@@ -22,10 +22,8 @@ class AuthService {
         'createdAt': Timestamp.now(),
       });
       
-      print('✅ User created in Firestore: ${result.user!.uid}');
       return result.user;
     } catch (e) {
-      print('❌ Registration error: $e');
       return null;
     }
   }
@@ -37,10 +35,8 @@ class AuthService {
         email: email,
         password: password,
       );
-      print('✅ Login successful: ${result.user!.email}');
       return result.user;
     } catch (e) {
-      print('❌ Login error: $e');
       return null;
     }
   }
