@@ -12,6 +12,8 @@ import 'package:mailer/smtp_server.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:firebase_core/firebase_core.dart';
 import '../../theme/app_theme.dart';
+import 'package:intl/intl.dart';
+import 'package:share_plus/share_plus.dart';
 
 class StudentAccounts extends StatefulWidget {
   @override

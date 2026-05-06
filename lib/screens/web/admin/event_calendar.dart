@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import '../../theme/app_theme.dart';
+import 'package:share_plus/share_plus.dart';
 
 class EventCalendar extends StatefulWidget {
   @override
