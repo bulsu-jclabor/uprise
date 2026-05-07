@@ -57,7 +57,6 @@ class UpriseTheme {
       primary: UpriseColors.primaryDark,
       secondary: UpriseColors.primaryLight,
       tertiary: UpriseColors.accent,
-      background: UpriseColors.lightGray,
       surface: UpriseColors.white,
       error: UpriseColors.error,
     ),

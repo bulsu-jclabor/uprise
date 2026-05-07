@@ -4,7 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'dart:io';
-import '../../theme/app_theme.dart'; // adjust path if needed
+import '../../theme/app_theme.dart';
 import 'package:intl/intl.dart';
 import 'package:share_plus/share_plus.dart';
 
@@ -32,6 +32,7 @@ class Organization {
   final String adviserName;
   final String adviserTitle;
   final String adviserEmail;
+  final String adviserPhone;
   final String logoUrl;
   final String status;
   final DateTime? createdAt;
@@ -46,6 +47,7 @@ class Organization {
     required this.adviserName,
     required this.adviserTitle,
     required this.adviserEmail,
+    required this.adviserPhone,
     required this.logoUrl,
     required this.status,
     this.createdAt,
@@ -56,15 +58,18 @@ class Organization {
 
 // ---------- Main Widget ----------
 class OrganizationManagement extends StatefulWidget {
+  const OrganizationManagement({super.key});
+
   @override
   _OrganizationManagementState createState() => _OrganizationManagementState();
 }
 
 class _OrganizationManagementState extends State<OrganizationManagement> {
   final TextEditingController _searchController = TextEditingController();
-  String _statusFilter = 'All'; // 'All' or 'Archived'
+  String _statusFilter = 'All';      // All, Active, Suspended, Archived
   String _typeFilter = 'All Types';
-  Organization? _selectedOrganization;
+  int _currentPage = 1;
+  static const int _pageSize = 10;
 
   final List<String> _orgTypes = [
     'All Types',
@@ -74,6 +79,8 @@ class _OrganizationManagementState extends State<OrganizationManagement> {
     'Cultural Organization',
     'Sports Organization',
   ];
+
+  Organization? _selectedOrganization;
 
   @override
   Widget build(BuildContext context) {
@@ -88,134 +95,274 @@ class _OrganizationManagementState extends State<OrganizationManagement> {
     );
   }
 
+  // ---------- MAIN LIST VIEW ----------
   Widget _buildOrganizationList() {
     return Column(
       children: [
-        // Header
-        Container(
-          padding: EdgeInsets.all(24),
-          decoration: BoxDecoration(
-            color: UpriseColors.white,
-            border: Border(bottom: BorderSide(color: UpriseColors.mediumGray)),
-          ),
-          child: Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Organization Management',
-                        style: GoogleFonts.beVietnamPro(fontSize: 24, fontWeight: FontWeight.bold, color: UpriseColors.charcoal)),
-                    SizedBox(height: 4),
-                    Text('Manage student organization status, advisers, and core details.',
-                        style: GoogleFonts.beVietnamPro(fontSize: 14, color: UpriseColors.darkGray)),
-                  ],
-                ),
-              ),
-              ElevatedButton.icon(
-                onPressed: () => _showCreateOrganizationDialog(),
-                icon: Icon(Icons.add, size: 18),
-                label: Text('Create Organization'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: UpriseColors.primaryDark,
-                  foregroundColor: UpriseColors.white,
-                  padding: EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                ),
-              ),
-            ],
-          ),
-        ),
+        _buildHeader(),
+        _buildStatsRow(),
+        _buildToolbar(),
+        const SizedBox(height: 16),
+        Expanded(child: _buildTable()),
+        const SizedBox(height: 24),
+      ],
+    );
+  }
 
-        // Stats Cards (All and Archived)
-        Padding(
-          padding: EdgeInsets.all(24),
-          child: Row(
-            children: [
-              Expanded(child: _buildStatCard('All', _allOrgsStream, UpriseColors.primaryDark, Icons.business)),
-              SizedBox(width: 16),
-              Expanded(child: _buildStatCard('Archived', _archivedOrgsStream, UpriseColors.darkGray, Icons.archive)),
-            ],
+  // ---------- HEADER ----------
+  Widget _buildHeader() {
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: UpriseColors.white,
+        border: Border(bottom: BorderSide(color: UpriseColors.mediumGray)),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Organization Management',
+                    style: GoogleFonts.beVietnamPro(fontSize: 24, fontWeight: FontWeight.bold, color: UpriseColors.charcoal)),
+                const SizedBox(height: 4),
+                Text('Manage student organization status, advisers, and core details.',
+                    style: GoogleFonts.beVietnamPro(fontSize: 14, color: UpriseColors.darkGray)),
+              ],
+            ),
           ),
-        ),
+          ElevatedButton.icon(
+            onPressed: () => _showCreateOrganizationDialog(),
+            icon: const Icon(Icons.add, size: 18),
+            label: const Text('Create Organization'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: UpriseColors.primaryDark,
+              foregroundColor: UpriseColors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
-        // Search, Filter, Export Bar
-        Container(
-          margin: EdgeInsets.symmetric(horizontal: 24),
-          padding: EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: UpriseColors.white,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: UpriseColors.mediumGray),
-          ),
-          child: Row(
-            children: [
-              // Status Tabs (All / Archived)
-              Row(
-                children: [
-                  _buildTabButton('All', _statusFilter == 'All'),
-                  SizedBox(width: 8),
-                  _buildTabButton('Archived', _statusFilter == 'Archived'),
-                ],
-              ),
-              SizedBox(width: 16),
-              // Type Filter Dropdown
-              Container(
-                padding: EdgeInsets.symmetric(horizontal: 8),
-                decoration: BoxDecoration(
-                  border: Border.all(color: UpriseColors.mediumGray),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: DropdownButton<String>(
-                  value: _typeFilter,
-                  underline: SizedBox(),
-                  icon: Icon(Icons.filter_list, size: 18, color: UpriseColors.darkGray),
-                  items: _orgTypes.map((type) => DropdownMenuItem(value: type, child: Text(type))).toList(),
-                  onChanged: (val) => setState(() => _typeFilter = val!),
-                ),
-              ),
-              SizedBox(width: 16),
-              // Search Field
-              Expanded(
-                child: Container(
-                  height: 40,
-                  child: TextField(
-                    controller: _searchController,
-                    decoration: InputDecoration(
-                      hintText: 'Search organization, adviser...',
-                      hintStyle: GoogleFonts.beVietnamPro(fontSize: 13, color: UpriseColors.darkGray),
-                      prefixIcon: Icon(Icons.search, size: 18, color: UpriseColors.darkGray),
-                      filled: true,
-                      fillColor: UpriseColors.lightGray,
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(20), borderSide: BorderSide.none),
-                      contentPadding: EdgeInsets.symmetric(vertical: 0),
-                    ),
-                    onChanged: (value) => setState(() {}),
+  // ---------- REAL‑TIME STATS ROW ----------
+  Widget _buildStatsRow() {
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance.collection('organizations').snapshots(),
+      builder: (context, snapshot) {
+        int total = 0, active = 0, suspended = 0, archived = 0;
+        if (snapshot.hasData) {
+          total = snapshot.data!.docs.length;
+          for (var doc in snapshot.data!.docs) {
+            final status = (doc.data() as Map)['status'] ?? 'active';
+            switch (status) {
+              case 'active': active++; break;
+              case 'suspended': suspended++; break;
+              case 'archived': archived++; break;
+            }
+          }
+        }
+        return Padding(
+          padding: const EdgeInsets.all(24),
+          child: Row(children: [
+            _statCard('TOTAL ORGANIZATIONS', '$total', UpriseColors.primaryDark),
+            const SizedBox(width: 16),
+            _statCard('ACTIVE', '$active', UpriseColors.success),
+            const SizedBox(width: 16),
+            _statCard('SUSPENDED', '$suspended', UpriseColors.warning),
+            const SizedBox(width: 16),
+            _statCard('ARCHIVED', '$archived', UpriseColors.darkGray),
+          ]),
+        );
+      },
+    );
+  }
+
+  Widget _statCard(String label, String value, Color color) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: UpriseColors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: UpriseColors.mediumGray),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(label, style: GoogleFonts.beVietnamPro(fontSize: 11, fontWeight: FontWeight.w600, color: UpriseColors.darkGray)),
+            const SizedBox(height: 6),
+            Text(value, style: GoogleFonts.beVietnamPro(fontSize: 28, fontWeight: FontWeight.bold, color: color)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ---------- TOOLBAR (search + status filter + type filter + export) ----------
+  Widget _buildToolbar() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 24),
+      child: Row(
+        children: [
+          // Search field
+          Expanded(
+            child: SizedBox(
+              height: 40,
+              child: TextField(
+                controller: _searchController,
+                decoration: InputDecoration(
+                  hintText: 'Search organization, adviser...',
+                  hintStyle: GoogleFonts.beVietnamPro(fontSize: 13, color: UpriseColors.darkGray),
+                  prefixIcon: const Icon(Icons.search, size: 18, color: UpriseColors.darkGray),
+                  filled: true,
+                  fillColor: UpriseColors.white,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: BorderSide(color: UpriseColors.mediumGray),
                   ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: BorderSide(color: UpriseColors.mediumGray),
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(vertical: 0),
                 ),
+                onChanged: (_) => setState(() => _currentPage = 1),
               ),
-              SizedBox(width: 12),
-              // Export Button
-              OutlinedButton.icon(
-                onPressed: () => _exportOrganizations(),
-                icon: Icon(Icons.download, size: 18),
-                label: Text('Export'),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: UpriseColors.darkGray,
-                  side: BorderSide(color: UpriseColors.mediumGray),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-                ),
-              ),
-            ],
+            ),
           ),
-        ),
+          const SizedBox(width: 16),
+          // Status filter dropdown
+          Container(
+            height: 40,
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            decoration: BoxDecoration(
+              color: UpriseColors.white,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: UpriseColors.mediumGray),
+            ),
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<String>(
+                value: _statusFilter,
+                items: ['All', 'Active', 'Suspended', 'Archived']
+                    .map((status) => DropdownMenuItem(
+                          value: status,
+                          child: Row(children: [
+                            Icon(_statusIcon(status), size: 16, color: _statusColor(status)),
+                            const SizedBox(width: 8),
+                            Text(status, style: GoogleFonts.beVietnamPro(fontSize: 13)),
+                          ]),
+                        ))
+                    .toList(),
+                onChanged: (value) => setState(() {
+                  _statusFilter = value!;
+                  _currentPage = 1;
+                }),
+                style: GoogleFonts.beVietnamPro(fontSize: 13, color: UpriseColors.charcoal),
+                icon: Icon(Icons.arrow_drop_down, color: UpriseColors.darkGray),
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          // Type filter dropdown
+          Container(
+            height: 40,
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            decoration: BoxDecoration(
+              color: UpriseColors.white,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: UpriseColors.mediumGray),
+            ),
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<String>(
+                value: _typeFilter,
+                items: _orgTypes.map((type) => DropdownMenuItem(
+                  value: type,
+                  child: Text(type, style: GoogleFonts.beVietnamPro(fontSize: 13)),
+                )).toList(),
+                onChanged: (value) => setState(() {
+                  _typeFilter = value!;
+                  _currentPage = 1;
+                }),
+                style: GoogleFonts.beVietnamPro(fontSize: 13, color: UpriseColors.charcoal),
+                icon: Icon(Icons.arrow_drop_down, color: UpriseColors.darkGray),
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          // Export button
+          OutlinedButton.icon(
+            onPressed: _exportOrganizations,
+            icon: const Icon(Icons.download, size: 18),
+            label: const Text('Export'),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: UpriseColors.primaryDark,
+              side: BorderSide(color: UpriseColors.mediumGray),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
-        SizedBox(height: 16),
+  IconData _statusIcon(String status) {
+    switch (status) {
+      case 'Active': return Icons.check_circle;
+      case 'Suspended': return Icons.pause_circle;
+      case 'Archived': return Icons.archive;
+      default: return Icons.list;
+    }
+  }
 
-        // Organizations Table
-        Expanded(
-          child: Container(
-            margin: EdgeInsets.symmetric(horizontal: 24),
+  Color _statusColor(String status) {
+    switch (status) {
+      case 'Active': return UpriseColors.success;
+      case 'Suspended': return UpriseColors.warning;
+      case 'Archived': return UpriseColors.darkGray;
+      default: return UpriseColors.primaryDark;
+    }
+  }
+
+  // ---------- TABLE (real‑time + pagination) ----------
+  Widget _buildTable() {
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance.collection('organizations').orderBy('createdAt', descending: true).snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (snapshot.hasError) {
+          return Center(child: Text('Error: ${snapshot.error}', style: TextStyle(color: UpriseColors.error)));
+        }
+
+        var docs = snapshot.data!.docs;
+        // Apply status filter
+        if (_statusFilter != 'All') {
+          docs = docs.where((doc) => (doc.data() as Map)['status'] == _statusFilter.toLowerCase()).toList();
+        }
+        // Apply type filter
+        if (_typeFilter != 'All Types') {
+          docs = docs.where((doc) => (doc.data() as Map)['type'] == _typeFilter).toList();
+        }
+        // Apply search
+        final term = _searchController.text.trim().toLowerCase();
+        if (term.isNotEmpty) {
+          docs = docs.where((doc) {
+            final data = doc.data() as Map;
+            final name = (data['name'] ?? '').toString().toLowerCase();
+            final adviser = (data['adviserName'] ?? '').toString().toLowerCase();
+            return name.contains(term) || adviser.contains(term);
+          }).toList();
+        }
+
+        // Empty state: show header + centered empty message
+        if (docs.isEmpty) {
+          return Container(
+            margin: const EdgeInsets.symmetric(horizontal: 24),
             decoration: BoxDecoration(
               color: UpriseColors.white,
               borderRadius: BorderRadius.circular(12),
@@ -223,145 +370,100 @@ class _OrganizationManagementState extends State<OrganizationManagement> {
             ),
             child: Column(
               children: [
-                // Table Header
+                // Header always visible
                 Container(
-                  padding: EdgeInsets.all(16),
+                  padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    border: Border(bottom: BorderSide(color: UpriseColors.mediumGray)),
                     color: UpriseColors.lightGray,
+                    border: Border(bottom: BorderSide(color: UpriseColors.mediumGray)),
+                    borderRadius: const BorderRadius.only(topLeft: Radius.circular(12), topRight: Radius.circular(12)),
                   ),
-                  child: Row(
-                    children: [
-                      Expanded(flex: 2, child: Text('ORGANIZATION NAME', style: _headerStyle())),
-                      Expanded(flex: 2, child: Text('ADVISER', style: _headerStyle())),
-                      Expanded(flex: 1, child: Text('STATUS', style: _headerStyle())),
-                      Expanded(flex: 1, child: Text('DATE CREATED', style: _headerStyle())),
-                      Expanded(flex: 1, child: Text('ACTIONS', style: _headerStyle())),
-                    ],
-                  ),
+                  child: Row(children: [
+                    Expanded(flex: 2, child: Text('ORGANIZATION NAME', style: _headerStyle())),
+                    Expanded(flex: 2, child: Text('ADVISER', style: _headerStyle())),
+                    Expanded(flex: 1, child: Text('STATUS', style: _headerStyle())),
+                    Expanded(flex: 1, child: Text('DATE CREATED', style: _headerStyle())),
+                    Expanded(flex: 1, child: Text('ACTIONS', style: _headerStyle())),
+                  ]),
                 ),
-
-                // Table Body (Firestore stream with filters)
+                // Empty state centered
                 Expanded(
-                  child: StreamBuilder<QuerySnapshot>(
-                    stream: FirebaseFirestore.instance.collection('organizations').orderBy('createdAt', descending: true).snapshots(),
-                    builder: (context, snapshot) {
-                      if (snapshot.connectionState == ConnectionState.waiting) {
-                        return Center(child: CircularProgressIndicator());
-                      }
-                      if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                        return Center(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(Icons.business, size: 64, color: UpriseColors.mediumGray),
-                              SizedBox(height: 16),
-                              Text('No organizations found', style: GoogleFonts.beVietnamPro(color: UpriseColors.darkGray)),
-                              SizedBox(height: 8),
-                              Text('Click "Create Organization" to add one',
-                                  style: GoogleFonts.beVietnamPro(color: UpriseColors.darkGray, fontSize: 12)),
-                            ],
-                          ),
-                        );
-                      }
-
-                      var docs = snapshot.data!.docs;
-                      // Search filter
-                      if (_searchController.text.isNotEmpty) {
-                        docs = docs.where((doc) {
-                          final data = doc.data() as Map<String, dynamic>;
-                          final name = data['name']?.toLowerCase() ?? '';
-                          final adviser = data['adviserName']?.toLowerCase() ?? '';
-                          final term = _searchController.text.toLowerCase();
-                          return name.contains(term) || adviser.contains(term);
-                        }).toList();
-                      }
-                      // Status filter (All / Archived)
-                      if (_statusFilter == 'Archived') {
-                        docs = docs.where((doc) {
-                          final data = doc.data() as Map<String, dynamic>;
-                          return data['status'] == 'archived';
-                        }).toList();
-                      } else {
-                        docs = docs.where((doc) {
-                          final data = doc.data() as Map<String, dynamic>;
-                          return data['status'] != 'archived';
-                        }).toList();
-                      }
-                      // Type filter
-                      if (_typeFilter != 'All Types') {
-                        docs = docs.where((doc) {
-                          final data = doc.data() as Map<String, dynamic>;
-                          return data['type'] == _typeFilter;
-                        }).toList();
-                      }
-
-                      return ListView.builder(
-                        itemCount: docs.length,
-                        itemBuilder: (context, index) {
-                          final data = docs[index].data() as Map<String, dynamic>;
-                          final org = Organization(
-                            id: docs[index].id,
-                            name: data['name'] ?? '',
-                            shortName: data['shortName'] ?? '',
-                            type: data['type'] ?? '',
-                            description: data['description'] ?? '',
-                            adviserName: data['adviserName'] ?? 'No Adviser',
-                            adviserTitle: data['adviserTitle'] ?? '',
-                            adviserEmail: data['adviserEmail'] ?? '',
-                            logoUrl: data['logoUrl'] ?? '',
-                            status: data['status'] ?? 'active',
-                            createdAt: (data['createdAt'] as Timestamp?)?.toDate(),
-                            categories: List<String>.from(data['categories'] ?? []),
-                            officers: (data['officers'] as List?)?.map((e) => Officer.fromMap(e as Map<String, dynamic>)).toList() ?? [],
-                          );
-                          return _buildOrganizationRow(org);
-                        },
-                      );
-                    },
+                  child: Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.business, size: 64, color: UpriseColors.mediumGray),
+                        const SizedBox(height: 16),
+                        Text('No organizations found', style: GoogleFonts.beVietnamPro(color: UpriseColors.darkGray, fontSize: 15)),
+                      ],
+                    ),
                   ),
                 ),
               ],
             ),
-          ),
-        ),
-        SizedBox(height: 24),
-      ],
-    );
-  }
+          );
+        }
 
-  // Streams for stats cards
-  Stream<QuerySnapshot> get _allOrgsStream => FirebaseFirestore.instance.collection('organizations').snapshots();
-  Stream<QuerySnapshot> get _archivedOrgsStream => FirebaseFirestore.instance.collection('organizations').where('status', isEqualTo: 'archived').snapshots();
+        // Pagination
+        final totalPages = (docs.length / _pageSize).ceil();
+        final safePage = _currentPage.clamp(1, totalPages);
+        final start = (safePage - 1) * _pageSize;
+        final end = (start + _pageSize).clamp(0, docs.length);
+        final pageDocs = docs.sublist(start, end);
 
-  Widget _buildStatCard(String title, Stream<QuerySnapshot> stream, Color color, IconData icon) {
-    return StreamBuilder<QuerySnapshot>(
-      stream: stream,
-      builder: (context, snapshot) {
-        int count = 0;
-        if (snapshot.hasData) count = snapshot.data!.docs.length;
         return Container(
-          padding: EdgeInsets.all(16),
+          margin: const EdgeInsets.symmetric(horizontal: 24),
           decoration: BoxDecoration(
             color: UpriseColors.white,
             borderRadius: BorderRadius.circular(12),
             border: Border.all(color: UpriseColors.mediumGray),
           ),
-          child: Row(
+          child: Column(
             children: [
+              // Header
               Container(
-                padding: EdgeInsets.all(8),
-                decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
-                child: Icon(icon, color: color, size: 20),
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: UpriseColors.lightGray,
+                  border: Border(bottom: BorderSide(color: UpriseColors.mediumGray)),
+                  borderRadius: const BorderRadius.only(topLeft: Radius.circular(12), topRight: Radius.circular(12)),
+                ),
+                child: Row(children: [
+                  Expanded(flex: 2, child: Text('ORGANIZATION NAME', style: _headerStyle())),
+                  Expanded(flex: 2, child: Text('ADVISER', style: _headerStyle())),
+                  Expanded(flex: 1, child: Text('STATUS', style: _headerStyle())),
+                  Expanded(flex: 1, child: Text('DATE CREATED', style: _headerStyle())),
+                  Expanded(flex: 1, child: Text('ACTIONS', style: _headerStyle())),
+                ]),
               ),
-              SizedBox(width: 12),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(title, style: GoogleFonts.beVietnamPro(fontSize: 12, color: UpriseColors.darkGray)),
-                  Text(count.toString(), style: GoogleFonts.beVietnamPro(fontSize: 22, fontWeight: FontWeight.bold, color: UpriseColors.charcoal)),
-                ],
+              // Body (list)
+              Expanded(
+                child: ListView.builder(
+                  itemCount: pageDocs.length,
+                  itemBuilder: (_, i) {
+                    final data = pageDocs[i].data() as Map<String, dynamic>;
+                    final org = Organization(
+                      id: pageDocs[i].id,
+                      name: data['name'] ?? '',
+                      shortName: data['shortName'] ?? '',
+                      type: data['type'] ?? '',
+                      description: data['description'] ?? '',
+                      adviserName: data['adviserName'] ?? 'No Adviser',
+                      adviserTitle: data['adviserTitle'] ?? '',
+                      adviserEmail: data['adviserEmail'] ?? '',
+                      adviserPhone: data['adviserPhone'] ?? '',
+                      logoUrl: data['logoUrl'] ?? '',
+                      status: data['status'] ?? 'active',
+                      createdAt: (data['createdAt'] as Timestamp?)?.toDate(),
+                      categories: List<String>.from(data['categories'] ?? []),
+                      officers: (data['officers'] as List?)?.map((e) => Officer.fromMap(e as Map<String, dynamic>)).toList() ?? [],
+                    );
+                    return _buildOrganizationRow(org);
+                  },
+                ),
               ),
+              // Footer (pagination)
+              _buildFooter(docs.length, totalPages, start, end),
             ],
           ),
         );
@@ -371,80 +473,117 @@ class _OrganizationManagementState extends State<OrganizationManagement> {
 
   TextStyle _headerStyle() => GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.w600, color: UpriseColors.darkGray, letterSpacing: 0.5);
 
-  Widget _buildTabButton(String label, bool isActive) {
-    return GestureDetector(
-      onTap: () => setState(() => _statusFilter = label),
-      child: Container(
-        padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        decoration: BoxDecoration(
-          color: isActive ? UpriseColors.primaryDark : Colors.transparent,
-          borderRadius: BorderRadius.circular(6),
-          border: isActive ? null : Border.all(color: UpriseColors.mediumGray),
-        ),
-        child: Text(label,
-            style: GoogleFonts.beVietnamPro(
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-              color: isActive ? UpriseColors.white : UpriseColors.darkGray,
-            )),
+  Widget _buildFooter(int total, int totalPages, int start, int end) {
+    const int maxVisible = 5;
+    int firstPage = (_currentPage - maxVisible ~/ 2).clamp(1, totalPages);
+    int lastPage = (firstPage + maxVisible - 1).clamp(1, totalPages);
+    if (lastPage - firstPage + 1 < maxVisible && firstPage > 1) {
+      firstPage = (lastPage - maxVisible + 1).clamp(1, totalPages);
+    }
+    final pages = List.generate(lastPage - firstPage + 1, (i) => firstPage + i);
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      decoration: BoxDecoration(
+        border: Border(top: BorderSide(color: UpriseColors.mediumGray)),
+        color: UpriseColors.lightGray,
+        borderRadius: const BorderRadius.only(bottomLeft: Radius.circular(12), bottomRight: Radius.circular(12)),
       ),
+      child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+        Text('Showing ${total == 0 ? 0 : start + 1}–$end of $total organizations',
+            style: GoogleFonts.beVietnamPro(fontSize: 13, color: UpriseColors.darkGray)),
+        Row(children: [
+          IconButton(
+            icon: const Icon(Icons.chevron_left, size: 20),
+            color: _currentPage > 1 ? UpriseColors.charcoal : UpriseColors.mediumGray,
+            onPressed: _currentPage > 1 ? () => setState(() => _currentPage--) : null,
+          ),
+          ...pages.map((page) => GestureDetector(
+                onTap: () => setState(() => _currentPage = page),
+                child: Container(
+                  margin: const EdgeInsets.symmetric(horizontal: 2),
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: page == _currentPage ? UpriseColors.primaryDark : Colors.transparent,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text('$page',
+                      style: GoogleFonts.beVietnamPro(
+                        fontSize: 12,
+                        color: page == _currentPage ? Colors.white : UpriseColors.charcoal,
+                        fontWeight: page == _currentPage ? FontWeight.w600 : FontWeight.normal,
+                      )),
+                ),
+              )),
+          if (lastPage < totalPages) ...[
+            Text('...', style: TextStyle(color: UpriseColors.darkGray)),
+            GestureDetector(
+              onTap: () => setState(() => _currentPage = totalPages),
+              child: Container(
+                margin: const EdgeInsets.symmetric(horizontal: 2),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                child: Text('$totalPages',
+                    style: GoogleFonts.beVietnamPro(fontSize: 12, color: UpriseColors.charcoal)),
+              ),
+            ),
+          ],
+          IconButton(
+            icon: const Icon(Icons.chevron_right, size: 20),
+            color: _currentPage < totalPages ? UpriseColors.charcoal : UpriseColors.mediumGray,
+            onPressed: _currentPage < totalPages ? () => setState(() => _currentPage++) : null,
+          ),
+        ]),
+      ]),
     );
   }
 
   Widget _buildOrganizationRow(Organization org) {
+    final statusColor = org.status == 'active'
+        ? UpriseColors.success
+        : org.status == 'suspended'
+            ? UpriseColors.warning
+            : UpriseColors.darkGray;
+    final statusLabel = org.status.toUpperCase();
     return GestureDetector(
       onTap: () => setState(() => _selectedOrganization = org),
       child: Container(
-        padding: EdgeInsets.all(16),
-        decoration: BoxDecoration(border: Border(bottom: BorderSide(color: UpriseColors.mediumGray))),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(border: Border(bottom: BorderSide(color: UpriseColors.mediumGray.withOpacity(0.5)))),
         child: Row(
           children: [
-            // Organization Name + Type
             Expanded(
               flex: 2,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(org.name, style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.w600, fontSize: 14, color: UpriseColors.charcoal)),
-                  SizedBox(height: 4),
+                  const SizedBox(height: 4),
                   Text(org.type, style: GoogleFonts.beVietnamPro(fontSize: 11, color: UpriseColors.darkGray)),
                 ],
               ),
             ),
-            // Adviser Name + Title
             Expanded(
               flex: 2,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(org.adviserName, style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w500, color: UpriseColors.charcoal)),
-                  SizedBox(height: 2),
+                  const SizedBox(height: 2),
                   Text(org.adviserTitle.isNotEmpty ? org.adviserTitle : 'Faculty Adviser',
                       style: GoogleFonts.beVietnamPro(fontSize: 11, color: UpriseColors.darkGray)),
                 ],
               ),
             ),
-            // Status badge
             Expanded(
               flex: 1,
               child: Container(
-                padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: org.status == 'active' ? UpriseColors.success.withOpacity(0.1) : UpriseColors.darkGray.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Text(
-                  org.status.toUpperCase(),
-                  textAlign: TextAlign.center,
-                  style: GoogleFonts.beVietnamPro(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    color: org.status == 'active' ? UpriseColors.success : UpriseColors.darkGray,
-                  ),
-                ),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(color: statusColor.withOpacity(0.1), borderRadius: BorderRadius.circular(12)),
+                child: Text(statusLabel,
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.beVietnamPro(fontSize: 11, fontWeight: FontWeight.w600, color: statusColor)),
               ),
             ),
-            // Date Created
             Expanded(
               flex: 1,
               child: Text(
@@ -452,7 +591,6 @@ class _OrganizationManagementState extends State<OrganizationManagement> {
                 style: GoogleFonts.beVietnamPro(fontSize: 13, color: UpriseColors.darkGray),
               ),
             ),
-            // Action buttons
             Expanded(
               flex: 1,
               child: Row(
@@ -460,10 +598,12 @@ class _OrganizationManagementState extends State<OrganizationManagement> {
                   IconButton(
                     icon: Icon(Icons.edit_outlined, size: 18, color: UpriseColors.darkGray),
                     onPressed: () => _showEditOrganizationDialog(org),
+                    tooltip: 'Edit',
                   ),
                   IconButton(
                     icon: Icon(org.status == 'archived' ? Icons.restore_outlined : Icons.archive_outlined, size: 18, color: UpriseColors.darkGray),
                     onPressed: () => _toggleArchiveOrganization(org),
+                    tooltip: org.status == 'archived' ? 'Restore' : 'Archive',
                   ),
                 ],
               ),
@@ -499,7 +639,7 @@ class _OrganizationManagementState extends State<OrganizationManagement> {
         title: Text(isArchived ? 'Restore Organization' : 'Archive Organization'),
         content: Text('Are you sure you want to ${isArchived ? 'restore' : 'archive'} "${org.name}"?'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
           ElevatedButton(
             onPressed: () async {
               await FirebaseFirestore.instance.collection('organizations').doc(org.id).update({'status': newStatus});
@@ -517,18 +657,46 @@ class _OrganizationManagementState extends State<OrganizationManagement> {
     );
   }
 
-  void _exportOrganizations() {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Export feature coming soon')));
+  // ---------- EXPORT ----------
+  Future<void> _exportOrganizations() async {
+    try {
+      final snap = await FirebaseFirestore.instance.collection('organizations').get();
+      final lines = <String>['Name,Short Name,Type,Description,Adviser Name,Adviser Title,Adviser Email,Adviser Phone,Status,Created At,Categories'];
+      for (var doc in snap.docs) {
+        final d = doc.data();
+        lines.add([
+          d['name'] ?? '',
+          d['shortName'] ?? '',
+          d['type'] ?? '',
+          (d['description'] ?? '').replaceAll(',', ';'),
+          d['adviserName'] ?? '',
+          d['adviserTitle'] ?? '',
+          d['adviserEmail'] ?? '',
+          d['adviserPhone'] ?? '',
+          d['status'] ?? '',
+          (d['createdAt'] as Timestamp?)?.toDate().toString() ?? '',
+          (d['categories'] as List?)?.join(';') ?? '',
+        ].map((v) => '"$v"').join(','));
+      }
+      final file = File('${Directory.systemTemp.path}/organizations.csv');
+      await file.writeAsString(lines.join('\n'));
+      await Share.shareXFiles([XFile(file.path)], text: 'Organizations Export');
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Export failed: $e'), backgroundColor: UpriseColors.error),
+      );
+    }
   }
 
   String _formatDate(DateTime date) => '${_monthAbbr(date.month)} ${date.day}, ${date.year}';
   String _monthAbbr(int m) => ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'][m-1];
 }
 
-// ---------- CREATE ORGANIZATION DIALOG ----------
+// ---------- CREATE ORGANIZATION DIALOG (atomic batch sync) ----------
+// (Keep exactly as in your original code – it already uses batch and includes adviserPhone)
 class CreateOrganizationDialog extends StatefulWidget {
   final VoidCallback onCreated;
-  CreateOrganizationDialog({required this.onCreated});
+  const CreateOrganizationDialog({super.key, required this.onCreated});
   @override
   _CreateOrganizationDialogState createState() => _CreateOrganizationDialogState();
 }
@@ -542,7 +710,8 @@ class _CreateOrganizationDialogState extends State<CreateOrganizationDialog> {
   final _advNameCtrl = TextEditingController();
   final _advTitleCtrl = TextEditingController();
   final _advEmailCtrl = TextEditingController();
-  List<String> _categories = [];
+  final _advPhoneCtrl = TextEditingController();
+  final List<String> _categories = [];
   final _catCtrl = TextEditingController();
   File? _logoFile;
   bool _isLoading = false;
@@ -550,23 +719,22 @@ class _CreateOrganizationDialogState extends State<CreateOrganizationDialog> {
   @override
   Widget build(BuildContext context) {
     return Dialog(
-      insetPadding: EdgeInsets.symmetric(horizontal: 24),
+      insetPadding: const EdgeInsets.symmetric(horizontal: 24),
       child: Container(
         width: 560,
         constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.9),
         child: Column(
           children: [
-            // Header
             Container(
-              padding: EdgeInsets.all(20),
+              padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
                 color: UpriseColors.primaryDark,
-                borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
               ),
               child: Row(
                 children: [
                   Icon(Icons.add_business, color: UpriseColors.white, size: 24),
-                  SizedBox(width: 12),
+                  const SizedBox(width: 12),
                   Expanded(
                     child: Text('Create New Organization',
                         style: GoogleFonts.beVietnamPro(fontSize: 20, fontWeight: FontWeight.bold, color: UpriseColors.white)),
@@ -580,14 +748,14 @@ class _CreateOrganizationDialogState extends State<CreateOrganizationDialog> {
             ),
             Expanded(
               child: SingleChildScrollView(
-                padding: EdgeInsets.all(20),
+                padding: const EdgeInsets.all(20),
                 child: Form(
                   key: _formKey,
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text('Organization Logo', style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.w600)),
-                      SizedBox(height: 8),
+                      const SizedBox(height: 8),
                       Center(
                         child: GestureDetector(
                           onTap: _pickImage,
@@ -602,57 +770,57 @@ class _CreateOrganizationDialogState extends State<CreateOrganizationDialog> {
                                 ? ClipRRect(borderRadius: BorderRadius.circular(12), child: Image.file(_logoFile!, fit: BoxFit.cover))
                                 : Column(mainAxisAlignment: MainAxisAlignment.center, children: [
                                     Icon(Icons.cloud_upload, size: 32, color: UpriseColors.darkGray),
-                                    SizedBox(height: 8),
+                                    const SizedBox(height: 8),
                                     Text('Click to upload', style: GoogleFonts.beVietnamPro(fontSize: 11, color: UpriseColors.darkGray)),
                                   ]),
                           ),
                         ),
                       ),
-                      SizedBox(height: 20),
+                      const SizedBox(height: 20),
                       TextFormField(
                         controller: _nameCtrl,
-                        decoration: InputDecoration(labelText: 'Organization Name', border: OutlineInputBorder()),
+                        decoration: const InputDecoration(labelText: 'Organization Name', border: OutlineInputBorder()),
                         validator: (v) => v!.isEmpty ? 'Required' : null,
                       ),
-                      SizedBox(height: 12),
+                      const SizedBox(height: 12),
                       TextFormField(
                         controller: _shortNameCtrl,
-                        decoration: InputDecoration(labelText: 'Short Name (e.g., SWITS)', border: OutlineInputBorder()),
+                        decoration: const InputDecoration(labelText: 'Short Name (e.g., SWITS)', border: OutlineInputBorder()),
                       ),
-                      SizedBox(height: 12),
+                      const SizedBox(height: 12),
                       DropdownButtonFormField<String>(
-                        value: _type,
-                        decoration: InputDecoration(labelText: 'Organization Type', border: OutlineInputBorder()),
+                        initialValue: _type,
+                        decoration: const InputDecoration(labelText: 'Organization Type', border: OutlineInputBorder()),
                         items: ['Academic Organization','Student Government','Special Interest Group','Cultural Organization','Sports Organization']
-                            .map((t) => DropdownMenuItem(value: t, child: Text(t))).toList(),
+                            .map((t) => DropdownMenuItem(value: t, child: Text(t, style: GoogleFonts.beVietnamPro(fontSize: 13)))).toList(),
                         onChanged: (v) => setState(() => _type = v!),
                       ),
-                      SizedBox(height: 12),
+                      const SizedBox(height: 12),
                       TextFormField(
                         controller: _descCtrl,
                         maxLines: 3,
-                        decoration: InputDecoration(labelText: 'Description', border: OutlineInputBorder()),
+                        decoration: const InputDecoration(labelText: 'Description', border: OutlineInputBorder()),
                       ),
-                      SizedBox(height: 12),
+                      const SizedBox(height: 12),
                       Text('Categories', style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.w600)),
-                      SizedBox(height: 8),
+                      const SizedBox(height: 8),
                       Wrap(
                         spacing: 8,
                         runSpacing: 8,
                         children: [
                           ..._categories.map((c) => Chip(
-                            label: Text(c),
+                            label: Text(c, style: GoogleFonts.beVietnamPro(fontSize: 12)),
                             onDeleted: () => setState(() => _categories.remove(c)),
                             backgroundColor: UpriseColors.lightGray,
                           )),
-                          Container(
+                          SizedBox(
                             width: 120,
                             child: TextField(
                               controller: _catCtrl,
                               decoration: InputDecoration(
                                 hintText: 'Add',
-                                border: OutlineInputBorder(),
-                                contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                                border: const OutlineInputBorder(),
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
                               ),
                               onSubmitted: (v) {
                                 if (v.isNotEmpty && !_categories.contains(v)) {
@@ -664,27 +832,45 @@ class _CreateOrganizationDialogState extends State<CreateOrganizationDialog> {
                           ),
                         ],
                       ),
-                      Divider(height: 32),
+                      const Divider(height: 32),
                       Text('Faculty Adviser', style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.bold)),
-                      SizedBox(height: 12),
-                      TextFormField(controller: _advNameCtrl, decoration: InputDecoration(labelText: 'Full Name', border: OutlineInputBorder())),
-                      SizedBox(height: 12),
-                      TextFormField(controller: _advTitleCtrl, decoration: InputDecoration(labelText: 'Title/Department', border: OutlineInputBorder())),
-                      SizedBox(height: 12),
-                      TextFormField(controller: _advEmailCtrl, decoration: InputDecoration(labelText: 'Email', border: OutlineInputBorder())),
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: _advNameCtrl,
+                        decoration: const InputDecoration(labelText: 'Full Name', border: OutlineInputBorder()),
+                        validator: (v) => v!.trim().isEmpty ? 'Required' : null,
+                      ),
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: _advTitleCtrl,
+                        decoration: const InputDecoration(labelText: 'Title/Department', border: OutlineInputBorder()),
+                        validator: (v) => v!.trim().isEmpty ? 'Required' : null,
+                      ),
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: _advEmailCtrl,
+                        decoration: const InputDecoration(labelText: 'Email', border: OutlineInputBorder()),
+                        validator: (v) => v!.trim().isEmpty ? 'Required' : null,
+                      ),
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: _advPhoneCtrl,
+                        decoration: const InputDecoration(labelText: 'Phone Number', border: OutlineInputBorder()),
+                        validator: (v) => v!.trim().isEmpty ? 'Required' : null,
+                      ),
                     ],
                   ),
                 ),
               ),
             ),
             Container(
-              padding: EdgeInsets.all(20),
+              padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(border: Border(top: BorderSide(color: UpriseColors.mediumGray))),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
                   TextButton(onPressed: () => Navigator.pop(context), child: Text('Cancel', style: TextStyle(color: UpriseColors.darkGray))),
-                  SizedBox(width: 12),
+                  const SizedBox(width: 12),
                   ElevatedButton(
                     onPressed: _isLoading ? null : _create,
                     style: ElevatedButton.styleFrom(
@@ -693,8 +879,8 @@ class _CreateOrganizationDialogState extends State<CreateOrganizationDialog> {
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                     ),
                     child: _isLoading
-                        ? SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: UpriseColors.white))
-                        : Text('Create Organization'),
+                        ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: UpriseColors.white))
+                        : const Text('Create Organization'),
                   ),
                 ],
               ),
@@ -715,7 +901,12 @@ class _CreateOrganizationDialogState extends State<CreateOrganizationDialog> {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _isLoading = true);
     try {
-      await FirebaseFirestore.instance.collection('organizations').add({
+      final orgRef = FirebaseFirestore.instance.collection('organizations').doc();
+      final adviserRoleRef = FirebaseFirestore.instance.collection('adviser_roles').doc();
+
+      final batch = FirebaseFirestore.instance.batch();
+
+      batch.set(orgRef, {
         'name': _nameCtrl.text,
         'shortName': _shortNameCtrl.text,
         'type': _type,
@@ -723,40 +914,65 @@ class _CreateOrganizationDialogState extends State<CreateOrganizationDialog> {
         'adviserName': _advNameCtrl.text,
         'adviserTitle': _advTitleCtrl.text,
         'adviserEmail': _advEmailCtrl.text,
+        'adviserPhone': _advPhoneCtrl.text,
         'logoUrl': '',
         'status': 'active',
         'categories': _categories,
         'officers': [],
         'createdAt': FieldValue.serverTimestamp(),
       });
+
+      batch.set(adviserRoleRef, {
+        'orgId': orgRef.id,
+        'orgName': _nameCtrl.text,
+        'orgAbbrev': _shortNameCtrl.text,
+        'orgTag': _type,
+        'adviserId': '',
+        'adviserName': _advNameCtrl.text,
+        'adviserEmail': _advEmailCtrl.text,
+        'adviserPhone': _advPhoneCtrl.text,
+        'adviserRank': _advTitleCtrl.text,
+        'president': '',
+        'vicePresident': '',
+        'secretary': '',
+        'archived': false,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+
+      await batch.commit();
+
       await FirebaseFirestore.instance.collection('activity_logs').add({
         'title': 'New Organization Created',
         'description': '${_nameCtrl.text} was created',
         'createdAt': FieldValue.serverTimestamp(),
         'userId': FirebaseAuth.instance.currentUser?.uid,
       });
+
       widget.onCreated();
       Navigator.pop(context);
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Organization created successfully')));
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Organization created successfully')));
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+      );
     } finally {
       setState(() => _isLoading = false);
     }
   }
 }
 
-// ---------- EDIT ORGANIZATION DIALOG ----------
+// ---------- EDIT ORGANIZATION DIALOG (atomic batch sync) ----------
+// (Keep exactly as in your original code)
 class EditOrganizationDialog extends StatefulWidget {
   final Organization organization;
   final VoidCallback onUpdated;
-  EditOrganizationDialog({required this.organization, required this.onUpdated});
+  const EditOrganizationDialog({super.key, required this.organization, required this.onUpdated});
   @override
   _EditOrganizationDialogState createState() => _EditOrganizationDialogState();
 }
 
 class _EditOrganizationDialogState extends State<EditOrganizationDialog> {
-  late TextEditingController _nameCtrl, _shortCtrl, _typeCtrl, _descCtrl, _advNameCtrl, _advTitleCtrl, _advEmailCtrl;
+  late TextEditingController _nameCtrl, _shortCtrl, _typeCtrl, _descCtrl, _advNameCtrl, _advTitleCtrl, _advEmailCtrl, _advPhoneCtrl;
   late String _status;
   bool _isLoading = false;
 
@@ -770,28 +986,29 @@ class _EditOrganizationDialogState extends State<EditOrganizationDialog> {
     _advNameCtrl = TextEditingController(text: widget.organization.adviserName);
     _advTitleCtrl = TextEditingController(text: widget.organization.adviserTitle);
     _advEmailCtrl = TextEditingController(text: widget.organization.adviserEmail);
+    _advPhoneCtrl = TextEditingController(text: widget.organization.adviserPhone);
     _status = widget.organization.status;
   }
 
   @override
   Widget build(BuildContext context) {
     return Dialog(
-      insetPadding: EdgeInsets.symmetric(horizontal: 24),
-      child: Container(
+      insetPadding: const EdgeInsets.symmetric(horizontal: 24),
+      child: SizedBox(
         width: 560,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Container(
-              padding: EdgeInsets.all(20),
+              padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
                 color: UpriseColors.primaryDark,
-                borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
               ),
               child: Row(
                 children: [
                   Icon(Icons.edit, color: UpriseColors.white),
-                  SizedBox(width: 12),
+                  const SizedBox(width: 12),
                   Expanded(
                     child: Text('Edit Organization', style: GoogleFonts.beVietnamPro(fontSize: 20, fontWeight: FontWeight.bold, color: UpriseColors.white)),
                   ),
@@ -803,46 +1020,48 @@ class _EditOrganizationDialogState extends State<EditOrganizationDialog> {
               ),
             ),
             SingleChildScrollView(
-              padding: EdgeInsets.all(20),
+              padding: const EdgeInsets.all(20),
               child: Column(
                 children: [
-                  TextFormField(controller: _nameCtrl, decoration: InputDecoration(labelText: 'Name', border: OutlineInputBorder())),
-                  SizedBox(height: 12),
-                  TextFormField(controller: _shortCtrl, decoration: InputDecoration(labelText: 'Short Name', border: OutlineInputBorder())),
-                  SizedBox(height: 12),
+                  TextFormField(controller: _nameCtrl, decoration: const InputDecoration(labelText: 'Name', border: OutlineInputBorder())),
+                  const SizedBox(height: 12),
+                  TextFormField(controller: _shortCtrl, decoration: const InputDecoration(labelText: 'Short Name', border: OutlineInputBorder())),
+                  const SizedBox(height: 12),
                   DropdownButtonFormField<String>(
-                    value: _typeCtrl.text,
+                    initialValue: _typeCtrl.text,
                     items: ['Academic Organization','Student Government','Special Interest Group','Cultural Organization','Sports Organization']
-                        .map((t) => DropdownMenuItem(value: t, child: Text(t))).toList(),
+                        .map((t) => DropdownMenuItem(value: t, child: Text(t, style: GoogleFonts.beVietnamPro(fontSize: 13)))).toList(),
                     onChanged: (v) => _typeCtrl.text = v!,
-                    decoration: InputDecoration(labelText: 'Type', border: OutlineInputBorder()),
+                    decoration: const InputDecoration(labelText: 'Type', border: OutlineInputBorder()),
                   ),
-                  SizedBox(height: 12),
+                  const SizedBox(height: 12),
                   DropdownButtonFormField<String>(
-                    value: _status,
-                    items: ['active','suspended','archived'].map((s) => DropdownMenuItem(value: s, child: Text(s.toUpperCase()))).toList(),
+                    initialValue: _status,
+                    items: ['active','suspended','archived'].map((s) => DropdownMenuItem(value: s, child: Text(s.toUpperCase(), style: GoogleFonts.beVietnamPro(fontSize: 13)))).toList(),
                     onChanged: (v) => setState(() => _status = v!),
-                    decoration: InputDecoration(labelText: 'Status', border: OutlineInputBorder()),
+                    decoration: const InputDecoration(labelText: 'Status', border: OutlineInputBorder()),
                   ),
-                  SizedBox(height: 12),
-                  TextFormField(controller: _descCtrl, maxLines: 2, decoration: InputDecoration(labelText: 'Description', border: OutlineInputBorder())),
-                  SizedBox(height: 12),
-                  TextFormField(controller: _advNameCtrl, decoration: InputDecoration(labelText: 'Adviser Name', border: OutlineInputBorder())),
-                  SizedBox(height: 12),
-                  TextFormField(controller: _advTitleCtrl, decoration: InputDecoration(labelText: 'Adviser Title', border: OutlineInputBorder())),
-                  SizedBox(height: 12),
-                  TextFormField(controller: _advEmailCtrl, decoration: InputDecoration(labelText: 'Adviser Email', border: OutlineInputBorder())),
+                  const SizedBox(height: 12),
+                  TextFormField(controller: _descCtrl, maxLines: 2, decoration: const InputDecoration(labelText: 'Description', border: OutlineInputBorder())),
+                  const SizedBox(height: 12),
+                  TextFormField(controller: _advNameCtrl, decoration: const InputDecoration(labelText: 'Adviser Name', border: OutlineInputBorder())),
+                  const SizedBox(height: 12),
+                  TextFormField(controller: _advTitleCtrl, decoration: const InputDecoration(labelText: 'Adviser Title', border: OutlineInputBorder())),
+                  const SizedBox(height: 12),
+                  TextFormField(controller: _advEmailCtrl, decoration: const InputDecoration(labelText: 'Adviser Email', border: OutlineInputBorder())),
+                  const SizedBox(height: 12),
+                  TextFormField(controller: _advPhoneCtrl, decoration: const InputDecoration(labelText: 'Adviser Phone', border: OutlineInputBorder())),
                 ],
               ),
             ),
             Container(
-              padding: EdgeInsets.all(20),
+              padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(border: Border(top: BorderSide(color: UpriseColors.mediumGray))),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
                   TextButton(onPressed: () => Navigator.pop(context), child: Text('Cancel', style: TextStyle(color: UpriseColors.darkGray))),
-                  SizedBox(width: 12),
+                  const SizedBox(width: 12),
                   ElevatedButton(
                     onPressed: _isLoading ? null : _update,
                     style: ElevatedButton.styleFrom(
@@ -851,8 +1070,8 @@ class _EditOrganizationDialogState extends State<EditOrganizationDialog> {
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                     ),
                     child: _isLoading
-                        ? SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: UpriseColors.white))
-                        : Text('Save Changes'),
+                        ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: UpriseColors.white))
+                        : const Text('Save Changes'),
                   ),
                 ],
               ),
@@ -866,7 +1085,10 @@ class _EditOrganizationDialogState extends State<EditOrganizationDialog> {
   Future<void> _update() async {
     setState(() => _isLoading = true);
     try {
-      await FirebaseFirestore.instance.collection('organizations').doc(widget.organization.id).update({
+      final batch = FirebaseFirestore.instance.batch();
+
+      final orgRef = FirebaseFirestore.instance.collection('organizations').doc(widget.organization.id);
+      batch.update(orgRef, {
         'name': _nameCtrl.text,
         'shortName': _shortCtrl.text,
         'type': _typeCtrl.text,
@@ -874,26 +1096,69 @@ class _EditOrganizationDialogState extends State<EditOrganizationDialog> {
         'adviserName': _advNameCtrl.text,
         'adviserTitle': _advTitleCtrl.text,
         'adviserEmail': _advEmailCtrl.text,
+        'adviserPhone': _advPhoneCtrl.text,
         'status': _status,
         'updatedAt': FieldValue.serverTimestamp(),
       });
+
+      final existingRoles = await FirebaseFirestore.instance
+          .collection('adviser_roles')
+          .where('orgId', isEqualTo: widget.organization.id)
+          .get();
+
+      if (existingRoles.docs.isNotEmpty) {
+        final roleRef = existingRoles.docs.first.reference;
+        batch.update(roleRef, {
+          'orgName': _nameCtrl.text,
+          'orgAbbrev': _shortCtrl.text,
+          'orgTag': _typeCtrl.text,
+          'adviserName': _advNameCtrl.text,
+          'adviserEmail': _advEmailCtrl.text,
+          'adviserPhone': _advPhoneCtrl.text,
+          'adviserRank': _advTitleCtrl.text,
+        });
+      } else {
+        final newRoleRef = FirebaseFirestore.instance.collection('adviser_roles').doc();
+        batch.set(newRoleRef, {
+          'orgId': widget.organization.id,
+          'orgName': _nameCtrl.text,
+          'orgAbbrev': _shortCtrl.text,
+          'orgTag': _typeCtrl.text,
+          'adviserId': '',
+          'adviserName': _advNameCtrl.text,
+          'adviserEmail': _advEmailCtrl.text,
+          'adviserPhone': _advPhoneCtrl.text,
+          'adviserRank': _advTitleCtrl.text,
+          'president': '',
+          'vicePresident': '',
+          'secretary': '',
+          'archived': false,
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+      }
+
+      await batch.commit();
+
       widget.onUpdated();
       Navigator.pop(context);
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Organization updated')));
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Organization updated')));
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+      );
     } finally {
       setState(() => _isLoading = false);
     }
   }
 }
 
-// ---------- ORGANIZATION DETAIL PAGE (Fully dynamic, no hardcoded data) ----------
+
+// ---------- ORGANIZATION DETAIL PAGE (unchanged but includes adviserPhone) ----------
 class OrganizationDetailPage extends StatefulWidget {
   final Organization organization;
   final VoidCallback onBack;
 
-  const OrganizationDetailPage({Key? key, required this.organization, required this.onBack}) : super(key: key);
+  const OrganizationDetailPage({super.key, required this.organization, required this.onBack});
 
   @override
   _OrganizationDetailPageState createState() => _OrganizationDetailPageState();
@@ -946,12 +1211,11 @@ class _OrganizationDetailPageState extends State<OrganizationDetailPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('${widget.organization.name} has been ${isArchived ? 'restored' : 'archived'}')),
       );
-      widget.onBack(); // Go back to list to refresh
+      widget.onBack();
     }
   }
 
   void _manageOfficers() {
-    // TODO: Navigate to Officers Management screen
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Manage Officers feature coming soon')));
   }
 
@@ -963,7 +1227,6 @@ class _OrganizationDetailPageState extends State<OrganizationDetailPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Back button
           IconButton(
             icon: Icon(Icons.arrow_back, color: UpriseColors.darkGray),
             onPressed: widget.onBack,
@@ -971,8 +1234,6 @@ class _OrganizationDetailPageState extends State<OrganizationDetailPage> {
             alignment: Alignment.centerLeft,
           ),
           SizedBox(height: 16),
-
-          // Header Card
           Container(
             padding: EdgeInsets.all(24),
             decoration: BoxDecoration(
@@ -983,7 +1244,6 @@ class _OrganizationDetailPageState extends State<OrganizationDetailPage> {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Logo placeholder
                 Container(
                   width: 100,
                   height: 100,
@@ -996,7 +1256,6 @@ class _OrganizationDetailPageState extends State<OrganizationDetailPage> {
                       : Icon(Icons.business, size: 50, color: UpriseColors.primaryDark),
                 ),
                 SizedBox(width: 24),
-                // Title & type
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -1011,7 +1270,6 @@ class _OrganizationDetailPageState extends State<OrganizationDetailPage> {
                         style: GoogleFonts.beVietnamPro(fontSize: 14, color: UpriseColors.darkGray),
                       ),
                       SizedBox(height: 16),
-                      // Status badge
                       Container(
                         padding: EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                         decoration: BoxDecoration(
@@ -1032,7 +1290,6 @@ class _OrganizationDetailPageState extends State<OrganizationDetailPage> {
                     ],
                   ),
                 ),
-                // Action buttons
                 Column(
                   children: [
                     ElevatedButton.icon(
@@ -1072,12 +1329,9 @@ class _OrganizationDetailPageState extends State<OrganizationDetailPage> {
             ),
           ),
           SizedBox(height: 24),
-
-          // Two-column layout
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // LEFT COLUMN
               Expanded(
                 flex: 2,
                 child: Column(
@@ -1121,10 +1375,17 @@ class _OrganizationDetailPageState extends State<OrganizationDetailPage> {
                                   style: GoogleFonts.beVietnamPro(fontSize: 13, color: UpriseColors.darkGray),
                                 ),
                                 if (widget.organization.adviserEmail.isNotEmpty) ...[
-                                  SizedBox(height: 4),
+                                  SizedBox(height: 2),
                                   Text(
                                     widget.organization.adviserEmail,
                                     style: GoogleFonts.beVietnamPro(fontSize: 12, color: UpriseColors.primaryDark),
+                                  ),
+                                ],
+                                if (widget.organization.adviserPhone.isNotEmpty) ...[
+                                  SizedBox(height: 2),
+                                  Text(
+                                    widget.organization.adviserPhone,
+                                    style: GoogleFonts.beVietnamPro(fontSize: 12, color: UpriseColors.darkGray),
                                   ),
                                 ],
                               ],
@@ -1134,7 +1395,6 @@ class _OrganizationDetailPageState extends State<OrganizationDetailPage> {
                       ),
                     ),
                     SizedBox(height: 24),
-                    // AT A GLANCE section (dynamic)
                     Container(
                       key: _atGlanceKey,
                       child: _buildAtGlanceStats(),
@@ -1157,7 +1417,6 @@ class _OrganizationDetailPageState extends State<OrganizationDetailPage> {
                 ),
               ),
               SizedBox(width: 24),
-              // RIGHT COLUMN
               Expanded(
                 flex: 3,
                 child: Column(
@@ -1205,7 +1464,6 @@ class _OrganizationDetailPageState extends State<OrganizationDetailPage> {
     );
   }
 
-  // ----- DYNAMIC "AT A GLANCE" STATS (Live from Firestore) -----
   Widget _buildAtGlanceStats() {
     return Column(
       children: [
@@ -1244,7 +1502,6 @@ class _OrganizationDetailPageState extends State<OrganizationDetailPage> {
   }
 
   Stream<Map<String, int>> _fetchOrganizationStats() async* {
-    // Get completed events count
     final eventsQuery = await FirebaseFirestore.instance
         .collection('events')
         .where('organizationId', isEqualTo: widget.organization.id)
@@ -1253,7 +1510,6 @@ class _OrganizationDetailPageState extends State<OrganizationDetailPage> {
         .get();
     final eventsCount = eventsQuery.count;
 
-    // Get pending event proposals count
     final proposalsQuery = await FirebaseFirestore.instance
         .collection('event_proposals')
         .where('organizationId', isEqualTo: widget.organization.id)
@@ -1262,7 +1518,6 @@ class _OrganizationDetailPageState extends State<OrganizationDetailPage> {
         .get();
     final pendingCount = proposalsQuery.count;
 
-    // Get achievements count (assuming an 'achievements' collection)
     final achievementsQuery = await FirebaseFirestore.instance
         .collection('achievements')
         .where('organizationId', isEqualTo: widget.organization.id)
@@ -1277,7 +1532,6 @@ class _OrganizationDetailPageState extends State<OrganizationDetailPage> {
     };
   }
 
-  // ----- RECENT ACTIVITY (Live stream) -----
   Widget _buildRecentActivity() {
     return _infoCard(
       'RECENT ACTIVITY',
@@ -1321,7 +1575,6 @@ class _OrganizationDetailPageState extends State<OrganizationDetailPage> {
     );
   }
 
-  // Helper widgets
   Widget _statItem(IconData icon, String label, String value) {
     return Column(
       children: [

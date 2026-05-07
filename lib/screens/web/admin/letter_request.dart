@@ -1,107 +1,53 @@
-// lib/screens/admin/letter_request.dart – fixed fileSize type
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
+import 'package:share_plus/share_plus.dart';
 import '../../theme/app_theme.dart';
 
 class LetterRequest extends StatefulWidget {
+  const LetterRequest({super.key});
+
   @override
   _LetterRequestState createState() => _LetterRequestState();
 }
 
 class _LetterRequestState extends State<LetterRequest> {
-  String _statusFilter = 'All';
   final TextEditingController _searchController = TextEditingController();
-  List<Document> _allDocs = [];
-  List<Document> _filteredDocs = [];
-  bool _isLoading = true;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadDocuments();
-  }
-
-  Future<void> _loadDocuments() async {
-    setState(() => _isLoading = true);
-    try {
-      final snapshot = await FirebaseFirestore.instance
-          .collection('letter_requests')
-          .orderBy('uploadDate', descending: true)
-          .get();
-      _allDocs = snapshot.docs.map((doc) {
-        final data = doc.data();
-        return Document(
-          id: doc.id,
-          title: data['title'] ?? 'Untitled',
-          fileName: data['fileName'] ?? '',
-          fileType: data['fileType'] ?? 'pdf',
-          fileSize: (data['fileSize'] ?? 0).toInt(),
-          uploadDate: (data['uploadDate'] as Timestamp).toDate(),
-          status: data['status'] ?? 'pending',
-          requestedBy: data['requestedBy'] ?? '',
-          department: data['department'] ?? '',
-          content: data['content'] ?? '',
-          revisionNotes: data['revisionNotes'] ?? '',
-        );
-      }).toList();
-      _applyFilters();
-    } catch (e) {
-      print('Error loading docs: $e');
-    } finally {
-      setState(() => _isLoading = false);
-    }
-  }
-
-  void _applyFilters() {
-    setState(() {
-      _filteredDocs = _allDocs.where((doc) {
-        if (_statusFilter != 'All' && doc.status != _statusFilter) return false;
-        final term = _searchController.text.trim().toLowerCase();
-        if (term.isNotEmpty) {
-          return doc.title.toLowerCase().contains(term) ||
-              doc.requestedBy.toLowerCase().contains(term);
-        }
-        return true;
-      }).toList();
-    });
-  }
+  String _statusFilter = 'All';
+  int _currentPage = 1;
+  static const int _pageSize = 10;
 
   @override
   Widget build(BuildContext context) {
-    int total = _allDocs.length;
-    int pending = _allDocs.where((d) => d.status == 'pending').length;
-    int approved = _allDocs.where((d) => d.status == 'approved').length;
-    int rejected = _allDocs.where((d) => d.status == 'rejected').length;
-    int archived = _allDocs.where((d) => d.status == 'archived').length;
-
     return Scaffold(
       backgroundColor: UpriseColors.lightGray,
       floatingActionButton: FloatingActionButton(
         onPressed: _showAddDocumentDialog,
         backgroundColor: UpriseColors.primaryDark,
-        child: Icon(Icons.add, color: UpriseColors.white),
         tooltip: 'Upload Document',
+        child: const Icon(Icons.add, color: Colors.white),
       ),
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _buildHeader(),
-          _buildStatsRow(total, pending, approved, rejected, archived),
+          _buildStatsRow(),
           _buildToolbar(),
+          const SizedBox(height: 16),
           Expanded(child: _buildTable()),
-          SizedBox(height: 24),
+          const SizedBox(height: 24),
         ],
       ),
     );
   }
 
+  // ---------- HEADER ----------
   Widget _buildHeader() {
     return Container(
-      padding: EdgeInsets.all(24),
+      padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
         color: UpriseColors.white,
         border: Border(bottom: BorderSide(color: UpriseColors.mediumGray)),
@@ -113,7 +59,7 @@ class _LetterRequestState extends State<LetterRequest> {
             'Letter Request',
             style: GoogleFonts.beVietnamPro(fontSize: 24, fontWeight: FontWeight.bold, color: UpriseColors.charcoal),
           ),
-          SizedBox(height: 4),
+          const SizedBox(height: 4),
           Text(
             'Manage and access centralized student organization documentations and requirements.',
             style: GoogleFonts.beVietnamPro(fontSize: 14, color: UpriseColors.darkGray),
@@ -123,94 +69,135 @@ class _LetterRequestState extends State<LetterRequest> {
     );
   }
 
-  Widget _buildStatsRow(int total, int pending, int approved, int rejected, int archived) {
-    return Padding(
-      padding: EdgeInsets.all(24),
-      child: Row(children: [
-        _statCard('TOTAL DOCUMENTS', '$total', UpriseColors.primaryDark),
-        SizedBox(width: 16),
-        _statCard('PENDING', '$pending', UpriseColors.warning),
-        SizedBox(width: 16),
-        _statCard('APPROVED', '$approved', UpriseColors.success),
-        SizedBox(width: 16),
-        _statCard('REJECTED', '$rejected', UpriseColors.error),
-        SizedBox(width: 16),
-        _statCard('ARCHIVED', '$archived', UpriseColors.darkGray),
-      ]),
+  // ---------- REAL‑TIME STATS ROW ----------
+  Widget _buildStatsRow() {
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance.collection('letter_requests').snapshots(),
+      builder: (context, snapshot) {
+        int total = 0, pending = 0, approved = 0, rejected = 0, archived = 0;
+        if (snapshot.hasData) {
+          final docs = snapshot.data!.docs;
+          total = docs.length;
+          for (var doc in docs) {
+            final status = (doc.data() as Map)['status'] ?? 'pending';
+            switch (status) {
+              case 'pending': pending++; break;
+              case 'approved': approved++; break;
+              case 'rejected': rejected++; break;
+              case 'archived': archived++; break;
+            }
+          }
+        }
+        return Padding(
+          padding: const EdgeInsets.all(24),
+          child: Row(children: [
+            _statCard('TOTAL DOCUMENTS', '$total', UpriseColors.primaryDark),
+            const SizedBox(width: 16),
+            _statCard('PENDING', '$pending', UpriseColors.warning),
+            const SizedBox(width: 16),
+            _statCard('APPROVED', '$approved', UpriseColors.success),
+            const SizedBox(width: 16),
+            _statCard('REJECTED', '$rejected', UpriseColors.error),
+            const SizedBox(width: 16),
+            _statCard('ARCHIVED', '$archived', UpriseColors.darkGray),
+          ]),
+        );
+      },
     );
   }
 
   Widget _statCard(String label, String value, Color color) {
     return Expanded(
       child: Container(
-        padding: EdgeInsets.all(16),
+        padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           color: UpriseColors.white,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(color: UpriseColors.mediumGray),
         ),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(label, style: GoogleFonts.beVietnamPro(fontSize: 11, color: UpriseColors.darkGray, fontWeight: FontWeight.w600)),
-          SizedBox(height: 6),
-          Text(value, style: GoogleFonts.beVietnamPro(fontSize: 28, fontWeight: FontWeight.bold, color: color)),
-        ]),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(label, style: GoogleFonts.beVietnamPro(fontSize: 11, fontWeight: FontWeight.w600, color: UpriseColors.darkGray)),
+            const SizedBox(height: 6),
+            Text(value, style: GoogleFonts.beVietnamPro(fontSize: 28, fontWeight: FontWeight.bold, color: color)),
+          ],
+        ),
       ),
     );
   }
 
+  // ---------- TOOLBAR (search + filter dropdown + export) ----------
   Widget _buildToolbar() {
-    final tabs = ['All', 'Pending', 'Approved', 'Rejected', 'Archived'];
-    return Container(
-      padding: EdgeInsets.symmetric(horizontal: 24),
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 24),
       child: Row(
         children: [
           Expanded(
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: tabs.map((tab) {
-                  final selected = (_statusFilter == tab) ||
-                      (tab == 'All' && _statusFilter == 'All') ||
-                      (tab == 'Pending' && _statusFilter == 'pending') ||
-                      (tab == 'Approved' && _statusFilter == 'approved') ||
-                      (tab == 'Rejected' && _statusFilter == 'rejected') ||
-                      (tab == 'Archived' && _statusFilter == 'archived');
-                  return Padding(
-                    padding: EdgeInsets.only(right: 12),
-                    child: _filterChip(tab, selected, () {
-                      setState(() {
-                        if (tab == 'All') _statusFilter = 'All';
-                        else if (tab == 'Pending') _statusFilter = 'pending';
-                        else if (tab == 'Approved') _statusFilter = 'approved';
-                        else if (tab == 'Rejected') _statusFilter = 'rejected';
-                        else if (tab == 'Archived') _statusFilter = 'archived';
-                        _applyFilters();
-                      });
-                    }),
-                  );
-                }).toList(),
+            child: SizedBox(
+              height: 40,
+              child: TextField(
+                controller: _searchController,
+                decoration: InputDecoration(
+                  hintText: 'Search documents...',
+                  hintStyle: GoogleFonts.beVietnamPro(fontSize: 13, color: UpriseColors.darkGray),
+                  prefixIcon: const Icon(Icons.search, size: 18, color: UpriseColors.darkGray),
+                  filled: true,
+                  fillColor: UpriseColors.white,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: BorderSide(color: UpriseColors.mediumGray),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: BorderSide(color: UpriseColors.mediumGray),
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(vertical: 0),
+                ),
+                onChanged: (_) => setState(() => _currentPage = 1),
               ),
             ),
           ),
-          SizedBox(width: 16),
+          const SizedBox(width: 16),
           Container(
-            width: 260,
             height: 40,
-            child: TextField(
-              controller: _searchController,
-              decoration: InputDecoration(
-                hintText: 'Search documents...',
-                hintStyle: GoogleFonts.beVietnamPro(fontSize: 13, color: UpriseColors.darkGray),
-                prefixIcon: Icon(Icons.search, size: 18, color: UpriseColors.darkGray),
-                filled: true,
-                fillColor: UpriseColors.white,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  borderSide: BorderSide(color: UpriseColors.mediumGray),
-                ),
-                contentPadding: EdgeInsets.symmetric(vertical: 0),
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            decoration: BoxDecoration(
+              color: UpriseColors.white,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: UpriseColors.mediumGray),
+            ),
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<String>(
+                value: _statusFilter,
+                items: ['All', 'Pending', 'Approved', 'Rejected', 'Archived']
+                    .map((status) => DropdownMenuItem(
+                          value: status,
+                          child: Row(children: [
+                            Icon(_statusIcon(status), size: 16, color: _statusColor(status)),
+                            const SizedBox(width: 8),
+                            Text(status, style: GoogleFonts.beVietnamPro(fontSize: 13)),
+                          ]),
+                        ))
+                    .toList(),
+                onChanged: (value) => setState(() {
+                  _statusFilter = value!;
+                  _currentPage = 1;
+                }),
+                style: GoogleFonts.beVietnamPro(fontSize: 13, color: UpriseColors.charcoal),
+                icon: Icon(Icons.arrow_drop_down, color: UpriseColors.darkGray),
               ),
-              onChanged: (_) => _applyFilters(),
+            ),
+          ),
+          const SizedBox(width: 12),
+          OutlinedButton.icon(
+            onPressed: _exportToCSV,
+            icon: const Icon(Icons.download, size: 18),
+            label: const Text('Export'),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: UpriseColors.primaryDark,
+              side: BorderSide(color: UpriseColors.mediumGray),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
             ),
           ),
         ],
@@ -218,116 +205,247 @@ class _LetterRequestState extends State<LetterRequest> {
     );
   }
 
-  Widget _filterChip(String label, bool selected, VoidCallback onTap) {
-    return FilterChip(
-      label: Text(label),
-      selected: selected,
-      onSelected: (_) => onTap(),
-      backgroundColor: UpriseColors.white,
-      selectedColor: UpriseColors.primaryDark.withOpacity(0.1),
-      checkmarkColor: UpriseColors.primaryDark,
-      labelStyle: GoogleFonts.beVietnamPro(
-        color: selected ? UpriseColors.primaryDark : UpriseColors.darkGray,
-        fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
-      ),
-      shape: StadiumBorder(side: BorderSide(color: UpriseColors.mediumGray)),
-    );
+  IconData _statusIcon(String status) {
+    switch (status) {
+      case 'Pending': return Icons.pending_actions;
+      case 'Approved': return Icons.check_circle;
+      case 'Rejected': return Icons.cancel;
+      case 'Archived': return Icons.archive;
+      default: return Icons.list;
+    }
   }
 
-  Widget _buildTable() {
-    if (_isLoading) {
-      return Center(child: CircularProgressIndicator(color: UpriseColors.primaryDark));
+  Color _statusColor(String status) {
+    switch (status) {
+      case 'Pending': return UpriseColors.warning;
+      case 'Approved': return UpriseColors.success;
+      case 'Rejected': return UpriseColors.error;
+      case 'Archived': return UpriseColors.darkGray;
+      default: return UpriseColors.primaryDark;
     }
-    if (_filteredDocs.isEmpty) {
-      return Center(
-        child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-          Icon(Icons.folder_open, size: 64, color: UpriseColors.mediumGray),
-          SizedBox(height: 16),
-          Text('No documents found', style: GoogleFonts.beVietnamPro(color: UpriseColors.darkGray)),
-        ]),
-      );
-    }
+  }
 
-    return Container(
-      margin: EdgeInsets.symmetric(horizontal: 24),
-      decoration: BoxDecoration(
-        color: UpriseColors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: UpriseColors.mediumGray),
-      ),
-      child: Column(children: [
-        Container(
-          padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+  // ---------- TABLE (real‑time + pagination) ----------
+Widget _buildTable() {
+  return StreamBuilder<QuerySnapshot>(
+    stream: FirebaseFirestore.instance.collection('letter_requests').orderBy('uploadDate', descending: true).snapshots(),
+    builder: (context, snapshot) {
+      if (snapshot.connectionState == ConnectionState.waiting) {
+        return const Center(child: CircularProgressIndicator());
+      }
+      if (snapshot.hasError) {
+        return Center(child: Text('Error: ${snapshot.error}', style: TextStyle(color: UpriseColors.error)));
+      }
+
+      var docs = snapshot.data!.docs;
+      // Apply status filter
+      if (_statusFilter != 'All') {
+        docs = docs.where((d) => (d.data() as Map)['status'] == _statusFilter.toLowerCase()).toList();
+      }
+      // Apply search
+      final term = _searchController.text.trim().toLowerCase();
+      if (term.isNotEmpty) {
+        docs = docs.where((d) {
+          final data = d.data() as Map;
+          final title = (data['title'] ?? '').toString().toLowerCase();
+          final requestedBy = (data['requestedBy'] ?? '').toString().toLowerCase();
+          return title.contains(term) || requestedBy.contains(term);
+        }).toList();
+      }
+
+      // Handle empty case early to avoid pagination errors
+      if (docs.isEmpty) {
+        return Container(
+          margin: const EdgeInsets.symmetric(horizontal: 24),
           decoration: BoxDecoration(
-            color: UpriseColors.lightGray,
-            border: Border(bottom: BorderSide(color: UpriseColors.mediumGray)),
-            borderRadius: BorderRadius.only(topLeft: Radius.circular(12), topRight: Radius.circular(12)),
+            color: UpriseColors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: UpriseColors.mediumGray),
           ),
-          child: Row(children: [
-            Expanded(flex: 3, child: Text('DOCUMENT NAME', style: _headerStyle())),
-            Expanded(flex: 1, child: Text('UPLOAD DATE', style: _headerStyle())),
-            Expanded(flex: 1, child: Text('STATUS', style: _headerStyle())),
-            Expanded(flex: 1, child: Text('ACTIONS', style: _headerStyle())),
-          ]),
-        ),
-        Expanded(
-          child: ListView.builder(
-            itemCount: _filteredDocs.length,
-            itemBuilder: (context, index) {
-              final doc = _filteredDocs[index];
-              return _buildRow(doc);
-            },
-          ),
-        ),
-        Container(
-          padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          decoration: BoxDecoration(
-            border: Border(top: BorderSide(color: UpriseColors.mediumGray)),
-            color: UpriseColors.lightGray,
-            borderRadius: BorderRadius.only(bottomLeft: Radius.circular(12), bottomRight: Radius.circular(12)),
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          child: Column(
             children: [
-              Text('Showing ${_filteredDocs.length} of ${_allDocs.length} documents',
-                  style: GoogleFonts.beVietnamPro(fontSize: 13, color: UpriseColors.darkGray)),
-              Row(
-                children: [
-                  IconButton(icon: Icon(Icons.chevron_left, size: 20), onPressed: () {}),
-                  Container(
-                    padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(color: UpriseColors.primaryDark, borderRadius: BorderRadius.circular(4)),
-                    child: Text('1', style: TextStyle(color: Colors.white, fontSize: 12)),
+              // TABLE HEADER (always visible)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                decoration: BoxDecoration(
+                  color: UpriseColors.lightGray,
+                  border: Border(bottom: BorderSide(color: UpriseColors.mediumGray)),
+                  borderRadius: const BorderRadius.only(topLeft: Radius.circular(12), topRight: Radius.circular(12)),
+                ),
+                child: Row(children: [
+                  Expanded(flex: 3, child: Text('DOCUMENT NAME', style: _headerStyle())),
+                  Expanded(flex: 1, child: Text('UPLOAD DATE', style: _headerStyle())),
+                  Expanded(flex: 1, child: Text('STATUS', style: _headerStyle())),
+                  Expanded(flex: 1, child: Text('ACTIONS', style: _headerStyle())),
+                ]),
+              ),
+              // Empty state (centered)
+              Expanded(
+                child: Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.folder_open, size: 64, color: UpriseColors.mediumGray),
+                      const SizedBox(height: 16),
+                      Text('No documents found', style: GoogleFonts.beVietnamPro(color: UpriseColors.darkGray, fontSize: 15)),
+                    ],
                   ),
-                  IconButton(icon: Icon(Icons.chevron_right, size: 20), onPressed: () {}),
-                ],
+                ),
               ),
             ],
           ),
+        );
+      }
+
+      // Only reach here if docs is not empty
+      final totalPages = (docs.length / _pageSize).ceil();
+      final safePage = _currentPage.clamp(1, totalPages);
+      final start = (safePage - 1) * _pageSize;
+      final end = (start + _pageSize).clamp(0, docs.length);
+      final pageDocs = docs.sublist(start, end);
+
+      return Container(
+        margin: const EdgeInsets.symmetric(horizontal: 24),
+        decoration: BoxDecoration(
+          color: UpriseColors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: UpriseColors.mediumGray),
         ),
+        child: Column(
+          children: [
+            // TABLE HEADER
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              decoration: BoxDecoration(
+                color: UpriseColors.lightGray,
+                border: Border(bottom: BorderSide(color: UpriseColors.mediumGray)),
+                borderRadius: const BorderRadius.only(topLeft: Radius.circular(12), topRight: Radius.circular(12)),
+              ),
+              child: Row(children: [
+                Expanded(flex: 3, child: Text('DOCUMENT NAME', style: _headerStyle())),
+                Expanded(flex: 1, child: Text('UPLOAD DATE', style: _headerStyle())),
+                Expanded(flex: 1, child: Text('STATUS', style: _headerStyle())),
+                Expanded(flex: 1, child: Text('ACTIONS', style: _headerStyle())),
+              ]),
+            ),
+            // TABLE BODY (list)
+            Expanded(
+              child: ListView.builder(
+                itemCount: pageDocs.length,
+                itemBuilder: (_, i) {
+                  final data = pageDocs[i].data() as Map<String, dynamic>;
+                  final doc = Document(
+                    id: pageDocs[i].id,
+                    title: data['title'] ?? 'Untitled',
+                    fileName: data['fileName'] ?? '',
+                    fileType: data['fileType'] ?? 'pdf',
+                    fileSize: (data['fileSize'] ?? 0).toInt(),
+                    uploadDate: (data['uploadDate'] as Timestamp).toDate(),
+                    status: data['status'] ?? 'pending',
+                    requestedBy: data['requestedBy'] ?? '',
+                    department: data['department'] ?? '',
+                    content: data['content'] ?? '',
+                    revisionNotes: data['revisionNotes'] ?? '',
+                  );
+                  return _buildRow(doc);
+                },
+              ),
+            ),
+            // PAGINATION FOOTER
+            _buildFooter(docs.length, totalPages, start, end),
+          ],
+        ),
+      );
+    },
+  );
+}
+
+  TextStyle _headerStyle() => GoogleFonts.beVietnamPro(
+      fontSize: 11, fontWeight: FontWeight.w700, color: UpriseColors.darkGray, letterSpacing: 0.5);
+
+  Widget _buildFooter(int total, int totalPages, int start, int end) {
+    const int maxVisible = 5;
+    int firstPage = (_currentPage - maxVisible ~/ 2).clamp(1, totalPages);
+    int lastPage = (firstPage + maxVisible - 1).clamp(1, totalPages);
+    if (lastPage - firstPage + 1 < maxVisible && firstPage > 1) {
+      firstPage = (lastPage - maxVisible + 1).clamp(1, totalPages);
+    }
+    final pages = List.generate(lastPage - firstPage + 1, (i) => firstPage + i);
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      decoration: BoxDecoration(
+        border: Border(top: BorderSide(color: UpriseColors.mediumGray)),
+        color: UpriseColors.lightGray,
+        borderRadius: const BorderRadius.only(bottomLeft: Radius.circular(12), bottomRight: Radius.circular(12)),
+      ),
+      child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+        Text('Showing ${total == 0 ? 0 : start + 1}–$end of $total documents',
+            style: GoogleFonts.beVietnamPro(fontSize: 13, color: UpriseColors.darkGray)),
+        Row(children: [
+          IconButton(
+            icon: const Icon(Icons.chevron_left, size: 20),
+            color: _currentPage > 1 ? UpriseColors.charcoal : UpriseColors.mediumGray,
+            onPressed: _currentPage > 1 ? () => setState(() => _currentPage--) : null,
+          ),
+          ...pages.map((page) => GestureDetector(
+                onTap: () => setState(() => _currentPage = page),
+                child: Container(
+                  margin: const EdgeInsets.symmetric(horizontal: 2),
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: page == _currentPage ? UpriseColors.primaryDark : Colors.transparent,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text('$page',
+                      style: GoogleFonts.beVietnamPro(
+                        fontSize: 12,
+                        color: page == _currentPage ? Colors.white : UpriseColors.charcoal,
+                        fontWeight: page == _currentPage ? FontWeight.w600 : FontWeight.normal,
+                      )),
+                ),
+              )),
+          if (lastPage < totalPages) ...[
+            Text('...', style: TextStyle(color: UpriseColors.darkGray)),
+            GestureDetector(
+              onTap: () => setState(() => _currentPage = totalPages),
+              child: Container(
+                margin: const EdgeInsets.symmetric(horizontal: 2),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                child: Text('$totalPages',
+                    style: GoogleFonts.beVietnamPro(fontSize: 12, color: UpriseColors.charcoal)),
+              ),
+            ),
+          ],
+          IconButton(
+            icon: const Icon(Icons.chevron_right, size: 20),
+            color: _currentPage < totalPages ? UpriseColors.charcoal : UpriseColors.mediumGray,
+            onPressed: _currentPage < totalPages ? () => setState(() => _currentPage++) : null,
+          ),
+        ]),
       ]),
     );
   }
 
-  TextStyle _headerStyle() => GoogleFonts.beVietnamPro(
-    fontSize: 11, fontWeight: FontWeight.w700, color: UpriseColors.darkGray, letterSpacing: 0.5);
-
   Widget _buildRow(Document doc) {
-    final statusColor = doc.status == 'approved' ? UpriseColors.success
-        : doc.status == 'rejected' ? UpriseColors.error
-        : doc.status == 'archived' ? UpriseColors.darkGray
-        : UpriseColors.warning;
+    final statusColor = doc.status == 'approved'
+        ? UpriseColors.success
+        : doc.status == 'rejected'
+            ? UpriseColors.error
+            : doc.status == 'archived'
+                ? UpriseColors.darkGray
+                : UpriseColors.warning;
     final formattedDate = DateFormat('MMM dd, yyyy').format(doc.uploadDate);
     final fileInfo = '${doc.fileType.toUpperCase()} • ${_formatFileSize(doc.fileSize)}';
     return Container(
-      padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(border: Border(bottom: BorderSide(color: UpriseColors.mediumGray.withOpacity(0.5)))),
       child: Row(children: [
         Expanded(
           flex: 3,
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(doc.title, style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.w600, fontSize: 14, color: UpriseColors.charcoal)),
-            SizedBox(height: 4),
+            const SizedBox(height: 4),
             Text(fileInfo, style: GoogleFonts.beVietnamPro(fontSize: 11, color: UpriseColors.darkGray)),
           ]),
         ),
@@ -335,9 +453,10 @@ class _LetterRequestState extends State<LetterRequest> {
         Expanded(
           flex: 1,
           child: Container(
-            padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             decoration: BoxDecoration(color: statusColor.withOpacity(0.1), borderRadius: BorderRadius.circular(12)),
-            child: Text(doc.status.toUpperCase(), textAlign: TextAlign.center,
+            child: Text(doc.status.toUpperCase(),
+                textAlign: TextAlign.center,
                 style: GoogleFonts.beVietnamPro(fontSize: 11, fontWeight: FontWeight.w600, color: statusColor)),
           ),
         ),
@@ -377,20 +496,21 @@ class _LetterRequestState extends State<LetterRequest> {
     );
   }
 
+  // ---------- CRUD OPERATIONS ----------
   Future<void> _setStatus(String docId, String newStatus) async {
     await FirebaseFirestore.instance.collection('letter_requests').doc(docId).update({'status': newStatus});
-    _loadDocuments();
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Status updated to ${newStatus.toUpperCase()}')));
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Status updated to ${newStatus.toUpperCase()}')));
+    }
   }
 
   void _showAddDocumentDialog() => _showDocumentForm(isEdit: false, doc: null);
   void _showEditDialog(Document doc) => _showDocumentForm(isEdit: true, doc: doc);
 
-  // Fixed method – fileSize is int
   void _showDocumentForm({required bool isEdit, required Document? doc}) {
     final titleCtrl = TextEditingController(text: isEdit ? doc!.title : '');
-    final requestedByCtrl = TextEditingController(text: isEdit ? doc!.requestedBy : 'Admin User');
-    final departmentCtrl = TextEditingController(text: isEdit ? doc!.department : 'Legal Department');
+    final requestedByCtrl = TextEditingController(text: isEdit ? doc!.requestedBy : '');
+    final departmentCtrl = TextEditingController(text: isEdit ? doc!.department : '');
     final contentCtrl = TextEditingController(text: isEdit ? doc!.content : '');
     String fileType = isEdit ? doc!.fileType : 'pdf';
     int fileSize = isEdit ? doc!.fileSize : 0;
@@ -419,41 +539,44 @@ class _LetterRequestState extends State<LetterRequest> {
           return AlertDialog(
             title: Row(children: [
               Icon(isEdit ? Icons.edit : Icons.upload_file, color: UpriseColors.primaryDark),
-              SizedBox(width: 8),
+              const SizedBox(width: 8),
               Text(isEdit ? 'Edit Document' : 'Upload New Document', style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.bold)),
             ]),
             content: SingleChildScrollView(
               child: SizedBox(
                 width: 450,
                 child: Column(mainAxisSize: MainAxisSize.min, children: [
-                  TextFormField(controller: titleCtrl, decoration: InputDecoration(labelText: 'Document Title')),
-                  SizedBox(height: 12),
+                  TextFormField(controller: titleCtrl, decoration: const InputDecoration(labelText: 'Document Title')),
+                  const SizedBox(height: 12),
                   if (!isEdit)
                     OutlinedButton.icon(
                       onPressed: pickFile,
-                      icon: Icon(Icons.attach_file),
+                      icon: const Icon(Icons.attach_file),
                       label: Text(fileName.isEmpty ? 'Choose File (PDF/DOCX)' : fileName),
                     ),
                   if (!isEdit && fileName.isNotEmpty)
-                    Padding(padding: EdgeInsets.only(top: 8), child: Text('$fileType • ${_formatFileSize(fileSize)}', style: GoogleFonts.beVietnamPro(fontSize: 11))),
-                  SizedBox(height: 12),
-                  TextFormField(controller: requestedByCtrl, decoration: InputDecoration(labelText: 'Requested By')),
-                  SizedBox(height: 12),
-                  TextFormField(controller: departmentCtrl, decoration: InputDecoration(labelText: 'Department')),
-                  SizedBox(height: 12),
-                  TextFormField(controller: contentCtrl, maxLines: 5, decoration: InputDecoration(labelText: 'Document Content / Description')),
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: Text('$fileType • ${_formatFileSize(fileSize)}', style: GoogleFonts.beVietnamPro(fontSize: 11)),
+                    ),
+                  const SizedBox(height: 12),
+                  TextFormField(controller: requestedByCtrl, decoration: const InputDecoration(labelText: 'Requested By')),
+                  const SizedBox(height: 12),
+                  TextFormField(controller: departmentCtrl, decoration: const InputDecoration(labelText: 'Department')),
+                  const SizedBox(height: 12),
+                  TextFormField(controller: contentCtrl, maxLines: 5, decoration: const InputDecoration(labelText: 'Document Content / Description')),
                   if (isEdit)
                     DropdownButtonFormField<String>(
                       value: status,
                       items: ['pending', 'approved', 'rejected', 'archived'].map((s) => DropdownMenuItem(value: s, child: Text(s.toUpperCase()))).toList(),
                       onChanged: (v) => setDlg(() => status = v!),
-                      decoration: InputDecoration(labelText: 'Status'),
+                      decoration: const InputDecoration(labelText: 'Status'),
                     ),
                 ]),
               ),
             ),
             actions: [
-              TextButton(onPressed: () => Navigator.pop(ctx), child: Text('Cancel')),
+              TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
               ElevatedButton(
                 onPressed: () async {
                   if (titleCtrl.text.isEmpty) return;
@@ -477,11 +600,12 @@ class _LetterRequestState extends State<LetterRequest> {
                       if (fileName.isEmpty) throw 'Please select a file';
                       await FirebaseFirestore.instance.collection('letter_requests').add(data);
                     }
-                    _loadDocuments();
                     Navigator.pop(ctx);
                     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(isEdit ? 'Document updated' : 'Document uploaded')));
                   } catch (e) {
-                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: UpriseColors.error));
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Error: $e'), backgroundColor: UpriseColors.error),
+                    );
                   }
                 },
                 style: ElevatedButton.styleFrom(backgroundColor: UpriseColors.primaryDark),
@@ -495,15 +619,17 @@ class _LetterRequestState extends State<LetterRequest> {
   }
 
   void _showViewDialog(Document doc) {
-    final statusColor = doc.status == 'approved' ? UpriseColors.success
-        : doc.status == 'rejected' ? UpriseColors.error
-        : UpriseColors.warning;
+    final statusColor = doc.status == 'approved'
+        ? UpriseColors.success
+        : doc.status == 'rejected'
+            ? UpriseColors.error
+            : UpriseColors.warning;
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         title: Row(children: [
           Icon(Icons.description, color: UpriseColors.primaryDark),
-          SizedBox(width: 8),
+          const SizedBox(width: 8),
           Expanded(child: Text(doc.title, style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.bold))),
         ]),
         content: SingleChildScrollView(
@@ -511,7 +637,7 @@ class _LetterRequestState extends State<LetterRequest> {
             width: 500,
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
               Container(
-                padding: EdgeInsets.all(12),
+                padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(color: UpriseColors.primaryDark.withOpacity(0.05), borderRadius: BorderRadius.circular(8)),
                 child: Column(children: [
                   Text('BULACAN STATE UNIVERSITY',
@@ -520,10 +646,10 @@ class _LetterRequestState extends State<LetterRequest> {
                       style: GoogleFonts.beVietnamPro(fontSize: 12, color: UpriseColors.darkGray)),
                 ]),
               ),
-              SizedBox(height: 16),
+              const SizedBox(height: 16),
               Text(doc.content.isNotEmpty ? doc.content : 'No detailed content provided.', style: GoogleFonts.beVietnamPro(fontSize: 13, height: 1.5)),
-              SizedBox(height: 20),
-              Divider(),
+              const SizedBox(height: 20),
+              const Divider(),
               _detailRow('Request Number', '#${doc.id.substring(0, 8)}'),
               _detailRow('Requested By', doc.requestedBy),
               _detailRow('Department', doc.department),
@@ -564,7 +690,7 @@ class _LetterRequestState extends State<LetterRequest> {
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx),
             style: ElevatedButton.styleFrom(backgroundColor: UpriseColors.primaryDark),
-            child: Text('Close', style: TextStyle(color: Colors.white)),
+            child: const Text('Close', style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
@@ -579,7 +705,7 @@ class _LetterRequestState extends State<LetterRequest> {
         title: Text('Request Revision', style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.bold)),
         content: Column(mainAxisSize: MainAxisSize.min, children: [
           Text('Please specify the changes or additional information needed for this document.'),
-          SizedBox(height: 12),
+          const SizedBox(height: 12),
           TextField(
             controller: notesCtrl,
             maxLines: 4,
@@ -590,19 +716,18 @@ class _LetterRequestState extends State<LetterRequest> {
           ),
         ]),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
           ElevatedButton(
             onPressed: () async {
               await FirebaseFirestore.instance.collection('letter_requests').doc(doc.id).update({
                 'revisionNotes': notesCtrl.text,
                 'status': 'pending',
               });
-              _loadDocuments();
               Navigator.pop(ctx);
-              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Revision request sent')));
+              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Revision request sent')));
             },
             style: ElevatedButton.styleFrom(backgroundColor: UpriseColors.primaryDark),
-            child: Text('Send Revision Request'),
+            child: const Text('Send Revision Request'),
           ),
         ],
       ),
@@ -611,13 +736,13 @@ class _LetterRequestState extends State<LetterRequest> {
 
   Widget _detailRow(String label, String value, {bool isStatus = false, Color? statusColor}) {
     return Padding(
-      padding: EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.only(bottom: 8),
       child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
         SizedBox(width: 120, child: Text('$label:', style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.w600, color: UpriseColors.darkGray))),
         Expanded(
           child: isStatus
               ? Container(
-                  padding: EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                   decoration: BoxDecoration(color: statusColor?.withOpacity(0.1) ?? Colors.transparent, borderRadius: BorderRadius.circular(4)),
                   child: Text(value, style: GoogleFonts.beVietnamPro(fontSize: 12, color: statusColor, fontWeight: FontWeight.w600)),
                 )
@@ -631,23 +756,50 @@ class _LetterRequestState extends State<LetterRequest> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text('Delete Document'),
+        title: const Text('Delete Document'),
         content: Text('Are you sure you want to delete "${doc.title}"? This action cannot be undone.'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
           ElevatedButton(
             onPressed: () async {
               await FirebaseFirestore.instance.collection('letter_requests').doc(doc.id).delete();
-              _loadDocuments();
               Navigator.pop(ctx);
-              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Document deleted')));
+              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Document deleted')));
             },
             style: ElevatedButton.styleFrom(backgroundColor: UpriseColors.error),
-            child: Text('Delete'),
+            child: const Text('Delete'),
           ),
         ],
       ),
     );
+  }
+
+  // ---------- EXPORT ----------
+  Future<void> _exportToCSV() async {
+    try {
+      final snap = await FirebaseFirestore.instance.collection('letter_requests').get();
+      final lines = <String>['Title,Requested By,Department,Upload Date,Status,File Name,File Size,Content'];
+      for (var doc in snap.docs) {
+        final d = doc.data();
+        lines.add([
+          d['title'] ?? '',
+          d['requestedBy'] ?? '',
+          d['department'] ?? '',
+          (d['uploadDate'] as Timestamp).toDate().toString(),
+          d['status'] ?? '',
+          d['fileName'] ?? '',
+          d['fileSize'] ?? '',
+          (d['content'] ?? '').replaceAll(',', ';'),
+        ].map((v) => '"$v"').join(','));
+      }
+      final file = File('${Directory.systemTemp.path}/letter_requests.csv');
+      await file.writeAsString(lines.join('\n'));
+      await Share.shareXFiles([XFile(file.path)], text: 'Letter Requests Export');
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Export failed: $e'), backgroundColor: UpriseColors.error),
+      );
+    }
   }
 
   String _formatFileSize(int bytes) {
@@ -657,6 +809,7 @@ class _LetterRequestState extends State<LetterRequest> {
   }
 }
 
+// Document model
 class Document {
   final String id;
   final String title;

@@ -69,10 +69,10 @@ dependencies:
   google_fonts: ^6.2.1
 
   #ito dinagdag ko
-  intl: ^0.18.0
+  intl: ^0.20.2
   share_plus: ^7.0.0
 
-    # ✅ ADD THESE BACK (needed by your web code)
+  # ✅ ADD THESE BACK (needed by your web code)
   file_picker: ^8.0.0
   image_picker: ^1.0.7
   excel: ^4.0.0

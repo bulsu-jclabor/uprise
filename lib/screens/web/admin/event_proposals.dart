@@ -1,14 +1,13 @@
-// lib/screens/admin/event_proposals.dart
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:share_plus/share_plus.dart';
 import '../../theme/app_theme.dart';
-import 'package:intl/intl.dart';
-import 'package:share_plus/share_plus.dart';
 
 class EventProposals extends StatefulWidget {
+  const EventProposals({super.key});
+
   @override
   _EventProposalsState createState() => _EventProposalsState();
 }
@@ -19,37 +18,6 @@ class _EventProposalsState extends State<EventProposals> {
   int _currentPage = 1;
   static const int _pageSize = 10;
 
-  int _totalProposals = 0;
-  int _pendingCount = 0;
-  int _approvedCount = 0;
-  int _rejectedCount = 0;
-  int _archivedCount = 0;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadStats();
-  }
-
-  Future<void> _loadStats() async {
-    final snap = await FirebaseFirestore.instance.collection('event_proposals').get();
-    int pending = 0, approved = 0, rejected = 0, archived = 0;
-    for (var doc in snap.docs) {
-      final status = doc.data()['status'] ?? 'pending';
-      if (status == 'pending') pending++;
-      else if (status == 'approved') approved++;
-      else if (status == 'rejected') rejected++;
-      else if (status == 'archived') archived++;
-    }
-    setState(() {
-      _totalProposals = snap.docs.length;
-      _pendingCount = pending;
-      _approvedCount = approved;
-      _rejectedCount = rejected;
-      _archivedCount = archived;
-    });
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -58,11 +26,11 @@ class _EventProposalsState extends State<EventProposals> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _buildHeader(),
-          _buildStatsRow(),
+          _buildStatsRow(),        // now a StreamBuilder – real‑time
           _buildToolbar(),
-          SizedBox(height: 16),
+          const SizedBox(height: 16),
           Expanded(child: _buildTable()),
-          SizedBox(height: 24),
+          const SizedBox(height: 24),
         ],
       ),
     );
@@ -70,7 +38,7 @@ class _EventProposalsState extends State<EventProposals> {
 
   Widget _buildHeader() {
     return Container(
-      padding: EdgeInsets.all(24),
+      padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
         color: UpriseColors.white,
         border: Border(bottom: BorderSide(color: UpriseColors.mediumGray)),
@@ -81,7 +49,7 @@ class _EventProposalsState extends State<EventProposals> {
           Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text('Event Proposals',
                 style: GoogleFonts.beVietnamPro(fontSize: 24, fontWeight: FontWeight.bold, color: UpriseColors.charcoal)),
-            SizedBox(height: 4),
+            const SizedBox(height: 4),
             Text('Manage and review pending event applications from CICT student organizations.',
                 style: GoogleFonts.beVietnamPro(fontSize: 14, color: UpriseColors.darkGray)),
           ]),
@@ -90,27 +58,47 @@ class _EventProposalsState extends State<EventProposals> {
     );
   }
 
+  // ---------- REAL‑TIME STATS (StreamBuilder) ----------
   Widget _buildStatsRow() {
-    return Padding(
-      padding: EdgeInsets.all(24),
-      child: Row(children: [
-        _statCard('TOTAL PROPOSALS', '$_totalProposals', UpriseColors.primaryDark),
-        SizedBox(width: 16),
-        _statCard('PENDING', '$_pendingCount', UpriseColors.warning),
-        SizedBox(width: 16),
-        _statCard('APPROVED', '$_approvedCount', UpriseColors.success),
-        SizedBox(width: 16),
-        _statCard('REJECTED', '$_rejectedCount', UpriseColors.error),
-        SizedBox(width: 16),
-        _statCard('ARCHIVED', '$_archivedCount', UpriseColors.darkGray),
-      ]),
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance.collection('event_proposals').snapshots(),
+      builder: (context, snapshot) {
+        int total = 0, pending = 0, approved = 0, rejected = 0, archived = 0;
+        if (snapshot.hasData) {
+          final docs = snapshot.data!.docs;
+          total = docs.length;
+          for (var doc in docs) {
+            final status = (doc.data() as Map)['status'] ?? 'pending';
+            switch (status) {
+              case 'pending': pending++; break;
+              case 'approved': approved++; break;
+              case 'rejected': rejected++; break;
+              case 'archived': archived++; break;
+            }
+          }
+        }
+        return Padding(
+          padding: const EdgeInsets.all(24),
+          child: Row(children: [
+            _statCard('TOTAL PROPOSALS', '$total', UpriseColors.primaryDark),
+            const SizedBox(width: 16),
+            _statCard('PENDING', '$pending', UpriseColors.warning),
+            const SizedBox(width: 16),
+            _statCard('APPROVED', '$approved', UpriseColors.success),
+            const SizedBox(width: 16),
+            _statCard('REJECTED', '$rejected', UpriseColors.error),
+            const SizedBox(width: 16),
+            _statCard('ARCHIVED', '$archived', UpriseColors.darkGray),
+          ]),
+        );
+      },
     );
   }
 
   Widget _statCard(String label, String value, Color color) {
     return Expanded(
       child: Container(
-        padding: EdgeInsets.all(16),
+        padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           color: UpriseColors.white,
           borderRadius: BorderRadius.circular(12),
@@ -118,22 +106,21 @@ class _EventProposalsState extends State<EventProposals> {
         ),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text(label, style: GoogleFonts.beVietnamPro(fontSize: 11, color: UpriseColors.darkGray, fontWeight: FontWeight.w600)),
-          SizedBox(height: 6),
+          const SizedBox(height: 6),
           Text(value, style: GoogleFonts.beVietnamPro(fontSize: 28, fontWeight: FontWeight.bold, color: color)),
         ]),
       ),
     );
   }
 
-  // ===================== TOOLBAR (Search + Filter + Export) =====================
+  // ---------- TOOLBAR ----------
   Widget _buildToolbar() {
     return Padding(
-      padding: EdgeInsets.symmetric(horizontal: 24),
+      padding: const EdgeInsets.symmetric(horizontal: 24),
       child: Row(
         children: [
-          // Search field (left)
           Expanded(
-            child: Container(
+            child: SizedBox(
               height: 40,
               child: TextField(
                 controller: _searchController,
@@ -151,17 +138,16 @@ class _EventProposalsState extends State<EventProposals> {
                     borderRadius: BorderRadius.circular(8),
                     borderSide: BorderSide(color: UpriseColors.mediumGray),
                   ),
-                  contentPadding: EdgeInsets.symmetric(vertical: 0),
+                  contentPadding: const EdgeInsets.symmetric(vertical: 0),
                 ),
                 onChanged: (_) => setState(() => _currentPage = 1),
               ),
             ),
           ),
-          SizedBox(width: 16),
-          // Filter dropdown
+          const SizedBox(width: 16),
           Container(
             height: 40,
-            padding: EdgeInsets.symmetric(horizontal: 12),
+            padding: const EdgeInsets.symmetric(horizontal: 12),
             decoration: BoxDecoration(
               color: UpriseColors.white,
               borderRadius: BorderRadius.circular(8),
@@ -175,7 +161,7 @@ class _EventProposalsState extends State<EventProposals> {
                           value: status,
                           child: Row(children: [
                             Icon(_statusIcon(status), size: 16, color: _statusColor(status)),
-                            SizedBox(width: 8),
+                            const SizedBox(width: 8),
                             Text(status, style: GoogleFonts.beVietnamPro(fontSize: 13)),
                           ]),
                         ))
@@ -189,12 +175,11 @@ class _EventProposalsState extends State<EventProposals> {
               ),
             ),
           ),
-          SizedBox(width: 12),
-          // Export button
+          const SizedBox(width: 12),
           OutlinedButton.icon(
             onPressed: _exportToCSV,
-            icon: Icon(Icons.download, size: 16),
-            label: Text('Export'),
+            icon: const Icon(Icons.download, size: 16),
+            label: const Text('Export'),
             style: OutlinedButton.styleFrom(
               foregroundColor: UpriseColors.primaryDark,
               side: BorderSide(color: UpriseColors.mediumGray),
@@ -226,23 +211,23 @@ class _EventProposalsState extends State<EventProposals> {
     }
   }
 
-  // ===================== TABLE =====================
+  // ---------- TABLE ----------
   Widget _buildTable() {
     return Container(
-      margin: EdgeInsets.symmetric(horizontal: 24),
+      margin: const EdgeInsets.symmetric(horizontal: 24),
       decoration: BoxDecoration(
         color: UpriseColors.white,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: UpriseColors.mediumGray),
       ),
       child: Column(children: [
-        // Table Header (same style as Org Management)
+        // Header
         Container(
-          padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           decoration: BoxDecoration(
             color: UpriseColors.lightGray,
             border: Border(bottom: BorderSide(color: UpriseColors.mediumGray)),
-            borderRadius: BorderRadius.only(topLeft: Radius.circular(12), topRight: Radius.circular(12)),
+            borderRadius: const BorderRadius.only(topLeft: Radius.circular(12), topRight: Radius.circular(12)),
           ),
           child: Row(children: [
             Expanded(flex: 3, child: Text('EVENT TITLE & ACADEMIC YEAR', style: _headerStyle())),
@@ -252,7 +237,7 @@ class _EventProposalsState extends State<EventProposals> {
             Expanded(flex: 1, child: Text('ACTIONS', style: _headerStyle())),
           ]),
         ),
-        // Table Body
+        // Body
         Expanded(
           child: StreamBuilder<QuerySnapshot>(
             stream: FirebaseFirestore.instance
@@ -310,104 +295,140 @@ class _EventProposalsState extends State<EventProposals> {
   }
 
   TextStyle _headerStyle() => GoogleFonts.beVietnamPro(
-    fontSize: 11, fontWeight: FontWeight.w700, color: UpriseColors.darkGray, letterSpacing: 0.5);
+      fontSize: 11, fontWeight: FontWeight.w700, color: UpriseColors.darkGray, letterSpacing: 0.5);
 
   Widget _buildRow(Map<String, dynamic> data, String docId) {
     final status = data['status'] ?? 'pending';
-    final statusColor = status == 'approved' ? UpriseColors.success
-        : status == 'rejected' ? UpriseColors.error
-        : status == 'archived' ? UpriseColors.darkGray
-        : UpriseColors.warning;
+    final statusColor = status == 'approved'
+        ? UpriseColors.success
+        : status == 'rejected'
+            ? UpriseColors.error
+            : status == 'archived'
+                ? UpriseColors.darkGray
+                : UpriseColors.warning;
     final statusLabel = status.toUpperCase();
-    // Format date
-    String dateStr = 'TBD';
-    if (data['date'] != null) {
-      try {
-        final date = (data['date'] as Timestamp).toDate();
-        dateStr = '${date.month}/${date.day}/${date.year}';
-      } catch (_) {}
-    }
+    final dateStr = _formatDate(data['date']);
     final academicYear = data['academicYear'] ?? '1ST SEM 2024-2025';
 
     return Container(
-      padding: EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       decoration: BoxDecoration(border: Border(bottom: BorderSide(color: UpriseColors.mediumGray.withOpacity(0.5)))),
       child: Row(children: [
-        Expanded(flex: 3, child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(data['title'] ?? 'Untitled', style: GoogleFonts.beVietnamPro(fontSize: 14, fontWeight: FontWeight.w600, color: UpriseColors.charcoal)),
-          SizedBox(height: 2),
-          Text(academicYear, style: GoogleFonts.beVietnamPro(fontSize: 11, color: UpriseColors.darkGray)),
-        ])),
+        Expanded(
+          flex: 3,
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(data['title'] ?? 'Untitled',
+                style: GoogleFonts.beVietnamPro(fontSize: 14, fontWeight: FontWeight.w600, color: UpriseColors.charcoal)),
+            const SizedBox(height: 2),
+            Text(academicYear, style: GoogleFonts.beVietnamPro(fontSize: 11, color: UpriseColors.darkGray)),
+          ]),
+        ),
         Expanded(flex: 2, child: Text(data['orgName'] ?? 'Unknown', style: GoogleFonts.beVietnamPro(fontSize: 13))),
         Expanded(flex: 1, child: Text(dateStr, style: GoogleFonts.beVietnamPro(fontSize: 13, color: UpriseColors.darkGray))),
-        Expanded(flex: 1, child: Container(
-          padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-          decoration: BoxDecoration(color: statusColor.withOpacity(0.1), borderRadius: BorderRadius.circular(12)),
-          child: Text(statusLabel, textAlign: TextAlign.center, style: GoogleFonts.beVietnamPro(fontSize: 11, fontWeight: FontWeight.w600, color: statusColor)),
-        )),
-        Expanded(flex: 1, child: Row(children: [
-          IconButton(icon: Icon(Icons.visibility_outlined, size: 18, color: UpriseColors.darkGray),
-              onPressed: () => _showViewDialog(data, docId), tooltip: 'View'),
-          if (status != 'approved' && status != 'rejected' && status != 'archived')
-            IconButton(icon: Icon(Icons.check_circle_outline, size: 18, color: UpriseColors.success),
-                onPressed: () => _setStatus(docId, 'approved'), tooltip: 'Approve'),
-          if (status != 'approved' && status != 'rejected' && status != 'archived')
-            IconButton(icon: Icon(Icons.cancel_outlined, size: 18, color: UpriseColors.error),
-                onPressed: () => _setStatus(docId, 'rejected'), tooltip: 'Reject'),
-          if (status != 'archived')
-            IconButton(icon: Icon(Icons.archive_outlined, size: 18, color: UpriseColors.darkGray),
-                onPressed: () => _setStatus(docId, 'archived'), tooltip: 'Archive'),
-        ])),
+        Expanded(
+          flex: 1,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(color: statusColor.withOpacity(0.1), borderRadius: BorderRadius.circular(12)),
+            child: Text(statusLabel,
+                textAlign: TextAlign.center,
+                style: GoogleFonts.beVietnamPro(fontSize: 11, fontWeight: FontWeight.w600, color: statusColor)),
+          ),
+        ),
+        Expanded(
+          flex: 1,
+          child: Row(children: [
+            IconButton(
+                icon: Icon(Icons.visibility_outlined, size: 18, color: UpriseColors.darkGray),
+                onPressed: () => _showViewDialog(data, docId),
+                tooltip: 'View'),
+            if (status != 'approved' && status != 'rejected' && status != 'archived')
+              IconButton(
+                  icon: Icon(Icons.check_circle_outline, size: 18, color: UpriseColors.success),
+                  onPressed: () => _setStatus(docId, 'approved'),
+                  tooltip: 'Approve'),
+            if (status != 'approved' && status != 'rejected' && status != 'archived')
+              IconButton(
+                  icon: Icon(Icons.cancel_outlined, size: 18, color: UpriseColors.error),
+                  onPressed: () => _setStatus(docId, 'rejected'),
+                  tooltip: 'Reject'),
+            if (status != 'archived')
+              IconButton(
+                  icon: Icon(Icons.archive_outlined, size: 18, color: UpriseColors.darkGray),
+                  onPressed: () => _setStatus(docId, 'archived'),
+                  tooltip: 'Archive'),
+          ]),
+        ),
       ]),
     );
   }
 
   Widget _emptyState() {
-    return Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+    return Center(
+        child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
       Icon(Icons.event_busy, size: 64, color: UpriseColors.mediumGray),
-      SizedBox(height: 16),
+      const SizedBox(height: 16),
       Text('No proposals found', style: GoogleFonts.beVietnamPro(color: UpriseColors.darkGray, fontSize: 15)),
     ]));
   }
 
+  // ---------- FIXED PAGINATION (sliding window) ----------
   Widget _buildFooter(int total, int totalPages, int start, int end) {
+    const int maxVisible = 5;
+    int firstPage = (_currentPage - maxVisible ~/ 2).clamp(1, totalPages);
+    int lastPage = (firstPage + maxVisible - 1).clamp(1, totalPages);
+    if (lastPage - firstPage + 1 < maxVisible && firstPage > 1) {
+      firstPage = (lastPage - maxVisible + 1).clamp(1, totalPages);
+    }
+    final pages = List.generate(lastPage - firstPage + 1, (i) => firstPage + i);
+
     return Container(
-      padding: EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       decoration: BoxDecoration(
         border: Border(top: BorderSide(color: UpriseColors.mediumGray)),
         color: UpriseColors.lightGray,
-        borderRadius: BorderRadius.only(bottomLeft: Radius.circular(12), bottomRight: Radius.circular(12)),
+        borderRadius: const BorderRadius.only(bottomLeft: Radius.circular(12), bottomRight: Radius.circular(12)),
       ),
       child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
         Text('Showing ${total == 0 ? 0 : start + 1}–$end of $total proposals',
             style: GoogleFonts.beVietnamPro(fontSize: 13, color: UpriseColors.darkGray)),
         Row(children: [
           IconButton(
-            icon: Icon(Icons.chevron_left, size: 20),
+            icon: const Icon(Icons.chevron_left, size: 20),
             color: _currentPage > 1 ? UpriseColors.charcoal : UpriseColors.mediumGray,
             onPressed: _currentPage > 1 ? () => setState(() => _currentPage--) : null,
           ),
-          ...List.generate(totalPages.clamp(1, 5), (i) {
-            final page = i + 1;
-            final sel = page == _currentPage;
-            return GestureDetector(
-              onTap: () => setState(() => _currentPage = page),
-              child: Container(
-                margin: EdgeInsets.symmetric(horizontal: 2),
-                padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: sel ? UpriseColors.primaryDark : Colors.transparent,
-                  borderRadius: BorderRadius.circular(4),
+          ...pages.map((page) => GestureDetector(
+                onTap: () => setState(() => _currentPage = page),
+                child: Container(
+                  margin: const EdgeInsets.symmetric(horizontal: 2),
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: page == _currentPage ? UpriseColors.primaryDark : Colors.transparent,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text('$page',
+                      style: GoogleFonts.beVietnamPro(
+                        fontSize: 12,
+                        color: page == _currentPage ? Colors.white : UpriseColors.charcoal,
+                        fontWeight: page == _currentPage ? FontWeight.w600 : FontWeight.normal,
+                      )),
                 ),
-                child: Text('$page', style: GoogleFonts.beVietnamPro(
-                  fontSize: 12, color: sel ? Colors.white : UpriseColors.charcoal,
-                  fontWeight: sel ? FontWeight.w600 : FontWeight.normal,
-                )),
+              )),
+          if (lastPage < totalPages) ...[
+            Text('...', style: TextStyle(color: UpriseColors.darkGray)),
+            GestureDetector(
+              onTap: () => setState(() => _currentPage = totalPages),
+              child: Container(
+                margin: const EdgeInsets.symmetric(horizontal: 2),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                child: Text('$totalPages',
+                    style: GoogleFonts.beVietnamPro(fontSize: 12, color: UpriseColors.charcoal)),
               ),
-            );
-          }),
+            ),
+          ],
           IconButton(
-            icon: Icon(Icons.chevron_right, size: 20),
+            icon: const Icon(Icons.chevron_right, size: 20),
             color: _currentPage < totalPages ? UpriseColors.charcoal : UpriseColors.mediumGray,
             onPressed: _currentPage < totalPages ? () => setState(() => _currentPage++) : null,
           ),
@@ -418,11 +439,11 @@ class _EventProposalsState extends State<EventProposals> {
 
   Future<void> _setStatus(String docId, String newStatus) async {
     await FirebaseFirestore.instance.collection('event_proposals').doc(docId).update({'status': newStatus});
-    _loadStats();
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Proposal ${newStatus.toUpperCase()}')));
+    // Stats update automatically because of StreamBuilder
   }
 
-  // ===================== VIEW DIALOG =====================
+  // ---------- VIEW DIALOG ----------
   void _showViewDialog(Map<String, dynamic> data, String docId) {
     final status = data['status'] ?? 'pending';
     showDialog(
@@ -430,7 +451,7 @@ class _EventProposalsState extends State<EventProposals> {
       builder: (ctx) => AlertDialog(
         title: Row(children: [
           Icon(Icons.event_note, color: UpriseColors.primaryDark),
-          SizedBox(width: 8),
+          const SizedBox(width: 8),
           Expanded(child: Text(data['title'] ?? 'Event Proposal', style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.bold))),
         ]),
         content: SingleChildScrollView(
@@ -443,9 +464,15 @@ class _EventProposalsState extends State<EventProposals> {
               _detailRow('Estimated Budget', data['budget'] != null ? '₱${data['budget']}' : '—'),
               _detailRow('Description', data['description'] ?? 'No description provided.'),
               if (data['goal'] != null && data['goal'].toString().isNotEmpty) _detailRow('Goal', data['goal']),
-              SizedBox(height: 12),
-              Divider(),
-              _detailRow('Status', status.toUpperCase(), isStatus: true, statusColor: status == 'approved' ? UpriseColors.success : status == 'rejected' ? UpriseColors.error : UpriseColors.warning),
+              const SizedBox(height: 12),
+              const Divider(),
+              _detailRow('Status', status.toUpperCase(),
+                  isStatus: true,
+                  statusColor: status == 'approved'
+                      ? UpriseColors.success
+                      : status == 'rejected'
+                          ? UpriseColors.error
+                          : UpriseColors.warning),
               _detailRow('Submitted', _formatTimestamp(data['createdAt'])),
               if (data['reviewedAt'] != null) _detailRow('Reviewed', _formatTimestamp(data['reviewedAt'])),
             ]),
@@ -482,7 +509,7 @@ class _EventProposalsState extends State<EventProposals> {
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx),
             style: ElevatedButton.styleFrom(backgroundColor: UpriseColors.primaryDark),
-            child: Text('Close', style: TextStyle(color: Colors.white)),
+            child: const Text('Close', style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
@@ -491,15 +518,20 @@ class _EventProposalsState extends State<EventProposals> {
 
   Widget _detailRow(String label, String value, {bool isStatus = false, Color? statusColor}) {
     return Padding(
-      padding: EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.only(bottom: 8),
       child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        SizedBox(width: 120, child: Text('$label:', style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.w600, color: UpriseColors.darkGray))),
+        SizedBox(
+            width: 120,
+            child: Text('$label:',
+                style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.w600, color: UpriseColors.darkGray))),
         Expanded(
           child: isStatus
               ? Container(
-                  padding: EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                  decoration: BoxDecoration(color: statusColor?.withOpacity(0.1) ?? Colors.transparent, borderRadius: BorderRadius.circular(4)),
-                  child: Text(value, style: GoogleFonts.beVietnamPro(fontSize: 12, color: statusColor, fontWeight: FontWeight.w600)),
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  decoration: BoxDecoration(
+                      color: statusColor?.withOpacity(0.1) ?? Colors.transparent, borderRadius: BorderRadius.circular(4)),
+                  child: Text(value,
+                      style: GoogleFonts.beVietnamPro(fontSize: 12, color: statusColor, fontWeight: FontWeight.w600)),
                 )
               : Text(value, style: GoogleFonts.beVietnamPro(fontSize: 12)),
         ),
@@ -507,27 +539,26 @@ class _EventProposalsState extends State<EventProposals> {
     );
   }
 
+  // ---------- SAFE DATE FORMATTING ----------
   String _formatDate(dynamic dateField) {
     if (dateField == null) return 'TBD';
-    try {
-      final date = (dateField as Timestamp).toDate();
+    if (dateField is Timestamp) {
+      final date = dateField.toDate();
       return '${date.month}/${date.day}/${date.year}';
-    } catch (_) {
-      return dateField.toString();
     }
+    return dateField.toString(); // fallback for string dates
   }
 
   String _formatTimestamp(dynamic ts) {
     if (ts == null) return '—';
-    try {
-      final date = (ts as Timestamp).toDate();
+    if (ts is Timestamp) {
+      final date = ts.toDate();
       return '${date.month}/${date.day}/${date.year} ${date.hour}:${date.minute.toString().padLeft(2, '0')}';
-    } catch (_) {
-      return '—';
     }
+    return ts.toString();
   }
 
-  // ===================== EXPORT =====================
+  // ---------- EXPORT ----------
   Future<void> _exportToCSV() async {
     try {
       final snap = await FirebaseFirestore.instance.collection('event_proposals').get();
@@ -548,7 +579,8 @@ class _EventProposalsState extends State<EventProposals> {
       await file.writeAsString(lines.join('\n'));
       await Share.shareXFiles([XFile(file.path)], text: 'Event Proposals Export');
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Export failed: $e'), backgroundColor: UpriseColors.error));
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Export failed: $e'), backgroundColor: UpriseColors.error));
     }
   }
 

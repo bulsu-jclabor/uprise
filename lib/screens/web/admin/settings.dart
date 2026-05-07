@@ -7,6 +7,8 @@ import '../../theme/app_theme.dart';
 import 'package:intl/intl.dart';
 
 class AdminSettings extends StatefulWidget {
+  const AdminSettings({super.key});
+
   @override
   _AdminSettingsState createState() => _AdminSettingsState();
 }
@@ -325,7 +327,7 @@ class _AdminSettingsState extends State<AdminSettings> {
                   subtitle: Text('Receive a verification code via email on each login', style: GoogleFonts.beVietnamPro(fontSize: 12)),
                   value: false,
                   onChanged: (v) {},
-                  activeColor: UpriseColors.primaryDark,
+                  activeThumbColor: UpriseColors.primaryDark,
                 ),
               ],
             ),
@@ -363,14 +365,14 @@ class _AdminSettingsState extends State<AdminSettings> {
                   subtitle: Text('Receive daily summary of pending approvals', style: GoogleFonts.beVietnamPro(fontSize: 12)),
                   value: _emailNotifications,
                   onChanged: (v) => setState(() { _emailNotifications = v; _saveSettings(); }),
-                  activeColor: UpriseColors.primaryDark,
+                  activeThumbColor: UpriseColors.primaryDark,
                 ),
                 SwitchListTile(
                   title: Text('Desktop Alerts', style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.w500)),
                   subtitle: Text('In-browser push notifications for urgent alerts', style: GoogleFonts.beVietnamPro(fontSize: 12)),
                   value: _desktopAlerts,
                   onChanged: (v) => setState(() { _desktopAlerts = v; _saveSettings(); }),
-                  activeColor: UpriseColors.primaryDark,
+                  activeThumbColor: UpriseColors.primaryDark,
                 ),
                 Divider(),
                 Text('ADVANCED NOTIFICATIONS', style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.w700, color: UpriseColors.darkGray, letterSpacing: 0.5)),
@@ -380,21 +382,21 @@ class _AdminSettingsState extends State<AdminSettings> {
                   subtitle: Text('Get a daily digest of all system activities', style: GoogleFonts.beVietnamPro(fontSize: 12)),
                   value: _dailySummary,
                   onChanged: (v) => setState(() { _dailySummary = v; _saveSettings(); }),
-                  activeColor: UpriseColors.primaryDark,
+                  activeThumbColor: UpriseColors.primaryDark,
                 ),
                 SwitchListTile(
                   title: Text('Urgent Alerts', style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.w500)),
                   subtitle: Text('Receive immediate notifications for critical issues', style: GoogleFonts.beVietnamPro(fontSize: 12)),
                   value: _urgentAlerts,
                   onChanged: (v) => setState(() { _urgentAlerts = v; _saveSettings(); }),
-                  activeColor: UpriseColors.primaryDark,
+                  activeThumbColor: UpriseColors.primaryDark,
                 ),
                 SwitchListTile(
                   title: Text('Event Reminders', style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.w500)),
                   subtitle: Text('Get reminded about upcoming events and deadlines', style: GoogleFonts.beVietnamPro(fontSize: 12)),
                   value: _eventReminders,
                   onChanged: (v) => setState(() { _eventReminders = v; _saveSettings(); }),
-                  activeColor: UpriseColors.primaryDark,
+                  activeThumbColor: UpriseColors.primaryDark,
                 ),
               ],
             ),

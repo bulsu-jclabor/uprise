@@ -12,10 +12,10 @@ import 'package:mailer/smtp_server.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:firebase_core/firebase_core.dart';
 import '../../theme/app_theme.dart';
-import 'package:intl/intl.dart';
-import 'package:share_plus/share_plus.dart';
 
 class StudentAccounts extends StatefulWidget {
+  const StudentAccounts({super.key});
+
   @override
   _StudentAccountsState createState() => _StudentAccountsState();
 }
@@ -37,15 +37,25 @@ class _StudentAccountsState extends State<StudentAccounts> {
   final _manualEmailController = TextEditingController();
   String _manualStatus = 'pending';
 
-  // Fixed column widths (total ~990, horizontal scroll will kick in if needed)
-  final double _colId = 120;
-  final double _colName = 200;
-  final double _colCourse = 100;
-  final double _colYear = 100;
-  final double _colEmail = 220;
-  final double _colStatus = 100;
-  final double _colActions = 150;
+  // Column widths (total ~960px)
+  final double _colId = 110;
+  final double _colName = 180;
+  final double _colCourse = 90;
+  final double _colYear = 90;
+  final double _colEmail = 210;
+  final double _colStatus = 90;
+  final double _colActions = 190; // enough for 4 icons
   double get _totalWidth => _colId + _colName + _colCourse + _colYear + _colEmail + _colStatus + _colActions;
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    _manualIdController.dispose();
+    _manualNameController.dispose();
+    _manualYearController.dispose();
+    _manualEmailController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -53,192 +63,229 @@ class _StudentAccountsState extends State<StudentAccounts> {
       backgroundColor: UpriseColors.lightGray,
       body: Column(
         children: [
-          // Header
-          Container(
-            padding: EdgeInsets.all(24),
-            decoration: BoxDecoration(
-              color: UpriseColors.white,
-              border: Border(bottom: BorderSide(color: UpriseColors.mediumGray)),
+          _buildHeader(),
+          _buildFilterBar(),
+          const SizedBox(height: 16),
+          Expanded(child: _buildTable()),
+          const SizedBox(height: 16),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHeader() {
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: UpriseColors.white,
+        border: Border(bottom: BorderSide(color: UpriseColors.mediumGray)),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Student Accounts',
+                  style: GoogleFonts.beVietnamPro(fontSize: 24, fontWeight: FontWeight.bold, color: UpriseColors.charcoal)),
+              const SizedBox(height: 4),
+              Text('Manage and verify student accounts. Batch import via Excel/CSV or add manually.',
+                  style: GoogleFonts.beVietnamPro(fontSize: 14, color: UpriseColors.darkGray)),
+            ],
+          ),
+          ElevatedButton.icon(
+            onPressed: _showUploadDialog,
+            icon: const Icon(Icons.upload_file),
+            label: const Text('Batch Import'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: UpriseColors.primaryDark,
+              foregroundColor: UpriseColors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
             ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Column(
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFilterBar() {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 24),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: UpriseColors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: UpriseColors.mediumGray),
+      ),
+      child: Row(
+        children: [
+          Row(
+            children: [
+              _buildStatusTab('All', _statusFilter == 'All'),
+              const SizedBox(width: 8),
+              _buildStatusTab('Pending', _statusFilter == 'pending'),
+              const SizedBox(width: 8),
+              _buildStatusTab('Verified', _statusFilter == 'verified'),
+            ],
+          ),
+          const SizedBox(width: 24),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            decoration: BoxDecoration(
+              border: Border.all(color: UpriseColors.mediumGray),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: DropdownButton<String>(
+              value: _courseFilter,
+              underline: const SizedBox(),
+              icon: Icon(Icons.filter_list, size: 18, color: UpriseColors.darkGray),
+              items: const [
+                DropdownMenuItem(value: 'All', child: Text('All Courses')),
+                DropdownMenuItem(value: 'BSIT', child: Text('BSIT')),
+                DropdownMenuItem(value: 'BSIS', child: Text('BSIS')),
+                DropdownMenuItem(value: 'BLIS', child: Text('BLIS')),
+              ],
+              onChanged: (val) => setState(() => _courseFilter = val!),
+            ),
+          ),
+          const Spacer(),
+          SizedBox(
+            width: 260,
+            height: 40,
+            child: TextField(
+              controller: _searchController,
+              decoration: InputDecoration(
+                hintText: 'Search by name, ID, or email...',
+                hintStyle: GoogleFonts.beVietnamPro(fontSize: 13, color: UpriseColors.darkGray),
+                prefixIcon: Icon(Icons.search, size: 18, color: UpriseColors.darkGray),
+                filled: true,
+                fillColor: UpriseColors.lightGray,
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(20), borderSide: BorderSide.none),
+                contentPadding: const EdgeInsets.symmetric(vertical: 0),
+              ),
+              onChanged: (_) => setState(() {}),
+            ),
+          ),
+          const SizedBox(width: 16),
+          OutlinedButton.icon(
+            onPressed: _exportToCSV,
+            icon: const Icon(Icons.download, size: 18),
+            label: const Text('Export CSV'),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: UpriseColors.primaryDark,
+              side: BorderSide(color: UpriseColors.primaryDark),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+          ),
+          const SizedBox(width: 12),
+          ElevatedButton.icon(
+            onPressed: _showManualAddDialog,
+            icon: const Icon(Icons.person_add),
+            label: const Text('Add Manually'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: UpriseColors.white,
+              foregroundColor: UpriseColors.primaryDark,
+              side: BorderSide(color: UpriseColors.primaryDark),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatusTab(String label, bool isActive) {
+    return GestureDetector(
+      onTap: () => setState(() => _statusFilter = label == 'All' ? 'All' : label.toLowerCase()),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: BoxDecoration(
+          color: isActive ? UpriseColors.primaryDark : Colors.transparent,
+          borderRadius: BorderRadius.circular(6),
+          border: isActive ? null : Border.all(color: UpriseColors.mediumGray),
+        ),
+        child: Text(
+          label,
+          style: GoogleFonts.beVietnamPro(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: isActive ? UpriseColors.white : UpriseColors.darkGray,
+          ),
+        ),
+      ),
+    );
+  }
+
+  TextStyle _headerStyle() {
+    return GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.w600, color: UpriseColors.darkGray, letterSpacing: 0.5);
+  }
+
+  Widget _buildTable() {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 24),
+      decoration: BoxDecoration(
+        color: UpriseColors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: UpriseColors.mediumGray),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(12),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            return SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              physics: const AlwaysScrollableScrollPhysics(),
+              child: SizedBox(
+                width: _totalWidth,
+                child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Student Accounts',
-                        style: GoogleFonts.beVietnamPro(fontSize: 24, fontWeight: FontWeight.bold, color: UpriseColors.charcoal)),
-                    SizedBox(height: 4),
-                    Text('Manage and verify student accounts. Batch import via Excel/CSV or add manually.',
-                        style: GoogleFonts.beVietnamPro(fontSize: 14, color: UpriseColors.darkGray)),
-                  ],
-                ),
-                ElevatedButton.icon(
-                  onPressed: _showUploadDialog,
-                  icon: Icon(Icons.upload_file),
-                  label: Text('Batch Import'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: UpriseColors.primaryDark,
-                    foregroundColor: UpriseColors.white,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          // Filter Bar
-          Container(
-            margin: EdgeInsets.symmetric(horizontal: 24),
-            padding: EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: UpriseColors.white,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: UpriseColors.mediumGray),
-            ),
-            child: Row(
-              children: [
-                Row(
-                  children: [
-                    _buildStatusTab('All', _statusFilter == 'All'),
-                    SizedBox(width: 8),
-                    _buildStatusTab('Pending', _statusFilter == 'pending'),
-                    SizedBox(width: 8),
-                    _buildStatusTab('Verified', _statusFilter == 'verified'),
-                  ],
-                ),
-                SizedBox(width: 24),
-                Container(
-                  padding: EdgeInsets.symmetric(horizontal: 8),
-                  decoration: BoxDecoration(
-                    border: Border.all(color: UpriseColors.mediumGray),
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: DropdownButton<String>(
-                    value: _courseFilter,
-                    underline: const SizedBox(),
-                    icon: Icon(Icons.filter_list, size: 18, color: UpriseColors.darkGray),
-                    items: const [
-                      DropdownMenuItem(value: 'All', child: Text('All Courses')),
-                      DropdownMenuItem(value: 'BSIT', child: Text('BSIT')),
-                      DropdownMenuItem(value: 'BSIS', child: Text('BSIS')),
-                      DropdownMenuItem(value: 'BLIS', child: Text('BLIS')),
-                    ],
-                    onChanged: (val) => setState(() => _courseFilter = val!),
-                  ),
-                ),
-                const Spacer(),
-                SizedBox(
-                  width: 260,
-                  height: 40,
-                  child: TextField(
-                    controller: _searchController,
-                    decoration: InputDecoration(
-                      hintText: 'Search by name, ID, or email...',
-                      hintStyle: GoogleFonts.beVietnamPro(fontSize: 13, color: UpriseColors.darkGray),
-                      prefixIcon: Icon(Icons.search, size: 18, color: UpriseColors.darkGray),
-                      filled: true,
-                      fillColor: UpriseColors.lightGray,
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(20), borderSide: BorderSide.none),
-                      contentPadding: EdgeInsets.symmetric(vertical: 0),
-                    ),
-                    onChanged: (_) => setState(() {}),
-                  ),
-                ),
-                SizedBox(width: 16),
-                OutlinedButton.icon(
-                  onPressed: _exportToCSV,
-                  icon: Icon(Icons.download, size: 18),
-                  label: Text('Export CSV'),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: UpriseColors.primaryDark,
-                    side: BorderSide(color: UpriseColors.primaryDark),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                  ),
-                ),
-                SizedBox(width: 12),
-                ElevatedButton.icon(
-                  onPressed: _showManualAddDialog,
-                  icon: Icon(Icons.person_add),
-                  label: Text('Add Manually'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: UpriseColors.white,
-                    foregroundColor: UpriseColors.primaryDark,
-                    side: BorderSide(color: UpriseColors.primaryDark),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          SizedBox(height: 16),
-
-          // Table area – simple horizontal scroll + vertical list
-          Expanded(
-            child: Container(
-              margin: EdgeInsets.symmetric(horizontal: 24),
-              decoration: BoxDecoration(
-                color: UpriseColors.white,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: UpriseColors.mediumGray),
-              ),
-              child: SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: SizedBox(
-                  width: _totalWidth,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Table header
-                      Container(
-                        padding: EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          border: Border(bottom: BorderSide(color: UpriseColors.mediumGray)),
-                          color: UpriseColors.lightGray,
-                        ),
-                        child: Row(
-                          children: [
-                            SizedBox(width: _colId, child: Text('STUDENT ID', style: _headerStyle())),
-                            SizedBox(width: _colName, child: Text('FULL NAME', style: _headerStyle())),
-                            SizedBox(width: _colCourse, child: Text('COURSE', style: _headerStyle())),
-                            SizedBox(width: _colYear, child: Text('YEAR', style: _headerStyle())),
-                            SizedBox(width: _colEmail, child: Text('EMAIL', style: _headerStyle())),
-                            SizedBox(width: _colStatus, child: Text('STATUS', style: _headerStyle())),
-                            SizedBox(width: _colActions, child: Text('ACTIONS', style: _headerStyle())),
-                          ],
-                        ),
+                    // Header
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        border: Border(bottom: BorderSide(color: UpriseColors.mediumGray)),
+                        color: UpriseColors.lightGray,
                       ),
-                      // Table rows (dynamic height, vertical scrolling)
-                      StreamBuilder<QuerySnapshot>(
+                      child: Row(
+                        children: [
+                          SizedBox(width: _colId, child: Text('STUDENT ID', style: _headerStyle())),
+                          SizedBox(width: _colName, child: Text('FULL NAME', style: _headerStyle())),
+                          SizedBox(width: _colCourse, child: Text('COURSE', style: _headerStyle())),
+                          SizedBox(width: _colYear, child: Text('YEAR', style: _headerStyle())),
+                          SizedBox(width: _colEmail, child: Text('EMAIL', style: _headerStyle())),
+                          SizedBox(width: _colStatus, child: Text('STATUS', style: _headerStyle())),
+                          SizedBox(width: _colActions, child: Text('ACTIONS', style: _headerStyle())),
+                        ],
+                      ),
+                    ),
+                    // Rows
+                    SizedBox(
+                      height: (constraints.maxHeight - 60).clamp(200.0, 800.0),
+                      child: StreamBuilder<QuerySnapshot>(
                         stream: FirebaseFirestore.instance
                             .collection('students')
                             .orderBy('createdAt', descending: true)
                             .snapshots(),
                         builder: (context, snapshot) {
                           if (snapshot.connectionState == ConnectionState.waiting) {
-                            return SizedBox(
-                              height: 200,
-                              child: Center(child: CircularProgressIndicator()),
-                            );
+                            return const Center(child: CircularProgressIndicator());
                           }
                           if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                            return SizedBox(
-                              height: 200,
-                              child: Center(
-                                child: Column(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Icon(Icons.people_outline, size: 64, color: UpriseColors.mediumGray),
-                                    SizedBox(height: 16),
-                                    Text('No students found', style: GoogleFonts.beVietnamPro(color: UpriseColors.darkGray)),
-                                  ],
-                                ),
+                            return Center(
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(Icons.people_outline, size: 64, color: UpriseColors.mediumGray),
+                                  const SizedBox(height: 16),
+                                  Text('No students found', style: GoogleFonts.beVietnamPro(color: UpriseColors.darkGray)),
+                                ],
                               ),
                             );
                           }
 
                           var docs = snapshot.data!.docs;
-                          // Apply filters
+                          // Filters
                           if (_searchController.text.isNotEmpty) {
                             docs = docs.where((doc) {
                               final data = doc.data() as Map<String, dynamic>;
@@ -263,31 +310,26 @@ class _StudentAccountsState extends State<StudentAccounts> {
                           }
 
                           if (docs.isEmpty) {
-                            return SizedBox(
-                              height: 200,
-                              child: Center(
-                                child: Column(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Icon(Icons.filter_alt_off, size: 64, color: UpriseColors.mediumGray),
-                                    SizedBox(height: 16),
-                                    Text('No students match filters', style: GoogleFonts.beVietnamPro(color: UpriseColors.darkGray)),
-                                  ],
-                                ),
+                            return Center(
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(Icons.filter_alt_off, size: 64, color: UpriseColors.mediumGray),
+                                  const SizedBox(height: 16),
+                                  Text('No students match filters', style: GoogleFonts.beVietnamPro(color: UpriseColors.darkGray)),
+                                ],
                               ),
                             );
                           }
 
                           return ListView.builder(
-                            shrinkWrap: true,
-                            physics: const NeverScrollableScrollPhysics(), // Let parent handle vertical scroll
                             itemCount: docs.length,
                             itemBuilder: (context, index) {
                               final data = docs[index].data() as Map<String, dynamic>;
                               final status = data['status'] ?? 'pending';
-                              Color statusColor = status == 'verified' ? UpriseColors.success : UpriseColors.warning;
+                              final statusColor = status == 'verified' ? UpriseColors.success : UpriseColors.warning;
                               return Container(
-                                padding: EdgeInsets.all(16),
+                                padding: const EdgeInsets.all(16),
                                 decoration: BoxDecoration(
                                   border: Border(bottom: BorderSide(color: UpriseColors.mediumGray)),
                                 ),
@@ -301,7 +343,7 @@ class _StudentAccountsState extends State<StudentAccounts> {
                                     SizedBox(
                                       width: _colStatus,
                                       child: Container(
-                                        padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                                         decoration: BoxDecoration(
                                           color: statusColor.withOpacity(0.1),
                                           borderRadius: BorderRadius.circular(12),
@@ -315,7 +357,10 @@ class _StudentAccountsState extends State<StudentAccounts> {
                                     ),
                                     SizedBox(
                                       width: _colActions,
-                                      child: Row(
+                                      child: Wrap(
+                                        spacing: 4,
+                                        runSpacing: 4,
+                                        alignment: WrapAlignment.center,
                                         children: [
                                           IconButton(
                                             icon: Icon(Icons.key, size: 18, color: UpriseColors.primaryDark),
@@ -347,57 +392,29 @@ class _StudentAccountsState extends State<StudentAccounts> {
                           );
                         },
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
               ),
-            ),
-          ),
-          SizedBox(height: 16),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildStatusTab(String label, bool isActive) {
-    return GestureDetector(
-      onTap: () => setState(() => _statusFilter = label == 'All' ? 'All' : label.toLowerCase()),
-      child: Container(
-        padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        decoration: BoxDecoration(
-          color: isActive ? UpriseColors.primaryDark : Colors.transparent,
-          borderRadius: BorderRadius.circular(6),
-          border: isActive ? null : Border.all(color: UpriseColors.mediumGray),
-        ),
-        child: Text(
-          label,
-          style: GoogleFonts.beVietnamPro(
-            fontSize: 13,
-            fontWeight: FontWeight.w600,
-            color: isActive ? UpriseColors.white : UpriseColors.darkGray,
-          ),
+            );
+          },
         ),
       ),
     );
   }
 
-  TextStyle _headerStyle() {
-    return GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.w600, color: UpriseColors.darkGray, letterSpacing: 0.5);
-  }
-
-  // ---------- Credentials helpers ----------
   void _showPasswordDialog(String studentId, String? password) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text('Student Credentials'),
+        title: const Text('Student Credentials'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text('Student ID: $studentId', style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.bold)),
-            SizedBox(height: 8),
-            Text('Password: ', style: GoogleFonts.beVietnamPro()),
+            const SizedBox(height: 8),
+            const Text('Password: '),
             SelectableText(
               password ?? 'No password stored. Use "Resend Credentials" to generate a new one.',
               style: GoogleFonts.beVietnamPro(fontSize: 16, fontWeight: FontWeight.w500, color: UpriseColors.primaryDark),
@@ -405,7 +422,7 @@ class _StudentAccountsState extends State<StudentAccounts> {
           ],
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: Text('Close')),
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close')),
         ],
       ),
     );
@@ -421,7 +438,7 @@ class _StudentAccountsState extends State<StudentAccounts> {
   Future<void> _verifyStudent(String docId) async {
     try {
       await FirebaseFirestore.instance.collection('students').doc(docId).update({'status': 'verified'});
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Student account verified')));
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Student account verified')));
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red));
     }
@@ -431,22 +448,22 @@ class _StudentAccountsState extends State<StudentAccounts> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text('Delete Student Account'),
-        content: Text('Are you sure you want to delete this student account? This action cannot be undone.'),
+        title: const Text('Delete Student Account'),
+        content: const Text('Are you sure you want to delete this student account? This action cannot be undone.'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
           ElevatedButton(
             onPressed: () async {
               try {
                 await FirebaseFirestore.instance.collection('students').doc(docId).delete();
-                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Student record deleted')));
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Student record deleted')));
                 Navigator.pop(context);
               } catch (e) {
                 ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red));
               }
             },
             style: ElevatedButton.styleFrom(backgroundColor: UpriseColors.error),
-            child: Text('Delete'),
+            child: const Text('Delete'),
           ),
         ],
       ),
@@ -465,11 +482,11 @@ class _StudentAccountsState extends State<StudentAccounts> {
             title: Row(
               children: [
                 Icon(Icons.upload_file, color: UpriseColors.primaryDark),
-                SizedBox(width: 8),
+                const SizedBox(width: 8),
                 Text('Batch Import Students', style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.bold)),
               ],
             ),
-            content: Container(
+            content: SizedBox(
               width: 500,
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -484,7 +501,7 @@ class _StudentAccountsState extends State<StudentAccounts> {
                     child: Row(
                       children: [
                         Icon(Icons.description, color: UpriseColors.primaryDark),
-                        SizedBox(width: 12),
+                        const SizedBox(width: 12),
                         Expanded(
                           child: Text(_selectedFileName.isEmpty ? 'No file selected' : _selectedFileName,
                               style: GoogleFonts.beVietnamPro(fontSize: 14)),
@@ -503,25 +520,25 @@ class _StudentAccountsState extends State<StudentAccounts> {
                               setDialogState(() {});
                             }
                           },
-                          child: Text('Browse'),
+                          child: const Text('Browse'),
                         ),
                       ],
                     ),
                   ),
-                  SizedBox(height: 8),
+                  const SizedBox(height: 8),
                   Text(
                     'Supported: Excel (.xlsx, .xls) or CSV. Columns: Student ID, Full Name, Course, Year Level, Email',
                     style: GoogleFonts.beVietnamPro(fontSize: 12, color: UpriseColors.darkGray),
                   ),
                   if (_isUploading) ...[
-                    SizedBox(height: 16),
+                    const SizedBox(height: 16),
                     LinearProgressIndicator(color: UpriseColors.primaryDark),
                   ],
                 ],
               ),
             ),
             actions: [
-              TextButton(onPressed: () => Navigator.pop(context), child: Text('Cancel')),
+              TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
               ElevatedButton(
                 onPressed: _isUploading || _uploadedFile == null
                     ? null
@@ -556,7 +573,7 @@ class _StudentAccountsState extends State<StudentAccounts> {
                         }
                       },
                 style: ElevatedButton.styleFrom(backgroundColor: UpriseColors.primaryDark),
-                child: Text('Upload & Create'),
+                child: const Text('Upload & Create'),
               ),
             ],
           );
@@ -568,12 +585,12 @@ class _StudentAccountsState extends State<StudentAccounts> {
   // ---------- File parsing ----------
   Future<List<Map<String, String>>> _parseFile(File file) async {
     List<Map<String, String>> students = [];
-    String extension = file.path.split('.').last.toLowerCase();
+    final extension = file.path.split('.').last.toLowerCase();
     if (extension == 'csv') {
-      String csvString = await file.readAsString();
-      List<List<dynamic>> rows = const CsvToListConverter().convert(csvString);
+      final csvString = await file.readAsString();
+      final rows = const CsvToListConverter().convert(csvString);
       for (int i = 1; i < rows.length; i++) {
-        var row = rows[i];
+        final row = rows[i];
         if (row.length >= 5) {
           students.add({
             'studentId': row[0]?.toString().trim() ?? '',
@@ -585,12 +602,12 @@ class _StudentAccountsState extends State<StudentAccounts> {
         }
       }
     } else {
-      var bytes = await file.readAsBytes();
-      var excel = Excel.decodeBytes(bytes);
+      final bytes = await file.readAsBytes();
+      final excel = Excel.decodeBytes(bytes);
       for (var table in excel.tables.keys) {
-        var sheet = excel.tables[table];
+        final sheet = excel.tables[table];
         for (int i = 1; i < sheet!.rows.length; i++) {
-          var row = sheet.rows[i];
+          final row = sheet.rows[i];
           if (row.length >= 5) {
             students.add({
               'studentId': row[0]?.value?.toString().trim() ?? '',
@@ -618,18 +635,19 @@ class _StudentAccountsState extends State<StudentAccounts> {
 
   // ---------- Account creation & email ----------
   Future<void> _createStudentAccount(Map<String, String> student) async {
-    String email = student['email']!;
-    String studentId = student['studentId']!;
-    String fullName = student['fullName']!;
-    String password = _generateRandomPassword();
+    final email = student['email']!;
+    final studentId = student['studentId']!;
+    final fullName = student['fullName']!;
+    final password = _generateRandomPassword();
 
+    // Use a secondary Firebase app to keep admin logged in
     FirebaseApp secondaryApp;
     try {
       secondaryApp = await Firebase.initializeApp(name: 'secondaryApp', options: Firebase.app().options);
     } catch (e) {
       secondaryApp = Firebase.app('secondaryApp');
     }
-    FirebaseAuth secondaryAuth = FirebaseAuth.instanceFor(app: secondaryApp);
+    final secondaryAuth = FirebaseAuth.instanceFor(app: secondaryApp);
     UserCredential userCred;
     try {
       userCred = await secondaryAuth.createUserWithEmailAndPassword(email: email, password: password);
@@ -658,12 +676,12 @@ class _StudentAccountsState extends State<StudentAccounts> {
 
   String _generateRandomPassword() {
     const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#%&*';
-    String random = List.generate(12, (index) => chars[DateTime.now().millisecondsSinceEpoch % chars.length]).join();
+    final random = List.generate(12, (index) => chars[DateTime.now().millisecondsSinceEpoch % chars.length]).join();
     return random;
   }
 
   Future<void> _sendCredentialsEmail(String email, String studentId, String password) async {
-    // REPLACE WITH YOUR SMTP CREDENTIALS
+    // ========== REPLACE WITH YOUR SMTP CREDENTIALS ==========
     final smtpServer = gmail('your-email@gmail.com', 'your-app-password');
     final message = Message()
       ..from = Address('your-email@gmail.com', 'UPRISE Admin')
@@ -680,7 +698,7 @@ class _StudentAccountsState extends State<StudentAccounts> {
     try {
       await send(message, smtpServer);
     } catch (e) {
-      print('Email send failed: $e');
+      debugPrint('Email send failed: $e');
     }
   }
 
@@ -697,13 +715,13 @@ class _StudentAccountsState extends State<StudentAccounts> {
       barrierDismissible: false,
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) {
-          bool _isCreating = false;
-          String? _errorMessage;
+          bool isCreating = false;
+          String? errorMessage;
           return AlertDialog(
             title: Row(
               children: [
                 Icon(Icons.person_add, color: UpriseColors.primaryDark),
-                SizedBox(width: 8),
+                const SizedBox(width: 8),
                 Text('Add Student Manually', style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.bold)),
               ],
             ),
@@ -713,46 +731,59 @@ class _StudentAccountsState extends State<StudentAccounts> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    TextFormField(controller: _manualIdController, decoration: InputDecoration(labelText: 'Student ID'), validator: (v) => v!.isEmpty ? 'Required' : null),
-                    SizedBox(height: 12),
-                    TextFormField(controller: _manualNameController, decoration: InputDecoration(labelText: 'Full Name'), validator: (v) => v!.isEmpty ? 'Required' : null),
-                    SizedBox(height: 12),
+                    TextFormField(
+                      controller: _manualIdController,
+                      decoration: const InputDecoration(labelText: 'Student ID'),
+                      validator: (v) => v!.isEmpty ? 'Required' : null,
+                    ),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: _manualNameController,
+                      decoration: const InputDecoration(labelText: 'Full Name'),
+                      validator: (v) => v!.isEmpty ? 'Required' : null,
+                    ),
+                    const SizedBox(height: 12),
                     DropdownButtonFormField<String>(
                       value: _manualCourse,
-                      items: ['BSIT', 'BSIS', 'BLIS'].map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
+                      items: const ['BSIT', 'BSIS', 'BLIS'].map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
                       onChanged: (v) => setDialogState(() => _manualCourse = v!),
-                      decoration: InputDecoration(labelText: 'Course'),
+                      decoration: const InputDecoration(labelText: 'Course'),
                     ),
-                    SizedBox(height: 12),
+                    const SizedBox(height: 12),
                     DropdownButtonFormField<String>(
                       value: _manualYearController.text.isNotEmpty ? _manualYearController.text : null,
-                      items: ['1st Year', '2nd Year', '3rd Year', '4th Year', '5th Year'].map((y) => DropdownMenuItem(value: y, child: Text(y))).toList(),
+                      items: const ['1st Year', '2nd Year', '3rd Year', '4th Year', '5th Year']
+                          .map((y) => DropdownMenuItem(value: y, child: Text(y))).toList(),
                       onChanged: (v) => _manualYearController.text = v!,
-                      decoration: InputDecoration(labelText: 'Year Level'),
+                      decoration: const InputDecoration(labelText: 'Year Level'),
                       validator: (v) => v == null ? 'Required' : null,
                     ),
-                    SizedBox(height: 12),
-                    TextFormField(controller: _manualEmailController, decoration: InputDecoration(labelText: 'Email'), validator: (v) => v!.isEmpty || !v.contains('@') ? 'Valid email required' : null),
-                    SizedBox(height: 12),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: _manualEmailController,
+                      decoration: const InputDecoration(labelText: 'Email'),
+                      validator: (v) => v!.isEmpty || !v.contains('@') ? 'Valid email required' : null,
+                    ),
+                    const SizedBox(height: 12),
                     DropdownButtonFormField<String>(
                       value: _manualStatus,
-                      items: ['pending', 'verified'].map((s) => DropdownMenuItem(value: s, child: Text(s.toUpperCase()))).toList(),
+                      items: const ['pending', 'verified'].map((s) => DropdownMenuItem(value: s, child: Text(s.toUpperCase()))).toList(),
                       onChanged: (v) => setDialogState(() => _manualStatus = v!),
-                      decoration: InputDecoration(labelText: 'Status'),
+                      decoration: const InputDecoration(labelText: 'Status'),
                     ),
-                    if (_errorMessage != null) Text(_errorMessage!, style: TextStyle(color: UpriseColors.error)),
+                    if (errorMessage != null) Text(errorMessage!, style: TextStyle(color: UpriseColors.error)),
                   ],
                 ),
               ),
             ),
             actions: [
-              TextButton(onPressed: _isCreating ? null : () => Navigator.pop(context), child: Text('Cancel')),
+              TextButton(onPressed: isCreating ? null : () => Navigator.pop(context), child: const Text('Cancel')),
               ElevatedButton(
-                onPressed: _isCreating
+                onPressed: isCreating
                     ? null
                     : () async {
                         if (_formKey.currentState!.validate()) {
-                          setDialogState(() => _isCreating = true);
+                          setDialogState(() => isCreating = true);
                           try {
                             final student = {
                               'studentId': _manualIdController.text.trim(),
@@ -763,20 +794,27 @@ class _StudentAccountsState extends State<StudentAccounts> {
                             };
                             await _createStudentAccount(student);
                             if (_manualStatus == 'verified') {
-                              final query = await FirebaseFirestore.instance.collection('students').where('email', isEqualTo: student['email']).get();
-                              if (query.docs.isNotEmpty) await query.docs.first.reference.update({'status': 'verified'});
+                              final query = await FirebaseFirestore.instance
+                                  .collection('students')
+                                  .where('email', isEqualTo: student['email'])
+                                  .get();
+                              if (query.docs.isNotEmpty) {
+                                await query.docs.first.reference.update({'status': 'verified'});
+                              }
                             }
                             Navigator.pop(context);
-                            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Student account created')));
+                            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Student account created')));
                             setState(() {});
                           } catch (e) {
-                            setDialogState(() => _errorMessage = e.toString());
+                            setDialogState(() => errorMessage = e.toString());
                           } finally {
-                            setDialogState(() => _isCreating = false);
+                            setDialogState(() => isCreating = false);
                           }
                         }
                       },
-                child: _isCreating ? SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)) : Text('Create Account'),
+                child: isCreating
+                    ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                    : const Text('Create Account'),
               ),
             ],
           );
@@ -789,7 +827,6 @@ class _StudentAccountsState extends State<StudentAccounts> {
     try {
       QuerySnapshot snapshot = await FirebaseFirestore.instance.collection('students').get();
       var docs = snapshot.docs;
-      // Apply same filters
       if (_searchController.text.isNotEmpty) {
         docs = docs.where((doc) {
           final data = doc.data() as Map<String, dynamic>;
@@ -805,12 +842,21 @@ class _StudentAccountsState extends State<StudentAccounts> {
       if (_courseFilter != 'All') {
         docs = docs.where((doc) => (doc.data() as Map)['course'] == _courseFilter).toList();
       }
-      List<List<dynamic>> rows = [['Student ID', 'Full Name', 'Course', 'Year Level', 'Email', 'Status']];
+      final rows = <List<dynamic>>[
+        ['Student ID', 'Full Name', 'Course', 'Year Level', 'Email', 'Status']
+      ];
       for (var doc in docs) {
         final data = doc.data() as Map<String, dynamic>;
-        rows.add([data['studentId'] ?? '', data['fullName'] ?? '', data['course'] ?? '', data['yearLevel'] ?? '', data['email'] ?? '', data['status'] ?? 'pending']);
+        rows.add([
+          data['studentId'] ?? '',
+          data['fullName'] ?? '',
+          data['course'] ?? '',
+          data['yearLevel'] ?? '',
+          data['email'] ?? '',
+          data['status'] ?? 'pending'
+        ]);
       }
-      String csv = const ListToCsvConverter().convert(rows);
+      final csv = const ListToCsvConverter().convert(rows);
       final file = File('${Directory.systemTemp.path}/students_export.csv');
       await file.writeAsString(csv);
       await Share.shareXFiles([XFile(file.path)], text: 'Student list export');

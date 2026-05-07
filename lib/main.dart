@@ -49,9 +49,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'screens/auth/login_screen.dart';
-import 'screens/student/student_home_screen.dart';
+import 'role_router.dart';
 import 'utils/theme.dart';
 import 'firebase_options.dart';
 
@@ -77,21 +75,7 @@ class MyApp extends StatelessWidget {
       title: 'UPRISE',
       theme: appTheme,
       debugShowCheckedModeBanner: false,
-      home: StreamBuilder<User?>(
-        stream: FirebaseAuth.instance.authStateChanges(),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.active) {
-            final user = snapshot.data;
-            if (user == null) {
-              return const LoginScreen();
-            }
-            return const StudentHomeScreen();
-          }
-          return const Scaffold(
-            body: Center(child: CircularProgressIndicator()),
-          );
-        },
-      ),
+      home: RoleRouter(),
     );
   }
 }

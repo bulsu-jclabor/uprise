@@ -2,13 +2,16 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'auth_service.dart';
-import 'login_screen.dart';
+import 'screens/web/admin/admin_login.dart';
+import 'screens/student/student_login.dart';
 
 // IMPORT THE REAL ADMIN DASHBOARD (not the placeholder)
 import 'screens/web/admin/admin_dashboard.dart';
 
 // Placeholder for other dashboards (to be built later)
 class OrgDashboard extends StatelessWidget {
+  const OrgDashboard({super.key});
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -19,6 +22,8 @@ class OrgDashboard extends StatelessWidget {
 }
 
 class StudentHome extends StatelessWidget {
+  const StudentHome({super.key});
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -29,6 +34,8 @@ class StudentHome extends StatelessWidget {
 }
 
 class GuestHome extends StatelessWidget {
+  const GuestHome({super.key});
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -41,6 +48,8 @@ class GuestHome extends StatelessWidget {
 class RoleRouter extends StatelessWidget {
   final AuthService _auth = AuthService();
 
+  RoleRouter({super.key});
+
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<User?>(
@@ -51,7 +60,12 @@ class RoleRouter extends StatelessWidget {
         }
         
         if (!snapshot.hasData) {
-          return LoginScreen();
+          // Show appropriate login screen based on platform
+          if (kIsWeb) {
+            return AdminLogin();
+          } else {
+            return StudentLogin();
+          }
         }
         
         return FutureBuilder<String?>(

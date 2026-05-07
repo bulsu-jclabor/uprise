@@ -1,15 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'auth_service.dart';
-import 'screens/web/admin/admin_dashboard.dart';
+import '../../auth_service.dart';
+import 'student_home_screen.dart';
 
-class LoginScreen extends StatefulWidget {
+class StudentLogin extends StatefulWidget {
   @override
-  _LoginScreenState createState() => _LoginScreenState();
+  _StudentLoginState createState() => _StudentLoginState();
 }
 
-class _LoginScreenState extends State<LoginScreen> {
+class _StudentLoginState extends State<StudentLogin> {
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   bool _isLoading = false;
@@ -36,10 +36,10 @@ class _LoginScreenState extends State<LoginScreen> {
       );
 
       if (user != null) {
-        // Navigate to dashboard
+        // Navigate to home
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (_) => AdminDashboard()),
+          MaterialPageRoute(builder: (_) => const StudentHomeScreen()),
         );
       } else {
         _showError('Invalid email or password');
@@ -108,7 +108,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       Align(
                         alignment: Alignment.centerLeft,
                         child: Text(
-                          'Admin Login',
+                          'Student Login',
                           style: GoogleFonts.beVietnamPro(
                             fontSize: 30,
                             fontWeight: FontWeight.bold,
@@ -158,7 +158,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             ),
                             const SizedBox(height: 6),
                             Text(
-                              'Admin Portal',
+                              'Student Portal',
                               style: GoogleFonts.beVietnamPro(
                                 fontSize: 14,
                                 color: const Color(0xFF475569),
@@ -166,7 +166,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             ),
                             const SizedBox(height: 24),
                             Text(
-                              'Welcome back! Sign in to continue to your dashboard.',
+                              'Welcome! Sign in to access your student portal.',
                               style: GoogleFonts.beVietnamPro(
                                 fontSize: 14,
                                 color: const Color(0xFF64748B),
@@ -182,7 +182,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                 labelStyle: GoogleFonts.beVietnamPro(
                                   color: const Color(0xFF475569),
                                 ),
-                                hintText: 'admin@uprise.org',
+                                hintText: 'student@uprise.org',
                                 hintStyle: GoogleFonts.beVietnamPro(color: Colors.grey.shade400),
                                 filled: true,
                                 fillColor: const Color(0xFFF8FAFC),
@@ -270,7 +270,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                         ),
                                       )
                                     : Text(
-                                        'Login to Dashboard',
+                                        'Login',
                                         style: GoogleFonts.beVietnamPro(
                                           fontSize: 16,
                                           fontWeight: FontWeight.w700,
@@ -280,7 +280,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             ),
                             const SizedBox(height: 20),
                             Text(
-                              "Don't have an admin account? Contact System Admin",
+                              "Don't have an account? Contact your institution",
                               style: GoogleFonts.beVietnamPro(
                                 fontSize: 13,
                                 color: const Color(0xFF64748B),
