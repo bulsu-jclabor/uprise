@@ -27,7 +27,7 @@ class DefaultFirebaseOptions {
 
   static const FirebaseOptions android = FirebaseOptions(
     apiKey: 'AIzaSyC-jZ7dqgbb28y6uK-RnyHYk9PdD9Ta5D0',
-    appId: '1:338888794484:android:YOUR_ANDROID_APP_ID', // You'll need to add Android app in Firebase
+    appId: '1:338888794484:android:dd70223f733e0224ff0c21', 
     messagingSenderId: '338888794484',
     projectId: 'uprise-5eac8',
     storageBucket: 'uprise-5eac8.firebasestorage.app',
