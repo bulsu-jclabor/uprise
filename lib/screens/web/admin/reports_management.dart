@@ -1,28 +1,154 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:printing/printing.dart';
 import 'package:pdf/pdf.dart';
-import 'package:pdf/widgets.dart' as pdf;
-import '../../theme/app_theme.dart';
+import 'package:pdf/widgets.dart' as pw;
 
-// -------------------- ENUMS --------------------
-enum ReportGeneratorType {
-  eventPerformance,
-  financialSummary,
-  accomplishmentSummary,
+// ============ ACTIVITY LOGGER ============
+class ActivityLogger {
+  static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+
+  static Future<void> log({
+    required String action,
+    required String module,
+    String severity = 'info',
+    Map<String, dynamic>? details,
+  }) async {
+    final user = FirebaseAuth.instance.currentUser;
+    final userName = user?.email ?? 'Unknown User';
+    await _firestore.collection('activity_logs').add({
+      'user': userName,
+      'action': action,
+      'module': module,
+      'severity': severity,
+      'timestamp': FieldValue.serverTimestamp(),
+      'ipAddress': '',
+      'details': details,
+    });
+  }
 }
 
-// -------------------- DATA MODELS --------------------
+// ─────────────────────────────────────────────
+//  THEME COLORS  (matches UPRISE orange palette)
+// ─────────────────────────────────────────────
+class UpriseColors {
+  static const Color primary      = Color(0xFFE87722);
+  static const Color primaryDark  = Color(0xFFC45E00);
+  static const Color primaryLight = Color(0xFFFFF3E8);
+  static const Color white        = Color(0xFFFFFFFF);
+  static const Color lightGray    = Color(0xFFF7F8FA);
+  static const Color mediumGray   = Color(0xFFE2E6EA);
+  static const Color darkGray     = Color(0xFF6B7280);
+  static const Color charcoal     = Color(0xFF1F2937);
+  static const Color success      = Color(0xFF16A34A);
+  static const Color successBg    = Color(0xFFDCFCE7);
+  static const Color error        = Color(0xFFDC2626);
+  static const Color errorBg      = Color(0xFFFEE2E2);
+  static const Color warning      = Color(0xFFD97706);
+  static const Color warningBg    = Color(0xFFFEF3C7);
+  static const Color info         = Color(0xFF2563EB);
+  static const Color infoBg       = Color(0xFFDBEAFE);
+}
+
+// ─────────────────────────────────────────────
+//  DATA MODELS
+// ─────────────────────────────────────────────
+class EventReport {
+  final String id;
+  final String title;
+  final String orgId;
+  final String orgName;
+  final String type;
+  final DateTime date;
+  final String status;
+  // financial
+  final double totalIncome;
+  final double totalExpenses;
+  final double budgetVariance;
+  // attendance
+  final int registrants;
+  final int attendees;
+  // detail fields
+  final String submittedBy;
+  final DateTime? submittedDate;
+  final String reportPeriod;
+  final List<Map<String, dynamic>> incomeBreakdown;
+  final List<Map<String, dynamic>> expenseBreakdown;
+  final List<String> financialNotes;
+  final List<String> recommendations;
+  final List<Map<String, dynamic>> attachments;
+
+  EventReport({
+    required this.id,
+    required this.title,
+    required this.orgId,
+    required this.orgName,
+    required this.type,
+    required this.date,
+    required this.status,
+    this.totalIncome = 0,
+    this.totalExpenses = 0,
+    this.budgetVariance = 0,
+    this.registrants = 0,
+    this.attendees = 0,
+    this.submittedBy = '',
+    this.submittedDate,
+    this.reportPeriod = '',
+    this.incomeBreakdown = const [],
+    this.expenseBreakdown = const [],
+    this.financialNotes = const [],
+    this.recommendations = const [],
+    this.attachments = const [],
+  });
+
+  double get netAmount => totalIncome - totalExpenses;
+  int get attendanceRatio =>
+      registrants > 0 ? ((attendees / registrants) * 100).round() : 0;
+
+  factory EventReport.fromFirestore(
+    DocumentSnapshot doc,
+    String orgName,
+    int registrants,
+    int attendees,
+  ) {
+    final d = doc.data() as Map<String, dynamic>;
+    return EventReport(
+      id:              doc.id,
+      title:           d['title']?.toString() ?? 'Untitled',
+      orgId:           d['orgId']?.toString() ?? '',
+      orgName:         orgName,
+      type:            d['type']?.toString() ?? 'Others',
+      date:            (d['date'] as Timestamp).toDate(),
+      status:          d['status']?.toString() ?? 'approved',
+      totalIncome:     (d['totalIncome'] as num?)?.toDouble() ?? 0,
+      totalExpenses:   (d['totalExpenses'] as num?)?.toDouble() ?? 0,
+      budgetVariance:  (d['budgetVariance'] as num?)?.toDouble() ?? 0,
+      registrants:     registrants,
+      attendees:       attendees,
+      submittedBy:     d['submittedBy']?.toString() ?? '',
+      submittedDate:   (d['submittedDate'] as Timestamp?)?.toDate(),
+      reportPeriod:    d['reportPeriod']?.toString() ?? '',
+      incomeBreakdown:  List<Map<String, dynamic>>.from(d['incomeBreakdown'] ?? []),
+      expenseBreakdown: List<Map<String, dynamic>>.from(d['expenseBreakdown'] ?? []),
+      financialNotes:   List<String>.from(d['financialNotes'] ?? []),
+      recommendations:  List<String>.from(d['recommendations'] ?? []),
+      attachments:      List<Map<String, dynamic>>.from(d['attachments'] ?? []),
+    );
+  }
+}
+
 class OrgSubmission {
   final String orgId;
   final String orgName;
   final DateTime? submittedAt;
   final String? fileUrl;
   final String? submissionId;
+
   OrgSubmission({
     required this.orgId,
     required this.orgName,
@@ -32,97 +158,141 @@ class OrgSubmission {
   });
 }
 
-class EventReportData {
-  final String id;
-  final String name;
-  final String organization;
-  final String type;
-  final DateTime date;
-  final int registrants;
-  final int attendees;
-  EventReportData({
-    required this.id,
-    required this.name,
-    required this.organization,
-    required this.type,
-    required this.date,
-    required this.registrants,
-    required this.attendees,
-  });
-}
-
-class FinancialSummaryData {
-  final String orgName;
-  final DateTime submittedAt;
-  final String? fileUrl;
-  FinancialSummaryData({
-    required this.orgName,
-    required this.submittedAt,
-    this.fileUrl,
-  });
-}
-
-class AccomplishmentSummaryData {
-  final String orgName;
-  final DateTime submittedAt;
-  final String? fileUrl;
-  AccomplishmentSummaryData({
-    required this.orgName,
-    required this.submittedAt,
-    this.fileUrl,
-  });
-}
-
-// -------------------- MAIN WIDGET --------------------
+// ─────────────────────────────────────────────
+//  MAIN WIDGET
+// ─────────────────────────────────────────────
 class ReportsManagement extends StatefulWidget {
   const ReportsManagement({super.key});
 
   @override
-  _ReportsManagementState createState() => _ReportsManagementState();
+  State<ReportsManagement> createState() => _ReportsManagementState();
 }
 
 class _ReportsManagementState extends State<ReportsManagement>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
 
-  // ---------- SUBMISSION TRACKER DATA ----------
+  // ── filters (only used for Event Summary) ──
+  String _filterOrg   = 'All Organizations';
+  String _filterType  = 'All Types';
+  String _filterRange = 'Current Semester';
+  String _reportView  = 'By Event';
+
+  // ── report data ──
+  List<EventReport>    _events         = [];
+  List<Map<String, dynamic>> _organizations = [];
+  bool _loadingEvents  = true;
+
+  // ── submission tracker ──
+  List<OrgSubmission> _financialSubs      = [];
+  List<OrgSubmission> _accomplishmentSubs = [];
+  bool _loadingFinancial      = true;
+  bool _loadingAccomplishment = true;
   DateTime? _financialDeadline;
   DateTime? _accomplishmentDeadline;
   bool _loadingDeadlines = true;
-  List<OrgSubmission> _financialSubmissions = [];
-  List<OrgSubmission> _accomplishmentSubmissions = [];
-  bool _loadingFinancial = true;
-  bool _loadingAccomplishment = true;
 
-  // ---------- REPORT GENERATOR DATA ----------
-  ReportGeneratorType _selectedReportType = ReportGeneratorType.eventPerformance;
-  String _dateRange = 'Current Semester';
-  String _selectedOrg = 'All Organizations';
-  String _eventType = 'All Types';
-  String _reportView = 'By Event';
-  List<Map<String, String>> _organizations = [];
+  // ── detail view ──
+  EventReport? _detailEvent;
 
-  List<EventReportData> _eventsData = [];
-  List<FinancialSummaryData> _financialSummaryData = [];
-  List<AccomplishmentSummaryData> _accomplishmentSummaryData = [];
-  bool _isLoadingReport = true;
-  int _totalEvents = 0, _totalRegistrants = 0, _totalAttendees = 0;
-
+  // ── pagination ──
   int _currentPage = 1;
   static const int _pageSize = 10;
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(length: 4, vsync: this);
+    _tabController.addListener(() => setState(() {
+      _detailEvent = null;
+      _currentPage = 1;
+    }));
     _loadOrganizations();
     _loadDeadlines();
     _loadSubmissionData();
-    _loadReportDataForCurrentType();
+    _loadEvents();
   }
 
-  // ==================== SUBMISSION TRACKER METHODS ====================
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
+
+  // ══════════════════════════════════════════
+  //  FIREBASE — ORGANIZATIONS
+  // ══════════════════════════════════════════
+  Future<void> _loadOrganizations() async {
+    final snap = await FirebaseFirestore.instance.collection('organizations').get();
+    if (!mounted) return;
+    setState(() {
+      _organizations = snap.docs.map((doc) => {
+        'id':   doc.id,
+        'name': doc.data()['name']?.toString() ?? 'Unknown',
+      }).toList();
+    });
+  }
+
+  // ══════════════════════════════════════════
+  //  FIREBASE — EVENTS
+  // ══════════════════════════════════════════
+  Future<void> _loadEvents() async {
+    if (!mounted) return;
+    setState(() => _loadingEvents = true);
+    try {
+      Query query = FirebaseFirestore.instance
+          .collection('events')
+          .where('status', isEqualTo: 'approved');
+
+      if (_filterType != 'All Types') {
+        query = query.where('type', isEqualTo: _filterType);
+      }
+      if (_filterOrg != 'All Organizations') {
+        final org = _organizations.firstWhere(
+          (o) => o['name'] == _filterOrg,
+          orElse: () => {'id': '', 'name': ''},
+        );
+        if ((org['id'] as String).isNotEmpty) {
+          query = query.where('orgId', isEqualTo: org['id']);
+        }
+      }
+
+      final eventsSnap = await query.get();
+      final List<EventReport> loaded = [];
+
+      final orgMap = {for (var o in _organizations) o['id'] as String: o['name'] as String};
+
+      for (final doc in eventsSnap.docs) {
+        final data = doc.data() as Map<String, dynamic>;
+        final orgId   = data['orgId']?.toString() ?? '';
+        final orgName = orgMap[orgId] ?? data['orgName']?.toString() ?? 'Unknown';
+
+        final regSnap = await FirebaseFirestore.instance
+            .collection('registrations')
+            .where('eventId', isEqualTo: doc.id)
+            .get();
+        final registrants = regSnap.docs.length;
+        final attendees   = regSnap.docs
+            .where((r) => (r.data())['attended'] == true)
+            .length;
+
+        loaded.add(EventReport.fromFirestore(doc, orgName, registrants, attendees));
+      }
+
+      if (!mounted) return;
+      setState(() => _events = loaded);
+    } catch (e) {
+      debugPrint('Error loading events: $e');
+    } finally {
+      if (mounted) setState(() => _loadingEvents = false);
+    }
+  }
+
+  // ══════════════════════════════════════════
+  //  FIREBASE — DEADLINES
+  // ══════════════════════════════════════════
   Future<void> _loadDeadlines() async {
+    if (!mounted) return;
     setState(() => _loadingDeadlines = true);
     try {
       final doc = await FirebaseFirestore.instance
@@ -131,18 +301,14 @@ class _ReportsManagementState extends State<ReportsManagement>
           .get();
       if (doc.exists) {
         final data = doc.data()!;
-        _financialDeadline = (data['financial'] as Timestamp?)?.toDate();
-        _accomplishmentDeadline =
-            (data['accomplishment'] as Timestamp?)?.toDate();
-      } else {
-        final now = DateTime.now();
-        _financialDeadline = DateTime(now.year, now.month + 1, 0);
-        _accomplishmentDeadline = DateTime(now.year, now.month + 1, 0);
+        _financialDeadline      = (data['financial'] as Timestamp?)?.toDate();
+        _accomplishmentDeadline = (data['accomplishment'] as Timestamp?)?.toDate();
       }
     } catch (e) {
       debugPrint('Error loading deadlines: $e');
+    } finally {
+      if (mounted) setState(() => _loadingDeadlines = false);
     }
-    setState(() => _loadingDeadlines = false);
   }
 
   Future<void> _saveDeadlines() async {
@@ -151,15 +317,27 @@ class _ReportsManagementState extends State<ReportsManagement>
         .collection('report_deadlines')
         .doc('deadlines')
         .set({
-      'financial': Timestamp.fromDate(_financialDeadline!),
+      'financial':      Timestamp.fromDate(_financialDeadline!),
       'accomplishment': Timestamp.fromDate(_accomplishmentDeadline!),
     });
+
+    // Log deadline change
+    await ActivityLogger.log(
+      action: 'Updated report deadlines: Financial → ${DateFormat('yyyy-MM-dd').format(_financialDeadline!)}, Accomplishment → ${DateFormat('yyyy-MM-dd').format(_accomplishmentDeadline!)}',
+      module: 'Reports',
+      severity: 'info',
+    );
+
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Deadlines updated')));
+        const SnackBar(content: Text('Deadlines updated successfully')),
+      );
     }
   }
 
+  // ══════════════════════════════════════════
+  //  FIREBASE — SUBMISSIONS
+  // ══════════════════════════════════════════
   Future<void> _loadSubmissionData() async {
     await Future.wait([
       _loadFinancialSubmissions(),
@@ -168,33 +346,38 @@ class _ReportsManagementState extends State<ReportsManagement>
   }
 
   Future<void> _loadFinancialSubmissions() async {
+    if (!mounted) return;
     setState(() => _loadingFinancial = true);
     try {
-      final orgsSnap =
-          await FirebaseFirestore.instance.collection('organizations').get();
-      final allOrgs = orgsSnap.docs.map((doc) => {
-            'id': doc.id,
-            'name': doc.data()['name']?.toString() ?? 'Unknown',
-          }).toList();
+      final orgsSnap = await FirebaseFirestore.instance.collection('organizations').get();
+      final allOrgs  = orgsSnap.docs.map((doc) => {
+        'id':   doc.id,
+        'name': doc.data()['name']?.toString() ?? 'Unknown',
+      }).toList();
+
       final subsSnap = await FirebaseFirestore.instance
           .collection('financial_submissions')
           .get();
-      final submissionsMap = <String, Map<String, dynamic>>{};
-      for (var doc in subsSnap.docs) {
+      final subsMap = <String, Map<String, dynamic>>{};
+      for (final doc in subsSnap.docs) {
         final data = doc.data();
-        submissionsMap[data['orgId']] = {
-          'submittedAt': (data['submittedAt'] as Timestamp).toDate(),
-          'fileUrl': data['fileUrl'],
+        subsMap[data['orgId']?.toString() ?? ''] = {
+          'submittedAt':  (data['submittedAt'] as Timestamp).toDate(),
+          'fileUrl':      data['fileUrl'],
           'submissionId': doc.id,
         };
       }
-      _financialSubmissions = allOrgs.map((org) => OrgSubmission(
-            orgId: org['id']!,
-            orgName: org['name']!,
-            submittedAt: submissionsMap[org['id']]?['submittedAt'],
-            fileUrl: submissionsMap[org['id']]?['fileUrl'],
-            submissionId: submissionsMap[org['id']]?['submissionId'],
-          )).toList();
+
+      if (!mounted) return;
+      setState(() {
+        _financialSubs = allOrgs.map((org) => OrgSubmission(
+          orgId:        org['id']!,
+          orgName:      org['name']!,
+          submittedAt:  subsMap[org['id']]?['submittedAt'] as DateTime?,
+          fileUrl:      subsMap[org['id']]?['fileUrl'] as String?,
+          submissionId: subsMap[org['id']]?['submissionId'] as String?,
+        )).toList();
+      });
     } catch (e) {
       debugPrint('Error loading financial submissions: $e');
     } finally {
@@ -203,33 +386,38 @@ class _ReportsManagementState extends State<ReportsManagement>
   }
 
   Future<void> _loadAccomplishmentSubmissions() async {
+    if (!mounted) return;
     setState(() => _loadingAccomplishment = true);
     try {
-      final orgsSnap =
-          await FirebaseFirestore.instance.collection('organizations').get();
-      final allOrgs = orgsSnap.docs.map((doc) => {
-            'id': doc.id,
-            'name': doc.data()['name']?.toString() ?? 'Unknown',
-          }).toList();
+      final orgsSnap = await FirebaseFirestore.instance.collection('organizations').get();
+      final allOrgs  = orgsSnap.docs.map((doc) => {
+        'id':   doc.id,
+        'name': doc.data()['name']?.toString() ?? 'Unknown',
+      }).toList();
+
       final subsSnap = await FirebaseFirestore.instance
           .collection('accomplishment_submissions')
           .get();
-      final submissionsMap = <String, Map<String, dynamic>>{};
-      for (var doc in subsSnap.docs) {
+      final subsMap = <String, Map<String, dynamic>>{};
+      for (final doc in subsSnap.docs) {
         final data = doc.data();
-        submissionsMap[data['orgId']] = {
-          'submittedAt': (data['submittedAt'] as Timestamp).toDate(),
-          'fileUrl': data['fileUrl'],
+        subsMap[data['orgId']?.toString() ?? ''] = {
+          'submittedAt':  (data['submittedAt'] as Timestamp).toDate(),
+          'fileUrl':      data['fileUrl'],
           'submissionId': doc.id,
         };
       }
-      _accomplishmentSubmissions = allOrgs.map((org) => OrgSubmission(
-            orgId: org['id']!,
-            orgName: org['name']!,
-            submittedAt: submissionsMap[org['id']]?['submittedAt'],
-            fileUrl: submissionsMap[org['id']]?['fileUrl'],
-            submissionId: submissionsMap[org['id']]?['submissionId'],
-          )).toList();
+
+      if (!mounted) return;
+      setState(() {
+        _accomplishmentSubs = allOrgs.map((org) => OrgSubmission(
+          orgId:        org['id']!,
+          orgName:      org['name']!,
+          submittedAt:  subsMap[org['id']]?['submittedAt'] as DateTime?,
+          fileUrl:      subsMap[org['id']]?['fileUrl'] as String?,
+          submissionId: subsMap[org['id']]?['submissionId'] as String?,
+        )).toList();
+      });
     } catch (e) {
       debugPrint('Error loading accomplishment submissions: $e');
     } finally {
@@ -237,268 +425,945 @@ class _ReportsManagementState extends State<ReportsManagement>
     }
   }
 
-  void _showSetDeadlineDialog() {
-    DateTime? tempFinancial = _financialDeadline;
-    DateTime? tempAccomplishment = _accomplishmentDeadline;
+  // ══════════════════════════════════════════
+  //  PDF / CSV GENERATION (Event Summary only) with logging
+  // ══════════════════════════════════════════
+  Future<void> _logGeneratedReport(String fileName, String format, String type) async {
+    await FirebaseFirestore.instance.collection('generated_reports').add({
+      'fileName':    fileName,
+      'dateRange':   _filterRange,
+      'organization': _filterOrg,
+      'eventType':   _filterType,
+      'reportView':  _reportView,
+      'generatedAt': FieldValue.serverTimestamp(),
+      'format':      format,
+      'reportType':  type,
+    });
+    // Also log to activity logs
+    await ActivityLogger.log(
+      action: 'Generated $type report in $format format',
+      module: 'Reports',
+      severity: 'info',
+      details: {'fileName': fileName, 'filters': 'Org: $_filterOrg, Type: $_filterType, Range: $_filterRange'},
+    );
+  }
+
+  Future<void> _generatePDFReport() async {
+    final pdfDoc = pw.Document();
+    final now    = DateTime.now();
+    final ts     = DateFormat('yyyyMMdd_HHmmss').format(now);
+    final fileName = 'financial_report_$ts.pdf';
+
+    pdfDoc.addPage(pw.MultiPage(
+      pageFormat: PdfPageFormat.a4,
+      build: (ctx) => [
+        pw.Header(
+          level: 0,
+          child: pw.Text('UPRISE Financial Report',
+              style: pw.TextStyle(fontSize: 22, fontWeight: pw.FontWeight.bold)),
+        ),
+        pw.SizedBox(height: 8),
+        pw.Text('Generated: ${DateFormat('yyyy-MM-dd HH:mm').format(now)}'),
+        pw.Text('Date Range: $_filterRange  |  Organization: $_filterOrg  |  Event Type: $_filterType'),
+        pw.SizedBox(height: 16),
+        pw.Header(level: 1, child: pw.Text('Event Financial Summary')),
+        _buildPdfFinancialTable(),
+      ],
+    ));
+
+    await Printing.sharePdf(bytes: await pdfDoc.save(), filename: fileName);
+    await _logGeneratedReport(fileName, 'PDF', 'Financial');
+  }
+
+  pw.Widget _buildPdfFinancialTable() {
+    return pw.Table(
+      border: pw.TableBorder.all(),
+      columnWidths: {
+        0: const pw.FlexColumnWidth(2),
+        1: const pw.FlexColumnWidth(2),
+        2: const pw.FlexColumnWidth(1.5),
+        3: const pw.FlexColumnWidth(1.5),
+        4: const pw.FlexColumnWidth(1.5),
+      },
+      children: [
+        pw.TableRow(children: [
+          pw.Padding(padding: const pw.EdgeInsets.all(4), child: pw.Text('Event', style: pw.TextStyle(fontWeight: pw.FontWeight.bold))),
+          pw.Padding(padding: const pw.EdgeInsets.all(4), child: pw.Text('Organization', style: pw.TextStyle(fontWeight: pw.FontWeight.bold))),
+          pw.Padding(padding: const pw.EdgeInsets.all(4), child: pw.Text('Income', style: pw.TextStyle(fontWeight: pw.FontWeight.bold))),
+          pw.Padding(padding: const pw.EdgeInsets.all(4), child: pw.Text('Expenses', style: pw.TextStyle(fontWeight: pw.FontWeight.bold))),
+          pw.Padding(padding: const pw.EdgeInsets.all(4), child: pw.Text('Net', style: pw.TextStyle(fontWeight: pw.FontWeight.bold))),
+        ]),
+        ..._events.map((e) => pw.TableRow(children: [
+          pw.Padding(padding: const pw.EdgeInsets.all(4), child: pw.Text(e.title)),
+          pw.Padding(padding: const pw.EdgeInsets.all(4), child: pw.Text(e.orgName)),
+          pw.Padding(padding: const pw.EdgeInsets.all(4), child: pw.Text('₱${e.totalIncome.toStringAsFixed(2)}')),
+          pw.Padding(padding: const pw.EdgeInsets.all(4), child: pw.Text('₱${e.totalExpenses.toStringAsFixed(2)}')),
+          pw.Padding(padding: const pw.EdgeInsets.all(4), child: pw.Text('₱${e.netAmount.toStringAsFixed(2)}')),
+        ])),
+      ],
+    );
+  }
+
+  Future<void> _exportFinancialCSV() async {
+    final rows = <List<String>>[
+      ['Event Name', 'Organization', 'Type', 'Date', 'Income', 'Expenses', 'Net Amount']
+    ];
+    for (final e in _events) {
+      rows.add([
+        e.title, e.orgName, e.type,
+        DateFormat('yyyy-MM-dd').format(e.date),
+        e.totalIncome.toStringAsFixed(2),
+        e.totalExpenses.toStringAsFixed(2),
+        e.netAmount.toStringAsFixed(2),
+      ]);
+    }
+    final csv  = rows.map((r) => r.join(',')).join('\n');
+    final now  = DateTime.now();
+    final ts   = DateFormat('yyyyMMdd_HHmmss').format(now);
+    final fileName = 'financial_report_$ts.csv';
+    final file = await File('${Directory.systemTemp.path}/$fileName').writeAsString(csv);
+    await Share.shareXFiles([XFile(file.path)], text: 'Financial Report');
+    await _logGeneratedReport(fileName, 'CSV', 'Financial');
+  }
+
+  Future<void> _exportAccomplishmentCSV() async {
+    final rows = <List<String>>[
+      ['Event Name', 'Organization', 'Type', 'Date', 'Registrants', 'Attendees', 'Ratio']
+    ];
+    for (final e in _events) {
+      rows.add([
+        e.title, e.orgName, e.type,
+        DateFormat('yyyy-MM-dd').format(e.date),
+        '${e.registrants}', '${e.attendees}', '${e.attendanceRatio}%',
+      ]);
+    }
+    final csv  = rows.map((r) => r.join(',')).join('\n');
+    final now  = DateTime.now();
+    final ts   = DateFormat('yyyyMMdd_HHmmss').format(now);
+    final fileName = 'accomplishment_report_$ts.csv';
+    final file = await File('${Directory.systemTemp.path}/$fileName').writeAsString(csv);
+    await Share.shareXFiles([XFile(file.path)], text: 'Accomplishment Report');
+    await _logGeneratedReport(fileName, 'CSV', 'Accomplishment');
+  }
+
+  Future<void> _exportSubmissionCSV(String reportType, List<OrgSubmission> submissions, DateTime? deadline) async {
+    final rows = <List<String>>[
+      ['Organization', 'Deadline', 'Submitted On', 'Status']
+    ];
+    for (final sub in submissions) {
+      final isSubmitted = sub.submittedAt != null;
+      final isOverdue   = deadline != null && !isSubmitted && DateTime.now().isAfter(deadline);
+      rows.add([
+        sub.orgName,
+        deadline != null ? DateFormat('yyyy-MM-dd').format(deadline) : '',
+        isSubmitted ? DateFormat('yyyy-MM-dd').format(sub.submittedAt!) : '',
+        isSubmitted ? 'Submitted' : (isOverdue ? 'Overdue' : 'Pending'),
+      ]);
+    }
+    final csv  = rows.map((r) => r.join(',')).join('\n');
+    final file = await File('${Directory.systemTemp.path}/${reportType.toLowerCase()}_submissions.csv')
+        .writeAsString(csv);
+    await Share.shareXFiles([XFile(file.path)], text: '$reportType Submissions');
+  }
+
+  // ══════════════════════════════════════════
+  //  DIALOGS
+  // ══════════════════════════════════════════
+  void _showDeadlineDialog() {
+    DateTime? tempFin = _financialDeadline;
+    DateTime? tempAcc = _accomplishmentDeadline;
     showDialog(
       context: context,
       builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setStateDlg) {
-          return AlertDialog(
-            title: const Text('Set Submission Deadlines'),
-            content: SizedBox(
-              width: 300,
-              child: Column(mainAxisSize: MainAxisSize.min, children: [
-                ListTile(
-                  title: const Text('Financial Report'),
-                  subtitle: Text(tempFinancial != null
-                      ? DateFormat('yyyy-MM-dd').format(tempFinancial!)
-                      : 'Not set'),
-                  trailing: IconButton(
-                    icon: const Icon(Icons.calendar_today),
-                    onPressed: () async {
-                      final picked = await showDatePicker(
-                        context: ctx,
-                        initialDate: tempFinancial ?? DateTime.now(),
-                        firstDate: DateTime.now(),
-                        lastDate: DateTime.now().add(const Duration(days: 365)),
-                      );
-                      if (picked != null) {
-                        setStateDlg(() => tempFinancial = picked);
-                      }
-                    },
-                  ),
-                ),
-                ListTile(
-                  title: const Text('Accomplishment Report'),
-                  subtitle: Text(tempAccomplishment != null
-                      ? DateFormat('yyyy-MM-dd').format(tempAccomplishment!)
-                      : 'Not set'),
-                  trailing: IconButton(
-                    icon: const Icon(Icons.calendar_today),
-                    onPressed: () async {
-                      final picked = await showDatePicker(
-                        context: ctx,
-                        initialDate: tempAccomplishment ?? DateTime.now(),
-                        firstDate: DateTime.now(),
-                        lastDate: DateTime.now().add(const Duration(days: 365)),
-                      );
-                      if (picked != null) {
-                        setStateDlg(() => tempAccomplishment = picked);
-                      }
-                    },
-                  ),
-                ),
-              ]),
+        builder: (ctx, setDlg) => AlertDialog(
+          title: Text('Set Submission Deadlines',
+              style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.bold)),
+          content: SizedBox(
+            width: 320,
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              _deadlineTile('Financial Report', tempFin, ctx, (p) => setDlg(() => tempFin = p)),
+              _deadlineTile('Accomplishment Report', tempAcc, ctx, (p) => setDlg(() => tempAcc = p)),
+            ]),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: UpriseColors.primary),
+              onPressed: () async {
+                setState(() {
+                  _financialDeadline      = tempFin;
+                  _accomplishmentDeadline = tempAcc;
+                });
+                await _saveDeadlines();
+                if (ctx.mounted) Navigator.pop(ctx);
+              },
+              child: const Text('Save'),
             ),
-            actions: [
-              TextButton(
-                  onPressed: () => Navigator.pop(ctx),
-                  child: const Text('Cancel')),
-              ElevatedButton(
-                onPressed: () async {
-                  setState(() {
-                    _financialDeadline = tempFinancial;
-                    _accomplishmentDeadline = tempAccomplishment;
-                  });
-                  await _saveDeadlines();
-                  Navigator.pop(ctx);
-                },
-                child: const Text('Save'),
-              ),
-            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  ListTile _deadlineTile(String label, DateTime? date, BuildContext ctx, void Function(DateTime) onPicked) {
+    return ListTile(
+      title: Text(label),
+      subtitle: Text(date != null ? DateFormat('MMM dd, yyyy').format(date) : 'Not set'),
+      trailing: IconButton(
+        icon: const Icon(Icons.calendar_today, color: UpriseColors.primary),
+        onPressed: () async {
+          final picked = await showDatePicker(
+            context: ctx,
+            initialDate: date ?? DateTime.now(),
+            firstDate: DateTime.now(),
+            lastDate: DateTime.now().add(const Duration(days: 730)),
           );
+          if (picked != null) onPicked(picked);
         },
       ),
     );
   }
 
-  Widget _buildSubmissionTable(String title, List<OrgSubmission> submissions,
-      DateTime? deadline, bool loading) {
-    if (loading) return const Center(child: CircularProgressIndicator());
-    final sorted = List<OrgSubmission>.from(submissions);
-    sorted.sort((a, b) {
-      final aSubmitted = a.submittedAt != null;
-      final bSubmitted = b.submittedAt != null;
-      final aOverdue =
-          deadline != null && !aSubmitted && DateTime.now().isAfter(deadline);
-      final bOverdue =
-          deadline != null && !bSubmitted && DateTime.now().isAfter(deadline);
-      if (aSubmitted && !bSubmitted) return 1;
-      if (!aSubmitted && bSubmitted) return -1;
-      if (aOverdue && !bOverdue) return -1;
-      if (!aOverdue && bOverdue) return 1;
-      return 0;
-    });
+  void _showGenerateReportDialog() {
+    String fmt = 'PDF';
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDlg) => AlertDialog(
+          title: Text('Generate Report', style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.bold)),
+          content: Column(mainAxisSize: MainAxisSize.min, children: [
+            _summaryRow('Date Range', _filterRange),
+            _summaryRow('Organization', _filterOrg),
+            _summaryRow('Event Type', _filterType),
+            _summaryRow('Report View', _reportView),
+            const Divider(height: 24),
+            Text('Format', style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.w600)),
+            Row(children: [
+              Expanded(child: RadioListTile(
+                title: const Text('PDF'),
+                value: 'PDF', groupValue: fmt,
+                onChanged: (v) => setDlg(() => fmt = v!),
+                activeColor: UpriseColors.primary,
+              )),
+              Expanded(child: RadioListTile(
+                title: const Text('CSV'),
+                value: 'CSV', groupValue: fmt,
+                onChanged: (v) => setDlg(() => fmt = v!),
+                activeColor: UpriseColors.primary,
+              )),
+            ]),
+          ]),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: UpriseColors.primary),
+              onPressed: () async {
+                Navigator.pop(ctx);
+                if (fmt == 'PDF') {
+                  await _generatePDFReport();
+                } else {
+                  await _exportFinancialCSV();
+                }
+              },
+              child: const Text('Generate & Download'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _summaryRow(String label, String value) => Padding(
+    padding: const EdgeInsets.only(bottom: 6),
+    child: Row(children: [
+      SizedBox(width: 110, child: Text(label, style: GoogleFonts.beVietnamPro(fontSize: 12, color: UpriseColors.darkGray))),
+      Text(value, style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.w600)),
+    ]),
+  );
+
+  // ══════════════════════════════════════════
+  //  MAIN BUILD
+  // ══════════════════════════════════════════
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: UpriseColors.lightGray,
+      body: _detailEvent != null ? _buildDetailView(_detailEvent!) : _buildMainView(),
+    );
+  }
+
+  // ─────────────────────────────────────────────
+  //  MAIN VIEW
+  // ─────────────────────────────────────────────
+  Widget _buildMainView() {
+    return Column(children: [
+      _buildHeader(),
+      _buildTabBar(),
+      Expanded(child: TabBarView(
+        controller: _tabController,
+        children: [
+          _buildEventSummaryTab(),
+          _buildAccomplishmentTab(),
+          _buildFinancialTab(),
+          _buildSubmissionTrackerTab(),
+        ],
+      )),
+    ]);
+  }
+
+  Widget _buildHeader() {
+    // Header buttons only appear on Event Summary tab (index 0)
+    final isEventSummaryTab = _tabController.index == 0;
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 24),
+      padding: const EdgeInsets.fromLTRB(28, 20, 28, 0),
+      color: UpriseColors.white,
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('Reports Management',
+                style: GoogleFonts.beVietnamPro(fontSize: 22, fontWeight: FontWeight.w800, color: UpriseColors.charcoal)),
+            const SizedBox(height: 3),
+            Text('Create and export comprehensive analysis on student organization performance, attendance rates, and financial auditing.',
+                style: GoogleFonts.beVietnamPro(fontSize: 13, color: UpriseColors.darkGray)),
+          ])),
+          const SizedBox(width: 16),
+          if (isEventSummaryTab)
+            Row(children: [
+              _outlineBtn(Icons.download_outlined, 'Export CSV', _exportFinancialCSV),
+              const SizedBox(width: 8),
+              _primaryBtn(Icons.picture_as_pdf_outlined, 'Export PDF', _showGenerateReportDialog),
+            ]),
+        ]),
+      ]),
+    );
+  }
+
+  Widget _buildTabBar() {
+    return Container(
+      color: UpriseColors.white,
+      child: TabBar(
+        controller: _tabController,
+        tabs: const [
+          Tab(text: 'Event Summary'),
+          Tab(text: 'Accomplishment Reports'),
+          Tab(text: 'Financial Reports'),
+          Tab(text: 'Submission Tracker'),
+        ],
+        labelColor: UpriseColors.primary,
+        unselectedLabelColor: UpriseColors.darkGray,
+        indicatorColor: UpriseColors.primary,
+        indicatorWeight: 3,
+        labelStyle: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w700),
+        unselectedLabelStyle: GoogleFonts.beVietnamPro(fontSize: 13),
+        isScrollable: true,
+        tabAlignment: TabAlignment.start,
+      ),
+    );
+  }
+
+  // ─────────────────────────────────────────────
+  //  EVENT SUMMARY TAB (with config panel)
+  // ─────────────────────────────────────────────
+  Widget _buildEventSummaryTab() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(24),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        _buildConfigPanel(),
+        const SizedBox(height: 16),
+        _buildEventStatCards(),
+        const SizedBox(height: 16),
+        _buildEventsTable(showFinancial: true),
+      ]),
+    );
+  }
+
+  // ─────────────────────────────────────────────
+  //  ACCOMPLISHMENT TAB (no config panel)
+  // ─────────────────────────────────────────────
+  Widget _buildAccomplishmentTab() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(24),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        _buildAccomplishmentStatCards(),
+        const SizedBox(height: 16),
+        _buildEventsTable(showFinancial: false),
+      ]),
+    );
+  }
+
+  // ─────────────────────────────────────────────
+  //  FINANCIAL TAB (no config panel)
+  // ─────────────────────────────────────────────
+  Widget _buildFinancialTab() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(24),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        _buildEventStatCards(),
+        const SizedBox(height: 16),
+        _buildEventsTable(showFinancial: true),
+        const SizedBox(height: 16),
+        _buildRecentReports(),
+      ]),
+    );
+  }
+
+  // ─────────────────────────────────────────────
+  //  CONFIG PANEL (used only in Event Summary)
+  // ─────────────────────────────────────────────
+  Widget _buildConfigPanel() {
+    final orgNames = ['All Organizations', ..._organizations.map((o) => o['name'] as String)];
+    return _card(
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          const Icon(Icons.tune, size: 16, color: UpriseColors.primary),
+          const SizedBox(width: 8),
+          Text('Report Configuration',
+              style: GoogleFonts.beVietnamPro(fontSize: 16, fontWeight: FontWeight.w700, color: UpriseColors.charcoal)),
+        ]),
+        const SizedBox(height: 16),
+        Wrap(spacing: 16, runSpacing: 16, children: [
+          _filterDropdown('DATE RANGE', _filterRange,
+              ['Current Semester', 'Last Semester', 'Academic Year 2024-2025'],
+              (v) => setState(() => _filterRange = v!)),
+          _filterDropdown('ORGANIZATION', _filterOrg, orgNames, (v) {
+            setState(() { _filterOrg = v!; _currentPage = 1; });
+            _loadEvents();
+          }),
+          _filterDropdown('EVENT TYPE', _filterType,
+              ['All Types', 'Seminar', 'Workshop', 'Exhibition', 'Social', 'Cultural', 'Competition'],
+              (v) {
+            setState(() { _filterType = v!; _currentPage = 1; });
+            _loadEvents();
+          }),
+          _filterDropdown('REPORT VIEW', _reportView,
+              ['By Event', 'By Organization', 'By Month'],
+              (v) => setState(() => _reportView = v!)),
+          Padding(
+            padding: const EdgeInsets.only(top: 16),
+            child: _primaryBtn(Icons.insert_drive_file_outlined, 'Generate Report', _showGenerateReportDialog),
+          ),
+        ]),
+      ]),
+    );
+  }
+
+  Widget _filterDropdown(String label, String value, List<String> items, ValueChanged<String?> onChanged) {
+    return SizedBox(
+      width: 180,
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(label, style: GoogleFonts.beVietnamPro(fontSize: 10, fontWeight: FontWeight.w700, color: UpriseColors.darkGray, letterSpacing: .5)),
+        const SizedBox(height: 4),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          decoration: BoxDecoration(
+            border: Border.all(color: UpriseColors.mediumGray),
+            borderRadius: BorderRadius.circular(8),
+            color: UpriseColors.white,
+          ),
+          child: DropdownButtonHideUnderline(
+            child: DropdownButton<String>(
+              value: value,
+              isExpanded: true,
+              style: GoogleFonts.beVietnamPro(fontSize: 13, color: UpriseColors.charcoal),
+              items: items.map((item) => DropdownMenuItem(value: item, child: Text(item))).toList(),
+              onChanged: onChanged,
+            ),
+          ),
+        ),
+      ]),
+    );
+  }
+
+  // ─────────────────────────────────────────────
+  //  STAT CARDS
+  // ─────────────────────────────────────────────
+  Widget _buildEventStatCards() {
+    final totalIncome   = _events.fold<double>(0, (s, e) => s + e.totalIncome);
+    final totalExpenses = _events.fold<double>(0, (s, e) => s + e.totalExpenses);
+    final netAmount     = totalIncome - totalExpenses;
+    return Row(children: [
+      _statCard('Total Income',   '₱${_fmt(totalIncome)}',   UpriseColors.primary),
+      const SizedBox(width: 14),
+      _statCard('Total Expenses', '₱${_fmt(totalExpenses)}', UpriseColors.error),
+      const SizedBox(width: 14),
+      _statCard('Net Amount',     '₱${_fmt(netAmount)}',     UpriseColors.success),
+    ]);
+  }
+
+  Widget _buildAccomplishmentStatCards() {
+    final totalReg = _events.fold<int>(0, (s, e) => s + e.registrants);
+    final totalAtt = _events.fold<int>(0, (s, e) => s + e.attendees);
+    final avgRatio = totalReg > 0 ? (totalAtt / totalReg * 100).round() : 0;
+    return Row(children: [
+      _statCard('Total Events',      '${_events.length}',          UpriseColors.primary),
+      const SizedBox(width: 14),
+      _statCard('Total Registrants', '$totalReg',                  UpriseColors.info),
+      const SizedBox(width: 14),
+      _statCard('Avg Attendance',    '$avgRatio%',                 UpriseColors.success),
+    ]);
+  }
+
+  Widget _statCard(String label, String value, Color color) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.all(18),
+        decoration: BoxDecoration(
+          color: UpriseColors.white,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: UpriseColors.mediumGray),
+        ),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(label, style: GoogleFonts.beVietnamPro(fontSize: 11, fontWeight: FontWeight.w600, color: UpriseColors.darkGray)),
+          const SizedBox(height: 6),
+          Text(value, style: GoogleFonts.beVietnamPro(fontSize: 26, fontWeight: FontWeight.w800, color: color)),
+        ]),
+      ),
+    );
+  }
+
+  // ─────────────────────────────────────────────
+  //  EVENTS TABLE (with countdown column in Event Summary)
+  // ─────────────────────────────────────────────
+  Widget _buildEventsTable({required bool showFinancial}) {
+    if (_loadingEvents) {
+      return const Center(child: Padding(padding: EdgeInsets.all(40), child: CircularProgressIndicator(color: UpriseColors.primary)));
+    }
+    if (_events.isEmpty) {
+      return _emptyState('No events found matching the selected filters.');
+    }
+
+    final totalPages = (_events.length / _pageSize).ceil();
+    final start      = (_currentPage - 1) * _pageSize;
+    final end        = (start + _pageSize).clamp(0, _events.length);
+    final pageEvents = _events.sublist(start, end);
+
+    return Container(
       decoration: BoxDecoration(
         color: UpriseColors.white,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(10),
         border: Border.all(color: UpriseColors.mediumGray),
       ),
-      child: Column(
-        children: [
-          Container(
+      child: Column(children: [
+        // toolbar
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          decoration: const BoxDecoration(
+            color: UpriseColors.lightGray,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(10)),
+          ),
+          child: Row(children: [
+            Expanded(child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(children: showFinancial
+                ? [
+                    _th('EVENT NAME', 200), _th('ORGANIZATION', 150),
+                    _th('TOTAL INCOME', 130), _th('TOTAL EXPENSE', 130),
+                    _th('NET AMOUNT', 120), _th('DAYS TO EVENT', 110), _th('ACTIONS', 80),
+                  ]
+                : [
+                    _th('EVENT NAME', 200), _th('ORGANIZATION', 150),
+                    _th('TYPE', 110), _th('DATE', 120),
+                    _th('REGISTRANTS', 100), _th('ATTENDEES', 100),
+                    _th('RATIO', 90), _th('ACTIONS', 80),
+                  ],
+            )),
+        )]),
+        ),
+        // rows
+        ...pageEvents.map((e) => _buildEventRow(e, showFinancial)),
+        // footer
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          decoration: const BoxDecoration(
+            color: UpriseColors.lightGray,
+            borderRadius: BorderRadius.vertical(bottom: Radius.circular(10)),
+          ),
+          child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+            Text('Showing ${start + 1}–$end of ${_events.length} events',
+                style: GoogleFonts.beVietnamPro(fontSize: 12, color: UpriseColors.darkGray)),
+            Row(children: [
+              _pageBtn(Icons.chevron_left, _currentPage > 1, () => setState(() => _currentPage--)),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                child: Text('$_currentPage / $totalPages',
+                    style: GoogleFonts.beVietnamPro(fontSize: 13)),
+              ),
+              _pageBtn(Icons.chevron_right, _currentPage < totalPages, () => setState(() => _currentPage++)),
+              const SizedBox(width: 12),
+              _outlineBtn(Icons.download_outlined, 'Export',
+                  showFinancial ? _exportFinancialCSV : _exportAccomplishmentCSV),
+            ]),
+          ]),
+        ),
+      ]),
+    );
+  }
+
+  Widget _buildEventRow(EventReport event, bool showFinancial) {
+    // Countdown days until event
+    final now = DateTime.now();
+    final daysUntil = event.date.difference(now).inDays;
+    String countdownText;
+    Color countdownColor;
+    if (daysUntil < 0) {
+      countdownText = 'Passed';
+      countdownColor = UpriseColors.darkGray;
+    } else if (daysUntil == 0) {
+      countdownText = 'Today';
+      countdownColor = UpriseColors.success;
+    } else {
+      countdownText = '$daysUntil days';
+      countdownColor = daysUntil <= 7 ? UpriseColors.warning : UpriseColors.primary;
+    }
+
+    return InkWell(
+      onTap: () => setState(() => _detailEvent = event),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          border: Border(bottom: BorderSide(color: UpriseColors.mediumGray.withOpacity(0.5))),
+        ),
+        child: SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: showFinancial
+            ? Row(children: [
+                _td(event.title, 200, bold: true),
+                _td(event.orgName, 150),
+                _td('₱${_fmt(event.totalIncome)}', 130),
+                _td('₱${_fmt(event.totalExpenses)}', 130),
+                SizedBox(width: 120, child: Text(
+                  '₱${_fmt(event.netAmount)}',
+                  style: TextStyle(
+                    fontSize: 13, fontWeight: FontWeight.w600,
+                    color: event.netAmount >= 0 ? UpriseColors.success : UpriseColors.error,
+                  ),
+                )),
+                SizedBox(width: 110, child: Text(
+                  countdownText,
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: countdownColor),
+                )),
+                SizedBox(width: 80, child: IconButton(
+                  icon: const Icon(Icons.visibility_outlined, size: 18, color: UpriseColors.primaryDark),
+                  onPressed: () => setState(() => _detailEvent = event),
+                  tooltip: 'View Report',
+                )),
+              ])
+            : Row(children: [
+                _td(event.title, 200, bold: true),
+                _td(event.orgName, 150),
+                SizedBox(width: 110, child: _typeBadge(event.type)),
+                _td(DateFormat('MMM dd, yyyy').format(event.date), 120),
+                _td('${event.registrants}', 100),
+                _td('${event.attendees}', 100),
+                SizedBox(width: 90, child: _ratioBadge(event.attendanceRatio)),
+                SizedBox(width: 80, child: IconButton(
+                  icon: const Icon(Icons.visibility_outlined, size: 18, color: UpriseColors.primaryDark),
+                  onPressed: () => setState(() => _detailEvent = event),
+                  tooltip: 'View Report',
+                )),
+              ]),
+        ),
+      ),
+    );
+  }
+
+  Widget _typeBadge(String type) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+    decoration: BoxDecoration(color: UpriseColors.infoBg, borderRadius: BorderRadius.circular(20)),
+    child: Text(type, style: GoogleFonts.beVietnamPro(fontSize: 11, fontWeight: FontWeight.w600, color: UpriseColors.info)),
+  );
+
+  Widget _ratioBadge(int ratio) => Row(children: [
+    Expanded(child: ClipRRect(
+      borderRadius: BorderRadius.circular(3),
+      child: LinearProgressIndicator(
+        value: ratio / 100,
+        backgroundColor: UpriseColors.mediumGray,
+        color: UpriseColors.primary,
+        minHeight: 6,
+      ),
+    )),
+    const SizedBox(width: 6),
+    Text('$ratio%', style: GoogleFonts.beVietnamPro(fontSize: 11, fontWeight: FontWeight.w700, color: UpriseColors.primary)),
+  ]);
+
+  // ─────────────────────────────────────────────
+  //  RECENT REPORTS (Financial tab)
+  // ─────────────────────────────────────────────
+  Widget _buildRecentReports() {
+    return _card(
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text('Recent Generated Reports',
+            style: GoogleFonts.beVietnamPro(fontSize: 16, fontWeight: FontWeight.w700, color: UpriseColors.charcoal)),
+        const SizedBox(height: 16),
+        StreamBuilder<QuerySnapshot>(
+          stream: FirebaseFirestore.instance
+              .collection('generated_reports')
+              .orderBy('generatedAt', descending: true)
+              .limit(5)
+              .snapshots(),
+          builder: (ctx, snap) {
+            if (!snap.hasData) return const Center(child: CircularProgressIndicator(color: UpriseColors.primary));
+            if (snap.data!.docs.isEmpty) {
+              return Center(child: Text('No reports generated yet.',
+                  style: GoogleFonts.beVietnamPro(color: UpriseColors.darkGray)));
+            }
+            return Column(
+              children: snap.data!.docs.map((doc) {
+                final d = doc.data() as Map<String, dynamic>;
+                final generatedAt = (d['generatedAt'] as Timestamp?)?.toDate();
+                return ListTile(
+                  leading: Icon(
+                    d['format'] == 'PDF' ? Icons.picture_as_pdf : Icons.table_chart,
+                    color: UpriseColors.primary,
+                  ),
+                  title: Text(d['fileName'] ?? 'Report',
+                      style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.w600, fontSize: 13)),
+                  subtitle: Text(
+                    generatedAt != null
+                        ? DateFormat('MMM dd, yyyy hh:mm a').format(generatedAt)
+                        : 'Unknown date',
+                    style: GoogleFonts.beVietnamPro(fontSize: 12, color: UpriseColors.darkGray),
+                  ),
+                  trailing: Chip(
+                    label: Text(d['format'] ?? ''),
+                    backgroundColor: UpriseColors.primaryLight,
+                    labelStyle: GoogleFonts.beVietnamPro(
+                        fontSize: 11, fontWeight: FontWeight.w700, color: UpriseColors.primary),
+                  ),
+                );
+              }).toList(),
+            );
+          },
+        ),
+      ]),
+    );
+  }
+
+  // ─────────────────────────────────────────────
+  //  SUBMISSION TRACKER TAB (unchanged)
+  // ─────────────────────────────────────────────
+  Widget _buildSubmissionTrackerTab() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(24),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        _buildDeadlineBar(),
+        const SizedBox(height: 16),
+        _buildTrackerStats(),
+        const SizedBox(height: 20),
+        _trackerSectionTitle(Icons.attach_money, 'Financial Report Submissions'),
+        const SizedBox(height: 10),
+        _buildSubmissionTable('Financial', _financialSubs, _financialDeadline, _loadingFinancial),
+        const SizedBox(height: 24),
+        _trackerSectionTitle(Icons.assignment, 'Accomplishment Report Submissions'),
+        const SizedBox(height: 10),
+        _buildSubmissionTable('Accomplishment', _accomplishmentSubs, _accomplishmentDeadline, _loadingAccomplishment),
+        const SizedBox(height: 24),
+      ]),
+    );
+  }
+
+  Widget _buildDeadlineBar() {
+    if (_loadingDeadlines) return const LinearProgressIndicator(color: UpriseColors.primary);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+      decoration: BoxDecoration(
+        color: UpriseColors.white,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: UpriseColors.mediumGray),
+      ),
+      child: Row(children: [
+        Expanded(child: SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(children: [
+            const Icon(Icons.timer_outlined, color: UpriseColors.primary, size: 18),
+            const SizedBox(width: 8),
+            Text('Financial Deadline: ', style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.w700, fontSize: 13)),
+            Text(_financialDeadline != null ? DateFormat('MMM dd, yyyy').format(_financialDeadline!) : 'Not set',
+                style: GoogleFonts.beVietnamPro(fontSize: 13)),
+            if (_financialDeadline != null) ...[
+              const SizedBox(width: 8),
+              _countdownChip(_financialDeadline!),
+            ],
+            const SizedBox(width: 24),
+            const Icon(Icons.assignment_outlined, color: UpriseColors.primary, size: 18),
+            const SizedBox(width: 8),
+            Text('Accomplishment Deadline: ', style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.w700, fontSize: 13)),
+            Text(_accomplishmentDeadline != null ? DateFormat('MMM dd, yyyy').format(_accomplishmentDeadline!) : 'Not set',
+                style: GoogleFonts.beVietnamPro(fontSize: 13)),
+            if (_accomplishmentDeadline != null) ...[
+              const SizedBox(width: 8),
+              _countdownChip(_accomplishmentDeadline!),
+            ],
+          ]),
+        )),
+        const SizedBox(width: 16),
+        OutlinedButton.icon(
+          onPressed: _showDeadlineDialog,
+          icon: const Icon(Icons.edit_calendar, size: 16),
+          label: const Text('Set Deadlines'),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: UpriseColors.charcoal,
+            side: const BorderSide(color: UpriseColors.mediumGray),
+          ),
+        ),
+      ]),
+    );
+  }
+
+  Widget _countdownChip(DateTime deadline) {
+    final days = deadline.difference(DateTime.now()).inDays;
+    final isOverdue = days < 0;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: isOverdue ? UpriseColors.errorBg : UpriseColors.warningBg,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Text(
+        isOverdue ? 'Overdue' : '⏱ $days days left',
+        style: GoogleFonts.beVietnamPro(
+          fontSize: 11, fontWeight: FontWeight.w700,
+          color: isOverdue ? UpriseColors.error : UpriseColors.warning,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTrackerStats() {
+    final finSubmitted = _financialSubs.where((s) => s.submittedAt != null).length;
+    final accSubmitted = _accomplishmentSubs.where((s) => s.submittedAt != null).length;
+    final total        = _financialSubs.length;
+    return Row(children: [
+      _statCard('Total Organizations', '$total',              UpriseColors.primary),
+      const SizedBox(width: 14),
+      _statCard('Financial Submitted', '$finSubmitted/$total', UpriseColors.success),
+      const SizedBox(width: 14),
+      _statCard('Accomplishment Submitted', '$accSubmitted/$total', UpriseColors.info),
+    ]);
+  }
+
+  Widget _trackerSectionTitle(IconData icon, String label) => Row(children: [
+    Icon(icon, size: 16, color: UpriseColors.primary),
+    const SizedBox(width: 8),
+    Text(label, style: GoogleFonts.beVietnamPro(fontSize: 14, fontWeight: FontWeight.w700, color: UpriseColors.charcoal)),
+  ]);
+
+  Widget _buildSubmissionTable(
+    String title,
+    List<OrgSubmission> submissions,
+    DateTime? deadline,
+    bool loading,
+  ) {
+    if (loading) return const Center(child: CircularProgressIndicator(color: UpriseColors.primary));
+
+    final sorted = List<OrgSubmission>.from(submissions)
+      ..sort((a, b) {
+        final aSubmitted = a.submittedAt != null;
+        final bSubmitted = b.submittedAt != null;
+        final now = DateTime.now();
+        final aOverdue = deadline != null && !aSubmitted && now.isAfter(deadline);
+        final bOverdue = deadline != null && !bSubmitted && now.isAfter(deadline);
+        if (aOverdue && !bOverdue) return -1;
+        if (!aOverdue && bOverdue) return 1;
+        if (aSubmitted && !bSubmitted) return 1;
+        if (!aSubmitted && bSubmitted) return -1;
+        return 0;
+      });
+
+    return Container(
+      decoration: BoxDecoration(
+        color: UpriseColors.white,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: UpriseColors.mediumGray),
+      ),
+      child: Column(children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          decoration: const BoxDecoration(
+            color: UpriseColors.lightGray,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(10)),
+          ),
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(children: [
+              _th('ORGANIZATION', 200), _th('DEADLINE', 150),
+              _th('SUBMITTED ON', 150), _th('STATUS', 180), _th('ACTIONS', 100),
+            ]),
+          ),
+        ),
+        ...sorted.map((sub) {
+          final isSubmitted = sub.submittedAt != null;
+          final isOverdue   = deadline != null && !isSubmitted && DateTime.now().isAfter(deadline);
+          final daysLeft    = deadline != null && !isSubmitted
+              ? deadline.difference(DateTime.now()).inDays : 0;
+
+          String statusText;
+          Color statusColor;
+          Color statusBg;
+          if (isSubmitted) {
+            statusText  = 'Submitted';
+            statusColor = UpriseColors.success;
+            statusBg    = UpriseColors.successBg;
+          } else if (isOverdue) {
+            statusText  = 'Overdue';
+            statusColor = UpriseColors.error;
+            statusBg    = UpriseColors.errorBg;
+          } else {
+            statusText  = 'Pending ($daysLeft days left)';
+            statusColor = UpriseColors.warning;
+            statusBg    = UpriseColors.warningBg;
+          }
+
+          return Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             decoration: BoxDecoration(
-              color: UpriseColors.lightGray,
-              border: Border(bottom: BorderSide(color: UpriseColors.mediumGray)),
-              borderRadius: const BorderRadius.only(
-                  topLeft: Radius.circular(12),
-                  topRight: Radius.circular(12)),
+              border: Border(bottom: BorderSide(color: UpriseColors.mediumGray.withOpacity(0.5))),
             ),
             child: SingleChildScrollView(
               scrollDirection: Axis.horizontal,
-              child: Row(
-                children: [
-                  SizedBox(
-                      width: 200,
-                      child: Text('ORGANIZATION', style: _headerStyle())),
-                  SizedBox(
-                      width: 150,
-                      child: Text('DEADLINE', style: _headerStyle())),
-                  SizedBox(
-                      width: 150,
-                      child: Text('SUBMITTED ON', style: _headerStyle())),
-                  SizedBox(
-                      width: 180,
-                      child: Text('STATUS', style: _headerStyle())),
-                  SizedBox(
-                      width: 100,
-                      child: Text('ACTIONS', style: _headerStyle())),
-                ],
-              ),
-            ),
-          ),
-          Expanded(
-            child: ListView.builder(
-              itemCount: sorted.length,
-              itemBuilder: (context, index) {
-                final sub = sorted[index];
-                final isSubmitted = sub.submittedAt != null;
-                final isOverdue = deadline != null &&
-                    !isSubmitted &&
-                    DateTime.now().isAfter(deadline);
-                final daysLeft = deadline != null && !isSubmitted
-                    ? deadline.difference(DateTime.now()).inDays
-                    : 0;
-                String statusText;
-                Color statusColor;
-                if (isSubmitted) {
-                  statusText = 'Submitted';
-                  statusColor = UpriseColors.success;
-                } else if (isOverdue) {
-                  statusText = 'Overdue';
-                  statusColor = UpriseColors.error;
-                } else {
-                  statusText = 'Pending ($daysLeft days left)';
-                  statusColor = UpriseColors.warning;
-                }
-                return Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  decoration: BoxDecoration(
-                      border: Border(
-                          bottom: BorderSide(
-                              color: UpriseColors.mediumGray.withOpacity(0.5)))),
-                  child: SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: Row(
-                      children: [
-                        SizedBox(
-                            width: 200,
-                            child: Text(sub.orgName,
-                                style: const TextStyle(
-                                    fontSize: 13, fontWeight: FontWeight.w500))),
-                        SizedBox(
-                            width: 150,
-                            child: Text(
-                                deadline != null
-                                    ? DateFormat('MMM dd, yyyy')
-                                        .format(deadline)
-                                    : 'No deadline',
-                                style: const TextStyle(fontSize: 12))),
-                        SizedBox(
-                            width: 150,
-                            child: Text(
-                                isSubmitted
-                                    ? DateFormat('MMM dd, yyyy')
-                                        .format(sub.submittedAt!)
-                                    : '—',
-                                style: const TextStyle(fontSize: 12))),
-                        SizedBox(
-                            width: 180,
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 8, vertical: 4),
-                              decoration: BoxDecoration(
-                                  color: statusColor.withOpacity(0.1),
-                                  borderRadius: BorderRadius.circular(12)),
-                              child: Text(
-                                statusText,
-                                style: TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w600,
-                                    color: statusColor),
-                              ),
-                            )),
-                        SizedBox(
-                            width: 100,
-                            child: Row(
-                              children: [
-                                if (isSubmitted)
-                                  IconButton(
-                                    icon: const Icon(Icons.visibility,
-                                        size: 18,
-                                        color: UpriseColors.primaryDark),
-                                    onPressed: () =>
-                                        _viewSubmission(sub, title),
-                                    tooltip: 'View Report',
-                                  ),
-                                if (!isSubmitted)
-                                  IconButton(
-                                    icon: const Icon(Icons.send,
-                                        size: 18,
-                                        color: UpriseColors.primaryDark),
-                                    onPressed: () =>
-                                        _sendReminder(sub, title),
-                                    tooltip: 'Send Reminder',
-                                  ),
-                              ],
-                            )),
-                      ],
+              child: Row(children: [
+                _td(sub.orgName, 200, bold: true),
+                _td(deadline != null ? DateFormat('MMM dd, yyyy').format(deadline) : 'No deadline', 150),
+                _td(isSubmitted ? DateFormat('MMM dd, yyyy').format(sub.submittedAt!) : '—', 150),
+                SizedBox(width: 180, child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(color: statusBg, borderRadius: BorderRadius.circular(20)),
+                  child: Text(statusText, style: GoogleFonts.beVietnamPro(
+                      fontSize: 11, fontWeight: FontWeight.w600, color: statusColor)),
+                )),
+                SizedBox(width: 100, child: Row(children: [
+                  if (isSubmitted)
+                    IconButton(
+                      icon: const Icon(Icons.visibility_outlined, size: 18, color: UpriseColors.primaryDark),
+                      onPressed: () => _viewSubmission(sub, title),
+                      tooltip: 'View Report',
                     ),
-                  ),
-                );
-              },
+                  if (!isSubmitted)
+                    IconButton(
+                      icon: const Icon(Icons.send_outlined, size: 18, color: UpriseColors.primaryDark),
+                      onPressed: () => _sendReminder(sub, title),
+                      tooltip: 'Send Reminder',
+                    ),
+                ])),
+              ]),
             ),
+          );
+        }),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          decoration: const BoxDecoration(
+            color: UpriseColors.lightGray,
+            borderRadius: BorderRadius.vertical(bottom: Radius.circular(10)),
           ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            decoration: BoxDecoration(
-              border: Border(top: BorderSide(color: UpriseColors.mediumGray)),
-              color: UpriseColors.lightGray,
-              borderRadius: const BorderRadius.only(
-                  bottomLeft: Radius.circular(12),
-                  bottomRight: Radius.circular(12)),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text('Showing ${sorted.length} organizations',
-                    style: GoogleFonts.beVietnamPro(
-                        fontSize: 13, color: UpriseColors.darkGray)),
-                OutlinedButton.icon(
-                  onPressed: () =>
-                      _exportSubmissionToCSV(title, submissions, deadline),
-                  icon: const Icon(Icons.download, size: 16),
-                  label: const Text('Export CSV'),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
+          child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+            Text('Showing ${sorted.length} organizations',
+                style: GoogleFonts.beVietnamPro(fontSize: 12, color: UpriseColors.darkGray)),
+            _outlineBtn(Icons.download_outlined, 'Export CSV',
+                () => _exportSubmissionCSV(title, submissions, deadline)),
+          ]),
+        ),
+      ]),
     );
   }
 
@@ -506,1307 +1371,377 @@ class _ReportsManagementState extends State<ReportsManagement>
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text('$reportType Report - ${sub.orgName}'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-                'Submitted on: ${DateFormat('MMMM dd, yyyy HH:mm').format(sub.submittedAt!)}'),
-            const SizedBox(height: 16),
-            if (sub.fileUrl != null)
-              ElevatedButton.icon(
-                onPressed: () async {
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                      content: Text('Download feature: open URL')));
-                },
-                icon: const Icon(Icons.download),
-                label: const Text('Download File'),
-              )
-            else
-              const Text('No file attached.'),
-          ],
-        ),
+        title: Text('$reportType Report — ${sub.orgName}',
+            style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.w700)),
+        content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text('Submitted: ${DateFormat('MMMM dd, yyyy HH:mm').format(sub.submittedAt!)}'),
+          const SizedBox(height: 16),
+          if (sub.fileUrl != null && sub.fileUrl!.isNotEmpty)
+            ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(backgroundColor: UpriseColors.primary),
+              onPressed: () {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Opening file: ${sub.fileUrl}')));
+              },
+              icon: const Icon(Icons.open_in_new),
+              label: const Text('Open File'),
+            )
+          else
+            const Text('No file attached.'),
+        ]),
         actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx), child: const Text('Close')),
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Close')),
         ],
       ),
     );
   }
 
   void _sendReminder(OrgSubmission sub, String reportType) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content:
-            Text('Reminder sent to ${sub.orgName} for $reportType report')));
-  }
-
-  Future<void> _exportSubmissionToCSV(String reportType,
-      List<OrgSubmission> submissions, DateTime? deadline) async {
-    final rows = <List<String>>[];
-    rows.add(['Organization', 'Deadline', 'Submitted On', 'Status']);
-    for (var sub in submissions) {
-      final isSubmitted = sub.submittedAt != null;
-      final isOverdue = deadline != null &&
-          !isSubmitted &&
-          DateTime.now().isAfter(deadline);
-      String status;
-      if (isSubmitted)
-        status = 'Submitted';
-      else if (isOverdue)
-        status = 'Overdue';
-      else
-        status = 'Pending';
-      rows.add([
-        sub.orgName,
-        deadline != null ? DateFormat('yyyy-MM-dd').format(deadline) : '',
-        isSubmitted ? DateFormat('yyyy-MM-dd').format(sub.submittedAt!) : '',
-        status,
-      ]);
-    }
-    final csvContent = rows.map((row) => row.join(',')).join('\n');
-    final tempFile = await File(
-            '${Directory.systemTemp.path}/${reportType.toLowerCase()}_submissions.csv')
-        .writeAsString(csvContent);
-    await Share.shareXFiles([XFile(tempFile.path)],
-        text: '$reportType Report Submissions');
-  }
-
-  // ==================== REPORT GENERATOR METHODS ====================
-  Future<void> _loadOrganizations() async {
-    final snap =
-        await FirebaseFirestore.instance.collection('organizations').get();
-    setState(() {
-      _organizations = snap.docs.map((doc) {
-        final data = doc.data();
-        return {
-          'id': doc.id,
-          'name': data['name']?.toString() ?? 'Unknown',
-        };
-      }).toList();
-    });
-  }
-
-  Future<void> _loadReportDataForCurrentType() async {
-    setState(() => _isLoadingReport = true);
-    try {
-      if (_selectedReportType == ReportGeneratorType.eventPerformance) {
-        await _loadEventPerformanceData();
-      } else if (_selectedReportType == ReportGeneratorType.financialSummary) {
-        await _loadFinancialSummaryData();
-      } else if (_selectedReportType ==
-          ReportGeneratorType.accomplishmentSummary) {
-        await _loadAccomplishmentSummaryData();
-      }
-    } catch (e) {
-      debugPrint('Error loading report data: $e');
-    } finally {
-      setState(() => _isLoadingReport = false);
-    }
-  }
-
-  Future<void> _loadEventPerformanceData() async {
-    Query query = FirebaseFirestore.instance
-        .collection('events')
-        .where('status', isEqualTo: 'approved');
-    if (_eventType != 'All Types') {
-      query = query.where('type', isEqualTo: _eventType);
-    }
-    if (_selectedOrg != 'All Organizations') {
-      final org = _organizations.firstWhere((o) => o['name'] == _selectedOrg);
-      if (org['id'] != null) {
-        query = query.where('orgId', isEqualTo: org['id']);
-      }
-    }
-    final eventsSnap = await query.get();
-    _eventsData = [];
-    _totalRegistrants = 0;
-    _totalAttendees = 0;
-    for (var doc in eventsSnap.docs) {
-      final data = doc.data() as Map<String, dynamic>;
-      final regSnap = await FirebaseFirestore.instance
-          .collection('registrations')
-          .where('eventId', isEqualTo: doc.id)
-          .get();
-      final registrants = regSnap.docs.length;
-      final attendees =
-          regSnap.docs.where((r) => (r.data())['attended'] == true).length;
-      _eventsData.add(EventReportData(
-        id: doc.id,
-        name: data['title']?.toString() ?? 'Untitled',
-        organization: data['orgName']?.toString() ?? 'Unknown',
-        type: data['type']?.toString() ?? 'Others',
-        date: (data['date'] as Timestamp).toDate(),
-        registrants: registrants,
-        attendees: attendees,
-      ));
-      _totalRegistrants += registrants;
-      _totalAttendees += attendees;
-    }
-    _totalEvents = _eventsData.length;
-  }
-
-  Future<void> _loadFinancialSummaryData() async {
-    final subsSnap = await FirebaseFirestore.instance
-        .collection('financial_submissions')
-        .get();
-    final submissions = <FinancialSummaryData>[];
-    for (var doc in subsSnap.docs) {
-      final data = doc.data();
-      final orgDoc = await FirebaseFirestore.instance
-          .collection('organizations')
-          .doc(data['orgId'])
-          .get();
-      final orgName = orgDoc.exists
-          ? (orgDoc.data()?['name'] ?? 'Unknown')
-          : 'Unknown';
-      submissions.add(FinancialSummaryData(
-        orgName: orgName,
-        submittedAt: (data['submittedAt'] as Timestamp).toDate(),
-        fileUrl: data['fileUrl'],
-      ));
-    }
-    _financialSummaryData = submissions;
-  }
-
-  Future<void> _loadAccomplishmentSummaryData() async {
-    final subsSnap = await FirebaseFirestore.instance
-        .collection('accomplishment_submissions')
-        .get();
-    final submissions = <AccomplishmentSummaryData>[];
-    for (var doc in subsSnap.docs) {
-      final data = doc.data();
-      final orgDoc = await FirebaseFirestore.instance
-          .collection('organizations')
-          .doc(data['orgId'])
-          .get();
-      final orgName = orgDoc.exists
-          ? (orgDoc.data()?['name'] ?? 'Unknown')
-          : 'Unknown';
-      submissions.add(AccomplishmentSummaryData(
-        orgName: orgName,
-        submittedAt: (data['submittedAt'] as Timestamp).toDate(),
-        fileUrl: data['fileUrl'],
-      ));
-    }
-    _accomplishmentSummaryData = submissions;
-  }
-
-  Widget _buildReportGeneratorUI() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _buildReportTypeSelector(),
-        _buildReportConfig(),
-        _buildStatsRow(),
-        if (_selectedReportType == ReportGeneratorType.eventPerformance)
-          _buildEventTable()
-        else if (_selectedReportType == ReportGeneratorType.financialSummary)
-          _buildFinancialSummaryTable()
-        else
-          _buildAccomplishmentSummaryTable(),
-        _buildRecentReports(),
-      ],
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Reminder sent to ${sub.orgName} for $reportType report')),
     );
   }
 
-  Widget _buildReportTypeSelector() {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
-      child: Row(
-        children: [
-          const Icon(Icons.assignment, color: UpriseColors.primaryDark),
-          const SizedBox(width: 12),
-          Text('Report Type:',
-              style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.w600)),
-          const SizedBox(width: 16),
-          Expanded(
-            child: SegmentedButton<ReportGeneratorType>(
-              segments: const [
-                ButtonSegment(
-                    value: ReportGeneratorType.eventPerformance,
-                    label: Text('Event Performance')),
-                ButtonSegment(
-                    value: ReportGeneratorType.financialSummary,
-                    label: Text('Financial Summary')),
-                ButtonSegment(
-                    value: ReportGeneratorType.accomplishmentSummary,
-                    label: Text('Accomplishment Summary')),
-              ],
-              selected: {_selectedReportType},
-              onSelectionChanged: (Set<ReportGeneratorType> selection) {
-                setState(() {
-                  _selectedReportType = selection.first;
-                  _currentPage = 1;
-                  _loadReportDataForCurrentType();
-                });
-              },
-              style: SegmentedButton.styleFrom(
-                selectedBackgroundColor:
-                    UpriseColors.primaryDark.withOpacity(0.1),
-                selectedForegroundColor: UpriseColors.primaryDark,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+  // ─────────────────────────────────────────────
+  //  DETAIL VIEW (unchanged)
+  // ─────────────────────────────────────────────
+  Widget _buildDetailView(EventReport event) {
+    final net = event.netAmount;
+    final maxInc = event.incomeBreakdown.isEmpty ? 1.0
+        : event.incomeBreakdown.map((i) => (i['amount'] as num?)?.toDouble() ?? 0.0).reduce((a, b) => a > b ? a : b);
+    final maxExp = event.expenseBreakdown.isEmpty ? 1.0
+        : event.expenseBreakdown.map((i) => (i['amount'] as num?)?.toDouble() ?? 0.0).reduce((a, b) => a > b ? a : b);
 
-  Widget _buildReportConfig() {
-    return Container(
-      margin: const EdgeInsets.all(24),
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: UpriseColors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: UpriseColors.mediumGray),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('Report Configuration',
-              style: GoogleFonts.beVietnamPro(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: UpriseColors.charcoal)),
-          const SizedBox(height: 16),
-          Wrap(
-            spacing: 16,
-            runSpacing: 16,
-            children: [
-              _buildFilterDropdown(
-                  'DATE RANGE', _dateRange,
-                  ['Current Semester', 'Last Semester', 'Academic Year 2024-2025'],
-                  (v) => setState(() => _dateRange = v!)),
-              _buildFilterDropdown(
-                  'ORGANIZATION', _selectedOrg,
-                  ['All Organizations', ..._organizations.map((o) => o['name']!)],
-                  (v) => setState(() {
-                    _selectedOrg = v!;
-                    _loadReportDataForCurrentType();
-                  })),
-              if (_selectedReportType == ReportGeneratorType.eventPerformance)
-                _buildFilterDropdown(
-                    'EVENT TYPE', _eventType,
-                    ['All Types', 'In Person', 'Virtual', 'Workshop', 'Seminar', 'Competition'],
-                    (v) => setState(() {
-                      _eventType = v!;
-                      _loadReportDataForCurrentType();
-                    })),
-              _buildFilterDropdown(
-                  'REPORT VIEW', _reportView,
-                  ['By Event', 'By Organization', 'By Month'],
-                  (v) => setState(() => _reportView = v!)),
-            ],
-          ),
-          const SizedBox(height: 16),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: [
-              ElevatedButton.icon(
-                onPressed: _showGenerateReportDialog,
-                icon: const Icon(Icons.insert_drive_file),
-                label: const Text('Generate Report'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: UpriseColors.primaryDark,
-                  foregroundColor: UpriseColors.white,
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8)),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildFilterDropdown(String label, String value, List<String> items,
-      ValueChanged<String?> onChanged) {
-    return SizedBox(
-      width: 180,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(label,
-              style: GoogleFonts.beVietnamPro(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                  color: UpriseColors.darkGray)),
-          const SizedBox(height: 4),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            decoration: BoxDecoration(
-                border: Border.all(color: UpriseColors.mediumGray),
-                borderRadius: BorderRadius.circular(8)),
-            child: DropdownButtonHideUnderline(
-              child: DropdownButton<String>(
-                value: value,
-                items: items
-                    .map((item) => DropdownMenuItem(
-                          value: item,
-                          child: Text(item,
-                              style: GoogleFonts.beVietnamPro(fontSize: 13)),
-                        ))
-                    .toList(),
-                onChanged: onChanged,
-                isExpanded: true,
-                style: GoogleFonts.beVietnamPro(
-                    fontSize: 13, color: UpriseColors.charcoal),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildStatsRow() {
-    if (_selectedReportType == ReportGeneratorType.eventPerformance) {
-      return Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 24),
-        child: Row(children: [
-          _statCard('Total Events', '$_totalEvents', UpriseColors.primaryDark),
-          const SizedBox(width: 16),
-          _statCard('Total Registrants', '$_totalRegistrants',
-              UpriseColors.success),
-          const SizedBox(width: 16),
-          _statCard('Total Attendees', '$_totalAttendees', UpriseColors.accent),
-        ]),
-      );
-    } else if (_selectedReportType == ReportGeneratorType.financialSummary) {
-      return Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 24),
-        child: Row(children: [
-          _statCard('Total Submissions', '${_financialSummaryData.length}',
-              UpriseColors.primaryDark),
-          const SizedBox(width: 16),
-          _statCard('With Files',
-              '${_financialSummaryData.where((e) => e.fileUrl != null).length}',
-              UpriseColors.success),
-          const SizedBox(width: 16),
-          _statCard('Date Range', _dateRange, UpriseColors.accent),
-        ]),
-      );
-    } else {
-      return Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 24),
-        child: Row(children: [
-          _statCard('Total Submissions', '${_accomplishmentSummaryData.length}',
-              UpriseColors.primaryDark),
-          const SizedBox(width: 16),
-          _statCard(
-              'With Files',
-              '${_accomplishmentSummaryData.where((e) => e.fileUrl != null).length}',
-              UpriseColors.success),
-          const SizedBox(width: 16),
-          _statCard('Date Range', _dateRange, UpriseColors.accent),
-        ]),
-      );
-    }
-  }
-
-  Widget _statCard(String label, String value, Color color) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
+    return Scaffold(
+      backgroundColor: UpriseColors.lightGray,
+      body: Column(children: [
+        Container(
+          padding: const EdgeInsets.fromLTRB(28, 20, 28, 16),
           color: UpriseColors.white,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: UpriseColors.mediumGray),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(label,
-                style: GoogleFonts.beVietnamPro(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    color: UpriseColors.darkGray)),
-            const SizedBox(height: 6),
-            Text(value,
-                style: GoogleFonts.beVietnamPro(
-                    fontSize: 28, fontWeight: FontWeight.bold, color: color)),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildEventTable() {
-    if (_isLoadingReport) return const Center(child: CircularProgressIndicator());
-    if (_eventsData.isEmpty)
-      return _emptyWidget('No events match the selected filters');
-    final totalPages = (_eventsData.length / _pageSize).ceil();
-    final start = (_currentPage - 1) * _pageSize;
-    final end = (start + _pageSize).clamp(0, _eventsData.length);
-    final pageEvents = _eventsData.sublist(start, end);
-    return _buildTableContainer(
-      header: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: Row(children: [
-          SizedBox(width: 200, child: Text('EVENT NAME', style: _headerStyle())),
-          SizedBox(
-              width: 150, child: Text('ORGANIZATION', style: _headerStyle())),
-          SizedBox(width: 120, child: Text('TYPE', style: _headerStyle())),
-          SizedBox(width: 120, child: Text('DATE', style: _headerStyle())),
-          SizedBox(width: 100, child: Text('REGISTRANTS', style: _headerStyle())),
-          SizedBox(width: 100, child: Text('ATTENDEES', style: _headerStyle())),
-          SizedBox(width: 80, child: Text('RATIO', style: _headerStyle())),
-        ]),
-      ),
-      body: Column(
-          children: pageEvents.map((event) => _buildEventRow(event)).toList()),
-      totalCount: _eventsData.length,
-      start: start,
-      end: end,
-      totalPages: totalPages,
-      onExport: _exportCurrentTableAsCSV,
-    );
-  }
-
-  Widget _buildEventRow(EventReportData event) {
-    final ratio = event.registrants > 0
-        ? ((event.attendees / event.registrants) * 100).toStringAsFixed(0)
-        : '0';
-    return _tableRow(children: [
-      SizedBox(
-          width: 200,
-          child: Text(event.name,
-              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500))),
-      SizedBox(
-          width: 150,
-          child: Text(event.organization,
-              style: const TextStyle(fontSize: 12))),
-      SizedBox(
-          width: 120,
-          child:
-              Text(event.type, style: const TextStyle(fontSize: 12))),
-      SizedBox(
-          width: 120,
-          child: Text(DateFormat('MMM dd, yyyy').format(event.date),
-              style: const TextStyle(fontSize: 12))),
-      SizedBox(
-          width: 100,
-          child: Text('${event.registrants}',
-              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600))),
-      SizedBox(
-          width: 100,
-          child: Text('${event.attendees}',
-              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600))),
-      SizedBox(
-          width: 80,
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-            decoration: BoxDecoration(
-                color: UpriseColors.success.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(12)),
-            child: Text('$ratio%',
-                style: const TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    color: UpriseColors.success),
-                textAlign: TextAlign.center),
-          )),
-    ]);
-  }
-
-  Widget _buildFinancialSummaryTable() {
-    if (_isLoadingReport) return const Center(child: CircularProgressIndicator());
-    if (_financialSummaryData.isEmpty)
-      return _emptyWidget('No financial submissions found');
-    final totalPages = (_financialSummaryData.length / _pageSize).ceil();
-    final start = (_currentPage - 1) * _pageSize;
-    final end = (start + _pageSize).clamp(0, _financialSummaryData.length);
-    final pageData = _financialSummaryData.sublist(start, end);
-    return _buildTableContainer(
-      header: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: Row(children: [
-          SizedBox(
-              width: 200, child: Text('ORGANIZATION', style: _headerStyle())),
-          SizedBox(
-              width: 150, child: Text('SUBMITTED ON', style: _headerStyle())),
-          SizedBox(width: 100, child: Text('FILE', style: _headerStyle())),
-        ]),
-      ),
-      body: Column(
-          children: pageData.map((item) => _financialSummaryRow(item)).toList()),
-      totalCount: _financialSummaryData.length,
-      start: start,
-      end: end,
-      totalPages: totalPages,
-      onExport: _exportFinancialSummary,
-    );
-  }
-
-  Widget _financialSummaryRow(FinancialSummaryData item) {
-    return _tableRow(children: [
-      SizedBox(
-          width: 200,
-          child: Text(item.orgName,
-              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500))),
-      SizedBox(
-          width: 150,
-          child: Text(DateFormat('MMM dd, yyyy').format(item.submittedAt),
-              style: const TextStyle(fontSize: 12))),
-      SizedBox(
-          width: 100,
-          child: item.fileUrl != null
-              ? const Icon(Icons.attach_file, color: UpriseColors.primaryDark)
-              : const Text('No file')),
-    ]);
-  }
-
-  Widget _buildAccomplishmentSummaryTable() {
-    if (_isLoadingReport) return const Center(child: CircularProgressIndicator());
-    if (_accomplishmentSummaryData.isEmpty)
-      return _emptyWidget('No accomplishment submissions found');
-    final totalPages = (_accomplishmentSummaryData.length / _pageSize).ceil();
-    final start = (_currentPage - 1) * _pageSize;
-    final end = (start + _pageSize).clamp(0, _accomplishmentSummaryData.length);
-    final pageData = _accomplishmentSummaryData.sublist(start, end);
-    return _buildTableContainer(
-      header: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: Row(children: [
-          SizedBox(
-              width: 200, child: Text('ORGANIZATION', style: _headerStyle())),
-          SizedBox(
-              width: 150, child: Text('SUBMITTED ON', style: _headerStyle())),
-          SizedBox(width: 100, child: Text('FILE', style: _headerStyle())),
-        ]),
-      ),
-      body: Column(
-          children: pageData.map((item) => _accomplishmentSummaryRow(item)).toList()),
-      totalCount: _accomplishmentSummaryData.length,
-      start: start,
-      end: end,
-      totalPages: totalPages,
-      onExport: _exportAccomplishmentSummary,
-    );
-  }
-
-  Widget _accomplishmentSummaryRow(AccomplishmentSummaryData item) {
-    return _tableRow(children: [
-      SizedBox(
-          width: 200,
-          child: Text(item.orgName,
-              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500))),
-      SizedBox(
-          width: 150,
-          child: Text(DateFormat('MMM dd, yyyy').format(item.submittedAt),
-              style: const TextStyle(fontSize: 12))),
-      SizedBox(
-          width: 100,
-          child: item.fileUrl != null
-              ? const Icon(Icons.attach_file, color: UpriseColors.primaryDark)
-              : const Text('No file')),
-    ]);
-  }
-
-  Widget _buildTableContainer({
-    required Widget header,
-    required Widget body,
-    required int totalCount,
-    required int start,
-    required int end,
-    required int totalPages,
-    required VoidCallback onExport,
-  }) {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 24),
-      decoration: BoxDecoration(
-        color: UpriseColors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: UpriseColors.mediumGray),
-      ),
-      child: Column(
-        children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            decoration: BoxDecoration(
-              color: UpriseColors.lightGray,
-              border: Border(bottom: BorderSide(color: UpriseColors.mediumGray)),
-              borderRadius: const BorderRadius.only(
-                  topLeft: Radius.circular(12),
-                  topRight: Radius.circular(12)),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            GestureDetector(
+              onTap: () => setState(() => _detailEvent = null),
+              child: Row(children: [
+                const Icon(Icons.arrow_back, size: 16, color: UpriseColors.darkGray),
+                const SizedBox(width: 6),
+                Text('Back to Reports List',
+                    style: GoogleFonts.beVietnamPro(fontSize: 13, color: UpriseColors.darkGray, fontWeight: FontWeight.w500)),
+              ]),
             ),
-            child: header,
-          ),
-          ConstrainedBox(
-            constraints: const BoxConstraints(maxHeight: 500),
-            child:
-                SingleChildScrollView(scrollDirection: Axis.vertical, child: body),
-          ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            decoration: BoxDecoration(
-              border: Border(top: BorderSide(color: UpriseColors.mediumGray)),
-              color: UpriseColors.lightGray,
-              borderRadius: const BorderRadius.only(
-                  bottomLeft: Radius.circular(12),
-                  bottomRight: Radius.circular(12)),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text('Showing ${start + 1}–$end of $totalCount items',
-                    style: GoogleFonts.beVietnamPro(
-                        fontSize: 13, color: UpriseColors.darkGray)),
-                Row(
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.chevron_left, size: 20),
-                      color: _currentPage > 1
-                          ? UpriseColors.charcoal
-                          : UpriseColors.mediumGray,
-                      onPressed: _currentPage > 1
-                          ? () => setState(() => _currentPage--)
-                          : null,
-                    ),
-                    Text('$_currentPage / $totalPages',
-                        style: GoogleFonts.beVietnamPro(fontSize: 13)),
-                    IconButton(
-                      icon: const Icon(Icons.chevron_right, size: 20),
-                      color: _currentPage < totalPages
-                          ? UpriseColors.charcoal
-                          : UpriseColors.mediumGray,
-                      onPressed: _currentPage < totalPages
-                          ? () => setState(() => _currentPage++)
-                          : null,
-                    ),
-                    const SizedBox(width: 12),
-                    OutlinedButton.icon(
-                      onPressed: onExport,
-                      icon: const Icon(Icons.download, size: 16),
-                      label: const Text('Export Table'),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _tableRow({required List<Widget> children}) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      decoration: BoxDecoration(
-          border: Border(
-              bottom: BorderSide(
-                  color: UpriseColors.mediumGray.withOpacity(0.5)))),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: Row(children: children),
-      ),
-    );
-  }
-
-  Widget _emptyWidget(String message) => Container(
-        margin: const EdgeInsets.all(24),
-        padding: const EdgeInsets.all(40),
-        decoration: BoxDecoration(
-            color: UpriseColors.white,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: UpriseColors.mediumGray)),
-        child: Center(
-          child: Column(children: [
-            Icon(Icons.bar_chart, size: 64, color: UpriseColors.mediumGray),
-            const SizedBox(height: 16),
-            Text(message,
-                style: GoogleFonts.beVietnamPro(color: UpriseColors.darkGray)),
+            const SizedBox(height: 12),
+            Row(children: [
+              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text('Financial Report',
+                    style: GoogleFonts.beVietnamPro(fontSize: 24, fontWeight: FontWeight.w800, color: UpriseColors.charcoal)),
+                Text('${event.title} • ${event.orgName}',
+                    style: GoogleFonts.beVietnamPro(fontSize: 13, color: UpriseColors.darkGray)),
+              ])),
+              Row(children: [
+                _outlineBtn(Icons.archive_outlined, 'Archive', () {
+                  // In production: update Firestore doc status to 'archived' and log
+                }),
+                const SizedBox(width: 8),
+                _primaryBtn(Icons.download_outlined, 'Download PDF',
+                    () => _generatePDFReport()),
+              ]),
+            ]),
           ]),
         ),
-      );
-
-  TextStyle _headerStyle() => GoogleFonts.beVietnamPro(
-      fontSize: 11,
-      fontWeight: FontWeight.w700,
-      color: UpriseColors.darkGray,
-      letterSpacing: 0.5);
-
-  // ---------- EXPORT FUNCTIONS FOR GENERATOR ----------
-  Future<void> _exportCurrentTableAsCSV() async {
-    final rows = <List<String>>[];
-    rows.add([
-      'Event Name',
-      'Organization',
-      'Type',
-      'Date',
-      'Registrants',
-      'Attendees',
-      'Ratio'
-    ]);
-    for (var event in _eventsData) {
-      final ratio = event.registrants > 0
-          ? ((event.attendees / event.registrants) * 100).toStringAsFixed(0)
-          : '0';
-      rows.add([
-        event.name,
-        event.organization,
-        event.type,
-        DateFormat('yyyy-MM-dd').format(event.date),
-        event.registrants.toString(),
-        event.attendees.toString(),
-        '$ratio%',
-      ]);
-    }
-    final csvContent = rows.map((row) => row.join(',')).join('\n');
-    final tempFile = await File('${Directory.systemTemp.path}/event_performance.csv')
-        .writeAsString(csvContent);
-    await Share.shareXFiles([XFile(tempFile.path)],
-        text: 'Event Performance Report');
-  }
-
-  Future<void> _exportFinancialSummary() async {
-    final rows = <List<String>>[];
-    rows.add(['Organization', 'Submitted On', 'Has File']);
-    for (var item in _financialSummaryData) {
-      rows.add([
-        item.orgName,
-        DateFormat('yyyy-MM-dd').format(item.submittedAt),
-        item.fileUrl != null ? 'Yes' : 'No'
-      ]);
-    }
-    final csvContent = rows.map((row) => row.join(',')).join('\n');
-    final tempFile = await File('${Directory.systemTemp.path}/financial_summary.csv')
-        .writeAsString(csvContent);
-    await Share.shareXFiles([XFile(tempFile.path)],
-        text: 'Financial Summary Report');
-  }
-
-  Future<void> _exportAccomplishmentSummary() async {
-    final rows = <List<String>>[];
-    rows.add(['Organization', 'Submitted On', 'Has File']);
-    for (var item in _accomplishmentSummaryData) {
-      rows.add([
-        item.orgName,
-        DateFormat('yyyy-MM-dd').format(item.submittedAt),
-        item.fileUrl != null ? 'Yes' : 'No'
-      ]);
-    }
-    final csvContent = rows.map((row) => row.join(',')).join('\n');
-    final tempFile = await File(
-            '${Directory.systemTemp.path}/accomplishment_summary.csv')
-        .writeAsString(csvContent);
-    await Share.shareXFiles([XFile(tempFile.path)],
-        text: 'Accomplishment Summary Report');
-  }
-
-  // ---------- GENERATE PDF/CSV (system-wide) ----------
-  void _showGenerateReportDialog() {
-    String selectedFormat = 'PDF';
-    showDialog(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setStateDlg) {
-          return AlertDialog(
-            title: Text(
-                'Generate ${_selectedReportType.toString().split('.').last} Report',
-                style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.bold)),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Report Summary',
-                    style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.w600)),
-                const SizedBox(height: 8),
-                _summaryRow('Date Range:', _dateRange),
-                _summaryRow('Organization:', _selectedOrg),
-                if (_selectedReportType ==
-                    ReportGeneratorType.eventPerformance)
-                  _summaryRow('Event Type:', _eventType),
-                _summaryRow('Report View:', _reportView),
-                const SizedBox(height: 16),
-                Text('Report Format',
-                    style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.w600)),
-                const SizedBox(height: 8),
-                Row(children: [
-                  Expanded(
-                      child: RadioListTile(
-                          title: const Text('PDF'),
-                          value: 'PDF',
-                          groupValue: selectedFormat,
-                          onChanged: (v) =>
-                              setStateDlg(() => selectedFormat = v!),
-                          activeColor: UpriseColors.primaryDark)),
-                  Expanded(
-                      child: RadioListTile(
-                          title: const Text('CSV'),
-                          value: 'CSV',
-                          groupValue: selectedFormat,
-                          onChanged: (v) =>
-                              setStateDlg(() => selectedFormat = v!),
-                          activeColor: UpriseColors.primaryDark)),
-                ]),
-              ],
-            ),
-            actions: [
-              TextButton(
-                  onPressed: () => Navigator.pop(ctx),
-                  child: const Text('Cancel')),
-              ElevatedButton(
-                onPressed: () async {
-                  Navigator.pop(ctx);
-                  if (selectedFormat == 'PDF') {
-                    await _generatePDFReport();
-                  } else {
-                    await _generateCSVReport();
-                  }
-                },
-                child: const Text('Generate & Download'),
+        Expanded(child: SingleChildScrollView(
+          padding: const EdgeInsets.all(24),
+          child: Column(children: [
+            Container(
+              decoration: BoxDecoration(
+                color: UpriseColors.white,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: UpriseColors.mediumGray),
               ),
+              child: Column(children: [
+                Row(children: [
+                  _metaCell('EVENT NAME',      event.title),
+                  _metaCell('ORGANIZATION',    event.orgName),
+                  _metaCell('REPORT TYPE',     'Event Financial Report', last: true),
+                ]),
+                Row(children: [
+                  _metaCell('REPORT PERIOD',   event.reportPeriod.isNotEmpty ? event.reportPeriod : DateFormat('MMM dd, yyyy').format(event.date)),
+                  _metaCell('SUBMITTED DATE',  event.submittedDate != null ? DateFormat('MMM dd, yyyy').format(event.submittedDate!) : '—'),
+                  _metaCell('SUBMITTED BY',    event.submittedBy.isNotEmpty ? event.submittedBy : '—', last: true, lastRow: true),
+                ]),
+              ]),
+            ),
+            const SizedBox(height: 16),
+            Row(children: [
+              _finStat('Total Income',    '₱${_fmt(event.totalIncome)}',   UpriseColors.primary),
+              const SizedBox(width: 14),
+              _finStat('Total Expenses',  '₱${_fmt(event.totalExpenses)}', UpriseColors.error),
+              const SizedBox(width: 14),
+              _finStat('Net Amount',      '₱${_fmt(net)}',                 net >= 0 ? UpriseColors.success : UpriseColors.error),
+              const SizedBox(width: 14),
+              _finStat('Budget Variance', '₱${_fmt(event.budgetVariance)}', UpriseColors.success),
+            ]),
+            const SizedBox(height: 16),
+            Row(children: [
+              Expanded(child: _card(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Row(children: [
+                  const Icon(Icons.trending_up, size: 16, color: UpriseColors.success),
+                  const SizedBox(width: 6),
+                  Text('Income Breakdown', style: GoogleFonts.beVietnamPro(fontSize: 14, fontWeight: FontWeight.w700)),
+                ]),
+                const SizedBox(height: 14),
+                if (event.incomeBreakdown.isEmpty)
+                  Text('No breakdown data.', style: GoogleFonts.beVietnamPro(color: UpriseColors.darkGray, fontSize: 13))
+                else
+                  ...event.incomeBreakdown.map((item) {
+                    final amt   = (item['amount'] as num?)?.toDouble() ?? 0;
+                    final ratio = maxInc > 0 ? amt / maxInc : 0.0;
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                          Text(item['name']?.toString() ?? '', style: GoogleFonts.beVietnamPro(fontSize: 13, color: UpriseColors.darkGray)),
+                          Text('₱${_fmt(amt)}', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600)),
+                        ]),
+                        const SizedBox(height: 4),
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(3),
+                          child: LinearProgressIndicator(
+                            value: ratio.toDouble(),
+                            backgroundColor: UpriseColors.mediumGray,
+                            color: UpriseColors.success,
+                            minHeight: 5,
+                          ),
+                        ),
+                      ]),
+                    );
+                  }),
+              ]))),
+              const SizedBox(width: 14),
+              Expanded(child: _card(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Row(children: [
+                  const Icon(Icons.trending_down, size: 16, color: UpriseColors.error),
+                  const SizedBox(width: 6),
+                  Text('Expenses Breakdown', style: GoogleFonts.beVietnamPro(fontSize: 14, fontWeight: FontWeight.w700)),
+                ]),
+                const SizedBox(height: 14),
+                if (event.expenseBreakdown.isEmpty)
+                  Text('No breakdown data.', style: GoogleFonts.beVietnamPro(color: UpriseColors.darkGray, fontSize: 13))
+                else
+                  ...event.expenseBreakdown.map((item) {
+                    final amt   = (item['amount'] as num?)?.toDouble() ?? 0;
+                    final ratio = maxExp > 0 ? amt / maxExp : 0.0;
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                          Text(item['name']?.toString() ?? '', style: GoogleFonts.beVietnamPro(fontSize: 13, color: UpriseColors.darkGray)),
+                          Text('₱${_fmt(amt)}', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600)),
+                        ]),
+                        const SizedBox(height: 4),
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(3),
+                          child: LinearProgressIndicator(
+                            value: ratio.toDouble(),
+                            backgroundColor: UpriseColors.mediumGray,
+                            color: UpriseColors.error,
+                            minHeight: 5,
+                          ),
+                        ),
+                      ]),
+                    );
+                  }),
+              ]))),
+            ]),
+            const SizedBox(height: 16),
+            Row(children: [
+              Expanded(child: _card(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text('Financial Notes', style: GoogleFonts.beVietnamPro(fontSize: 14, fontWeight: FontWeight.w700)),
+                const SizedBox(height: 12),
+                if (event.financialNotes.isEmpty)
+                  Text('No notes recorded.', style: GoogleFonts.beVietnamPro(color: UpriseColors.darkGray, fontSize: 13))
+                else
+                  ...event.financialNotes.map((note) => Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Container(width: 3, height: 40, margin: const EdgeInsets.only(right: 10, top: 2), color: UpriseColors.mediumGray),
+                      Expanded(child: Text(note, style: GoogleFonts.beVietnamPro(fontSize: 13, color: UpriseColors.darkGray, height: 1.5))),
+                    ]),
+                  )),
+              ]))),
+              const SizedBox(width: 14),
+              Expanded(child: _card(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text('Recommendations', style: GoogleFonts.beVietnamPro(fontSize: 14, fontWeight: FontWeight.w700)),
+                const SizedBox(height: 12),
+                if (event.recommendations.isEmpty)
+                  Text('No recommendations recorded.', style: GoogleFonts.beVietnamPro(color: UpriseColors.darkGray, fontSize: 13))
+                else
+                  ...event.recommendations.map((rec) => Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Container(width: 3, height: 40, margin: const EdgeInsets.only(right: 10, top: 2), color: UpriseColors.mediumGray),
+                      Expanded(child: Text(rec, style: GoogleFonts.beVietnamPro(fontSize: 13, color: UpriseColors.darkGray, height: 1.5))),
+                    ]),
+                  )),
+              ]))),
+            ]),
+            if (event.attachments.isNotEmpty) ...[
+              const SizedBox(height: 16),
+              _card(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text('Attachments', style: GoogleFonts.beVietnamPro(fontSize: 14, fontWeight: FontWeight.w700)),
+                const SizedBox(height: 12),
+                Wrap(spacing: 10, runSpacing: 10, children: event.attachments.map((att) {
+                  final name    = att['name']?.toString() ?? 'File';
+                  final size    = att['size']?.toString() ?? '';
+                  final fileUrl = att['fileUrl']?.toString() ?? '';
+                  return GestureDetector(
+                    onTap: () {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Opening: $fileUrl')));
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: UpriseColors.white,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: UpriseColors.mediumGray),
+                      ),
+                      child: Row(mainAxisSize: MainAxisSize.min, children: [
+                        Container(
+                          width: 36, height: 36,
+                          decoration: BoxDecoration(color: UpriseColors.infoBg, borderRadius: BorderRadius.circular(8)),
+                          child: const Icon(Icons.insert_drive_file_outlined, color: UpriseColors.info, size: 20),
+                        ),
+                        const SizedBox(width: 10),
+                        Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                          Text(name, style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.w600)),
+                          Text(size, style: GoogleFonts.beVietnamPro(fontSize: 11, color: UpriseColors.darkGray)),
+                        ]),
+                        const SizedBox(width: 10),
+                        const Icon(Icons.download_outlined, size: 16, color: UpriseColors.darkGray),
+                      ]),
+                    ),
+                  );
+                }).toList()),
+              ])),
             ],
-          );
-        },
-      ),
-    );
-  }
-
-  Widget _summaryRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 4),
-      child: Row(children: [
-        SizedBox(
-            width: 100,
-            child: Text(label,
-                style: GoogleFonts.beVietnamPro(
-                    fontSize: 12, color: UpriseColors.darkGray))),
-        Text(value,
-            style: GoogleFonts.beVietnamPro(
-                fontSize: 12, fontWeight: FontWeight.w500)),
+            const SizedBox(height: 24),
+          ]),
+        )),
       ]),
     );
   }
 
-  Future<void> _generatePDFReport() async {
-    final pdfDoc = pdf.Document();
-    pdfDoc.addPage(pdf.MultiPage(
-      build: (context) => [
-        pdf.Header(
-            level: 0,
-            child: pdf.Text(
-                'UPRISE ${_selectedReportType.toString().split('.').last} Report',
-                style: pdf.TextStyle(
-                    fontSize: 24, fontWeight: pdf.FontWeight.bold))),
-        pdf.SizedBox(height: 10),
-        pdf.Text(
-            'Generated on: ${DateFormat('yyyy-MM-dd HH:mm:ss').format(DateTime.now())}'),
-        pdf.SizedBox(height: 20),
-        pdf.Header(level: 1, child: pdf.Text('Report Configuration')),
-        pdf.Row(children: [pdf.Text('Date Range: '), pdf.Text(_dateRange)]),
-        pdf.Row(
-            children: [pdf.Text('Organization: '), pdf.Text(_selectedOrg)]),
-        if (_selectedReportType == ReportGeneratorType.eventPerformance)
-          pdf.Row(children: [pdf.Text('Event Type: '), pdf.Text(_eventType)]),
-        pdf.Row(children: [pdf.Text('Report View: '), pdf.Text(_reportView)]),
-        pdf.SizedBox(height: 20),
-        pdf.Header(level: 1, child: pdf.Text('Data')),
-        _buildPdfTable(),
-      ],
-    ));
-    await Printing.sharePdf(
-      bytes: await pdfDoc.save(),
-      filename:
-          '${_selectedReportType.toString().split('.').last}_report_${DateFormat('yyyyMMdd_HHmmss').format(DateTime.now())}.pdf',
-    );
-    await FirebaseFirestore.instance.collection('generated_reports').add({
-      'fileName':
-          '${_selectedReportType.toString().split('.').last}_report_${DateFormat('yyyyMMdd_HHmmss').format(DateTime.now())}.pdf',
-      'dateRange': _dateRange,
-      'organization': _selectedOrg,
-      'eventType': _eventType,
-      'reportView': _reportView,
-      'generatedAt': FieldValue.serverTimestamp(),
-      'format': 'PDF',
-      'reportType': _selectedReportType.toString().split('.').last,
-    });
-  }
-
-  pdf.Widget _buildPdfTable() {
-    if (_selectedReportType == ReportGeneratorType.eventPerformance) {
-      return pdf.Table(
-        border: pdf.TableBorder.all(),
-        columnWidths: {
-          0: pdf.FlexColumnWidth(2),
-          1: pdf.FlexColumnWidth(2),
-          2: pdf.FlexColumnWidth(1),
-          3: pdf.FlexColumnWidth(1),
-          4: pdf.FlexColumnWidth(1),
-        },
-        children: [
-          pdf.TableRow(children: [
-            pdf.Text('Event Name',
-                style: pdf.TextStyle(fontWeight: pdf.FontWeight.bold)),
-            pdf.Text('Organization',
-                style: pdf.TextStyle(fontWeight: pdf.FontWeight.bold)),
-            pdf.Text('Registrants',
-                style: pdf.TextStyle(fontWeight: pdf.FontWeight.bold)),
-            pdf.Text('Attendees',
-                style: pdf.TextStyle(fontWeight: pdf.FontWeight.bold)),
-            pdf.Text('Ratio',
-                style: pdf.TextStyle(fontWeight: pdf.FontWeight.bold)),
-          ]),
-          ..._eventsData.map((event) {
-            final ratio = event.registrants > 0
-                ? ((event.attendees / event.registrants) * 100)
-                    .toStringAsFixed(0)
-                : '0';
-            return pdf.TableRow(children: [
-              pdf.Text(event.name),
-              pdf.Text(event.organization),
-              pdf.Text('${event.registrants}'),
-              pdf.Text('${event.attendees}'),
-              pdf.Text('$ratio%'),
-            ]);
-          }),
-        ],
-      );
-    } else if (_selectedReportType == ReportGeneratorType.financialSummary) {
-      return pdf.Table(
-        border: pdf.TableBorder.all(),
-        columnWidths: {
-          0: pdf.FlexColumnWidth(2),
-          1: pdf.FlexColumnWidth(2),
-          2: pdf.FlexColumnWidth(1),
-        },
-        children: [
-          pdf.TableRow(children: [
-            pdf.Text('Organization',
-                style: pdf.TextStyle(fontWeight: pdf.FontWeight.bold)),
-            pdf.Text('Submitted On',
-                style: pdf.TextStyle(fontWeight: pdf.FontWeight.bold)),
-            pdf.Text('Has File',
-                style: pdf.TextStyle(fontWeight: pdf.FontWeight.bold)),
-          ]),
-          ..._financialSummaryData.map((item) => pdf.TableRow(children: [
-                pdf.Text(item.orgName),
-                pdf.Text(DateFormat('yyyy-MM-dd').format(item.submittedAt)),
-                pdf.Text(item.fileUrl != null ? 'Yes' : 'No'),
-              ])),
-        ],
-      );
-    } else {
-      return pdf.Table(
-        border: pdf.TableBorder.all(),
-        columnWidths: {
-          0: pdf.FlexColumnWidth(2),
-          1: pdf.FlexColumnWidth(2),
-          2: pdf.FlexColumnWidth(1),
-        },
-        children: [
-          pdf.TableRow(children: [
-            pdf.Text('Organization',
-                style: pdf.TextStyle(fontWeight: pdf.FontWeight.bold)),
-            pdf.Text('Submitted On',
-                style: pdf.TextStyle(fontWeight: pdf.FontWeight.bold)),
-            pdf.Text('Has File',
-                style: pdf.TextStyle(fontWeight: pdf.FontWeight.bold)),
-          ]),
-          ..._accomplishmentSummaryData.map((item) => pdf.TableRow(children: [
-                pdf.Text(item.orgName),
-                pdf.Text(DateFormat('yyyy-MM-dd').format(item.submittedAt)),
-                pdf.Text(item.fileUrl != null ? 'Yes' : 'No'),
-              ])),
-        ],
-      );
-    }
-  }
-
-  Future<void> _generateCSVReport() async {
-    List<List<String>> rows;
-    if (_selectedReportType == ReportGeneratorType.eventPerformance) {
-      rows = [
-        [
-          'Event Name',
-          'Organization',
-          'Type',
-          'Date',
-          'Registrants',
-          'Attendees',
-          'Ratio'
-        ]
-      ];
-      for (var event in _eventsData) {
-        final ratio = event.registrants > 0
-            ? ((event.attendees / event.registrants) * 100).toStringAsFixed(0)
-            : '0';
-        rows.add([
-          event.name,
-          event.organization,
-          event.type,
-          DateFormat('yyyy-MM-dd').format(event.date),
-          event.registrants.toString(),
-          event.attendees.toString(),
-          '$ratio%',
-        ]);
-      }
-    } else if (_selectedReportType == ReportGeneratorType.financialSummary) {
-      rows = [['Organization', 'Submitted On', 'Has File']];
-      for (var item in _financialSummaryData) {
-        rows.add([
-          item.orgName,
-          DateFormat('yyyy-MM-dd').format(item.submittedAt),
-          item.fileUrl != null ? 'Yes' : 'No'
-        ]);
-      }
-    } else {
-      rows = [['Organization', 'Submitted On', 'Has File']];
-      for (var item in _accomplishmentSummaryData) {
-        rows.add([
-          item.orgName,
-          DateFormat('yyyy-MM-dd').format(item.submittedAt),
-          item.fileUrl != null ? 'Yes' : 'No'
-        ]);
-      }
-    }
-    final csvContent = rows.map((row) => row.join(',')).join('\n');
-    final tempFile = await File(
-            '${Directory.systemTemp.path}/${_selectedReportType.toString().split('.').last}_report.csv')
-        .writeAsString(csvContent);
-    await Share.shareXFiles([XFile(tempFile.path)],
-        text: '${_selectedReportType.toString().split('.').last} Report');
-    await FirebaseFirestore.instance.collection('generated_reports').add({
-      'fileName':
-          '${_selectedReportType.toString().split('.').last}_report_${DateFormat('yyyyMMdd_HHmmss').format(DateTime.now())}.csv',
-      'dateRange': _dateRange,
-      'organization': _selectedOrg,
-      'eventType': _eventType,
-      'reportView': _reportView,
-      'generatedAt': FieldValue.serverTimestamp(),
-      'format': 'CSV',
-      'reportType': _selectedReportType.toString().split('.').last,
-    });
-  }
-
-  Widget _buildRecentReports() {
-    return Container(
-      margin: const EdgeInsets.all(24),
-      padding: const EdgeInsets.all(20),
+  Widget _finStat(String label, String value, Color color) => Expanded(
+    child: Container(
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: UpriseColors.white,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(10),
         border: Border.all(color: UpriseColors.mediumGray),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('Recent Reports',
-              style: GoogleFonts.beVietnamPro(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: UpriseColors.charcoal)),
-          const SizedBox(height: 16),
-          StreamBuilder<QuerySnapshot>(
-            stream: FirebaseFirestore.instance
-                .collection('generated_reports')
-                .orderBy('generatedAt', descending: true)
-                .limit(5)
-                .snapshots(),
-            builder: (context, snapshot) {
-              if (!snapshot.hasData) {
-                return const Center(child: CircularProgressIndicator());
-              }
-              if (snapshot.data!.docs.isEmpty) {
-                return Center(
-                    child: Text('No reports generated yet',
-                        style: GoogleFonts.beVietnamPro(
-                            color: UpriseColors.darkGray)));
-              }
-              return ListView.builder(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                itemCount: snapshot.data!.docs.length,
-                itemBuilder: (context, index) {
-                  final data =
-                      snapshot.data!.docs[index].data() as Map<String, dynamic>;
-                  return ListTile(
-                    leading: Icon(Icons.picture_as_pdf,
-                        color: UpriseColors.primaryDark),
-                    title: Text(data['fileName'] ?? 'Report',
-                        style: GoogleFonts.beVietnamPro(
-                            fontWeight: FontWeight.w500)),
-                    subtitle: Text(
-                        DateFormat('MMM dd, yyyy hh:mm a').format(
-                            (data['generatedAt'] as Timestamp).toDate())),
-                    trailing: Row(mainAxisSize: MainAxisSize.min, children: [
-                      IconButton(
-                          icon: const Icon(Icons.visibility, size: 18),
-                          onPressed: () => _viewGeneratedReport(data),
-                          tooltip: 'View'),
-                      IconButton(
-                          icon: const Icon(Icons.download, size: 18),
-                          onPressed: () => _downloadGeneratedReport(data),
-                          tooltip: 'Download'),
-                    ]),
-                  );
-                },
-              );
-            },
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(label, style: GoogleFonts.beVietnamPro(fontSize: 11, fontWeight: FontWeight.w600, color: UpriseColors.darkGray)),
+        const SizedBox(height: 6),
+        Text(value, style: GoogleFonts.beVietnamPro(fontSize: 20, fontWeight: FontWeight.w800, color: color)),
+      ]),
+    ),
+  );
+
+  Widget _metaCell(String key, String value, {bool last = false, bool lastRow = false}) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+        decoration: BoxDecoration(
+          border: Border(
+            right: last ? BorderSide.none : const BorderSide(color: UpriseColors.mediumGray),
+            bottom: lastRow ? BorderSide.none : const BorderSide(color: UpriseColors.mediumGray),
           ),
-        ],
+        ),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(key, style: GoogleFonts.beVietnamPro(fontSize: 10, fontWeight: FontWeight.w700,
+              color: UpriseColors.darkGray, letterSpacing: .5)),
+          const SizedBox(height: 4),
+          Text(value, style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600, color: UpriseColors.charcoal)),
+        ]),
       ),
     );
   }
 
-  void _viewGeneratedReport(Map<String, dynamic> report) {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(report['fileName'] ?? 'Report'),
-        content: Text('Report generated on ${report['generatedAt']?.toDate()}'),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx), child: const Text('Close')),
-        ],
-      ),
-    );
-  }
+  // ─────────────────────────────────────────────
+  //  SHARED HELPERS
+  // ─────────────────────────────────────────────
+  Widget _card({required Widget child}) => Container(
+    padding: const EdgeInsets.all(20),
+    decoration: BoxDecoration(
+      color: UpriseColors.white,
+      borderRadius: BorderRadius.circular(10),
+      border: Border.all(color: UpriseColors.mediumGray),
+    ),
+    child: child,
+  );
 
-  Future<void> _downloadGeneratedReport(Map<String, dynamic> report) async {
-    ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Download started (simulated)')));
-  }
+  Widget _th(String label, double width) => SizedBox(
+    width: width,
+    child: Text(label, style: GoogleFonts.beVietnamPro(
+        fontSize: 10, fontWeight: FontWeight.w700, color: UpriseColors.darkGray, letterSpacing: .5)),
+  );
 
-  // ==================== MAIN BUILD ====================
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: UpriseColors.lightGray,
-      body: Column(
-        children: [
-          _buildMainHeader(),
-          TabBar(
-            controller: _tabController,
-            tabs: const [
-              Tab(text: 'Submission Tracker'),
-              Tab(text: 'Generate Reports'),
-            ],
-            labelColor: UpriseColors.primaryDark,
-            unselectedLabelColor: UpriseColors.darkGray,
-            indicatorColor: UpriseColors.primaryDark,
-          ),
-          Expanded(
-            child: TabBarView(
-              controller: _tabController,
-              children: [
-                _buildSubmissionTracker(),
-                _buildReportGeneratorUI(),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+  Widget _td(String text, double width, {bool bold = false}) => SizedBox(
+    width: width,
+    child: Text(text, style: TextStyle(
+        fontSize: 13,
+        fontWeight: bold ? FontWeight.w600 : FontWeight.normal,
+        color: UpriseColors.charcoal,
+        overflow: TextOverflow.ellipsis)),
+  );
 
-  Widget _buildMainHeader() {
-    return Container(
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: UpriseColors.white,
-        border: Border(bottom: BorderSide(color: UpriseColors.mediumGray)),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Reports Management',
-                  style: GoogleFonts.beVietnamPro(
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                      color: UpriseColors.charcoal),
-                  softWrap: true,
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'Track organization submissions and generate system‑wide reports',
-                  style: GoogleFonts.beVietnamPro(
-                      fontSize: 14, color: UpriseColors.darkGray),
-                  softWrap: true,
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+  Widget _primaryBtn(IconData icon, String label, VoidCallback onTap) => ElevatedButton.icon(
+    onPressed: onTap,
+    icon: Icon(icon, size: 16),
+    label: Text(label),
+    style: ElevatedButton.styleFrom(
+      backgroundColor: UpriseColors.primary,
+      foregroundColor: UpriseColors.white,
+      textStyle: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600),
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+    ),
+  );
 
-  Widget _buildSubmissionTracker() {
-    return SingleChildScrollView(
-      child: Column(
-        children: [
-          _buildDeadlineBar(),
-          const SizedBox(height: 16),
-          _buildSubmissionTable('Financial', _financialSubmissions,
-              _financialDeadline, _loadingFinancial),
-          const SizedBox(height: 24),
-          _buildSubmissionTable('Accomplishment', _accomplishmentSubmissions,
-              _accomplishmentDeadline, _loadingAccomplishment),
-          const SizedBox(height: 24),
-        ],
-      ),
-    );
-  }
+  Widget _outlineBtn(IconData icon, String label, VoidCallback onTap) => OutlinedButton.icon(
+    onPressed: onTap,
+    icon: Icon(icon, size: 16),
+    label: Text(label),
+    style: OutlinedButton.styleFrom(
+      foregroundColor: UpriseColors.charcoal,
+      textStyle: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w500),
+      side: const BorderSide(color: UpriseColors.mediumGray),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+    ),
+  );
 
-  Widget _buildDeadlineBar() {
-    if (_loadingDeadlines) return const LinearProgressIndicator();
-    return Container(
-      margin: const EdgeInsets.all(16),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      decoration: BoxDecoration(
-        color: UpriseColors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: UpriseColors.mediumGray),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Expanded(
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: [
-                  const Icon(Icons.timer, color: UpriseColors.primaryDark),
-                  const SizedBox(width: 8),
-                  Text('Financial Deadline: ',
-                      style: GoogleFonts.beVietnamPro(
-                          fontWeight: FontWeight.w600)),
-                  Text(_financialDeadline != null
-                      ? DateFormat('MMM dd, yyyy').format(_financialDeadline!)
-                      : 'Not set'),
-                  const SizedBox(width: 24),
-                  const Icon(Icons.assignment, color: UpriseColors.primaryDark),
-                  const SizedBox(width: 8),
-                  Text('Accomplishment Deadline: ',
-                      style: GoogleFonts.beVietnamPro(
-                          fontWeight: FontWeight.w600)),
-                  Text(_accomplishmentDeadline != null
-                      ? DateFormat('MMM dd, yyyy')
-                          .format(_accomplishmentDeadline!)
-                      : 'Not set'),
-                ],
-              ),
-            ),
-          ),
-          OutlinedButton.icon(
-            onPressed: _showSetDeadlineDialog,
-            icon: const Icon(Icons.edit_calendar, size: 18),
-            label: const Text('Set Deadlines'),
-          ),
-        ],
-      ),
-    );
+  Widget _pageBtn(IconData icon, bool enabled, VoidCallback onTap) => IconButton(
+    icon: Icon(icon, size: 20),
+    color: enabled ? UpriseColors.charcoal : UpriseColors.mediumGray,
+    onPressed: enabled ? onTap : null,
+  );
+
+  Widget _emptyState(String message) => Container(
+    margin: const EdgeInsets.symmetric(vertical: 16),
+    padding: const EdgeInsets.all(48),
+    decoration: BoxDecoration(
+      color: UpriseColors.white,
+      borderRadius: BorderRadius.circular(10),
+      border: Border.all(color: UpriseColors.mediumGray),
+    ),
+    child: Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
+      const Icon(Icons.bar_chart_outlined, size: 56, color: UpriseColors.mediumGray),
+      const SizedBox(height: 14),
+      Text(message, style: GoogleFonts.beVietnamPro(fontSize: 14, color: UpriseColors.darkGray)),
+    ])),
+  );
+
+  String _fmt(double value) {
+    return NumberFormat('#,##0.00', 'en_PH').format(value);
   }
 }

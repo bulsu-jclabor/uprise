@@ -1,12 +1,36 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'dart:io';
 import '../../theme/app_theme.dart';
 import 'package:intl/intl.dart';
 import 'package:share_plus/share_plus.dart';
+
+// ============ ACTIVITY LOGGER (to track events) ============
+class ActivityLogger {
+  static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+
+  static Future<void> log({
+    required String action,
+    required String module,
+    String severity = 'info',
+    Map<String, dynamic>? details,
+  }) async {
+    final user = FirebaseAuth.instance.currentUser;
+    final userName = user?.email ?? 'Unknown User';
+    await _firestore.collection('activity_logs').add({
+      'user': userName,
+      'action': action,
+      'module': module,
+      'severity': severity,
+      'timestamp': FieldValue.serverTimestamp(),
+      'ipAddress': '',
+      'details': details,
+    });
+  }
+}
 
 // ---------- Data Models ----------
 class Officer {
@@ -66,7 +90,7 @@ class OrganizationManagement extends StatefulWidget {
 
 class _OrganizationManagementState extends State<OrganizationManagement> {
   final TextEditingController _searchController = TextEditingController();
-  String _statusFilter = 'All';      // All, Active, Suspended, Archived
+  String _statusFilter = 'All';
   String _typeFilter = 'All Types';
   int _currentPage = 1;
   static const int _pageSize = 10;
@@ -202,7 +226,7 @@ class _OrganizationManagementState extends State<OrganizationManagement> {
     );
   }
 
-  // ---------- TOOLBAR (search + status filter + type filter + export) ----------
+  // ---------- TOOLBAR ----------
   Widget _buildToolbar() {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 24),
@@ -235,7 +259,7 @@ class _OrganizationManagementState extends State<OrganizationManagement> {
             ),
           ),
           const SizedBox(width: 16),
-          // Status filter dropdown
+          // Status filter
           Container(
             height: 40,
             padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -267,7 +291,7 @@ class _OrganizationManagementState extends State<OrganizationManagement> {
             ),
           ),
           const SizedBox(width: 12),
-          // Type filter dropdown
+          // Type filter
           Container(
             height: 40,
             padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -327,7 +351,7 @@ class _OrganizationManagementState extends State<OrganizationManagement> {
     }
   }
 
-  // ---------- TABLE (real‑time + pagination) ----------
+  // ---------- TABLE ----------
   Widget _buildTable() {
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance.collection('organizations').orderBy('createdAt', descending: true).snapshots(),
@@ -340,15 +364,12 @@ class _OrganizationManagementState extends State<OrganizationManagement> {
         }
 
         var docs = snapshot.data!.docs;
-        // Apply status filter
         if (_statusFilter != 'All') {
           docs = docs.where((doc) => (doc.data() as Map)['status'] == _statusFilter.toLowerCase()).toList();
         }
-        // Apply type filter
         if (_typeFilter != 'All Types') {
           docs = docs.where((doc) => (doc.data() as Map)['type'] == _typeFilter).toList();
         }
-        // Apply search
         final term = _searchController.text.trim().toLowerCase();
         if (term.isNotEmpty) {
           docs = docs.where((doc) {
@@ -359,7 +380,6 @@ class _OrganizationManagementState extends State<OrganizationManagement> {
           }).toList();
         }
 
-        // Empty state: show header + centered empty message
         if (docs.isEmpty) {
           return Container(
             margin: const EdgeInsets.symmetric(horizontal: 24),
@@ -370,7 +390,6 @@ class _OrganizationManagementState extends State<OrganizationManagement> {
             ),
             child: Column(
               children: [
-                // Header always visible
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
@@ -386,7 +405,6 @@ class _OrganizationManagementState extends State<OrganizationManagement> {
                     Expanded(flex: 1, child: Text('ACTIONS', style: _headerStyle())),
                   ]),
                 ),
-                // Empty state centered
                 Expanded(
                   child: Center(
                     child: Column(
@@ -404,7 +422,6 @@ class _OrganizationManagementState extends State<OrganizationManagement> {
           );
         }
 
-        // Pagination
         final totalPages = (docs.length / _pageSize).ceil();
         final safePage = _currentPage.clamp(1, totalPages);
         final start = (safePage - 1) * _pageSize;
@@ -420,7 +437,6 @@ class _OrganizationManagementState extends State<OrganizationManagement> {
           ),
           child: Column(
             children: [
-              // Header
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
@@ -436,7 +452,6 @@ class _OrganizationManagementState extends State<OrganizationManagement> {
                   Expanded(flex: 1, child: Text('ACTIONS', style: _headerStyle())),
                 ]),
               ),
-              // Body (list)
               Expanded(
                 child: ListView.builder(
                   itemCount: pageDocs.length,
@@ -462,7 +477,6 @@ class _OrganizationManagementState extends State<OrganizationManagement> {
                   },
                 ),
               ),
-              // Footer (pagination)
               _buildFooter(docs.length, totalPages, start, end),
             ],
           ),
@@ -643,6 +657,12 @@ class _OrganizationManagementState extends State<OrganizationManagement> {
           ElevatedButton(
             onPressed: () async {
               await FirebaseFirestore.instance.collection('organizations').doc(org.id).update({'status': newStatus});
+              // === LOG ACTIVITY ===
+              await ActivityLogger.log(
+                action: isArchived ? 'Restored organization: ${org.name}' : 'Archived organization: ${org.name}',
+                module: 'Organizations',
+                severity: 'info',
+              );
               Navigator.pop(context);
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(content: Text('${org.name} has been ${isArchived ? 'restored' : 'archived'}')),
@@ -692,8 +712,7 @@ class _OrganizationManagementState extends State<OrganizationManagement> {
   String _monthAbbr(int m) => ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'][m-1];
 }
 
-// ---------- CREATE ORGANIZATION DIALOG (atomic batch sync) ----------
-// (Keep exactly as in your original code – it already uses batch and includes adviserPhone)
+// ---------- CREATE ORGANIZATION DIALOG (with logging) ----------
 class CreateOrganizationDialog extends StatefulWidget {
   final VoidCallback onCreated;
   const CreateOrganizationDialog({super.key, required this.onCreated});
@@ -941,6 +960,13 @@ class _CreateOrganizationDialogState extends State<CreateOrganizationDialog> {
 
       await batch.commit();
 
+      // Log activity
+      await ActivityLogger.log(
+        action: 'Created new organization: ${_nameCtrl.text}',
+        module: 'Organizations',
+        severity: 'info',
+      );
+
       await FirebaseFirestore.instance.collection('activity_logs').add({
         'title': 'New Organization Created',
         'description': '${_nameCtrl.text} was created',
@@ -961,8 +987,7 @@ class _CreateOrganizationDialogState extends State<CreateOrganizationDialog> {
   }
 }
 
-// ---------- EDIT ORGANIZATION DIALOG (atomic batch sync) ----------
-// (Keep exactly as in your original code)
+// ---------- EDIT ORGANIZATION DIALOG (with logging) ----------
 class EditOrganizationDialog extends StatefulWidget {
   final Organization organization;
   final VoidCallback onUpdated;
@@ -1139,6 +1164,13 @@ class _EditOrganizationDialogState extends State<EditOrganizationDialog> {
 
       await batch.commit();
 
+      // Log activity
+      await ActivityLogger.log(
+        action: 'Updated organization: ${widget.organization.name} → ${_nameCtrl.text}',
+        module: 'Organizations',
+        severity: 'info',
+      );
+
       widget.onUpdated();
       Navigator.pop(context);
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Organization updated')));
@@ -1152,8 +1184,7 @@ class _EditOrganizationDialogState extends State<EditOrganizationDialog> {
   }
 }
 
-
-// ---------- ORGANIZATION DETAIL PAGE (unchanged but includes adviserPhone) ----------
+// ---------- ORGANIZATION DETAIL PAGE (unchanged except fixed stats syntax) ----------
 class OrganizationDetailPage extends StatefulWidget {
   final Organization organization;
   final VoidCallback onBack;

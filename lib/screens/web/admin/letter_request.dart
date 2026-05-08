@@ -1,11 +1,36 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:share_plus/share_plus.dart';
 import '../../theme/app_theme.dart';
+
+// ============ ACTIVITY LOGGER ============
+class ActivityLogger {
+  static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+
+  static Future<void> log({
+    required String action,
+    required String module,
+    String severity = 'info',
+    Map<String, dynamic>? details,
+  }) async {
+    final user = FirebaseAuth.instance.currentUser;
+    final userName = user?.email ?? 'Unknown User';
+    await _firestore.collection('activity_logs').add({
+      'user': userName,
+      'action': action,
+      'module': module,
+      'severity': severity,
+      'timestamp': FieldValue.serverTimestamp(),
+      'ipAddress': '',
+      'details': details,
+    });
+  }
+}
 
 class LetterRequest extends StatefulWidget {
   const LetterRequest({super.key});
@@ -24,12 +49,7 @@ class _LetterRequestState extends State<LetterRequest> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: UpriseColors.lightGray,
-      floatingActionButton: FloatingActionButton(
-        onPressed: _showAddDocumentDialog,
-        backgroundColor: UpriseColors.primaryDark,
-        tooltip: 'Upload Document',
-        child: const Icon(Icons.add, color: Colors.white),
-      ),
+      // FloatingActionButton removed – documents are uploaded by organizations
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -44,7 +64,7 @@ class _LetterRequestState extends State<LetterRequest> {
     );
   }
 
-  // ---------- HEADER ----------
+  // ---------- HEADER (responsive) ----------
   Widget _buildHeader() {
     return Container(
       padding: const EdgeInsets.all(24),
@@ -52,17 +72,26 @@ class _LetterRequestState extends State<LetterRequest> {
         color: UpriseColors.white,
         border: Border(bottom: BorderSide(color: UpriseColors.mediumGray)),
       ),
-      child: Column(
+      child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'Letter Request',
-            style: GoogleFonts.beVietnamPro(fontSize: 24, fontWeight: FontWeight.bold, color: UpriseColors.charcoal),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            'Manage and access centralized student organization documentations and requirements.',
-            style: GoogleFonts.beVietnamPro(fontSize: 14, color: UpriseColors.darkGray),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Letter Request',
+                  style: GoogleFonts.beVietnamPro(fontSize: 24, fontWeight: FontWeight.bold, color: UpriseColors.charcoal),
+                  softWrap: true,
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Manage and access centralized student organization documentations and requirements.',
+                  style: GoogleFonts.beVietnamPro(fontSize: 14, color: UpriseColors.darkGray),
+                  softWrap: true,
+                ),
+              ],
+            ),
           ),
         ],
       ),
@@ -127,7 +156,7 @@ class _LetterRequestState extends State<LetterRequest> {
     );
   }
 
-  // ---------- TOOLBAR (search + filter dropdown + export) ----------
+  // ---------- TOOLBAR (unchanged) ----------
   Widget _buildToolbar() {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 24),
@@ -225,36 +254,79 @@ class _LetterRequestState extends State<LetterRequest> {
     }
   }
 
-  // ---------- TABLE (real‑time + pagination) ----------
-Widget _buildTable() {
-  return StreamBuilder<QuerySnapshot>(
-    stream: FirebaseFirestore.instance.collection('letter_requests').orderBy('uploadDate', descending: true).snapshots(),
-    builder: (context, snapshot) {
-      if (snapshot.connectionState == ConnectionState.waiting) {
-        return const Center(child: CircularProgressIndicator());
-      }
-      if (snapshot.hasError) {
-        return Center(child: Text('Error: ${snapshot.error}', style: TextStyle(color: UpriseColors.error)));
-      }
+  // ---------- TABLE (unchanged) ----------
+  Widget _buildTable() {
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance.collection('letter_requests').orderBy('uploadDate', descending: true).snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (snapshot.hasError) {
+          return Center(child: Text('Error: ${snapshot.error}', style: TextStyle(color: UpriseColors.error)));
+        }
 
-      var docs = snapshot.data!.docs;
-      // Apply status filter
-      if (_statusFilter != 'All') {
-        docs = docs.where((d) => (d.data() as Map)['status'] == _statusFilter.toLowerCase()).toList();
-      }
-      // Apply search
-      final term = _searchController.text.trim().toLowerCase();
-      if (term.isNotEmpty) {
-        docs = docs.where((d) {
-          final data = d.data() as Map;
-          final title = (data['title'] ?? '').toString().toLowerCase();
-          final requestedBy = (data['requestedBy'] ?? '').toString().toLowerCase();
-          return title.contains(term) || requestedBy.contains(term);
-        }).toList();
-      }
+        var docs = snapshot.data!.docs;
+        if (_statusFilter != 'All') {
+          docs = docs.where((d) => (d.data() as Map)['status'] == _statusFilter.toLowerCase()).toList();
+        }
+        final term = _searchController.text.trim().toLowerCase();
+        if (term.isNotEmpty) {
+          docs = docs.where((d) {
+            final data = d.data() as Map;
+            final title = (data['title'] ?? '').toString().toLowerCase();
+            final requestedBy = (data['requestedBy'] ?? '').toString().toLowerCase();
+            return title.contains(term) || requestedBy.contains(term);
+          }).toList();
+        }
 
-      // Handle empty case early to avoid pagination errors
-      if (docs.isEmpty) {
+        if (docs.isEmpty) {
+          return Container(
+            margin: const EdgeInsets.symmetric(horizontal: 24),
+            decoration: BoxDecoration(
+              color: UpriseColors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: UpriseColors.mediumGray),
+            ),
+            child: Column(
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: UpriseColors.lightGray,
+                    border: Border(bottom: BorderSide(color: UpriseColors.mediumGray)),
+                    borderRadius: const BorderRadius.only(topLeft: Radius.circular(12), topRight: Radius.circular(12)),
+                  ),
+                  child: Row(children: [
+                    Expanded(flex: 3, child: Text('DOCUMENT NAME', style: _headerStyle())),
+                    Expanded(flex: 1, child: Text('UPLOAD DATE', style: _headerStyle())),
+                    Expanded(flex: 1, child: Text('STATUS', style: _headerStyle())),
+                    Expanded(flex: 1, child: Text('ACTIONS', style: _headerStyle())),
+                  ]),
+                ),
+                Expanded(
+                  child: Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.folder_open, size: 64, color: UpriseColors.mediumGray),
+                        const SizedBox(height: 16),
+                        Text('No documents found', style: GoogleFonts.beVietnamPro(color: UpriseColors.darkGray, fontSize: 15)),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+
+        final totalPages = (docs.length / _pageSize).ceil();
+        final safePage = _currentPage.clamp(1, totalPages);
+        final start = (safePage - 1) * _pageSize;
+        final end = (start + _pageSize).clamp(0, docs.length);
+        final pageDocs = docs.sublist(start, end);
+
         return Container(
           margin: const EdgeInsets.symmetric(horizontal: 24),
           decoration: BoxDecoration(
@@ -264,7 +336,6 @@ Widget _buildTable() {
           ),
           child: Column(
             children: [
-              // TABLE HEADER (always visible)
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 decoration: BoxDecoration(
@@ -279,86 +350,35 @@ Widget _buildTable() {
                   Expanded(flex: 1, child: Text('ACTIONS', style: _headerStyle())),
                 ]),
               ),
-              // Empty state (centered)
               Expanded(
-                child: Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.folder_open, size: 64, color: UpriseColors.mediumGray),
-                      const SizedBox(height: 16),
-                      Text('No documents found', style: GoogleFonts.beVietnamPro(color: UpriseColors.darkGray, fontSize: 15)),
-                    ],
-                  ),
+                child: ListView.builder(
+                  itemCount: pageDocs.length,
+                  itemBuilder: (_, i) {
+                    final data = pageDocs[i].data() as Map<String, dynamic>;
+                    final doc = Document(
+                      id: pageDocs[i].id,
+                      title: data['title'] ?? 'Untitled',
+                      fileName: data['fileName'] ?? '',
+                      fileType: data['fileType'] ?? 'pdf',
+                      fileSize: (data['fileSize'] ?? 0).toInt(),
+                      uploadDate: (data['uploadDate'] as Timestamp).toDate(),
+                      status: data['status'] ?? 'pending',
+                      requestedBy: data['requestedBy'] ?? '',
+                      department: data['department'] ?? '',
+                      content: data['content'] ?? '',
+                      revisionNotes: data['revisionNotes'] ?? '',
+                    );
+                    return _buildRow(doc);
+                  },
                 ),
               ),
+              _buildFooter(docs.length, totalPages, start, end),
             ],
           ),
         );
-      }
-
-      // Only reach here if docs is not empty
-      final totalPages = (docs.length / _pageSize).ceil();
-      final safePage = _currentPage.clamp(1, totalPages);
-      final start = (safePage - 1) * _pageSize;
-      final end = (start + _pageSize).clamp(0, docs.length);
-      final pageDocs = docs.sublist(start, end);
-
-      return Container(
-        margin: const EdgeInsets.symmetric(horizontal: 24),
-        decoration: BoxDecoration(
-          color: UpriseColors.white,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: UpriseColors.mediumGray),
-        ),
-        child: Column(
-          children: [
-            // TABLE HEADER
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              decoration: BoxDecoration(
-                color: UpriseColors.lightGray,
-                border: Border(bottom: BorderSide(color: UpriseColors.mediumGray)),
-                borderRadius: const BorderRadius.only(topLeft: Radius.circular(12), topRight: Radius.circular(12)),
-              ),
-              child: Row(children: [
-                Expanded(flex: 3, child: Text('DOCUMENT NAME', style: _headerStyle())),
-                Expanded(flex: 1, child: Text('UPLOAD DATE', style: _headerStyle())),
-                Expanded(flex: 1, child: Text('STATUS', style: _headerStyle())),
-                Expanded(flex: 1, child: Text('ACTIONS', style: _headerStyle())),
-              ]),
-            ),
-            // TABLE BODY (list)
-            Expanded(
-              child: ListView.builder(
-                itemCount: pageDocs.length,
-                itemBuilder: (_, i) {
-                  final data = pageDocs[i].data() as Map<String, dynamic>;
-                  final doc = Document(
-                    id: pageDocs[i].id,
-                    title: data['title'] ?? 'Untitled',
-                    fileName: data['fileName'] ?? '',
-                    fileType: data['fileType'] ?? 'pdf',
-                    fileSize: (data['fileSize'] ?? 0).toInt(),
-                    uploadDate: (data['uploadDate'] as Timestamp).toDate(),
-                    status: data['status'] ?? 'pending',
-                    requestedBy: data['requestedBy'] ?? '',
-                    department: data['department'] ?? '',
-                    content: data['content'] ?? '',
-                    revisionNotes: data['revisionNotes'] ?? '',
-                  );
-                  return _buildRow(doc);
-                },
-              ),
-            ),
-            // PAGINATION FOOTER
-            _buildFooter(docs.length, totalPages, start, end),
-          ],
-        ),
-      );
-    },
-  );
-}
+      },
+    );
+  }
 
   TextStyle _headerStyle() => GoogleFonts.beVietnamPro(
       fontSize: 11, fontWeight: FontWeight.w700, color: UpriseColors.darkGray, letterSpacing: 0.5);
@@ -496,9 +516,25 @@ Widget _buildTable() {
     );
   }
 
-  // ---------- CRUD OPERATIONS ----------
+  // ---------- CRUD OPERATIONS WITH LOGGING ----------
   Future<void> _setStatus(String docId, String newStatus) async {
+    // Fetch document title before update
+    String title = '';
+    try {
+      final docSnap = await FirebaseFirestore.instance.collection('letter_requests').doc(docId).get();
+      title = docSnap.data()?['title'] ?? 'Unknown document';
+    } catch (e) {
+      title = 'Unknown document';
+    }
+
     await FirebaseFirestore.instance.collection('letter_requests').doc(docId).update({'status': newStatus});
+
+    await ActivityLogger.log(
+      action: '${newStatus.toUpperCase()} letter request: $title',
+      module: 'Letter Request',
+      severity: newStatus == 'rejected' ? 'warning' : 'info',
+    );
+
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Status updated to ${newStatus.toUpperCase()}')));
     }
@@ -596,9 +632,19 @@ Widget _buildTable() {
                   try {
                     if (isEdit) {
                       await FirebaseFirestore.instance.collection('letter_requests').doc(doc!.id).update(data);
+                      await ActivityLogger.log(
+                        action: 'Updated letter request: ${titleCtrl.text}',
+                        module: 'Letter Request',
+                        severity: 'info',
+                      );
                     } else {
                       if (fileName.isEmpty) throw 'Please select a file';
                       await FirebaseFirestore.instance.collection('letter_requests').add(data);
+                      await ActivityLogger.log(
+                        action: 'Uploaded new letter request: ${titleCtrl.text}',
+                        module: 'Letter Request',
+                        severity: 'info',
+                      );
                     }
                     Navigator.pop(ctx);
                     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(isEdit ? 'Document updated' : 'Document uploaded')));
@@ -723,6 +769,11 @@ Widget _buildTable() {
                 'revisionNotes': notesCtrl.text,
                 'status': 'pending',
               });
+              await ActivityLogger.log(
+                action: 'Requested revision for letter request: ${doc.title}',
+                module: 'Letter Request',
+                severity: 'info',
+              );
               Navigator.pop(ctx);
               ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Revision request sent')));
             },
@@ -763,6 +814,11 @@ Widget _buildTable() {
           ElevatedButton(
             onPressed: () async {
               await FirebaseFirestore.instance.collection('letter_requests').doc(doc.id).delete();
+              await ActivityLogger.log(
+                action: 'Deleted letter request: ${doc.title}',
+                module: 'Letter Request',
+                severity: 'warning',
+              );
               Navigator.pop(ctx);
               ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Document deleted')));
             },
@@ -809,7 +865,7 @@ Widget _buildTable() {
   }
 }
 
-// Document model
+// Document model (unchanged)
 class Document {
   final String id;
   final String title;

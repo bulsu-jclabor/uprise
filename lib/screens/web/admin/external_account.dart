@@ -1,10 +1,35 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'dart:io';
 import 'package:share_plus/share_plus.dart';
 import '../../theme/app_theme.dart';
+
+// ============ ACTIVITY LOGGER ============
+class ActivityLogger {
+  static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+
+  static Future<void> log({
+    required String action,
+    required String module,
+    String severity = 'info',
+    Map<String, dynamic>? details,
+  }) async {
+    final user = FirebaseAuth.instance.currentUser;
+    final userName = user?.email ?? 'Unknown User';
+    await _firestore.collection('activity_logs').add({
+      'user': userName,
+      'action': action,
+      'module': module,
+      'severity': severity,
+      'timestamp': FieldValue.serverTimestamp(),
+      'ipAddress': '',
+      'details': details,
+    });
+  }
+}
 
 class ExternalAccount extends StatefulWidget {
   const ExternalAccount({super.key});
@@ -15,7 +40,7 @@ class ExternalAccount extends StatefulWidget {
 
 class _ExternalAccountState extends State<ExternalAccount> {
   final TextEditingController _searchController = TextEditingController();
-  String _statusFilter = 'All'; // All, pending, approved, rejected
+  String _statusFilter = 'All';
   int _currentPage = 1;
   static const int _pageSize = 10;
 
@@ -23,12 +48,7 @@ class _ExternalAccountState extends State<ExternalAccount> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: UpriseColors.lightGray,
-      floatingActionButton: FloatingActionButton(
-        onPressed: _showCreateRequestDialog,
-        backgroundColor: UpriseColors.primaryDark,
-        tooltip: 'Add External Account',
-        child: const Icon(Icons.add, color: Colors.white),
-      ),
+      // FloatingActionButton removed – external requests are submitted by users, not admin
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -43,7 +63,7 @@ class _ExternalAccountState extends State<ExternalAccount> {
     );
   }
 
-  // ---------- HEADER ----------
+  // ---------- HEADER (responsive) ----------
   Widget _buildHeader() {
     return Container(
       padding: const EdgeInsets.all(24),
@@ -51,17 +71,26 @@ class _ExternalAccountState extends State<ExternalAccount> {
         color: UpriseColors.white,
         border: Border(bottom: BorderSide(color: UpriseColors.mediumGray)),
       ),
-      child: Column(
+      child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'External Account Management',
-            style: GoogleFonts.beVietnamPro(fontSize: 24, fontWeight: FontWeight.bold, color: UpriseColors.charcoal),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            'Manage Non-CICT / Guest Accounts',
-            style: GoogleFonts.beVietnamPro(fontSize: 14, color: UpriseColors.darkGray),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'External Account Management',
+                  style: GoogleFonts.beVietnamPro(fontSize: 24, fontWeight: FontWeight.bold, color: UpriseColors.charcoal),
+                  softWrap: true,
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Manage Non-CICT / Guest Accounts',
+                  style: GoogleFonts.beVietnamPro(fontSize: 14, color: UpriseColors.darkGray),
+                  softWrap: true,
+                ),
+              ],
+            ),
           ),
         ],
       ),
@@ -122,13 +151,12 @@ class _ExternalAccountState extends State<ExternalAccount> {
     );
   }
 
-  // ---------- TOOLBAR (search + filter dropdown + export) ----------
+  // ---------- TOOLBAR (unchanged) ----------
   Widget _buildToolbar() {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 24),
       child: Row(
         children: [
-          // Search field
           Expanded(
             child: SizedBox(
               height: 40,
@@ -155,7 +183,6 @@ class _ExternalAccountState extends State<ExternalAccount> {
             ),
           ),
           const SizedBox(width: 16),
-          // Status filter dropdown
           Container(
             height: 40,
             padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -187,7 +214,6 @@ class _ExternalAccountState extends State<ExternalAccount> {
             ),
           ),
           const SizedBox(width: 12),
-          // Export button
           OutlinedButton.icon(
             onPressed: _exportToCSV,
             icon: const Icon(Icons.download, size: 18),
@@ -221,7 +247,7 @@ class _ExternalAccountState extends State<ExternalAccount> {
     }
   }
 
-  // ---------- TABLE (real‑time + pagination) ----------
+  // ---------- TABLE (unchanged) ----------
   Widget _buildTable() {
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance.collection('external_requests').orderBy('requestDate', descending: true).snapshots(),
@@ -234,11 +260,9 @@ class _ExternalAccountState extends State<ExternalAccount> {
         }
 
         var docs = snapshot.data!.docs;
-        // Apply status filter
         if (_statusFilter != 'All') {
           docs = docs.where((d) => (d.data() as Map)['status'] == _statusFilter.toLowerCase()).toList();
         }
-        // Apply search
         final term = _searchController.text.trim().toLowerCase();
         if (term.isNotEmpty) {
           docs = docs.where((d) {
@@ -250,7 +274,6 @@ class _ExternalAccountState extends State<ExternalAccount> {
           }).toList();
         }
 
-        // Empty state: show header + centered empty message
         if (docs.isEmpty) {
           return Container(
             margin: const EdgeInsets.symmetric(horizontal: 24),
@@ -261,7 +284,6 @@ class _ExternalAccountState extends State<ExternalAccount> {
             ),
             child: Column(
               children: [
-                // Header always visible
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                   decoration: BoxDecoration(
@@ -278,7 +300,6 @@ class _ExternalAccountState extends State<ExternalAccount> {
                     Expanded(flex: 1, child: Text('ACTIONS', style: _headerStyle())),
                   ]),
                 ),
-                // Empty state centered
                 Expanded(
                   child: Center(
                     child: Column(
@@ -296,7 +317,6 @@ class _ExternalAccountState extends State<ExternalAccount> {
           );
         }
 
-        // Pagination
         final totalPages = (docs.length / _pageSize).ceil();
         final safePage = _currentPage.clamp(1, totalPages);
         final start = (safePage - 1) * _pageSize;
@@ -312,7 +332,6 @@ class _ExternalAccountState extends State<ExternalAccount> {
           ),
           child: Column(
             children: [
-              // Header
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 decoration: BoxDecoration(
@@ -329,7 +348,6 @@ class _ExternalAccountState extends State<ExternalAccount> {
                   Expanded(flex: 1, child: Text('ACTIONS', style: _headerStyle())),
                 ]),
               ),
-              // Body
               Expanded(
                 child: ListView.builder(
                   itemCount: pageDocs.length,
@@ -349,7 +367,6 @@ class _ExternalAccountState extends State<ExternalAccount> {
                   },
                 ),
               ),
-              // Footer (pagination)
               _buildFooter(docs.length, totalPages, start, end),
             ],
           ),
@@ -432,7 +449,6 @@ class _ExternalAccountState extends State<ExternalAccount> {
             ? UpriseColors.error
             : UpriseColors.warning;
     final formattedDate = DateFormat('MMM dd, yyyy').format(req.requestDate);
-    // ID: first letters of name
     String shortId = req.userName.isNotEmpty
         ? req.userName.split(' ').map((e) => e.isNotEmpty ? e[0] : '').take(2).join()
         : '??';
@@ -492,13 +508,32 @@ class _ExternalAccountState extends State<ExternalAccount> {
     );
   }
 
+  // ---------- STATUS CHANGE WITH LOGGING ----------
   Future<void> _setStatus(String docId, String newStatus) async {
+    // Fetch request details before update
+    String userName = '';
+    try {
+      final docSnap = await FirebaseFirestore.instance.collection('external_requests').doc(docId).get();
+      userName = docSnap.data()?['userName'] ?? 'Unknown user';
+    } catch (e) {
+      userName = 'Unknown user';
+    }
+
     await FirebaseFirestore.instance.collection('external_requests').doc(docId).update({'status': newStatus});
+
+    await ActivityLogger.log(
+      action: '${newStatus.toUpperCase()} external request for $userName',
+      module: 'External Account',
+      severity: newStatus == 'rejected' ? 'warning' : 'info',
+      details: {'requestId': docId},
+    );
+
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Request ${newStatus.toUpperCase()}')));
     }
   }
 
+  // ---------- DELETE WITH LOGGING ----------
   void _confirmDelete(ExternalRequest req) {
     showDialog(
       context: context,
@@ -510,6 +545,14 @@ class _ExternalAccountState extends State<ExternalAccount> {
           ElevatedButton(
             onPressed: () async {
               await FirebaseFirestore.instance.collection('external_requests').doc(req.id).delete();
+
+              await ActivityLogger.log(
+                action: 'Deleted external request for ${req.userName}',
+                module: 'External Account',
+                severity: 'warning',
+                details: {'requestId': req.id},
+              );
+
               if (mounted) {
                 Navigator.pop(ctx);
                 ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Request deleted')));
@@ -523,6 +566,7 @@ class _ExternalAccountState extends State<ExternalAccount> {
     );
   }
 
+  // ---------- DETAILS DIALOG (unchanged) ----------
   void _showDetails(ExternalRequest req) {
     final statusColor = req.status == 'approved'
         ? UpriseColors.success
@@ -591,65 +635,6 @@ class _ExternalAccountState extends State<ExternalAccount> {
               : Text(value, style: GoogleFonts.beVietnamPro(fontSize: 12)),
         ),
       ]),
-    );
-  }
-
-  void _showCreateRequestDialog() {
-    final nameCtrl = TextEditingController();
-    final emailCtrl = TextEditingController();
-    final universityCtrl = TextEditingController();
-    final purposeCtrl = TextEditingController();
-    final formKey = GlobalKey<FormState>();
-
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Row(children: [
-          Icon(Icons.person_add, color: UpriseColors.primaryDark),
-          const SizedBox(width: 8),
-          Text('Create External Account Request', style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.bold)),
-        ]),
-        content: SingleChildScrollView(
-          child: Form(
-            key: formKey,
-            child: SizedBox(
-              width: 400,
-              child: Column(mainAxisSize: MainAxisSize.min, children: [
-                TextFormField(controller: nameCtrl, decoration: const InputDecoration(labelText: 'Full Name'), validator: (v) => v!.isEmpty ? 'Required' : null),
-                const SizedBox(height: 12),
-                TextFormField(controller: emailCtrl, decoration: const InputDecoration(labelText: 'Email Address'), validator: (v) => v!.isEmpty || !v.contains('@') ? 'Valid email required' : null),
-                const SizedBox(height: 12),
-                TextFormField(controller: universityCtrl, decoration: const InputDecoration(labelText: 'University / Organization')),
-                const SizedBox(height: 12),
-                TextFormField(controller: purposeCtrl, maxLines: 3, decoration: const InputDecoration(labelText: 'Purpose of Access')),
-              ]),
-            ),
-          ),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-          ElevatedButton(
-            onPressed: () async {
-              if (formKey.currentState!.validate()) {
-                await FirebaseFirestore.instance.collection('external_requests').add({
-                  'userName': nameCtrl.text,
-                  'email': emailCtrl.text,
-                  'university': universityCtrl.text,
-                  'purpose': purposeCtrl.text,
-                  'status': 'pending',
-                  'requestDate': FieldValue.serverTimestamp(),
-                });
-                if (mounted) {
-                  Navigator.pop(ctx);
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Request submitted')));
-                }
-              }
-            },
-            style: ElevatedButton.styleFrom(backgroundColor: UpriseColors.primaryDark),
-            child: const Text('Submit Request'),
-          ),
-        ],
-      ),
     );
   }
 

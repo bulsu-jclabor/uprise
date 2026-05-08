@@ -1,9 +1,34 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'dart:io';
 import 'package:share_plus/share_plus.dart';
 import '../../theme/app_theme.dart';
+
+// ============ ACTIVITY LOGGER ============
+class ActivityLogger {
+  static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+
+  static Future<void> log({
+    required String action,
+    required String module,
+    String severity = 'info',
+    Map<String, dynamic>? details,
+  }) async {
+    final user = FirebaseAuth.instance.currentUser;
+    final userName = user?.email ?? 'Unknown User';
+    await _firestore.collection('activity_logs').add({
+      'user': userName,
+      'action': action,
+      'module': module,
+      'severity': severity,
+      'timestamp': FieldValue.serverTimestamp(),
+      'ipAddress': '',
+      'details': details,
+    });
+  }
+}
 
 class OrgModel {
   final String id;
@@ -562,7 +587,7 @@ class _AdviserRolesState extends State<AdviserRoles> {
     );
   }
 
-  // ---------- Add / Edit Dialog with adviser phone ----------
+  // ---------- Add / Edit Dialog (fixed nullable errors) ----------
   void _showAddDialog() => _showFormDialog(isEdit: false, docId: null, existing: null);
   void _showEditDialog(Map<String, dynamic> data, String docId) => _showFormDialog(isEdit: true, docId: docId, existing: data);
 
@@ -605,17 +630,18 @@ class _AdviserRolesState extends State<AdviserRoles> {
 
           Future<void> save() async {
             if (!formKey.currentState!.validate()) return;
-            if (selectedOrg == null) {
+            final OrgModel? org = selectedOrg;
+            if (org == null) {
               setDlg(() => errorMsg = 'Please select an organization.');
               return;
             }
             setDlg(() { isSaving = true; errorMsg = null; });
             try {
               final payload = <String, dynamic>{
-                'orgId': selectedOrg!.id,
-                'orgName': selectedOrg!.name,
-                'orgAbbrev': selectedOrg!.abbrev,
-                'orgTag': selectedOrg!.tag,
+                'orgId': org.id,
+                'orgName': org.name,
+                'orgAbbrev': org.abbrev,
+                'orgTag': org.tag,
                 'adviserName': advNameCtrl.text.trim(),
                 'adviserEmail': advEmailCtrl.text.trim(),
                 'adviserPhone': advPhoneCtrl.text.trim(),
@@ -628,18 +654,30 @@ class _AdviserRolesState extends State<AdviserRoles> {
 
               if (isEdit && docId != null) {
                 await FirebaseFirestore.instance.collection('adviser_roles').doc(docId).update(payload);
+                await ActivityLogger.log(
+                  action: 'Updated adviser role for ${org.name}',
+                  module: 'Adviser Roles',
+                  severity: 'info',
+                  details: {'orgId': org.id, 'adviser': advNameCtrl.text.trim()},
+                );
               } else {
                 final dup = await FirebaseFirestore.instance
                     .collection('adviser_roles')
-                    .where('orgId', isEqualTo: selectedOrg!.id)
+                    .where('orgId', isEqualTo: org.id)
                     .where('archived', isEqualTo: false)
                     .get();
                 if (dup.docs.isNotEmpty) {
-                  setDlg(() { isSaving = false; errorMsg = '${selectedOrg!.name} already has an active adviser role assigned.'; });
+                  setDlg(() { isSaving = false; errorMsg = '${org.name} already has an active adviser role assigned.'; });
                   return;
                 }
                 payload['createdAt'] = FieldValue.serverTimestamp();
                 await FirebaseFirestore.instance.collection('adviser_roles').add(payload);
+                await ActivityLogger.log(
+                  action: 'Assigned new adviser role for ${org.name}',
+                  module: 'Adviser Roles',
+                  severity: 'info',
+                  details: {'orgId': org.id, 'adviser': advNameCtrl.text.trim()},
+                );
               }
               _loadMeta();
               Navigator.pop(ctx);
@@ -826,6 +864,11 @@ class _AdviserRolesState extends State<AdviserRoles> {
             TextButton.icon(
               onPressed: () async {
                 await FirebaseFirestore.instance.collection('adviser_roles').doc(docId).update({'archived': false});
+                await ActivityLogger.log(
+                  action: 'Restored adviser role for ${data['orgName'] ?? 'unknown organization'}',
+                  module: 'Adviser Roles',
+                  severity: 'info',
+                );
                 _loadMeta();
                 Navigator.pop(ctx);
                 ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Record restored.')));
@@ -900,6 +943,11 @@ class _AdviserRolesState extends State<AdviserRoles> {
           ElevatedButton(
             onPressed: () async {
               await FirebaseFirestore.instance.collection('adviser_roles').doc(docId).update({'archived': true});
+              await ActivityLogger.log(
+                action: 'Archived adviser role for $orgName',
+                module: 'Adviser Roles',
+                severity: 'info',
+              );
               _loadMeta();
               Navigator.pop(ctx);
               ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Record archived.')));
@@ -929,6 +977,11 @@ class _AdviserRolesState extends State<AdviserRoles> {
           ElevatedButton(
             onPressed: () async {
               await FirebaseFirestore.instance.collection('adviser_roles').doc(docId).delete();
+              await ActivityLogger.log(
+                action: 'Deleted adviser role for $orgName',
+                module: 'Adviser Roles',
+                severity: 'warning',
+              );
               _loadMeta();
               Navigator.pop(ctx);
               ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Record deleted.'), backgroundColor: UpriseColors.error));

@@ -1,9 +1,34 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:share_plus/share_plus.dart';
 import '../../theme/app_theme.dart';
+
+// ============ ACTIVITY LOGGER ============
+class ActivityLogger {
+  static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+
+  static Future<void> log({
+    required String action,
+    required String module,
+    String severity = 'info',
+    Map<String, dynamic>? details,
+  }) async {
+    final user = FirebaseAuth.instance.currentUser;
+    final userName = user?.email ?? 'Unknown User';
+    await _firestore.collection('activity_logs').add({
+      'user': userName,
+      'action': action,
+      'module': module,
+      'severity': severity,
+      'timestamp': FieldValue.serverTimestamp(),
+      'ipAddress': '',
+      'details': details,
+    });
+  }
+}
 
 class EventProposals extends StatefulWidget {
   const EventProposals({super.key});
@@ -26,7 +51,7 @@ class _EventProposalsState extends State<EventProposals> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _buildHeader(),
-          _buildStatsRow(),        // now a StreamBuilder – real‑time
+          _buildStatsRow(),
           _buildToolbar(),
           const SizedBox(height: 16),
           Expanded(child: _buildTable()),
@@ -437,8 +462,27 @@ class _EventProposalsState extends State<EventProposals> {
     );
   }
 
+  // ---------- STATUS CHANGE WITH LOGGING ----------
   Future<void> _setStatus(String docId, String newStatus) async {
+    // Fetch the proposal title before updating (for logging)
+    String title = '';
+    try {
+      final docSnap = await FirebaseFirestore.instance.collection('event_proposals').doc(docId).get();
+      title = docSnap.data()?['title'] ?? 'Unknown event';
+    } catch (e) {
+      title = 'Unknown event';
+    }
+
     await FirebaseFirestore.instance.collection('event_proposals').doc(docId).update({'status': newStatus});
+
+    // Log the status change
+    await ActivityLogger.log(
+      action: '${newStatus.toUpperCase()} proposal: $title',
+      module: 'Event Management',
+      severity: newStatus == 'rejected' ? 'warning' : 'info',
+      details: {'proposalId': docId},
+    );
+
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Proposal ${newStatus.toUpperCase()}')));
     // Stats update automatically because of StreamBuilder
   }

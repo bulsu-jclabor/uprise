@@ -1,10 +1,51 @@
-// lib/screens/admin/settings.dart
+import 'dart:io';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../../theme/app_theme.dart';
 import 'package:intl/intl.dart';
+import '../../theme/app_theme.dart';
+import 'admin_login.dart';
+
+// ============ ACTIVITY LOGGER ============
+class ActivityLogger {
+  static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  static Future<void> log({
+    required String action,
+    required String module,
+    String severity = 'info',
+    Map<String, dynamic>? details,
+  }) async {
+    final user = FirebaseAuth.instance.currentUser;
+    final userName = user?.email ?? 'Unknown User';
+    await _firestore.collection('activity_logs').add({
+      'user': userName,
+      'action': action,
+      'module': module,
+      'severity': severity,
+      'timestamp': FieldValue.serverTimestamp(),
+      'ipAddress': '',
+      'details': details,
+    });
+  }
+}
+
+// ============ SIDEBAR ICONS ============
+const Map<String, IconData> _sidebarIcons = {
+  'Dashboard': Icons.dashboard_outlined,
+  'Organization Management': Icons.business_outlined,
+  'Student Accounts': Icons.people_outline,
+  'Adviser Roles': Icons.school_outlined,
+  'Event Proposals': Icons.pending_actions_outlined,
+  'College Event Calendar': Icons.calendar_today_outlined,
+  'Letter Request': Icons.mail_outline,
+  'External Account': Icons.link_outlined,
+  'Reports Management': Icons.assessment_outlined,
+  'Activity Logs': Icons.history_outlined,
+  'Settings': Icons.settings_outlined,
+};
 
 class AdminSettings extends StatefulWidget {
   const AdminSettings({super.key});
@@ -13,29 +54,47 @@ class AdminSettings extends StatefulWidget {
   _AdminSettingsState createState() => _AdminSettingsState();
 }
 
-class _AdminSettingsState extends State<AdminSettings> {
-  int _selectedTab = 0; // 0: Admin Profile, 1: System Preferences, 2: Security Settings, 3: Audit Logs
+class _AdminSettingsState extends State<AdminSettings>
+    with SingleTickerProviderStateMixin {
+  late TabController _tabController;
+
+  // Profile data
   final TextEditingController _fullNameController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
+  bool _isLoading = false;
+  User? _currentUser;
+  String? _profileImageBase64;
+  File? _selectedImageFile;
+
+  // Password change
   final TextEditingController _newPasswordController = TextEditingController();
   final TextEditingController _confirmPasswordController = TextEditingController();
-  
+
   // Notification settings
   bool _emailNotifications = true;
   bool _desktopAlerts = true;
   bool _dailySummary = true;
   bool _urgentAlerts = true;
   bool _eventReminders = true;
-  
-  bool _isLoading = false;
-  User? _currentUser;
 
   @override
   void initState() {
     super.initState();
+    _tabController = TabController(length: 4, vsync: this);
     _currentUser = FirebaseAuth.instance.currentUser;
     _loadUserData();
     _loadSettings();
+    _loadProfileImage();
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    _fullNameController.dispose();
+    _emailController.dispose();
+    _newPasswordController.dispose();
+    _confirmPasswordController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadUserData() async {
@@ -43,8 +102,10 @@ class _AdminSettingsState extends State<AdminSettings> {
       _fullNameController.text = _currentUser!.displayName ?? '';
       _emailController.text = _currentUser!.email ?? '';
     }
-    // Also fetch from Firestore if additional fields exist
-    final doc = await FirebaseFirestore.instance.collection('users').doc(_currentUser?.uid).get();
+    final doc = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(_currentUser?.uid)
+        .get();
     if (doc.exists) {
       final data = doc.data();
       if (data != null) {
@@ -53,6 +114,55 @@ class _AdminSettingsState extends State<AdminSettings> {
       }
     }
     setState(() {});
+  }
+
+  Future<void> _loadProfileImage() async {
+    final doc = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(_currentUser?.uid)
+        .get();
+    if (doc.exists) {
+      final data = doc.data();
+      if (data != null && data['photoBase64'] != null) {
+        setState(() => _profileImageBase64 = data['photoBase64']);
+      }
+    }
+  }
+
+  Future<void> _pickAndUploadImage() async {
+    final picker = ImagePicker();
+    final picked = await picker.pickImage(source: ImageSource.gallery, imageQuality: 50);
+    if (picked == null) return;
+
+    setState(() => _selectedImageFile = File(picked.path));
+    setState(() => _isLoading = true);
+
+    try {
+      final bytes = await File(picked.path).readAsBytes();
+      final base64String = base64Encode(bytes);
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(_currentUser!.uid)
+          .set({'photoBase64': base64String}, SetOptions(merge: true));
+      setState(() {
+        _profileImageBase64 = base64String;
+        _selectedImageFile = null;
+      });
+      await ActivityLogger.log(
+        action: 'Updated profile picture',
+        module: 'Admin Settings',
+        severity: 'info',
+      );
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Profile picture updated')),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error saving picture: $e'), backgroundColor: UpriseColors.error),
+      );
+    } finally {
+      setState(() => _isLoading = false);
+    }
   }
 
   Future<void> _loadSettings() async {
@@ -86,36 +196,70 @@ class _AdminSettingsState extends State<AdminSettings> {
       'eventReminders': _eventReminders,
       'updatedAt': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Settings saved')));
+    await ActivityLogger.log(
+      action: 'Updated notification preferences',
+      module: 'Admin Settings',
+      severity: 'info',
+    );
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Settings saved')),
+      );
+    }
   }
 
   Future<void> _updateProfile() async {
+    if (_fullNameController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Name cannot be empty'), backgroundColor: UpriseColors.error),
+      );
+      return;
+    }
     setState(() => _isLoading = true);
     try {
-      if (_currentUser != null && _fullNameController.text.isNotEmpty) {
+      if (_currentUser != null) {
         await _currentUser!.updateDisplayName(_fullNameController.text);
-        // Also update Firestore
-        await FirebaseFirestore.instance.collection('users').doc(_currentUser!.uid).set({
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(_currentUser!.uid)
+            .set({
           'fullName': _fullNameController.text,
           'email': _emailController.text,
           'updatedAt': FieldValue.serverTimestamp(),
         }, SetOptions(merge: true));
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Profile updated')));
+        await ActivityLogger.log(
+          action: 'Updated profile name to ${_fullNameController.text}',
+          module: 'Admin Settings',
+          severity: 'info',
+        );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Profile updated')),
+          );
+        }
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: UpriseColors.error));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e'), backgroundColor: UpriseColors.error),
+        );
+      }
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
   Future<void> _changePassword() async {
     if (_newPasswordController.text != _confirmPasswordController.text) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Passwords do not match'), backgroundColor: UpriseColors.error));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Passwords do not match'), backgroundColor: UpriseColors.error),
+      );
       return;
     }
     if (_newPasswordController.text.length < 6) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Password must be at least 6 characters'), backgroundColor: UpriseColors.error));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Password must be at least 6 characters'), backgroundColor: UpriseColors.error),
+      );
       return;
     }
     setState(() => _isLoading = true);
@@ -123,14 +267,186 @@ class _AdminSettingsState extends State<AdminSettings> {
       await _currentUser!.updatePassword(_newPasswordController.text);
       _newPasswordController.clear();
       _confirmPasswordController.clear();
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Password changed')));
+      await ActivityLogger.log(
+        action: 'Changed account password',
+        module: 'Admin Settings',
+        severity: 'info',
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Password changed successfully')),
+        );
+      }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: UpriseColors.error));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e'), backgroundColor: UpriseColors.error),
+        );
+      }
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
+  // ========== SIDEBAR (identical to dashboard) ==========
+  Widget _buildSidebar() {
+    final titles = [
+      'Dashboard',
+      'Organization Management',
+      'Student Accounts',
+      'Adviser Roles',
+      'Event Proposals',
+      'College Event Calendar',
+      'Letter Request',
+      'External Account',
+      'Reports Management',
+      'Activity Logs',
+      'Settings',
+    ];
+
+    return Container(
+      width: 260,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [UpriseColors.primaryDark, UpriseColors.primaryLight],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+      ),
+      child: Column(
+        children: [
+          const SizedBox(height: 30),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(6.0),
+                  child: Image.asset(
+                    'assets/images/logo.png',
+                    fit: BoxFit.contain,
+                    errorBuilder: (_, __, ___) => const Icon(Icons.school, color: Colors.white),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Text(
+                "UPRISE",
+                style: GoogleFonts.beVietnamPro(
+                  color: UpriseColors.white,
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 2,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'CICT Organization Management',
+            style: GoogleFonts.beVietnamPro(
+              color: UpriseColors.white.withOpacity(0.7),
+              fontSize: 11,
+            ),
+          ),
+          const SizedBox(height: 30),
+          Divider(color: UpriseColors.white.withOpacity(0.2), thickness: 1),
+          const SizedBox(height: 16),
+          Expanded(
+            child: ListView.builder(
+              itemCount: titles.length,
+              itemBuilder: (context, index) {
+                final isSelected = titles[index] == 'Settings';
+                return GestureDetector(
+                  onTap: () {
+                    if (titles[index] == 'Settings') return;
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('${titles[index]} is not available from Settings page.'),
+                        duration: const Duration(seconds: 1),
+                      ),
+                    );
+                  },
+                  child: Container(
+                    margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                    padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
+                    decoration: BoxDecoration(
+                      color: isSelected ? UpriseColors.white.withOpacity(0.2) : Colors.transparent,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(_sidebarIcons[titles[index]]!, color: UpriseColors.white, size: 18),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            titles[index],
+                            overflow: TextOverflow.ellipsis,
+                            style: GoogleFonts.beVietnamPro(
+                              color: UpriseColors.white,
+                              fontSize: 13,
+                              fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+          Divider(color: UpriseColors.white.withOpacity(0.2), thickness: 1),
+          GestureDetector(
+            onTap: () {
+              showDialog(
+                context: context,
+                builder: (ctx) => AlertDialog(
+                  title: const Text('Confirm Logout'),
+                  content: const Text('Are you sure you want to logout?'),
+                  actions: [
+                    TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+                    ElevatedButton(
+                      onPressed: () async {
+                        Navigator.pop(ctx);
+                        await FirebaseAuth.instance.signOut();
+                        Navigator.pushReplacement(
+                          context,
+                          MaterialPageRoute(builder: (_) => AdminLogin()),
+                        );
+                      },
+                      style: ElevatedButton.styleFrom(backgroundColor: UpriseColors.error),
+                      child: const Text('Logout'),
+                    ),
+                  ],
+                ),
+              );
+            },
+            child: Container(
+              margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
+              child: Row(
+                children: [
+                  Icon(Icons.logout, color: UpriseColors.white.withOpacity(0.75), size: 18),
+                  const SizedBox(width: 12),
+                  Text('Logout', style: GoogleFonts.beVietnamPro(color: UpriseColors.white.withOpacity(0.75), fontSize: 13)),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 20),
+        ],
+      ),
+    );
+  }
+
+  // ========== MAIN BUILD ==========
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -138,74 +454,136 @@ class _AdminSettingsState extends State<AdminSettings> {
       body: Row(
         children: [
           _buildSidebar(),
-          Expanded(child: _buildContent()),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSidebar() {
-    final tabs = ['Admin Profile', 'System Preferences', 'Security Settings', 'Audit Logs'];
-    final icons = [Icons.person_outline, Icons.settings_outlined, Icons.security_outlined, Icons.history_outlined];
-    return Container(
-      width: 260,
-      decoration: BoxDecoration(
-        color: UpriseColors.white,
-        border: Border(right: BorderSide(color: UpriseColors.mediumGray)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(height: 30),
-          Padding(
-            padding: EdgeInsets.symmetric(horizontal: 20),
-            child: Text('Admin System Settings',
-                style: GoogleFonts.beVietnamPro(fontSize: 18, fontWeight: FontWeight.bold, color: UpriseColors.charcoal)),
+          Expanded(
+            child: Column(
+              children: [
+                // Header (fixed – no cut‑off)
+                Container(
+                  padding: const EdgeInsets.all(24),
+                  decoration: BoxDecoration(
+                    color: UpriseColors.white,
+                    border: Border(bottom: BorderSide(color: UpriseColors.mediumGray)),
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Admin System Settings',
+                              style: GoogleFonts.beVietnamPro(fontSize: 24, fontWeight: FontWeight.bold, color: UpriseColors.charcoal),
+                              softWrap: true,
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'Manage your profile, security, and notification preferences.',
+                              style: GoogleFonts.beVietnamPro(fontSize: 14, color: UpriseColors.darkGray),
+                              softWrap: true,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                // Tab Bar
+                Container(
+                  color: UpriseColors.white,
+                  child: TabBar(
+                    controller: _tabController,
+                    tabs: const [
+                      Tab(text: 'Profile'),
+                      Tab(text: 'Preferences'),
+                      Tab(text: 'Security'),
+                      Tab(text: 'Audit Logs'),
+                    ],
+                    labelColor: UpriseColors.primaryDark,
+                    unselectedLabelColor: UpriseColors.darkGray,
+                    indicatorColor: UpriseColors.primaryDark,
+                    indicatorWeight: 3,
+                    labelStyle: GoogleFonts.beVietnamPro(fontWeight: FontWeight.w600),
+                  ),
+                ),
+                Expanded(
+                  child: TabBarView(
+                    controller: _tabController,
+                    children: [
+                      _buildProfileTab(),
+                      _buildPreferencesTab(),
+                      _buildSecurityTab(),
+                      _buildAuditLogsTab(),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
-          SizedBox(height: 20),
-          Divider(),
-          ...List.generate(tabs.length, (index) {
-            final isSelected = _selectedTab == index;
-            return ListTile(
-              leading: Icon(icons[index], color: isSelected ? UpriseColors.primaryDark : UpriseColors.darkGray, size: 22),
-              title: Text(tabs[index], style: GoogleFonts.beVietnamPro(
-                fontSize: 14,
-                color: isSelected ? UpriseColors.primaryDark : UpriseColors.charcoal,
-                fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-              )),
-              selected: isSelected,
-              selectedTileColor: UpriseColors.primaryDark.withOpacity(0.05),
-              onTap: () => setState(() => _selectedTab = index),
-            );
-          }),
         ],
       ),
     );
   }
 
-  Widget _buildContent() {
-    switch (_selectedTab) {
-      case 0: return _buildProfileTab();
-      case 1: return _buildPreferencesTab();
-      case 2: return _buildSecurityTab();
-      case 3: return _buildAuditLogsTab();
-      default: return Container();
-    }
-  }
-
+  // ========== PROFILE TAB ==========
   Widget _buildProfileTab() {
+    ImageProvider? imageProvider;
+    if (_profileImageBase64 != null && _profileImageBase64!.isNotEmpty) {
+      imageProvider = MemoryImage(base64Decode(_profileImageBase64!));
+    }
     return SingleChildScrollView(
-      padding: EdgeInsets.all(24),
+      padding: const EdgeInsets.all(24),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Admin Profile', style: GoogleFonts.beVietnamPro(fontSize: 24, fontWeight: FontWeight.bold, color: UpriseColors.charcoal)),
-          SizedBox(height: 8),
-          Text('Configure your administrative preferences and account security.',
-              style: GoogleFonts.beVietnamPro(fontSize: 14, color: UpriseColors.darkGray)),
-          SizedBox(height: 32),
           Container(
-            padding: EdgeInsets.all(24),
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: UpriseColors.white,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: UpriseColors.mediumGray),
+            ),
+            child: Column(
+              children: [
+                Center(
+                  child: Stack(
+                    children: [
+                      CircleAvatar(
+                        radius: 60,
+                        backgroundColor: UpriseColors.lightGray,
+                        backgroundImage: imageProvider,
+                        child: _profileImageBase64 == null
+                            ? Icon(Icons.person, size: 60, color: UpriseColors.darkGray)
+                            : null,
+                      ),
+                      Positioned(
+                        bottom: 0,
+                        right: 0,
+                        child: GestureDetector(
+                          onTap: _pickAndUploadImage,
+                          child: Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: UpriseColors.primaryDark,
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(Icons.camera_alt, size: 20, color: Colors.white),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 20),
+                Text(
+                  'Tap the camera icon to change your profile picture',
+                  style: GoogleFonts.beVietnamPro(fontSize: 12, color: UpriseColors.darkGray),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 24),
+          Container(
+            padding: const EdgeInsets.all(24),
             decoration: BoxDecoration(
               color: UpriseColors.white,
               borderRadius: BorderRadius.circular(16),
@@ -214,33 +592,44 @@ class _AdminSettingsState extends State<AdminSettings> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Personal Information', style: GoogleFonts.beVietnamPro(fontSize: 18, fontWeight: FontWeight.bold)),
-                SizedBox(height: 20),
+                Text(
+                  'Personal Information',
+                  style: GoogleFonts.beVietnamPro(fontSize: 18, fontWeight: FontWeight.bold, color: UpriseColors.charcoal),
+                ),
+                const SizedBox(height: 20),
                 TextFormField(
                   controller: _fullNameController,
-                  decoration: InputDecoration(labelText: 'Full Name', prefixIcon: Icon(Icons.person_outline)),
+                  decoration: InputDecoration(
+                    labelText: 'Full Name',
+                    prefixIcon: Icon(Icons.person_outline, color: UpriseColors.primaryDark),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    filled: true,
+                    fillColor: UpriseColors.lightGray,
+                  ),
                 ),
-                SizedBox(height: 16),
+                const SizedBox(height: 16),
                 TextFormField(
                   controller: _emailController,
                   enabled: false,
-                  decoration: InputDecoration(labelText: 'Email Address', prefixIcon: Icon(Icons.email_outlined)),
+                  decoration: InputDecoration(
+                    labelText: 'Email Address',
+                    prefixIcon: Icon(Icons.email_outlined, color: UpriseColors.primaryDark),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    filled: true,
+                    fillColor: UpriseColors.lightGray,
+                  ),
                 ),
-                SizedBox(height: 24),
-                Row(
-                  children: [
-                    Expanded(
-                      child: ElevatedButton.icon(
-                        onPressed: _isLoading ? null : _updateProfile,
-                        icon: Icon(Icons.save),
-                        label: Text('Save Changes'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: UpriseColors.primaryDark,
-                          padding: EdgeInsets.symmetric(vertical: 12),
-                        ),
-                      ),
-                    ),
-                  ],
+                const SizedBox(height: 24),
+                ElevatedButton.icon(
+                  onPressed: _isLoading ? null : _updateProfile,
+                  icon: const Icon(Icons.save),
+                  label: const Text('Save Changes'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: UpriseColors.primaryDark,
+                    foregroundColor: UpriseColors.white,
+                    minimumSize: const Size(double.infinity, 48),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
                 ),
               ],
             ),
@@ -250,19 +639,91 @@ class _AdminSettingsState extends State<AdminSettings> {
     );
   }
 
+  // ========== PREFERENCES TAB ==========
+  Widget _buildPreferencesTab() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(24),
+      child: Container(
+        padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(
+          color: UpriseColors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: UpriseColors.mediumGray),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Notification Settings',
+              style: GoogleFonts.beVietnamPro(fontSize: 18, fontWeight: FontWeight.bold, color: UpriseColors.charcoal),
+            ),
+            const SizedBox(height: 16),
+            _notificationSwitch(
+              title: 'Email Notifications',
+              subtitle: 'Receive daily summary of pending approvals',
+              value: _emailNotifications,
+              onChanged: (v) => setState(() { _emailNotifications = v; _saveSettings(); }),
+            ),
+            _notificationSwitch(
+              title: 'Desktop Alerts',
+              subtitle: 'In-browser push notifications for urgent alerts',
+              value: _desktopAlerts,
+              onChanged: (v) => setState(() { _desktopAlerts = v; _saveSettings(); }),
+            ),
+            const Divider(),
+            Text(
+              'Advanced Notifications',
+              style: GoogleFonts.beVietnamPro(fontSize: 14, fontWeight: FontWeight.w600, color: UpriseColors.charcoal),
+            ),
+            const SizedBox(height: 8),
+            _notificationSwitch(
+              title: 'Daily Summary',
+              subtitle: 'Get a daily digest of all system activities',
+              value: _dailySummary,
+              onChanged: (v) => setState(() { _dailySummary = v; _saveSettings(); }),
+            ),
+            _notificationSwitch(
+              title: 'Urgent Alerts',
+              subtitle: 'Receive immediate notifications for critical issues',
+              value: _urgentAlerts,
+              onChanged: (v) => setState(() { _urgentAlerts = v; _saveSettings(); }),
+            ),
+            _notificationSwitch(
+              title: 'Event Reminders',
+              subtitle: 'Get reminded about upcoming events and deadlines',
+              value: _eventReminders,
+              onChanged: (v) => setState(() { _eventReminders = v; _saveSettings(); }),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _notificationSwitch({
+    required String title,
+    required String subtitle,
+    required bool value,
+    required ValueChanged<bool> onChanged,
+  }) {
+    return SwitchListTile(
+      contentPadding: EdgeInsets.zero,
+      title: Text(title, style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.w500)),
+      subtitle: Text(subtitle, style: GoogleFonts.beVietnamPro(fontSize: 12, color: UpriseColors.darkGray)),
+      value: value,
+      onChanged: onChanged,
+      activeColor: UpriseColors.primaryDark,
+    );
+  }
+
+  // ========== SECURITY TAB ==========
   Widget _buildSecurityTab() {
     return SingleChildScrollView(
-      padding: EdgeInsets.all(24),
+      padding: const EdgeInsets.all(24),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Security Settings', style: GoogleFonts.beVietnamPro(fontSize: 24, fontWeight: FontWeight.bold, color: UpriseColors.charcoal)),
-          SizedBox(height: 8),
-          Text('Manage your password and account security.',
-              style: GoogleFonts.beVietnamPro(fontSize: 14, color: UpriseColors.darkGray)),
-          SizedBox(height: 32),
           Container(
-            padding: EdgeInsets.all(24),
+            padding: const EdgeInsets.all(24),
             decoration: BoxDecoration(
               color: UpriseColors.white,
               borderRadius: BorderRadius.circular(16),
@@ -271,44 +732,57 @@ class _AdminSettingsState extends State<AdminSettings> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Change Password', style: GoogleFonts.beVietnamPro(fontSize: 18, fontWeight: FontWeight.bold)),
-                SizedBox(height: 8),
-                Text('Regularly updating your password increases account security.',
-                    style: GoogleFonts.beVietnamPro(fontSize: 13, color: UpriseColors.darkGray)),
-                SizedBox(height: 20),
+                Text(
+                  'Change Password',
+                  style: GoogleFonts.beVietnamPro(fontSize: 18, fontWeight: FontWeight.bold, color: UpriseColors.charcoal),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Regularly updating your password increases account security.',
+                  style: GoogleFonts.beVietnamPro(fontSize: 13, color: UpriseColors.darkGray),
+                ),
+                const SizedBox(height: 20),
                 TextFormField(
                   controller: _newPasswordController,
                   obscureText: true,
-                  decoration: InputDecoration(labelText: 'New Password', prefixIcon: Icon(Icons.lock_outline)),
+                  decoration: InputDecoration(
+                    labelText: 'New Password',
+                    prefixIcon: Icon(Icons.lock_outline, color: UpriseColors.primaryDark),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    filled: true,
+                    fillColor: UpriseColors.lightGray,
+                  ),
                 ),
-                SizedBox(height: 16),
+                const SizedBox(height: 16),
                 TextFormField(
                   controller: _confirmPasswordController,
                   obscureText: true,
-                  decoration: InputDecoration(labelText: 'Confirm New Password', prefixIcon: Icon(Icons.lock_outline)),
+                  decoration: InputDecoration(
+                    labelText: 'Confirm New Password',
+                    prefixIcon: Icon(Icons.lock_outline, color: UpriseColors.primaryDark),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    filled: true,
+                    fillColor: UpriseColors.lightGray,
+                  ),
                 ),
-                SizedBox(height: 24),
-                Row(
-                  children: [
-                    Expanded(
-                      child: ElevatedButton.icon(
-                        onPressed: _isLoading ? null : _changePassword,
-                        icon: Icon(Icons.update),
-                        label: Text('Update Password'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: UpriseColors.primaryDark,
-                          padding: EdgeInsets.symmetric(vertical: 12),
-                        ),
-                      ),
-                    ),
-                  ],
+                const SizedBox(height: 24),
+                ElevatedButton.icon(
+                  onPressed: _isLoading ? null : _changePassword,
+                  icon: const Icon(Icons.update),
+                  label: const Text('Update Password'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: UpriseColors.primaryDark,
+                    foregroundColor: UpriseColors.white,
+                    minimumSize: const Size(double.infinity, 48),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
                 ),
               ],
             ),
           ),
-          SizedBox(height: 24),
+          const SizedBox(height: 24),
           Container(
-            padding: EdgeInsets.all(24),
+            padding: const EdgeInsets.all(24),
             decoration: BoxDecoration(
               color: UpriseColors.white,
               borderRadius: BorderRadius.circular(16),
@@ -317,17 +791,23 @@ class _AdminSettingsState extends State<AdminSettings> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Two‑Factor Authentication', style: GoogleFonts.beVietnamPro(fontSize: 18, fontWeight: FontWeight.bold)),
-                SizedBox(height: 8),
-                Text('Add an extra layer of security to your account.',
-                    style: GoogleFonts.beVietnamPro(fontSize: 13, color: UpriseColors.darkGray)),
-                SizedBox(height: 16),
+                Text(
+                  'Two‑Factor Authentication',
+                  style: GoogleFonts.beVietnamPro(fontSize: 18, fontWeight: FontWeight.bold, color: UpriseColors.charcoal),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Add an extra layer of security to your account.',
+                  style: GoogleFonts.beVietnamPro(fontSize: 13, color: UpriseColors.darkGray),
+                ),
+                const SizedBox(height: 16),
                 SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
                   title: Text('Enable 2FA', style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.w500)),
                   subtitle: Text('Receive a verification code via email on each login', style: GoogleFonts.beVietnamPro(fontSize: 12)),
                   value: false,
                   onChanged: (v) {},
-                  activeThumbColor: UpriseColors.primaryDark,
+                  activeColor: UpriseColors.primaryDark,
                 ),
               ],
             ),
@@ -337,142 +817,99 @@ class _AdminSettingsState extends State<AdminSettings> {
     );
   }
 
-  Widget _buildPreferencesTab() {
-    return SingleChildScrollView(
-      padding: EdgeInsets.all(24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('System Preferences', style: GoogleFonts.beVietnamPro(fontSize: 24, fontWeight: FontWeight.bold, color: UpriseColors.charcoal)),
-          SizedBox(height: 8),
-          Text('Customize your notification and alert preferences.',
-              style: GoogleFonts.beVietnamPro(fontSize: 14, color: UpriseColors.darkGray)),
-          SizedBox(height: 32),
-          Container(
-            padding: EdgeInsets.all(24),
-            decoration: BoxDecoration(
-              color: UpriseColors.white,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: UpriseColors.mediumGray),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('NOTIFICATION SETTINGS', style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.w700, color: UpriseColors.darkGray, letterSpacing: 0.5)),
-                SizedBox(height: 16),
-                SwitchListTile(
-                  title: Text('Email Notifications', style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.w500)),
-                  subtitle: Text('Receive daily summary of pending approvals', style: GoogleFonts.beVietnamPro(fontSize: 12)),
-                  value: _emailNotifications,
-                  onChanged: (v) => setState(() { _emailNotifications = v; _saveSettings(); }),
-                  activeThumbColor: UpriseColors.primaryDark,
-                ),
-                SwitchListTile(
-                  title: Text('Desktop Alerts', style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.w500)),
-                  subtitle: Text('In-browser push notifications for urgent alerts', style: GoogleFonts.beVietnamPro(fontSize: 12)),
-                  value: _desktopAlerts,
-                  onChanged: (v) => setState(() { _desktopAlerts = v; _saveSettings(); }),
-                  activeThumbColor: UpriseColors.primaryDark,
-                ),
-                Divider(),
-                Text('ADVANCED NOTIFICATIONS', style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.w700, color: UpriseColors.darkGray, letterSpacing: 0.5)),
-                SizedBox(height: 8),
-                SwitchListTile(
-                  title: Text('Daily Summary', style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.w500)),
-                  subtitle: Text('Get a daily digest of all system activities', style: GoogleFonts.beVietnamPro(fontSize: 12)),
-                  value: _dailySummary,
-                  onChanged: (v) => setState(() { _dailySummary = v; _saveSettings(); }),
-                  activeThumbColor: UpriseColors.primaryDark,
-                ),
-                SwitchListTile(
-                  title: Text('Urgent Alerts', style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.w500)),
-                  subtitle: Text('Receive immediate notifications for critical issues', style: GoogleFonts.beVietnamPro(fontSize: 12)),
-                  value: _urgentAlerts,
-                  onChanged: (v) => setState(() { _urgentAlerts = v; _saveSettings(); }),
-                  activeThumbColor: UpriseColors.primaryDark,
-                ),
-                SwitchListTile(
-                  title: Text('Event Reminders', style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.w500)),
-                  subtitle: Text('Get reminded about upcoming events and deadlines', style: GoogleFonts.beVietnamPro(fontSize: 12)),
-                  value: _eventReminders,
-                  onChanged: (v) => setState(() { _eventReminders = v; _saveSettings(); }),
-                  activeThumbColor: UpriseColors.primaryDark,
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
+  // ========== AUDIT LOGS TAB ==========
   Widget _buildAuditLogsTab() {
-  return SingleChildScrollView(
-    padding: EdgeInsets.all(24),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text('Audit Logs', style: GoogleFonts.beVietnamPro(fontSize: 24, fontWeight: FontWeight.bold, color: UpriseColors.charcoal)),
-        SizedBox(height: 8),
-        Text('View your recent account activity and login history.',
-            style: GoogleFonts.beVietnamPro(fontSize: 14, color: UpriseColors.darkGray)),
-        SizedBox(height: 32),
-        Container(
-          decoration: BoxDecoration(
-            color: UpriseColors.white,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: UpriseColors.mediumGray),
-          ),
-          child: StreamBuilder<QuerySnapshot>(
-            stream: FirebaseFirestore.instance
-                .collection('activity_logs')
-                .where('user', isEqualTo: _currentUser?.displayName ?? '')
-                .orderBy('timestamp', descending: true)
-                .limit(20)
-                .snapshots(),
-            builder: (context, snapshot) {
-              if (!snapshot.hasData) {
-                return Center(child: CircularProgressIndicator());
-              }
-              final logs = snapshot.data!.docs;
-              if (logs.isEmpty) {
-                return Padding(
-                  padding: EdgeInsets.all(40),
-                  child: Center(child: Text('No recent activity', style: GoogleFonts.beVietnamPro(color: UpriseColors.darkGray))),
-                );
-              }
-              return Column(
-                children: logs.map((doc) {
-                  final data = doc.data() as Map<String, dynamic>;
-                  final timestamp = data['timestamp'] as Timestamp;
-                  final dateTime = timestamp.toDate(); // <-- FIX HERE
-                  return ListTile(
-                    leading: CircleAvatar(
-                      backgroundColor: UpriseColors.primaryDark.withOpacity(0.1),
-                      child: Icon(Icons.history, color: UpriseColors.primaryDark, size: 18),
-                    ),
-                    title: Text(data['action'] ?? 'Action', style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.w500)),
-                    subtitle: Text('${data['module'] ?? 'System'} • ${DateFormat('MMM dd, yyyy hh:mm a').format(dateTime)}'), // <-- FIX HERE
-                    trailing: Container(
-                      padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: (data['severity'] == 'error' || data['severity'] == 'critical')
-                            ? UpriseColors.error.withOpacity(0.1)
-                            : UpriseColors.success.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Text(data['severity']?.toUpperCase() ?? 'INFO',
-                          style: GoogleFonts.beVietnamPro(fontSize: 10, fontWeight: FontWeight.w600,
-                              color: (data['severity'] == 'error' || data['severity'] == 'critical') ? UpriseColors.error : UpriseColors.success)),
-                    ),
-                  );
-                }).toList(),
-              );
-            },
-          ),
-        ),
-      ],
-    ),
-  );
-}
+    final email = _currentUser?.email ?? '';
+    if (email.isEmpty) {
+      return const Center(child: Text('Unable to load logs: user not found'));
+    }
+
+    return FutureBuilder<QuerySnapshot>(
+      future: FirebaseFirestore.instance
+          .collection('activity_logs')
+          .where('user', isEqualTo: email)
+          .orderBy('timestamp', descending: true)
+          .limit(20)
+          .get(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (snapshot.hasError) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.error_outline, size: 48, color: UpriseColors.error),
+                const SizedBox(height: 12),
+                Text('Error loading logs: ${snapshot.error}',
+                    style: GoogleFonts.beVietnamPro(color: UpriseColors.darkGray)),
+              ],
+            ),
+          );
+        }
+        final logs = snapshot.data!.docs;
+        if (logs.isEmpty) {
+          return Center(
+            child: Padding(
+              padding: const EdgeInsets.all(40),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.history, size: 48, color: UpriseColors.mediumGray),
+                  const SizedBox(height: 16),
+                  Text('No recent activity found.',
+                      style: GoogleFonts.beVietnamPro(color: UpriseColors.darkGray)),
+                  const SizedBox(height: 8),
+                  Text('Actions you perform will appear here.',
+                      style: GoogleFonts.beVietnamPro(fontSize: 12, color: UpriseColors.darkGray)),
+                ],
+              ),
+            ),
+          );
+        }
+        return ListView.separated(
+          padding: const EdgeInsets.all(16),
+          itemCount: logs.length,
+          separatorBuilder: (_, __) => const Divider(),
+          itemBuilder: (context, index) {
+            final data = logs[index].data() as Map<String, dynamic>;
+            final timestamp = data['timestamp'] as Timestamp;
+            final dateTime = timestamp.toDate();
+            return ListTile(
+              leading: CircleAvatar(
+                backgroundColor: UpriseColors.primaryDark.withOpacity(0.1),
+                child: Icon(Icons.history, color: UpriseColors.primaryDark, size: 18),
+              ),
+              title: Text(data['action'] ?? 'Action',
+                  style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.w500)),
+              subtitle: Text(
+                '${data['module'] ?? 'System'} • ${DateFormat('MMM dd, yyyy hh:mm a').format(dateTime)}',
+                style: GoogleFonts.beVietnamPro(fontSize: 12),
+              ),
+              trailing: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: (data['severity'] == 'error' || data['severity'] == 'critical')
+                      ? UpriseColors.error.withOpacity(0.1)
+                      : UpriseColors.success.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  data['severity']?.toUpperCase() ?? 'INFO',
+                  style: GoogleFonts.beVietnamPro(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w600,
+                    color: (data['severity'] == 'error' || data['severity'] == 'critical')
+                        ? UpriseColors.error
+                        : UpriseColors.success,
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
 }
