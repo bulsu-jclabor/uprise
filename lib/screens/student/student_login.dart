@@ -3,7 +3,6 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../auth_service.dart';
-import 'student_home_screen.dart';
 
 class StudentLogin extends StatefulWidget {
   const StudentLogin({super.key});
@@ -22,16 +21,12 @@ class _StudentLoginState extends State<StudentLogin> {
   final AuthService _auth = AuthService();
 
   Future<void> _login() async {
-    if (_emailController.text.trim().isEmpty) {
-      _showError('Please enter your email address');
+    if (_emailController.text.trim().isEmpty || _passwordController.text.trim().isEmpty) {
+      _showError('Please enter email and password');
       return;
     }
 
-    if (_passwordController.text.trim().isEmpty) {
-      _showError('Please enter your password');
-      return;
-    }
-
+    if (!mounted) return;
     setState(() => _isLoading = true);
 
     try {
@@ -45,20 +40,13 @@ class _StudentLoginState extends State<StudentLogin> {
       if (user == null) {
         _showError('Invalid email or password');
       } else {
-        // Navigate directly to StudentHomeScreen after successful login
-        if (mounted) {
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (_) => StudentHomeScreen()),
-          );
-        }
+        // ✅ No manual navigation here.
+        // RoleRouter will automatically redirect to StudentHomeScreen.
       }
-
     } on FirebaseAuthException catch (e) {
       if (!mounted) return;
 
       String message = 'Login failed';
-
       if (e.code == 'user-not-found') {
         message = 'No account found with this email';
       } else if (e.code == 'wrong-password') {
@@ -68,18 +56,16 @@ class _StudentLoginState extends State<StudentLogin> {
       }
 
       _showError(message);
-    } catch (e) {
-      if (mounted) {
-        _showError('An error occurred. Please try again.');
-      }
+    } catch (_) {
+      if (mounted) _showError('An error occurred. Please try again.');
     }
 
-    if (mounted) {
-      setState(() => _isLoading = false);
-    }
+    if (!mounted) return;
+    setState(() => _isLoading = false);
   }
 
   void _showError(String message) {
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
@@ -87,6 +73,13 @@ class _StudentLoginState extends State<StudentLogin> {
         behavior: SnackBarBehavior.floating,
       ),
     );
+  }
+
+  @override
+  void dispose() {
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
   }
 
   @override
@@ -102,7 +95,6 @@ class _StudentLoginState extends State<StudentLogin> {
                   Container(color: Colors.grey[200]),
             ),
           ),
-
           Positioned.fill(
             child: Container(
               decoration: BoxDecoration(
@@ -117,7 +109,6 @@ class _StudentLoginState extends State<StudentLogin> {
               ),
             ),
           ),
-
           SafeArea(
             child: Center(
               child: SingleChildScrollView(
@@ -126,7 +117,6 @@ class _StudentLoginState extends State<StudentLogin> {
                   constraints: const BoxConstraints(maxWidth: 520),
                   child: Column(
                     children: [
-
                       Align(
                         alignment: Alignment.centerLeft,
                         child: Text(
@@ -138,9 +128,7 @@ class _StudentLoginState extends State<StudentLogin> {
                           ),
                         ),
                       ),
-
                       const SizedBox(height: 18),
-
                       Container(
                         padding: const EdgeInsets.all(28),
                         decoration: BoxDecoration(
@@ -156,18 +144,14 @@ class _StudentLoginState extends State<StudentLogin> {
                         ),
                         child: Column(
                           children: [
-
                             const SizedBox(height: 20),
-
                             TextField(
                               controller: _emailController,
                               decoration: const InputDecoration(
                                 labelText: 'Email Address',
                               ),
                             ),
-
                             const SizedBox(height: 18),
-
                             TextField(
                               controller: _passwordController,
                               obscureText: _obscurePassword,
@@ -180,23 +164,20 @@ class _StudentLoginState extends State<StudentLogin> {
                                         : Icons.visibility,
                                   ),
                                   onPressed: () {
+                                    if (!mounted) return;
                                     setState(() {
-                                      _obscurePassword =
-                                          !_obscurePassword;
+                                      _obscurePassword = !_obscurePassword;
                                     });
                                   },
                                 ),
                               ),
                             ),
-
                             const SizedBox(height: 24),
-
                             SizedBox(
                               width: double.infinity,
                               height: 52,
                               child: ElevatedButton(
-                                onPressed:
-                                    _isLoading ? null : _login,
+                                onPressed: _isLoading ? null : _login,
                                 child: _isLoading
                                     ? const CircularProgressIndicator(
                                         color: Colors.white,
@@ -204,7 +185,6 @@ class _StudentLoginState extends State<StudentLogin> {
                                     : const Text('Login'),
                               ),
                             ),
-
                           ],
                         ),
                       ),

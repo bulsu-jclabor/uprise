@@ -75,8 +75,13 @@ class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  // Register - for guests signing up
-  Future<User?> registerWithEmail(String email, String password, String fullName) async {
+  // Register - specify role (default: student)
+  Future<User?> registerWithEmail(
+    String email,
+    String password,
+    String fullName, {
+    String role = 'student', // default role is student
+  }) async {
     try {
       UserCredential result = await _auth.createUserWithEmailAndPassword(
         email: email,
@@ -87,12 +92,12 @@ class AuthService {
       await _firestore.collection('users').doc(result.user!.uid).set({
         'uid': result.user!.uid,
         'email': email,
-        'fullName': fullName,  // Changed from 'name' to 'fullName'
-        'role': 'guest',
+        'fullName': fullName,
+        'role': role, // now flexible, defaults to student
         'createdAt': Timestamp.now(),
       });
       
-      print('✅ User registered: $email with role: guest');
+      print('✅ User registered: $email with role: $role');
       return result.user;
     } catch (e) {
       print('❌ Registration error: $e');
@@ -120,18 +125,17 @@ class AuthService {
     try {
       DocumentSnapshot doc = await _firestore.collection('users').doc(uid).get();
       if (doc.exists) {
-        // Safe way to get role - default to 'guest' if missing
-        final role = doc.data() as Map<String, dynamic>?;
-        final roleValue = role?['role'] as String?;
+        final data = doc.data() as Map<String, dynamic>?;
+        final roleValue = data?['role'] as String?;
         print('✅ Role found for $uid: $roleValue');
-        return roleValue ?? 'guest';
+        return roleValue ?? 'student'; // default to student if missing
       } else {
         print('⚠️ No user document found for uid: $uid');
-        return 'guest';
+        return 'student';
       }
     } catch (e) {
       print('❌ Error getting role: $e');
-      return 'guest';
+      return 'student';
     }
   }
 
