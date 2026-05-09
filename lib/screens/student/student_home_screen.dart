@@ -127,9 +127,13 @@ class _HomeContent extends StatelessWidget {
         ),
         
         // Announcements Feed
-        const AnnouncementsFeed(),
-        
-        const SliverToBoxAdapter(child: SizedBox(height: 80)),
+        const SliverToBoxAdapter(
+          child: AnnouncementsFeed(),
+        ),
+
+        const SliverToBoxAdapter(
+          child: SizedBox(height: 80),
+        ),
       ],
     );
   }
