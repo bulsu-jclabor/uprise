@@ -9,44 +9,6 @@ import 'package:intl/intl.dart';
 import '../../theme/app_theme.dart';
 import 'admin_login.dart';
 
-// ============ ACTIVITY LOGGER ============
-class ActivityLogger {
-  static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  static Future<void> log({
-    required String action,
-    required String module,
-    String severity = 'info',
-    Map<String, dynamic>? details,
-  }) async {
-    final user = FirebaseAuth.instance.currentUser;
-    final userName = user?.email ?? 'Unknown User';
-    await _firestore.collection('activity_logs').add({
-      'user': userName,
-      'action': action,
-      'module': module,
-      'severity': severity,
-      'timestamp': FieldValue.serverTimestamp(),
-      'ipAddress': '',
-      'details': details,
-    });
-  }
-}
-
-// ============ SIDEBAR ICONS ============
-const Map<String, IconData> _sidebarIcons = {
-  'Dashboard': Icons.dashboard_outlined,
-  'Organization Management': Icons.business_outlined,
-  'Student Accounts': Icons.people_outline,
-  'Adviser Roles': Icons.school_outlined,
-  'Event Proposals': Icons.pending_actions_outlined,
-  'College Event Calendar': Icons.calendar_today_outlined,
-  'Letter Request': Icons.mail_outline,
-  'External Account': Icons.link_outlined,
-  'Reports Management': Icons.assessment_outlined,
-  'Activity Logs': Icons.history_outlined,
-  'Settings': Icons.settings_outlined,
-};
-
 class AdminSettings extends StatefulWidget {
   const AdminSettings({super.key});
 
@@ -148,11 +110,6 @@ class _AdminSettingsState extends State<AdminSettings>
         _profileImageBase64 = base64String;
         _selectedImageFile = null;
       });
-      await ActivityLogger.log(
-        action: 'Updated profile picture',
-        module: 'Admin Settings',
-        severity: 'info',
-      );
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Profile picture updated')),
       );
@@ -196,11 +153,6 @@ class _AdminSettingsState extends State<AdminSettings>
       'eventReminders': _eventReminders,
       'updatedAt': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
-    await ActivityLogger.log(
-      action: 'Updated notification preferences',
-      module: 'Admin Settings',
-      severity: 'info',
-    );
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Settings saved')),
@@ -227,11 +179,6 @@ class _AdminSettingsState extends State<AdminSettings>
           'email': _emailController.text,
           'updatedAt': FieldValue.serverTimestamp(),
         }, SetOptions(merge: true));
-        await ActivityLogger.log(
-          action: 'Updated profile name to ${_fullNameController.text}',
-          module: 'Admin Settings',
-          severity: 'info',
-        );
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Profile updated')),
@@ -267,11 +214,6 @@ class _AdminSettingsState extends State<AdminSettings>
       await _currentUser!.updatePassword(_newPasswordController.text);
       _newPasswordController.clear();
       _confirmPasswordController.clear();
-      await ActivityLogger.log(
-        action: 'Changed account password',
-        module: 'Admin Settings',
-        severity: 'info',
-      );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Password changed successfully')),
@@ -288,235 +230,68 @@ class _AdminSettingsState extends State<AdminSettings>
     }
   }
 
-  // ========== SIDEBAR (identical to dashboard) ==========
-  Widget _buildSidebar() {
-    final titles = [
-      'Dashboard',
-      'Organization Management',
-      'Student Accounts',
-      'Adviser Roles',
-      'Event Proposals',
-      'College Event Calendar',
-      'Letter Request',
-      'External Account',
-      'Reports Management',
-      'Activity Logs',
-      'Settings',
-    ];
-
-    return Container(
-      width: 260,
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [UpriseColors.primaryDark, UpriseColors.primaryLight],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-      ),
-      child: Column(
-        children: [
-          const SizedBox(height: 30),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Container(
-                width: 36,
-                height: 36,
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.all(6.0),
-                  child: Image.asset(
-                    'assets/images/logo.png',
-                    fit: BoxFit.contain,
-                    errorBuilder: (_, __, ___) => const Icon(Icons.school, color: Colors.white),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Text(
-                "UPRISE",
-                style: GoogleFonts.beVietnamPro(
-                  color: UpriseColors.white,
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 2,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'CICT Organization Management',
-            style: GoogleFonts.beVietnamPro(
-              color: UpriseColors.white.withOpacity(0.7),
-              fontSize: 11,
-            ),
-          ),
-          const SizedBox(height: 30),
-          Divider(color: UpriseColors.white.withOpacity(0.2), thickness: 1),
-          const SizedBox(height: 16),
-          Expanded(
-            child: ListView.builder(
-              itemCount: titles.length,
-              itemBuilder: (context, index) {
-                final isSelected = titles[index] == 'Settings';
-                return GestureDetector(
-                  onTap: () {
-                    if (titles[index] == 'Settings') return;
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('${titles[index]} is not available from Settings page.'),
-                        duration: const Duration(seconds: 1),
-                      ),
-                    );
-                  },
-                  child: Container(
-                    margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                    padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
-                    decoration: BoxDecoration(
-                      color: isSelected ? UpriseColors.white.withOpacity(0.2) : Colors.transparent,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(_sidebarIcons[titles[index]]!, color: UpriseColors.white, size: 18),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Text(
-                            titles[index],
-                            overflow: TextOverflow.ellipsis,
-                            style: GoogleFonts.beVietnamPro(
-                              color: UpriseColors.white,
-                              fontSize: 13,
-                              fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
-          Divider(color: UpriseColors.white.withOpacity(0.2), thickness: 1),
-          GestureDetector(
-            onTap: () {
-              showDialog(
-                context: context,
-                builder: (ctx) => AlertDialog(
-                  title: const Text('Confirm Logout'),
-                  content: const Text('Are you sure you want to logout?'),
-                  actions: [
-                    TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-                    ElevatedButton(
-                      onPressed: () async {
-                        Navigator.pop(ctx);
-                        await FirebaseAuth.instance.signOut();
-                        Navigator.pushReplacement(
-                          context,
-                          MaterialPageRoute(builder: (_) => AdminLogin()),
-                        );
-                      },
-                      style: ElevatedButton.styleFrom(backgroundColor: UpriseColors.error),
-                      child: const Text('Logout'),
-                    ),
-                  ],
-                ),
-              );
-            },
-            child: Container(
-              margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
-              child: Row(
-                children: [
-                  Icon(Icons.logout, color: UpriseColors.white.withOpacity(0.75), size: 18),
-                  const SizedBox(width: 12),
-                  Text('Logout', style: GoogleFonts.beVietnamPro(color: UpriseColors.white.withOpacity(0.75), fontSize: 13)),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 20),
-        ],
-      ),
-    );
-  }
-
-  // ========== MAIN BUILD ==========
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: UpriseColors.lightGray,
-      body: Row(
+      body: Column(
         children: [
-          _buildSidebar(),
-          Expanded(
-            child: Column(
+          // Header
+          Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: UpriseColors.white,
+              border: Border(bottom: BorderSide(color: UpriseColors.mediumGray)),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Header (fixed – no cut‑off)
-                Container(
-                  padding: const EdgeInsets.all(24),
-                  decoration: BoxDecoration(
-                    color: UpriseColors.white,
-                    border: Border(bottom: BorderSide(color: UpriseColors.mediumGray)),
-                  ),
-                  child: Row(
+                Expanded(
+                  child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Admin System Settings',
-                              style: GoogleFonts.beVietnamPro(fontSize: 24, fontWeight: FontWeight.bold, color: UpriseColors.charcoal),
-                              softWrap: true,
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              'Manage your profile, security, and notification preferences.',
-                              style: GoogleFonts.beVietnamPro(fontSize: 14, color: UpriseColors.darkGray),
-                              softWrap: true,
-                            ),
-                          ],
-                        ),
+                      Text(
+                        'Admin System Settings',
+                        style: GoogleFonts.beVietnamPro(fontSize: 24, fontWeight: FontWeight.bold, color: UpriseColors.charcoal),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Manage your profile, security, and notification preferences.',
+                        style: GoogleFonts.beVietnamPro(fontSize: 14, color: UpriseColors.darkGray),
                       ),
                     ],
                   ),
                 ),
-                // Tab Bar
-                Container(
-                  color: UpriseColors.white,
-                  child: TabBar(
-                    controller: _tabController,
-                    tabs: const [
-                      Tab(text: 'Profile'),
-                      Tab(text: 'Preferences'),
-                      Tab(text: 'Security'),
-                      Tab(text: 'Audit Logs'),
-                    ],
-                    labelColor: UpriseColors.primaryDark,
-                    unselectedLabelColor: UpriseColors.darkGray,
-                    indicatorColor: UpriseColors.primaryDark,
-                    indicatorWeight: 3,
-                    labelStyle: GoogleFonts.beVietnamPro(fontWeight: FontWeight.w600),
-                  ),
-                ),
-                Expanded(
-                  child: TabBarView(
-                    controller: _tabController,
-                    children: [
-                      _buildProfileTab(),
-                      _buildPreferencesTab(),
-                      _buildSecurityTab(),
-                      _buildAuditLogsTab(),
-                    ],
-                  ),
-                ),
+              ],
+            ),
+          ),
+          // Tab Bar
+          Container(
+            color: UpriseColors.white,
+            child: TabBar(
+              controller: _tabController,
+              tabs: const [
+                Tab(text: 'Profile'),
+                Tab(text: 'Preferences'),
+                Tab(text: 'Security'),
+                Tab(text: 'Audit Logs'),
+              ],
+              labelColor: UpriseColors.primaryDark,
+              unselectedLabelColor: UpriseColors.darkGray,
+              indicatorColor: UpriseColors.primaryDark,
+              indicatorWeight: 3,
+              labelStyle: GoogleFonts.beVietnamPro(fontWeight: FontWeight.w600),
+            ),
+          ),
+          // Tab Bar View
+          Expanded(
+            child: TabBarView(
+              controller: _tabController,
+              children: [
+                _buildProfileTab(),
+                _buildPreferencesTab(),
+                _buildSecurityTab(),
+                _buildAuditLogsTab(),
               ],
             ),
           ),
@@ -540,7 +315,7 @@ class _AdminSettingsState extends State<AdminSettings>
             decoration: BoxDecoration(
               color: UpriseColors.white,
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: UpriseColors.mediumGray),
+              border: Border.all(color: UpriseColors.primaryDark, width: 1),
             ),
             child: Column(
               children: [
@@ -587,7 +362,7 @@ class _AdminSettingsState extends State<AdminSettings>
             decoration: BoxDecoration(
               color: UpriseColors.white,
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: UpriseColors.mediumGray),
+              border: Border.all(color: UpriseColors.primaryDark, width: 1),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -648,7 +423,7 @@ class _AdminSettingsState extends State<AdminSettings>
         decoration: BoxDecoration(
           color: UpriseColors.white,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: UpriseColors.mediumGray),
+          border: Border.all(color: UpriseColors.primaryDark, width: 1),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -727,7 +502,7 @@ class _AdminSettingsState extends State<AdminSettings>
             decoration: BoxDecoration(
               color: UpriseColors.white,
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: UpriseColors.mediumGray),
+              border: Border.all(color: UpriseColors.primaryDark, width: 1),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -786,13 +561,13 @@ class _AdminSettingsState extends State<AdminSettings>
             decoration: BoxDecoration(
               color: UpriseColors.white,
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: UpriseColors.mediumGray),
+              border: Border.all(color: UpriseColors.primaryDark, width: 1),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Two‑Factor Authentication',
+                  'Two-Factor Authentication',
                   style: GoogleFonts.beVietnamPro(fontSize: 18, fontWeight: FontWeight.bold, color: UpriseColors.charcoal),
                 ),
                 const SizedBox(height: 8),
