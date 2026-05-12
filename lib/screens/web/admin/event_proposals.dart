@@ -127,7 +127,7 @@ class _EventProposalsState extends State<EventProposals> {
         decoration: BoxDecoration(
           color: UpriseColors.white,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: UpriseColors.mediumGray),
+          border: Border.all(color: UpriseColors.primaryDark, width: 1),
         ),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text(label, style: GoogleFonts.beVietnamPro(fontSize: 11, color: UpriseColors.darkGray, fontWeight: FontWeight.w600)),
@@ -176,7 +176,7 @@ class _EventProposalsState extends State<EventProposals> {
             decoration: BoxDecoration(
               color: UpriseColors.white,
               borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: UpriseColors.mediumGray),
+              border: Border.all(color: UpriseColors.primaryDark, width: 1),
             ),
             child: DropdownButtonHideUnderline(
               child: DropdownButton<String>(
@@ -243,7 +243,7 @@ class _EventProposalsState extends State<EventProposals> {
       decoration: BoxDecoration(
         color: UpriseColors.white,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: UpriseColors.mediumGray),
+        border: Border.all(color: UpriseColors.primaryDark, width: 1),
       ),
       child: Column(children: [
         // Header

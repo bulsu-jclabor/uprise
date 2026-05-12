@@ -856,7 +856,7 @@ class _ReportsManagementState extends State<ReportsManagement>
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 12),
           decoration: BoxDecoration(
-            border: Border.all(color: UpriseColors.mediumGray),
+            border: Border.all(color: UpriseColors.primaryDark, width: 1),
             borderRadius: BorderRadius.circular(8),
             color: UpriseColors.white,
           ),
@@ -910,7 +910,7 @@ class _ReportsManagementState extends State<ReportsManagement>
         decoration: BoxDecoration(
           color: UpriseColors.white,
           borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: UpriseColors.mediumGray),
+          border: Border.all(color: UpriseColors.primaryDark, width: 1),
         ),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text(label, style: GoogleFonts.beVietnamPro(fontSize: 11, fontWeight: FontWeight.w600, color: UpriseColors.darkGray)),
@@ -941,7 +941,7 @@ class _ReportsManagementState extends State<ReportsManagement>
       decoration: BoxDecoration(
         color: UpriseColors.white,
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: UpriseColors.mediumGray),
+        border: Border.all(color: UpriseColors.primaryDark, width: 1),
       ),
       child: Column(children: [
         // toolbar
@@ -1170,7 +1170,7 @@ class _ReportsManagementState extends State<ReportsManagement>
       decoration: BoxDecoration(
         color: UpriseColors.white,
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: UpriseColors.mediumGray),
+        border: Border.all(color: UpriseColors.primaryDark, width: 1),
       ),
       child: Row(children: [
         Expanded(child: SingleChildScrollView(
@@ -1275,7 +1275,7 @@ class _ReportsManagementState extends State<ReportsManagement>
       decoration: BoxDecoration(
         color: UpriseColors.white,
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: UpriseColors.mediumGray),
+        border: Border.all(color: UpriseColors.primaryDark, width: 1),
       ),
       child: Column(children: [
         Container(
@@ -1454,7 +1454,7 @@ class _ReportsManagementState extends State<ReportsManagement>
               decoration: BoxDecoration(
                 color: UpriseColors.white,
                 borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: UpriseColors.mediumGray),
+                border: Border.all(color: UpriseColors.primaryDark, width: 1),
               ),
               child: Column(children: [
                 Row(children: [
@@ -1602,7 +1602,7 @@ class _ReportsManagementState extends State<ReportsManagement>
                       decoration: BoxDecoration(
                         color: UpriseColors.white,
                         borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: UpriseColors.mediumGray),
+                        border: Border.all(color: UpriseColors.primaryDark, width: 1),
                       ),
                       child: Row(mainAxisSize: MainAxisSize.min, children: [
                         Container(
@@ -1636,7 +1636,7 @@ class _ReportsManagementState extends State<ReportsManagement>
       decoration: BoxDecoration(
         color: UpriseColors.white,
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: UpriseColors.mediumGray),
+        border: Border.all(color: UpriseColors.primaryDark, width: 1),
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Text(label, style: GoogleFonts.beVietnamPro(fontSize: 11, fontWeight: FontWeight.w600, color: UpriseColors.darkGray)),
@@ -1674,7 +1674,7 @@ class _ReportsManagementState extends State<ReportsManagement>
     decoration: BoxDecoration(
       color: UpriseColors.white,
       borderRadius: BorderRadius.circular(10),
-      border: Border.all(color: UpriseColors.mediumGray),
+      border: Border.all(color: UpriseColors.primaryDark, width: 1),
     ),
     child: child,
   );
@@ -1732,7 +1732,7 @@ class _ReportsManagementState extends State<ReportsManagement>
     decoration: BoxDecoration(
       color: UpriseColors.white,
       borderRadius: BorderRadius.circular(10),
-      border: Border.all(color: UpriseColors.mediumGray),
+      border: Border.all(color: UpriseColors.primaryDark, width: 1),
     ),
     child: Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
       const Icon(Icons.bar_chart_outlined, size: 56, color: UpriseColors.mediumGray),

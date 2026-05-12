@@ -137,7 +137,7 @@ class _ExternalAccountState extends State<ExternalAccount> {
         decoration: BoxDecoration(
           color: UpriseColors.white,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: UpriseColors.mediumGray),
+          border: Border.all(color: UpriseColors.primaryDark, width: 1),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -189,7 +189,7 @@ class _ExternalAccountState extends State<ExternalAccount> {
             decoration: BoxDecoration(
               color: UpriseColors.white,
               borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: UpriseColors.mediumGray),
+              border: Border.all(color: UpriseColors.primaryDark, width: 1),
             ),
             child: DropdownButtonHideUnderline(
               child: DropdownButton<String>(
@@ -280,7 +280,7 @@ class _ExternalAccountState extends State<ExternalAccount> {
             decoration: BoxDecoration(
               color: UpriseColors.white,
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: UpriseColors.mediumGray),
+              border: Border.all(color: UpriseColors.primaryDark, width: 1),
             ),
             child: Column(
               children: [
@@ -328,7 +328,7 @@ class _ExternalAccountState extends State<ExternalAccount> {
           decoration: BoxDecoration(
             color: UpriseColors.white,
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: UpriseColors.mediumGray),
+            border: Border.all(color: UpriseColors.primaryDark, width: 1),
           ),
           child: Column(
             children: [

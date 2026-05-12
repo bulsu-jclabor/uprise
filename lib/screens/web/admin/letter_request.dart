@@ -138,25 +138,25 @@ class _LetterRequestState extends State<LetterRequest> {
   Widget _statCard(String label, String value, Color color) {
     return Expanded(
       child: Container(
-        padding: const EdgeInsets.all(16),
+        padding: EdgeInsets.all(18),
         decoration: BoxDecoration(
           color: UpriseColors.white,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: UpriseColors.mediumGray),
+          border: Border.all(color: UpriseColors.primaryDark, width: 1),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(label, style: GoogleFonts.beVietnamPro(fontSize: 11, fontWeight: FontWeight.w600, color: UpriseColors.darkGray)),
-            const SizedBox(height: 6),
-            Text(value, style: GoogleFonts.beVietnamPro(fontSize: 28, fontWeight: FontWeight.bold, color: color)),
+            Text(label, style: TextStyle(fontSize: 13, color: UpriseColors.darkGray, fontWeight: FontWeight.w500)),
+            SizedBox(height: 12),
+            Text(value, style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: UpriseColors.primaryDark)),
           ],
         ),
       ),
     );
   }
 
-  // ---------- TOOLBAR (unchanged) ----------
+  // ---------- TOOLBAR ----------
   Widget _buildToolbar() {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 24),
@@ -169,89 +169,67 @@ class _LetterRequestState extends State<LetterRequest> {
                 controller: _searchController,
                 decoration: InputDecoration(
                   hintText: 'Search documents...',
-                  hintStyle: GoogleFonts.beVietnamPro(fontSize: 13, color: UpriseColors.darkGray),
-                  prefixIcon: const Icon(Icons.search, size: 18, color: UpriseColors.darkGray),
+                  hintStyle: TextStyle(fontSize: 13, color: UpriseColors.darkGray),
+                  prefixIcon: Icon(Icons.search, size: 20, color: UpriseColors.darkGray),
                   filled: true,
-                  fillColor: UpriseColors.white,
+                  fillColor: UpriseColors.lightGray,
                   border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    borderSide: BorderSide(color: UpriseColors.mediumGray),
+                    borderRadius: BorderRadius.circular(24),
+                    borderSide: BorderSide.none,
                   ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    borderSide: BorderSide(color: UpriseColors.mediumGray),
-                  ),
-                  contentPadding: const EdgeInsets.symmetric(vertical: 0),
+                  contentPadding: EdgeInsets.symmetric(vertical: 0, horizontal: 16),
                 ),
                 onChanged: (_) => setState(() => _currentPage = 1),
               ),
             ),
           ),
-          const SizedBox(width: 16),
-          Container(
-            height: 40,
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            decoration: BoxDecoration(
-              color: UpriseColors.white,
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: UpriseColors.mediumGray),
-            ),
-            child: DropdownButtonHideUnderline(
+          Padding(
+            padding: EdgeInsets.only(left: 12),
+            child: Container(
+              padding: EdgeInsets.symmetric(horizontal: 12, vertical: 0),
+              decoration: BoxDecoration(
+                border: Border.all(color: UpriseColors.primaryDark, width: 1),
+                borderRadius: BorderRadius.circular(24),
+              ),
               child: DropdownButton<String>(
                 value: _statusFilter,
+                hint: Text('Filter', style: TextStyle(fontSize: 13, color: UpriseColors.darkGray)),
+                underline: SizedBox(),
                 items: ['All', 'Pending', 'Approved', 'Rejected', 'Archived']
                     .map((status) => DropdownMenuItem(
                           value: status,
-                          child: Row(children: [
-                            Icon(_statusIcon(status), size: 16, color: _statusColor(status)),
-                            const SizedBox(width: 8),
-                            Text(status, style: GoogleFonts.beVietnamPro(fontSize: 13)),
-                          ]),
+                          child: Text(status),
                         ))
                     .toList(),
                 onChanged: (value) => setState(() {
                   _statusFilter = value!;
                   _currentPage = 1;
                 }),
-                style: GoogleFonts.beVietnamPro(fontSize: 13, color: UpriseColors.charcoal),
-                icon: Icon(Icons.arrow_drop_down, color: UpriseColors.darkGray),
               ),
             ),
           ),
-          const SizedBox(width: 12),
-          OutlinedButton.icon(
-            onPressed: _exportToCSV,
-            icon: const Icon(Icons.download, size: 18),
-            label: const Text('Export'),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: UpriseColors.primaryDark,
-              side: BorderSide(color: UpriseColors.mediumGray),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          Padding(
+            padding: EdgeInsets.only(left: 12),
+            child: ElevatedButton.icon(
+              onPressed: () {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Export feature coming soon')),
+                );
+              },
+              icon: Icon(Icons.download, size: 18),
+              label: Text('Export', style: TextStyle(fontSize: 13)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: UpriseColors.white,
+                foregroundColor: UpriseColors.primaryDark,
+                side: BorderSide(color: UpriseColors.primaryDark),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                padding: EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              ),
             ),
           ),
         ],
       ),
     );
-  }
-
-  IconData _statusIcon(String status) {
-    switch (status) {
-      case 'Pending': return Icons.pending_actions;
-      case 'Approved': return Icons.check_circle;
-      case 'Rejected': return Icons.cancel;
-      case 'Archived': return Icons.archive;
-      default: return Icons.list;
-    }
-  }
-
-  Color _statusColor(String status) {
-    switch (status) {
-      case 'Pending': return UpriseColors.warning;
-      case 'Approved': return UpriseColors.success;
-      case 'Rejected': return UpriseColors.error;
-      case 'Archived': return UpriseColors.darkGray;
-      default: return UpriseColors.primaryDark;
-    }
   }
 
   // ---------- TABLE (unchanged) ----------
@@ -286,7 +264,7 @@ class _LetterRequestState extends State<LetterRequest> {
             decoration: BoxDecoration(
               color: UpriseColors.white,
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: UpriseColors.mediumGray),
+              border: Border.all(color: UpriseColors.primaryDark, width: 1),
             ),
             child: Column(
               children: [
@@ -332,7 +310,7 @@ class _LetterRequestState extends State<LetterRequest> {
           decoration: BoxDecoration(
             color: UpriseColors.white,
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: UpriseColors.mediumGray),
+            border: Border.all(color: UpriseColors.primaryDark, width: 1),
           ),
           child: Column(
             children: [

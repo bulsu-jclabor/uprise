@@ -80,7 +80,11 @@ dependencies:
   mailer: ^6.0.1
   printing: ^5.12.0
   pdf: ^3.10.7
+<<<<<<< HEAD
   shared_preferences: ^2.5.5
+=======
+  firebase_storage: ^12.4.10
+>>>>>>> 2809f40abcd299c75e3e9155329fcccd3241bf35
 
   # REMOVE MUNA ITO (sila ang may problema)
   # image_picker: ^1.0.0
