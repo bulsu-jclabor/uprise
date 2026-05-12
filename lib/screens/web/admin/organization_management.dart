@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -657,7 +658,6 @@ class _OrganizationManagementState extends State<OrganizationManagement> {
           ElevatedButton(
             onPressed: () async {
               await FirebaseFirestore.instance.collection('organizations').doc(org.id).update({'status': newStatus});
-              // === LOG ACTIVITY ===
               await ActivityLogger.log(
                 action: isArchived ? 'Restored organization: ${org.name}' : 'Archived organization: ${org.name}',
                 module: 'Organizations',
@@ -712,7 +712,7 @@ class _OrganizationManagementState extends State<OrganizationManagement> {
   String _monthAbbr(int m) => ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'][m-1];
 }
 
-// ---------- CREATE ORGANIZATION DIALOG (with logging) ----------
+// ---------- ENHANCED CREATE ORGANIZATION DIALOG (with multiple advisers) ----------
 class CreateOrganizationDialog extends StatefulWidget {
   final VoidCallback onCreated;
   const CreateOrganizationDialog({super.key, required this.onCreated});
@@ -726,24 +726,120 @@ class _CreateOrganizationDialogState extends State<CreateOrganizationDialog> {
   final _shortNameCtrl = TextEditingController();
   String _type = 'Academic Organization';
   final _descCtrl = TextEditingController();
-  final _advNameCtrl = TextEditingController();
-  final _advTitleCtrl = TextEditingController();
-  final _advEmailCtrl = TextEditingController();
-  final _advPhoneCtrl = TextEditingController();
   final List<String> _categories = [];
   final _catCtrl = TextEditingController();
   File? _logoFile;
   bool _isLoading = false;
 
+  // Primary adviser
+  final _primaryNameCtrl = TextEditingController();
+  final _primaryTitleCtrl = TextEditingController();
+  final _primaryEmailCtrl = TextEditingController();
+  final _primaryPhoneCtrl = TextEditingController();
+
+  // Additional advisers
+  List<Map<String, TextEditingController>> _additionalAdvisers = [];
+
+  @override
+  void initState() {
+    super.initState();
+    // Start with one empty additional adviser
+    _addAdviser();
+  }
+
+  void _addAdviser() {
+    setState(() {
+      _additionalAdvisers.add({
+        'name': TextEditingController(),
+        'title': TextEditingController(),
+        'email': TextEditingController(),
+        'phone': TextEditingController(),
+      });
+    });
+  }
+
+  void _removeAdviser(int index) {
+    setState(() {
+      _additionalAdvisers[index].forEach((_, ctrl) => ctrl.dispose());
+      _additionalAdvisers.removeAt(index);
+    });
+  }
+
+  // Generate strong password
+  String _generatePassword() {
+    const upper = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+    const lower = 'abcdefghjkmnpqrstuvwxyz';
+    const digits = '23456789';
+    const special = '@#\$!';
+    final rand = Random.secure();
+    final chars = [
+      upper[rand.nextInt(upper.length)],
+      upper[rand.nextInt(upper.length)],
+      lower[rand.nextInt(lower.length)],
+      lower[rand.nextInt(lower.length)],
+      digits[rand.nextInt(digits.length)],
+      digits[rand.nextInt(digits.length)],
+      special[rand.nextInt(special.length)],
+      ...List.generate(3, (_) {
+        final all = upper + lower + digits + special;
+        return all[rand.nextInt(all.length)];
+      }),
+    ]..shuffle(rand);
+    return chars.join();
+  }
+
+  Future<void> _sendCredentialsEmail({
+    required String toEmail,
+    required String orgName,
+    required String adviserName,
+    required String password,
+  }) async {
+    await FirebaseFirestore.instance.collection('mail').add({
+      'to': [toEmail],
+      'message': {
+        'subject': '🎓 UPRISE Portal — Your Organization Login Credentials',
+        'html': '''
+          <div style="font-family: sans-serif; max-width: 520px; margin: auto; border: 1px solid #FDE68A; border-radius: 12px; overflow: hidden;">
+            <div style="background: linear-gradient(135deg, #D97706, #B45309); padding: 24px 32px;">
+              <h1 style="color: white; margin: 0; font-size: 24px; letter-spacing: 2px;">UPRISE</h1>
+              <p style="color: rgba(255,255,255,0.85); margin: 4px 0 0; font-size: 13px;">CICT Organization Management Portal</p>
+            </div>
+            <div style="padding: 32px;">
+              <p style="font-size: 15px; color: #1E293B;">Hi <strong>$adviserName</strong>,</p>
+              <p style="color: #475569; font-size: 14px; line-height: 1.6;">
+                Your organization <strong>$orgName</strong> has been registered on the UPRISE Portal.
+                Below are your login credentials. Please keep them secure and change your password after first login.
+              </p>
+              <div style="background: #FFF7ED; border: 1px solid #FDE68A; border-radius: 10px; padding: 20px 24px; margin: 24px 0;">
+                <p style="margin: 0 0 10px; font-size: 13px; color: #92400E; font-weight: 600; letter-spacing: 1px;">YOUR LOGIN CREDENTIALS</p>
+                <table style="width: 100%; font-size: 14px; color: #1E293B;">
+                  <tr><td style="padding: 6px 0; color: #64748B; width: 120px;">Email</td><td style="font-weight: 600;">$toEmail</td></tr>
+                  <tr><td style="padding: 6px 0; color: #64748B;">Password</td><td style="font-weight: 600; font-family: monospace; font-size: 16px; letter-spacing: 1px; color: #B45309;">$password</td></tr>
+                  <tr><td style="padding: 6px 0; color: #64748B;">Portal</td><td><a href="https://your-uprise-url.web.app" style="color: #D97706;">Organization Portal →</a></td></tr>
+                </table>
+              </div>
+              <p style="color: #94A3B8; font-size: 12px; margin-top: 24px;">If you did not expect this email, please contact your System Administrator immediately.</p>
+            </div>
+            <div style="background: #F8FAFC; padding: 16px 32px; border-top: 1px solid #E2E8F0;">
+              <p style="color: #94A3B8; font-size: 11px; margin: 0;">© UPRISE — CICT Organization Management System</p>
+            </div>
+          </div>
+        ''',
+      },
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Dialog(
-      insetPadding: const EdgeInsets.symmetric(horizontal: 24),
+      insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
       child: Container(
-        width: 560,
+        width: 700,
         constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.9),
         child: Column(
           children: [
+            // Header
             Container(
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
@@ -756,7 +852,7 @@ class _CreateOrganizationDialogState extends State<CreateOrganizationDialog> {
                   const SizedBox(width: 12),
                   Expanded(
                     child: Text('Create New Organization',
-                        style: GoogleFonts.beVietnamPro(fontSize: 20, fontWeight: FontWeight.bold, color: UpriseColors.white)),
+                        style: GoogleFonts.beVietnamPro(fontSize: 18, fontWeight: FontWeight.bold, color: UpriseColors.white)),
                   ),
                   IconButton(
                     icon: Icon(Icons.close, color: UpriseColors.white),
@@ -765,15 +861,17 @@ class _CreateOrganizationDialogState extends State<CreateOrganizationDialog> {
                 ],
               ),
             ),
+            // Scrollable content
             Expanded(
               child: SingleChildScrollView(
-                padding: const EdgeInsets.all(20),
+                padding: const EdgeInsets.all(24),
                 child: Form(
                   key: _formKey,
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('Organization Logo', style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.w600)),
+                      // Organization Logo
+                      _sectionTitle('Organization Logo', Icons.image),
                       const SizedBox(height: 8),
                       Center(
                         child: GestureDetector(
@@ -795,33 +893,60 @@ class _CreateOrganizationDialogState extends State<CreateOrganizationDialog> {
                           ),
                         ),
                       ),
-                      const SizedBox(height: 20),
+                      const SizedBox(height: 24),
+
+                      // Basic Information
+                      _sectionTitle('Basic Information', Icons.info_outline),
+                      const SizedBox(height: 8),
                       TextFormField(
                         controller: _nameCtrl,
-                        decoration: const InputDecoration(labelText: 'Organization Name', border: OutlineInputBorder()),
+                        decoration: InputDecoration(
+                          labelText: 'Organization Name',
+                          prefixIcon: Icon(Icons.business, color: UpriseColors.primaryDark),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
                         validator: (v) => v!.isEmpty ? 'Required' : null,
                       ),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 16),
                       TextFormField(
                         controller: _shortNameCtrl,
-                        decoration: const InputDecoration(labelText: 'Short Name (e.g., SWITS)', border: OutlineInputBorder()),
+                        decoration: InputDecoration(
+                          labelText: 'Short Name (e.g., SWITS)',
+                          prefixIcon: Icon(Icons.title, color: UpriseColors.primaryDark),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
                       ),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 16),
                       DropdownButtonFormField<String>(
-                        initialValue: _type,
-                        decoration: const InputDecoration(labelText: 'Organization Type', border: OutlineInputBorder()),
-                        items: ['Academic Organization','Student Government','Special Interest Group','Cultural Organization','Sports Organization']
-                            .map((t) => DropdownMenuItem(value: t, child: Text(t, style: GoogleFonts.beVietnamPro(fontSize: 13)))).toList(),
+                        value: _type,
+                        decoration: InputDecoration(
+                          labelText: 'Organization Type',
+                          prefixIcon: Icon(Icons.category, color: UpriseColors.primaryDark),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                        items: const [
+                          'Academic Organization',
+                          'Student Government',
+                          'Special Interest Group',
+                          'Cultural Organization',
+                          'Sports Organization'
+                        ].map((t) => DropdownMenuItem(value: t, child: Text(t))).toList(),
                         onChanged: (v) => setState(() => _type = v!),
                       ),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 16),
                       TextFormField(
                         controller: _descCtrl,
                         maxLines: 3,
-                        decoration: const InputDecoration(labelText: 'Description', border: OutlineInputBorder()),
+                        decoration: InputDecoration(
+                          labelText: 'Description',
+                          prefixIcon: Icon(Icons.description, color: UpriseColors.primaryDark),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
                       ),
-                      const SizedBox(height: 12),
-                      Text('Categories', style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.w600)),
+                      const SizedBox(height: 24),
+
+                      // Categories
+                      _sectionTitle('Categories', Icons.label_outline),
                       const SizedBox(height: 8),
                       Wrap(
                         spacing: 8,
@@ -838,8 +963,8 @@ class _CreateOrganizationDialogState extends State<CreateOrganizationDialog> {
                               controller: _catCtrl,
                               decoration: InputDecoration(
                                 hintText: 'Add',
-                                border: const OutlineInputBorder(),
-                                contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                               ),
                               onSubmitted: (v) {
                                 if (v.isNotEmpty && !_categories.contains(v)) {
@@ -851,54 +976,137 @@ class _CreateOrganizationDialogState extends State<CreateOrganizationDialog> {
                           ),
                         ],
                       ),
-                      const Divider(height: 32),
-                      Text('Faculty Adviser', style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.bold)),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 24),
+
+                      // Primary Adviser (will receive login credentials)
+                      _sectionTitle('Primary Adviser (Login Account)', Icons.person),
+                      const SizedBox(height: 8),
                       TextFormField(
-                        controller: _advNameCtrl,
-                        decoration: const InputDecoration(labelText: 'Full Name', border: OutlineInputBorder()),
+                        controller: _primaryNameCtrl,
+                        decoration: InputDecoration(
+                          labelText: 'Full Name',
+                          prefixIcon: Icon(Icons.person_outline, color: UpriseColors.primaryDark),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
                         validator: (v) => v!.trim().isEmpty ? 'Required' : null,
                       ),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 16),
                       TextFormField(
-                        controller: _advTitleCtrl,
-                        decoration: const InputDecoration(labelText: 'Title/Department', border: OutlineInputBorder()),
+                        controller: _primaryTitleCtrl,
+                        decoration: InputDecoration(
+                          labelText: 'Title / Position',
+                          prefixIcon: Icon(Icons.work_outline, color: UpriseColors.primaryDark),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
                         validator: (v) => v!.trim().isEmpty ? 'Required' : null,
                       ),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 16),
                       TextFormField(
-                        controller: _advEmailCtrl,
-                        decoration: const InputDecoration(labelText: 'Email', border: OutlineInputBorder()),
+                        controller: _primaryEmailCtrl,
+                        decoration: InputDecoration(
+                          labelText: 'Email Address',
+                          prefixIcon: Icon(Icons.email, color: UpriseColors.primaryDark),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
                         validator: (v) => v!.trim().isEmpty ? 'Required' : null,
                       ),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 16),
                       TextFormField(
-                        controller: _advPhoneCtrl,
-                        decoration: const InputDecoration(labelText: 'Phone Number', border: OutlineInputBorder()),
+                        controller: _primaryPhoneCtrl,
+                        decoration: InputDecoration(
+                          labelText: 'Phone Number',
+                          prefixIcon: Icon(Icons.phone, color: UpriseColors.primaryDark),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
                         validator: (v) => v!.trim().isEmpty ? 'Required' : null,
+                      ),
+                      const SizedBox(height: 24),
+
+                      // Additional Advisers
+                      _sectionTitle('Additional Advisers (Optional)', Icons.group_add),
+                      const SizedBox(height: 8),
+                      ..._additionalAdvisers.asMap().entries.map((entry) {
+                        final idx = entry.key;
+                        final controllers = entry.value;
+                        return Card(
+                          margin: const EdgeInsets.only(bottom: 12),
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: BorderSide(color: UpriseColors.mediumGray)),
+                          child: Padding(
+                            padding: const EdgeInsets.all(12),
+                            child: Column(
+                              children: [
+                                Row(
+                                  children: [
+                                    Expanded(child: Text('Additional Adviser ${idx + 1}', style: TextStyle(fontWeight: FontWeight.w600))),
+                                    IconButton(
+                                      icon: Icon(Icons.remove_circle_outline, color: UpriseColors.error),
+                                      onPressed: () => _removeAdviser(idx),
+                                      tooltip: 'Remove',
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 8),
+                                TextFormField(
+                                  controller: controllers['name']!,
+                                  decoration: InputDecoration(labelText: 'Full Name', border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))),
+                                ),
+                                const SizedBox(height: 12),
+                                TextFormField(
+                                  controller: controllers['title']!,
+                                  decoration: InputDecoration(labelText: 'Title / Position', border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))),
+                                ),
+                                const SizedBox(height: 12),
+                                TextFormField(
+                                  controller: controllers['email']!,
+                                  decoration: InputDecoration(labelText: 'Email Address', border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))),
+                                ),
+                                const SizedBox(height: 12),
+                                TextFormField(
+                                  controller: controllers['phone']!,
+                                  decoration: InputDecoration(labelText: 'Phone Number', border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                      const SizedBox(height: 8),
+                      TextButton.icon(
+                        onPressed: _addAdviser,
+                        icon: const Icon(Icons.add_circle_outline),
+                        label: const Text('Add Another Adviser'),
+                        style: TextButton.styleFrom(foregroundColor: UpriseColors.primaryDark),
                       ),
                     ],
                   ),
                 ),
               ),
             ),
+            // Footer buttons
             Container(
               padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(border: Border(top: BorderSide(color: UpriseColors.mediumGray))),
+              decoration: BoxDecoration(
+                border: Border(top: BorderSide(color: UpriseColors.mediumGray)),
+              ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
-                  TextButton(onPressed: () => Navigator.pop(context), child: Text('Cancel', style: TextStyle(color: UpriseColors.darkGray))),
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: Text('Cancel', style: TextStyle(color: UpriseColors.darkGray)),
+                  ),
                   const SizedBox(width: 12),
                   ElevatedButton(
                     onPressed: _isLoading ? null : _create,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: UpriseColors.primaryDark,
                       foregroundColor: UpriseColors.white,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),
                     child: _isLoading
-                        ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: UpriseColors.white))
+                        ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                         : const Text('Create Organization'),
                   ),
                 ],
@@ -919,38 +1127,61 @@ class _CreateOrganizationDialogState extends State<CreateOrganizationDialog> {
   Future<void> _create() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _isLoading = true);
+
+    final generatedPassword = _generatePassword();
+    final primaryEmail = _primaryEmailCtrl.text.trim();
+
     try {
-      final orgRef = FirebaseFirestore.instance.collection('organizations').doc();
-      final adviserRoleRef = FirebaseFirestore.instance.collection('adviser_roles').doc();
+      // 1. Create Firebase Auth account for primary adviser
+      final userCredential = await FirebaseAuth.instance.createUserWithEmailAndPassword(
+        email: primaryEmail,
+        password: generatedPassword,
+      );
+      final uid = userCredential.user!.uid;
 
       final batch = FirebaseFirestore.instance.batch();
+      final orgRef = FirebaseFirestore.instance.collection('organizations').doc();
 
+      // 2. Organization document
       batch.set(orgRef, {
         'name': _nameCtrl.text,
         'shortName': _shortNameCtrl.text,
         'type': _type,
         'description': _descCtrl.text,
-        'adviserName': _advNameCtrl.text,
-        'adviserTitle': _advTitleCtrl.text,
-        'adviserEmail': _advEmailCtrl.text,
-        'adviserPhone': _advPhoneCtrl.text,
+        'adviserName': _primaryNameCtrl.text,
+        'adviserTitle': _primaryTitleCtrl.text,
+        'adviserEmail': primaryEmail,
+        'adviserPhone': _primaryPhoneCtrl.text,
         'logoUrl': '',
         'status': 'active',
         'categories': _categories,
         'officers': [],
+        'orgUserId': uid,
         'createdAt': FieldValue.serverTimestamp(),
       });
 
-      batch.set(adviserRoleRef, {
+      // 3. User role document (for AuthWrapper)
+      final userRef = FirebaseFirestore.instance.collection('users').doc(uid);
+      batch.set(userRef, {
+        'role': 'org',
+        'orgId': orgRef.id,
+        'email': primaryEmail,
+        'fullName': _primaryNameCtrl.text,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+
+      // 4. Primary adviser role
+      final primaryRoleRef = FirebaseFirestore.instance.collection('adviser_roles').doc();
+      batch.set(primaryRoleRef, {
         'orgId': orgRef.id,
         'orgName': _nameCtrl.text,
         'orgAbbrev': _shortNameCtrl.text,
         'orgTag': _type,
-        'adviserId': '',
-        'adviserName': _advNameCtrl.text,
-        'adviserEmail': _advEmailCtrl.text,
-        'adviserPhone': _advPhoneCtrl.text,
-        'adviserRank': _advTitleCtrl.text,
+        'adviserId': uid,
+        'adviserName': _primaryNameCtrl.text,
+        'adviserEmail': primaryEmail,
+        'adviserPhone': _primaryPhoneCtrl.text,
+        'adviserRank': _primaryTitleCtrl.text,
         'president': '',
         'vicePresident': '',
         'secretary': '',
@@ -958,36 +1189,85 @@ class _CreateOrganizationDialogState extends State<CreateOrganizationDialog> {
         'createdAt': FieldValue.serverTimestamp(),
       });
 
+      // 5. Additional advisers (no Auth accounts)
+      for (var adviser in _additionalAdvisers) {
+        final name = adviser['name']!.text.trim();
+        final title = adviser['title']!.text.trim();
+        final email = adviser['email']!.text.trim();
+        final phone = adviser['phone']!.text.trim();
+        if (name.isEmpty && email.isEmpty) continue; // skip empty
+        final roleRef = FirebaseFirestore.instance.collection('adviser_roles').doc();
+        batch.set(roleRef, {
+          'orgId': orgRef.id,
+          'orgName': _nameCtrl.text,
+          'orgAbbrev': _shortNameCtrl.text,
+          'orgTag': _type,
+          'adviserId': '',  // no Auth account
+          'adviserName': name,
+          'adviserEmail': email,
+          'adviserPhone': phone,
+          'adviserRank': title,
+          'president': '',
+          'vicePresident': '',
+          'secretary': '',
+          'archived': false,
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+      }
+
       await batch.commit();
 
-      // Log activity
+      // 6. Send email to primary adviser
+      await _sendCredentialsEmail(
+        toEmail: primaryEmail,
+        orgName: _nameCtrl.text,
+        adviserName: _primaryNameCtrl.text,
+        password: generatedPassword,
+      );
+
+      // 7. Activity log
       await ActivityLogger.log(
         action: 'Created new organization: ${_nameCtrl.text}',
         module: 'Organizations',
         severity: 'info',
       );
 
-      await FirebaseFirestore.instance.collection('activity_logs').add({
-        'title': 'New Organization Created',
-        'description': '${_nameCtrl.text} was created',
-        'createdAt': FieldValue.serverTimestamp(),
-        'userId': FirebaseAuth.instance.currentUser?.uid,
-      });
-
       widget.onCreated();
       Navigator.pop(context);
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Organization created successfully')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Organization created & credentials sent to primary adviser email')),
+      );
+    } on FirebaseAuthException catch (e) {
+      String msg = 'Account creation failed';
+      if (e.code == 'email-already-in-use') {
+        msg = 'This email already has an account. Please use a different email for primary adviser.';
+      } else if (e.code == 'invalid-email') {
+        msg = 'Invalid email address.';
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(msg), backgroundColor: UpriseColors.error),
+      );
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+        SnackBar(content: Text('Error: $e'), backgroundColor: UpriseColors.error),
       );
     } finally {
       setState(() => _isLoading = false);
     }
   }
+
+  Widget _sectionTitle(String title, IconData icon) {
+    return Row(
+      children: [
+        Icon(icon, size: 18, color: UpriseColors.primaryDark),
+        const SizedBox(width: 8),
+        Text(title, style: GoogleFonts.beVietnamPro(fontSize: 14, fontWeight: FontWeight.w700, color: UpriseColors.charcoal)),
+      ],
+    );
+  }
 }
 
-// ---------- EDIT ORGANIZATION DIALOG (with logging) ----------
+// ---------- EDIT ORGANIZATION DIALOG (unchanged, logging kept) ----------
 class EditOrganizationDialog extends StatefulWidget {
   final Organization organization;
   final VoidCallback onUpdated;
@@ -1164,7 +1444,6 @@ class _EditOrganizationDialogState extends State<EditOrganizationDialog> {
 
       await batch.commit();
 
-      // Log activity
       await ActivityLogger.log(
         action: 'Updated organization: ${widget.organization.name} → ${_nameCtrl.text}',
         module: 'Organizations',
@@ -1184,7 +1463,7 @@ class _EditOrganizationDialogState extends State<EditOrganizationDialog> {
   }
 }
 
-// ---------- ORGANIZATION DETAIL PAGE (unchanged except fixed stats syntax) ----------
+// ---------- ORGANIZATION DETAIL PAGE (with fixed stats) ----------
 class OrganizationDetailPage extends StatefulWidget {
   final Organization organization;
   final VoidCallback onBack;

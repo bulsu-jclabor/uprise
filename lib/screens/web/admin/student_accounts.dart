@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'dart:math';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -7,13 +8,11 @@ import 'package:file_picker/file_picker.dart';
 import 'package:excel/excel.dart' hide Border;
 import 'package:csv/csv.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:mailer/mailer.dart';
-import 'package:mailer/smtp_server.dart';
 import 'package:share_plus/share_plus.dart';
-import 'package:firebase_core/firebase_core.dart';
+import 'package:cross_file/cross_file.dart'; // For XFile
 import '../../theme/app_theme.dart';
 
-// ============ ACTIVITY LOGGER ============
+// ============ ACTIVITY LOGGER (unchanged, works) ============
 class ActivityLogger {
   static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
@@ -109,14 +108,10 @@ class _StudentAccountsState extends State<StudentAccounts> {
               children: [
                 Text('Student Accounts',
                     style: GoogleFonts.beVietnamPro(
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                        color: UpriseColors.charcoal)),
+                        fontSize: 24, fontWeight: FontWeight.bold, color: UpriseColors.charcoal)),
                 const SizedBox(height: 4),
-                Text(
-                    'Manage and verify student accounts. Batch import via Excel/CSV or add manually.',
-                    style: GoogleFonts.beVietnamPro(
-                        fontSize: 14, color: UpriseColors.darkGray)),
+                Text('Manage and verify student accounts. Batch import via Excel/CSV or add manually.',
+                    style: GoogleFonts.beVietnamPro(fontSize: 14, color: UpriseColors.darkGray)),
               ],
             ),
           ),
@@ -127,8 +122,7 @@ class _StudentAccountsState extends State<StudentAccounts> {
             style: ElevatedButton.styleFrom(
               backgroundColor: UpriseColors.primaryDark,
               foregroundColor: UpriseColors.white,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8)),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
             ),
           ),
         ],
@@ -178,22 +172,18 @@ class _StudentAccountsState extends State<StudentAccounts> {
           children: [
             Text(label,
                 style: GoogleFonts.beVietnamPro(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    color: UpriseColors.darkGray)),
+                    fontSize: 11, fontWeight: FontWeight.w600, color: UpriseColors.darkGray)),
             const SizedBox(height: 6),
             Text(value,
                 style: GoogleFonts.beVietnamPro(
-                    fontSize: 28,
-                    fontWeight: FontWeight.bold,
-                    color: color)),
+                    fontSize: 28, fontWeight: FontWeight.bold, color: color)),
           ],
         ),
       ),
     );
   }
 
-  // ---------- TOOLBAR (unchanged, already good) ----------
+  // ---------- TOOLBAR ----------
   Widget _buildToolbar() {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 24),
@@ -214,10 +204,8 @@ class _StudentAccountsState extends State<StudentAccounts> {
                     controller: _searchController,
                     decoration: InputDecoration(
                       hintText: 'Search by name, ID, or email...',
-                      hintStyle: GoogleFonts.beVietnamPro(
-                          fontSize: 13, color: UpriseColors.darkGray),
-                      prefixIcon: const Icon(Icons.search, size: 18,
-                          color: UpriseColors.darkGray),
+                      hintStyle: GoogleFonts.beVietnamPro(fontSize: 13, color: UpriseColors.darkGray),
+                      prefixIcon: const Icon(Icons.search, size: 18, color: UpriseColors.darkGray),
                       filled: true,
                       fillColor: UpriseColors.white,
                       border: OutlineInputBorder(
@@ -232,21 +220,13 @@ class _StudentAccountsState extends State<StudentAccounts> {
                 const SizedBox(height: 12),
                 Row(
                   children: [
-                    Expanded(
-                      child: _buildFilterDropdown(
-                        label: 'Status',
-                        value: _statusFilter,
-                        items: const ['All', 'Pending', 'Verified'],
-                        onChanged: (val) => setState(() {
-                          _statusFilter = val!;
-                          _currentPage = 1;
-                        }),
-                      ),
-                    ),
+                    Expanded(child: _buildFilterDropdown(
+                      label: 'Status', value: _statusFilter,
+                      items: const ['All', 'Pending', 'Verified'],
+                      onChanged: (val) => setState(() { _statusFilter = val!; _currentPage = 1; }),
+                    )),
                     const SizedBox(width: 12),
-                    Expanded(
-                      child: _buildCourseDropdown(),
-                    ),
+                    Expanded(child: _buildCourseDropdown()),
                     const SizedBox(width: 12),
                     _buildExportButton(),
                     const SizedBox(width: 12),
@@ -265,10 +245,8 @@ class _StudentAccountsState extends State<StudentAccounts> {
                     controller: _searchController,
                     decoration: InputDecoration(
                       hintText: 'Search by name, ID, or email...',
-                      hintStyle: GoogleFonts.beVietnamPro(
-                          fontSize: 13, color: UpriseColors.darkGray),
-                      prefixIcon: const Icon(Icons.search, size: 18,
-                          color: UpriseColors.darkGray),
+                      hintStyle: GoogleFonts.beVietnamPro(fontSize: 13, color: UpriseColors.darkGray),
+                      prefixIcon: const Icon(Icons.search, size: 18, color: UpriseColors.darkGray),
                       filled: true,
                       fillColor: UpriseColors.white,
                       border: OutlineInputBorder(
@@ -283,13 +261,9 @@ class _StudentAccountsState extends State<StudentAccounts> {
               ),
               const SizedBox(width: 16),
               _buildFilterDropdown(
-                label: 'Status',
-                value: _statusFilter,
+                label: 'Status', value: _statusFilter,
                 items: const ['All', 'Pending', 'Verified'],
-                onChanged: (val) => setState(() {
-                  _statusFilter = val!;
-                  _currentPage = 1;
-                }),
+                onChanged: (val) => setState(() { _statusFilter = val!; _currentPage = 1; }),
               ),
               const SizedBox(width: 12),
               _buildCourseDropdown(),
@@ -314,10 +288,7 @@ class _StudentAccountsState extends State<StudentAccounts> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(label,
-            style: GoogleFonts.beVietnamPro(
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
-                color: UpriseColors.darkGray)),
+            style: GoogleFonts.beVietnamPro(fontSize: 11, fontWeight: FontWeight.w600, color: UpriseColors.darkGray)),
         const SizedBox(height: 4),
         Container(
           height: 40,
@@ -352,10 +323,7 @@ class _StudentAccountsState extends State<StudentAccounts> {
       label: 'Course',
       value: _courseFilter,
       items: const ['All', 'BSIT', 'BSIS', 'BLIS'],
-      onChanged: (val) => setState(() {
-        _courseFilter = val!;
-        _currentPage = 1;
-      }),
+      onChanged: (val) => setState(() { _courseFilter = val!; _currentPage = 1; }),
     );
   }
 
@@ -386,7 +354,7 @@ class _StudentAccountsState extends State<StudentAccounts> {
     );
   }
 
-  // ---------- TABLE (unchanged) ----------
+  // ---------- TABLE ----------
   Widget _buildTable() {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 24),
@@ -415,16 +383,12 @@ class _StudentAccountsState extends State<StudentAccounts> {
                   .snapshots(),
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const SizedBox(
-                      height: 400,
-                      child: Center(child: CircularProgressIndicator()));
+                  return const SizedBox(height: 400, child: Center(child: CircularProgressIndicator()));
                 }
                 if (snapshot.hasError) {
                   return SizedBox(
                       height: 400,
-                      child: Center(
-                          child: Text('Error: ${snapshot.error}',
-                              style: TextStyle(color: UpriseColors.error))));
+                      child: Center(child: Text('Error: ${snapshot.error}', style: TextStyle(color: UpriseColors.error))));
                 }
 
                 var docs = snapshot.data!.docs;
@@ -450,9 +414,7 @@ class _StudentAccountsState extends State<StudentAccounts> {
                       .toList();
                 }
 
-                Widget header = _buildTableHeader(
-                    colId, colName, colCourse, colYear, colEmail,
-                    colStatus, colActions);
+                Widget header = _buildTableHeader(colId, colName, colCourse, colYear, colEmail, colStatus, colActions);
 
                 if (docs.isEmpty) {
                   return Column(children: [
@@ -462,11 +424,9 @@ class _StudentAccountsState extends State<StudentAccounts> {
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Icon(Icons.filter_alt_off,
-                                size: 64, color: UpriseColors.mediumGray),
+                            Icon(Icons.filter_alt_off, size: 64, color: UpriseColors.mediumGray),
                             SizedBox(height: 16),
-                            Text('No students match the filters',
-                                style: TextStyle(color: UpriseColors.darkGray)),
+                            Text('No students match the filters', style: TextStyle(color: UpriseColors.darkGray)),
                           ],
                         ),
                       ),
@@ -504,26 +464,11 @@ class _StudentAccountsState extends State<StudentAccounts> {
                           ),
                           child: Row(
                             children: [
-                              _cell(colId,
-                                  child: Text(data['studentId'] ?? '',
-                                      style: GoogleFonts.beVietnamPro(fontSize: 13),
-                                      overflow: TextOverflow.ellipsis)),
-                              _cell(colName,
-                                  child: Text(data['fullName'] ?? '',
-                                      style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w500),
-                                      overflow: TextOverflow.ellipsis)),
-                              _cell(colCourse,
-                                  child: Text(data['course'] ?? '',
-                                      style: GoogleFonts.beVietnamPro(fontSize: 13),
-                                      overflow: TextOverflow.ellipsis)),
-                              _cell(colYear,
-                                  child: Text(data['yearLevel'] ?? '',
-                                      style: GoogleFonts.beVietnamPro(fontSize: 13),
-                                      overflow: TextOverflow.ellipsis)),
-                              _cell(colEmail,
-                                  child: Text(data['email'] ?? '',
-                                      style: GoogleFonts.beVietnamPro(fontSize: 13),
-                                      overflow: TextOverflow.ellipsis)),
+                              _cell(colId, child: Text(data['studentId'] ?? '', style: GoogleFonts.beVietnamPro(fontSize: 13), overflow: TextOverflow.ellipsis)),
+                              _cell(colName, child: Text(data['fullName'] ?? '', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w500), overflow: TextOverflow.ellipsis)),
+                              _cell(colCourse, child: Text(data['course'] ?? '', style: GoogleFonts.beVietnamPro(fontSize: 13), overflow: TextOverflow.ellipsis)),
+                              _cell(colYear, child: Text(data['yearLevel'] ?? '', style: GoogleFonts.beVietnamPro(fontSize: 13), overflow: TextOverflow.ellipsis)),
+                              _cell(colEmail, child: Text(data['email'] ?? '', style: GoogleFonts.beVietnamPro(fontSize: 13), overflow: TextOverflow.ellipsis)),
                               SizedBox(
                                 width: colStatus,
                                 child: Center(
@@ -535,8 +480,7 @@ class _StudentAccountsState extends State<StudentAccounts> {
                                     ),
                                     child: Text(
                                       status.toUpperCase(),
-                                      style: GoogleFonts.beVietnamPro(
-                                          fontSize: 11, fontWeight: FontWeight.w700, color: badgeText),
+                                      style: GoogleFonts.beVietnamPro(fontSize: 11, fontWeight: FontWeight.w700, color: badgeText),
                                     ),
                                   ),
                                 ),
@@ -550,15 +494,13 @@ class _StudentAccountsState extends State<StudentAccounts> {
                                       icon: Icons.key,
                                       color: UpriseColors.primaryDark,
                                       tip: 'View Password',
-                                      onTap: () => _showPasswordDialog(
-                                          data['studentId'], data['tempPassword']),
+                                      onTap: () => _showPasswordDialog(data['studentId'], data['tempPassword']),
                                     ),
                                     _iconBtn(
                                       icon: Icons.email_outlined,
                                       color: UpriseColors.primaryDark,
                                       tip: 'Resend Credentials',
-                                      onTap: () => _resendCredentials(
-                                          doc.id, data['email'], data['studentId'], data['tempPassword']),
+                                      onTap: () => _resendCredentials(doc.id, data['email'], data['studentId'], data['tempPassword']),
                                     ),
                                     _iconBtn(
                                       icon: Icons.verified_outlined,
@@ -592,21 +534,10 @@ class _StudentAccountsState extends State<StudentAccounts> {
   }
 
   Widget _cell(double width, {required Widget child}) {
-    return SizedBox(
-      width: width,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 8),
-        child: child,
-      ),
-    );
+    return SizedBox(width: width, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 8), child: child));
   }
 
-  Widget _iconBtn({
-    required IconData icon,
-    required Color color,
-    required String tip,
-    VoidCallback? onTap,
-  }) {
+  Widget _iconBtn({required IconData icon, required Color color, required String tip, VoidCallback? onTap}) {
     return Tooltip(
       message: tip,
       child: InkWell(
@@ -614,23 +545,13 @@ class _StudentAccountsState extends State<StudentAccounts> {
         borderRadius: BorderRadius.circular(6),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 6),
-          child: Icon(icon,
-              size: 18,
-              color: onTap == null ? UpriseColors.mediumGray : color),
+          child: Icon(icon, size: 18, color: onTap == null ? UpriseColors.mediumGray : color),
         ),
       ),
     );
   }
 
-  Widget _buildTableHeader(
-    double colId,
-    double colName,
-    double colCourse,
-    double colYear,
-    double colEmail,
-    double colStatus,
-    double colActions,
-  ) {
+  Widget _buildTableHeader(double colId, double colName, double colCourse, double colYear, double colEmail, double colStatus, double colActions) {
     return Container(
       height: 44,
       decoration: BoxDecoration(
@@ -652,11 +573,7 @@ class _StudentAccountsState extends State<StudentAccounts> {
   }
 
   TextStyle _headerStyle() {
-    return GoogleFonts.beVietnamPro(
-        fontSize: 11,
-        fontWeight: FontWeight.w700,
-        color: UpriseColors.darkGray,
-        letterSpacing: 0.6);
+    return GoogleFonts.beVietnamPro(fontSize: 11, fontWeight: FontWeight.w700, color: UpriseColors.darkGray, letterSpacing: 0.6);
   }
 
   Widget _buildFooter(int total, int totalPages, int start, int end) {
@@ -736,17 +653,13 @@ class _StudentAccountsState extends State<StudentAccounts> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Student ID: $studentId',
-                style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.bold)),
+            Text('Student ID: $studentId', style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.bold)),
             const SizedBox(height: 8),
             const Text('Password:'),
             const SizedBox(height: 4),
             SelectableText(
               password ?? 'No password stored. Use "Resend Credentials" to generate a new one.',
-              style: GoogleFonts.beVietnamPro(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w500,
-                  color: UpriseColors.primaryDark),
+              style: GoogleFonts.beVietnamPro(fontSize: 16, fontWeight: FontWeight.w500, color: UpriseColors.primaryDark),
             ),
           ],
         ),
@@ -761,19 +674,19 @@ class _StudentAccountsState extends State<StudentAccounts> {
     String password = existingPassword ?? _generateRandomPassword();
     await FirebaseFirestore.instance.collection('students').doc(docId).update({'tempPassword': password});
     await _sendCredentialsEmail(email, studentId, password);
-    // Log activity
     await ActivityLogger.log(
       action: 'Resent credentials for student: $studentId ($email)',
       module: 'User Directory',
       severity: 'info',
     );
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Credentials resent to $email')));
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Credentials resent to $email')));
+    }
   }
 
   Future<void> _verifyStudent(String docId) async {
     try {
       await FirebaseFirestore.instance.collection('students').doc(docId).update({'status': 'verified'});
-      // Log activity
       final doc = await FirebaseFirestore.instance.collection('students').doc(docId).get();
       final studentId = doc.data()?['studentId'] ?? 'Unknown';
       await ActivityLogger.log(
@@ -781,9 +694,13 @@ class _StudentAccountsState extends State<StudentAccounts> {
         module: 'User Directory',
         severity: 'info',
       );
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Student account verified')));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Student account verified')));
+      }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red));
+      }
     }
   }
 
@@ -801,16 +718,19 @@ class _StudentAccountsState extends State<StudentAccounts> {
                 final doc = await FirebaseFirestore.instance.collection('students').doc(docId).get();
                 final studentId = doc.data()?['studentId'] ?? 'Unknown';
                 await FirebaseFirestore.instance.collection('students').doc(docId).delete();
-                // Log activity
                 await ActivityLogger.log(
                   action: 'Deleted student account: $studentId ($email)',
                   module: 'User Directory',
                   severity: 'info',
                 );
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Student record deleted')));
-                Navigator.pop(context);
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Student record deleted')));
+                  Navigator.pop(context);
+                }
               } catch (e) {
-                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red));
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red));
+                }
               }
             },
             style: ElevatedButton.styleFrom(backgroundColor: UpriseColors.error),
@@ -821,7 +741,7 @@ class _StudentAccountsState extends State<StudentAccounts> {
     );
   }
 
-  // ---------- BATCH IMPORT ----------
+  // ---------- BATCH IMPORT (fixed setState vs setDialogState) ----------
   void _showUploadDialog() {
     _selectedFileName = '';
     _uploadedFile = null;
@@ -833,8 +753,7 @@ class _StudentAccountsState extends State<StudentAccounts> {
             title: Row(children: [
               Icon(Icons.upload_file, color: UpriseColors.primaryDark),
               const SizedBox(width: 8),
-              Text('Batch Import Students',
-                  style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.bold)),
+              Text('Batch Import Students', style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.bold)),
             ]),
             content: SizedBox(
               width: 500,
@@ -862,11 +781,11 @@ class _StudentAccountsState extends State<StudentAccounts> {
                             allowedExtensions: ['xlsx', 'xls', 'csv'],
                           );
                           if (result != null) {
-                            setState(() {
+                            // ✅ Use setDialogState to update dialog state (not outer setState)
+                            setDialogState(() {
                               _uploadedFile = File(result.files.single.path!);
                               _selectedFileName = result.files.single.name;
                             });
-                            setDialogState(() {});
                           }
                         },
                         child: const Text('Browse'),
@@ -888,36 +807,39 @@ class _StudentAccountsState extends State<StudentAccounts> {
             actions: [
               TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
               ElevatedButton(
-                onPressed: _isUploading || _uploadedFile == null
-                    ? null
-                    : () async {
-                        setState(() => _isUploading = true);
-                        try {
-                          List<Map<String, String>> students = await _parseFile(_uploadedFile!);
-                          if (students.isEmpty) throw Exception('No valid data');
-                          int success = 0, failed = 0;
-                          for (var student in students) {
-                            try {
-                              await _createStudentAccount(student);
-                              success++;
-                            } catch (e) {
-                              failed++;
-                            }
-                          }
-                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                              content: Text('Upload complete: $success created, $failed failed')));
-                          setState(() {
-                            _uploadedFile = null;
-                            _selectedFileName = '';
-                          });
-                          Navigator.pop(context);
-                        } catch (e) {
-                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                              content: Text('Error: $e'), backgroundColor: Colors.red));
-                        } finally {
-                          setState(() => _isUploading = false);
-                        }
-                      },
+                onPressed: _isUploading || _uploadedFile == null ? null : () async {
+                  // Use setState for outer loading indicator, but dialog is still open
+                  setState(() => _isUploading = true);
+                  try {
+                    List<Map<String, String>> students = await _parseFile(_uploadedFile!);
+                    if (students.isEmpty) throw Exception('No valid data');
+                    int success = 0, failed = 0;
+                    for (var student in students) {
+                      try {
+                        await _createStudentAccount(student);
+                        success++;
+                      } catch (e) {
+                        failed++;
+                      }
+                    }
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                          content: Text('Upload complete: $success created, $failed failed')));
+                    }
+                    setState(() {
+                      _uploadedFile = null;
+                      _selectedFileName = '';
+                    });
+                    Navigator.pop(context);
+                  } catch (e) {
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                          content: Text('Error: $e'), backgroundColor: Colors.red));
+                    }
+                  } finally {
+                    setState(() => _isUploading = false);
+                  }
+                },
                 style: ElevatedButton.styleFrom(backgroundColor: UpriseColors.primaryDark),
                 child: const Text('Upload & Create'),
               ),
@@ -978,18 +900,22 @@ class _StudentAccountsState extends State<StudentAccounts> {
     return 'BSIT';
   }
 
-  // ---------- ACCOUNT CREATION & EMAIL (with logging) ----------
+  // ---------- ACCOUNT CREATION & EMAIL (FIXED: secondary app + Firestore mail) ----------
   Future<void> _createStudentAccount(Map<String, String> student) async {
     final email = student['email']!;
     final studentId = student['studentId']!;
     final fullName = student['fullName']!;
     final password = _generateRandomPassword();
 
+    // ✅ FIX #1: Properly check for existing secondary app
     FirebaseApp secondaryApp;
     try {
-      secondaryApp = await Firebase.initializeApp(name: 'secondaryApp', options: Firebase.app().options);
-    } catch (e) {
       secondaryApp = Firebase.app('secondaryApp');
+    } catch (_) {
+      secondaryApp = await Firebase.initializeApp(
+        name: 'secondaryApp',
+        options: Firebase.app().options,
+      );
     }
     final secondaryAuth = FirebaseAuth.instanceFor(app: secondaryApp);
     UserCredential userCred;
@@ -1016,7 +942,6 @@ class _StudentAccountsState extends State<StudentAccounts> {
     });
     await secondaryAuth.signOut();
     await _sendCredentialsEmail(email, studentId, password);
-    // Log activity
     await ActivityLogger.log(
       action: 'Created student account: $studentId ($email)',
       module: 'User Directory',
@@ -1030,29 +955,42 @@ class _StudentAccountsState extends State<StudentAccounts> {
     return List.generate(12, (index) => chars[random.nextInt(chars.length)]).join();
   }
 
+  // ✅ FIX #4: Replace SMTP with Firestore mail collection (works with Firebase Extensions or Cloud Function)
   Future<void> _sendCredentialsEmail(String email, String studentId, String password) async {
-    // ⚠️ REPLACE WITH YOUR SMTP CREDENTIALS ⚠️
-    final smtpServer = gmail('your-email@gmail.com', 'your-app-password');
-    final message = Message()
-      ..from = Address('your-email@gmail.com', 'UPRISE Admin')
-      ..recipients.add(email)
-      ..subject = 'Welcome to UPRISE - Your Student Credentials'
-      ..html = '''
-        <h2 style="color:#BE4700;">UPRISE Student Account</h2>
-        <p><strong>Student ID:</strong> $studentId</p>
-        <p><strong>Email:</strong> $email</p>
-        <p><strong>Password:</strong> $password</p>
-        <p>Login at: <a href="https://your-app.com/login">UPRISE Portal</a></p>
-        <p>Please change your password after first login.</p>
-      ''';
     try {
-      await send(message, smtpServer);
+      await FirebaseFirestore.instance.collection('mail').add({
+        'to': [email],
+        'message': {
+          'subject': 'UPRISE — Your Student Login Credentials',
+          'html': '''
+            <div style="font-family:sans-serif;max-width:480px;margin:auto;">
+              <div style="background:linear-gradient(135deg,#D97706,#B45309);padding:24px 32px;border-radius:12px 12px 0 0;">
+                <h1 style="color:white;margin:0;letter-spacing:2px;font-size:22px;">UPRISE</h1>
+                <p style="color:rgba(255,255,255,0.85);margin:4px 0 0;font-size:12px;">CICT Student Portal</p>
+              </div>
+              <div style="padding:24px 32px;border:1px solid #FDE68A;border-top:none;border-radius:0 0 12px 12px;">
+                <p style="color:#1E293B;">Your student account has been created.</p>
+                <div style="background:#FFF7ED;border:1px solid #FDE68A;border-radius:8px;padding:16px;margin:16px 0;">
+                  <p style="margin:0 0 8px;font-size:11px;color:#92400E;font-weight:700;letter-spacing:1px;">LOGIN CREDENTIALS</p>
+                  <table style="font-size:13px;color:#1E293B;width:100%;">
+                    <tr><td style="color:#64748B;padding:4px 0;width:100px;">Student ID</td><td style="font-weight:600;">$studentId</td></tr>
+                    <tr><td style="color:#64748B;padding:4px 0;">Email</td><td style="font-weight:600;">$email</td></tr>
+                    <tr><td style="color:#64748B;padding:4px 0;">Password</td><td style="font-weight:700;font-family:monospace;font-size:15px;color:#B45309;">$password</td></tr>
+                  </table>
+                </div>
+                <p style="color:#94A3B8;font-size:11px;">Please change your password after first login.</p>
+              </div>
+            </div>
+          ''',
+        },
+        'createdAt': FieldValue.serverTimestamp(),
+      });
     } catch (e) {
-      debugPrint('Email send failed: $e');
+      debugPrint('Failed to queue email: $e');
     }
   }
 
-  // ---------- MANUAL ADD DIALOG ----------
+  // ---------- MANUAL ADD DIALOG (FIXED: isCreating/errorMessage moved outside builder) ----------
   void _showManualAddDialog() {
     _manualIdController.clear();
     _manualNameController.clear();
@@ -1061,19 +999,20 @@ class _StudentAccountsState extends State<StudentAccounts> {
     _manualEmailController.clear();
     _manualStatus = 'pending';
 
+    // ✅ FIX #2: These belong to the outer function, not inside StatefulBuilder
+    bool isCreating = false;
+    String? errorMessage;
+
     showDialog(
       context: context,
       barrierDismissible: false,
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) {
-          bool isCreating = false;
-          String? errorMessage;
           return AlertDialog(
             title: Row(children: [
               Icon(Icons.person_add, color: UpriseColors.primaryDark),
               const SizedBox(width: 8),
-              Text('Add Student Manually',
-                  style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.bold)),
+              Text('Add Student Manually', style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.bold)),
             ]),
             content: SingleChildScrollView(
               child: Form(
@@ -1139,6 +1078,7 @@ class _StudentAccountsState extends State<StudentAccounts> {
                     ? null
                     : () async {
                         if (_formKey.currentState!.validate()) {
+                          // Update dialog state to show loading
                           setDialogState(() => isCreating = true);
                           try {
                             final student = {
@@ -1158,9 +1098,11 @@ class _StudentAccountsState extends State<StudentAccounts> {
                                 await query.docs.first.reference.update({'status': 'verified'});
                               }
                             }
-                            Navigator.pop(context);
-                            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Student account created')));
-                            setState(() {});
+                            if (mounted) {
+                              Navigator.pop(context);
+                              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Student account created')));
+                              setState(() {}); // refresh table
+                            }
                           } catch (e) {
                             setDialogState(() => errorMessage = e.toString());
                           } finally {
@@ -1218,7 +1160,9 @@ class _StudentAccountsState extends State<StudentAccounts> {
       await file.writeAsString(csv);
       await Share.shareXFiles([XFile(file.path)], text: 'Student list export');
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Export failed: $e'), backgroundColor: Colors.red));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Export failed: $e'), backgroundColor: Colors.red));
+      }
     }
   }
 }

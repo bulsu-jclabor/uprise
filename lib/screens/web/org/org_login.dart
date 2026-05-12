@@ -1,60 +1,23 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import '../../../auth_service.dart';
-import 'admin_dashboard.dart';
+import 'org_dashboard.dart'; // we'll create later
 
-class AdminLogin extends StatefulWidget {
+class OrganizationLogin extends StatefulWidget {
+  const OrganizationLogin({super.key});
+
   @override
-  _AdminLoginState createState() => _AdminLoginState();
+  _OrganizationLoginState createState() => _OrganizationLoginState();
 }
 
-class _AdminLoginState extends State<AdminLogin> {
+class _OrganizationLoginState extends State<OrganizationLogin> {
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   bool _isLoading = false;
   bool _obscurePassword = true;
-  bool _rememberMe = false;
   final AuthService _auth = AuthService();
-
-  @override
-  void initState() {
-    super.initState();
-    _loadSavedEmail();
-  }
-
-  // ✅ Safe SharedPreferences getter with fallback
-  Future<SharedPreferences> _getPrefs() async {
-    try {
-      return await SharedPreferences.getInstance();
-    } catch (e) {
-      // If plugin fails (e.g., MissingPluginException), use in-memory fallback
-      SharedPreferences.setMockInitialValues({});
-      return await SharedPreferences.getInstance();
-    }
-  }
-
-  Future<void> _loadSavedEmail() async {
-    final prefs = await _getPrefs();
-    final savedEmail = prefs.getString('admin_email');
-    if (savedEmail != null && savedEmail.isNotEmpty) {
-      setState(() {
-        _emailController.text = savedEmail;
-        _rememberMe = true;
-      });
-    }
-  }
-
-  Future<void> _saveEmail(String email) async {
-    final prefs = await _getPrefs();
-    if (_rememberMe && email.isNotEmpty) {
-      await prefs.setString('admin_email', email);
-    } else {
-      await prefs.remove('admin_email');
-    }
-  }
 
   Future<void> _login() async {
     if (_emailController.text.trim().isEmpty) {
@@ -75,21 +38,20 @@ class _AdminLoginState extends State<AdminLogin> {
       );
 
       if (user != null) {
+        // Verify role is 'org'
         final doc = await FirebaseFirestore.instance
             .collection('users')
             .doc(user.uid)
             .get();
-        if (doc.exists && doc.data()?['role'] == 'admin') {
-          await _saveEmail(_emailController.text.trim());
-          if (mounted) {
-            Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(builder: (_) => AdminDashboard()),
-            );
-          }
+        if (doc.exists && doc.data()?['role'] == 'org') {
+          // Success – go to organization dashboard
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (_) => const OrgDashboard()), // placeholder
+          );
         } else {
           await FirebaseAuth.instance.signOut();
-          _showError('This account is not authorized as Admin');
+          _showError('This account is not authorized for Organization Portal');
         }
       } else {
         _showError('Invalid email or password');
@@ -97,62 +59,18 @@ class _AdminLoginState extends State<AdminLogin> {
     } on FirebaseAuthException catch (e) {
       String message = 'Login failed';
       if (e.code == 'user-not-found') {
-        message = 'No account found with this email';
+        message = 'No organization account found with this email';
       } else if (e.code == 'wrong-password') {
         message = 'Incorrect password';
       } else if (e.code == 'invalid-email') {
         message = 'Please enter a valid email address';
-      } else {
-        message = e.message ?? 'Login error';
       }
       _showError(message);
     } catch (e) {
-      _showError('An error occurred: ${e.toString()}');
+      _showError('An error occurred. Please try again.');
     }
 
-    if (mounted) setState(() => _isLoading = false);
-  }
-
-  Future<void> _resetPassword() async {
-    String email = _emailController.text.trim();
-    if (email.isEmpty) {
-      _showError('Please enter your email address first');
-      return;
-    }
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Reset Password'),
-        content: Text('Send password reset email to $email?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Send'),
-          ),
-        ],
-      ),
-    );
-    if (confirm != true) return;
-
-    setState(() => _isLoading = true);
-    try {
-      await FirebaseAuth.instance.sendPasswordResetEmail(email: email);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Password reset email sent. Check your inbox.'),
-          backgroundColor: Colors.green,
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-    } catch (e) {
-      _showError('Failed to send reset email: ${e.toString()}');
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
-    }
+    setState(() => _isLoading = false);
   }
 
   void _showError(String message) {
@@ -211,48 +129,32 @@ class _AdminLoginState extends State<AdminLogin> {
                         ),
                         child: Column(
                           children: [
-                            // Logo image (unchanged)
+                            // Logo
                             Container(
-                              width: 100,
-                              height: 100,
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFFAF5EE),
+                              padding: const EdgeInsets.all(18),
+                              decoration: const BoxDecoration(
+                                color: Color(0xFFFAF5EE),
                                 shape: BoxShape.circle,
                               ),
-                              child: ClipOval(
-                                child: Image.asset(
-                                  'assets/images/logo.png',
-                                  fit: BoxFit.contain,
-                                  alignment: Alignment.center,
-                                ),
+                              child: Image.asset(
+                                'assets/images/logo.png',
+                                width: 64,
+                                height: 64,
                               ),
                             ),
                             const SizedBox(height: 20),
-
-                            // ✅ UPRISE text with UP red and RISE orange
-                            RichText(
-                              text: const TextSpan(
-                                style: TextStyle(
-                                  fontSize: 30,
-                                  fontWeight: FontWeight.bold,
-                                  fontFamily: 'BeVietnamPro', // or your GoogleFonts fallback
-                                  letterSpacing: 1.8,
-                                ),
-                                children: [
-                                  TextSpan(
-                                    text: 'UP',
-                                    style: TextStyle(color: Colors.red),
-                                  ),
-                                  TextSpan(
-                                    text: 'RISE',
-                                    style: TextStyle(color: Color(0xFFD97706)), // orange
-                                  ),
-                                ],
+                            Text(
+                              'UPRISE',
+                              style: GoogleFonts.beVietnamPro(
+                                fontSize: 30,
+                                fontWeight: FontWeight.bold,
+                                color: const Color(0xFF1E293B),
+                                letterSpacing: 1.8,
                               ),
                             ),
                             const SizedBox(height: 6),
                             Text(
-                              'Admin Portal',
+                              'Organization Portal',
                               style: GoogleFonts.beVietnamPro(
                                 fontSize: 14,
                                 color: const Color(0xFF475569),
@@ -260,7 +162,7 @@ class _AdminLoginState extends State<AdminLogin> {
                             ),
                             const SizedBox(height: 24),
                             Text(
-                              'Welcome back! Sign in to continue to your dashboard.',
+                              'Sign in to manage your organization\'s events, reports, and members.',
                               style: GoogleFonts.beVietnamPro(
                                 fontSize: 14,
                                 color: const Color(0xFF64748B),
@@ -268,14 +170,14 @@ class _AdminLoginState extends State<AdminLogin> {
                               textAlign: TextAlign.center,
                             ),
                             const SizedBox(height: 28),
-                            // Email Field
+                            // Email
                             TextField(
                               controller: _emailController,
                               keyboardType: TextInputType.emailAddress,
                               decoration: InputDecoration(
                                 labelText: 'Email Address',
                                 labelStyle: GoogleFonts.beVietnamPro(color: const Color(0xFF475569)),
-                                hintText: 'admin@uprise.org',
+                                hintText: 'org@example.com',
                                 hintStyle: GoogleFonts.beVietnamPro(color: Colors.grey.shade400),
                                 filled: true,
                                 fillColor: const Color(0xFFF8FAFC),
@@ -287,7 +189,7 @@ class _AdminLoginState extends State<AdminLogin> {
                               ),
                             ),
                             const SizedBox(height: 18),
-                            // Password Field
+                            // Password
                             TextField(
                               controller: _passwordController,
                               obscureText: _obscurePassword,
@@ -310,33 +212,20 @@ class _AdminLoginState extends State<AdminLogin> {
                                 ),
                               ),
                             ),
-                            const SizedBox(height: 8),
-                            // Remember Me
-                            Row(
-                              children: [
-                                Checkbox(
-                                  value: _rememberMe,
-                                  onChanged: (value) {
-                                    setState(() => _rememberMe = value ?? false);
-                                    if (!_rememberMe) {
-                                      _saveEmail('');
-                                    }
-                                  },
-                                  activeColor: const Color(0xFFD97706),
-                                ),
-                                Text(
-                                  'Remember Me',
-                                  style: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF475569)),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 8),
-                            // Forgot Password
+                            const SizedBox(height: 16),
+                            // Forgot password
                             Row(
                               mainAxisAlignment: MainAxisAlignment.end,
                               children: [
                                 TextButton(
-                                  onPressed: _resetPassword,
+                                  onPressed: () {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text('Password reset link will be sent to your email'),
+                                        behavior: SnackBarBehavior.floating,
+                                      ),
+                                    );
+                                  },
                                   style: TextButton.styleFrom(padding: EdgeInsets.zero),
                                   child: Text(
                                     'Forgot Password?',
@@ -349,7 +238,7 @@ class _AdminLoginState extends State<AdminLogin> {
                               ],
                             ),
                             const SizedBox(height: 24),
-                            // Login Button
+                            // Login button
                             SizedBox(
                               width: double.infinity,
                               height: 52,
@@ -373,7 +262,7 @@ class _AdminLoginState extends State<AdminLogin> {
                                         ),
                                       )
                                     : Text(
-                                        'Login to Dashboard',
+                                        'Login to Organization Portal',
                                         style: GoogleFonts.beVietnamPro(
                                           fontSize: 16,
                                           fontWeight: FontWeight.w700,
@@ -383,7 +272,7 @@ class _AdminLoginState extends State<AdminLogin> {
                             ),
                             const SizedBox(height: 20),
                             Text(
-                              "Don't have an admin account? Contact System Admin",
+                              "Don't have an organization account? Contact CICT Admin",
                               style: GoogleFonts.beVietnamPro(
                                 fontSize: 13,
                                 color: const Color(0xFF64748B),
@@ -393,7 +282,7 @@ class _AdminLoginState extends State<AdminLogin> {
                             const SizedBox(height: 8),
                             TextButton(
                               onPressed: () {
-                                Navigator.pop(context);
+                                Navigator.pop(context); // back to landing
                               },
                               child: Text(
                                 '← Back to Portal Selection',
