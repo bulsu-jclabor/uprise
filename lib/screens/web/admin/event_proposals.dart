@@ -611,7 +611,3 @@ class _EventProposalsState extends State<EventProposals> {
     super.dispose();
   }
 }
-<<<<<<< HEAD
-
-=======
->>>>>>> 27957c91067b9941c210707d39962f8d81d9cae1

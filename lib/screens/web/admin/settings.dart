@@ -8,8 +8,29 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import '../../theme/app_theme.dart';
 import 'admin_login.dart';
-<<<<<<< HEAD
-import '../../../services/activity_logger.dart' as activity_log;
+
+// ============ ACTIVITY LOGGER ============
+class ActivityLogger {
+  static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  static Future<void> log({
+    required String action,
+    required String module,
+    String severity = 'info',
+    Map<String, dynamic>? details,
+  }) async {
+    final user = FirebaseAuth.instance.currentUser;
+    final userName = user?.email ?? 'Unknown User';
+    await _firestore.collection('activity_logs').add({
+      'user': userName,
+      'action': action,
+      'module': module,
+      'severity': severity,
+      'timestamp': FieldValue.serverTimestamp(),
+      'ipAddress': '',
+      'details': details,
+    });
+  }
+}
 
 // ============ SIDEBAR ICONS ============
 const Map<String, IconData> _sidebarIcons = {
@@ -25,8 +46,6 @@ const Map<String, IconData> _sidebarIcons = {
   'Activity Logs': Icons.history_outlined,
   'Settings': Icons.settings_outlined,
 };
-=======
->>>>>>> 27957c91067b9941c210707d39962f8d81d9cae1
 
 class AdminSettings extends StatefulWidget {
   const AdminSettings({super.key});
@@ -129,14 +148,11 @@ class _AdminSettingsState extends State<AdminSettings>
         _profileImageBase64 = base64String;
         _selectedImageFile = null;
       });
-<<<<<<< HEAD
-      await activity_log.ActivityLogger.log(
+      await ActivityLogger.log(
         action: 'Updated profile picture',
         module: 'Admin Settings',
         severity: 'info',
       );
-=======
->>>>>>> 27957c91067b9941c210707d39962f8d81d9cae1
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Profile picture updated')),
       );
@@ -180,14 +196,11 @@ class _AdminSettingsState extends State<AdminSettings>
       'eventReminders': _eventReminders,
       'updatedAt': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
-<<<<<<< HEAD
-    await activity_log.ActivityLogger.log(
+    await ActivityLogger.log(
       action: 'Updated notification preferences',
       module: 'Admin Settings',
       severity: 'info',
     );
-=======
->>>>>>> 27957c91067b9941c210707d39962f8d81d9cae1
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Settings saved')),
@@ -214,14 +227,11 @@ class _AdminSettingsState extends State<AdminSettings>
           'email': _emailController.text,
           'updatedAt': FieldValue.serverTimestamp(),
         }, SetOptions(merge: true));
-<<<<<<< HEAD
-        await activity_log.ActivityLogger.log(
+        await ActivityLogger.log(
           action: 'Updated profile name to ${_fullNameController.text}',
           module: 'Admin Settings',
           severity: 'info',
         );
-=======
->>>>>>> 27957c91067b9941c210707d39962f8d81d9cae1
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Profile updated')),
@@ -257,14 +267,11 @@ class _AdminSettingsState extends State<AdminSettings>
       await _currentUser!.updatePassword(_newPasswordController.text);
       _newPasswordController.clear();
       _confirmPasswordController.clear();
-<<<<<<< HEAD
-      await activity_log.ActivityLogger.log(
+      await ActivityLogger.log(
         action: 'Changed account password',
         module: 'Admin Settings',
         severity: 'info',
       );
-=======
->>>>>>> 27957c91067b9941c210707d39962f8d81d9cae1
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Password changed successfully')),

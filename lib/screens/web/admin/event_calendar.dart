@@ -520,7 +520,3 @@ class Event {
     required this.status,
   });
 }
-<<<<<<< HEAD
-
-=======
->>>>>>> 27957c91067b9941c210707d39962f8d81d9cae1

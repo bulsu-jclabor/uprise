@@ -1722,7 +1722,3 @@ class _ReportsManagementState extends State<ReportsManagement>
     return NumberFormat('#,##0.00', 'en_PH').format(value);
   }
 }
-<<<<<<< HEAD
-
-=======
->>>>>>> 27957c91067b9941c210707d39962f8d81d9cae1
