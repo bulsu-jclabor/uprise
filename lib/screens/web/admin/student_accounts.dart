@@ -136,165 +136,166 @@ class _StudentAccountsState extends State<StudentAccounts> {
     );
   }
 
-  Widget _statCard(String label, String value, Color color) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: UpriseColors.white,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: UpriseColors.mediumGray),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(label,
-                style: GoogleFonts.beVietnamPro(
-                    fontSize: 11, fontWeight: FontWeight.w600, color: UpriseColors.darkGray)),
-            const SizedBox(height: 6),
-            Text(value,
-                style: GoogleFonts.beVietnamPro(
-                    fontSize: 28, fontWeight: FontWeight.bold, color: color)),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // ---------- TOOLBAR ----------
-  Widget _buildToolbar() {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 24),
-      padding: const EdgeInsets.all(16),
+Widget _statCard(String label, String value, Color color) {
+  return Expanded(
+    child: Container(
+      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         color: UpriseColors.white,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: UpriseColors.mediumGray),
+        border: Border.all(color: UpriseColors.primaryDark, width: 1),
       ),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          if (constraints.maxWidth < 800) {
-            return Column(
-              children: [
-                SizedBox(
-                  height: 40,
-                  child: TextField(
-                    controller: _searchController,
-                    decoration: InputDecoration(
-                      hintText: 'Search by name, ID, or email...',
-                      hintStyle: GoogleFonts.beVietnamPro(fontSize: 13, color: UpriseColors.darkGray),
-                      prefixIcon: const Icon(Icons.search, size: 18, color: UpriseColors.darkGray),
-                      filled: true,
-                      fillColor: UpriseColors.white,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8),
-                        borderSide: BorderSide(color: UpriseColors.mediumGray),
-                      ),
-                      contentPadding: const EdgeInsets.symmetric(vertical: 0),
-                    ),
-                    onChanged: (_) => setState(() => _currentPage = 1),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(child: _buildFilterDropdown(
-                      label: 'Status', value: _statusFilter,
-                      items: const ['All', 'Pending', 'Verified'],
-                      onChanged: (val) => setState(() { _statusFilter = val!; _currentPage = 1; }),
-                    )),
-                    const SizedBox(width: 12),
-                    Expanded(child: _buildCourseDropdown()),
-                    const SizedBox(width: 12),
-                    _buildExportButton(),
-                    const SizedBox(width: 12),
-                    _buildManualAddButton(),
-                  ],
-                ),
-              ],
-            );
-          }
-          return Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label,
+              style: GoogleFonts.beVietnamPro(
+                  fontSize: 11, fontWeight: FontWeight.w600, color: UpriseColors.darkGray)),
+          const SizedBox(height: 6),
+          Text(value,
+              style: GoogleFonts.beVietnamPro(
+                  fontSize: 28, fontWeight: FontWeight.bold, color: color)),
+        ],
+      ),
+    ),
+  );
+}
+
+  // ---------- TOOLBAR ----------
+  Widget _buildToolbar() {
+  return Container(
+    margin: const EdgeInsets.symmetric(horizontal: 24),
+    padding: const EdgeInsets.all(16),
+    decoration: BoxDecoration(
+      color: UpriseColors.white,
+      borderRadius: BorderRadius.circular(12),
+      border: Border.all(color: UpriseColors.primaryDark, width: 1),
+    ),
+    child: LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth < 800) {
+          // compact layout: search field above filters
+          return Column(
             children: [
-              Expanded(
-                child: SizedBox(
-                  height: 40,
-                  child: TextField(
-                    controller: _searchController,
-                    decoration: InputDecoration(
-                      hintText: 'Search by name, ID, or email...',
-                      hintStyle: GoogleFonts.beVietnamPro(fontSize: 13, color: UpriseColors.darkGray),
-                      prefixIcon: const Icon(Icons.search, size: 18, color: UpriseColors.darkGray),
-                      filled: true,
-                      fillColor: UpriseColors.white,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8),
-                        borderSide: BorderSide(color: UpriseColors.mediumGray),
-                      ),
-                      contentPadding: const EdgeInsets.symmetric(vertical: 0),
+              SizedBox(
+                height: 40,
+                child: TextField(
+                  controller: _searchController,
+                  decoration: InputDecoration(
+                    hintText: 'Search by name, ID, or email...',
+                    hintStyle: GoogleFonts.beVietnamPro(fontSize: 13, color: UpriseColors.darkGray),
+                    prefixIcon: const Icon(Icons.search, size: 18, color: UpriseColors.darkGray),
+                    filled: true,
+                    fillColor: UpriseColors.white,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: BorderSide(color: UpriseColors.mediumGray),
                     ),
-                    onChanged: (_) => setState(() => _currentPage = 1),
+                    contentPadding: const EdgeInsets.symmetric(vertical: 0),
                   ),
+                  onChanged: (_) => setState(() => _currentPage = 1),
                 ),
               ),
-              const SizedBox(width: 16),
-              _buildFilterDropdown(
-                label: 'Status', value: _statusFilter,
-                items: const ['All', 'Pending', 'Verified'],
-                onChanged: (val) => setState(() { _statusFilter = val!; _currentPage = 1; }),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(child: _buildFilterDropdown(
+                    label: 'Status', value: _statusFilter,
+                    items: const ['All', 'Pending', 'Verified'],
+                    onChanged: (val) => setState(() { _statusFilter = val!; _currentPage = 1; }),
+                  )),
+                  const SizedBox(width: 12),
+                  Expanded(child: _buildCourseDropdown()),
+                  const SizedBox(width: 12),
+                  _buildExportButton(),
+                  const SizedBox(width: 12),
+                  _buildManualAddButton(),
+                ],
               ),
-              const SizedBox(width: 12),
-              _buildCourseDropdown(),
-              const SizedBox(width: 12),
-              _buildExportButton(),
-              const SizedBox(width: 12),
-              _buildManualAddButton(),
             ],
           );
-        },
-      ),
-    );
-  }
-
-  Widget _buildFilterDropdown({
-    required String label,
-    required String value,
-    required List<String> items,
-    required ValueChanged<String?> onChanged,
-  }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(label,
-            style: GoogleFonts.beVietnamPro(fontSize: 11, fontWeight: FontWeight.w600, color: UpriseColors.darkGray)),
-        const SizedBox(height: 4),
-        Container(
-          height: 40,
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          decoration: BoxDecoration(
-            color: UpriseColors.white,
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: UpriseColors.mediumGray),
-          ),
-          child: DropdownButtonHideUnderline(
-            child: DropdownButton<String>(
-              value: value,
-              items: items.map((item) {
-                final display = item == 'All' ? 'All' : item;
-                return DropdownMenuItem(
-                  value: item,
-                  child: Text(display, style: GoogleFonts.beVietnamPro(fontSize: 13)),
-                );
-              }).toList(),
-              onChanged: onChanged,
-              style: GoogleFonts.beVietnamPro(fontSize: 13, color: UpriseColors.charcoal),
-              icon: Icon(Icons.arrow_drop_down, color: UpriseColors.darkGray),
+        }
+        // wide layout: all controls in one row
+        return Row(
+          children: [
+            Expanded(
+              child: SizedBox(
+                height: 40,
+                child: TextField(
+                  controller: _searchController,
+                  decoration: InputDecoration(
+                    hintText: 'Search by name, ID, or email...',
+                    hintStyle: GoogleFonts.beVietnamPro(fontSize: 13, color: UpriseColors.darkGray),
+                    prefixIcon: const Icon(Icons.search, size: 18, color: UpriseColors.darkGray),
+                    filled: true,
+                    fillColor: UpriseColors.white,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: BorderSide(color: UpriseColors.mediumGray),
+                    ),
+                    contentPadding: const EdgeInsets.symmetric(vertical: 0),
+                  ),
+                  onChanged: (_) => setState(() => _currentPage = 1),
+                ),
+              ),
             ),
+            const SizedBox(width: 16),
+            _buildFilterDropdown(
+              label: 'Status', value: _statusFilter,
+              items: const ['All', 'Pending', 'Verified'],
+              onChanged: (val) => setState(() { _statusFilter = val!; _currentPage = 1; }),
+            ),
+            const SizedBox(width: 12),
+            _buildCourseDropdown(),
+            const SizedBox(width: 12),
+            _buildExportButton(),
+            const SizedBox(width: 12),
+            _buildManualAddButton(),
+          ],
+        );
+      },
+    ),
+  );
+}
+Widget _buildFilterDropdown({
+  required String label,
+  required String value,
+  required List<String> items,
+  required ValueChanged<String?> onChanged,
+}) {
+  return Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Text(label,
+          style: GoogleFonts.beVietnamPro(fontSize: 11, fontWeight: FontWeight.w600, color: UpriseColors.darkGray)),
+      const SizedBox(height: 4),
+      Container(
+        height: 40,
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        decoration: BoxDecoration(
+          color: UpriseColors.white,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: UpriseColors.mediumGray),
+        ),
+        child: DropdownButtonHideUnderline(
+          child: DropdownButton<String>(
+            value: value,
+            items: items.map((item) {
+              final display = item == 'All' ? 'All' : item;
+              return DropdownMenuItem(
+                value: item,
+                child: Text(display, style: GoogleFonts.beVietnamPro(fontSize: 13)),
+              );
+            }).toList(),
+            onChanged: onChanged,
+            style: GoogleFonts.beVietnamPro(fontSize: 13, color: UpriseColors.charcoal),
+            icon: Icon(Icons.arrow_drop_down, color: UpriseColors.darkGray),
           ),
         ),
-      ],
-    );
-  }
+      ),
+    ],
+  );
+}
 
   Widget _buildCourseDropdown() {
     return _buildFilterDropdown(
@@ -306,14 +307,20 @@ class _StudentAccountsState extends State<StudentAccounts> {
   }
 
   Widget _buildExportButton() {
-    return OutlinedButton.icon(
-      onPressed: _exportToCSV,
-      icon: const Icon(Icons.download, size: 18),
-      label: const Text('Export CSV'),
-      style: OutlinedButton.styleFrom(
+    return ElevatedButton.icon(
+      onPressed: () {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Export feature coming soon')),
+        );
+      },
+      icon: Icon(Icons.download, size: 18),
+      label: Text('Export', style: TextStyle(fontSize: 13)),
+      style: ElevatedButton.styleFrom(
+        backgroundColor: UpriseColors.white,
         foregroundColor: UpriseColors.primaryDark,
         side: BorderSide(color: UpriseColors.primaryDark),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        padding: EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       ),
     );
   }
@@ -339,7 +346,7 @@ class _StudentAccountsState extends State<StudentAccounts> {
       decoration: BoxDecoration(
         color: UpriseColors.white,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: UpriseColors.mediumGray),
+        border: Border.all(color: UpriseColors.primaryDark, width: 1),
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(12),
@@ -743,7 +750,7 @@ class _StudentAccountsState extends State<StudentAccounts> {
                     decoration: BoxDecoration(
                       color: UpriseColors.lightGray,
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: UpriseColors.mediumGray),
+                      border: Border.all(color: UpriseColors.primaryDark, width: 1),
                     ),
                     child: Row(children: [
                       Icon(Icons.description, color: UpriseColors.primaryDark),
@@ -1144,4 +1151,3 @@ class _StudentAccountsState extends State<StudentAccounts> {
     }
   }
 }
-

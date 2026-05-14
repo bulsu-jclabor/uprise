@@ -148,9 +148,31 @@ class _AdviserRolesState extends State<AdviserRoles> {
           const SizedBox(height: 16),
           Row(
             children: [
-              _buildTabButton('All', _statusFilter == 'All'),
+              FilterChip(
+                label: Text('All'),
+                selected: _statusFilter == 'All',
+                onSelected: (selected) => setState(() => _statusFilter = 'All'),
+                backgroundColor: UpriseColors.lightGray,
+                selectedColor: UpriseColors.primaryDark,
+                labelStyle: TextStyle(
+                  color: _statusFilter == 'All' ? UpriseColors.white : UpriseColors.darkGray,
+                  fontSize: 13,
+                ),
+                shape: StadiumBorder(),
+              ),
               const SizedBox(width: 8),
-              _buildTabButton('Archived', _statusFilter == 'Archived'),
+              FilterChip(
+                label: Text('Archived'),
+                selected: _statusFilter == 'Archived',
+                onSelected: (selected) => setState(() => _statusFilter = 'Archived'),
+                backgroundColor: UpriseColors.lightGray,
+                selectedColor: UpriseColors.primaryDark,
+                labelStyle: TextStyle(
+                  color: _statusFilter == 'Archived' ? UpriseColors.white : UpriseColors.darkGray,
+                  fontSize: 13,
+                ),
+                shape: StadiumBorder(),
+              ),
             ],
           ),
         ],
@@ -173,27 +195,18 @@ class _AdviserRolesState extends State<AdviserRoles> {
 
   Widget _buildStatCard(String title, int count, Color color, IconData icon) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: EdgeInsets.all(18),
       decoration: BoxDecoration(
         color: UpriseColors.white,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: UpriseColors.mediumGray),
+        border: Border.all(color: UpriseColors.primaryDark, width: 1),
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
-            child: Icon(icon, color: color, size: 20),
-          ),
-          const SizedBox(width: 12),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(title, style: GoogleFonts.beVietnamPro(fontSize: 12, color: UpriseColors.darkGray)),
-              Text(count.toString(), style: GoogleFonts.beVietnamPro(fontSize: 22, fontWeight: FontWeight.bold, color: UpriseColors.charcoal)),
-            ],
-          ),
+          Text(title, style: TextStyle(fontSize: 13, color: UpriseColors.darkGray, fontWeight: FontWeight.w500)),
+          SizedBox(height: 12),
+          Text(count.toString(), style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: UpriseColors.primaryDark)),
         ],
       ),
     );
@@ -206,106 +219,97 @@ class _AdviserRolesState extends State<AdviserRoles> {
       decoration: BoxDecoration(
         color: UpriseColors.white,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: UpriseColors.mediumGray),
+        border: Border.all(color: UpriseColors.primaryDark, width: 1),
       ),
       child: Row(
         children: [
-          Container(
-            height: 36,
-            padding: const EdgeInsets.symmetric(horizontal: 8),
-            decoration: BoxDecoration(
-              border: Border.all(color: UpriseColors.mediumGray),
-              borderRadius: BorderRadius.circular(6),
-            ),
-            child: DropdownButton<String>(
-              value: _filterOrgId == 'All' ? null : _filterOrgId,
-              underline: const SizedBox(),
-              icon: Icon(Icons.filter_list, size: 18, color: UpriseColors.darkGray),
-              hint: Text('All Orgs', style: GoogleFonts.beVietnamPro(fontSize: 13, color: UpriseColors.darkGray)),
-              items: [
-                const DropdownMenuItem(value: null, child: Text('All Orgs', style: TextStyle(fontSize: 13))),
-                ..._orgs.map((o) => DropdownMenuItem(
-                      value: o.id,
-                      child: Text(o.abbrev.isNotEmpty ? o.abbrev : o.name, style: GoogleFonts.beVietnamPro(fontSize: 13)),
-                    )),
-              ],
-              onChanged: (val) => setState(() => _filterOrgId = val ?? 'All'),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Container(
-            height: 36,
-            padding: const EdgeInsets.symmetric(horizontal: 8),
-            decoration: BoxDecoration(
-              border: Border.all(color: UpriseColors.mediumGray),
-              borderRadius: BorderRadius.circular(6),
-            ),
-            child: DropdownButton<String>(
-              value: _filterAdviserName == 'All' ? null : _filterAdviserName,
-              underline: const SizedBox(),
-              icon: Icon(Icons.filter_list, size: 18, color: UpriseColors.darkGray),
-              hint: Text('All Advisers', style: GoogleFonts.beVietnamPro(fontSize: 13, color: UpriseColors.darkGray)),
-              items: [
-                const DropdownMenuItem(value: null, child: Text('All Advisers', style: TextStyle(fontSize: 13))),
-                ..._adviserNames.map((name) => DropdownMenuItem(
-                      value: name,
-                      child: Text(name, style: GoogleFonts.beVietnamPro(fontSize: 13)),
-                    )),
-              ],
-              onChanged: (val) => setState(() => _filterAdviserName = val ?? 'All'),
-            ),
-          ),
-          const Spacer(),
-          SizedBox(
-            width: 240,
-            height: 36,
-            child: TextField(
-              controller: _searchController,
-              decoration: InputDecoration(
-                hintText: 'Search...',
-                hintStyle: GoogleFonts.beVietnamPro(fontSize: 12, color: UpriseColors.darkGray),
-                prefixIcon: Icon(Icons.search, size: 16, color: UpriseColors.darkGray),
-                filled: true,
-                fillColor: UpriseColors.lightGray,
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(20), borderSide: BorderSide.none),
-                contentPadding: const EdgeInsets.symmetric(vertical: 0),
+          Expanded(
+            child: SizedBox(
+              height: 40,
+              child: TextField(
+                controller: _searchController,
+                decoration: InputDecoration(
+                  hintText: 'Search...',
+                  hintStyle: TextStyle(fontSize: 13, color: UpriseColors.darkGray),
+                  prefixIcon: Icon(Icons.search, size: 20, color: UpriseColors.darkGray),
+                  filled: true,
+                  fillColor: UpriseColors.lightGray,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(24),
+                    borderSide: BorderSide.none,
+                  ),
+                  contentPadding: EdgeInsets.symmetric(vertical: 0, horizontal: 16),
+                ),
+                onChanged: (_) => setState(() => _currentPage = 1),
               ),
-              onChanged: (_) => setState(() => _currentPage = 1),
             ),
           ),
-          const SizedBox(width: 12),
-          OutlinedButton.icon(
-            onPressed: _exportCSV,
-            icon: const Icon(Icons.download, size: 16),
-            label: const Text('Export', style: TextStyle(fontSize: 12)),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: UpriseColors.darkGray,
-              side: BorderSide(color: UpriseColors.mediumGray),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          Padding(
+            padding: EdgeInsets.only(left: 12),
+            child: Container(
+              padding: EdgeInsets.symmetric(horizontal: 12, vertical: 0),
+              decoration: BoxDecoration(
+                border: Border.all(color: UpriseColors.primaryDark, width: 1),
+                borderRadius: BorderRadius.circular(24),
+              ),
+              child: DropdownButton<String>(
+                value: _filterOrgId,
+                hint: Text('Filter', style: TextStyle(fontSize: 13, color: UpriseColors.darkGray)),
+                underline: SizedBox(),
+                items: [
+                  DropdownMenuItem(value: 'All', child: Text('All Orgs')),
+                  ..._orgs.map((o) => DropdownMenuItem(
+                        value: o.id,
+                        child: Text(o.abbrev.isNotEmpty ? o.abbrev : o.name),
+                      )),
+                ],
+                onChanged: (val) => setState(() => _filterOrgId = val ?? 'All'),
+              ),
+            ),
+          ),
+          Padding(
+            padding: EdgeInsets.only(left: 12),
+            child: Container(
+              padding: EdgeInsets.symmetric(horizontal: 12, vertical: 0),
+              decoration: BoxDecoration(
+                border: Border.all(color: UpriseColors.primaryDark, width: 1),
+                borderRadius: BorderRadius.circular(24),
+              ),
+              child: DropdownButton<String>(
+                value: _filterAdviserName,
+                hint: Text('Filter', style: TextStyle(fontSize: 13, color: UpriseColors.darkGray)),
+                underline: SizedBox(),
+                items: [
+                  DropdownMenuItem(value: 'All', child: Text('All Advisers')),
+                  ..._adviserNames.map((name) => DropdownMenuItem(
+                        value: name,
+                        child: Text(name),
+                      )),
+                ],
+                onChanged: (val) => setState(() => _filterAdviserName = val ?? 'All'),
+              ),
+            ),
+          ),
+          Padding(
+            padding: EdgeInsets.only(left: 12),
+            child: ElevatedButton.icon(
+              onPressed: () {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Export feature coming soon')),
+                );
+              },
+              icon: Icon(Icons.download, size: 18),
+              label: Text('Export', style: TextStyle(fontSize: 13)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: UpriseColors.white,
+                foregroundColor: UpriseColors.primaryDark,
+                side: BorderSide(color: UpriseColors.primaryDark),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                padding: EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              ),
             ),
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildTabButton(String label, bool isActive) {
-    return GestureDetector(
-      onTap: () => setState(() => _statusFilter = label),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        decoration: BoxDecoration(
-          color: isActive ? UpriseColors.primaryDark : Colors.transparent,
-          borderRadius: BorderRadius.circular(6),
-          border: isActive ? null : Border.all(color: UpriseColors.mediumGray),
-        ),
-        child: Text(label,
-            style: GoogleFonts.beVietnamPro(
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-              color: isActive ? UpriseColors.white : UpriseColors.darkGray,
-            )),
       ),
     );
   }
@@ -316,7 +320,7 @@ class _AdviserRolesState extends State<AdviserRoles> {
       decoration: BoxDecoration(
         color: UpriseColors.white,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: UpriseColors.mediumGray),
+        border: Border.all(color: UpriseColors.primaryDark, width: 1),
       ),
       child: Column(
         children: [
@@ -1010,4 +1014,3 @@ class _AdviserRolesState extends State<AdviserRoles> {
     super.dispose();
   }
 }
-

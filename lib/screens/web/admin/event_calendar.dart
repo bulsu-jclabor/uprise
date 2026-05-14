@@ -155,7 +155,7 @@ class _EventCalendarState extends State<EventCalendar> {
                     decoration: BoxDecoration(
                       color: UpriseColors.white,
                       borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: UpriseColors.mediumGray),
+                      border: Border.all(color: UpriseColors.primaryDark, width: 1),
                     ),
                     child: DropdownButtonHideUnderline(
                       child: DropdownButton<String>(
@@ -237,7 +237,7 @@ class _EventCalendarState extends State<EventCalendar> {
               decoration: BoxDecoration(
                 color: UpriseColors.white,
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: UpriseColors.mediumGray),
+                border: Border.all(color: UpriseColors.primaryDark, width: 1),
               ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -266,7 +266,7 @@ class _EventCalendarState extends State<EventCalendar> {
         decoration: BoxDecoration(
           color: UpriseColors.white,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: UpriseColors.mediumGray),
+          border: Border.all(color: UpriseColors.primaryDark, width: 1),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -344,7 +344,7 @@ class _EventCalendarState extends State<EventCalendar> {
       decoration: BoxDecoration(
         color: UpriseColors.white,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: UpriseColors.mediumGray),
+        border: Border.all(color: UpriseColors.primaryDark, width: 1),
       ),
       child: GridView.count(
         shrinkWrap: true,
@@ -361,7 +361,7 @@ class _EventCalendarState extends State<EventCalendar> {
     if (day == null) {
       return Container(
         decoration: BoxDecoration(
-          border: Border.all(color: UpriseColors.mediumGray.withOpacity(0.3)),
+          border: Border.all(color: UpriseColors.primaryDark.withOpacity(0.3), width: 1),
         ),
       );
     }
@@ -377,7 +377,7 @@ class _EventCalendarState extends State<EventCalendar> {
 
     return Container(
       decoration: BoxDecoration(
-        border: Border.all(color: UpriseColors.mediumGray.withOpacity(0.3)),
+        border: Border.all(color: UpriseColors.primaryDark.withOpacity(0.3), width: 1),
         color: isToday ? UpriseColors.primaryDark.withOpacity(0.05) : null,
       ),
       padding: const EdgeInsets.all(6),
@@ -520,4 +520,7 @@ class Event {
     required this.status,
   });
 }
+<<<<<<< HEAD
 
+=======
+>>>>>>> 27957c91067b9941c210707d39962f8d81d9cae1
