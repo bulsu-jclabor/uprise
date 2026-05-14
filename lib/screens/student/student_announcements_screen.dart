@@ -7,11 +7,32 @@ class StudentAnnouncementsScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final announcements = [
       {
-        'title': 'BLIS ANNOUNCEMENT',
+        'title': 'FRX CREW ANNOUNCEMENT',
         'id': 'CICT-2024-089',
-        'org': 'BLIS ORGANIZATION',
-        'date': 'Oct 24, 2023',
+        'org': 'FRX CREW',
+        'orgSub': 'ORGANIZATION',
+        'date': 'Oct 14, 2025',
         'time': '10:30 AM',
+        'isPinned': true,
+        'tag': 'EVENT UPDATE',
+        'imageUrl':
+            'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=800&q=60',
+        'logoUrl':
+            'https://upload.wikimedia.org/wikipedia/commons/thumb/4/4a/Logo.svg/120px-Logo.svg.png',
+        'likes': 40,
+        'reactions': 18,
+        'comments': 5,
+        'shares': 0,
+      },
+      {
+        'title': 'BLIS ANNOUNCEMENT',
+        'id': 'CICT-2024-090',
+        'org': 'BLIS',
+        'orgSub': 'ORGANIZATION',
+        'date': 'Oct 24, 2025',
+        'time': '10:30 AM',
+        'isPinned': true,
+        'tag': 'EVENT UPDATE',
         'imageUrl':
             'https://images.unsplash.com/photo-1506748686214-e9df14d4d9d0?w=800&q=60',
         'logoUrl':
@@ -19,29 +40,17 @@ class StudentAnnouncementsScreen extends StatelessWidget {
         'likes': 42,
         'reactions': 18,
         'comments': 5,
-        'shares': 3,
-      },
-      {
-        'title': 'SWITS ANNOUNCEMENT',
-        'id': 'CICT-2024-090',
-        'org': 'SWITS ORGANIZATION',
-        'date': 'Nov 10, 2023',
-        'time': '2:00 PM',
-        'imageUrl':
-            'https://images.unsplash.com/photo-1529333166437-7750a6dd5a70?w=800&q=60',
-        'logoUrl':
-            'https://upload.wikimedia.org/wikipedia/commons/thumb/8/89/Logo.svg/120px-Logo.svg.png',
-        'likes': 30,
-        'reactions': 12,
-        'comments': 8,
-        'shares': 2,
+        'shares': 0,
       },
       {
         'title': 'INFORMATION SYSTEMS SYNERGY SOCIETY',
         'id': 'CICT-2024-091',
-        'org': 'IS Synergy Society',
-        'date': 'Oct 24, 2023',
+        'org': 'CURSOR ANNOUNCEMENT',
+        'orgSub': 'ORGANIZATION',
+        'date': 'Oct 24, 2025',
         'time': '10:30 AM',
+        'isPinned': true,
+        'tag': 'EVENT UPDATE',
         'imageUrl':
             'https://images.unsplash.com/photo-1504384308090-c894fdcc538d?w=800&q=60',
         'logoUrl':
@@ -55,60 +64,133 @@ class StudentAnnouncementsScreen extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Announcements'),
+        title: const Text(
+          'Announcement',
+          style: TextStyle(
+            fontWeight: FontWeight.w600,
+            fontSize: 18,
+            color: Colors.black,
+          ),
+        ),
         backgroundColor: Colors.white,
         foregroundColor: Colors.black,
         elevation: 0,
+        centerTitle: false,
       ),
-      backgroundColor: const Color(0xFFF5F5F5),
+      backgroundColor: const Color(0xFFF2F2F2),
       body: ListView.builder(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         itemCount: announcements.length,
         itemBuilder: (context, index) {
           final ann = announcements[index];
-          return Card(
-            margin: const EdgeInsets.only(bottom: 16),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
+          final isPinned = ann['isPinned'] as bool;
+
+          return Container(
+            margin: const EdgeInsets.only(bottom: 14),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(14),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.07),
+                  blurRadius: 6,
+                  offset: const Offset(0, 2),
+                ),
+              ],
             ),
-            elevation: 4,
             clipBehavior: Clip.antiAlias,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Image banner
-                Image.network(
-                  ann['imageUrl'] as String,
-                  height: 160,
-                  width: double.infinity,
-                  fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) => Container(
-                    height: 160,
-                    color: Colors.grey[300],
-                    child: const Icon(Icons.image, size: 50),
-                  ),
+                // ── Banner Image with Pinned Badge ──
+                Stack(
+                  children: [
+                    Image.network(
+                      ann['imageUrl'] as String,
+                      height: 155,
+                      width: double.infinity,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => Container(
+                        height: 155,
+                        color: Colors.grey[300],
+                        child: const Icon(Icons.image, size: 50, color: Colors.grey),
+                      ),
+                    ),
+                    if (isPinned)
+                      Positioned(
+                        top: 10,
+                        left: 10,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFFA726), // amber
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: const [
+                              Icon(Icons.push_pin, size: 12, color: Colors.white),
+                              SizedBox(width: 4),
+                              Text(
+                                'Pinned',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
+
                 Padding(
-                  padding: const EdgeInsets.all(16),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      // ── Tag row: EVENT UPDATE  |  ID ──
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            ann['tag'] as String,
+                            style: const TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFF888888),
+                              letterSpacing: 0.4,
+                            ),
+                          ),
+                          Text(
+                            ann['id'] as String,
+                            style: const TextStyle(
+                              fontSize: 11,
+                              color: Color(0xFFAAAAAA),
+                            ),
+                          ),
+                        ],
+                      ),
+
+                      const SizedBox(height: 6),
+
+                      // ── Announcement Title ──
                       Text(
                         ann['title'] as String,
                         style: const TextStyle(
-                          fontSize: 16,
+                          fontSize: 15,
                           fontWeight: FontWeight.bold,
+                          color: Colors.black87,
                         ),
                       ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'ID: ${ann['id']}',
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: Colors.grey,
-                        ),
-                      ),
+
                       const SizedBox(height: 12),
+
+                      // ── Org Row ──
                       Row(
                         children: [
                           CircleAvatar(
@@ -116,14 +198,28 @@ class StudentAnnouncementsScreen extends StatelessWidget {
                             backgroundImage:
                                 NetworkImage(ann['logoUrl'] as String),
                             backgroundColor: Colors.grey[200],
+                            onBackgroundImageError: (_, __) {},
                           ),
                           const SizedBox(width: 10),
-                          Text(
-                            ann['org'] as String,
-                            style: const TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.bold,
-                            ),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                ann['org'] as String,
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w700,
+                                  color: Colors.black87,
+                                ),
+                              ),
+                              Text(
+                                ann['orgSub'] as String,
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  color: Colors.grey,
+                                ),
+                              ),
+                            ],
                           ),
                           const Spacer(),
                           Column(
@@ -132,44 +228,49 @@ class StudentAnnouncementsScreen extends StatelessWidget {
                               Text(
                                 ann['date'] as String,
                                 style: const TextStyle(
-                                    fontSize: 13, color: Colors.black87),
+                                  fontSize: 12,
+                                  color: Colors.black87,
+                                ),
                               ),
                               Text(
                                 ann['time'] as String,
                                 style: const TextStyle(
-                                    fontSize: 13, color: Colors.black54),
+                                  fontSize: 12,
+                                  color: Colors.black54,
+                                ),
                               ),
                             ],
                           ),
                         ],
                       ),
+
                       const SizedBox(height: 12),
-                      // Engagement row (gray icons)
+                      const Divider(height: 1, color: Color(0xFFEEEEEE)),
+                      const SizedBox(height: 10),
+
+                      // ── Engagement Row ──
                       Row(
                         children: [
-                          Icon(Icons.thumb_up_alt_outlined,
-                              color: Colors.grey, size: 18),
-                          const SizedBox(width: 4),
-                          Text('${ann['likes']}',
-                              style: const TextStyle(color: Colors.grey)),
-                          const SizedBox(width: 16),
-                          Icon(Icons.favorite_border,
-                              color: Colors.grey, size: 18),
-                          const SizedBox(width: 4),
-                          Text('${ann['reactions']}',
-                              style: const TextStyle(color: Colors.grey)),
-                          const SizedBox(width: 16),
-                          Icon(Icons.comment_outlined,
-                              color: Colors.grey, size: 18),
-                          const SizedBox(width: 4),
-                          Text('${ann['comments']}',
-                              style: const TextStyle(color: Colors.grey)),
-                          const SizedBox(width: 16),
-                          Icon(Icons.share_outlined,
-                              color: Colors.grey, size: 18),
-                          const SizedBox(width: 4),
-                          Text('${ann['shares']}',
-                              style: const TextStyle(color: Colors.grey)),
+                          _EngagementItem(
+                            icon: Icons.thumb_up_alt_outlined,
+                            count: ann['likes'] as int,
+                          ),
+                          const SizedBox(width: 18),
+                          _EngagementItem(
+                            icon: Icons.favorite_border,
+                            count: ann['reactions'] as int,
+                          ),
+                          const SizedBox(width: 18),
+                          _EngagementItem(
+                            icon: Icons.mode_comment_outlined,
+                            count: ann['comments'] as int,
+                          ),
+                          const Spacer(),
+                          _EngagementItem(
+                            icon: Icons.share_outlined,
+                            count: ann['shares'] as int,
+                            showCount: false,
+                          ),
                         ],
                       ),
                     ],
@@ -180,6 +281,37 @@ class StudentAnnouncementsScreen extends StatelessWidget {
           );
         },
       ),
+    );
+  }
+}
+
+class _EngagementItem extends StatelessWidget {
+  final IconData icon;
+  final int count;
+  final bool showCount;
+
+  const _EngagementItem({
+    required this.icon,
+    required this.count,
+    this.showCount = true,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Icon(icon, size: 18, color: const Color(0xFF999999)),
+        if (showCount) ...[
+          const SizedBox(width: 4),
+          Text(
+            '$count',
+            style: const TextStyle(
+              fontSize: 13,
+              color: Color(0xFF999999),
+            ),
+          ),
+        ],
+      ],
     );
   }
 }
