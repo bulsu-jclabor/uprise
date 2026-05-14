@@ -8,29 +8,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import '../../theme/app_theme.dart';
 import 'admin_login.dart';
-
-// ============ ACTIVITY LOGGER ============
-class ActivityLogger {
-  static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  static Future<void> log({
-    required String action,
-    required String module,
-    String severity = 'info',
-    Map<String, dynamic>? details,
-  }) async {
-    final user = FirebaseAuth.instance.currentUser;
-    final userName = user?.email ?? 'Unknown User';
-    await _firestore.collection('activity_logs').add({
-      'user': userName,
-      'action': action,
-      'module': module,
-      'severity': severity,
-      'timestamp': FieldValue.serverTimestamp(),
-      'ipAddress': '',
-      'details': details,
-    });
-  }
-}
+import '../../../services/activity_logger.dart' as activity_log;
 
 // ============ SIDEBAR ICONS ============
 const Map<String, IconData> _sidebarIcons = {
@@ -148,7 +126,7 @@ class _AdminSettingsState extends State<AdminSettings>
         _profileImageBase64 = base64String;
         _selectedImageFile = null;
       });
-      await ActivityLogger.log(
+      await activity_log.ActivityLogger.log(
         action: 'Updated profile picture',
         module: 'Admin Settings',
         severity: 'info',
@@ -196,7 +174,7 @@ class _AdminSettingsState extends State<AdminSettings>
       'eventReminders': _eventReminders,
       'updatedAt': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
-    await ActivityLogger.log(
+    await activity_log.ActivityLogger.log(
       action: 'Updated notification preferences',
       module: 'Admin Settings',
       severity: 'info',
@@ -227,7 +205,7 @@ class _AdminSettingsState extends State<AdminSettings>
           'email': _emailController.text,
           'updatedAt': FieldValue.serverTimestamp(),
         }, SetOptions(merge: true));
-        await ActivityLogger.log(
+        await activity_log.ActivityLogger.log(
           action: 'Updated profile name to ${_fullNameController.text}',
           module: 'Admin Settings',
           severity: 'info',
@@ -267,7 +245,7 @@ class _AdminSettingsState extends State<AdminSettings>
       await _currentUser!.updatePassword(_newPasswordController.text);
       _newPasswordController.clear();
       _confirmPasswordController.clear();
-      await ActivityLogger.log(
+      await activity_log.ActivityLogger.log(
         action: 'Changed account password',
         module: 'Admin Settings',
         severity: 'info',
@@ -712,7 +690,7 @@ class _AdminSettingsState extends State<AdminSettings>
       subtitle: Text(subtitle, style: GoogleFonts.beVietnamPro(fontSize: 12, color: UpriseColors.darkGray)),
       value: value,
       onChanged: onChanged,
-      activeColor: UpriseColors.primaryDark,
+      activeThumbColor: UpriseColors.primaryDark,
     );
   }
 
@@ -807,7 +785,7 @@ class _AdminSettingsState extends State<AdminSettings>
                   subtitle: Text('Receive a verification code via email on each login', style: GoogleFonts.beVietnamPro(fontSize: 12)),
                   value: false,
                   onChanged: (v) {},
-                  activeColor: UpriseColors.primaryDark,
+                  activeThumbColor: UpriseColors.primaryDark,
                 ),
               ],
             ),
@@ -913,3 +891,4 @@ class _AdminSettingsState extends State<AdminSettings>
     );
   }
 }
+

@@ -17,7 +17,6 @@ ThemeData appTheme = ThemeData(
     primary: primaryOrange,
     secondary: secondaryOrange,
     surface: Colors.white,
-    background: backgroundColor,
   ),
   scaffoldBackgroundColor: backgroundColor,
   fontFamily: GoogleFonts.poppins().fontFamily,

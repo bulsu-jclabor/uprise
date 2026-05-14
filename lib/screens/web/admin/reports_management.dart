@@ -8,30 +8,7 @@ import 'package:share_plus/share_plus.dart';
 import 'package:printing/printing.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
-
-// ============ ACTIVITY LOGGER ============
-class ActivityLogger {
-  static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-
-  static Future<void> log({
-    required String action,
-    required String module,
-    String severity = 'info',
-    Map<String, dynamic>? details,
-  }) async {
-    final user = FirebaseAuth.instance.currentUser;
-    final userName = user?.email ?? 'Unknown User';
-    await _firestore.collection('activity_logs').add({
-      'user': userName,
-      'action': action,
-      'module': module,
-      'severity': severity,
-      'timestamp': FieldValue.serverTimestamp(),
-      'ipAddress': '',
-      'details': details,
-    });
-  }
-}
+import '../../../services/activity_logger.dart' as activity_log;
 
 // ─────────────────────────────────────────────
 //  THEME COLORS  (matches UPRISE orange palette)
@@ -322,7 +299,7 @@ class _ReportsManagementState extends State<ReportsManagement>
     });
 
     // Log deadline change
-    await ActivityLogger.log(
+    await activity_log.ActivityLogger.log(
       action: 'Updated report deadlines: Financial → ${DateFormat('yyyy-MM-dd').format(_financialDeadline!)}, Accomplishment → ${DateFormat('yyyy-MM-dd').format(_accomplishmentDeadline!)}',
       module: 'Reports',
       severity: 'info',
@@ -440,7 +417,7 @@ class _ReportsManagementState extends State<ReportsManagement>
       'reportType':  type,
     });
     // Also log to activity logs
-    await ActivityLogger.log(
+    await activity_log.ActivityLogger.log(
       action: 'Generated $type report in $format format',
       module: 'Reports',
       severity: 'info',
@@ -1745,3 +1722,4 @@ class _ReportsManagementState extends State<ReportsManagement>
     return NumberFormat('#,##0.00', 'en_PH').format(value);
   }
 }
+

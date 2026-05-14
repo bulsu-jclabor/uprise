@@ -1,24 +1,29 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_fonts/google_fonts.dart';
+
 import 'firebase_options.dart';
 import 'screens/web/admin/admin_login.dart';
 import 'screens/web/admin/admin_dashboard.dart';
 import 'screens/web/org/org_login.dart';
-import 'screens/web/org/org_dashboard.dart'; // we'll create later, for now use AdminDashboard
+import 'screens/web/org/org_dashboard.dart';
+import 'screens/student/student_login.dart';
+import 'screens/student/student_home_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
-  runApp(const MyWebAdminApp());
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+
+  // Removed Firestore settings to avoid internal assertion errors
+
+  runApp(const MyApp());
 }
 
-class MyWebAdminApp extends StatelessWidget {
-  const MyWebAdminApp({super.key});
+class MyApp extends StatelessWidget {
+  const MyApp({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -26,16 +31,185 @@ class MyWebAdminApp extends StatelessWidget {
       title: 'UPRISE - Portal',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        primaryColor: const Color(0xFFFF6B35),
-        fontFamily: 'Poppins',
+        primaryColor: const Color(0xFFD97706),
+        fontFamily: 'BeVietnamPro',
         useMaterial3: true,
       ),
-      home: const LandingPage(),
+      home: const AuthGate(),
     );
   }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// AuthGate — single source of truth for routing.
+// Uses a StatefulWidget so we can cache the role fetch and avoid
+// re-querying Firestore on every auth-stream rebuild.
+// ─────────────────────────────────────────────────────────────────────────────
+class AuthGate extends StatefulWidget {
+  const AuthGate({super.key});
 
+  @override
+  State<AuthGate> createState() => _AuthGateState();
+}
+
+class _AuthGateState extends State<AuthGate> {
+  // Cache the role per UID so a widget rebuild doesn't re-hit Firestore.
+  String? _cachedUid;
+  Future<String?>? _roleFuture;
+
+  Future<String?> _getRoleFuture(String uid) {
+    if (_cachedUid != uid) {
+      _cachedUid = uid;
+      _roleFuture = Future<String?>(() async {
+        try {
+          final doc = await FirebaseFirestore.instance
+              .collection('users')
+              .doc(uid)
+              .get();
+          if (!doc.exists) return null;
+          return (doc.data()?['role'] as String?)?.toLowerCase();
+        } catch (e) {
+          debugPrint('AuthGate role fetch error: $e');
+          return null;
+        }
+      });
+    }
+    return _roleFuture!;
+  }
+
+  void _clearCache() {
+    _cachedUid = null;
+    _roleFuture = null;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<User?>(
+      stream: FirebaseAuth.instance.authStateChanges(),
+      builder: (context, authSnap) {
+        // ── Still resolving ──────────────────────────────────────────
+        if (authSnap.connectionState == ConnectionState.waiting) {
+          return const _LoadingScreen();
+        }
+
+        // ── Stream error (e.g. Firestore internal assertion) ─────────
+        if (authSnap.hasError) {
+          debugPrint('AuthGate stream error: \${authSnap.error}');
+          // Sign out to clear bad state, then let the gate rebuild cleanly.
+          FirebaseAuth.instance.signOut();
+          return const _LoadingScreen();
+        }
+
+        // ── No user → show login / landing ───────────────────────────
+        if (!authSnap.hasData) {
+          _clearCache();
+          if (!kIsWeb) return StudentLogin();
+          return const LandingPage();
+        }
+
+        // ── User logged in → fetch role (cached) ─────────────────────
+        final uid = authSnap.data!.uid;
+        return FutureBuilder<String?>(
+          future: _getRoleFuture(uid),
+          builder: (context, roleSnap) {
+            if (roleSnap.connectionState == ConnectionState.waiting) {
+              return const _LoadingScreen();
+            }
+
+            // Role fetch failed → sign out cleanly
+            if (roleSnap.hasError) {
+              debugPrint('AuthGate roleSnap error: \${roleSnap.error}');
+              WidgetsBinding.instance.addPostFrameCallback(
+                  (_) => FirebaseAuth.instance.signOut());
+              return const _LoadingScreen();
+            }
+
+            final role = roleSnap.data ?? '';
+            debugPrint('AuthGate: uid=$uid role=$role kIsWeb=$kIsWeb');
+
+            // ── Mobile routing ────────────────────────────────────────
+            if (!kIsWeb) {
+              if (role == 'student') return const StudentHomeScreen();
+              return _WrongPlatformScreen(
+                message: 'This account ($role) is only available on Web.',
+                icon: Icons.computer,
+              );
+            }
+
+            // ── Web routing ───────────────────────────────────────────
+            if (role == 'admin') return const AdminDashboard();
+            if (role == 'org')   return OrgDashboard();
+            if (role == 'student') {
+              return _WrongPlatformScreen(
+                message: 'Student accounts are only available on Mobile.',
+                icon: Icons.phone_android,
+              );
+            }
+
+            // Unknown / missing role → sign out, back to landing
+            FirebaseAuth.instance.signOut();
+            return const LandingPage();
+          },
+        );
+      },
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// _LoadingScreen
+// ─────────────────────────────────────────────────────────────────────────────
+class _LoadingScreen extends StatelessWidget {
+  const _LoadingScreen();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Scaffold(
+      backgroundColor: Color(0xFFFFF7ED),
+      body: Center(child: CircularProgressIndicator(color: Color(0xFFD97706))),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// _WrongPlatformScreen
+// ─────────────────────────────────────────────────────────────────────────────
+class _WrongPlatformScreen extends StatelessWidget {
+  final String message;
+  final IconData icon;
+  const _WrongPlatformScreen({required this.message, required this.icon});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, size: 70, color: Colors.orange),
+              const SizedBox(height: 20),
+              Text(message,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(fontSize: 18)),
+              const SizedBox(height: 30),
+              ElevatedButton(
+                onPressed: () => FirebaseAuth.instance.signOut(),
+                // AuthGate's StreamBuilder will react and show LandingPage
+                child: const Text('Logout'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// LandingPage  (web-only portal selector)
+// ─────────────────────────────────────────────────────────────────────────────
 class LandingPage extends StatelessWidget {
   const LandingPage({super.key});
 
@@ -62,8 +236,7 @@ class LandingPage extends StatelessWidget {
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(28),
                   border: Border.all(
-                    color: const Color(0xFFFDE68A).withOpacity(0.5),
-                  ),
+                      color: const Color(0xFFFDE68A).withOpacity(0.5)),
                   boxShadow: [
                     BoxShadow(
                       color: const Color(0xFFB45309).withOpacity(0.10),
@@ -80,38 +253,45 @@ class LandingPage extends StatelessWidget {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    // Logo – perfectly centered in circle
+                    // ── Logo ────────────────────────────────────────
                     Container(
                       width: 80,
                       height: 80,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
                         color: const Color(0xFFFAF5EE),
-                        border: Border.all(color: const Color(0xFFFDE68A), width: 2),
+                        border: Border.all(
+                            color: const Color(0xFFFDE68A), width: 2),
                       ),
                       child: ClipOval(
-                        child: Image.asset(
-                          'assets/images/logo.png',
-                          fit: BoxFit.contain,
-                          alignment: Alignment.center,
-                        ),
+                        child: Image.asset('assets/images/logo.png',
+                            fit: BoxFit.contain,
+                            errorBuilder: (_, __, ___) => const Icon(
+                                Icons.school,
+                                color: Color(0xFFD97706),
+                                size: 40)),
                       ),
                     ),
                     const SizedBox(height: 14),
+                    // ── Title ───────────────────────────────────────
                     RichText(
                       text: TextSpan(children: [
                         TextSpan(
                           text: 'UP',
                           style: GoogleFonts.beVietnamPro(
-                            fontSize: 28, fontWeight: FontWeight.w800,
-                            color: const Color(0xFF1E293B), letterSpacing: 3,
+                            fontSize: 28,
+                            fontWeight: FontWeight.w800,
+                            color: const Color(0xFF1E293B),
+                            letterSpacing: 3,
                           ),
                         ),
                         TextSpan(
                           text: 'RISE',
                           style: GoogleFonts.beVietnamPro(
-                            fontSize: 28, fontWeight: FontWeight.w800,
-                            color: const Color(0xFFD97706), letterSpacing: 3,
+                            fontSize: 28,
+                            fontWeight: FontWeight.w800,
+                            color: const Color(0xFFD97706),
+                            letterSpacing: 3,
                           ),
                         ),
                       ]),
@@ -120,62 +300,70 @@ class LandingPage extends StatelessWidget {
                     Text(
                       'CICT Organization Management Portal',
                       style: GoogleFonts.beVietnamPro(
-                        fontSize: 11.5, color: const Color(0xFF64748B),
-                      ),
+                          fontSize: 11.5, color: const Color(0xFF64748B)),
                       textAlign: TextAlign.center,
                     ),
                     const SizedBox(height: 20),
-
-                    // Divider with label
+                    // ── Divider label ────────────────────────────────
                     Row(children: [
-                      const Expanded(child: Divider(color: Color(0xFFF1F5F9))),
+                      const Expanded(
+                          child: Divider(color: Color(0xFFF1F5F9))),
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 10),
-                        child: Text('SELECT YOUR PORTAL',
+                        child: Text(
+                          'SELECT YOUR PORTAL',
                           style: GoogleFonts.beVietnamPro(
-                            fontSize: 10, color: const Color(0xFF94A3B8),
+                            fontSize: 10,
+                            color: const Color(0xFF94A3B8),
                             letterSpacing: 1.5,
                           ),
                         ),
                       ),
-                      const Expanded(child: Divider(color: Color(0xFFF1F5F9))),
+                      const Expanded(
+                          child: Divider(color: Color(0xFFF1F5F9))),
                     ]),
                     const SizedBox(height: 16),
-
+                    // ── Admin portal button ──────────────────────────
                     _PortalButton(
                       label: 'Admin Portal',
                       description: 'Manage system & organizations',
                       icon: Icons.shield_rounded,
                       isPrimary: true,
-                      onTap: () => Navigator.push(context,
-                        MaterialPageRoute(builder: (_) => AdminLogin())),
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => AdminLogin()),
+                      ),
                     ),
                     const SizedBox(height: 10),
+                    // ── Org portal button ────────────────────────────
                     _PortalButton(
                       label: 'Organization Portal',
                       description: 'Access your org dashboard',
                       icon: Icons.domain_rounded,
                       isPrimary: false,
-                      onTap: () => Navigator.push(context,
-                        MaterialPageRoute(builder: (_) => const OrganizationLogin())),
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                            builder: (_) => const OrganizationLogin()),
+                      ),
                     ),
                     const SizedBox(height: 18),
-
-                    // Badges
+                    // ── Badges ───────────────────────────────────────
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         _Badge(label: 'Secure Login', showDot: true),
                         const SizedBox(width: 6),
-                        _Badge(label: 'CICT Verified', icon: Icons.verified_rounded),
+                        _Badge(
+                            label: 'CICT Verified',
+                            icon: Icons.verified_rounded),
                       ],
                     ),
                     const SizedBox(height: 14),
                     Text(
                       'No account? Contact your System Administrator',
                       style: GoogleFonts.beVietnamPro(
-                        fontSize: 11, color: const Color(0xFF94A3B8),
-                      ),
+                          fontSize: 11, color: const Color(0xFF94A3B8)),
                       textAlign: TextAlign.center,
                     ),
                   ],
@@ -189,6 +377,9 @@ class LandingPage extends StatelessWidget {
   }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// LandingPage helpers
+// ─────────────────────────────────────────────────────────────────────────────
 class _PortalButton extends StatelessWidget {
   final String label, description;
   final IconData icon;
@@ -196,8 +387,11 @@ class _PortalButton extends StatelessWidget {
   final VoidCallback onTap;
 
   const _PortalButton({
-    required this.label, required this.description,
-    required this.icon, required this.isPrimary, required this.onTap,
+    required this.label,
+    required this.description,
+    required this.icon,
+    required this.isPrimary,
+    required this.onTap,
   });
 
   @override
@@ -224,32 +418,42 @@ class _PortalButton extends StatelessWidget {
             borderRadius: BorderRadius.circular(16),
           ),
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+            padding:
+                const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
             child: Row(children: [
               Container(
-                width: 36, height: 36,
+                width: 36,
+                height: 36,
                 decoration: BoxDecoration(
                   color: isPrimary
                       ? Colors.white.withOpacity(0.22)
                       : const Color(0xFFFEF3C7),
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: Icon(icon, size: 18,
-                  color: isPrimary ? Colors.white : const Color(0xFFB45309)),
+                child: Icon(icon,
+                    size: 18,
+                    color: isPrimary
+                        ? Colors.white
+                        : const Color(0xFFB45309)),
               ),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(label,
+                    Text(
+                      label,
                       style: GoogleFonts.beVietnamPro(
-                        fontSize: 14, fontWeight: FontWeight.w700,
-                        color: isPrimary ? Colors.white : const Color(0xFF1E293B),
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: isPrimary
+                            ? Colors.white
+                            : const Color(0xFF1E293B),
                       ),
                     ),
                     const SizedBox(height: 2),
-                    Text(description,
+                    Text(
+                      description,
                       style: GoogleFonts.beVietnamPro(
                         fontSize: 10.5,
                         color: isPrimary
@@ -261,9 +465,9 @@ class _PortalButton extends StatelessWidget {
                 ),
               ),
               Icon(Icons.chevron_right_rounded,
-                color: isPrimary
-                    ? Colors.white.withOpacity(0.6)
-                    : const Color(0xFFD97706)),
+                  color: isPrimary
+                      ? Colors.white.withOpacity(0.6)
+                      : const Color(0xFFD97706)),
             ]),
           ),
         ),
@@ -276,7 +480,6 @@ class _Badge extends StatelessWidget {
   final String label;
   final bool showDot;
   final IconData? icon;
-
   const _Badge({required this.label, this.showDot = false, this.icon});
 
   @override
@@ -290,9 +493,11 @@ class _Badge extends StatelessWidget {
       ),
       child: Row(mainAxisSize: MainAxisSize.min, children: [
         if (showDot) ...[
-          Container(width: 5, height: 5,
-            decoration: const BoxDecoration(
-              color: Color(0xFF10B981), shape: BoxShape.circle)),
+          Container(
+              width: 5,
+              height: 5,
+              decoration: const BoxDecoration(
+                  color: Color(0xFF10B981), shape: BoxShape.circle)),
           const SizedBox(width: 5),
         ],
         if (icon != null) ...[
@@ -300,52 +505,9 @@ class _Badge extends StatelessWidget {
           const SizedBox(width: 4),
         ],
         Text(label,
-          style: GoogleFonts.beVietnamPro(
-            fontSize: 10, color: const Color(0xFF94A3B8),
-          ),
-        ),
+            style: GoogleFonts.beVietnamPro(
+                fontSize: 10, color: const Color(0xFF94A3B8))),
       ]),
-    );
-  }
-}
-
-// AuthWrapper – decides which dashboard to show after login
-class AuthWrapper extends StatelessWidget {
-  const AuthWrapper({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return StreamBuilder<User?>(
-      stream: FirebaseAuth.instance.authStateChanges(),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.active) {
-          final user = snapshot.data;
-          if (user == null) {
-            return const LandingPage();
-          }
-          return FutureBuilder<DocumentSnapshot>(
-            future: FirebaseFirestore.instance.collection('users').doc(user.uid).get(),
-            builder: (context, roleSnapshot) {
-              if (roleSnapshot.connectionState == ConnectionState.waiting) {
-                return const Scaffold(body: Center(child: CircularProgressIndicator()));
-              }
-              if (roleSnapshot.hasData && roleSnapshot.data!.exists) {
-                final role = roleSnapshot.data!.get('role') as String?;
-                if (role == 'admin') {
-                  return const AdminDashboard();
-                } else if (role == 'org') {
-                  // For now use AdminDashboard, later replace with OrgDashboard
-                  return const AdminDashboard(); // Change to OrgDashboard when ready
-                }
-              }
-              // Invalid role → sign out and go to landing
-              FirebaseAuth.instance.signOut();
-              return const LandingPage();
-            },
-          );
-        }
-        return const Scaffold(body: Center(child: CircularProgressIndicator()));
-      },
     );
   }
 }

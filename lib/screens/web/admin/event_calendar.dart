@@ -6,30 +6,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import '../../theme/app_theme.dart';
 import 'package:share_plus/share_plus.dart';
-
-// ============ ACTIVITY LOGGER ============
-class ActivityLogger {
-  static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-
-  static Future<void> log({
-    required String action,
-    required String module,
-    String severity = 'info',
-    Map<String, dynamic>? details,
-  }) async {
-    final user = FirebaseAuth.instance.currentUser;
-    final userName = user?.email ?? 'Unknown User';
-    await _firestore.collection('activity_logs').add({
-      'user': userName,
-      'action': action,
-      'module': module,
-      'severity': severity,
-      'timestamp': FieldValue.serverTimestamp(),
-      'ipAddress': '',
-      'details': details,
-    });
-  }
-}
+import '../../../services/activity_logger.dart' as activity_log;
 
 class EventCalendar extends StatefulWidget {
   const EventCalendar({super.key});
@@ -63,8 +40,8 @@ class _EventCalendarState extends State<EventCalendar> {
       floatingActionButton: FloatingActionButton(
         onPressed: () => _showAddEventDialog(),
         backgroundColor: UpriseColors.primaryDark,
-        child: const Icon(Icons.add, color: Colors.white),
         tooltip: 'Add Event',
+        child: const Icon(Icons.add, color: Colors.white),
       ),
       body: SingleChildScrollView(
         child: Column(
@@ -487,7 +464,7 @@ class _EventCalendarState extends State<EventCalendar> {
   Future<void> _showAddEventDialog() async {
     // TODO: Implement a proper add event dialog.
     // When you do, add:
-    // await ActivityLogger.log(
+    // await activity_log.ActivityLogger.log(
     //   action: 'Created event: $eventTitle',
     //   module: 'Event Calendar',
     //   severity: 'info',
@@ -543,3 +520,4 @@ class Event {
     required this.status,
   });
 }
+

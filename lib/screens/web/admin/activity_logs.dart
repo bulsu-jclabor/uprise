@@ -6,35 +6,7 @@ import 'package:intl/intl.dart';
 import 'dart:io';
 import 'package:share_plus/share_plus.dart';
 import '../../theme/app_theme.dart';
-
-// ═══════════════════════════════════════════════════════════════
-//  ACTIVITY LOGGER – use in any screen to track events
-// ═══════════════════════════════════════════════════════════════
-class ActivityLogger {
-  static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-
-  /// Log an activity to the 'activity_logs' collection.
-  /// Call this method anywhere in the app.
-  static Future<void> log({
-    required String action,
-    required String module,
-    String severity = 'info',
-    Map<String, dynamic>? details,
-  }) async {
-    final user = FirebaseAuth.instance.currentUser;
-    final userName = user?.email ?? 'Admin (not logged in)';
-
-    await _firestore.collection('activity_logs').add({
-      'user': userName,
-      'action': action,
-      'module': module,
-      'severity': severity,
-      'timestamp': FieldValue.serverTimestamp(),
-      'ipAddress': '', // optionally use an IP fetching package
-      'details': details,
-    });
-  }
-}
+import '../../../services/activity_logger.dart' as activity_log;
 
 // ═══════════════════════════════════════════════════════════════
 //  ACTIVITY LOGS PAGE
@@ -57,18 +29,34 @@ class _ActivityLogsState extends State<ActivityLogs> {
   int _totalLogs24h = 0;
   int _criticalActions = 0;
   int _failedAttempts = 0;
-  int _activeAdmins = 3; // optional – fetch from a separate 'online_sessions' collection
+  final int _activeAdmins = 3; // optional – fetch from a separate 'online_sessions' collection
 
   List<String> get _modules => [
         'All Modules',
-        'Event Management',
-        'Organizations',
-        'User Directory',
-        'Authentication',
-        'Letter Request',
-        'Adviser Roles',
-        'Reports',
         'System',
+        'Admin Dashboard',
+        'User Directory',
+        'Organizations',
+        'Event Management',
+        'Letter Request',
+        'Reports',
+        'Adviser Roles',
+        'Admin Settings',
+        'External Account',
+        'Event Calendar',
+        'Broadcast',
+        'Announcements',
+        'Certificates',
+        'Finance',
+        'Merchandise',
+        'Attendance QR',
+        'Event Analytics',
+        'Event Proposals',
+        'Events Schedule',
+        'Org Profile',
+        'Org Settings',
+        'Adviser Approvals',
+        'Adviser Signing',
       ];
 
   List<String> get _dateRanges => ['Today', 'Yesterday', 'This Week', 'Last Week', 'All'];
@@ -87,7 +75,7 @@ class _ActivityLogsState extends State<ActivityLogs> {
   void initState() {
     super.initState();
     // optional: log that admin viewed the logs
-    // ActivityLogger.log(action: 'Viewed activity logs', module: 'System', severity: 'info');
+    // activity_log.ActivityLogger.log(action: 'Viewed activity logs', module: 'System', severity: 'info');
   }
 
   @override
@@ -156,8 +144,9 @@ class _ActivityLogsState extends State<ActivityLogs> {
             final data = doc.data() as Map<String, dynamic>;
             dynamic tsField = data['timestamp'];
             DateTime? timestamp;
-            if (tsField is Timestamp) timestamp = tsField.toDate();
-            else if (tsField is DateTime) timestamp = tsField;
+            if (tsField is Timestamp) {
+              timestamp = tsField.toDate();
+            } else if (tsField is DateTime) timestamp = tsField;
             if (timestamp != null && timestamp.isAfter(twentyFourHoursAgo)) total24h++;
             final severity = data['severity'] ?? 'info';
             if (severity == 'critical' || severity == 'high') critical++;
@@ -358,8 +347,9 @@ class _ActivityLogsState extends State<ActivityLogs> {
           final data = doc.data() as Map<String, dynamic>;
           dynamic tsField = data['timestamp'];
           DateTime? timestamp;
-          if (tsField is Timestamp) timestamp = tsField.toDate();
-          else if (tsField is DateTime) timestamp = tsField;
+          if (tsField is Timestamp) {
+            timestamp = tsField.toDate();
+          } else if (tsField is DateTime) timestamp = tsField;
 
           if (_dateRange != 'All' && timestamp == null) continue;
           if (timestamp != null) {
@@ -369,7 +359,7 @@ class _ActivityLogsState extends State<ActivityLogs> {
             if (_dateRange == 'This Week' && logDate.isBefore(thisWeekStart)) continue;
             if (_dateRange == 'Last Week' && (logDate.isBefore(lastWeekStart) || logDate.isAfter(thisWeekStart.subtract(const Duration(days: 1))))) continue;
           }
-          if (_selectedModule != 'All Modules' && data['module'] != _selectedModule) continue;
+          if (_selectedModule != 'All Modules' && !_matchesModule(_selectedModule, (data['module'] ?? '').toString())) continue;
           if (_severity != 'All Severities' && data['severity'] != _severity) continue;
 
           final term = _searchController.text.trim().toLowerCase();
@@ -377,7 +367,8 @@ class _ActivityLogsState extends State<ActivityLogs> {
             final user = (data['user'] ?? '').toString().toLowerCase();
             final action = (data['action'] ?? '').toString().toLowerCase();
             final module = (data['module'] ?? '').toString().toLowerCase();
-            if (!user.contains(term) && !action.contains(term) && !module.contains(term)) continue;
+            final orgId = (data['orgId'] ?? (data['details'] is Map ? data['details']['orgId'] : '')).toString().toLowerCase();
+            if (!user.contains(term) && !action.contains(term) && !module.contains(term) && !orgId.contains(term)) continue;
           }
           logs.add(data);
         }
@@ -433,15 +424,18 @@ class _ActivityLogsState extends State<ActivityLogs> {
                     final data = pageLogs[i];
                     dynamic tsField = data['timestamp'];
                     DateTime? timestamp;
-                    if (tsField is Timestamp) timestamp = tsField.toDate();
-                    else if (tsField is DateTime) timestamp = tsField;
+                    if (tsField is Timestamp) {
+                      timestamp = tsField.toDate();
+                    } else if (tsField is DateTime) timestamp = tsField;
                     final severity = data['severity'] ?? 'info';
+                    final orgId = (data['orgId'] ?? (data['details'] is Map ? data['details']['orgId'] : ''))?.toString() ?? '';
                     return _buildRow(
                       user: data['user'] ?? 'Unknown',
                       action: data['action'] ?? 'Unknown action',
                       module: data['module'] ?? 'General',
                       severity: severity,
                       timestamp: timestamp,
+                      orgId: orgId,
                     );
                   },
                 ),
@@ -468,6 +462,7 @@ class _ActivityLogsState extends State<ActivityLogs> {
           children: [
             SizedBox(width: 160, child: Text('USER', style: _headerStyle())),
             SizedBox(width: 280, child: Text('ACTION', style: _headerStyle())),
+            SizedBox(width: 140, child: Text('ORG', style: _headerStyle())),
             SizedBox(width: 180, child: Text('MODULE', style: _headerStyle())),
             SizedBox(width: 120, child: Text('DATE', style: _headerStyle())),
             SizedBox(width: 100, child: Text('TIME', style: _headerStyle())),
@@ -520,9 +515,15 @@ class _ActivityLogsState extends State<ActivityLogs> {
     );
   }
 
+  bool _matchesModule(String selectedModule, String moduleValue) {
+    final normalizedModule = moduleValue.toLowerCase().replaceAll('_', ' ').trim();
+    final normalizedSelected = selectedModule.toLowerCase().trim();
+    return normalizedModule == normalizedSelected || normalizedModule.contains(normalizedSelected) || normalizedSelected.contains(normalizedModule);
+  }
+
   TextStyle _headerStyle() => GoogleFonts.beVietnamPro(fontSize: 11, fontWeight: FontWeight.w700, color: UpriseColors.darkGray, letterSpacing: 0.5);
 
-  Widget _buildRow({required String user, required String action, required String module, required String severity, DateTime? timestamp}) {
+  Widget _buildRow({required String user, required String action, required String module, required String severity, DateTime? timestamp, String orgId = ''}) {
     String formattedDate = '—';
     String formattedTime = '—';
     if (timestamp != null) {
@@ -538,7 +539,20 @@ class _ActivityLogsState extends State<ActivityLogs> {
         child: Row(
           children: [
             SizedBox(width: 160, child: Text(user, style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w500))),
-            SizedBox(width: 280, child: Text(action, style: GoogleFonts.beVietnamPro(fontSize: 13))),
+            SizedBox(
+              width: 280,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(action, style: GoogleFonts.beVietnamPro(fontSize: 13)),
+                  if (orgId.isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    Text('Org: $orgId', style: GoogleFonts.beVietnamPro(fontSize: 11, color: UpriseColors.darkGray)),
+                  ],
+                ],
+              ),
+            ),
+            SizedBox(width: 140, child: Text(orgId.isNotEmpty ? orgId : '—', style: GoogleFonts.beVietnamPro(fontSize: 13))),
             SizedBox(width: 180, child: Row(children: [Container(width: 8, height: 8, decoration: BoxDecoration(color: severityColor, shape: BoxShape.circle)), const SizedBox(width: 8), Expanded(child: Text(module, style: GoogleFonts.beVietnamPro(fontSize: 13)))])),
             SizedBox(width: 120, child: Text(formattedDate, style: GoogleFonts.beVietnamPro(fontSize: 12))),
             SizedBox(width: 100, child: Text(formattedTime, style: GoogleFonts.beVietnamPro(fontSize: 12, color: UpriseColors.darkGray))),
@@ -557,8 +571,9 @@ class _ActivityLogsState extends State<ActivityLogs> {
         final d = doc.data();
         dynamic tsField = d['timestamp'];
         String timestampStr = '';
-        if (tsField is Timestamp) timestampStr = tsField.toDate().toIso8601String();
-        else if (tsField is DateTime) timestampStr = tsField.toIso8601String();
+        if (tsField is Timestamp) {
+          timestampStr = tsField.toDate().toIso8601String();
+        } else if (tsField is DateTime) timestampStr = tsField.toIso8601String();
         lines.add([d['user'] ?? '', d['action'] ?? '', d['module'] ?? '', d['severity'] ?? '', timestampStr, d['ipAddress'] ?? ''].map((v) => '"$v"').join(','));
       }
       final file = File('${Directory.systemTemp.path}/activity_logs_export.csv');

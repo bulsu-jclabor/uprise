@@ -1,7 +1,6 @@
 // lib/screens/student/student_home_screen.dart
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import '../../utils/theme.dart';
 import '../../widgets/common/bottom_nav_bar.dart';
 import '../../widgets/student/upcoming_events_widget.dart';
 import '../../widgets/student/announcements_feed.dart';

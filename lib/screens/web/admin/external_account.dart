@@ -6,30 +6,7 @@ import 'package:intl/intl.dart';
 import 'dart:io';
 import 'package:share_plus/share_plus.dart';
 import '../../theme/app_theme.dart';
-
-// ============ ACTIVITY LOGGER ============
-class ActivityLogger {
-  static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-
-  static Future<void> log({
-    required String action,
-    required String module,
-    String severity = 'info',
-    Map<String, dynamic>? details,
-  }) async {
-    final user = FirebaseAuth.instance.currentUser;
-    final userName = user?.email ?? 'Unknown User';
-    await _firestore.collection('activity_logs').add({
-      'user': userName,
-      'action': action,
-      'module': module,
-      'severity': severity,
-      'timestamp': FieldValue.serverTimestamp(),
-      'ipAddress': '',
-      'details': details,
-    });
-  }
-}
+import '../../../services/activity_logger.dart' as activity_log;
 
 class ExternalAccount extends StatefulWidget {
   const ExternalAccount({super.key});
@@ -521,7 +498,7 @@ class _ExternalAccountState extends State<ExternalAccount> {
 
     await FirebaseFirestore.instance.collection('external_requests').doc(docId).update({'status': newStatus});
 
-    await ActivityLogger.log(
+    await activity_log.ActivityLogger.log(
       action: '${newStatus.toUpperCase()} external request for $userName',
       module: 'External Account',
       severity: newStatus == 'rejected' ? 'warning' : 'info',
@@ -546,7 +523,7 @@ class _ExternalAccountState extends State<ExternalAccount> {
             onPressed: () async {
               await FirebaseFirestore.instance.collection('external_requests').doc(req.id).delete();
 
-              await ActivityLogger.log(
+              await activity_log.ActivityLogger.log(
                 action: 'Deleted external request for ${req.userName}',
                 module: 'External Account',
                 severity: 'warning',
@@ -687,3 +664,4 @@ class ExternalRequest {
     required this.purpose,
   });
 }
+

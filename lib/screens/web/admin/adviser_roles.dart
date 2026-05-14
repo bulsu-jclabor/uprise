@@ -2,33 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../../../services/activity_logger.dart' as activity_log;
 import 'dart:io';
 import 'package:share_plus/share_plus.dart';
 import '../../theme/app_theme.dart';
-
-// ============ ACTIVITY LOGGER ============
-class ActivityLogger {
-  static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-
-  static Future<void> log({
-    required String action,
-    required String module,
-    String severity = 'info',
-    Map<String, dynamic>? details,
-  }) async {
-    final user = FirebaseAuth.instance.currentUser;
-    final userName = user?.email ?? 'Unknown User';
-    await _firestore.collection('activity_logs').add({
-      'user': userName,
-      'action': action,
-      'module': module,
-      'severity': severity,
-      'timestamp': FieldValue.serverTimestamp(),
-      'ipAddress': '',
-      'details': details,
-    });
-  }
-}
 
 class OrgModel {
   final String id;
@@ -654,7 +631,7 @@ class _AdviserRolesState extends State<AdviserRoles> {
 
               if (isEdit && docId != null) {
                 await FirebaseFirestore.instance.collection('adviser_roles').doc(docId).update(payload);
-                await ActivityLogger.log(
+                await activity_log.ActivityLogger.log(
                   action: 'Updated adviser role for ${org.name}',
                   module: 'Adviser Roles',
                   severity: 'info',
@@ -672,7 +649,7 @@ class _AdviserRolesState extends State<AdviserRoles> {
                 }
                 payload['createdAt'] = FieldValue.serverTimestamp();
                 await FirebaseFirestore.instance.collection('adviser_roles').add(payload);
-                await ActivityLogger.log(
+                await activity_log.ActivityLogger.log(
                   action: 'Assigned new adviser role for ${org.name}',
                   module: 'Adviser Roles',
                   severity: 'info',
@@ -702,7 +679,7 @@ class _AdviserRolesState extends State<AdviserRoles> {
                     _sectionLabel('Organization'),
                     const SizedBox(height: 8),
                     DropdownButtonFormField<OrgModel>(
-                      value: selectedOrg,
+                      initialValue: selectedOrg,
                       isExpanded: true,
                       decoration: InputDecoration(
                         labelText: 'Select Organization',
@@ -864,7 +841,7 @@ class _AdviserRolesState extends State<AdviserRoles> {
             TextButton.icon(
               onPressed: () async {
                 await FirebaseFirestore.instance.collection('adviser_roles').doc(docId).update({'archived': false});
-                await ActivityLogger.log(
+                await activity_log.ActivityLogger.log(
                   action: 'Restored adviser role for ${data['orgName'] ?? 'unknown organization'}',
                   module: 'Adviser Roles',
                   severity: 'info',
@@ -943,7 +920,7 @@ class _AdviserRolesState extends State<AdviserRoles> {
           ElevatedButton(
             onPressed: () async {
               await FirebaseFirestore.instance.collection('adviser_roles').doc(docId).update({'archived': true});
-              await ActivityLogger.log(
+              await activity_log.ActivityLogger.log(
                 action: 'Archived adviser role for $orgName',
                 module: 'Adviser Roles',
                 severity: 'info',
@@ -977,7 +954,7 @@ class _AdviserRolesState extends State<AdviserRoles> {
           ElevatedButton(
             onPressed: () async {
               await FirebaseFirestore.instance.collection('adviser_roles').doc(docId).delete();
-              await ActivityLogger.log(
+              await activity_log.ActivityLogger.log(
                 action: 'Deleted adviser role for $orgName',
                 module: 'Adviser Roles',
                 severity: 'warning',
@@ -1033,3 +1010,4 @@ class _AdviserRolesState extends State<AdviserRoles> {
     super.dispose();
   }
 }
+

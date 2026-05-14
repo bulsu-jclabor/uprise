@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
+import 'package:uprise/screens/web/admin/activity_logs.dart';
 import '../../../auth_service.dart';
 import 'admin_login.dart';
 import 'organization_management.dart';
@@ -13,8 +14,8 @@ import 'event_proposals.dart';
 import 'event_calendar.dart';
 import 'letter_request.dart';
 import 'external_account.dart';
+import '../../../services/activity_logger.dart' as activity_log;
 import 'reports_management.dart';
-import 'activity_logs.dart';
 import 'settings.dart'; // separate settings page
 
 // ============ COLOR SCHEME ============
@@ -31,30 +32,6 @@ class UpriseColors {
   static const Color warning = Color(0xFFF59E0B);
   static const Color error = Color(0xFFEF4444);
   static const Color info = Color(0xFF3B82F6);
-}
-
-// ============ ACTIVITY LOGGER ============
-class ActivityLogger {
-  static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-
-  static Future<void> log({
-    required String action,
-    required String module,
-    String severity = 'info',
-    Map<String, dynamic>? details,
-  }) async {
-    final user = FirebaseAuth.instance.currentUser;
-    final userName = user?.email ?? 'Unknown User';
-    await _firestore.collection('activity_logs').add({
-      'user': userName,
-      'action': action,
-      'module': module,
-      'severity': severity,
-      'timestamp': FieldValue.serverTimestamp(),
-      'ipAddress': '',
-      'details': details,
-    });
-  }
 }
 
 // ============ SIDEBAR ICONS ============
@@ -643,8 +620,9 @@ class _DashboardHomeState extends State<DashboardHome> {
           final eventDate = dateStamp.toDate();
           int monthIndex;
           if (startMonth == 8) {
-            if (eventDate.month >= 8) monthIndex = eventDate.month - 8;
-            else if (eventDate.month == 1) monthIndex = 5;
+            if (eventDate.month >= 8) {
+              monthIndex = eventDate.month - 8;
+            } else if (eventDate.month == 1) monthIndex = 5;
             else monthIndex = -1;
           } else {
             monthIndex = eventDate.month - 1;

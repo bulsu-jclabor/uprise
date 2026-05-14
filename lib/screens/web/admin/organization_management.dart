@@ -8,30 +8,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../theme/app_theme.dart';
 import 'package:intl/intl.dart';
 import 'package:share_plus/share_plus.dart';
-
-// ============ ACTIVITY LOGGER (to track events) ============
-class ActivityLogger {
-  static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-
-  static Future<void> log({
-    required String action,
-    required String module,
-    String severity = 'info',
-    Map<String, dynamic>? details,
-  }) async {
-    final user = FirebaseAuth.instance.currentUser;
-    final userName = user?.email ?? 'Unknown User';
-    await _firestore.collection('activity_logs').add({
-      'user': userName,
-      'action': action,
-      'module': module,
-      'severity': severity,
-      'timestamp': FieldValue.serverTimestamp(),
-      'ipAddress': '',
-      'details': details,
-    });
-  }
-}
+import '../../../services/activity_logger.dart' as activity_log;
 
 // ---------- Data Models ----------
 class Officer {
@@ -658,7 +635,7 @@ class _OrganizationManagementState extends State<OrganizationManagement> {
           ElevatedButton(
             onPressed: () async {
               await FirebaseFirestore.instance.collection('organizations').doc(org.id).update({'status': newStatus});
-              await ActivityLogger.log(
+              await activity_log.ActivityLogger.log(
                 action: isArchived ? 'Restored organization: ${org.name}' : 'Archived organization: ${org.name}',
                 module: 'Organizations',
                 severity: 'info',
@@ -738,7 +715,7 @@ class _CreateOrganizationDialogState extends State<CreateOrganizationDialog> {
   final _primaryPhoneCtrl = TextEditingController();
 
   // Additional advisers
-  List<Map<String, TextEditingController>> _additionalAdvisers = [];
+  final List<Map<String, TextEditingController>> _additionalAdvisers = [];
 
   @override
   void initState() {
@@ -918,7 +895,7 @@ class _CreateOrganizationDialogState extends State<CreateOrganizationDialog> {
                       ),
                       const SizedBox(height: 16),
                       DropdownButtonFormField<String>(
-                        value: _type,
+                        initialValue: _type,
                         decoration: InputDecoration(
                           labelText: 'Organization Type',
                           prefixIcon: Icon(Icons.category, color: UpriseColors.primaryDark),
@@ -1070,7 +1047,7 @@ class _CreateOrganizationDialogState extends State<CreateOrganizationDialog> {
                             ),
                           ),
                         );
-                      }).toList(),
+                      }),
                       const SizedBox(height: 8),
                       TextButton.icon(
                         onPressed: _addAdviser,
@@ -1226,7 +1203,7 @@ class _CreateOrganizationDialogState extends State<CreateOrganizationDialog> {
       );
 
       // 7. Activity log
-      await ActivityLogger.log(
+      await activity_log.ActivityLogger.log(
         action: 'Created new organization: ${_nameCtrl.text}',
         module: 'Organizations',
         severity: 'info',
@@ -1444,7 +1421,7 @@ class _EditOrganizationDialogState extends State<EditOrganizationDialog> {
 
       await batch.commit();
 
-      await ActivityLogger.log(
+      await activity_log.ActivityLogger.log(
         action: 'Updated organization: ${widget.organization.name} → ${_nameCtrl.text}',
         module: 'Organizations',
         severity: 'info',
@@ -1970,3 +1947,4 @@ class _OrganizationDetailPageState extends State<OrganizationDetailPage> {
     return '${(diff.inDays / 7).floor()} week${(diff.inDays / 7).floor() == 1 ? '' : 's'} ago';
   }
 }
+

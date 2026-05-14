@@ -7,30 +7,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:share_plus/share_plus.dart';
 import '../../theme/app_theme.dart';
-
-// ============ ACTIVITY LOGGER ============
-class ActivityLogger {
-  static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-
-  static Future<void> log({
-    required String action,
-    required String module,
-    String severity = 'info',
-    Map<String, dynamic>? details,
-  }) async {
-    final user = FirebaseAuth.instance.currentUser;
-    final userName = user?.email ?? 'Unknown User';
-    await _firestore.collection('activity_logs').add({
-      'user': userName,
-      'action': action,
-      'module': module,
-      'severity': severity,
-      'timestamp': FieldValue.serverTimestamp(),
-      'ipAddress': '',
-      'details': details,
-    });
-  }
-}
+import '../../../services/activity_logger.dart' as activity_log;
 
 class LetterRequest extends StatefulWidget {
   const LetterRequest({super.key});
@@ -529,7 +506,7 @@ class _LetterRequestState extends State<LetterRequest> {
 
     await FirebaseFirestore.instance.collection('letter_requests').doc(docId).update({'status': newStatus});
 
-    await ActivityLogger.log(
+    await activity_log.ActivityLogger.log(
       action: '${newStatus.toUpperCase()} letter request: $title',
       module: 'Letter Request',
       severity: newStatus == 'rejected' ? 'warning' : 'info',
@@ -603,7 +580,7 @@ class _LetterRequestState extends State<LetterRequest> {
                   TextFormField(controller: contentCtrl, maxLines: 5, decoration: const InputDecoration(labelText: 'Document Content / Description')),
                   if (isEdit)
                     DropdownButtonFormField<String>(
-                      value: status,
+                      initialValue: status,
                       items: ['pending', 'approved', 'rejected', 'archived'].map((s) => DropdownMenuItem(value: s, child: Text(s.toUpperCase()))).toList(),
                       onChanged: (v) => setDlg(() => status = v!),
                       decoration: const InputDecoration(labelText: 'Status'),
@@ -632,7 +609,7 @@ class _LetterRequestState extends State<LetterRequest> {
                   try {
                     if (isEdit) {
                       await FirebaseFirestore.instance.collection('letter_requests').doc(doc!.id).update(data);
-                      await ActivityLogger.log(
+                      await activity_log.ActivityLogger.log(
                         action: 'Updated letter request: ${titleCtrl.text}',
                         module: 'Letter Request',
                         severity: 'info',
@@ -640,7 +617,7 @@ class _LetterRequestState extends State<LetterRequest> {
                     } else {
                       if (fileName.isEmpty) throw 'Please select a file';
                       await FirebaseFirestore.instance.collection('letter_requests').add(data);
-                      await ActivityLogger.log(
+                      await activity_log.ActivityLogger.log(
                         action: 'Uploaded new letter request: ${titleCtrl.text}',
                         module: 'Letter Request',
                         severity: 'info',
@@ -769,7 +746,7 @@ class _LetterRequestState extends State<LetterRequest> {
                 'revisionNotes': notesCtrl.text,
                 'status': 'pending',
               });
-              await ActivityLogger.log(
+              await activity_log.ActivityLogger.log(
                 action: 'Requested revision for letter request: ${doc.title}',
                 module: 'Letter Request',
                 severity: 'info',
@@ -814,7 +791,7 @@ class _LetterRequestState extends State<LetterRequest> {
           ElevatedButton(
             onPressed: () async {
               await FirebaseFirestore.instance.collection('letter_requests').doc(doc.id).delete();
-              await ActivityLogger.log(
+              await activity_log.ActivityLogger.log(
                 action: 'Deleted letter request: ${doc.title}',
                 module: 'Letter Request',
                 severity: 'warning',
@@ -893,3 +870,4 @@ class Document {
     required this.revisionNotes,
   });
 }
+

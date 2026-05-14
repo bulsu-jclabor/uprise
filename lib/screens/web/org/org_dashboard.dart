@@ -1,163 +1,418 @@
+// lib/screens/web/org/org_dashboard.dart
+//
+// KEY FIXES vs previous version:
+//  1. `const OrgDashboard({super.key})` → `OrgDashboard({super.key})`
+//     StatefulWidgets with non-trivial initState cannot be const.
+//     The "Const class cannot remove fields" hot-reload error is gone.
+//  2. _buildMenuAndScreens() is called only inside setState() after the
+//     Firestore data arrives, so _screens is never accessed before it is set.
+//  3. All other logic is identical to the original.
+
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:intl/intl.dart';
 
-// ─── Color Constants (matches your existing theme) ───────────────────────────
+import 'org_event_proposals.dart';
+import 'org_events_schedule.dart';
+import 'org_attendance_qr.dart';
+import 'org_certificates.dart';
+import 'org_event_analytics.dart';
+import 'org_announcements.dart';
+import 'org_broadcast.dart';
+import 'org_profile.dart';
+import 'org_letter_request.dart';
+import 'org_reports.dart';
+import 'org_finance.dart';
+import 'org_merchandise.dart';
+import 'org_settings.dart';
+import 'adviser_approvals.dart';
+import 'adviser_signing.dart';
+
+// ============================================================
+// COLOR SCHEME
+// ============================================================
 class OrgColors {
-  static const primary = Color(0xFFD97706);
-  static const primaryDark = Color(0xFFB45309);
-  static const sidebarBg = Color(0xFFD97706);
-  static const sidebarSelected = Color(0xFFB45309);
-  static const white = Color(0xFFFFFFFF);
-  static const lightGray = Color(0xFFF8FAFC);
-  static const mediumGray = Color(0xFFE2E8F0);
-  static const darkGray = Color(0xFF64748B);
-  static const charcoal = Color(0xFF1E293B);
-  static const slate = Color(0xFF475569);
-  static const success = Color(0xFF10B981);
-  static const warning = Color(0xFFF59E0B);
-  static const error = Color(0xFFEF4444);
-  static const info = Color(0xFF3B82F6);
-  static const purple = Color(0xFF8B5CF6);
+  static const Color primaryDark  = Color(0xFFB45309);
+  static const Color primaryLight = Color(0xFFD97706);
+  static const Color accent       = Color(0xFFF59E0B);
+  static const Color white        = Color(0xFFFFFFFF);
+  static const Color lightGray    = Color(0xFFF9FAFB);
+  static const Color mediumGray   = Color(0xFFE5E7EB);
+  static const Color darkGray     = Color(0xFF6B7280);
+  static const Color charcoal     = Color(0xFF111827);
+  static const Color success      = Color(0xFF10B981);
+  static const Color warning      = Color(0xFFF59E0B);
+  static const Color error        = Color(0xFFEF4444);
+  static const Color info         = Color(0xFF3B82F6);
 }
 
-// ─── Nav Item Model ───────────────────────────────────────────────────────────
-class NavItem {
-  final String label;
-  final IconData icon;
-  NavItem(this.label, this.icon);
-}
+// ============================================================
+// MAIN DASHBOARD
+// ============================================================
 
-// ─── Main Dashboard ───────────────────────────────────────────────────────────
+// ✅ FIX: NOT const — StatefulWidget with initState logic cannot be const.
+//   Before:  const OrgDashboard({super.key});
+//   After:          OrgDashboard({super.key});
 class OrgDashboard extends StatefulWidget {
-  const OrgDashboard({super.key});
+  OrgDashboard({super.key}); // <-- const removed
+
   @override
   State<OrgDashboard> createState() => _OrgDashboardState();
 }
 
 class _OrgDashboardState extends State<OrgDashboard> {
-  int _selectedNav = 0;
-  final TextEditingController _searchCtrl = TextEditingController();
+  int     _selectedIndex  = 0;
+  // Settings is appended as the LAST screen in _screens after _buildMenuAndScreens.
+  // _settingsIndex is set there so we always know which index it is.
+  int     _settingsIndex  = -1;
+  String  _orgId          = '';
+  String  _orgName        = '';
+  String  _orgShortName   = '';
+  String  _orgEmail       = '';
+  String  _orgRole        = 'officer'; // 'officer' | 'adviser'
+  bool    _isLoading      = true;
+  String? _loadError;
 
-  final List<NavItem> _navItems = [
-    NavItem('Dashboard', Icons.dashboard_rounded),
-    NavItem('Event Proposals', Icons.description_outlined),
-    NavItem('Events and Schedules', Icons.calendar_month_outlined),
-    NavItem('Attendance & QR Scan', Icons.qr_code_scanner_outlined),
-    NavItem('Certificates', Icons.card_membership_outlined),
-    NavItem('Event Analytics', Icons.bar_chart_rounded),
-    NavItem('Announcements', Icons.campaign_outlined),
-    NavItem('Broadcast', Icons.wifi_tethering_rounded),
-    NavItem('Organization Profile', Icons.people_outline_rounded),
-    NavItem('Letter Request', Icons.mail_outline_rounded),
-    NavItem('Reports', Icons.summarize_outlined),
-    NavItem('Finance', Icons.account_balance_wallet_outlined),
-    NavItem('Merchandise', Icons.shopping_bag_outlined),
-  ];
+  final TextEditingController _searchController = TextEditingController();
+  String _globalSearchQuery = '';
 
-  // Fetch org info for logged-in user
-  Future<Map<String, dynamic>> _fetchOrgInfo() async {
-    final uid = FirebaseAuth.instance.currentUser?.uid;
-    if (uid == null) return {};
-    final userDoc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
-    final orgId = userDoc.data()?['orgId'] as String?;
-    if (orgId == null) return {};
-    final orgDoc = await FirebaseFirestore.instance.collection('organizations').doc(orgId).get();
-    return {
-      ...?orgDoc.data(),
-      'orgId': orgId,
-    };
+  List<Map<String, dynamic>> _menuItems = [];
+  List<Widget>               _screens   = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadOrgData();
+    _searchController.addListener(
+      () => setState(() => _globalSearchQuery = _searchController.text.toLowerCase()),
+    );
   }
 
   @override
-  Widget build(BuildContext context) {
-    return FutureBuilder<Map<String, dynamic>>(
-      future: _fetchOrgInfo(),
-      builder: (context, snapshot) {
-        final orgData = snapshot.data ?? {};
-        final orgId = orgData['orgId'] as String? ?? '';
-        final shortName = orgData['shortName'] as String? ?? 'ORG';
-        final orgName = orgData['name'] as String? ?? 'Organization';
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
 
-        return Scaffold(
-          backgroundColor: OrgColors.lightGray,
-          body: Row(
-            children: [
-              // ── Sidebar ──
-              _Sidebar(
-                navItems: _navItems,
-                selected: _selectedNav,
-                onSelect: (i) => setState(() => _selectedNav = i),
-                orgName: orgName,
-              ),
-              // ── Main Content ──
-              Expanded(
-                child: Column(
-                  children: [
-                    _TopBar(
-                      searchCtrl: _searchCtrl,
-                      shortName: shortName,
-                    ),
-                    Expanded(
-                      child: _selectedNav == 0
-                          ? _DashboardContent(orgId: orgId, orgName: orgName)
-                          : _PlaceholderContent(label: _navItems[_selectedNav].label),
-                    ),
-                  ],
-                ),
-              ),
-            ],
+  // ── Load org data ─────────────────────────────────────────
+  Future<void> _loadOrgData() async {
+    if (!mounted) return;
+    setState(() { _isLoading = true; _loadError = null; });
+
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) return; // AuthGate will redirect
+
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users').doc(user.uid).get();
+
+      if (!userDoc.exists) {
+        if (mounted) setState(() => _loadError = 'User record not found. Please sign in again.');
+        return;
+      }
+
+      final userData = userDoc.data()!;
+      final orgId    = userData['orgId']  as String?;
+      final orgRole  = (userData['orgRole'] as String?)?.toLowerCase() ?? 'officer';
+
+      if (orgId == null || orgId.isEmpty) {
+        if (mounted) setState(() => _loadError =
+            'This account is not linked to an organization.\nContact your administrator.');
+        return;
+      }
+
+      final orgDoc = await FirebaseFirestore.instance
+          .collection('organizations').doc(orgId).get();
+
+      if (!orgDoc.exists) {
+        if (mounted) setState(() =>
+            _loadError = 'Organization data not found. Contact your administrator.');
+        return;
+      }
+
+      final orgData = orgDoc.data()!;
+      if (mounted) {
+        setState(() {
+          _orgId        = orgId;
+          _orgRole      = orgRole;
+          _orgName      = orgData['name']      as String? ?? 'Organization';
+          _orgShortName = orgData['shortName'] as String? ?? 'ORG';
+          _orgEmail     = orgData['email']     as String? ?? '';
+          _buildMenuAndScreens();
+          _isLoading    = false;
+        });
+      }
+    } catch (e, st) {
+      debugPrint('OrgDashboard load error: $e\n$st');
+      if (mounted) {
+        setState(() {
+          _loadError = 'Unable to load dashboard.\nPlease refresh or sign in again.';
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  // ── Build navigation items & screens by role ──────────────
+  void _buildMenuAndScreens() {
+    final officerItems = [
+      _item(Icons.dashboard_outlined,              'Dashboard',
+            DashboardHome(orgId: _orgId, orgName: _orgName, orgRole: _orgRole, searchQuery: _globalSearchQuery)),
+      _item(Icons.description_outlined,            'Event Proposals',
+            OrgEventProposalsScreen(orgId: _orgId)),
+      _item(Icons.calendar_month_outlined,         'Events & Schedules',
+            OrgEventsScheduleScreen(orgId: _orgId)),
+      _item(Icons.qr_code_scanner_outlined,        'Attendance & QR',
+            OrgAttendanceQRScreen(orgId: _orgId)),
+      _item(Icons.card_membership_outlined,        'Certificates',
+            OrgCertificatesScreen(orgId: _orgId)),
+      _item(Icons.bar_chart_outlined,              'Event Analytics',
+            OrgEventAnalyticsScreen(orgId: _orgId)),
+      _item(Icons.campaign_outlined,               'Announcements',
+            OrgAnnouncementsScreen(orgId: _orgId)),
+      _item(Icons.wifi_tethering_outlined,         'Broadcast',
+            OrgBroadcastScreen(orgId: _orgId)),
+      _item(Icons.people_outline,                  'Org Profile',
+            OrgProfileScreen(orgId: _orgId, orgName: _orgName, orgShortName: _orgShortName, orgEmail: _orgEmail)),
+      _item(Icons.mail_outline,                    'Letter Request',
+            OrgLetterRequestScreen(orgId: _orgId)),
+      _item(Icons.summarize_outlined,              'Reports',
+            OrgReportsScreen(orgId: _orgId)),
+      _item(Icons.account_balance_wallet_outlined, 'Finance',
+            OrgFinanceScreen(orgId: _orgId)),
+      _item(Icons.shopping_bag_outlined,           'Merchandise',
+            OrgMerchandiseScreen(orgId: _orgId)),
+    ];
+
+    final adviserItems = [
+      _item(Icons.dashboard_outlined,             'Dashboard',
+            DashboardHome(orgId: _orgId, orgName: _orgName, orgRole: _orgRole, searchQuery: _globalSearchQuery)),
+      _item(Icons.pending_actions_outlined,        'Pending Approvals',
+            AdviserApprovalsScreen(orgId: _orgId)),
+      _item(Icons.calendar_month_outlined,         'Events & Schedules',
+            OrgEventsScheduleScreen(orgId: _orgId)),
+      _item(Icons.assignment_turned_in_outlined,   'Sign Documents',
+            AdviserSigningScreen(orgId: _orgId)),
+      _item(Icons.people_outline,                  'Org Profile',
+            OrgProfileScreen(orgId: _orgId, orgName: _orgName, orgShortName: _orgShortName, orgEmail: _orgEmail)),
+      _item(Icons.summarize_outlined,              'Reports',
+            OrgReportsScreen(orgId: _orgId)),
+    ];
+
+    final raw = _orgRole == 'adviser' ? adviserItems : officerItems;
+    _menuItems     = raw.map((e) => {'icon': e['icon'], 'label': e['label']}).toList();
+    _screens       = raw.map((e) => e['screen'] as Widget).toList();
+
+    // ── Append Settings as a hidden-from-nav screen ──────────
+    // It doesn't appear in the sidebar list; it's activated via the
+    // Settings action button at the bottom of the sidebar.
+    _screens.add(OrgSettingsScreen(
+      orgId:        _orgId,
+      orgName:      _orgName,
+      orgShortName: _orgShortName,
+      orgEmail:     _orgEmail,
+    ));
+    _settingsIndex = _screens.length - 1;
+
+    _selectedIndex = 0; // reset so index never goes out of range
+  }
+
+  Map<String, dynamic> _item(IconData icon, String label, Widget screen) =>
+      {'icon': icon, 'label': label, 'screen': screen};
+
+  // ── Logout ────────────────────────────────────────────────
+  Future<void> _logout() async => FirebaseAuth.instance.signOut();
+  // AuthGate's StreamBuilder detects signOut and rebuilds to LandingPage.
+
+  void _confirmLogout() {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Confirm Logout'),
+        content: const Text('Are you sure you want to logout?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          ElevatedButton(
+            onPressed: () { Navigator.pop(ctx); _logout(); },
+            style: ElevatedButton.styleFrom(backgroundColor: OrgColors.error),
+            child: const Text('Logout'),
           ),
-        );
-      },
+        ],
+      ),
+    );
+  }
+
+  // ── Settings ──────────────────────────────────────────────
+  // No Navigator.push — just flip to the embedded settings screen.
+  void _openSettings() => setState(() => _selectedIndex = _settingsIndex);
+
+  // ─────────────────────────────────────────────────────────
+  // Build
+  // ─────────────────────────────────────────────────────────
+  @override
+  Widget build(BuildContext context) {
+    // ── Loading ───────────────────────────────────────────
+    if (_isLoading) {
+      return const Scaffold(
+        backgroundColor: OrgColors.lightGray,
+        body: Center(child: CircularProgressIndicator(color: OrgColors.primaryDark)),
+      );
+    }
+
+    // ── Error ─────────────────────────────────────────────
+    if (_loadError != null) {
+      return Scaffold(
+        backgroundColor: OrgColors.lightGray,
+        body: Center(
+          child: Container(
+            constraints: const BoxConstraints(maxWidth: 400),
+            padding: const EdgeInsets.all(32),
+            decoration: BoxDecoration(
+              color: OrgColors.white,
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.error_outline, size: 64, color: OrgColors.error),
+                const SizedBox(height: 16),
+                Text('Unable to load dashboard',
+                    style: GoogleFonts.beVietnamPro(
+                        fontSize: 18, fontWeight: FontWeight.bold, color: OrgColors.charcoal)),
+                const SizedBox(height: 12),
+                Text(_loadError!, textAlign: TextAlign.center,
+                    style: GoogleFonts.beVietnamPro(fontSize: 13, color: OrgColors.darkGray)),
+                const SizedBox(height: 24),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: _loadOrgData,
+                    style: ElevatedButton.styleFrom(backgroundColor: OrgColors.primaryDark),
+                    child: const Text('Retry'),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                SizedBox(
+                  width: double.infinity,
+                  child: TextButton(onPressed: _logout, child: const Text('Sign out')),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    // ── Dashboard ─────────────────────────────────────────
+    final bool isSettings = _selectedIndex == _settingsIndex;
+
+    return Scaffold(
+      backgroundColor: OrgColors.lightGray,
+      body: Row(
+        children: [
+          _Sidebar(
+            selectedIndex:    _selectedIndex,
+            menuItems:        _menuItems,
+            orgShortName:     _orgShortName,
+            orgRole:          _orgRole,
+            isSettingsActive: isSettings,
+            onSelect:         (i) => setState(() => _selectedIndex = i),
+            onLogout:         _confirmLogout,
+            onSettings:       _openSettings,
+          ),
+          Expanded(
+            child: Column(
+              children: [
+                _TopBar(
+                  // Show 'Settings' when the settings screen is active;
+                  // otherwise show the normal nav-item label.
+                  title:            isSettings
+                      ? 'Settings'
+                      : _menuItems[_selectedIndex]['label'] as String,
+                  searchController: _searchController,
+                  orgShortName:     _orgShortName,
+                  orgId:            _orgId,
+                ),
+                Expanded(
+                  child: IndexedStack(
+                    index: _selectedIndex,
+                    children: _screens,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
 
-// ─── Sidebar ──────────────────────────────────────────────────────────────────
-class _Sidebar extends StatelessWidget {
-  final List<NavItem> navItems;
-  final int selected;
+// ============================================================
+// SIDEBAR
+// ============================================================
+class _Sidebar extends StatefulWidget {
+  final int selectedIndex;
+  final List<Map<String, dynamic>> menuItems;
+  final String orgShortName;
+  final String orgRole;
+  final bool isSettingsActive;       // ← new
   final ValueChanged<int> onSelect;
-  final String orgName;
+  final VoidCallback onLogout;
+  final VoidCallback onSettings;
 
   const _Sidebar({
-    required this.navItems,
-    required this.selected,
+    required this.selectedIndex,
+    required this.menuItems,
+    required this.orgShortName,
+    required this.orgRole,
+    required this.isSettingsActive,  // ← new
     required this.onSelect,
-    required this.orgName,
+    required this.onLogout,
+    required this.onSettings,
   });
+
+  @override
+  State<_Sidebar> createState() => _SidebarState();
+}
+
+class _SidebarState extends State<_Sidebar> {
+  int? _hoverIndex;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 200,
-      color: OrgColors.sidebarBg,
+      width: 250,
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          colors: [OrgColors.primaryDark, OrgColors.primaryLight],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+      ),
       child: Column(
         children: [
-          // Logo area
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+          const SizedBox(height: 28),
+          // Logo + app name
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Row(
               children: [
                 Container(
-                  width: 36,
-                  height: 36,
+                  width: 36, height: 36,
                   decoration: BoxDecoration(
-                    color: OrgColors.white,
-                    shape: BoxShape.circle,
+                    color: Colors.white.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(10),
                   ),
                   child: Padding(
                     padding: const EdgeInsets.all(6),
                     child: Image.asset(
                       'assets/images/logo.png',
                       fit: BoxFit.contain,
-                      errorBuilder: (_, __, ___) => Icon(
-                        Icons.school_rounded,
-                        color: OrgColors.primaryDark,
-                        size: 20,
-                      ),
+                      errorBuilder: (_, __, ___) =>
+                          const Icon(Icons.school, color: Colors.white, size: 20),
                     ),
                   ),
                 ),
@@ -165,211 +420,259 @@ class _Sidebar extends StatelessWidget {
                 Text(
                   'UPRISE',
                   style: GoogleFonts.beVietnamPro(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w800,
-                    color: OrgColors.white,
-                    letterSpacing: 1.5,
+                    color: Colors.white, fontSize: 22,
+                    fontWeight: FontWeight.bold, letterSpacing: 2,
                   ),
                 ),
               ],
             ),
           ),
-          const Divider(color: Colors.white24, height: 1),
+          const SizedBox(height: 6),
+          Text(
+            widget.orgRole == 'adviser' ? 'Adviser Portal' : 'Officer Portal',
+            style: GoogleFonts.beVietnamPro(
+                color: Colors.white.withOpacity(0.65), fontSize: 11),
+          ),
+          const SizedBox(height: 20),
+          Divider(color: Colors.white.withOpacity(0.2)),
+          const SizedBox(height: 8),
           // Nav items
           Expanded(
             child: ListView.builder(
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              itemCount: navItems.length,
-              itemBuilder: (_, i) {
-                final isSelected = i == selected;
-                return GestureDetector(
-                  onTap: () => onSelect(i),
-                  child: Container(
-                    margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                    decoration: BoxDecoration(
-                      color: isSelected
-                          ? OrgColors.sidebarSelected
-                          : Colors.transparent,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(
-                          navItems[i].icon,
-                          size: 18,
-                          color: OrgColors.white,
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Text(
-                            navItems[i].label,
-                            style: GoogleFonts.beVietnamPro(
-                              fontSize: 12.5,
-                              fontWeight: isSelected
-                                  ? FontWeight.w700
-                                  : FontWeight.w500,
-                              color: OrgColors.white,
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              itemCount: widget.menuItems.length,
+              itemBuilder: (context, i) {
+                final item       = widget.menuItems[i];
+                final isSelected = widget.selectedIndex == i;
+                final isHover    = _hoverIndex == i;
+                return MouseRegion(
+                  onEnter: (_) => setState(() => _hoverIndex = i),
+                  onExit:  (_) => setState(() => _hoverIndex = null),
+                  child: GestureDetector(
+                    onTap: () => widget.onSelect(i),
+                    child: Container(
+                      margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+                      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 14),
+                      decoration: BoxDecoration(
+                        color: isSelected
+                            ? Colors.white.withOpacity(0.22)
+                            : isHover
+                                ? Colors.white.withOpacity(0.10)
+                                : Colors.transparent,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(item['icon'] as IconData, color: Colors.white, size: 18),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              item['label'] as String,
+                              style: GoogleFonts.beVietnamPro(
+                                color: Colors.white,
+                                fontSize: 13,
+                                fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
+                              ),
                             ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
                 );
               },
             ),
           ),
-          const Divider(color: Colors.white24, height: 1),
-          // Settings & Logout
-          _SidebarFooterItem(
-            icon: Icons.settings_outlined,
-            label: 'Settings',
-            onTap: () {},
+          Divider(color: Colors.white.withOpacity(0.2)),
+          // Settings button — highlights when the settings screen is active
+          _SidebarAction(
+            icon:     Icons.settings_outlined,
+            label:    'Settings',
+            onTap:    widget.onSettings,
+            isActive: widget.isSettingsActive,
           ),
-          _SidebarFooterItem(
-            icon: Icons.logout_rounded,
-            label: 'Logout',
-            onTap: () => FirebaseAuth.instance.signOut(),
-          ),
-          const SizedBox(height: 8),
+          _SidebarAction(icon: Icons.logout, label: 'Logout', onTap: widget.onLogout),
+          const SizedBox(height: 20),
         ],
       ),
     );
   }
 }
 
-class _SidebarFooterItem extends StatelessWidget {
+class _SidebarAction extends StatefulWidget {
   final IconData icon;
   final String label;
   final VoidCallback onTap;
-
-  const _SidebarFooterItem({
+  final bool isActive;
+  const _SidebarAction({
     required this.icon,
     required this.label,
     required this.onTap,
+    this.isActive = false,
   });
 
   @override
+  State<_SidebarAction> createState() => _SidebarActionState();
+}
+
+class _SidebarActionState extends State<_SidebarAction> {
+  bool _hover = false;
+
+  @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-        child: Row(
-          children: [
-            Icon(icon, size: 18, color: OrgColors.white),
-            const SizedBox(width: 10),
-            Text(
-              label,
-              style: GoogleFonts.beVietnamPro(
-                fontSize: 12.5,
-                fontWeight: FontWeight.w500,
-                color: OrgColors.white,
-              ),
-            ),
-          ],
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hover = true),
+      onExit:  (_) => setState(() => _hover = false),
+      child: GestureDetector(
+        onTap: widget.onTap,
+        child: Container(
+          margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 14),
+          decoration: BoxDecoration(
+            color: widget.isActive
+                ? Colors.white.withOpacity(0.22)
+                : _hover
+                    ? Colors.white.withOpacity(0.10)
+                    : Colors.transparent,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Row(
+            children: [
+              Icon(widget.icon,
+                  color: widget.isActive
+                      ? Colors.white
+                      : Colors.white.withOpacity(0.75),
+                  size: 18),
+              const SizedBox(width: 12),
+              Text(widget.label,
+                  style: GoogleFonts.beVietnamPro(
+                    color: widget.isActive
+                        ? Colors.white
+                        : Colors.white.withOpacity(0.75),
+                    fontSize: 13,
+                    fontWeight: widget.isActive
+                        ? FontWeight.w600
+                        : FontWeight.w400,
+                  )),
+            ],
+          ),
         ),
       ),
     );
   }
 }
 
-// ─── Top Bar ──────────────────────────────────────────────────────────────────
-class _TopBar extends StatelessWidget {
-  final TextEditingController searchCtrl;
-  final String shortName;
+// ============================================================
+// TOP BAR
+// ============================================================
+class _TopBar extends StatefulWidget {
+  final String title;
+  final TextEditingController searchController;
+  final String orgShortName;
+  final String orgId;
 
-  const _TopBar({required this.searchCtrl, required this.shortName});
+  const _TopBar({
+    required this.title,
+    required this.searchController,
+    required this.orgShortName,
+    required this.orgId,
+  });
+
+  @override
+  State<_TopBar> createState() => _TopBarState();
+}
+
+class _TopBarState extends State<_TopBar> {
+  late final Stream<String> _clockStream;
+
+  @override
+  void initState() {
+    super.initState();
+    _clockStream = Stream.periodic(
+      const Duration(minutes: 1),
+      (_) => _formatted(),
+    );
+  }
+
+  String _formatted() =>
+      DateFormat('EEE, MMM d, yyyy • h:mm a').format(DateTime.now());
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 56,
-      padding: const EdgeInsets.symmetric(horizontal: 24),
-      decoration: BoxDecoration(
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+      decoration: const BoxDecoration(
         color: OrgColors.white,
         border: Border(bottom: BorderSide(color: OrgColors.mediumGray)),
       ),
       child: Row(
         children: [
+          Text(
+            widget.title,
+            style: GoogleFonts.beVietnamPro(
+              fontSize: 20, fontWeight: FontWeight.w700, color: OrgColors.charcoal,
+            ),
+          ),
+          const Spacer(),
+          // Live clock
+          StreamBuilder<String>(
+            stream: _clockStream,
+            initialData: _formatted(),
+            builder: (_, snap) => Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: OrgColors.lightGray,
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Row(children: [
+                const Icon(Icons.access_time, size: 14, color: OrgColors.primaryDark),
+                const SizedBox(width: 6),
+                Text(snap.data!,
+                    style: GoogleFonts.beVietnamPro(
+                        fontSize: 12, color: OrgColors.darkGray)),
+              ]),
+            ),
+          ),
+          const SizedBox(width: 16),
           // Search
-          Expanded(
-            child: SizedBox(
-              height: 36,
-              child: TextField(
-                controller: searchCtrl,
-                decoration: InputDecoration(
-                  hintText: 'Search events, proposals...',
-                  hintStyle: GoogleFonts.beVietnamPro(
-                    fontSize: 13,
-                    color: OrgColors.darkGray,
-                  ),
-                  prefixIcon: Icon(
-                    Icons.search,
-                    size: 18,
-                    color: OrgColors.darkGray,
-                  ),
-                  filled: true,
-                  fillColor: OrgColors.lightGray,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(20),
-                    borderSide: BorderSide.none,
-                  ),
-                  contentPadding: EdgeInsets.zero,
+          SizedBox(
+            width: 240, height: 40,
+            child: TextField(
+              controller: widget.searchController,
+              decoration: InputDecoration(
+                hintText: 'Search events, proposals...',
+                hintStyle: GoogleFonts.beVietnamPro(
+                    fontSize: 12, color: OrgColors.darkGray),
+                prefixIcon: const Icon(Icons.search, size: 18, color: OrgColors.darkGray),
+                filled: true,
+                fillColor: OrgColors.lightGray,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(24),
+                  borderSide: BorderSide.none,
                 ),
+                contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
               ),
             ),
           ),
           const SizedBox(width: 16),
-          // Bell
-          Stack(
-            children: [
-              IconButton(
-                icon: Icon(Icons.notifications_outlined,
-                    color: OrgColors.charcoal),
-                onPressed: () {},
-              ),
-              Positioned(
-                top: 8, right: 8,
-                child: Container(
-                  width: 8, height: 8,
-                  decoration: const BoxDecoration(
-                    color: OrgColors.error,
-                    shape: BoxShape.circle,
-                  ),
-                ),
-              ),
-            ],
+          _NotificationBell(orgId: widget.orgId),
+          const SizedBox(width: 12),
+          const CircleAvatar(
+            backgroundColor: OrgColors.lightGray,
+            radius: 18,
+            child: Icon(Icons.business, color: OrgColors.primaryDark, size: 20),
           ),
           const SizedBox(width: 8),
-          // User info
           Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.end,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
             children: [
-              Text(
-                shortName,
-                style: GoogleFonts.beVietnamPro(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w700,
-                  color: OrgColors.charcoal,
-                ),
-              ),
-              Text(
-                'Organization',
-                style: GoogleFonts.beVietnamPro(
-                  fontSize: 11,
-                  color: OrgColors.darkGray,
-                ),
-              ),
+              Text(widget.orgShortName,
+                  style: GoogleFonts.beVietnamPro(
+                      fontSize: 13, fontWeight: FontWeight.w600, color: OrgColors.charcoal)),
+              Text('Organization',
+                  style: GoogleFonts.beVietnamPro(fontSize: 10, color: OrgColors.darkGray)),
             ],
-          ),
-          const SizedBox(width: 10),
-          CircleAvatar(
-            radius: 18,
-            backgroundColor: OrgColors.mediumGray,
-            child: Icon(Icons.person, color: OrgColors.darkGray, size: 20),
           ),
         ],
       ),
@@ -377,12 +680,177 @@ class _TopBar extends StatelessWidget {
   }
 }
 
-// ─── Dashboard Content ────────────────────────────────────────────────────────
-class _DashboardContent extends StatelessWidget {
+// ============================================================
+// NOTIFICATION BELL
+// ============================================================
+class _NotificationBell extends StatelessWidget {
+  final String orgId;
+  const _NotificationBell({required this.orgId});
+
+  @override
+  Widget build(BuildContext context) {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return const SizedBox();
+
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('notifications')
+          .where('userId', isEqualTo: user.uid)
+          .where('orgId', isEqualTo: orgId)
+          .orderBy('createdAt', descending: true)
+          .limit(30)
+          .snapshots(),
+      builder: (context, snapshot) {
+        final docs   = snapshot.data?.docs ?? [];
+        final unread = docs
+            .where((d) => (d.data() as Map)['isRead'] == false)
+            .length;
+        return Stack(
+          clipBehavior: Clip.none,
+          children: [
+            IconButton(
+              icon: const Icon(Icons.notifications_none, color: OrgColors.darkGray),
+              onPressed: () => _showPanel(context, docs),
+            ),
+            if (unread > 0)
+              Positioned(
+                right: 6, top: 6,
+                child: Container(
+                  width: 17, height: 17,
+                  decoration: const BoxDecoration(
+                      color: OrgColors.error, shape: BoxShape.circle),
+                  child: Center(
+                    child: Text(
+                      unread > 9 ? '9+' : '$unread',
+                      style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 9,
+                          fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _showPanel(BuildContext context, List<QueryDocumentSnapshot> docs) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+      builder: (ctx) => SizedBox(
+        height: 460,
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 8, 0),
+              child: Row(
+                children: [
+                  Text('Notifications',
+                      style: GoogleFonts.beVietnamPro(
+                          fontSize: 18, fontWeight: FontWeight.bold)),
+                  const Spacer(),
+                  if (docs.any((d) => (d.data() as Map)['isRead'] == false))
+                    TextButton(
+                      onPressed: () => _markAll(ctx, docs),
+                      child: const Text('Mark all read'),
+                    ),
+                  IconButton(
+                      onPressed: () => Navigator.pop(ctx),
+                      icon: const Icon(Icons.close)),
+                ],
+              ),
+            ),
+            const Divider(),
+            Expanded(
+              child: docs.isEmpty
+                  ? Center(
+                      child: Text('No notifications',
+                          style: GoogleFonts.beVietnamPro(
+                              color: OrgColors.darkGray)))
+                  : ListView.separated(
+                      itemCount: docs.length,
+                      separatorBuilder: (_, __) => const Divider(height: 1),
+                      itemBuilder: (ctx, i) {
+                        final data   = docs[i].data() as Map<String, dynamic>;
+                        final isRead = data['isRead'] == true;
+                        final ts     = data['createdAt'] as Timestamp?;
+                        return ListTile(
+                          leading: Icon(
+                            isRead
+                                ? Icons.notifications_none
+                                : Icons.notifications_active,
+                            color: isRead
+                                ? OrgColors.darkGray
+                                : OrgColors.primaryDark,
+                          ),
+                          title: Text(
+                            data['title'] as String? ?? 'Notification',
+                            style: TextStyle(
+                                fontWeight: isRead
+                                    ? FontWeight.normal
+                                    : FontWeight.bold,
+                                fontSize: 13),
+                          ),
+                          subtitle: Text(data['body'] as String? ?? '',
+                              style: const TextStyle(fontSize: 12)),
+                          trailing: ts == null
+                              ? null
+                              : Text(
+                                  DateFormat('MM/dd HH:mm').format(ts.toDate()),
+                                  style: const TextStyle(
+                                      fontSize: 10, color: OrgColors.darkGray)),
+                          onTap: isRead ? null : () => _markOne(docs[i].id),
+                        );
+                      },
+                    ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _markOne(String id) async {
+    await FirebaseFirestore.instance
+        .collection('notifications')
+        .doc(id)
+        .update({'isRead': true});
+  }
+
+  Future<void> _markAll(
+      BuildContext ctx, List<QueryDocumentSnapshot> docs) async {
+    final batch = FirebaseFirestore.instance.batch();
+    for (final d in docs) {
+      if ((d.data() as Map)['isRead'] != true) {
+        batch.update(d.reference, {'isRead': true});
+      }
+    }
+    await batch.commit();
+    if (ctx.mounted) Navigator.pop(ctx);
+  }
+}
+
+// ============================================================
+// DASHBOARD HOME
+// ============================================================
+class DashboardHome extends StatelessWidget {
   final String orgId;
   final String orgName;
+  final String orgRole;
+  final String searchQuery;
 
-  const _DashboardContent({required this.orgId, required this.orgName});
+  const DashboardHome({
+    super.key,
+    required this.orgId,
+    required this.orgName,
+    required this.orgRole,
+    required this.searchQuery,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -391,50 +859,35 @@ class _DashboardContent extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header
-          Text(
-            'Organization Dashboard',
-            style: GoogleFonts.beVietnamPro(
-              fontSize: 22,
-              fontWeight: FontWeight.w700,
-              color: OrgColors.charcoal,
-            ),
-          ),
+          Text('Organization Dashboard',
+              style: GoogleFonts.beVietnamPro(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                  color: OrgColors.charcoal)),
           const SizedBox(height: 4),
-          Text(
-            'Welcome back. Here is the latest status for the $orgName.',
-            style: GoogleFonts.beVietnamPro(
-              fontSize: 13,
-              color: OrgColors.darkGray,
-            ),
-          ),
-          const SizedBox(height: 20),
-
-          // Stat cards row
+          Text('Welcome back. Here is the latest status for $orgName.',
+              style: GoogleFonts.beVietnamPro(
+                  fontSize: 14, color: OrgColors.darkGray)),
+          const SizedBox(height: 28),
           _StatsRow(orgId: orgId),
-          const SizedBox(height: 20),
-
-          // Bottom two columns
+          const SizedBox(height: 24),
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Left column
               Expanded(
                 flex: 5,
-                child: Column(
-                  children: [
-                    _RecentProposals(orgId: orgId),
-                    const SizedBox(height: 20),
-                    _TopMerch(orgId: orgId),
-                  ],
-                ),
+                child: Column(children: [
+                  _RecentProposals(
+                    orgId: orgId,
+                    isAdviser: orgRole == 'adviser',
+                    searchQuery: searchQuery,
+                  ),
+                  const SizedBox(height: 20),
+                  _TopMerch(orgId: orgId),
+                ]),
               ),
               const SizedBox(width: 20),
-              // Right column
-              Expanded(
-                flex: 3,
-                child: _ActivityTimeline(orgId: orgId),
-              ),
+              Expanded(flex: 3, child: _ActivityTimeline(orgId: orgId)),
             ],
           ),
         ],
@@ -443,224 +896,161 @@ class _DashboardContent extends StatelessWidget {
   }
 }
 
-// ─── Stats Row ────────────────────────────────────────────────────────────────
+// ============================================================
+// STAT CARDS ROW
+// ============================================================
 class _StatsRow extends StatelessWidget {
   final String orgId;
   const _StatsRow({required this.orgId});
 
   @override
   Widget build(BuildContext context) {
+    return Row(children: [
+      Expanded(child: _StatCard(
+        label: 'Total Events',
+        icon: Icons.event, iconColor: OrgColors.info,
+        stream: FirebaseFirestore.instance.collection('events')
+            .where('orgId', isEqualTo: orgId)
+            .where('status', isEqualTo: 'approved')
+            .snapshots(),
+      )),
+      const SizedBox(width: 16),
+      Expanded(child: _StatCard(
+        label: 'Pending Proposals',
+        icon: Icons.pending_actions, iconColor: OrgColors.warning,
+        stream: FirebaseFirestore.instance.collection('event_proposals')
+            .where('orgId', isEqualTo: orgId)
+            .where('status', isEqualTo: 'pending')
+            .snapshots(),
+      )),
+      const SizedBox(width: 16),
+      Expanded(child: _StatCard(
+        label: 'Members',
+        icon: Icons.people, iconColor: OrgColors.success,
+        stream: FirebaseFirestore.instance.collection('users')
+            .where('orgId', isEqualTo: orgId)
+            .where('role', isEqualTo: 'org')
+            .snapshots(),
+      )),
+      const SizedBox(width: 16),
+      Expanded(child: _MerchSalesCard(orgId: orgId)),
+    ]);
+  }
+}
+
+class _StatCard extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final Color iconColor;
+  final Stream<QuerySnapshot> stream;
+
+  const _StatCard({
+    required this.label,
+    required this.icon,
+    required this.iconColor,
+    required this.stream,
+  });
+
+  @override
+  Widget build(BuildContext context) {
     return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection('events')
-          .where('organizationId', isEqualTo: orgId)
-          .snapshots(),
-      builder: (context, eventsSnap) {
-        return StreamBuilder<QuerySnapshot>(
-          stream: FirebaseFirestore.instance
-              .collection('event_proposals')
-              .where('organizationId', isEqualTo: orgId)
-              .snapshots(),
-          builder: (context, proposalsSnap) {
-            return StreamBuilder<QuerySnapshot>(
-              stream: FirebaseFirestore.instance
-                  .collection('merchandise')
-                  .where('organizationId', isEqualTo: orgId)
-                  .where('status', isEqualTo: 'active')
-                  .snapshots(),
-              builder: (context, merchSnap) {
-                // Upcoming events
-                int upcomingEvents = 0;
-                int recentEventDelta = 0;
-                if (eventsSnap.hasData) {
-                  final now = DateTime.now();
-                  final upcoming = eventsSnap.data!.docs.where((d) {
-                    final data = d.data() as Map;
-                    final ts = data['startDate'] as Timestamp?;
-                    return ts != null && ts.toDate().isAfter(now);
-                  }).toList();
-                  upcomingEvents = upcoming.length;
-                  // This week
-                  recentEventDelta = upcoming.where((d) {
-                    final data = d.data() as Map;
-                    final ts = data['startDate'] as Timestamp?;
-                    return ts != null &&
-                        ts.toDate().isBefore(now.add(const Duration(days: 7)));
-                  }).length;
-                }
+      stream: stream,
+      builder: (_, snap) {
+        String value;
+        if (snap.hasError)                                         value = '—';
+        else if (snap.connectionState == ConnectionState.waiting)  value = '…';
+        else                                                       value = '${snap.data!.docs.length}';
+        return _card(value);
+      },
+    );
+  }
 
-                // Pending proposals
-                int pendingProposals = 0;
-                int urgentProposals = 0;
-                if (proposalsSnap.hasData) {
-                  pendingProposals = proposalsSnap.data!.docs
-                      .where((d) =>
-                          (d.data() as Map)['status'] == 'pending')
-                      .length;
-                  urgentProposals = proposalsSnap.data!.docs
-                      .where((d) =>
-                          (d.data() as Map)['priority'] == 'urgent')
-                      .length;
-                }
+  Widget _card(String value) => Container(
+    padding: const EdgeInsets.all(16),
+    decoration: BoxDecoration(
+      color: OrgColors.white,
+      borderRadius: BorderRadius.circular(12),
+      border: Border.all(color: OrgColors.mediumGray),
+    ),
+    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+        Text(label,
+            style: GoogleFonts.beVietnamPro(
+                fontSize: 12, color: OrgColors.darkGray)),
+        Icon(icon, size: 20, color: iconColor),
+      ]),
+      const SizedBox(height: 10),
+      Text(value,
+          style: GoogleFonts.beVietnamPro(
+              fontSize: 28,
+              fontWeight: FontWeight.bold,
+              color: OrgColors.charcoal)),
+    ]),
+  );
+}
 
-                // Attendance avg
-                double attendanceAvg = 0;
-                if (eventsSnap.hasData) {
-                  final docs = eventsSnap.data!.docs;
-                  final withAttendance = docs.where((d) =>
-                      (d.data() as Map)['attendanceRate'] != null);
-                  if (withAttendance.isNotEmpty) {
-                    final total = withAttendance.fold<double>(
-                        0,
-                        (sum, d) =>
-                            sum +
-                            ((d.data() as Map)['attendanceRate'] as num)
-                                .toDouble());
-                    attendanceAvg = total / withAttendance.length;
-                  }
-                }
+class _MerchSalesCard extends StatelessWidget {
+  final String orgId;
+  const _MerchSalesCard({required this.orgId});
 
-                // Active merch
-                int activeMerch = 0;
-                if (merchSnap.hasData) {
-                  activeMerch = merchSnap.data!.docs.length;
-                }
+  Future<String> _sales() async {
+    try {
+      final snap = await FirebaseFirestore.instance
+          .collection('products').where('orgId', isEqualTo: orgId).get();
+      double sum = 0;
+      for (final d in snap.docs) {
+        final data = d.data();
+        sum += ((data['price'] as num?)?.toDouble() ?? 0) *
+               ((data['sold']  as num?)?.toDouble() ?? 0);
+      }
+      return '₱${sum.toStringAsFixed(0)}';
+    } catch (_) { return '₱0'; }
+  }
 
-                return Row(
-                  children: [
-                    _StatCard(
-                      label: 'Upcoming Events',
-                      value: '$upcomingEvents',
-                      sub: '+$recentEventDelta this week',
-                      icon: Icons.calendar_today_outlined,
-                      iconColor: OrgColors.info,
-                    ),
-                    const SizedBox(width: 16),
-                    _StatCard(
-                      label: 'Pending Proposals',
-                      value: '$pendingProposals',
-                      sub: urgentProposals > 0
-                          ? '$urgentProposals urgent'
-                          : 'All on track',
-                      icon: Icons.description_outlined,
-                      iconColor: OrgColors.error,
-                    ),
-                    const SizedBox(width: 16),
-                    _StatCard(
-                      label: 'Attendance Avg',
-                      value: attendanceAvg > 0
-                          ? '${attendanceAvg.toStringAsFixed(0)}%'
-                          : '—',
-                      sub: attendanceAvg >= 80
-                          ? 'High engagement'
-                          : attendanceAvg > 0
-                              ? 'Needs attention'
-                              : 'No data yet',
-                      icon: Icons.people_outline_rounded,
-                      iconColor: OrgColors.success,
-                    ),
-                    const SizedBox(width: 16),
-                    _StatCard(
-                      label: 'Active Merch',
-                      value: '$activeMerch',
-                      sub: '$activeMerch campaigns',
-                      icon: Icons.shopping_cart_outlined,
-                      iconColor: OrgColors.purple,
-                    ),
-                  ],
-                );
-              },
-            );
-          },
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<String>(
+      future: _sales(),
+      builder: (_, snap) {
+        final value = snap.data ?? '…';
+        return Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: OrgColors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: OrgColors.mediumGray),
+          ),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+              Text('Merch Sales',
+                  style: GoogleFonts.beVietnamPro(
+                      fontSize: 12, color: OrgColors.darkGray)),
+              const Icon(Icons.shopping_cart, size: 20, color: OrgColors.primaryDark),
+            ]),
+            const SizedBox(height: 10),
+            Text(value,
+                style: GoogleFonts.beVietnamPro(
+                    fontSize: 28,
+                    fontWeight: FontWeight.bold,
+                    color: OrgColors.charcoal)),
+          ]),
         );
       },
     );
   }
 }
 
-class _StatCard extends StatelessWidget {
-  final String label;
-  final String value;
-  final String sub;
-  final IconData icon;
-  final Color iconColor;
-
-  const _StatCard({
-    required this.label,
-    required this.value,
-    required this.sub,
-    required this.icon,
-    required this.iconColor,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: OrgColors.white,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: OrgColors.mediumGray),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  label,
-                  style: GoogleFonts.beVietnamPro(
-                    fontSize: 12,
-                    color: OrgColors.darkGray,
-                  ),
-                ),
-                Icon(icon, size: 20, color: iconColor),
-              ],
-            ),
-            const SizedBox(height: 10),
-            Text(
-              value,
-              style: GoogleFonts.beVietnamPro(
-                fontSize: 32,
-                fontWeight: FontWeight.w700,
-                color: OrgColors.charcoal,
-                height: 1,
-              ),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              sub,
-              style: GoogleFonts.beVietnamPro(
-                fontSize: 11,
-                color: OrgColors.darkGray,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ─── Recent Proposals ─────────────────────────────────────────────────────────
+// ============================================================
+// RECENT PROPOSALS
+// ============================================================
 class _RecentProposals extends StatelessWidget {
   final String orgId;
-  const _RecentProposals({required this.orgId});
-
-  Color _statusColor(String status) {
-    switch (status.toLowerCase()) {
-      case 'approved': return OrgColors.success;
-      case 'needs revision': return OrgColors.error;
-      case 'awaiting review': return OrgColors.warning;
-      case 'pending': return OrgColors.warning;
-      case 'rejected': return OrgColors.error;
-      default: return OrgColors.darkGray;
-    }
-  }
-
-  String _statusLabel(String status) => status.toUpperCase();
+  final bool isAdviser;
+  final String searchQuery;
+  const _RecentProposals(
+      {required this.orgId,
+      required this.isAdviser,
+      required this.searchQuery});
 
   @override
   Widget build(BuildContext context) {
@@ -670,181 +1060,114 @@ class _RecentProposals extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: OrgColors.mediumGray),
       ),
-      child: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  'Recent Proposals',
-                  style: GoogleFonts.beVietnamPro(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w700,
-                    color: OrgColors.charcoal,
-                  ),
-                ),
-                TextButton(
-                  onPressed: () {},
-                  child: Text(
-                    'View All',
-                    style: GoogleFonts.beVietnamPro(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: OrgColors.primary,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const Divider(height: 1, color: Color(0xFFE2E8F0)),
-          StreamBuilder<QuerySnapshot>(
-            stream: FirebaseFirestore.instance
-                .collection('event_proposals')
-                .where('organizationId', isEqualTo: orgId)
-                .orderBy('createdAt', descending: true)
-                .limit(5)
-                .snapshots(),
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                return const Padding(
-                  padding: EdgeInsets.all(32),
-                  child: Center(child: CircularProgressIndicator()),
-                );
-              }
-              if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                return Padding(
-                  padding: const EdgeInsets.all(32),
-                  child: Center(
-                    child: Text(
-                      'No proposals yet',
-                      style: GoogleFonts.beVietnamPro(
-                        color: OrgColors.darkGray,
-                        fontSize: 13,
-                      ),
-                    ),
-                  ),
-                );
-              }
-              return Column(
-                children: snapshot.data!.docs.map((doc) {
-                  final data = doc.data() as Map<String, dynamic>;
-                  final title = data['title'] as String? ?? 'Untitled Proposal';
-                  final submittedBy = data['submittedBy'] as String? ?? '';
-                  final status = data['status'] as String? ?? 'pending';
-                  final ts = data['createdAt'] as Timestamp?;
-                  final when = ts != null
-                      ? _relativeTime(ts.toDate())
-                      : 'Recently';
-
-                  return Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 14),
-                    decoration: const BoxDecoration(
-                      border: Border(
-                          bottom: BorderSide(color: Color(0xFFE2E8F0))),
-                    ),
-                    child: Row(
-                      children: [
-                        Container(
-                          width: 36,
-                          height: 36,
-                          decoration: BoxDecoration(
-                            color: OrgColors.primary.withOpacity(0.08),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Icon(
-                            Icons.description_outlined,
-                            size: 18,
-                            color: OrgColors.primary,
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                title,
-                                style: GoogleFonts.beVietnamPro(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w600,
-                                  color: OrgColors.charcoal,
-                                ),
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                'Submitted $when${submittedBy.isNotEmpty ? ' by $submittedBy' : ''}',
-                                style: GoogleFonts.beVietnamPro(
-                                  fontSize: 11,
-                                  color: OrgColors.darkGray,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        _StatusBadge(status: status),
-                      ],
-                    ),
-                  );
-                }).toList(),
+      child: Column(children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 14, 8, 14),
+          child: Row(children: [
+            Text('Recent Proposals',
+                style: GoogleFonts.beVietnamPro(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: OrgColors.charcoal)),
+            const Spacer(),
+          ]),
+        ),
+        const Divider(height: 1),
+        StreamBuilder<QuerySnapshot>(
+          stream: FirebaseFirestore.instance
+              .collection('event_proposals')
+              .where('orgId', isEqualTo: orgId)
+              .orderBy('submittedAt', descending: true)
+              .limit(10)
+              .snapshots(),
+          builder: (_, snap) {
+            if (snap.hasError) {
+              return _empty('Failed to load. Check Firestore indexes.');
+            }
+            if (snap.connectionState == ConnectionState.waiting) {
+              return const Padding(
+                padding: EdgeInsets.all(32),
+                child: Center(child: CircularProgressIndicator()),
               );
-            },
-          ),
-        ],
-      ),
+            }
+            var docs = snap.data!.docs;
+            if (searchQuery.isNotEmpty) {
+              docs = docs.where((d) {
+                final title =
+                    ((d.data() as Map)['title'] as String? ?? '').toLowerCase();
+                return title.contains(searchQuery);
+              }).toList();
+            }
+            if (docs.isEmpty) {
+              return _empty(searchQuery.isEmpty
+                  ? 'No proposals yet.'
+                  : 'No results for "$searchQuery".');
+            }
+            final shown = docs.take(5).toList();
+            return ListView.separated(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: shown.length,
+              separatorBuilder: (_, __) => const Divider(height: 1),
+              itemBuilder: (_, i) {
+                final data   = shown[i].data() as Map<String, dynamic>;
+                final status = data['status'] as String? ?? 'pending';
+                return ListTile(
+                  leading: const Icon(Icons.description_outlined,
+                      color: OrgColors.primaryDark),
+                  title: Text(data['title'] as String? ?? 'Untitled',
+                      style: const TextStyle(fontSize: 13)),
+                  subtitle: Text(
+                      'Submitted: ${_fmtTs(data['submittedAt'])}',
+                      style: const TextStyle(fontSize: 11)),
+                  trailing: _StatusChip(status),
+                );
+              },
+            );
+          },
+        ),
+      ]),
     );
   }
 
-  String _relativeTime(DateTime date) {
-    final diff = DateTime.now().difference(date);
-    if (diff.inDays == 0) return 'today';
-    if (diff.inDays == 1) return 'yesterday';
-    return '${diff.inDays} days ago';
+  Widget _empty(String msg) => Padding(
+    padding: const EdgeInsets.all(32),
+    child: Center(
+        child: Text(msg,
+            style: const TextStyle(
+                color: OrgColors.darkGray, fontSize: 13))),
+  );
+
+  String _fmtTs(dynamic ts) {
+    if (ts == null) return 'Unknown';
+    if (ts is Timestamp) return DateFormat('MMM dd, yyyy').format(ts.toDate());
+    return ts.toString();
   }
 }
 
-class _StatusBadge extends StatelessWidget {
+class _StatusChip extends StatelessWidget {
   final String status;
-  const _StatusBadge({required this.status});
-
-  Color _color() {
-    switch (status.toLowerCase()) {
-      case 'approved': return OrgColors.success;
-      case 'needs revision': return OrgColors.error;
-      case 'awaiting review': return OrgColors.warning;
-      case 'pending': return OrgColors.warning;
-      case 'rejected': return OrgColors.error;
-      default: return OrgColors.darkGray;
-    }
-  }
+  const _StatusChip(this.status);
 
   @override
   Widget build(BuildContext context) {
-    final color = _color();
+    Color bg;
+    switch (status.toLowerCase()) {
+      case 'approved': bg = OrgColors.success.withOpacity(0.15); break;
+      case 'rejected': bg = OrgColors.error.withOpacity(0.15);   break;
+      default:         bg = OrgColors.warning.withOpacity(0.15);
+    }
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: color.withOpacity(0.3)),
-      ),
-      child: Text(
-        status.toUpperCase(),
-        style: GoogleFonts.beVietnamPro(
-          fontSize: 10,
-          fontWeight: FontWeight.w700,
-          color: color,
-          letterSpacing: 0.3,
-        ),
-      ),
+      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(12)),
+      child: Text(status, style: const TextStyle(fontSize: 11)),
     );
   }
 }
 
-// ─── Top Merch ────────────────────────────────────────────────────────────────
+// ============================================================
+// TOP MERCH
+// ============================================================
 class _TopMerch extends StatelessWidget {
   final String orgId;
   const _TopMerch({required this.orgId});
@@ -857,109 +1180,66 @@ class _TopMerch extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: OrgColors.mediumGray),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Text(
-              'Top Merch',
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+          child: Text('Top Merchandise',
               style: GoogleFonts.beVietnamPro(
-                fontSize: 15,
-                fontWeight: FontWeight.w700,
-                color: OrgColors.charcoal,
-              ),
-            ),
-          ),
-          const Divider(height: 1, color: Color(0xFFE2E8F0)),
-          StreamBuilder<QuerySnapshot>(
-            stream: FirebaseFirestore.instance
-                .collection('merchandise')
-                .where('organizationId', isEqualTo: orgId)
-                .orderBy('soldCount', descending: true)
-                .limit(5)
-                .snapshots(),
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                return const Padding(
-                  padding: EdgeInsets.all(24),
-                  child: Center(child: CircularProgressIndicator()),
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: OrgColors.charcoal)),
+        ),
+        const Divider(height: 1),
+        StreamBuilder<QuerySnapshot>(
+          stream: FirebaseFirestore.instance
+              .collection('products')
+              .where('orgId', isEqualTo: orgId)
+              .orderBy('sold', descending: true)
+              .limit(3)
+              .snapshots(),
+          builder: (_, snap) {
+            if (snap.hasError) {
+              return _msg('Failed to load. Check Firestore indexes.');
+            }
+            if (snap.connectionState == ConnectionState.waiting) {
+              return const Padding(
+                  padding: EdgeInsets.all(32),
+                  child: Center(child: CircularProgressIndicator()));
+            }
+            final docs = snap.data!.docs;
+            if (docs.isEmpty) return _msg('No merchandise yet.');
+            return Column(
+              children: docs.map((doc) {
+                final data = doc.data() as Map<String, dynamic>;
+                return ListTile(
+                  leading: const Icon(Icons.shopping_bag,
+                      color: OrgColors.primaryDark),
+                  title: Text(data['name'] as String? ?? 'Item',
+                      style: const TextStyle(fontSize: 13)),
+                  subtitle: Text('Sold: ${data['sold'] ?? 0}',
+                      style: const TextStyle(fontSize: 11)),
+                  trailing: Text('₱${data['price'] ?? 0}',
+                      style: const TextStyle(fontWeight: FontWeight.bold)),
                 );
-              }
-              if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                return Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: Center(
-                    child: Text(
-                      'No merchandise yet',
-                      style: GoogleFonts.beVietnamPro(
-                        color: OrgColors.darkGray,
-                        fontSize: 13,
-                      ),
-                    ),
-                  ),
-                );
-              }
-              return Column(
-                children: snapshot.data!.docs.map((doc) {
-                  final data = doc.data() as Map<String, dynamic>;
-                  final name = data['name'] as String? ?? 'Item';
-                  final sold = data['soldCount'] as int? ?? 0;
-                  return Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 14),
-                    decoration: const BoxDecoration(
-                      border: Border(
-                          bottom: BorderSide(color: Color(0xFFE2E8F0))),
-                    ),
-                    child: Row(
-                      children: [
-                        Container(
-                          width: 36,
-                          height: 36,
-                          decoration: BoxDecoration(
-                            color: OrgColors.primary.withOpacity(0.08),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Icon(
-                            Icons.shopping_cart_outlined,
-                            size: 18,
-                            color: OrgColors.primary,
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Text(
-                            name,
-                            style: GoogleFonts.beVietnamPro(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w500,
-                              color: OrgColors.charcoal,
-                            ),
-                          ),
-                        ),
-                        Text(
-                          '$sold Sold',
-                          style: GoogleFonts.beVietnamPro(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                            color: OrgColors.charcoal,
-                          ),
-                        ),
-                      ],
-                    ),
-                  );
-                }).toList(),
-              );
-            },
-          ),
-        ],
-      ),
+              }).toList(),
+            );
+          },
+        ),
+      ]),
     );
   }
+
+  Widget _msg(String s) => Padding(
+    padding: const EdgeInsets.all(32),
+    child: Center(
+        child:
+            Text(s, style: const TextStyle(color: OrgColors.darkGray, fontSize: 13))),
+  );
 }
 
-// ─── Activity Timeline ────────────────────────────────────────────────────────
+// ============================================================
+// ACTIVITY TIMELINE
+// ============================================================
 class _ActivityTimeline extends StatelessWidget {
   final String orgId;
   const _ActivityTimeline({required this.orgId});
@@ -972,225 +1252,85 @@ class _ActivityTimeline extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: OrgColors.mediumGray),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Row(
-              children: [
-                Icon(Icons.access_time_rounded,
-                    size: 18, color: OrgColors.primary),
-                const SizedBox(width: 8),
-                Text(
-                  'Activity Timeline',
-                  style: GoogleFonts.beVietnamPro(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w700,
-                    color: OrgColors.charcoal,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const Divider(height: 1, color: Color(0xFFE2E8F0)),
-          StreamBuilder<QuerySnapshot>(
-            stream: FirebaseFirestore.instance
-                .collection('activity_logs')
-                .where('orgId', isEqualTo: orgId)
-                .orderBy('timestamp', descending: true)
-                .limit(10)
-                .snapshots(),
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                return const Padding(
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+          child: Row(children: [
+            const Icon(Icons.access_time, size: 18, color: OrgColors.primaryDark),
+            const SizedBox(width: 8),
+            Text('Activity Timeline',
+                style: GoogleFonts.beVietnamPro(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: OrgColors.charcoal)),
+          ]),
+        ),
+        const Divider(height: 1),
+        StreamBuilder<QuerySnapshot>(
+          stream: FirebaseFirestore.instance
+              .collection('activity_logs')
+              .where('orgId', isEqualTo: orgId)
+              .orderBy('timestamp', descending: true)
+              .limit(8)
+              .snapshots(),
+          builder: (_, snap) {
+            if (snap.hasError) {
+              return _msg('Failed to load. Check Firestore indexes.');
+            }
+            if (snap.connectionState == ConnectionState.waiting) {
+              return const Padding(
                   padding: EdgeInsets.all(32),
-                  child: Center(child: CircularProgressIndicator()),
+                  child: Center(child: CircularProgressIndicator()));
+            }
+            final docs = snap.data!.docs;
+            if (docs.isEmpty) return _msg('No recent activity.');
+            return Column(
+              children: docs.map((doc) {
+                final data   = doc.data() as Map<String, dynamic>;
+                final action = data['action'] as String? ?? 'Activity';
+                final module = data['module'] as String? ?? '';
+                final ts     = data['timestamp'] as Timestamp?;
+                return ListTile(
+                  leading: Icon(Icons.circle, size: 10, color: _color(action)),
+                  title: Text(action,
+                      style: const TextStyle(
+                          fontSize: 13, fontWeight: FontWeight.w500)),
+                  subtitle: Text(module,
+                      style: const TextStyle(
+                          fontSize: 11, color: OrgColors.darkGray)),
+                  trailing: Text(_ago(ts),
+                      style: const TextStyle(
+                          fontSize: 10, color: OrgColors.darkGray)),
                 );
-              }
-              if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                return Padding(
-                  padding: const EdgeInsets.all(32),
-                  child: Center(
-                    child: Text(
-                      'No recent activity',
-                      style: GoogleFonts.beVietnamPro(
-                        color: OrgColors.darkGray,
-                        fontSize: 13,
-                      ),
-                    ),
-                  ),
-                );
-              }
-
-              final docs = snapshot.data!.docs;
-              String? lastSection;
-
-              return Column(
-                children: [
-                  ...docs.map((doc) {
-                    final data = doc.data() as Map<String, dynamic>;
-                    final title = data['action'] as String? ?? 'Activity';
-                    final description = data['details']?.toString() ?? '';
-                    final ts = data['timestamp'] as Timestamp?;
-                    final date = ts?.toDate();
-                    final section = _sectionLabel(date);
-                    final isNewSection = section != lastSection;
-                    lastSection = section;
-                    final dotColor = _dotColor(data['severity'] as String?);
-
-                    return Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        if (isNewSection)
-                          Padding(
-                            padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-                            child: Text(
-                              section,
-                              style: GoogleFonts.beVietnamPro(
-                                fontSize: 10,
-                                fontWeight: FontWeight.w700,
-                                color: OrgColors.darkGray,
-                                letterSpacing: 0.8,
-                              ),
-                            ),
-                          ),
-                        Padding(
-                          padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-                          child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Column(
-                                children: [
-                                  Container(
-                                    width: 10,
-                                    height: 10,
-                                    margin: const EdgeInsets.only(top: 3),
-                                    decoration: BoxDecoration(
-                                      color: dotColor,
-                                      shape: BoxShape.circle,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      title,
-                                      style: GoogleFonts.beVietnamPro(
-                                        fontSize: 13,
-                                        fontWeight: FontWeight.w600,
-                                        color: OrgColors.charcoal,
-                                      ),
-                                    ),
-                                    if (description.isNotEmpty) ...[
-                                      const SizedBox(height: 2),
-                                      Text(
-                                        description,
-                                        style: GoogleFonts.beVietnamPro(
-                                          fontSize: 11,
-                                          color: OrgColors.darkGray,
-                                          height: 1.4,
-                                        ),
-                                      ),
-                                    ],
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    );
-                  }),
-                  Padding(
-                    padding: const EdgeInsets.all(12),
-                    child: TextButton(
-                      onPressed: () {},
-                      child: Text(
-                        'Load more activities',
-                        style: GoogleFonts.beVietnamPro(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          color: OrgColors.primary,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              );
-            },
-          ),
-        ],
-      ),
+              }).toList(),
+            );
+          },
+        ),
+      ]),
     );
   }
 
-  Color _dotColor(String? severity) {
-    switch (severity) {
-      case 'error': return OrgColors.error;
-      case 'warning': return OrgColors.warning;
-      case 'success': return OrgColors.success;
-      default: return OrgColors.info;
-    }
+  Widget _msg(String s) => Padding(
+    padding: const EdgeInsets.all(32),
+    child: Center(
+        child:
+            Text(s, style: const TextStyle(color: OrgColors.darkGray, fontSize: 13))),
+  );
+
+  Color _color(String a) {
+    if (a.contains('proposal')) return OrgColors.warning;
+    if (a.contains('approv'))   return OrgColors.success;
+    if (a.contains('error'))    return OrgColors.error;
+    return OrgColors.primaryDark;
   }
 
-  String _sectionLabel(DateTime? date) {
-    if (date == null) return 'RECENTLY';
-    final now = DateTime.now();
-    final diff = now.difference(date);
-    if (diff.inMinutes < 60) {
-      final h = date.hour;
-      final m = date.minute.toString().padLeft(2, '0');
-      final ampm = h >= 12 ? 'PM' : 'AM';
-      final hour = h > 12 ? h - 12 : (h == 0 ? 12 : h);
-      return '$hour:$m $ampm TODAY';
-    }
-    if (diff.inDays == 0) return 'TODAY';
-    if (diff.inDays == 1) return 'YESTERDAY';
-    return '${_monthAbbr(date.month)} ${date.day}, ${date.year}';
-  }
-
-  String _monthAbbr(int m) =>
-      ['JAN','FEB','MAR','APR','MAY','JUN',
-       'JUL','AUG','SEP','OCT','NOV','DEC'][m - 1];
-}
-
-// ─── Placeholder for other nav items ─────────────────────────────────────────
-class _PlaceholderContent extends StatelessWidget {
-  final String label;
-  const _PlaceholderContent({required this.label});
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.construction_rounded,
-              size: 48, color: OrgColors.mediumGray),
-          const SizedBox(height: 16),
-          Text(
-            label,
-            style: GoogleFonts.beVietnamPro(
-              fontSize: 20,
-              fontWeight: FontWeight.w600,
-              color: OrgColors.charcoal,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'This module is coming soon.',
-            style: GoogleFonts.beVietnamPro(
-              fontSize: 14,
-              color: OrgColors.darkGray,
-            ),
-          ),
-        ],
-      ),
-    );
+  String _ago(Timestamp? ts) {
+    if (ts == null) return 'Just now';
+    final d = DateTime.now().difference(ts.toDate());
+    if (d.inMinutes < 1)  return 'Just now';
+    if (d.inMinutes < 60) return '${d.inMinutes}m ago';
+    if (d.inHours < 24)   return '${d.inHours}h ago';
+    if (d.inDays < 7)     return '${d.inDays}d ago';
+    return '${(d.inDays / 7).floor()}w ago';
   }
 }

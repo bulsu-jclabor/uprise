@@ -3,32 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../../../services/activity_logger.dart' as activity_log;
 import 'package:share_plus/share_plus.dart';
 import '../../theme/app_theme.dart';
-
-// ============ ACTIVITY LOGGER ============
-class ActivityLogger {
-  static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-
-  static Future<void> log({
-    required String action,
-    required String module,
-    String severity = 'info',
-    Map<String, dynamic>? details,
-  }) async {
-    final user = FirebaseAuth.instance.currentUser;
-    final userName = user?.email ?? 'Unknown User';
-    await _firestore.collection('activity_logs').add({
-      'user': userName,
-      'action': action,
-      'module': module,
-      'severity': severity,
-      'timestamp': FieldValue.serverTimestamp(),
-      'ipAddress': '',
-      'details': details,
-    });
-  }
-}
 
 class EventProposals extends StatefulWidget {
   const EventProposals({super.key});
@@ -476,7 +453,7 @@ class _EventProposalsState extends State<EventProposals> {
     await FirebaseFirestore.instance.collection('event_proposals').doc(docId).update({'status': newStatus});
 
     // Log the status change
-    await ActivityLogger.log(
+    await activity_log.ActivityLogger.log(
       action: '${newStatus.toUpperCase()} proposal: $title',
       module: 'Event Management',
       severity: newStatus == 'rejected' ? 'warning' : 'info',
@@ -634,3 +611,4 @@ class _EventProposalsState extends State<EventProposals> {
     super.dispose();
   }
 }
+

@@ -7,6 +7,8 @@ import '../../../auth_service.dart';
 import 'admin_dashboard.dart';
 
 class AdminLogin extends StatefulWidget {
+  const AdminLogin({super.key});
+
   @override
   _AdminLoginState createState() => _AdminLoginState();
 }
@@ -26,18 +28,18 @@ class _AdminLoginState extends State<AdminLogin> {
   }
 
   // ✅ Safe SharedPreferences getter with fallback
-  Future<SharedPreferences> _getPrefs() async {
+  Future<SharedPreferences?> _getPrefs() async {
     try {
       return await SharedPreferences.getInstance();
     } catch (e) {
-      // If plugin fails (e.g., MissingPluginException), use in-memory fallback
-      SharedPreferences.setMockInitialValues({});
-      return await SharedPreferences.getInstance();
+      // SharedPreferences not available on this platform (e.g., web)
+      return null;
     }
   }
 
   Future<void> _loadSavedEmail() async {
     final prefs = await _getPrefs();
+    if (prefs == null) return;
     final savedEmail = prefs.getString('admin_email');
     if (savedEmail != null && savedEmail.isNotEmpty) {
       setState(() {
@@ -49,6 +51,7 @@ class _AdminLoginState extends State<AdminLogin> {
 
   Future<void> _saveEmail(String email) async {
     final prefs = await _getPrefs();
+    if (prefs == null) return;
     if (_rememberMe && email.isNotEmpty) {
       await prefs.setString('admin_email', email);
     } else {

@@ -11,30 +11,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:cross_file/cross_file.dart'; // For XFile
 import '../../theme/app_theme.dart';
-
-// ============ ACTIVITY LOGGER (unchanged, works) ============
-class ActivityLogger {
-  static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-
-  static Future<void> log({
-    required String action,
-    required String module,
-    String severity = 'info',
-    Map<String, dynamic>? details,
-  }) async {
-    final user = FirebaseAuth.instance.currentUser;
-    final userName = user?.email ?? 'Unknown User';
-    await _firestore.collection('activity_logs').add({
-      'user': userName,
-      'action': action,
-      'module': module,
-      'severity': severity,
-      'timestamp': FieldValue.serverTimestamp(),
-      'ipAddress': '',
-      'details': details,
-    });
-  }
-}
+import '../../../services/activity_logger.dart' as activity_log;
 
 class StudentAccounts extends StatefulWidget {
   const StudentAccounts({super.key});
@@ -140,8 +117,9 @@ class _StudentAccountsState extends State<StudentAccounts> {
           total = snapshot.data!.docs.length;
           for (var doc in snapshot.data!.docs) {
             final status = (doc.data() as Map)['status'] ?? 'pending';
-            if (status == 'pending') pending++;
-            else if (status == 'verified') verified++;
+            if (status == 'pending') {
+              pending++;
+            } else if (status == 'verified') verified++;
           }
         }
         return Padding(
@@ -674,7 +652,7 @@ class _StudentAccountsState extends State<StudentAccounts> {
     String password = existingPassword ?? _generateRandomPassword();
     await FirebaseFirestore.instance.collection('students').doc(docId).update({'tempPassword': password});
     await _sendCredentialsEmail(email, studentId, password);
-    await ActivityLogger.log(
+    await activity_log.ActivityLogger.log(
       action: 'Resent credentials for student: $studentId ($email)',
       module: 'User Directory',
       severity: 'info',
@@ -689,7 +667,7 @@ class _StudentAccountsState extends State<StudentAccounts> {
       await FirebaseFirestore.instance.collection('students').doc(docId).update({'status': 'verified'});
       final doc = await FirebaseFirestore.instance.collection('students').doc(docId).get();
       final studentId = doc.data()?['studentId'] ?? 'Unknown';
-      await ActivityLogger.log(
+      await activity_log.ActivityLogger.log(
         action: 'Verified student account: $studentId',
         module: 'User Directory',
         severity: 'info',
@@ -718,7 +696,7 @@ class _StudentAccountsState extends State<StudentAccounts> {
                 final doc = await FirebaseFirestore.instance.collection('students').doc(docId).get();
                 final studentId = doc.data()?['studentId'] ?? 'Unknown';
                 await FirebaseFirestore.instance.collection('students').doc(docId).delete();
-                await ActivityLogger.log(
+                await activity_log.ActivityLogger.log(
                   action: 'Deleted student account: $studentId ($email)',
                   module: 'User Directory',
                   severity: 'info',
@@ -942,7 +920,7 @@ class _StudentAccountsState extends State<StudentAccounts> {
     });
     await secondaryAuth.signOut();
     await _sendCredentialsEmail(email, studentId, password);
-    await ActivityLogger.log(
+    await activity_log.ActivityLogger.log(
       action: 'Created student account: $studentId ($email)',
       module: 'User Directory',
       severity: 'info',
@@ -1033,7 +1011,7 @@ class _StudentAccountsState extends State<StudentAccounts> {
                     ),
                     const SizedBox(height: 12),
                     DropdownButtonFormField<String>(
-                      value: _manualCourse,
+                      initialValue: _manualCourse,
                       items: const ['BSIT', 'BSIS', 'BLIS']
                           .map((c) => DropdownMenuItem(value: c, child: Text(c)))
                           .toList(),
@@ -1042,7 +1020,7 @@ class _StudentAccountsState extends State<StudentAccounts> {
                     ),
                     const SizedBox(height: 12),
                     DropdownButtonFormField<String>(
-                      value: _manualYearController.text.isNotEmpty ? _manualYearController.text : null,
+                      initialValue: _manualYearController.text.isNotEmpty ? _manualYearController.text : null,
                       items: const ['1st Year', '2nd Year', '3rd Year', '4th Year', '5th Year']
                           .map((y) => DropdownMenuItem(value: y, child: Text(y)))
                           .toList(),
@@ -1058,7 +1036,7 @@ class _StudentAccountsState extends State<StudentAccounts> {
                     ),
                     const SizedBox(height: 12),
                     DropdownButtonFormField<String>(
-                      value: _manualStatus,
+                      initialValue: _manualStatus,
                       items: const ['pending', 'verified'].map((s) => DropdownMenuItem(value: s, child: Text(s.toUpperCase()))).toList(),
                       onChanged: (v) => setDialogState(() => _manualStatus = v!),
                       decoration: const InputDecoration(labelText: 'Status'),
@@ -1166,3 +1144,4 @@ class _StudentAccountsState extends State<StudentAccounts> {
     }
   }
 }
+
