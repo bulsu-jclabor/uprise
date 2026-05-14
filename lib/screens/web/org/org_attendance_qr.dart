@@ -257,7 +257,7 @@ class _OrgAttendanceQRScreenState extends State<OrgAttendanceQRScreen> {
       await FileSaver.instance.saveAs(
         name: fileName,
         bytes: bytes,
-        ext: 'csv',
+        file: 'csv',
         mimeType: MimeType.csv,
       );
 
