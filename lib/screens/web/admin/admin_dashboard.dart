@@ -207,13 +207,17 @@ class _AdminDashboardState extends State<AdminDashboard> {
         children: [
           _buildSidebar(),
           Expanded(
-            child: Column(
-              children: [
-                _buildTopBar(),
-                Expanded(child: _screens[_selectedIndex]),
-              ],
-            ),
-          ),
+  child: Column(
+    children: [
+      _buildTopBar(),
+      Expanded(
+        child: _selectedIndex == -1 
+            ? const AdminSettings()  // kung settings, ipakita ito
+            : _screens[_selectedIndex],  // kung hindi, regular screen
+      ),
+    ],
+  ),
+),
         ],
       ),
     );
@@ -294,40 +298,39 @@ class _AdminDashboardState extends State<AdminDashboard> {
               itemBuilder: (context, index) {
                 // Special handling for Settings: it's not a screen index but navigation
                 if (titles[index] == 'Settings') {
-                  return GestureDetector(
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (_) => const AdminSettings()),
-                      ).then((_) => _fetchAdminData());  // this will reload the admin name
-                    },
-                    child: Container(
-                      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
-                      decoration: BoxDecoration(
-                        color: Colors.transparent,
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(_sidebarIcons[titles[index]]!, color: UpriseColors.white, size: 18),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Text(
-                              titles[index],
-                              overflow: TextOverflow.ellipsis,
-                              style: GoogleFonts.beVietnamPro(
-                                color: UpriseColors.white,
-                                fontSize: 13,
-                                fontWeight: FontWeight.w400,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  );
-                }
+  return GestureDetector(
+    onTap: () {
+      setState(() {
+        _selectedIndex = -1;  // special value para sa Settings
+      });
+    },
+    child: Container(
+      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
+      decoration: BoxDecoration(
+        color: _selectedIndex == -1 ? UpriseColors.white.withOpacity(0.2) : Colors.transparent,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        children: [
+          Icon(_sidebarIcons[titles[index]]!, color: UpriseColors.white, size: 18),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              titles[index],
+              overflow: TextOverflow.ellipsis,
+              style: GoogleFonts.beVietnamPro(
+                color: UpriseColors.white,
+                fontSize: 13,
+                fontWeight: _selectedIndex == -1 ? FontWeight.w600 : FontWeight.w400,
+              ),
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+}
 
                 bool isSelected = _selectedIndex == index;
                 return GestureDetector(
@@ -498,13 +501,18 @@ class _AdminDashboardState extends State<AdminDashboard> {
     );
   }
 
-  String _getCurrentTitle() {
-    const titles = [
-      'Dashboard', 'Organization Management', 'Student Accounts', 'Adviser Roles', 'Event Proposals',
-      'College Event Calendar', 'Letter Request', 'External Account', 'Reports Management', 'Activity Logs'
-    ];
-    return titles[_selectedIndex];
+ String _getCurrentTitle() {
+  // Kapag nasa Settings, ibalik ang "Settings"
+  if (_selectedIndex == -1) {
+    return 'Settings';
   }
+  
+  const titles = [
+    'Dashboard', 'Organization Management', 'Student Accounts', 'Adviser Roles', 'Event Proposals',
+    'College Event Calendar', 'Letter Request', 'External Account', 'Reports Management', 'Activity Logs'
+  ];
+  return titles[_selectedIndex];
+}
 }
 
 // ============ DASHBOARD HOME (unchanged) ============

@@ -289,74 +289,74 @@ class _AdminSettingsState extends State<AdminSettings>
   }
 
   @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: UpriseColors.lightGray,
-      body: Column(
-        children: [
-          // Header
-          Container(
-            padding: const EdgeInsets.all(24),
-            decoration: BoxDecoration(
-              color: UpriseColors.white,
-              border: Border(bottom: BorderSide(color: UpriseColors.mediumGray)),
-            ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Admin System Settings',
-                        style: GoogleFonts.beVietnamPro(fontSize: 24, fontWeight: FontWeight.bold, color: UpriseColors.charcoal),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Manage your profile, security, and notification preferences.',
-                        style: GoogleFonts.beVietnamPro(fontSize: 14, color: UpriseColors.darkGray),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-          // Tab Bar
-          Container(
+Widget build(BuildContext context) {
+  return Container(  // <-- Scaffold naging Container
+    color: UpriseColors.lightGray,
+    child: Column(
+      children: [
+        // Header
+        Container(
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
             color: UpriseColors.white,
-            child: TabBar(
-              controller: _tabController,
-              tabs: const [
-                Tab(text: 'Profile'),
-                Tab(text: 'Preferences'),
-                Tab(text: 'Security'),
-                Tab(text: 'Audit Logs'),
-              ],
-              labelColor: UpriseColors.primaryDark,
-              unselectedLabelColor: UpriseColors.darkGray,
-              indicatorColor: UpriseColors.primaryDark,
-              indicatorWeight: 3,
-              labelStyle: GoogleFonts.beVietnamPro(fontWeight: FontWeight.w600),
-            ),
+            border: Border(bottom: BorderSide(color: UpriseColors.mediumGray)),
           ),
-          // Tab Bar View
-          Expanded(
-            child: TabBarView(
-              controller: _tabController,
-              children: [
-                _buildProfileTab(),
-                _buildPreferencesTab(),
-                _buildSecurityTab(),
-                _buildAuditLogsTab(),
-              ],
-            ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Admin System Settings',
+                      style: GoogleFonts.beVietnamPro(fontSize: 24, fontWeight: FontWeight.bold, color: UpriseColors.charcoal),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Manage your profile, security, and notification preferences.',
+                      style: GoogleFonts.beVietnamPro(fontSize: 14, color: UpriseColors.darkGray),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
-        ],
-      ),
-    );
-  }
+        ),
+        // Tab Bar
+        Container(
+          color: UpriseColors.white,
+          child: TabBar(
+            controller: _tabController,
+            tabs: const [
+              Tab(text: 'Profile'),
+              Tab(text: 'Preferences'),
+              Tab(text: 'Security'),
+              Tab(text: 'Audit Logs'),
+            ],
+            labelColor: UpriseColors.primaryDark,
+            unselectedLabelColor: UpriseColors.darkGray,
+            indicatorColor: UpriseColors.primaryDark,
+            indicatorWeight: 3,
+            labelStyle: GoogleFonts.beVietnamPro(fontWeight: FontWeight.w600),
+          ),
+        ),
+        // Tab Bar View - ito ang pinalitan ko
+        Expanded(
+          child: TabBarView(
+            controller: _tabController,
+            children: [
+              _buildProfileTab(),
+              _buildPreferencesTab(),
+              _buildSecurityTab(),
+              _buildAuditLogsTab(),
+            ],
+          ),
+        ),
+      ],
+    ),
+  );
+}
 
   // ========== PROFILE TAB ==========
   Widget _buildProfileTab() {

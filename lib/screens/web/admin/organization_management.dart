@@ -10,6 +10,9 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:share_plus/share_plus.dart';
 import '../../theme/app_theme.dart';
+import '../../../services/email_service.dart';
+
+
 
 // ============ ACTIVITY LOGGER ============
 class ActivityLogger {
@@ -667,14 +670,11 @@ class _CreateOrganizationDialogState extends State<CreateOrganizationDialog> {
   final _shortNameCtrl = TextEditingController();
   String _type = 'Academic Organization';
   final _descCtrl = TextEditingController();
-  final List<String> _categories = [];
-  final _catCtrl = TextEditingController();
   File? _logoFile;
   bool _isLoading = false;
 
   // Single adviser (will receive Firebase Auth account)
   final _advNameCtrl = TextEditingController();
-  final _advTitleCtrl = TextEditingController();
   final _advEmailCtrl = TextEditingController();
   final _advPhoneCtrl = TextEditingController();
 
@@ -683,9 +683,7 @@ class _CreateOrganizationDialogState extends State<CreateOrganizationDialog> {
     _nameCtrl.dispose();
     _shortNameCtrl.dispose();
     _descCtrl.dispose();
-    _catCtrl.dispose();
     _advNameCtrl.dispose();
-    _advTitleCtrl.dispose();
     _advEmailCtrl.dispose();
     _advPhoneCtrl.dispose();
     super.dispose();
@@ -736,46 +734,34 @@ class _CreateOrganizationDialogState extends State<CreateOrganizationDialog> {
     }
   }
 
-  Future<void> _sendCredentialsEmail({
-    required String toEmail,
-    required String orgName,
-    required String adviserName,
-    required String password,
-  }) async {
-    await FirebaseFirestore.instance.collection('mail').add({
-      'to': [toEmail],
-      'message': {
-        'subject': '🎓 UPRISE Portal — Your Organization Login Credentials',
-        'html': '''
-          <div style="font-family: sans-serif; max-width: 520px; margin: auto; border: 1px solid #FDE68A; border-radius: 12px; overflow: hidden;">
-            <div style="background: linear-gradient(135deg, #D97706, #B45309); padding: 24px 32px;">
-              <h1 style="color: white; margin: 0; font-size: 24px; letter-spacing: 2px;">UPRISE</h1>
-              <p style="color: rgba(255,255,255,0.85); margin: 4px 0 0; font-size: 13px;">CICT Organization Management Portal</p>
-            </div>
-            <div style="padding: 32px;">
-              <p style="font-size: 15px; color: #1E293B;">Hi <strong>$adviserName</strong>,</p>
-              <p style="color: #475569; font-size: 14px; line-height: 1.6;">
-                Your organization <strong>$orgName</strong> has been registered on the UPRISE Portal.
-                Below are your login credentials. Please keep them secure and change your password after first login.
-              </p>
-              <div style="background: #FFF7ED; border: 1px solid #FDE68A; border-radius: 10px; padding: 20px 24px; margin: 24px 0;">
-                <p style="margin: 0 0 10px; font-size: 13px; color: #92400E; font-weight: 600; letter-spacing: 1px;">YOUR LOGIN CREDENTIALS</p>
-                <table style="width: 100%; font-size: 14px; color: #1E293B;">
-                  <tr><td style="padding: 6px 0; color: #64748B; width: 120px;">Email</td><td style="font-weight: 600;">$toEmail</td></tr>
-                  <tr><td style="padding: 6px 0; color: #64748B;">Password</td><td style="font-weight: 600; font-family: monospace; font-size: 16px; letter-spacing: 1px; color: #B45309;">$password</td></tr>
-                </table>
-              </div>
-              <p style="color: #94A3B8; font-size: 12px; margin-top: 24px;">If you did not expect this email, please contact your System Administrator immediately.</p>
-            </div>
-            <div style="background: #F8FAFC; padding: 16px 32px; border-top: 1px solid #E2E8F0;">
-              <p style="color: #94A3B8; font-size: 11px; margin: 0;">© UPRISE — CICT Organization Management System</p>
-            </div>
-          </div>
-        ''',
-      },
-      'createdAt': FieldValue.serverTimestamp(),
-    });
+ // Sa loob ng _CreateOrganizationDialogState
+
+Future<void> _sendCredentialsEmail({
+  required String toEmail,
+  required String orgName,
+  required String adviserName,
+  required String password,
+}) async {
+  // Gamitin ang EmailService natin sa halip na Firebase mail collection
+  final bool success = await EmailService.sendCredentialsEmail(
+    toEmail: toEmail,
+    toName: adviserName,
+    orgName: orgName,
+    tempPassword: password,
+  );
+  
+  if (success) {
+    print('✅ Credentials email sent successfully to $adviserName');
+  } else {
+    print('⚠️ Failed to send email, but organization was created');
+    // Pwede mong i-log ito para malaman mong may problema sa email
+    await ActivityLogger.log(
+      action: 'Failed to send credentials email to $adviserName for org $orgName',
+      module: 'Email',
+      severity: 'warning',
+    );
   }
+}
 
   @override
   Widget build(BuildContext context) {
@@ -853,18 +839,21 @@ class _CreateOrganizationDialogState extends State<CreateOrganizationDialog> {
                         ),
                       ),
                       const SizedBox(height: 20),
+                      // Organization Name
                       TextFormField(
                         controller: _nameCtrl,
                         decoration: const InputDecoration(labelText: 'Organization Name', border: OutlineInputBorder()),
                         validator: (v) => v == null || v.isEmpty ? 'Required' : null,
                       ),
                       const SizedBox(height: 12),
+                      // Organization Acronym/Short Name
                       TextFormField(
                         controller: _shortNameCtrl,
-                        decoration: const InputDecoration(labelText: 'Short Name (e.g., SWITS)', border: OutlineInputBorder()),
+                        decoration: const InputDecoration(labelText: 'Organization Acronym/Short Name (e.g., SWITS)', border: OutlineInputBorder()),
                         validator: (v) => v == null || v.isEmpty ? 'Required' : null,
                       ),
                       const SizedBox(height: 12),
+                      // Organization Type
                       DropdownButtonFormField<String>(
                         value: _type,
                         decoration: const InputDecoration(labelText: 'Organization Type', border: OutlineInputBorder()),
@@ -878,61 +867,27 @@ class _CreateOrganizationDialogState extends State<CreateOrganizationDialog> {
                         onChanged: (v) => setState(() => _type = v!),
                       ),
                       const SizedBox(height: 12),
+                      // Description
                       TextFormField(
                         controller: _descCtrl,
                         maxLines: 3,
                         decoration: const InputDecoration(labelText: 'Description', border: OutlineInputBorder()),
                         validator: (v) => v == null || v.isEmpty ? 'Required' : null,
                       ),
-                      const SizedBox(height: 12),
-                      Text('Categories', style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.w600)),
-                      const SizedBox(height: 8),
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: [
-                          ..._categories.map((c) => Chip(
-                            label: Text(c, style: GoogleFonts.beVietnamPro(fontSize: 12)),
-                            onDeleted: () => setState(() => _categories.remove(c)),
-                            backgroundColor: UpriseColors.lightGray,
-                          )),
-                          SizedBox(
-                            width: 120,
-                            child: TextField(
-                              controller: _catCtrl,
-                              decoration: const InputDecoration(
-                                hintText: 'Add',
-                                border: OutlineInputBorder(),
-                                contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                              ),
-                              onSubmitted: (v) {
-                                if (v.isNotEmpty && !_categories.contains(v)) {
-                                  setState(() => _categories.add(v));
-                                  _catCtrl.clear();
-                                }
-                              },
-                            ),
-                          ),
-                        ],
-                      ),
                       const Divider(height: 32),
                       Text('Faculty Adviser (will receive login credentials)', style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.bold)),
                       const SizedBox(height: 12),
+                      // Adviser Full Name
                       TextFormField(
                         controller: _advNameCtrl,
-                        decoration: const InputDecoration(labelText: 'Full Name', border: OutlineInputBorder()),
+                        decoration: const InputDecoration(labelText: 'Adviser Full Name', border: OutlineInputBorder()),
                         validator: (v) => v == null || v.trim().isEmpty ? 'Required' : null,
                       ),
                       const SizedBox(height: 12),
-                      TextFormField(
-                        controller: _advTitleCtrl,
-                        decoration: const InputDecoration(labelText: 'Title / Department', border: OutlineInputBorder()),
-                        validator: (v) => v == null || v.trim().isEmpty ? 'Required' : null,
-                      ),
-                      const SizedBox(height: 12),
+                      // Adviser Email (for system credentials)
                       TextFormField(
                         controller: _advEmailCtrl,
-                        decoration: const InputDecoration(labelText: 'Email Address', border: OutlineInputBorder()),
+                        decoration: const InputDecoration(labelText: 'Adviser Email (for system credentials)', border: OutlineInputBorder()),
                         validator: (v) {
                           if (v == null || v.trim().isEmpty) return 'Required';
                           if (!v.contains('@') || !v.contains('.')) return 'Enter a valid email address';
@@ -940,9 +895,14 @@ class _CreateOrganizationDialogState extends State<CreateOrganizationDialog> {
                         },
                       ),
                       const SizedBox(height: 12),
+                      // Adviser Phone Number (optional)
                       TextFormField(
                         controller: _advPhoneCtrl,
-                        decoration: const InputDecoration(labelText: 'Phone Number', border: OutlineInputBorder()),
+                        decoration: const InputDecoration(
+                          labelText: 'Adviser Phone Number (optional)',
+                          border: OutlineInputBorder(),
+                          hintText: 'e.g., +63 912 345 6789',
+                        ),
                       ),
                     ],
                   ),
@@ -994,7 +954,6 @@ class _CreateOrganizationDialogState extends State<CreateOrganizationDialog> {
     final orgAcronym = _shortNameCtrl.text.trim();
     final orgDescription = _descCtrl.text.trim();
     final adviserName = _advNameCtrl.text.trim();
-    final adviserTitle = _advTitleCtrl.text.trim();
     final adviserEmail = _advEmailCtrl.text.trim().toLowerCase();
     final adviserPhone = _advPhoneCtrl.text.trim();
 
@@ -1039,7 +998,7 @@ class _CreateOrganizationDialogState extends State<CreateOrganizationDialog> {
 
       final batch = FirebaseFirestore.instance.batch();
 
-      // Organization document
+      // Organization document - removed categories field
       batch.set(orgRef, {
         'id': orgId,
         'name': orgName,
@@ -1051,9 +1010,9 @@ class _CreateOrganizationDialogState extends State<CreateOrganizationDialog> {
         'adviserId': adviserUid,
         'adviserName': adviserName,
         'adviserEmail': adviserEmail,
-        'adviserTitle': adviserTitle,
+        'adviserTitle': '', // Empty since we removed Title/Department field
         'adviserPhone': adviserPhone,
-        'categories': _categories,
+        'categories': [], // Empty array to maintain compatibility with existing code
         'status': 'active',
         'createdAt': FieldValue.serverTimestamp(),
         'createdBy': FirebaseAuth.instance.currentUser?.uid,
@@ -1086,7 +1045,7 @@ class _CreateOrganizationDialogState extends State<CreateOrganizationDialog> {
         'adviserName': adviserName,
         'adviserEmail': adviserEmail,
         'adviserPhone': adviserPhone,
-        'adviserRank': adviserTitle,
+        'adviserRank': '', // Empty since we removed Title/Department field
         'president': '',
         'vicePresident': '',
         'secretary': '',
@@ -1263,6 +1222,7 @@ class _EditOrganizationDialogState extends State<EditOrganizationDialog> {
       ),
     );
   }
+  
 
   Future<void> _update() async {
     setState(() => _isLoading = true);
@@ -1449,3 +1409,4 @@ class _OrganizationDetailPageState extends State<OrganizationDetailPage> {
     );
   }
 }
+

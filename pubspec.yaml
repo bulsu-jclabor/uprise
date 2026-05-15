@@ -58,6 +58,9 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+    
+  
+  http: ^1.1.0 
 
   # FIREBASE - KEEP THESE (working sa web mo!)
   cloud_firestore: ^5.6.12
