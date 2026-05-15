@@ -10,6 +10,7 @@ import 'student_organizations_screen.dart';
 import 'student_certificates_screen.dart';
 import 'student_profile_screen.dart';
 import 'student_announcements_screen.dart';
+import 'student_notifications_screen.dart'; // ✅ Import your notifications screen
 
 class StudentHomeScreen extends StatefulWidget {
   const StudentHomeScreen({super.key});
@@ -72,7 +73,13 @@ class _HomeContent extends StatelessWidget {
             IconButton(
               icon: const Icon(Icons.notifications_outlined),
               onPressed: () {
-                // Navigate to notifications
+                // ✅ Navigate to notifications screen
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const StudentNotificationsScreen(),
+                  ),
+                );
               },
             ),
           ],
@@ -98,7 +105,13 @@ class _HomeContent extends StatelessWidget {
                 ),
                 TextButton(
                   onPressed: () {
-                    // Navigate to events screen
+                    // ✅ Navigate to events screen
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const StudentEventsScreen(),
+                      ),
+                    );
                   },
                   child: const Text('See All'),
                 ),
