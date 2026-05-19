@@ -759,7 +759,7 @@ Future<void> _pickAndUploadFile() async {
   if (file.bytes == null || file.bytes!.isEmpty) {
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Cannot read file, princess! Try another one? 👸')),
+        const SnackBar(content: Text('Cannot read file! Try another one?')),
       );
     }
     return;
@@ -880,10 +880,9 @@ Future<void> _pickAndUploadFile() async {
   Future<void> _submit() async {
   if (!_formKey.currentState!.validate()) return;
   
-  // 🔥 NEW CHECK: For Base64, we need the file data
   if (widget.editDocId == null && _newAttachmentUrl == null && _attachmentUrl == null) {
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Please attach a file before submitting, princess! 👸')),
+      const SnackBar(content: Text('Please attach a file before submitting!')),
     );
     return;
   }
@@ -891,8 +890,42 @@ Future<void> _pickAndUploadFile() async {
   setState(() => _isSubmitting = true);
   final user = FirebaseAuth.instance.currentUser;
   
+  // 👇 ITO ANG IMPORTANTE - GET ORG NAME
+  String orgName = '';
+  try {
+    // Gamitin ang CURRENT USER para makuha ang org name
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser != null) {
+      // Hanapin ang org gamit ang email or uid
+      final orgQuery = await FirebaseFirestore.instance
+          .collection('organizations')
+          .where('email', isEqualTo: currentUser.email)  // or 'uid', isEqualTo: currentUser.uid
+          .limit(1)
+          .get();
+      
+      if (orgQuery.docs.isNotEmpty) {
+        orgName = orgQuery.docs.first.data()['name'] ?? 'Unknown';
+        print('✅ Found org name: $orgName');
+      } else {
+        // Pag hindi nahanap sa email, gamitin ang widget.orgId
+        final orgDoc = await FirebaseFirestore.instance
+            .collection('organizations')
+            .doc(widget.orgId)
+            .get();
+        if (orgDoc.exists) {
+          orgName = orgDoc.data()?['name'] ?? 'Unknown';
+          print('✅ Found org name via ID: $orgName');
+        }
+      }
+    }
+  } catch (e) {
+    print('❌ Error getting org: $e');
+    orgName = 'Unknown';
+  }
+  
   final Map<String, dynamic> payload = {
     'orgId': widget.orgId,
+    'orgName': orgName,  // 👈 DAPAT MAY VALUE ITO!
     'title': _titleCtrl.text.trim(),
     'category': _selectedCategory,
     'audience': _selectedAudience,
@@ -900,54 +933,48 @@ Future<void> _pickAndUploadFile() async {
     'location': _locationCtrl.text.trim(),
     'time': _timeCtrl.text.trim(),
     'submittedBy': user?.uid ?? '',
+    'submittedByEmail': user?.email ?? '',
     
-    // 🔥 NEW: Store Base64 instead of URL
-    'attachmentBase64': _newAttachmentUrl ?? _attachmentUrl,  // This now holds Base64 string!
+    'attachmentBase64': _newAttachmentUrl ?? _attachmentUrl,
     'attachmentName': _uploadedFileName,
     'attachmentSize': _uploadedFileSize,
   };
 
-    try {
-      final parsed = DateFormat('MM/dd/yyyy').parse(_dateCtrl.text.trim());
-      payload['date'] = Timestamp.fromDate(parsed);
-    } catch (_) {}
+  print('📤 Payload orgName: ${payload['orgName']}');  // I-print para makita
 
-    try {
-      if (widget.editDocId != null) {
-        await FirebaseFirestore.instance
-            .collection('event_proposals')
-            .doc(widget.editDocId)
-            .update(payload);
-        await activity_log.ActivityLogger.log(
-          action: 'edit_proposal',
-          module: 'event_proposals',
-          details: {
-            'orgId':      widget.orgId,
-            'proposalId': widget.editDocId,
-            'title':      payload['title'],
-          },
-        );
-      } else {
-        payload['status']      = 'pending';
-        payload['submittedAt'] = FieldValue.serverTimestamp();
-        await FirebaseFirestore.instance.collection('event_proposals').add(payload);
-        await activity_log.ActivityLogger.log(
-          action: 'submit_proposal',
-          module: 'event_proposals',
-          details: {'orgId': widget.orgId, 'title': payload['title']},
-        );
-      }
-      if (mounted) Navigator.pop(context);
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _isSubmitting = false);
+  try {
+    final parsed = DateFormat('MM/dd/yyyy').parse(_dateCtrl.text.trim());
+    payload['date'] = Timestamp.fromDate(parsed);
+  } catch (_) {}
+
+  try {
+    if (widget.editDocId != null) {
+      await FirebaseFirestore.instance
+          .collection('event_proposals')
+          .doc(widget.editDocId)
+          .update(payload);
+    } else {
+      payload['status'] = 'pending';
+      payload['createdAt'] = FieldValue.serverTimestamp();
+      payload['submittedAt'] = FieldValue.serverTimestamp();
+      
+      await FirebaseFirestore.instance.collection('event_proposals').add(payload);
     }
+    if (mounted) Navigator.pop(context);
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('✨ Proposal submitted successfully! ✨')),
+    );
+  } catch (e) {
+    print('❌ Submit error: $e');
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: $e')),
+      );
+    }
+  } finally {
+    if (mounted) setState(() => _isSubmitting = false);
   }
+}
 
   // ============ BUILD ============
   @override

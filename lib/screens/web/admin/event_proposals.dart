@@ -1,29 +1,42 @@
 import 'dart:io';
+import 'dart:typed_data';  // 👈 ADD THIS FOR Uint8List
+import 'dart:convert';      // 👈 FOR base64Decode
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../services/activity_logger.dart' as activity_log;
 import 'package:share_plus/share_plus.dart';
-import '../../theme/app_theme.dart';
+import 'dart:html' as html;  // 👈 OK lang to, ignore ang warning
 
 class EventProposals extends StatefulWidget {
   const EventProposals({super.key});
 
   @override
-  _EventProposalsState createState() => _EventProposalsState();
+  State<EventProposals> createState() => _EventProposalsState();
 }
 
 class _EventProposalsState extends State<EventProposals> {
   final TextEditingController _searchController = TextEditingController();
-  String _statusFilter = 'All'; // All, Pending, Approved, Rejected, Archived
+  String _statusFilter = 'All';
   int _currentPage = 1;
   static const int _pageSize = 10;
+
+  // Colors
+  final Color primaryDark = const Color(0xFFB45309);
+  final Color primaryLight = const Color(0xFFD97706);
+  final Color lightGray = const Color(0xFFF9FAFB);
+  final Color mediumGray = const Color(0xFFE5E7EB);
+  final Color darkGray = const Color(0xFF6B7280);
+  final Color charcoal = const Color(0xFF111827);
+  final Color success = const Color(0xFF10B981);
+  final Color warning = const Color(0xFFF59E0B);
+  final Color error = const Color(0xFFEF4444);
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: UpriseColors.lightGray,
+      backgroundColor: lightGray,
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -42,25 +55,24 @@ class _EventProposalsState extends State<EventProposals> {
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: UpriseColors.white,
-        border: Border(bottom: BorderSide(color: UpriseColors.mediumGray)),
+        color: Colors.white,
+        border: Border(bottom: BorderSide(color: mediumGray)),
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text('Event Proposals',
-                style: GoogleFonts.beVietnamPro(fontSize: 24, fontWeight: FontWeight.bold, color: UpriseColors.charcoal)),
+                style: GoogleFonts.beVietnamPro(fontSize: 24, fontWeight: FontWeight.bold, color: charcoal)),
             const SizedBox(height: 4),
             Text('Manage and review pending event applications from CICT student organizations.',
-                style: GoogleFonts.beVietnamPro(fontSize: 14, color: UpriseColors.darkGray)),
+                style: GoogleFonts.beVietnamPro(fontSize: 14, color: darkGray)),
           ]),
         ],
       ),
     );
   }
 
-  // ---------- REAL‑TIME STATS (StreamBuilder) ----------
   Widget _buildStatsRow() {
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance.collection('event_proposals').snapshots(),
@@ -82,15 +94,15 @@ class _EventProposalsState extends State<EventProposals> {
         return Padding(
           padding: const EdgeInsets.all(24),
           child: Row(children: [
-            _statCard('TOTAL PROPOSALS', '$total', UpriseColors.primaryDark),
+            _statCard('TOTAL PROPOSALS', '$total', primaryDark),
             const SizedBox(width: 16),
-            _statCard('PENDING', '$pending', UpriseColors.warning),
+            _statCard('PENDING', '$pending', warning),
             const SizedBox(width: 16),
-            _statCard('APPROVED', '$approved', UpriseColors.success),
+            _statCard('APPROVED', '$approved', success),
             const SizedBox(width: 16),
-            _statCard('REJECTED', '$rejected', UpriseColors.error),
+            _statCard('REJECTED', '$rejected', error),
             const SizedBox(width: 16),
-            _statCard('ARCHIVED', '$archived', UpriseColors.darkGray),
+            _statCard('ARCHIVED', '$archived', darkGray),
           ]),
         );
       },
@@ -102,12 +114,12 @@ class _EventProposalsState extends State<EventProposals> {
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: UpriseColors.white,
+          color: Colors.white,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: UpriseColors.primaryDark, width: 1),
+          border: Border.all(color: primaryDark, width: 1),
         ),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(label, style: GoogleFonts.beVietnamPro(fontSize: 11, color: UpriseColors.darkGray, fontWeight: FontWeight.w600)),
+          Text(label, style: GoogleFonts.beVietnamPro(fontSize: 11, color: darkGray, fontWeight: FontWeight.w600)),
           const SizedBox(height: 6),
           Text(value, style: GoogleFonts.beVietnamPro(fontSize: 28, fontWeight: FontWeight.bold, color: color)),
         ]),
@@ -115,7 +127,6 @@ class _EventProposalsState extends State<EventProposals> {
     );
   }
 
-  // ---------- TOOLBAR ----------
   Widget _buildToolbar() {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 24),
@@ -128,17 +139,17 @@ class _EventProposalsState extends State<EventProposals> {
                 controller: _searchController,
                 decoration: InputDecoration(
                   hintText: 'Search events...',
-                  hintStyle: GoogleFonts.beVietnamPro(fontSize: 13, color: UpriseColors.darkGray),
-                  prefixIcon: Icon(Icons.search, size: 18, color: UpriseColors.darkGray),
+                  hintStyle: GoogleFonts.beVietnamPro(fontSize: 13, color: darkGray),
+                  prefixIcon: Icon(Icons.search, size: 18, color: darkGray),
                   filled: true,
-                  fillColor: UpriseColors.white,
+                  fillColor: Colors.white,
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(8),
-                    borderSide: BorderSide(color: UpriseColors.mediumGray),
+                    borderSide: BorderSide(color: mediumGray),
                   ),
                   enabledBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(8),
-                    borderSide: BorderSide(color: UpriseColors.mediumGray),
+                    borderSide: BorderSide(color: mediumGray),
                   ),
                   contentPadding: const EdgeInsets.symmetric(vertical: 0),
                 ),
@@ -151,9 +162,9 @@ class _EventProposalsState extends State<EventProposals> {
             height: 40,
             padding: const EdgeInsets.symmetric(horizontal: 12),
             decoration: BoxDecoration(
-              color: UpriseColors.white,
+              color: Colors.white,
               borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: UpriseColors.primaryDark, width: 1),
+              border: Border.all(color: primaryDark, width: 1),
             ),
             child: DropdownButtonHideUnderline(
               child: DropdownButton<String>(
@@ -172,8 +183,8 @@ class _EventProposalsState extends State<EventProposals> {
                   _statusFilter = value!;
                   _currentPage = 1;
                 }),
-                style: GoogleFonts.beVietnamPro(fontSize: 13, color: UpriseColors.charcoal),
-                icon: Icon(Icons.arrow_drop_down, color: UpriseColors.darkGray),
+                style: GoogleFonts.beVietnamPro(fontSize: 13, color: charcoal),
+                icon: Icon(Icons.arrow_drop_down, color: darkGray),
               ),
             ),
           ),
@@ -183,8 +194,8 @@ class _EventProposalsState extends State<EventProposals> {
             icon: const Icon(Icons.download, size: 16),
             label: const Text('Export'),
             style: OutlinedButton.styleFrom(
-              foregroundColor: UpriseColors.primaryDark,
-              side: BorderSide(color: UpriseColors.mediumGray),
+              foregroundColor: primaryDark,
+              side: BorderSide(color: mediumGray),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
             ),
           ),
@@ -205,128 +216,131 @@ class _EventProposalsState extends State<EventProposals> {
 
   Color _statusColor(String status) {
     switch (status) {
-      case 'Pending': return UpriseColors.warning;
-      case 'Approved': return UpriseColors.success;
-      case 'Rejected': return UpriseColors.error;
-      case 'Archived': return UpriseColors.darkGray;
-      default: return UpriseColors.primaryDark;
+      case 'Pending': return warning;
+      case 'Approved': return success;
+      case 'Rejected': return error;
+      case 'Archived': return darkGray;
+      default: return primaryDark;
     }
   }
 
-  // ---------- TABLE ----------
   Widget _buildTable() {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 24),
-      decoration: BoxDecoration(
-        color: UpriseColors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: UpriseColors.primaryDark, width: 1),
+  return Container(
+    margin: const EdgeInsets.symmetric(horizontal: 24),
+    decoration: BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(12),
+      border: Border.all(color: primaryDark, width: 1),
+    ),
+    child: Column(children: [
+      Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: lightGray,
+          border: Border(bottom: BorderSide(color: mediumGray)),
+          borderRadius: const BorderRadius.only(topLeft: Radius.circular(12), topRight: Radius.circular(12)),
+        ),
+        child: Row(children: [
+          Expanded(flex: 3, child: Text('EVENT TITLE', style: _headerStyle())),
+          Expanded(flex: 2, child: Text('ORGANIZATION', style: _headerStyle())),
+          Expanded(flex: 1, child: Text('DATE', style: _headerStyle())),
+          Expanded(flex: 1, child: Text('STATUS', style: _headerStyle())),
+          Expanded(flex: 1, child: Text('ACTIONS', style: _headerStyle())),
+        ]),
       ),
-      child: Column(children: [
-        // Header
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          decoration: BoxDecoration(
-            color: UpriseColors.lightGray,
-            border: Border(bottom: BorderSide(color: UpriseColors.mediumGray)),
-            borderRadius: const BorderRadius.only(topLeft: Radius.circular(12), topRight: Radius.circular(12)),
-          ),
-          child: Row(children: [
-            Expanded(flex: 3, child: Text('EVENT TITLE & ACADEMIC YEAR', style: _headerStyle())),
-            Expanded(flex: 2, child: Text('ORGANIZATION', style: _headerStyle())),
-            Expanded(flex: 1, child: Text('DATE', style: _headerStyle())),
-            Expanded(flex: 1, child: Text('STATUS', style: _headerStyle())),
-            Expanded(flex: 1, child: Text('ACTIONS', style: _headerStyle())),
-          ]),
-        ),
-        // Body
-        Expanded(
-          child: StreamBuilder<QuerySnapshot>(
-            stream: FirebaseFirestore.instance
-                .collection('event_proposals')
-                .orderBy('createdAt', descending: true)
-                .snapshots(),
-            builder: (context, snap) {
-              if (snap.connectionState == ConnectionState.waiting) {
-                return Center(child: CircularProgressIndicator(color: UpriseColors.primaryDark));
-              }
-              if (snap.hasError) {
-                return Center(child: Text('Error: ${snap.error}', style: TextStyle(color: UpriseColors.error)));
-              }
-              var docs = snap.data!.docs;
-              // Filter by status
-              if (_statusFilter != 'All') {
-                docs = docs.where((d) => (d.data() as Map)['status'] == _statusFilter.toLowerCase()).toList();
-              }
-              // Search by title or org name
-              final term = _searchController.text.trim().toLowerCase();
-              if (term.isNotEmpty) {
-                docs = docs.where((d) {
-                  final data = d.data() as Map;
-                  final title = (data['title'] ?? '').toString().toLowerCase();
-                  final org = (data['orgName'] ?? '').toString().toLowerCase();
-                  return title.contains(term) || org.contains(term);
-                }).toList();
-              }
-              if (docs.isEmpty) return _emptyState();
+      Expanded(
+        child: StreamBuilder<QuerySnapshot>(
+          // 👇 REMOVE orderBy MUNA PARA MAKITA LAHAT
+          stream: FirebaseFirestore.instance
+              .collection('event_proposals')
+              .snapshots(),  // 👈 TANGGALIN MUNA ANG .orderBy
+          builder: (context, snap) {
+            if (snap.connectionState == ConnectionState.waiting) {
+              return Center(child: CircularProgressIndicator(color: primaryDark));
+            }
+            if (snap.hasError) {
+              print('❌ Error: ${snap.error}');
+              return Center(child: Text('Error: ${snap.error}', style: TextStyle(color: error)));
+            }
+            
+            var docs = snap.data!.docs;
+            print('📊 Total proposals in Firebase: ${docs.length}');  // 👈 CHECK ITO
+            
+            if (_statusFilter != 'All') {
+              docs = docs.where((d) => (d.data() as Map)['status'] == _statusFilter.toLowerCase()).toList();
+            }
+            final term = _searchController.text.trim().toLowerCase();
+            if (term.isNotEmpty) {
+              docs = docs.where((d) {
+                final data = d.data() as Map;
+                final title = (data['title'] ?? '').toString().toLowerCase();
+                final org = (data['orgName'] ?? '').toString().toLowerCase();
+                return title.contains(term) || org.contains(term);
+              }).toList();
+            }
+            
+            print('📊 After filter: ${docs.length} proposals');
+            
+            if (docs.isEmpty) return _emptyState();
 
-              final totalPages = (docs.length / _pageSize).ceil();
-              final safePage = _currentPage.clamp(1, totalPages);
-              final start = (safePage - 1) * _pageSize;
-              final end = (start + _pageSize).clamp(0, docs.length);
-              final pageDocs = docs.sublist(start, end);
+            final totalPages = (docs.length / _pageSize).ceil();
+            final safePage = _currentPage.clamp(1, totalPages);
+            final start = (safePage - 1) * _pageSize;
+            final end = (start + _pageSize).clamp(0, docs.length);
+            final pageDocs = docs.sublist(start, end);
 
-              return Column(children: [
-                Expanded(
-                  child: ListView.builder(
-                    itemCount: pageDocs.length,
-                    itemBuilder: (_, i) {
-                      final data = pageDocs[i].data() as Map<String, dynamic>;
-                      final docId = pageDocs[i].id;
-                      return _buildRow(data, docId);
-                    },
-                  ),
+            return Column(children: [
+              Expanded(
+                child: ListView.builder(
+                  itemCount: pageDocs.length,
+                  itemBuilder: (_, i) {
+                    final data = pageDocs[i].data() as Map<String, dynamic>;
+                    final docId = pageDocs[i].id;
+                    print('📄 Showing: ${data['title']} - ${data['orgName']}');  // 👈 CHECK ITO
+                    return _buildRow(data, docId);
+                  },
                 ),
-                _buildFooter(docs.length, totalPages, start, end),
-              ]);
-            },
-          ),
+              ),
+              _buildFooter(docs.length, totalPages, start, end),
+            ]);
+          },
         ),
-      ]),
-    );
-  }
+      ),
+    ]),
+  );
+}
 
   TextStyle _headerStyle() => GoogleFonts.beVietnamPro(
-      fontSize: 11, fontWeight: FontWeight.w700, color: UpriseColors.darkGray, letterSpacing: 0.5);
+      fontSize: 11, fontWeight: FontWeight.w700, color: darkGray, letterSpacing: 0.5);
 
   Widget _buildRow(Map<String, dynamic> data, String docId) {
     final status = data['status'] ?? 'pending';
     final statusColor = status == 'approved'
-        ? UpriseColors.success
+        ? success
         : status == 'rejected'
-            ? UpriseColors.error
+            ? error
             : status == 'archived'
-                ? UpriseColors.darkGray
-                : UpriseColors.warning;
+                ? darkGray
+                : warning;
     final statusLabel = status.toUpperCase();
     final dateStr = _formatDate(data['date']);
-    final academicYear = data['academicYear'] ?? '1ST SEM 2024-2025';
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      decoration: BoxDecoration(border: Border(bottom: BorderSide(color: UpriseColors.mediumGray.withOpacity(0.5)))),
+      decoration: BoxDecoration(border: Border(bottom: BorderSide(color: mediumGray.withOpacity(0.5)))),
       child: Row(children: [
         Expanded(
           flex: 3,
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(data['title'] ?? 'Untitled',
-                style: GoogleFonts.beVietnamPro(fontSize: 14, fontWeight: FontWeight.w600, color: UpriseColors.charcoal)),
+                style: GoogleFonts.beVietnamPro(fontSize: 14, fontWeight: FontWeight.w600, color: charcoal)),
             const SizedBox(height: 2),
-            Text(academicYear, style: GoogleFonts.beVietnamPro(fontSize: 11, color: UpriseColors.darkGray)),
+            Text(data['category'] ?? 'No category', 
+                style: GoogleFonts.beVietnamPro(fontSize: 11, color: darkGray)),
           ]),
         ),
         Expanded(flex: 2, child: Text(data['orgName'] ?? 'Unknown', style: GoogleFonts.beVietnamPro(fontSize: 13))),
-        Expanded(flex: 1, child: Text(dateStr, style: GoogleFonts.beVietnamPro(fontSize: 13, color: UpriseColors.darkGray))),
+        Expanded(flex: 1, child: Text(dateStr, style: GoogleFonts.beVietnamPro(fontSize: 13, color: darkGray))),
         Expanded(
           flex: 1,
           child: Container(
@@ -341,22 +355,22 @@ class _EventProposalsState extends State<EventProposals> {
           flex: 1,
           child: Row(children: [
             IconButton(
-                icon: Icon(Icons.visibility_outlined, size: 18, color: UpriseColors.darkGray),
+                icon: Icon(Icons.visibility_outlined, size: 18, color: darkGray),
                 onPressed: () => _showViewDialog(data, docId),
                 tooltip: 'View'),
             if (status != 'approved' && status != 'rejected' && status != 'archived')
               IconButton(
-                  icon: Icon(Icons.check_circle_outline, size: 18, color: UpriseColors.success),
+                  icon: Icon(Icons.check_circle_outline, size: 18, color: success),
                   onPressed: () => _setStatus(docId, 'approved'),
                   tooltip: 'Approve'),
             if (status != 'approved' && status != 'rejected' && status != 'archived')
               IconButton(
-                  icon: Icon(Icons.cancel_outlined, size: 18, color: UpriseColors.error),
+                  icon: Icon(Icons.cancel_outlined, size: 18, color: error),
                   onPressed: () => _setStatus(docId, 'rejected'),
                   tooltip: 'Reject'),
             if (status != 'archived')
               IconButton(
-                  icon: Icon(Icons.archive_outlined, size: 18, color: UpriseColors.darkGray),
+                  icon: Icon(Icons.archive_outlined, size: 18, color: darkGray),
                   onPressed: () => _setStatus(docId, 'archived'),
                   tooltip: 'Archive'),
           ]),
@@ -368,13 +382,12 @@ class _EventProposalsState extends State<EventProposals> {
   Widget _emptyState() {
     return Center(
         child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-      Icon(Icons.event_busy, size: 64, color: UpriseColors.mediumGray),
+      Icon(Icons.event_busy, size: 64, color: mediumGray),
       const SizedBox(height: 16),
-      Text('No proposals found', style: GoogleFonts.beVietnamPro(color: UpriseColors.darkGray, fontSize: 15)),
+      Text('No proposals found', style: GoogleFonts.beVietnamPro(color: darkGray, fontSize: 15)),
     ]));
   }
 
-  // ---------- FIXED PAGINATION (sliding window) ----------
   Widget _buildFooter(int total, int totalPages, int start, int end) {
     const int maxVisible = 5;
     int firstPage = (_currentPage - maxVisible ~/ 2).clamp(1, totalPages);
@@ -387,17 +400,17 @@ class _EventProposalsState extends State<EventProposals> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       decoration: BoxDecoration(
-        border: Border(top: BorderSide(color: UpriseColors.mediumGray)),
-        color: UpriseColors.lightGray,
+        border: Border(top: BorderSide(color: mediumGray)),
+        color: lightGray,
         borderRadius: const BorderRadius.only(bottomLeft: Radius.circular(12), bottomRight: Radius.circular(12)),
       ),
       child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
         Text('Showing ${total == 0 ? 0 : start + 1}–$end of $total proposals',
-            style: GoogleFonts.beVietnamPro(fontSize: 13, color: UpriseColors.darkGray)),
+            style: GoogleFonts.beVietnamPro(fontSize: 13, color: darkGray)),
         Row(children: [
           IconButton(
             icon: const Icon(Icons.chevron_left, size: 20),
-            color: _currentPage > 1 ? UpriseColors.charcoal : UpriseColors.mediumGray,
+            color: _currentPage > 1 ? charcoal : mediumGray,
             onPressed: _currentPage > 1 ? () => setState(() => _currentPage--) : null,
           ),
           ...pages.map((page) => GestureDetector(
@@ -406,32 +419,32 @@ class _EventProposalsState extends State<EventProposals> {
                   margin: const EdgeInsets.symmetric(horizontal: 2),
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
-                    color: page == _currentPage ? UpriseColors.primaryDark : Colors.transparent,
+                    color: page == _currentPage ? primaryDark : Colors.transparent,
                     borderRadius: BorderRadius.circular(4),
                   ),
                   child: Text('$page',
                       style: GoogleFonts.beVietnamPro(
                         fontSize: 12,
-                        color: page == _currentPage ? Colors.white : UpriseColors.charcoal,
+                        color: page == _currentPage ? Colors.white : charcoal,
                         fontWeight: page == _currentPage ? FontWeight.w600 : FontWeight.normal,
                       )),
                 ),
               )),
           if (lastPage < totalPages) ...[
-            Text('...', style: TextStyle(color: UpriseColors.darkGray)),
+            Text('...', style: TextStyle(color: darkGray)),
             GestureDetector(
               onTap: () => setState(() => _currentPage = totalPages),
               child: Container(
                 margin: const EdgeInsets.symmetric(horizontal: 2),
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 child: Text('$totalPages',
-                    style: GoogleFonts.beVietnamPro(fontSize: 12, color: UpriseColors.charcoal)),
+                    style: GoogleFonts.beVietnamPro(fontSize: 12, color: charcoal)),
               ),
             ),
           ],
           IconButton(
             icon: const Icon(Icons.chevron_right, size: 20),
-            color: _currentPage < totalPages ? UpriseColors.charcoal : UpriseColors.mediumGray,
+            color: _currentPage < totalPages ? charcoal : mediumGray,
             onPressed: _currentPage < totalPages ? () => setState(() => _currentPage++) : null,
           ),
         ]),
@@ -439,9 +452,7 @@ class _EventProposalsState extends State<EventProposals> {
     );
   }
 
-  // ---------- STATUS CHANGE WITH LOGGING ----------
   Future<void> _setStatus(String docId, String newStatus) async {
-    // Fetch the proposal title before updating (for logging)
     String title = '';
     try {
       final docSnap = await FirebaseFirestore.instance.collection('event_proposals').doc(docId).get();
@@ -450,9 +461,12 @@ class _EventProposalsState extends State<EventProposals> {
       title = 'Unknown event';
     }
 
-    await FirebaseFirestore.instance.collection('event_proposals').doc(docId).update({'status': newStatus});
+    await FirebaseFirestore.instance.collection('event_proposals').doc(docId).update({
+      'status': newStatus,
+      'reviewedAt': FieldValue.serverTimestamp(),
+      'reviewedBy': FirebaseAuth.instance.currentUser?.uid ?? '',
+    });
 
-    // Log the status change
     await activity_log.ActivityLogger.log(
       action: '${newStatus.toUpperCase()} proposal: $title',
       module: 'Event Management',
@@ -461,41 +475,84 @@ class _EventProposalsState extends State<EventProposals> {
     );
 
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Proposal ${newStatus.toUpperCase()}')));
-    // Stats update automatically because of StreamBuilder
   }
 
-  // ---------- VIEW DIALOG ----------
   void _showViewDialog(Map<String, dynamic> data, String docId) {
     final status = data['status'] ?? 'pending';
+    final hasAttachment = data['attachmentBase64'] != null && data['attachmentBase64'].toString().isNotEmpty;
+    
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         title: Row(children: [
-          Icon(Icons.event_note, color: UpriseColors.primaryDark),
+          Icon(Icons.event_note, color: primaryDark),
           const SizedBox(width: 8),
           Expanded(child: Text(data['title'] ?? 'Event Proposal', style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.bold))),
         ]),
         content: SingleChildScrollView(
           child: SizedBox(
-            width: 450,
+            width: 500,
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
               _detailRow('Organization', data['orgName'] ?? '—'),
-              _detailRow('Academic Year', data['academicYear'] ?? '—'),
+              _detailRow('Category', data['category'] ?? '—'),
+              _detailRow('Audience', data['audience'] ?? 'Public'),
               _detailRow('Proposed Date', _formatDate(data['date'])),
-              _detailRow('Estimated Budget', data['budget'] != null ? '₱${data['budget']}' : '—'),
+              _detailRow('Time', data['time'] ?? '—'),
+              _detailRow('Location', data['location'] ?? '—'),
               _detailRow('Description', data['description'] ?? 'No description provided.'),
-              if (data['goal'] != null && data['goal'].toString().isNotEmpty) _detailRow('Goal', data['goal']),
+              _detailRow('Submitted By', data['submittedByEmail'] ?? '—'),
               const SizedBox(height: 12),
               const Divider(),
               _detailRow('Status', status.toUpperCase(),
                   isStatus: true,
                   statusColor: status == 'approved'
-                      ? UpriseColors.success
+                      ? success
                       : status == 'rejected'
-                          ? UpriseColors.error
-                          : UpriseColors.warning),
+                          ? error
+                          : warning),
               _detailRow('Submitted', _formatTimestamp(data['createdAt'])),
               if (data['reviewedAt'] != null) _detailRow('Reviewed', _formatTimestamp(data['reviewedAt'])),
+              
+              if (hasAttachment) ...[
+                const SizedBox(height: 12),
+                const Divider(),
+                const SizedBox(height: 8),
+                Text('Attachment', style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.w600, fontSize: 13)),
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: lightGray,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(children: [
+                    Icon(Icons.insert_drive_file, size: 24, color: primaryDark),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            data['attachmentName'] ?? 'Attached File',
+                            style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w500),
+                          ),
+                          if (data['attachmentSize'] != null)
+                            Text(
+                              data['attachmentSize'],
+                              style: GoogleFonts.beVietnamPro(fontSize: 11, color: darkGray),
+                            ),
+                        ],
+                      ),
+                    ),
+                    TextButton.icon(
+                      onPressed: () => _viewAttachment(data),
+                      icon: Icon(Icons.visibility, size: 16),
+                      label: Text('View'),
+                      style: TextButton.styleFrom(foregroundColor: primaryDark),
+                    ),
+                  ]),
+                ),
+              ],
             ]),
           ),
         ),
@@ -506,16 +563,16 @@ class _EventProposalsState extends State<EventProposals> {
                 await _setStatus(docId, 'approved');
                 Navigator.pop(ctx);
               },
-              icon: Icon(Icons.check_circle, color: UpriseColors.success),
-              label: Text('Approve', style: TextStyle(color: UpriseColors.success)),
+              icon: Icon(Icons.check_circle, color: success),
+              label: Text('Approve', style: TextStyle(color: success)),
             ),
             TextButton.icon(
               onPressed: () async {
                 await _setStatus(docId, 'rejected');
                 Navigator.pop(ctx);
               },
-              icon: Icon(Icons.cancel, color: UpriseColors.error),
-              label: Text('Reject', style: TextStyle(color: UpriseColors.error)),
+              icon: Icon(Icons.cancel, color: error),
+              label: Text('Reject', style: TextStyle(color: error)),
             ),
           ],
           if (status != 'archived')
@@ -524,17 +581,104 @@ class _EventProposalsState extends State<EventProposals> {
                 await _setStatus(docId, 'archived');
                 Navigator.pop(ctx);
               },
-              icon: Icon(Icons.archive, color: UpriseColors.darkGray),
-              label: Text('Archive', style: TextStyle(color: UpriseColors.darkGray)),
+              icon: Icon(Icons.archive, color: darkGray),
+              label: Text('Archive', style: TextStyle(color: darkGray)),
             ),
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx),
-            style: ElevatedButton.styleFrom(backgroundColor: UpriseColors.primaryDark),
+            style: ElevatedButton.styleFrom(backgroundColor: primaryDark),
             child: const Text('Close', style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
     );
+  }
+
+  // 👇 FIXED: Ito ang may error dati
+  void _viewAttachment(Map<String, dynamic> data) {
+    final String base64String = data['attachmentBase64'];
+    final String fileName = data['attachmentName'] ?? 'document';
+    final String fileExtension = fileName.split('.').last.toLowerCase();
+    
+    try {
+      final Uint8List fileBytes = base64Decode(base64String);  // 👈 FIXED: base64Decode hindi base64.decode
+      
+      String contentType;
+      switch (fileExtension) {
+        case 'pdf':
+          contentType = 'application/pdf';
+          break;
+        case 'doc':
+          contentType = 'application/msword';
+          break;
+        case 'docx':
+          contentType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+          break;
+        case 'txt':
+          contentType = 'text/plain';
+          break;
+        case 'jpg':
+        case 'jpeg':
+          contentType = 'image/jpeg';
+          break;
+        case 'png':
+          contentType = 'image/png';
+          break;
+        default:
+          contentType = 'application/octet-stream';
+      }
+      
+      final blob = html.Blob([fileBytes], contentType);
+      final url = html.Url.createObjectUrlFromBlob(blob);
+      
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: Text('Open File: $fileName'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.insert_drive_file, size: 48, color: primaryDark),
+              const SizedBox(height: 16),
+              Text('File size: ${data['attachmentSize'] ?? 'Unknown'}'),
+              const SizedBox(height: 8),
+              Text('Extension: $fileExtension', style: GoogleFonts.beVietnamPro(fontSize: 12)),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                final anchor = html.AnchorElement(href: url)
+                  ..setAttribute('download', fileName)
+                  ..click();
+                html.Url.revokeObjectUrl(url);
+                Navigator.pop(ctx);
+              },
+              child: const Text('Download'),
+            ),
+            TextButton(
+              onPressed: () {
+                html.window.open(url, '_blank');
+                html.Url.revokeObjectUrl(url);
+                Navigator.pop(ctx);
+              },
+              child: const Text('View'),
+            ),
+            TextButton(
+              onPressed: () {
+                html.Url.revokeObjectUrl(url);
+                Navigator.pop(ctx);
+              },
+              child: const Text('Close'),
+            ),
+          ],
+        ),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error opening file: $e'), backgroundColor: error),
+      );
+    }
   }
 
   Widget _detailRow(String label, String value, {bool isStatus = false, Color? statusColor}) {
@@ -544,7 +688,7 @@ class _EventProposalsState extends State<EventProposals> {
         SizedBox(
             width: 120,
             child: Text('$label:',
-                style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.w600, color: UpriseColors.darkGray))),
+                style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.w600, color: darkGray))),
         Expanded(
           child: isStatus
               ? Container(
@@ -560,14 +704,13 @@ class _EventProposalsState extends State<EventProposals> {
     );
   }
 
-  // ---------- SAFE DATE FORMATTING ----------
   String _formatDate(dynamic dateField) {
     if (dateField == null) return 'TBD';
     if (dateField is Timestamp) {
       final date = dateField.toDate();
       return '${date.month}/${date.day}/${date.year}';
     }
-    return dateField.toString(); // fallback for string dates
+    return dateField.toString();
   }
 
   String _formatTimestamp(dynamic ts) {
@@ -579,20 +722,18 @@ class _EventProposalsState extends State<EventProposals> {
     return ts.toString();
   }
 
-  // ---------- EXPORT ----------
   Future<void> _exportToCSV() async {
     try {
       final snap = await FirebaseFirestore.instance.collection('event_proposals').get();
-      final lines = <String>['Title,Organization,Academic Year,Date,Status,Budget,Description'];
+      final lines = <String>['Title,Organization,Category,Date,Status,Description'];
       for (var doc in snap.docs) {
         final d = doc.data();
         lines.add([
           d['title'] ?? '',
           d['orgName'] ?? '',
-          d['academicYear'] ?? '',
+          d['category'] ?? '',
           _formatDate(d['date']),
           d['status'] ?? 'pending',
-          d['budget'] ?? '',
           (d['description'] ?? '').replaceAll(',', ';'),
         ].map((v) => '"$v"').join(','));
       }
@@ -601,7 +742,7 @@ class _EventProposalsState extends State<EventProposals> {
       await Share.shareXFiles([XFile(file.path)], text: 'Event Proposals Export');
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Export failed: $e'), backgroundColor: UpriseColors.error));
+          SnackBar(content: Text('Export failed: $e'), backgroundColor: error));
     }
   }
 
