@@ -12,6 +12,8 @@ import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'dart:html' as html;
+import 'dart:convert'; 
+import 'package:crypto/crypto.dart';  
 
 // ============ COLOR SCHEME ============
 class OrgColors {
@@ -710,159 +712,100 @@ class _SubmitProposalModalState extends State<_SubmitProposalModal> {
   }
 
   // ============ UPLOAD LOGIC ============
-  Future<void> _pickAndUploadFile() async {
+
+
+// ============ NEW UPLOAD FUNCTION (Base64 Version) ============
+Future<void> _pickAndUploadFile() async {
+  // Pick file
   FilePickerResult? result = await FilePicker.platform.pickFiles(
     type: FileType.custom,
-    allowedExtensions: ['pdf', 'doc', 'docx', 'txt'],
-    withData: true, // Must be true for web!
+    allowedExtensions: ['pdf', 'doc', 'docx', 'txt', 'jpg', 'png'],
+    withData: true,  // Need this to get file bytes!
   );
   
   if (result == null) return;
 
   final file = result.files.first;
 
-  // Check if we have the file data
+  // Check if file has data
   if (file.bytes == null || file.bytes!.isEmpty) {
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Cannot read file. Please try another one.')),
+        const SnackBar(content: Text('Cannot read file, princess! Try another one? 👸')),
       );
     }
     return;
   }
 
+  // Check file size (MAX 700KB for Base64 in Firestore)
   final fileSizeBytes = file.bytes!.length;
+  final maxSize = 700 * 1024; // 700 KB
   
-  // Check file size (10 MB max)
-  if (fileSizeBytes > 10 * 1024 * 1024) {
+  if (fileSizeBytes > maxSize) {
+    final sizeInKB = (fileSizeBytes / 1024).toStringAsFixed(1);
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('File is too big! Maximum is 10 MB.')),
+        SnackBar(
+          content: Text('File is $sizeInKB KB. Maximum is 700 KB for Base64. Please choose a smaller file! 💝'),
+          backgroundColor: Colors.orange,
+        ),
       );
     }
     return;
   }
 
-  final fileSizeMB = fileSizeBytes / (1024 * 1024);
-  final fileSizeLabel = fileSizeMB >= 1
-      ? '${fileSizeMB.toStringAsFixed(2)} MB'
-      : '${(fileSizeBytes / 1024).toStringAsFixed(1)} KB';
-
-  // Show uploading status
+  final fileSizeKB = (fileSizeBytes / 1024).toStringAsFixed(1);
+  
+  // Convert to Base64 (this is the magic! ✨)
   setState(() {
     _isUploading = true;
     _uploadProgress = 0.0;
     _uploadedFileName = file.name;
-    _uploadedFileSize = fileSizeLabel;
-    _newAttachmentUrl = null;
+    _uploadedFileSize = '$fileSizeKB KB';
   });
 
-  print('📤 Starting upload: ${file.name} ($fileSizeLabel)');
+  // Simulate progress (Base64 is instant, but we add a little delay for UX)
+  for (int i = 0; i <= 100; i += 20) {
+    await Future.delayed(Duration(milliseconds: 50));
+    if (mounted) {
+      setState(() => _uploadProgress = i / 100);
+    }
+  }
 
   try {
-    final fileName = '${DateTime.now().millisecondsSinceEpoch}_${file.name}';
-    final ref = FirebaseStorage.instance
-        .ref()
-        .child('proposals/${widget.orgId}/$fileName');
-
-    // What kind of file is it?
-    final contentType = {
-      'pdf': 'application/pdf',
-      'doc': 'application/msword',
-      'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      'txt': 'text/plain',
-    }[file.extension?.toLowerCase()] ?? 'application/octet-stream';
-
-    // ⭐ THE MAGIC FIX ⭐
-    // Create a Blob (web-friendly file format)
-    final blob = html.Blob([file.bytes!], contentType);
+    // 🔥 THE MAGIC HAPPENS HERE! 🔥
+    // Convert file bytes to Base64 string
+    String base64String = base64Encode(file.bytes!);
     
-    // Upload using putBlob (this works on web!)
-    _uploadTask = ref.putBlob(
-      blob,
-      SettableMetadata(contentType: contentType),
-    );
-
-    print('📤 Upload started, watching progress...');
-
-    // Watch the upload progress
-    _uploadTask!.snapshotEvents.listen(
-      (TaskSnapshot snap) async {
-        if (!mounted) return;
-
-        // Calculate how much is done
-        final progress = snap.totalBytes > 0
-            ? snap.bytesTransferred / snap.totalBytes
-            : 0.0;
-
-        print('📊 Progress: ${(progress * 100).toStringAsFixed(1)}%');
-
-        // Update the progress bar
-        setState(() => _uploadProgress = progress.clamp(0.0, 1.0));
-
-        // When upload is done!
-        if (snap.state == TaskState.success) {
-          print('✅ Upload complete! Getting download link...');
-          try {
-            final downloadUrl = await snap.ref.getDownloadURL();
-            print('✅ Download link: $downloadUrl');
-            if (!mounted) return;
-            setState(() {
-              _uploadProgress = 1.0;
-              _newAttachmentUrl = downloadUrl;
-              _isUploading = false;
-            });
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('✨ File uploaded successfully! ✨'),
-                duration: Duration(seconds: 2),
-              ),
-            );
-          } catch (urlError) {
-            print('❌ Failed to get download link: $urlError');
-            if (!mounted) return;
-            _resetUploadState();
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('Upload worked but couldn\'t get link: $urlError')),
-            );
-          }
-        } 
-        // If upload fails
-        else if (snap.state == TaskState.error) {
-          print('❌ Upload failed!');
-          if (!mounted) return;
-          _resetUploadState();
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Upload failed. Please check your internet and try again.'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
-      },
-      onError: (error) {
-        print('❌ Upload error: $error');
-        if (!mounted) return;
-        _resetUploadState();
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Upload error: $error'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      },
-    );
-  } catch (e) {
-    print('❌ Unexpected error: $e');
-    _resetUploadState();
+    // Store everything we need
+    setState(() {
+      _newAttachmentUrl = base64String;  // Store the Base64 string
+      _uploadedFileName = file.name;
+      _uploadedFileSize = '$fileSizeKB KB';
+      _uploadProgress = 1.0;
+      _isUploading = false;
+    });
+    
+    debugPrint('✅ File converted to Base64! Size: ${base64String.length} characters');
+    
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Unexpected error: $e')),
+        SnackBar(
+          content: Text('✨ File ready! Size: $fileSizeKB KB ✨'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+    }
+  } catch (e) {
+    debugPrint('❌ Base64 error: $e');
+    setState(() => _isUploading = false);
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error converting file: $e')),
       );
     }
   }
 }
-
 
 
 
@@ -907,27 +850,34 @@ class _SubmitProposalModalState extends State<_SubmitProposalModal> {
 
   // ============ SUBMIT LOGIC ============
   Future<void> _submit() async {
-    if (!_formKey.currentState!.validate()) return;
-    if (widget.editDocId == null && _newAttachmentUrl == null && _attachmentUrl == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please attach a file before submitting')),
-      );
-      return;
-    }
+  if (!_formKey.currentState!.validate()) return;
+  
+  // 🔥 NEW CHECK: For Base64, we need the file data
+  if (widget.editDocId == null && _newAttachmentUrl == null && _attachmentUrl == null) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Please attach a file before submitting, princess! 👸')),
+    );
+    return;
+  }
 
-    setState(() => _isSubmitting = true);
-    final user = FirebaseAuth.instance.currentUser;
-    final Map<String, dynamic> payload = {
-      'orgId':         widget.orgId,
-      'title':         _titleCtrl.text.trim(),
-      'category':      _selectedCategory,
-      'audience':      _selectedAudience,
-      'description':   _descCtrl.text.trim(),
-      'location':      _locationCtrl.text.trim(),
-      'time':          _timeCtrl.text.trim(),
-      'submittedBy':   user?.uid ?? '',
-      'attachmentUrl': _newAttachmentUrl ?? _attachmentUrl,
-    };
+  setState(() => _isSubmitting = true);
+  final user = FirebaseAuth.instance.currentUser;
+  
+  final Map<String, dynamic> payload = {
+    'orgId': widget.orgId,
+    'title': _titleCtrl.text.trim(),
+    'category': _selectedCategory,
+    'audience': _selectedAudience,
+    'description': _descCtrl.text.trim(),
+    'location': _locationCtrl.text.trim(),
+    'time': _timeCtrl.text.trim(),
+    'submittedBy': user?.uid ?? '',
+    
+    // 🔥 NEW: Store Base64 instead of URL
+    'attachmentBase64': _newAttachmentUrl ?? _attachmentUrl,  // This now holds Base64 string!
+    'attachmentName': _uploadedFileName,
+    'attachmentSize': _uploadedFileSize,
+  };
 
     try {
       final parsed = DateFormat('MM/dd/yyyy').parse(_dateCtrl.text.trim());
@@ -1484,6 +1434,7 @@ class _SubmitProposalModalState extends State<_SubmitProposalModal> {
 }
 
 // ============ VIEW PROPOSAL MODAL ============
+// ============ VIEW PROPOSAL MODAL ============
 class _ViewProposalModal extends StatelessWidget {
   final Map<String, dynamic> data;
   const _ViewProposalModal({required this.data});
@@ -1496,8 +1447,12 @@ class _ViewProposalModal extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final status   = (data['status'] ?? 'pending').toString().toLowerCase();
+    final status = (data['status'] ?? 'pending').toString().toLowerCase();
     final audience = data['audience'] ?? 'Public';
+    
+    // Check if we have Base64 attachment (new way) or URL (old way)
+    final hasBase64 = data['attachmentBase64'] != null && data['attachmentBase64'].toString().isNotEmpty;
+    final hasUrl = data['attachmentUrl'] != null && data['attachmentUrl'].toString().isNotEmpty;
 
     return Dialog(
       backgroundColor: Colors.transparent,
@@ -1552,14 +1507,16 @@ class _ViewProposalModal extends StatelessWidget {
             child: SingleChildScrollView(
               padding: const EdgeInsets.all(20),
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                _detailRow('Category',    data['category'] ?? '—'),
-                _detailRow('Audience',    audience),
+                _detailRow('Category', data['category'] ?? '—'),
+                _detailRow('Audience', audience),
                 _detailRow('Description', data['description'] ?? '—'),
-                _detailRow('Date',        _formatDate(data['date'])),
-                _detailRow('Time',        data['time'] ?? '—'),
-                _detailRow('Location',    data['location'] ?? '—'),
-                _detailRow('Submitted',   _formatDate(data['submittedAt'])),
-                if (data['attachmentUrl'] != null) ...[
+                _detailRow('Date', _formatDate(data['date'])),
+                _detailRow('Time', data['time'] ?? '—'),
+                _detailRow('Location', data['location'] ?? '—'),
+                _detailRow('Submitted', _formatDate(data['submittedAt'])),
+                
+                // 🔥 NEW: Show attachment if exists (Base64 or URL)
+                if (hasBase64 || hasUrl) ...[
                   const SizedBox(height: 12),
                   const Divider(),
                   const SizedBox(height: 8),
@@ -1569,22 +1526,45 @@ class _ViewProposalModal extends StatelessWidget {
                   ),
                   const SizedBox(height: 8),
                   Row(children: [
-                    const Icon(Icons.attach_file, size: 16, color: OrgColors.darkGray),
-                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: OrgColors.primaryDark.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Icon(Icons.insert_drive_file, size: 20, color: OrgColors.primaryDark),
+                    ),
+                    const SizedBox(width: 12),
                     Expanded(
-                      child: GestureDetector(
-                        onTap: () => _showAttachmentDialog(context, data['attachmentUrl'] as String),
-                        child: Text(
-                          Uri.decodeFull(
-                            (data['attachmentUrl'] as String).split('/').last.split('?').first,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            data['attachmentName'] ?? 'Attached File',
+                            style: GoogleFonts.beVietnamPro(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w500,
+                              color: OrgColors.charcoal,
+                            ),
+                            overflow: TextOverflow.ellipsis,
                           ),
-                          style: GoogleFonts.beVietnamPro(
-                            fontSize: 12,
-                            color: OrgColors.info,
-                            decoration: TextDecoration.underline,
-                          ),
-                          overflow: TextOverflow.ellipsis,
-                        ),
+                          if (data['attachmentSize'] != null)
+                            Text(
+                              data['attachmentSize'],
+                              style: GoogleFonts.beVietnamPro(
+                                fontSize: 11,
+                                color: OrgColors.darkGray,
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                    TextButton.icon(
+                      onPressed: () => _openAttachment(context, data),
+                      icon: Icon(Icons.visibility, size: 16),
+                      label: Text('View'),
+                      style: TextButton.styleFrom(
+                        foregroundColor: OrgColors.primaryDark,
                       ),
                     ),
                   ]),
@@ -1620,7 +1600,120 @@ class _ViewProposalModal extends StatelessWidget {
     );
   }
 
-  void _showAttachmentDialog(BuildContext context, String url) {
+  // 🔥 NEW: Open attachment (works for both Base64 and URL)
+  void _openAttachment(BuildContext context, Map<String, dynamic> data) {
+    final hasBase64 = data['attachmentBase64'] != null;
+    final hasUrl = data['attachmentUrl'] != null;
+    
+    if (hasBase64) {
+      _openBase64File(context, data);
+    } else if (hasUrl) {
+      _openUrlFile(context, data['attachmentUrl'] as String);
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No attachment found')),
+      );
+    }
+  }
+
+  // 🔥 NEW: Open Base64 file (the magic!)
+  void _openBase64File(BuildContext context, Map<String, dynamic> data) {
+    final String base64String = data['attachmentBase64'];
+    final String fileName = data['attachmentName'] ?? 'document';
+    final String fileExtension = fileName.split('.').last.toLowerCase();
+    
+    try {
+      // Convert Base64 back to bytes
+      final Uint8List fileBytes = base64Decode(base64String);
+      
+      // Determine content type
+      String contentType;
+      switch (fileExtension) {
+        case 'pdf':
+          contentType = 'application/pdf';
+          break;
+        case 'doc':
+          contentType = 'application/msword';
+          break;
+        case 'docx':
+          contentType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+          break;
+        case 'txt':
+          contentType = 'text/plain';
+          break;
+        case 'jpg':
+        case 'jpeg':
+          contentType = 'image/jpeg';
+          break;
+        case 'png':
+          contentType = 'image/png';
+          break;
+        default:
+          contentType = 'application/octet-stream';
+      }
+      
+      // Create a Blob and URL
+      final blob = html.Blob([fileBytes], contentType);
+      final url = html.Url.createObjectUrlFromBlob(blob);
+      
+      // Show dialog with options
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: Text('Open File: ${data['attachmentName'] ?? 'File'}'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.insert_drive_file, size: 48, color: OrgColors.primaryDark),
+              const SizedBox(height: 16),
+              Text('File size: ${data['attachmentSize'] ?? 'Unknown'}'),
+              const SizedBox(height: 8),
+              Text(
+                'Extension: $fileExtension',
+                style: GoogleFonts.beVietnamPro(fontSize: 12, color: OrgColors.darkGray),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                // Download file
+                final anchor = html.AnchorElement(href: url)
+                  ..setAttribute('download', fileName)
+                  ..click();
+                html.Url.revokeObjectUrl(url);
+                Navigator.pop(ctx);
+              },
+              child: const Text('Download'),
+            ),
+            TextButton(
+              onPressed: () {
+                // View in new tab
+                html.window.open(url, '_blank');
+                html.Url.revokeObjectUrl(url);
+                Navigator.pop(ctx);
+              },
+              child: const Text('View'),
+            ),
+            TextButton(
+              onPressed: () {
+                html.Url.revokeObjectUrl(url);
+                Navigator.pop(ctx);
+              },
+              child: const Text('Close'),
+            ),
+          ],
+        ),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error opening file: $e')),
+      );
+    }
+  }
+
+  // For old proposals that still use Storage URLs
+  void _openUrlFile(BuildContext context, String url) {
     showDialog(
       context: context,
       builder: (ctx) => Dialog(
