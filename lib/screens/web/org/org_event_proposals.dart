@@ -45,30 +45,30 @@ class _OrgEventProposalsScreenState extends State<OrgEventProposalsScreen> {
   String _searchQuery   = '';
   String _filterStatus  = 'All';
 
-  Stream<QuerySnapshot> get _totalStream => FirebaseFirestore.instance
+    Stream<QuerySnapshot> get _totalStream => FirebaseFirestore.instance
       .collection('event_proposals')
       .where('orgId', isEqualTo: widget.orgId)
-      .snapshots();
+      .snapshots(includeMetadataChanges: true);
   Stream<QuerySnapshot> get _pendingStream => FirebaseFirestore.instance
       .collection('event_proposals')
       .where('orgId', isEqualTo: widget.orgId)
       .where('status', isEqualTo: 'pending')
-      .snapshots();
+      .snapshots(includeMetadataChanges: true);
   Stream<QuerySnapshot> get _approvedStream => FirebaseFirestore.instance
       .collection('event_proposals')
       .where('orgId', isEqualTo: widget.orgId)
       .where('status', isEqualTo: 'approved')
-      .snapshots();
+      .snapshots(includeMetadataChanges: true);
   Stream<QuerySnapshot> get _forReviewStream => FirebaseFirestore.instance
       .collection('event_proposals')
       .where('orgId', isEqualTo: widget.orgId)
       .where('status', isEqualTo: 'for_review')
-      .snapshots();
+      .snapshots(includeMetadataChanges: true);
   Stream<QuerySnapshot> get _proposalsStream => FirebaseFirestore.instance
       .collection('event_proposals')
       .where('orgId', isEqualTo: widget.orgId)
       .orderBy('submittedAt', descending: true)
-      .snapshots();
+      .snapshots(includeMetadataChanges: true);
 
   void _openSubmitModal() {
     showDialog(
@@ -327,38 +327,66 @@ class _OrgEventProposalsScreenState extends State<OrgEventProposalsScreen> {
                 ]),
               ),
               Expanded(
-                child: StreamBuilder<QuerySnapshot>(
-                  stream: _proposalsStream,
-                  builder: (context, snapshot) {
-                    if (snapshot.connectionState == ConnectionState.waiting) {
-                      return const Center(child: CircularProgressIndicator());
-                    }
-                    if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                      return _emptyState();
-                    }
-                    final filtered = _applyFilters(snapshot.data!.docs);
-                    if (filtered.isEmpty) {
-                      return _emptyState(message: 'No proposals match your filter.');
-                    }
-                    return ListView.separated(
-                      itemCount: filtered.length,
-                      separatorBuilder: (_, __) => Divider(height: 1, color: OrgColors.mediumGray),
-                      itemBuilder: (context, i) {
-                        final doc = filtered[i];
-                        final data = doc.data() as Map<String, dynamic>;
-                        final proposalNum = 'EP-${doc.id.substring(0, 4).toUpperCase()}';
-                        return _ProposalRow(
-                          proposalNum: proposalNum,
-                          data: data,
-                          onEdit: () => _openEditModal(doc.id, data),
-                          onDelete: () => _confirmDelete(doc.id, data['title'] ?? 'Proposal'),
-                          onView: () => _openViewModal(data),
-                        );
-                      },
-                    );
-                  },
-                ),
+  child: StreamBuilder<QuerySnapshot>(
+    key: UniqueKey(),  // 👈 ADD THIS! Forces rebuild
+    stream: _proposalsStream,
+    builder: (context, snapshot) {
+      // 👈 ADD THIS DEBUG
+      print('🔄 Stream state: ${snapshot.connectionState}');
+      print('📊 Has data: ${snapshot.hasData}');
+      print('📊 Error: ${snapshot.error}');
+      
+      if (snapshot.connectionState == ConnectionState.waiting) {
+        return const Center(child: CircularProgressIndicator());
+      }
+      
+      if (snapshot.hasError) {
+        print('❌ Stream error: ${snapshot.error}');
+        return Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.error_outline, size: 48, color: Colors.red),
+              const SizedBox(height: 8),
+              Text('Error loading proposals: ${snapshot.error}'),
+              const SizedBox(height: 8),
+              ElevatedButton(
+                onPressed: () => setState(() {}),
+                child: Text('Retry'),
               ),
+            ],
+          ),
+        );
+      }
+      
+      if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+        return _emptyState();
+      }
+      
+      final filtered = _applyFilters(snapshot.data!.docs);
+      if (filtered.isEmpty) {
+        return _emptyState(message: 'No proposals match your filter.');
+      }
+      
+      return ListView.separated(
+        itemCount: filtered.length,
+        separatorBuilder: (_, __) => Divider(height: 1, color: OrgColors.mediumGray),
+        itemBuilder: (context, i) {
+          final doc = filtered[i];
+          final data = doc.data() as Map<String, dynamic>;
+          final proposalNum = 'EP-${doc.id.substring(0, 4).toUpperCase()}';
+          return _ProposalRow(
+            proposalNum: proposalNum,
+            data: data,
+            onEdit: () => _openEditModal(doc.id, data),
+            onDelete: () => _confirmDelete(doc.id, data['title'] ?? 'Proposal'),
+            onView: () => _openViewModal(data),
+          );
+        },
+      );
+    },
+  ),
+),
             ]),
           ),
         ),
