@@ -1,13 +1,15 @@
 import 'dart:io';
-import 'dart:typed_data';  // 👈 ADD THIS FOR Uint8List
-import 'dart:convert';      // 👈 FOR base64Decode
+import 'dart:typed_data';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../services/activity_logger.dart' as activity_log;
 import 'package:share_plus/share_plus.dart';
-import 'dart:html' as html;  // 👈 OK lang to, ignore ang warning
+import 'package:path_provider/path_provider.dart';  // 👈 ADD THIS
+import 'package:open_file/open_file.dart';          // 👈 ADD THIS
+// TANGGALIN ANG 'dart:html' import!
 
 class EventProposals extends StatefulWidget {
   const EventProposals({super.key});
@@ -478,208 +480,227 @@ class _EventProposalsState extends State<EventProposals> {
   }
 
   void _showViewDialog(Map<String, dynamic> data, String docId) {
-    final status = data['status'] ?? 'pending';
-    final hasAttachment = data['attachmentBase64'] != null && data['attachmentBase64'].toString().isNotEmpty;
-    
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Row(children: [
-          Icon(Icons.event_note, color: primaryDark),
-          const SizedBox(width: 8),
-          Expanded(child: Text(data['title'] ?? 'Event Proposal', style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.bold))),
-        ]),
-        content: SingleChildScrollView(
-          child: SizedBox(
-            width: 500,
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
-              _detailRow('Organization', data['orgName'] ?? '—'),
-              _detailRow('Category', data['category'] ?? '—'),
-              _detailRow('Audience', data['audience'] ?? 'Public'),
-              _detailRow('Proposed Date', _formatDate(data['date'])),
-              _detailRow('Time', data['time'] ?? '—'),
-              _detailRow('Location', data['location'] ?? '—'),
-              _detailRow('Description', data['description'] ?? 'No description provided.'),
-              _detailRow('Submitted By', data['submittedByEmail'] ?? '—'),
+  final status = data['status'] ?? 'pending';
+  final hasAttachment = data['attachmentBase64'] != null && data['attachmentBase64'].toString().isNotEmpty;
+  
+  showDialog(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: Row(children: [
+        Icon(Icons.event_note, color: primaryDark),
+        const SizedBox(width: 8),
+        Expanded(child: Text(data['title'] ?? 'Event Proposal', style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.bold))),
+      ]),
+      content: SingleChildScrollView(
+        child: SizedBox(
+          width: 500,
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+            _detailRow('Organization', data['orgName'] ?? '—'),
+            _detailRow('Category', data['category'] ?? '—'),
+            _detailRow('Audience', data['audience'] ?? 'Public'),
+            _detailRow('Proposed Date', _formatDate(data['date'])),
+            _detailRow('Time', data['time'] ?? '—'),
+            _detailRow('Location', data['location'] ?? '—'),
+            _detailRow('Description', data['description'] ?? 'No description provided.'),
+            _detailRow('Submitted By', data['submittedByEmail'] ?? '—'),
+            const SizedBox(height: 12),
+            const Divider(),
+            _detailRow('Status', status.toUpperCase(),
+                isStatus: true,
+                statusColor: status == 'approved'
+                    ? success
+                    : status == 'rejected'
+                        ? error
+                        : warning),
+            _detailRow('Submitted', _formatTimestamp(data['createdAt'])),
+            if (data['reviewedAt'] != null) _detailRow('Reviewed', _formatTimestamp(data['reviewedAt'])),
+            
+            if (hasAttachment) ...[
               const SizedBox(height: 12),
               const Divider(),
-              _detailRow('Status', status.toUpperCase(),
-                  isStatus: true,
-                  statusColor: status == 'approved'
-                      ? success
-                      : status == 'rejected'
-                          ? error
-                          : warning),
-              _detailRow('Submitted', _formatTimestamp(data['createdAt'])),
-              if (data['reviewedAt'] != null) _detailRow('Reviewed', _formatTimestamp(data['reviewedAt'])),
-              
-              if (hasAttachment) ...[
-                const SizedBox(height: 12),
-                const Divider(),
-                const SizedBox(height: 8),
-                Text('Attachment', style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.w600, fontSize: 13)),
-                const SizedBox(height: 8),
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: lightGray,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Row(children: [
-                    Icon(Icons.insert_drive_file, size: 24, color: primaryDark),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            data['attachmentName'] ?? 'Attached File',
-                            style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w500),
-                          ),
-                          if (data['attachmentSize'] != null)
-                            Text(
-                              data['attachmentSize'],
-                              style: GoogleFonts.beVietnamPro(fontSize: 11, color: darkGray),
-                            ),
-                        ],
-                      ),
-                    ),
-                    TextButton.icon(
-                      onPressed: () => _viewAttachment(data),
-                      icon: Icon(Icons.visibility, size: 16),
-                      label: Text('View'),
-                      style: TextButton.styleFrom(foregroundColor: primaryDark),
-                    ),
-                  ]),
+              const SizedBox(height: 8),
+              Text('Attachment', style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.w600, fontSize: 13)),
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: lightGray,
+                  borderRadius: BorderRadius.circular(8),
                 ),
-              ],
-            ]),
-          ),
+                child: Row(children: [
+                  Icon(Icons.insert_drive_file, size: 24, color: primaryDark),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          data['attachmentName'] ?? 'Attached File',
+                          style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w500),
+                        ),
+                        if (data['attachmentSize'] != null)
+                          Text(
+                            data['attachmentSize'],
+                            style: GoogleFonts.beVietnamPro(fontSize: 11, color: darkGray),
+                          ),
+                      ],
+                    ),
+                  ),
+                  TextButton.icon(
+                    onPressed: () => _saveAndOpenFile(data),  // 👈 CHANGE THIS
+                    icon: Icon(Icons.download, size: 16),
+                    label: Text('Open'),
+                    style: TextButton.styleFrom(foregroundColor: primaryDark),
+                  ),
+                ]),
+              ),
+            ],
+          ]),
         ),
-        actions: [
-          if (status == 'pending') ...[
-            TextButton.icon(
-              onPressed: () async {
-                await _setStatus(docId, 'approved');
-                Navigator.pop(ctx);
-              },
-              icon: Icon(Icons.check_circle, color: success),
-              label: Text('Approve', style: TextStyle(color: success)),
-            ),
-            TextButton.icon(
-              onPressed: () async {
-                await _setStatus(docId, 'rejected');
-                Navigator.pop(ctx);
-              },
-              icon: Icon(Icons.cancel, color: error),
-              label: Text('Reject', style: TextStyle(color: error)),
-            ),
-          ],
-          if (status != 'archived')
-            TextButton.icon(
-              onPressed: () async {
-                await _setStatus(docId, 'archived');
-                Navigator.pop(ctx);
-              },
-              icon: Icon(Icons.archive, color: darkGray),
-              label: Text('Archive', style: TextStyle(color: darkGray)),
-            ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(ctx),
-            style: ElevatedButton.styleFrom(backgroundColor: primaryDark),
-            child: const Text('Close', style: TextStyle(color: Colors.white)),
+      ),
+      actions: [
+        if (status == 'pending') ...[
+          TextButton.icon(
+            onPressed: () async {
+              await _setStatus(docId, 'approved');
+              Navigator.pop(ctx);
+            },
+            icon: Icon(Icons.check_circle, color: success),
+            label: Text('Approve', style: TextStyle(color: success)),
+          ),
+          TextButton.icon(
+            onPressed: () async {
+              await _setStatus(docId, 'rejected');
+              Navigator.pop(ctx);
+            },
+            icon: Icon(Icons.cancel, color: error),
+            label: Text('Reject', style: TextStyle(color: error)),
           ),
         ],
-      ),
-    );
-  }
+        if (status != 'archived')
+          TextButton.icon(
+            onPressed: () async {
+              await _setStatus(docId, 'archived');
+              Navigator.pop(ctx);
+            },
+            icon: Icon(Icons.archive, color: darkGray),
+            label: Text('Archive', style: TextStyle(color: darkGray)),
+          ),
+        ElevatedButton(
+          onPressed: () => Navigator.pop(ctx),
+          style: ElevatedButton.styleFrom(backgroundColor: primaryDark),
+          child: const Text('Close', style: TextStyle(color: Colors.white)),
+        ),
+      ],
+    ),
+  );
+}
 
-  // 👇 FIXED: Ito ang may error dati
-  void _viewAttachment(Map<String, dynamic> data) {
+// 👇 ADD THIS NEW FUNCTION (same sa org file)
+Future<void> _saveAndOpenFile(Map<String, dynamic> data) async {
+  try {
     final String base64String = data['attachmentBase64'];
     final String fileName = data['attachmentName'] ?? 'document';
-    final String fileExtension = fileName.split('.').last.toLowerCase();
+    final Uint8List fileBytes = base64Decode(base64String);
     
-    try {
-      final Uint8List fileBytes = base64Decode(base64String);  // 👈 FIXED: base64Decode hindi base64.decode
-      
-      String contentType;
-      switch (fileExtension) {
-        case 'pdf':
-          contentType = 'application/pdf';
-          break;
-        case 'doc':
-          contentType = 'application/msword';
-          break;
-        case 'docx':
-          contentType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
-          break;
-        case 'txt':
-          contentType = 'text/plain';
-          break;
-        case 'jpg':
-        case 'jpeg':
-          contentType = 'image/jpeg';
-          break;
-        case 'png':
-          contentType = 'image/png';
-          break;
-        default:
-          contentType = 'application/octet-stream';
-      }
-      
-      final blob = html.Blob([fileBytes], contentType);
-      final url = html.Url.createObjectUrlFromBlob(blob);
-      
-      showDialog(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          title: Text('Open File: $fileName'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.insert_drive_file, size: 48, color: primaryDark),
-              const SizedBox(height: 16),
-              Text('File size: ${data['attachmentSize'] ?? 'Unknown'}'),
-              const SizedBox(height: 8),
-              Text('Extension: $fileExtension', style: GoogleFonts.beVietnamPro(fontSize: 12)),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                final anchor = html.AnchorElement(href: url)
-                  ..setAttribute('download', fileName)
-                  ..click();
-                html.Url.revokeObjectUrl(url);
-                Navigator.pop(ctx);
-              },
-              child: const Text('Download'),
-            ),
-            TextButton(
-              onPressed: () {
-                html.window.open(url, '_blank');
-                html.Url.revokeObjectUrl(url);
-                Navigator.pop(ctx);
-              },
-              child: const Text('View'),
-            ),
-            TextButton(
-              onPressed: () {
-                html.Url.revokeObjectUrl(url);
-                Navigator.pop(ctx);
-              },
-              child: const Text('Close'),
-            ),
-          ],
-        ),
-      );
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error opening file: $e'), backgroundColor: error),
-      );
-    }
+    final directory = await getTemporaryDirectory();
+    final file = File('${directory.path}/$fileName');
+    await file.writeAsBytes(fileBytes);
+    
+    await OpenFile.open(file.path);
+  } catch (e) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Error opening file: $e'), backgroundColor: error),
+    );
   }
+}
+
+  // 👇 FIXED: Ito ang may error dati
+  // void _viewAttachment(Map<String, dynamic> data) {
+  //   final String base64String = data['attachmentBase64'];
+  //   final String fileName = data['attachmentName'] ?? 'document';
+  //   final String fileExtension = fileName.split('.').last.toLowerCase();
+    
+  //   try {
+  //     final Uint8List fileBytes = base64Decode(base64String);  // 👈 FIXED: base64Decode hindi base64.decode
+      
+  //     String contentType;
+  //     switch (fileExtension) {
+  //       case 'pdf':
+  //         contentType = 'application/pdf';
+  //         break;
+  //       case 'doc':
+  //         contentType = 'application/msword';
+  //         break;
+  //       case 'docx':
+  //         contentType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+  //         break;
+  //       case 'txt':
+  //         contentType = 'text/plain';
+  //         break;
+  //       case 'jpg':
+  //       case 'jpeg':
+  //         contentType = 'image/jpeg';
+  //         break;
+  //       case 'png':
+  //         contentType = 'image/png';
+  //         break;
+  //       default:
+  //         contentType = 'application/octet-stream';
+  //     }
+      
+  //     final blob = html.Blob([fileBytes], contentType);
+  //     final url = html.Url.createObjectUrlFromBlob(blob);
+      
+  //     showDialog(
+  //       context: context,
+  //       builder: (ctx) => AlertDialog(
+  //         title: Text('Open File: $fileName'),
+  //         content: Column(
+  //           mainAxisSize: MainAxisSize.min,
+  //           children: [
+  //             Icon(Icons.insert_drive_file, size: 48, color: primaryDark),
+  //             const SizedBox(height: 16),
+  //             Text('File size: ${data['attachmentSize'] ?? 'Unknown'}'),
+  //             const SizedBox(height: 8),
+  //             Text('Extension: $fileExtension', style: GoogleFonts.beVietnamPro(fontSize: 12)),
+  //           ],
+  //         ),
+  //         actions: [
+  //           TextButton(
+  //             onPressed: () {
+  //               final anchor = html.AnchorElement(href: url)
+  //                 ..setAttribute('download', fileName)
+  //                 ..click();
+  //               html.Url.revokeObjectUrl(url);
+  //               Navigator.pop(ctx);
+  //             },
+  //             child: const Text('Download'),
+  //           ),
+  //           TextButton(
+  //             onPressed: () {
+  //               html.window.open(url, '_blank');
+  //               html.Url.revokeObjectUrl(url);
+  //               Navigator.pop(ctx);
+  //             },
+  //             child: const Text('View'),
+  //           ),
+  //           TextButton(
+  //             onPressed: () {
+  //               html.Url.revokeObjectUrl(url);
+  //               Navigator.pop(ctx);
+  //             },
+  //             child: const Text('Close'),
+  //           ),
+  //         ],
+  //       ),
+  //     );
+  //   } catch (e) {
+  //     ScaffoldMessenger.of(context).showSnackBar(
+  //       SnackBar(content: Text('Error opening file: $e'), backgroundColor: error),
+  //     );
+  //   }
+  // }
 
   Widget _detailRow(String label, String value, {bool isStatus = false, Color? statusColor}) {
     return Padding(

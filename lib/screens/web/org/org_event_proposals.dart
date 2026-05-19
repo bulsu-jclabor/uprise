@@ -1,19 +1,22 @@
 // lib/screens/web/org/org_event_proposals.dart
 
 import 'dart:async';
+import 'dart:convert';
+import 'dart:typed_data';
+import 'dart:io';  // 👈 ADD THIS LINE
+import 'dart:io' if (dart.library.html) 'dart:html' as html;
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
-import '../../../services/activity_logger.dart' as activity_log;
 import 'package:file_picker/file_picker.dart';
-import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'dart:html' as html;
-import 'dart:convert'; 
-import 'package:crypto/crypto.dart';  
+import 'package:path_provider/path_provider.dart';
+import 'package:open_file/open_file.dart';
+import '../../../services/activity_logger.dart' as activity_log;
 
 // ============ COLOR SCHEME ============
 class OrgColors {
@@ -26,7 +29,7 @@ class OrgColors {
   static const Color darkGray     = Color(0xFF6B7280);
   static const Color charcoal     = Color(0xFF111827);
   static const Color success      = Color(0xFF10B981);
-  static const Color warning      = Color(0xFFF59E0B);
+  static const Color warning      = Color(0xFFF59E0B); 
   static const Color error        = Color(0xFFEF4444);
   static const Color info         = Color(0xFF3B82F6);
 }
@@ -1505,7 +1508,6 @@ class _ViewProposalModal extends StatelessWidget {
     final status = (data['status'] ?? 'pending').toString().toLowerCase();
     final audience = data['audience'] ?? 'Public';
     
-    // Check if we have Base64 attachment (new way) or URL (old way)
     final hasBase64 = data['attachmentBase64'] != null && data['attachmentBase64'].toString().isNotEmpty;
     final hasUrl = data['attachmentUrl'] != null && data['attachmentUrl'].toString().isNotEmpty;
 
@@ -1525,7 +1527,6 @@ class _ViewProposalModal extends StatelessWidget {
           ],
         ),
         child: Column(mainAxisSize: MainAxisSize.min, children: [
-          // ---- Header ----
           Container(
             padding: const EdgeInsets.fromLTRB(20, 16, 16, 16),
             decoration: BoxDecoration(
@@ -1556,8 +1557,6 @@ class _ViewProposalModal extends StatelessWidget {
               ),
             ]),
           ),
-
-          // ---- Body ----
           Flexible(
             child: SingleChildScrollView(
               padding: const EdgeInsets.all(20),
@@ -1570,15 +1569,11 @@ class _ViewProposalModal extends StatelessWidget {
                 _detailRow('Location', data['location'] ?? '—'),
                 _detailRow('Submitted', _formatDate(data['submittedAt'])),
                 
-                // 🔥 NEW: Show attachment if exists (Base64 or URL)
                 if (hasBase64 || hasUrl) ...[
                   const SizedBox(height: 12),
                   const Divider(),
                   const SizedBox(height: 8),
-                  Text(
-                    'Attachment',
-                    style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.w600, fontSize: 13),
-                  ),
+                  Text('Attachment', style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.w600, fontSize: 13)),
                   const SizedBox(height: 8),
                   Row(children: [
                     Container(
@@ -1596,21 +1591,11 @@ class _ViewProposalModal extends StatelessWidget {
                         children: [
                           Text(
                             data['attachmentName'] ?? 'Attached File',
-                            style: GoogleFonts.beVietnamPro(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w500,
-                              color: OrgColors.charcoal,
-                            ),
+                            style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w500),
                             overflow: TextOverflow.ellipsis,
                           ),
                           if (data['attachmentSize'] != null)
-                            Text(
-                              data['attachmentSize'],
-                              style: GoogleFonts.beVietnamPro(
-                                fontSize: 11,
-                                color: OrgColors.darkGray,
-                              ),
-                            ),
+                            Text(data['attachmentSize'], style: GoogleFonts.beVietnamPro(fontSize: 11, color: OrgColors.darkGray)),
                         ],
                       ),
                     ),
@@ -1618,22 +1603,16 @@ class _ViewProposalModal extends StatelessWidget {
                       onPressed: () => _openAttachment(context, data),
                       icon: Icon(Icons.visibility, size: 16),
                       label: Text('View'),
-                      style: TextButton.styleFrom(
-                        foregroundColor: OrgColors.primaryDark,
-                      ),
+                      style: TextButton.styleFrom(foregroundColor: OrgColors.primaryDark),
                     ),
                   ]),
                 ],
               ]),
             ),
           ),
-
-          // ---- Footer ----
           Container(
             padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
-            decoration: BoxDecoration(
-              border: Border(top: BorderSide(color: OrgColors.primaryLight)),
-            ),
+            decoration: BoxDecoration(border: Border(top: BorderSide(color: OrgColors.primaryLight))),
             child: Row(mainAxisAlignment: MainAxisAlignment.end, children: [
               ElevatedButton(
                 onPressed: () => Navigator.pop(context),
@@ -1641,12 +1620,8 @@ class _ViewProposalModal extends StatelessWidget {
                   backgroundColor: OrgColors.primaryDark,
                   padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                  elevation: 0,
                 ),
-                child: Text(
-                  'Close',
-                  style: GoogleFonts.beVietnamPro(color: Colors.white, fontWeight: FontWeight.w600),
-                ),
+                child: Text('Close', style: GoogleFonts.beVietnamPro(color: Colors.white, fontWeight: FontWeight.w600)),
               ),
             ]),
           ),
@@ -1655,15 +1630,12 @@ class _ViewProposalModal extends StatelessWidget {
     );
   }
 
-  // 🔥 NEW: Open attachment (works for both Base64 and URL)
   void _openAttachment(BuildContext context, Map<String, dynamic> data) {
     final hasBase64 = data['attachmentBase64'] != null;
-    final hasUrl = data['attachmentUrl'] != null;
     
     if (hasBase64) {
-      _openBase64File(context, data);
-    } else if (hasUrl) {
-      _openUrlFile(context, data['attachmentUrl'] as String);
+      // For both mobile and web, we'll save to temp file
+      _saveAndOpenFile(context, data);
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('No attachment found')),
@@ -1671,95 +1643,20 @@ class _ViewProposalModal extends StatelessWidget {
     }
   }
 
-  // 🔥 NEW: Open Base64 file (the magic!)
-  void _openBase64File(BuildContext context, Map<String, dynamic> data) {
-    final String base64String = data['attachmentBase64'];
-    final String fileName = data['attachmentName'] ?? 'document';
-    final String fileExtension = fileName.split('.').last.toLowerCase();
-    
+  // This works for BOTH mobile AND web!
+  Future<void> _saveAndOpenFile(BuildContext context, Map<String, dynamic> data) async {
     try {
-      // Convert Base64 back to bytes
+      final String base64String = data['attachmentBase64'];
+      final String fileName = data['attachmentName'] ?? 'document';
       final Uint8List fileBytes = base64Decode(base64String);
       
-      // Determine content type
-      String contentType;
-      switch (fileExtension) {
-        case 'pdf':
-          contentType = 'application/pdf';
-          break;
-        case 'doc':
-          contentType = 'application/msword';
-          break;
-        case 'docx':
-          contentType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
-          break;
-        case 'txt':
-          contentType = 'text/plain';
-          break;
-        case 'jpg':
-        case 'jpeg':
-          contentType = 'image/jpeg';
-          break;
-        case 'png':
-          contentType = 'image/png';
-          break;
-        default:
-          contentType = 'application/octet-stream';
-      }
+      // Get temp directory
+      final directory = await getTemporaryDirectory();
+      final file = File('${directory.path}/$fileName');
+      await file.writeAsBytes(fileBytes);
       
-      // Create a Blob and URL
-      final blob = html.Blob([fileBytes], contentType);
-      final url = html.Url.createObjectUrlFromBlob(blob);
-      
-      // Show dialog with options
-      showDialog(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          title: Text('Open File: ${data['attachmentName'] ?? 'File'}'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.insert_drive_file, size: 48, color: OrgColors.primaryDark),
-              const SizedBox(height: 16),
-              Text('File size: ${data['attachmentSize'] ?? 'Unknown'}'),
-              const SizedBox(height: 8),
-              Text(
-                'Extension: $fileExtension',
-                style: GoogleFonts.beVietnamPro(fontSize: 12, color: OrgColors.darkGray),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                // Download file
-                final anchor = html.AnchorElement(href: url)
-                  ..setAttribute('download', fileName)
-                  ..click();
-                html.Url.revokeObjectUrl(url);
-                Navigator.pop(ctx);
-              },
-              child: const Text('Download'),
-            ),
-            TextButton(
-              onPressed: () {
-                // View in new tab
-                html.window.open(url, '_blank');
-                html.Url.revokeObjectUrl(url);
-                Navigator.pop(ctx);
-              },
-              child: const Text('View'),
-            ),
-            TextButton(
-              onPressed: () {
-                html.Url.revokeObjectUrl(url);
-                Navigator.pop(ctx);
-              },
-              child: const Text('Close'),
-            ),
-          ],
-        ),
-      );
+      // Open file
+      await OpenFile.open(file.path);
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Error opening file: $e')),
@@ -1767,88 +1664,11 @@ class _ViewProposalModal extends StatelessWidget {
     }
   }
 
-  // For old proposals that still use Storage URLs
-  void _openUrlFile(BuildContext context, String url) {
-    showDialog(
-      context: context,
-      builder: (ctx) => Dialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        child: Container(
-          padding: const EdgeInsets.all(20),
-          width: 350,
-          child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(
-              'Attachment',
-              style: GoogleFonts.beVietnamPro(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 16),
-            Text('File URL:', style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.w600)),
-            const SizedBox(height: 8),
-            SelectableText(
-              url,
-              style: GoogleFonts.beVietnamPro(fontSize: 12, color: OrgColors.info),
-            ),
-            const SizedBox(height: 20),
-            Row(mainAxisAlignment: MainAxisAlignment.end, children: [
-              TextButton.icon(
-                onPressed: () async {
-                  await Clipboard.setData(ClipboardData(text: url));
-                  if (ctx.mounted) {
-                    ScaffoldMessenger.of(ctx).showSnackBar(
-                      const SnackBar(content: Text('URL copied')),
-                    );
-                  }
-                },
-                icon: const Icon(Icons.copy, size: 16),
-                label: const Text('Copy URL'),
-              ),
-              const SizedBox(width: 8),
-              TextButton.icon(
-                onPressed: () async {
-                  final uri = Uri.parse(url);
-                  if (await canLaunchUrl(uri)) {
-                    await launchUrl(uri, mode: LaunchMode.externalApplication);
-                  } else if (ctx.mounted) {
-                    ScaffoldMessenger.of(ctx).showSnackBar(
-                      const SnackBar(content: Text('Could not open URL')),
-                    );
-                  }
-                },
-                icon: const Icon(Icons.open_in_browser, size: 16),
-                label: const Text('Open'),
-              ),
-              const SizedBox(width: 8),
-              TextButton(
-                onPressed: () => Navigator.pop(ctx),
-                child: const Text('Close'),
-              ),
-            ]),
-          ]),
-        ),
-      ),
-    );
-  }
-
   Widget _detailRow(String label, String value) => Padding(
         padding: const EdgeInsets.only(bottom: 12),
         child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          SizedBox(
-            width: 100,
-            child: Text(
-              label,
-              style: GoogleFonts.beVietnamPro(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: OrgColors.darkGray,
-              ),
-            ),
-          ),
-          Expanded(
-            child: Text(
-              value,
-              style: GoogleFonts.beVietnamPro(fontSize: 13, color: OrgColors.charcoal),
-            ),
-          ),
+          SizedBox(width: 100, child: Text('$label:', style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.w600, color: OrgColors.darkGray))),
+          Expanded(child: Text(value, style: GoogleFonts.beVietnamPro(fontSize: 13, color: OrgColors.charcoal))),
         ]),
       );
 }

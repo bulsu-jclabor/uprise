@@ -93,6 +93,9 @@ dependencies:
 
   crypto: ^3.0.3  # optional, for file type detection
 
+  path_provider: ^2.1.0  # For temporary directory
+  open_file: ^3.3.2      # For opening files on mobile
+
   # REMOVE MUNA ITO (sila ang may problema)
   # image_picker: ^1.0.0
   # share_plus: ^7.2.1
