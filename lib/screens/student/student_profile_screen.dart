@@ -483,7 +483,6 @@ class _IdCard1 extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Split fullName into parts for the ID card labels
     final nameParts = profile.fullName.trim().split(' ');
     final lastName =
         nameParts.length > 1 ? nameParts.last.toUpperCase() : '';
@@ -884,11 +883,15 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 }
 
 // ─────────────────────────────────────────────────────────────
-// Settings Screen
+// Settings Screen — SIMPLER DESIGN
 // ─────────────────────────────────────────────────────────────
 class SettingsScreen extends StatefulWidget {
   final ProfileModel profile;
-  const SettingsScreen({super.key, required this.profile});
+
+  const SettingsScreen({
+    super.key,
+    required this.profile,
+  });
 
   @override
   State<SettingsScreen> createState() => _SettingsScreenState();
@@ -897,6 +900,7 @@ class SettingsScreen extends StatefulWidget {
 class _SettingsScreenState extends State<SettingsScreen> {
   final _currentPwCtrl = TextEditingController(text: '••••••');
   final _newPwCtrl = TextEditingController(text: '••••••');
+
   bool _showCurrentPw = false;
   bool _showNewPw = false;
 
@@ -905,6 +909,38 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _currentPwCtrl.dispose();
     _newPwCtrl.dispose();
     super.dispose();
+  }
+
+  Widget _buildTile({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required VoidCallback onTap,
+  }) {
+    return ListTile(
+      contentPadding:
+          const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      leading: Icon(icon, color: kOrange),
+      title: Text(
+        title,
+        style: const TextStyle(
+          fontWeight: FontWeight.w600,
+          fontSize: 14,
+        ),
+      ),
+      subtitle: Text(
+        subtitle,
+        style: const TextStyle(
+          fontSize: 12,
+          color: Colors.grey,
+        ),
+      ),
+      trailing: const Icon(
+        Icons.chevron_right,
+        color: Colors.grey,
+      ),
+      onTap: onTap,
+    );
   }
 
   @override
@@ -919,290 +955,239 @@ class _SettingsScreenState extends State<SettingsScreen> {
           icon: const Icon(Icons.arrow_back, color: Colors.black),
           onPressed: () => Navigator.pop(context),
         ),
-        title: const Text('Settings',
-            style: TextStyle(
-                color: Colors.black,
-                fontWeight: FontWeight.w600,
-                fontSize: 18)),
+        title: const Text(
+          'Settings',
+          style: TextStyle(
+            color: Colors.black,
+            fontWeight: FontWeight.w600,
+            fontSize: 18,
+          ),
+        ),
       ),
+
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // ── Admin Profile ──
-            _SectionLabel('ADMIN PROFILE'),
-            const SizedBox(height: 10),
-            AnimatedBuilder(
-              animation: widget.profile,
-              builder: (_, __) => Container(
-                width: double.infinity,
-                color: Colors.white,
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  children: [
-                    Stack(
-                      children: [
-                        Container(
-                          width: 80,
-                          height: 80,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: const Color(0xFFF5C8A0),
-                            border:
-                                Border.all(color: Colors.white, width: 3),
-                          ),
-                          child: ClipOval(
-                            child: Image.network(
-                              'https://i.pravatar.cc/150?img=11',
-                              fit: BoxFit.cover,
-                              errorBuilder: (_, __, ___) => const Icon(
-                                  Icons.person,
-                                  size: 40,
-                                  color: Colors.white),
-                            ),
-                          ),
+
+            // ───────────────── Profile Card ─────────────────
+            Container(
+              width: double.infinity,
+              color: Colors.white,
+              padding: const EdgeInsets.all(20),
+              child: AnimatedBuilder(
+                animation: widget.profile,
+                builder: (_, __) {
+                  return Column(
+                    children: [
+                      CircleAvatar(
+                        radius: 42,
+                        backgroundColor: kOrangeLight,
+                        backgroundImage: const NetworkImage(
+                          'https://i.pravatar.cc/150?img=11',
                         ),
-                        Positioned(
-                          bottom: 0,
-                          right: 0,
-                          child: Container(
-                            width: 22,
-                            height: 22,
-                            decoration: const BoxDecoration(
-                                color: kOrange, shape: BoxShape.circle),
-                            child: const Icon(Icons.edit,
-                                color: Colors.white, size: 12),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 10),
-                    Text(widget.profile.fullName,
+                      ),
+
+                      const SizedBox(height: 12),
+
+                      Text(
+                        widget.profile.fullName,
                         style: const TextStyle(
-                            fontSize: 17, fontWeight: FontWeight.bold)),
-                    Text(widget.profile.studentId,
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+
+                      const SizedBox(height: 4),
+
+                      Text(
+                        widget.profile.email,
                         style: const TextStyle(
-                            fontSize: 12, color: Colors.grey)),
-                    Text(widget.profile.email,
-                        style:
-                            const TextStyle(fontSize: 12, color: kOrange)),
-                    const SizedBox(height: 14),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: ElevatedButton(
-                            onPressed: () {},
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: kOrange,
-                              foregroundColor: Colors.white,
-                              shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(8)),
-                              padding:
-                                  const EdgeInsets.symmetric(vertical: 12),
+                          color: Colors.grey,
+                          fontSize: 13,
+                        ),
+                      ),
+
+                      const SizedBox(height: 16),
+
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton(
+                          onPressed: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => EditProfileScreen(
+                                  profile: widget.profile,
+                                ),
+                              ),
+                            );
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: kOrange,
+                            foregroundColor: Colors.white,
+                            elevation: 0,
+                            padding: const EdgeInsets.symmetric(
+                              vertical: 14,
                             ),
-                            child: const Text('Upload New',
-                                style: TextStyle(fontSize: 13)),
+                            shape: RoundedRectangleBorder(
+                              borderRadius:
+                                  BorderRadius.circular(10),
+                            ),
+                          ),
+                          child: const Text(
+                            'Edit Profile',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
                         ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: OutlinedButton(
-                            onPressed: () {},
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: Colors.black87,
-                              side:
-                                  BorderSide(color: Colors.grey.shade300),
-                              shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(8)),
-                              padding:
-                                  const EdgeInsets.symmetric(vertical: 12),
-                            ),
-                            child: const Text('Remove',
-                                style: TextStyle(fontSize: 13)),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
+                      ),
+                    ],
+                  );
+                },
               ),
             ),
 
-            const SizedBox(height: 20),
+            const SizedBox(height: 12),
 
-            // ── System Health ──
-            _SectionLabel('SYSTEM HEALTH'),
-            const SizedBox(height: 10),
+            // ───────────────── General Settings ─────────────────
             Container(
               color: Colors.white,
-              padding: const EdgeInsets.all(16),
               child: Column(
                 children: [
-                  Row(
-                    children: [
-                      Container(
-                        width: 10,
-                        height: 10,
-                        decoration: const BoxDecoration(
-                            color: Color(0xFF4CAF50),
-                            shape: BoxShape.circle),
-                      ),
-                      const SizedBox(width: 10),
-                      const Expanded(
-                        child: Text('All systems operational',
-                            style: TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w500)),
-                      ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 10, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFE8F5E9),
-                          borderRadius: BorderRadius.circular(6),
+
+                  _buildTile(
+                    icon: Icons.person_outline,
+                    title: 'Admin Profile',
+                    subtitle: 'Manage your information',
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => EditProfileScreen(
+                            profile: widget.profile,
+                          ),
                         ),
-                        child: const Text('ACTIVE',
-                            style: TextStyle(
-                                fontSize: 11,
-                                color: Color(0xFF2E7D32),
-                                fontWeight: FontWeight.bold)),
-                      ),
-                    ],
+                      );
+                    },
                   ),
-                  const SizedBox(height: 14),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: const [
-                      Text('SERVER LOAD',
-                          style: TextStyle(
-                              fontSize: 11,
-                              color: Colors.grey,
-                              fontWeight: FontWeight.w500,
-                              letterSpacing: 0.5)),
-                      Text('24%',
-                          style: TextStyle(
-                              fontSize: 14,
-                              color: kOrange,
-                              fontWeight: FontWeight.bold)),
-                    ],
+
+                  Divider(height: 1, color: Colors.grey.shade200),
+
+                  _buildTile(
+                    icon: Icons.tune_outlined,
+                    title: 'System Preferences',
+                    subtitle: 'App settings and behavior',
+                    onTap: () {},
                   ),
-                  const SizedBox(height: 6),
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(4),
-                    child: LinearProgressIndicator(
-                      value: 0.24,
-                      minHeight: 6,
-                      backgroundColor: Colors.grey.shade200,
-                      valueColor:
-                          const AlwaysStoppedAnimation<Color>(kOrange),
-                    ),
+
+                  Divider(height: 1, color: Colors.grey.shade200),
+
+                  _buildTile(
+                    icon: Icons.shield_outlined,
+                    title: 'Security Settings',
+                    subtitle: 'Privacy and protection',
+                    onTap: () {},
+                  ),
+
+                  Divider(height: 1, color: Colors.grey.shade200),
+
+                  _buildTile(
+                    icon: Icons.history_outlined,
+                    title: 'Audit Logs',
+                    subtitle: 'Recent activities',
+                    onTap: () {},
                   ),
                 ],
               ),
             ),
 
-            const SizedBox(height: 20),
+            const SizedBox(height: 12),
 
-            // ── Security Update ──
-            _SectionLabel('SECURITY UPDATE'),
-            const SizedBox(height: 10),
+            // ───────────────── Password Section ─────────────────
             Container(
               color: Colors.white,
               padding: const EdgeInsets.all(16),
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+                crossAxisAlignment:
+                    CrossAxisAlignment.start,
                 children: [
-                  const Text('Current Password',
-                      style: TextStyle(
-                          fontSize: 13, fontWeight: FontWeight.w500)),
-                  const SizedBox(height: 6),
-                  _PasswordField(
-                    controller: _currentPwCtrl,
-                    show: _showCurrentPw,
-                    icon: Icons.lock_outline,
-                    onToggle: () =>
-                        setState(() => _showCurrentPw = !_showCurrentPw),
+
+                  const Text(
+                    'Change Password',
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
-                  const SizedBox(height: 14),
-                  const Text('New Password',
-                      style: TextStyle(
-                          fontSize: 13, fontWeight: FontWeight.w500)),
-                  const SizedBox(height: 6),
-                  _PasswordField(
-                    controller: _newPwCtrl,
-                    show: _showNewPw,
-                    icon: Icons.visibility_outlined,
-                    onToggle: () =>
-                        setState(() => _showNewPw = !_showNewPw),
-                  ),
+
                   const SizedBox(height: 16),
+
+                  _EditField(
+                    label: 'Current Password',
+                    controller: _currentPwCtrl,
+                    icon: Icons.lock_outline,
+                    isPassword: true,
+                    showPassword: _showCurrentPw,
+                    onTogglePassword: () {
+                      setState(() {
+                        _showCurrentPw =
+                            !_showCurrentPw;
+                      });
+                    },
+                  ),
+
+                  const SizedBox(height: 14),
+
+                  _EditField(
+                    label: 'New Password',
+                    controller: _newPwCtrl,
+                    icon: Icons.lock_reset_outlined,
+                    isPassword: true,
+                    showPassword: _showNewPw,
+                    onTogglePassword: () {
+                      setState(() {
+                        _showNewPw = !_showNewPw;
+                      });
+                    },
+                  ),
+
+                  const SizedBox(height: 20),
+
                   SizedBox(
                     width: double.infinity,
-                    child: OutlinedButton(
+                    child: ElevatedButton(
                       onPressed: () {
-                        ScaffoldMessenger.of(context).showSnackBar(
+                        ScaffoldMessenger.of(context)
+                            .showSnackBar(
                           const SnackBar(
-                            content: Text('Credentials updated!'),
+                            content: Text(
+                              'Credentials updated!',
+                            ),
                             backgroundColor: kOrange,
                           ),
                         );
                       },
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: kOrange,
-                        side: const BorderSide(color: kOrange),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: kOrange,
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        padding:
+                            const EdgeInsets.symmetric(
+                          vertical: 15,
+                        ),
                         shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10)),
-                        padding: const EdgeInsets.symmetric(vertical: 14),
+                          borderRadius:
+                              BorderRadius.circular(10),
+                        ),
                       ),
-                      child: const Text('Update Credentials',
-                          style: TextStyle(
-                              fontWeight: FontWeight.w600, fontSize: 15)),
+                      child: const Text(
+                        'Update Credentials',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
                     ),
-                  ),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 20),
-
-            // ── Control Panel ──
-            _SectionLabel('CONTROL PANEL'),
-            const SizedBox(height: 10),
-            Container(
-              color: Colors.white,
-              child: Column(
-                children: [
-                  _ControlPanelItem(
-                    icon: Icons.person_outline,
-                    title: 'Admin Profile',
-                    subtitle: 'Personal info & settings',
-                    onTap: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                            builder: (_) => EditProfileScreen(
-                                profile: widget.profile))),
-                  ),
-                  const Divider(height: 1, indent: 56),
-                  _ControlPanelItem(
-                    icon: Icons.tune_outlined,
-                    title: 'System Preferences',
-                    subtitle: 'Global system behavior',
-                    onTap: () {},
-                  ),
-                  const Divider(height: 1, indent: 56),
-                  _ControlPanelItem(
-                    icon: Icons.shield_outlined,
-                    title: 'Security Settings',
-                    subtitle: 'Auth & firewall rules',
-                    onTap: () {},
-                  ),
-                  const Divider(height: 1, indent: 56),
-                  _ControlPanelItem(
-                    icon: Icons.history_outlined,
-                    title: 'Audit Logs',
-                    subtitle: 'Track system changes',
-                    onTap: () {},
                   ),
                 ],
               ),
@@ -1220,12 +1205,35 @@ class _SettingsScreenState extends State<SettingsScreen> {
 // Reusable small widgets
 // ─────────────────────────────────────────────────────────────
 
+/// Section header — matches the grey label style from Edit Profile,
+/// with a horizontal padding and top spacing identical to the card spacing.
+class _SectionHeader extends StatelessWidget {
+  final String text;
+  const _SectionHeader(this.text);
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+      child: Text(text.toUpperCase(),
+          style: const TextStyle(
+              fontSize: 11,
+              color: Colors.grey,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 0.8)),
+    );
+  }
+}
+
 class _EditField extends StatelessWidget {
   final String label;
   final TextEditingController controller;
   final IconData icon;
   final bool readOnly;
   final TextInputType keyboardType;
+  final bool isPassword;
+  final bool showPassword;
+  final VoidCallback? onTogglePassword;
 
   const _EditField({
     required this.label,
@@ -1233,6 +1241,9 @@ class _EditField extends StatelessWidget {
     required this.icon,
     this.readOnly = false,
     this.keyboardType = TextInputType.text,
+    this.isPassword = false,
+    this.showPassword = false,
+    this.onTogglePassword,
   });
 
   @override
@@ -1250,11 +1261,23 @@ class _EditField extends StatelessWidget {
           controller: controller,
           readOnly: readOnly,
           keyboardType: keyboardType,
+          obscureText: isPassword && !showPassword,
           style: TextStyle(
               fontSize: 14,
               color: readOnly ? Colors.grey : Colors.black87),
           decoration: InputDecoration(
             prefixIcon: Icon(icon, size: 18, color: Colors.grey),
+            suffixIcon: isPassword
+                ? IconButton(
+                    icon: Icon(
+                        showPassword
+                            ? Icons.visibility_off_outlined
+                            : Icons.visibility_outlined,
+                        size: 18,
+                        color: Colors.grey),
+                    onPressed: onTogglePassword,
+                  )
+                : null,
             filled: true,
             fillColor:
                 readOnly ? const Color(0xFFF8F8F8) : Colors.white,

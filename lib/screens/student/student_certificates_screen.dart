@@ -4,11 +4,21 @@ class StudentCertificatesScreen extends StatefulWidget {
   const StudentCertificatesScreen({super.key});
 
   @override
-  State<StudentCertificatesScreen> createState() => _StudentCertificatesScreenState();
+  State<StudentCertificatesScreen> createState() =>
+      _StudentCertificatesScreenState();
 }
 
-class _StudentCertificatesScreenState extends State<StudentCertificatesScreen> {
+class _StudentCertificatesScreenState
+    extends State<StudentCertificatesScreen> {
+
   String selectedFilter = 'All';
+
+  final List<String> filters = [
+    'All',
+    'Academic',
+    'Workshops',
+    'Events',
+  ];
 
   final List<Map<String, String>> certificates = [
     {
@@ -45,56 +55,133 @@ class _StudentCertificatesScreenState extends State<StudentCertificatesScreen> {
 
   @override
   Widget build(BuildContext context) {
+
     final filtered = selectedFilter == 'All'
         ? certificates
-        : certificates.where((c) => c['category'] == selectedFilter).toList();
+        : certificates
+            .where(
+              (c) => c['category'] == selectedFilter,
+            )
+            .toList();
 
     return Scaffold(
       backgroundColor: Colors.white,
+
       appBar: AppBar(
-        title: const Text('Certificate', style: TextStyle(fontWeight: FontWeight.bold)),
+        title: const Text(
+          'Certificate',
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            color: Colors.black,
+          ),
+        ),
+
         backgroundColor: Colors.white,
         elevation: 0,
         centerTitle: true,
+
+        iconTheme: const IconThemeData(
+          color: Colors.black,
+        ),
+
         actions: [
           Padding(
-            padding: const EdgeInsets.only(right: 12),
+            padding: const EdgeInsets.only(
+              right: 12,
+            ),
+
             child: ElevatedButton(
               onPressed: () {},
+
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.orange,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+
+                shape: RoundedRectangleBorder(
+                  borderRadius:
+                      BorderRadius.circular(8),
+                ),
               ),
-              child: const Text('Upload Certificate'),
+
+              child: const Text(
+                'Upload Certificate',
+                style: TextStyle(
+                  color: Colors.white,
+                ),
+              ),
             ),
           ),
         ],
       ),
+
       body: Column(
         children: [
-          // Filter buttons
+
+          // DROPDOWN FILTER
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: Row(
-              children: [
-                _buildFilterButton('All'),
-                const SizedBox(width: 8),
-                _buildFilterButton('Academic'),
-                const SizedBox(width: 8),
-                _buildFilterButton('Workshops'),
-                const SizedBox(width: 8),
-                _buildFilterButton('Events'),
-              ],
+            padding: const EdgeInsets.all(16),
+
+            child: Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 16,
+              ),
+
+              decoration: BoxDecoration(
+                color: Colors.grey.shade100,
+
+                borderRadius:
+                    BorderRadius.circular(12),
+
+                border: Border.all(
+                  color: Colors.grey.shade300,
+                ),
+              ),
+
+              child: DropdownButtonHideUnderline(
+                child: DropdownButton<String>(
+                  value: selectedFilter,
+
+                  isExpanded: true,
+
+                  icon: const Icon(
+                    Icons.keyboard_arrow_down_rounded,
+                  ),
+
+                  style: const TextStyle(
+                    color: Colors.black,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w500,
+                  ),
+
+                  items: filters.map((String value) {
+                    return DropdownMenuItem<String>(
+                      value: value,
+
+                      child: Text(value),
+                    );
+                  }).toList(),
+
+                  onChanged: (value) {
+                    setState(() {
+                      selectedFilter = value!;
+                    });
+                  },
+                ),
+              ),
             ),
           ),
 
-          // Certificates list
+          // CERTIFICATE LIST
           Expanded(
             child: ListView.builder(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.symmetric(
+                horizontal: 16,
+              ),
+
               itemCount: filtered.length,
+
               itemBuilder: (context, index) {
                 final cert = filtered[index];
+
                 return _buildCertificateCard(cert);
               },
             ),
@@ -104,61 +191,155 @@ class _StudentCertificatesScreenState extends State<StudentCertificatesScreen> {
     );
   }
 
-  Widget _buildFilterButton(String label) {
-    final isSelected = selectedFilter == label;
-    return GestureDetector(
-      onTap: () => setState(() => selectedFilter = label),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        decoration: BoxDecoration(
-          color: isSelected ? Colors.orange : Colors.grey.shade200,
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            color: isSelected ? Colors.white : Colors.black54,
-            fontWeight: FontWeight.w500,
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildCertificateCard(Map<String, String> cert) {
+  Widget _buildCertificateCard(
+    Map<String, String> cert,
+  ) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 16),
+      margin: const EdgeInsets.only(
+        bottom: 16,
+      ),
+
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
+
+        borderRadius:
+            BorderRadius.circular(14),
+
         boxShadow: [
-          BoxShadow(color: Colors.grey.shade200, blurRadius: 6, offset: const Offset(0, 3)),
+          BoxShadow(
+            color: Colors.grey.shade200,
+            blurRadius: 8,
+            offset: const Offset(0, 4),
+          ),
         ],
       ),
+
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment:
+            CrossAxisAlignment.start,
+
         children: [
-          // Certificate image
+
+          // IMAGE
           ClipRRect(
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
-            child: Image.asset(cert['image']!, height: 180, width: double.infinity, fit: BoxFit.cover),
+            borderRadius:
+                const BorderRadius.vertical(
+              top: Radius.circular(14),
+            ),
+
+            child: Image.asset(
+              cert['image']!,
+              height: 180,
+              width: double.infinity,
+              fit: BoxFit.cover,
+
+              errorBuilder:
+                  (context, error, stackTrace) {
+                return Container(
+                  height: 180,
+                  color: Colors.grey.shade200,
+
+                  child: const Center(
+                    child: Icon(
+                      Icons.image_not_supported,
+                      size: 50,
+                      color: Colors.grey,
+                    ),
+                  ),
+                );
+              },
+            ),
           ),
+
+          // DETAILS
           Padding(
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.all(14),
+
             child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              mainAxisAlignment:
+                  MainAxisAlignment.spaceBetween,
+
               children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(cert['title']!, style: const TextStyle(fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 4),
-                    Text(cert['date']!, style: const TextStyle(color: Colors.grey, fontSize: 12)),
-                  ],
+
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment:
+                        CrossAxisAlignment.start,
+
+                    children: [
+
+                      Text(
+                        cert['title']!,
+
+                        style: const TextStyle(
+                          fontWeight:
+                              FontWeight.bold,
+                          fontSize: 15,
+                        ),
+                      ),
+
+                      const SizedBox(height: 6),
+
+                      Text(
+                        cert['date']!,
+
+                        style: const TextStyle(
+                          color: Colors.grey,
+                          fontSize: 12,
+                        ),
+                      ),
+
+                      const SizedBox(height: 6),
+
+                      Container(
+                        padding:
+                            const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 4,
+                        ),
+
+                        decoration: BoxDecoration(
+                          color: Colors.orange
+                              .withOpacity(0.12),
+
+                          borderRadius:
+                              BorderRadius.circular(
+                            20,
+                          ),
+                        ),
+
+                        child: Text(
+                          cert['category']!,
+
+                          style: const TextStyle(
+                            color: Colors.orange,
+                            fontWeight:
+                                FontWeight.w600,
+                            fontSize: 11,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
+
                 IconButton(
-                  icon: const Icon(Icons.download_rounded, color: Colors.orange),
-                  onPressed: () {},
+                  icon: const Icon(
+                    Icons.download_rounded,
+                    color: Colors.orange,
+                    size: 28,
+                  ),
+
+                  onPressed: () {
+                    ScaffoldMessenger.of(context)
+                        .showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          '${cert['title']} downloaded',
+                        ),
+                      ),
+                    );
+                  },
                 ),
               ],
             ),
