@@ -325,7 +325,7 @@ class _OrgFinanceScreenState extends State<OrgFinanceScreen> {
                         decoration: BoxDecoration(
                           color: OrgColors.white,
                           borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: OrgColors.mediumGray),
+                          border: Border.all(color: OrgColors.primaryLight),
                         ),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -370,11 +370,11 @@ class _OrgFinanceScreenState extends State<OrgFinanceScreen> {
                                         fillColor: OrgColors.lightGray,
                                         border: OutlineInputBorder(
                                           borderRadius: BorderRadius.circular(8),
-                                          borderSide: BorderSide(color: OrgColors.mediumGray),
+                                          borderSide: BorderSide(color: OrgColors.primaryLight),
                                         ),
                                         enabledBorder: OutlineInputBorder(
                                           borderRadius: BorderRadius.circular(8),
-                                          borderSide: BorderSide(color: OrgColors.mediumGray),
+                                          borderSide: BorderSide(color: OrgColors.primaryLight),
                                         ),
                                         focusedBorder: OutlineInputBorder(
                                           borderRadius: BorderRadius.circular(8),
@@ -416,7 +416,7 @@ class _OrgFinanceScreenState extends State<OrgFinanceScreen> {
                                             fontSize: 13, fontWeight: FontWeight.w500)),
                                     style: OutlinedButton.styleFrom(
                                       foregroundColor: OrgColors.charcoal,
-                                      side: BorderSide(color: OrgColors.mediumGray),
+                                      side: BorderSide(color: OrgColors.primaryLight),
                                       shape: RoundedRectangleBorder(
                                           borderRadius: BorderRadius.circular(8)),
                                       padding: const EdgeInsets.symmetric(
@@ -595,7 +595,7 @@ class _OrgFinanceScreenState extends State<OrgFinanceScreen> {
                                     horizontal: 16, vertical: 10),
                                 decoration: BoxDecoration(
                                   border: Border(
-                                      top: BorderSide(color: OrgColors.mediumGray)),
+                                      top: BorderSide(color: OrgColors.primaryLight)),
                                 ),
                                 child: Row(
                                   children: [
@@ -688,7 +688,7 @@ class _FilterDropdown<T> extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 10),
       decoration: BoxDecoration(
         color: OrgColors.white,
-        border: Border.all(color: OrgColors.mediumGray),
+        border: Border.all(color: OrgColors.primaryLight),
         borderRadius: BorderRadius.circular(8),
       ),
       child: DropdownButtonHideUnderline(
@@ -737,7 +737,7 @@ class _StatCard extends StatelessWidget {
         decoration: BoxDecoration(
           color: OrgColors.white,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: OrgColors.mediumGray),
+          border: Border.all(color: OrgColors.primaryLight),
         ),
         child: Row(
           children: [
@@ -1084,7 +1084,7 @@ class _SummaryCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: OrgColors.white,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: OrgColors.mediumGray),
+        border: Border.all(color: OrgColors.primaryLight),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1362,7 +1362,7 @@ class _TransactionModalState extends State<_TransactionModal> {
                       decoration: BoxDecoration(
                         color: OrgColors.lightGray,
                         borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: OrgColors.mediumGray),
+                        border: Border.all(color: OrgColors.primaryLight),
                       ),
                       child: Row(
                         children: [
@@ -1399,7 +1399,7 @@ class _TransactionModalState extends State<_TransactionModal> {
                                   padding: const EdgeInsets.symmetric(
                                       horizontal: 12, vertical: 10),
                                   decoration: BoxDecoration(
-                                    border: Border.all(color: OrgColors.mediumGray),
+                                    border: Border.all(color: OrgColors.primaryLight),
                                     borderRadius: BorderRadius.circular(8),
                                   ),
                                   child: Row(
@@ -1440,11 +1440,11 @@ class _TransactionModalState extends State<_TransactionModal> {
                                       fontSize: 13, color: OrgColors.mediumGray),
                                   border: OutlineInputBorder(
                                     borderRadius: BorderRadius.circular(8),
-                                    borderSide: const BorderSide(color: OrgColors.mediumGray),
+                                    borderSide: const BorderSide(color: OrgColors.primaryLight),
                                   ),
                                   enabledBorder: OutlineInputBorder(
                                     borderRadius: BorderRadius.circular(8),
-                                    borderSide: const BorderSide(color: OrgColors.mediumGray),
+                                    borderSide: const BorderSide(color: OrgColors.primaryLight),
                                   ),
                                   focusedBorder: OutlineInputBorder(
                                     borderRadius: BorderRadius.circular(8),
@@ -1543,7 +1543,7 @@ class _TransactionModalState extends State<_TransactionModal> {
                     onPressed: () => Navigator.pop(context),
                     style: OutlinedButton.styleFrom(
                       foregroundColor: OrgColors.charcoal,
-                      side: const BorderSide(color: OrgColors.mediumGray),
+                      side: const BorderSide(color: OrgColors.primaryLight),
                       shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(8)),
                       padding: const EdgeInsets.symmetric(
@@ -1593,11 +1593,11 @@ class _TransactionModalState extends State<_TransactionModal> {
             fontSize: 13, color: OrgColors.mediumGray),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
-          borderSide: const BorderSide(color: OrgColors.mediumGray),
+          borderSide: const BorderSide(color: OrgColors.primaryLight),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
-          borderSide: const BorderSide(color: OrgColors.mediumGray),
+          borderSide: const BorderSide(color: OrgColors.primaryLight),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
@@ -1665,4 +1665,6 @@ class _TypeToggle extends StatelessWidget {
     );
   }
 }
+
+
 

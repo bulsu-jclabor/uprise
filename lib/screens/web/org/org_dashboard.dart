@@ -603,7 +603,7 @@ class _TopBarState extends State<_TopBar> {
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
       decoration: const BoxDecoration(
         color: OrgColors.white,
-        border: Border(bottom: BorderSide(color: OrgColors.mediumGray)),
+        border: Border(bottom: BorderSide(color: OrgColors.primaryLight)),
       ),
       child: Row(
         children: [
@@ -970,7 +970,7 @@ class _StatCard extends StatelessWidget {
     decoration: BoxDecoration(
       color: OrgColors.white,
       borderRadius: BorderRadius.circular(12),
-      border: Border.all(color: OrgColors.mediumGray),
+      border: Border.all(color: OrgColors.primaryLight),
     ),
     child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
@@ -1018,7 +1018,7 @@ class _MerchSalesCard extends StatelessWidget {
           decoration: BoxDecoration(
             color: OrgColors.white,
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: OrgColors.mediumGray),
+            border: Border.all(color: OrgColors.primaryLight),
           ),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
@@ -1058,7 +1058,7 @@ class _RecentProposals extends StatelessWidget {
       decoration: BoxDecoration(
         color: OrgColors.white,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: OrgColors.mediumGray),
+        border: Border.all(color: OrgColors.primaryLight),
       ),
       child: Column(children: [
         Padding(
@@ -1178,7 +1178,7 @@ class _TopMerch extends StatelessWidget {
       decoration: BoxDecoration(
         color: OrgColors.white,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: OrgColors.mediumGray),
+        border: Border.all(color: OrgColors.primaryLight),
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Padding(
@@ -1250,7 +1250,7 @@ class _ActivityTimeline extends StatelessWidget {
       decoration: BoxDecoration(
         color: OrgColors.white,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: OrgColors.mediumGray),
+        border: Border.all(color: OrgColors.primaryLight),
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Padding(
@@ -1334,3 +1334,4 @@ class _ActivityTimeline extends StatelessWidget {
     return '${(d.inDays / 7).floor()}w ago';
   }
 }
+

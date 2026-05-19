@@ -94,7 +94,7 @@ class _OrgSettingsScreenState extends State<OrgSettingsScreen>
           Container(
             decoration: const BoxDecoration(
               border: Border(
-                  bottom: BorderSide(color: OrgColors.mediumGray)),
+                  bottom: BorderSide(color: OrgColors.primaryLight)),
             ),
             child: TabBar(
               controller: _tabController,
@@ -210,7 +210,7 @@ class _NotificationsTabState extends State<_NotificationsTab> {
         decoration: BoxDecoration(
           color: OrgColors.white,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: OrgColors.mediumGray),
+          border: Border.all(color: OrgColors.primaryLight),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -237,7 +237,7 @@ class _NotificationsTabState extends State<_NotificationsTab> {
                 OutlinedButton(
                   onPressed: _restoreDefaults,
                   style: OutlinedButton.styleFrom(
-                    side: const BorderSide(color: OrgColors.mediumGray),
+                    side: const BorderSide(color: OrgColors.primaryLight),
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(8)),
                   ),
@@ -424,11 +424,11 @@ class _SecurityTabState extends State<_SecurityTab> {
         fillColor: OrgColors.lightGray,
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
-          borderSide: const BorderSide(color: OrgColors.mediumGray),
+          borderSide: const BorderSide(color: OrgColors.primaryLight),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
-          borderSide: const BorderSide(color: OrgColors.mediumGray),
+          borderSide: const BorderSide(color: OrgColors.primaryLight),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
@@ -450,7 +450,7 @@ class _SecurityTabState extends State<_SecurityTab> {
             decoration: BoxDecoration(
               color: OrgColors.white,
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: OrgColors.mediumGray),
+              border: Border.all(color: OrgColors.primaryLight),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -574,7 +574,7 @@ class _SecurityTabState extends State<_SecurityTab> {
             decoration: BoxDecoration(
               color: OrgColors.white,
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: OrgColors.mediumGray),
+              border: Border.all(color: OrgColors.primaryLight),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -651,7 +651,7 @@ class _SecurityTabState extends State<_SecurityTab> {
             decoration: BoxDecoration(
               color: OrgColors.white,
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: OrgColors.mediumGray),
+              border: Border.all(color: OrgColors.primaryLight),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -733,4 +733,6 @@ class _SecurityTabState extends State<_SecurityTab> {
     );
   }
 }
+
+
 

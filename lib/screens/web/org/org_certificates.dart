@@ -304,7 +304,7 @@ class _OrgCertificatesScreenState extends State<OrgCertificatesScreen> {
       decoration: BoxDecoration(
         color: OrgColors.white,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: OrgColors.mediumGray),
+        border: Border.all(color: OrgColors.primaryLight),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -345,11 +345,11 @@ class _OrgCertificatesScreenState extends State<OrgCertificatesScreen> {
                       contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(8),
-                        borderSide: const BorderSide(color: OrgColors.mediumGray),
+                        borderSide: const BorderSide(color: OrgColors.primaryLight),
                       ),
                       enabledBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(8),
-                        borderSide: const BorderSide(color: OrgColors.mediumGray),
+                        borderSide: const BorderSide(color: OrgColors.primaryLight),
                       ),
                       focusedBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(8),
@@ -479,7 +479,7 @@ class _StatCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: OrgColors.white,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: OrgColors.mediumGray),
+        border: Border.all(color: OrgColors.primaryLight),
       ),
       child: Row(
         children: [
@@ -785,7 +785,7 @@ class _SelectTemplateModalState extends State<_SelectTemplateModal> {
             Container(
               padding: const EdgeInsets.fromLTRB(20, 16, 16, 16),
               decoration: const BoxDecoration(
-                border: Border(bottom: BorderSide(color: OrgColors.mediumGray)),
+                border: Border(bottom: BorderSide(color: OrgColors.primaryLight)),
               ),
               child: Row(
                 children: [
@@ -886,7 +886,7 @@ class _SelectTemplateModalState extends State<_SelectTemplateModal> {
             Container(
               padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
               decoration: const BoxDecoration(
-                border: Border(top: BorderSide(color: OrgColors.mediumGray)),
+                border: Border(top: BorderSide(color: OrgColors.primaryLight)),
               ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.end,
@@ -895,7 +895,7 @@ class _SelectTemplateModalState extends State<_SelectTemplateModal> {
                     onPressed: () => Navigator.pop(context),
                     style: OutlinedButton.styleFrom(
                       foregroundColor: OrgColors.darkGray,
-                      side: const BorderSide(color: OrgColors.mediumGray),
+                      side: const BorderSide(color: OrgColors.primaryLight),
                       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                     ),
@@ -1219,7 +1219,7 @@ class _GenerateCertificateModalState extends State<_GenerateCertificateModal> {
               Container(
                 padding: const EdgeInsets.fromLTRB(20, 16, 16, 14),
                 decoration: const BoxDecoration(
-                  border: Border(bottom: BorderSide(color: OrgColors.mediumGray)),
+                  border: Border(bottom: BorderSide(color: OrgColors.primaryLight)),
                 ),
                 child: Row(
                   children: [
@@ -1517,7 +1517,7 @@ class _GenerateCertificateModalState extends State<_GenerateCertificateModal> {
               Container(
                 padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
                 decoration: const BoxDecoration(
-                  border: Border(top: BorderSide(color: OrgColors.mediumGray)),
+                  border: Border(top: BorderSide(color: OrgColors.primaryLight)),
                 ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.end,
@@ -1526,7 +1526,7 @@ class _GenerateCertificateModalState extends State<_GenerateCertificateModal> {
                       onPressed: _isSubmitting ? null : () => _submit(distribute: false),
                       style: OutlinedButton.styleFrom(
                         foregroundColor: OrgColors.darkGray,
-                        side: const BorderSide(color: OrgColors.mediumGray),
+                        side: const BorderSide(color: OrgColors.primaryLight),
                         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                       ),
@@ -1570,11 +1570,11 @@ class _GenerateCertificateModalState extends State<_GenerateCertificateModal> {
       contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(8),
-        borderSide: const BorderSide(color: OrgColors.mediumGray),
+        borderSide: const BorderSide(color: OrgColors.primaryLight),
       ),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(8),
-        borderSide: const BorderSide(color: OrgColors.mediumGray),
+        borderSide: const BorderSide(color: OrgColors.primaryLight),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(8),
@@ -1640,7 +1640,7 @@ class _CertificatePreview extends StatelessWidget {
       decoration: BoxDecoration(
         color: bg,
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: OrgColors.mediumGray),
+        border: Border.all(color: OrgColors.primaryLight),
       ),
       padding: const EdgeInsets.all(20),
       child: Column(
@@ -1746,7 +1746,7 @@ class _CertificatePreviewDialog extends StatelessWidget {
             Container(
               padding: const EdgeInsets.fromLTRB(20, 16, 16, 14),
               decoration: const BoxDecoration(
-                border: Border(bottom: BorderSide(color: OrgColors.mediumGray)),
+                border: Border(bottom: BorderSide(color: OrgColors.primaryLight)),
               ),
               child: Row(
                 children: [
@@ -1799,4 +1799,6 @@ class _CertificatePreviewDialog extends StatelessWidget {
     );
   }
 }
+
+
 

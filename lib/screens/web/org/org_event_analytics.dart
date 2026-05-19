@@ -448,7 +448,7 @@ class _SearchFilterBar extends StatelessWidget {
             height: 42,
             decoration: BoxDecoration(
               color: OrgColors.white,
-              border: Border.all(color: OrgColors.mediumGray),
+              border: Border.all(color: OrgColors.primaryLight),
               borderRadius: BorderRadius.circular(8),
             ),
             child: TextField(
@@ -544,7 +544,7 @@ class _FilterPanel extends StatelessWidget {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: OrgColors.white,
-        border: Border.all(color: OrgColors.mediumGray),
+        border: Border.all(color: OrgColors.primaryLight),
         borderRadius: BorderRadius.circular(10),
       ),
       child: Row(
@@ -563,7 +563,7 @@ class _FilterPanel extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12),
                   decoration: BoxDecoration(
-                    border: Border.all(color: OrgColors.mediumGray),
+                    border: Border.all(color: OrgColors.primaryLight),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: DropdownButtonHideUnderline(
@@ -798,7 +798,7 @@ class _KpiCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: OrgColors.white,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: OrgColors.mediumGray),
+        border: Border.all(color: OrgColors.primaryLight),
       ),
       child: Row(
         children: [
@@ -853,7 +853,7 @@ class _SatisfactionCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: OrgColors.white,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: OrgColors.mediumGray),
+        border: Border.all(color: OrgColors.primaryLight),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -952,7 +952,7 @@ class _DistributionCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: OrgColors.white,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: OrgColors.mediumGray),
+        border: Border.all(color: OrgColors.primaryLight),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1081,7 +1081,7 @@ class _CompletionCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: OrgColors.white,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: OrgColors.mediumGray),
+        border: Border.all(color: OrgColors.primaryLight),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1183,7 +1183,7 @@ class _FeedbackCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: OrgColors.white,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: OrgColors.mediumGray),
+        border: Border.all(color: OrgColors.primaryLight),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1299,3 +1299,4 @@ class _StarRow extends StatelessWidget {
     );
   }
 }
+

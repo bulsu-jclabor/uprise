@@ -11,6 +11,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'dart:html' as html;
 
 // ============ COLOR SCHEME ============
 class OrgColors {
@@ -227,7 +228,7 @@ class _OrgEventProposalsScreenState extends State<OrgEventProposalsScreen> {
             decoration: BoxDecoration(
               color: OrgColors.white,
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: OrgColors.mediumGray),
+              border: Border.all(color: OrgColors.primaryLight),
             ),
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Padding(
@@ -273,7 +274,7 @@ class _OrgEventProposalsScreenState extends State<OrgEventProposalsScreen> {
                     height: 38,
                     padding: const EdgeInsets.symmetric(horizontal: 12),
                     decoration: BoxDecoration(
-                      border: Border.all(color: OrgColors.mediumGray),
+                      border: Border.all(color: OrgColors.primaryLight),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: DropdownButtonHideUnderline(
@@ -295,7 +296,7 @@ class _OrgEventProposalsScreenState extends State<OrgEventProposalsScreen> {
                     label: Text('Export', style: GoogleFonts.beVietnamPro(fontSize: 13, color: OrgColors.darkGray)),
                     style: OutlinedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                      side: BorderSide(color: OrgColors.mediumGray),
+                      side: BorderSide(color: OrgColors.primaryLight),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                     ),
                   ),
@@ -307,8 +308,8 @@ class _OrgEventProposalsScreenState extends State<OrgEventProposalsScreen> {
                 decoration: BoxDecoration(
                   color: OrgColors.lightGray,
                   border: Border(
-                    top: BorderSide(color: OrgColors.mediumGray),
-                    bottom: BorderSide(color: OrgColors.mediumGray),
+                    top: BorderSide(color: OrgColors.primaryLight),
+                    bottom: BorderSide(color: OrgColors.primaryLight),
                   ),
                 ),
                 child: Row(children: [
@@ -416,7 +417,7 @@ class _StatCard extends StatelessWidget {
           decoration: BoxDecoration(
             color: OrgColors.white,
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: OrgColors.mediumGray),
+            border: Border.all(color: OrgColors.primaryLight),
           ),
           child: Row(children: [
             Container(
@@ -546,7 +547,7 @@ class _ProposalRow extends StatelessWidget {
         decoration: BoxDecoration(
           color: OrgColors.lightGray,
           borderRadius: BorderRadius.circular(4),
-          border: Border.all(color: OrgColors.mediumGray),
+          border: Border.all(color: OrgColors.primaryLight),
         ),
         child: Text(
           category,
@@ -664,6 +665,7 @@ class _SubmitProposalModalState extends State<_SubmitProposalModal> {
   double _uploadProgress = 0.0;
   UploadTask? _uploadTask;
   Timer? _progressTimer;
+  StreamSubscription<TaskSnapshot>? _uploadSub;
 
   static const _categories = [
     'Workshop', 'Seminar', 'Competition', 'General Assembly',
@@ -709,129 +711,178 @@ class _SubmitProposalModalState extends State<_SubmitProposalModal> {
 
   // ============ UPLOAD LOGIC ============
   Future<void> _pickAndUploadFile() async {
-    FilePickerResult? result = await FilePicker.platform.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: ['pdf', 'doc', 'docx', 'txt'],
-      withData: true,
-    );
-    if (result == null) return;
+  FilePickerResult? result = await FilePicker.platform.pickFiles(
+    type: FileType.custom,
+    allowedExtensions: ['pdf', 'doc', 'docx', 'txt'],
+    withData: true, // Must be true for web!
+  );
+  
+  if (result == null) return;
 
-    final file = result.files.first;
-    if (file.bytes == null) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Unable to read selected file. Please choose a different file.')),
-        );
-      }
-      return;
+  final file = result.files.first;
+
+  // Check if we have the file data
+  if (file.bytes == null || file.bytes!.isEmpty) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Cannot read file. Please try another one.')),
+      );
     }
+    return;
+  }
 
-    final fileSizeBytes = file.bytes!.length;
-    final fileSizeMB    = fileSizeBytes / (1024 * 1024);
-    final fileSizeLabel = fileSizeMB >= 1
-        ? '${fileSizeMB.toStringAsFixed(2)} MB'
-        : '${(fileSizeBytes / 1024).toStringAsFixed(1)} KB';
+  final fileSizeBytes = file.bytes!.length;
+  
+  // Check file size (10 MB max)
+  if (fileSizeBytes > 10 * 1024 * 1024) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('File is too big! Maximum is 10 MB.')),
+      );
+    }
+    return;
+  }
 
-    setState(() {
-      _isUploading      = true;
-      _uploadProgress   = 0.0;
-      _uploadedFileName = file.name;
-      _uploadedFileSize = fileSizeLabel;
-      // Clear previous successful upload if re-uploading
-      _newAttachmentUrl = null;
-    });
+  final fileSizeMB = fileSizeBytes / (1024 * 1024);
+  final fileSizeLabel = fileSizeMB >= 1
+      ? '${fileSizeMB.toStringAsFixed(2)} MB'
+      : '${(fileSizeBytes / 1024).toStringAsFixed(1)} KB';
 
-    // Fast linear fill to 99% in ~2s, then holds until Firebase confirms done.
-    // 100% is ONLY set after whenComplete() resolves — never faked.
-    _progressTimer = Timer.periodic(const Duration(milliseconds: 50), (timer) {
-      if (!mounted) {
-        timer.cancel();
-        return;
-      }
-      setState(() {
-        if (_uploadProgress < 0.99) {
-          _uploadProgress = (_uploadProgress + 0.008).clamp(0.0, 0.99);
-        }
-        // Don't cancel — keep alive so whenComplete() can push it to 1.0
-      });
-    });
+  // Show uploading status
+  setState(() {
+    _isUploading = true;
+    _uploadProgress = 0.0;
+    _uploadedFileName = file.name;
+    _uploadedFileSize = fileSizeLabel;
+    _newAttachmentUrl = null;
+  });
 
+  print('📤 Starting upload: ${file.name} ($fileSizeLabel)');
+
+  try {
     final fileName = '${DateTime.now().millisecondsSinceEpoch}_${file.name}';
     final ref = FirebaseStorage.instance
         .ref()
         .child('proposals/${widget.orgId}/$fileName');
 
+    // What kind of file is it?
     final contentType = {
-      'pdf':  'application/pdf',
-      'doc':  'application/msword',
+      'pdf': 'application/pdf',
+      'doc': 'application/msword',
       'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      'txt':  'text/plain',
+      'txt': 'text/plain',
     }[file.extension?.toLowerCase()] ?? 'application/octet-stream';
 
-    _uploadTask = ref.putData(
-      file.bytes!,
+    // ⭐ THE MAGIC FIX ⭐
+    // Create a Blob (web-friendly file format)
+    final blob = html.Blob([file.bytes!], contentType);
+    
+    // Upload using putBlob (this works on web!)
+    _uploadTask = ref.putBlob(
+      blob,
       SettableMetadata(contentType: contentType),
     );
 
-    try {
-      await _uploadTask!.whenComplete(() {});
+    print('📤 Upload started, watching progress...');
 
-      // If user cancelled mid-upload
-      if (_uploadTask!.snapshot.state == TaskState.canceled) {
-        _progressTimer?.cancel();
-        return;
-      }
+    // Watch the upload progress
+    _uploadTask!.snapshotEvents.listen(
+      (TaskSnapshot snap) async {
+        if (!mounted) return;
 
-      final downloadUrl = await ref.getDownloadURL();
+        // Calculate how much is done
+        final progress = snap.totalBytes > 0
+            ? snap.bytesTransferred / snap.totalBytes
+            : 0.0;
 
-      _progressTimer?.cancel();
-      if (mounted) {
-        // First snap to 100% so user sees full bar before widget switches state
-        setState(() => _uploadProgress = 1.0);
-        await Future.delayed(const Duration(milliseconds: 300));
-        if (mounted) setState(() {
-          _newAttachmentUrl = downloadUrl;
-          _isUploading      = false;
-        });
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('File uploaded successfully'),
-            duration: Duration(seconds: 2),
-          ),
-        );
-      }
-    } catch (e) {
-      _progressTimer?.cancel();
-      if (mounted) {
-        setState(() {
-          _isUploading      = false;
-          _uploadProgress   = 0.0;
-          _uploadedFileName = null;
-          _uploadedFileSize = null;
-        });
-        // Don't show error snackbar if it was a manual cancel
-        if (e is! FirebaseException || e.code != 'canceled') {
+        print('📊 Progress: ${(progress * 100).toStringAsFixed(1)}%');
+
+        // Update the progress bar
+        setState(() => _uploadProgress = progress.clamp(0.0, 1.0));
+
+        // When upload is done!
+        if (snap.state == TaskState.success) {
+          print('✅ Upload complete! Getting download link...');
+          try {
+            final downloadUrl = await snap.ref.getDownloadURL();
+            print('✅ Download link: $downloadUrl');
+            if (!mounted) return;
+            setState(() {
+              _uploadProgress = 1.0;
+              _newAttachmentUrl = downloadUrl;
+              _isUploading = false;
+            });
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('✨ File uploaded successfully! ✨'),
+                duration: Duration(seconds: 2),
+              ),
+            );
+          } catch (urlError) {
+            print('❌ Failed to get download link: $urlError');
+            if (!mounted) return;
+            _resetUploadState();
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Upload worked but couldn\'t get link: $urlError')),
+            );
+          }
+        } 
+        // If upload fails
+        else if (snap.state == TaskState.error) {
+          print('❌ Upload failed!');
+          if (!mounted) return;
+          _resetUploadState();
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Upload failed: $e'),
-              backgroundColor: OrgColors.error,
+            const SnackBar(
+              content: Text('Upload failed. Please check your internet and try again.'),
+              backgroundColor: Colors.red,
             ),
           );
         }
-      }
+      },
+      onError: (error) {
+        print('❌ Upload error: $error');
+        if (!mounted) return;
+        _resetUploadState();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Upload error: $error'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      },
+    );
+  } catch (e) {
+    print('❌ Unexpected error: $e');
+    _resetUploadState();
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Unexpected error: $e')),
+      );
     }
   }
+}
+
+
+
 
   void _cancelUpload() {
-    _progressTimer?.cancel();
-    _uploadTask?.cancel();
-    setState(() {
-      _isUploading      = false;
-      _uploadProgress   = 0.0;
-      _uploadedFileName = null;
-      _uploadedFileSize = null;
-    });
-  }
+  _progressTimer?.cancel();
+  _uploadTask?.cancel();
+  _uploadSub?.cancel();
+  _uploadSub = null;
+  _resetUploadState();
+}
+
+  void _resetUploadState() {
+  setState(() {
+    _isUploading      = false;
+    _uploadProgress   = 0.0;
+    _uploadedFileName = null;
+    _uploadedFileSize = null;
+    _newAttachmentUrl = null;
+  });
+}
 
   void _removeFile() {
     setState(() {
@@ -948,7 +999,7 @@ class _SubmitProposalModalState extends State<_SubmitProposalModal> {
               decoration: BoxDecoration(
                 color: OrgColors.lightGray,
                 borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
-                border: Border(bottom: BorderSide(color: OrgColors.mediumGray)),
+                border: Border(bottom: BorderSide(color: OrgColors.primaryLight)),
               ),
               child: Row(children: [
                 Icon(Icons.description_outlined, color: OrgColors.primaryDark, size: 20),
@@ -1093,14 +1144,14 @@ class _SubmitProposalModalState extends State<_SubmitProposalModal> {
             Container(
               padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
               decoration: BoxDecoration(
-                border: Border(top: BorderSide(color: OrgColors.mediumGray)),
+                border: Border(top: BorderSide(color: OrgColors.primaryLight)),
               ),
               child: Row(mainAxisAlignment: MainAxisAlignment.end, children: [
                 OutlinedButton(
                   onPressed: () => Navigator.pop(context),
                   style: OutlinedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                    side: BorderSide(color: OrgColors.mediumGray),
+                    side: BorderSide(color: OrgColors.primaryLight),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                   ),
                   child: Text('Cancel', style: GoogleFonts.beVietnamPro(color: OrgColors.darkGray)),
@@ -1381,11 +1432,11 @@ class _SubmitProposalModalState extends State<_SubmitProposalModal> {
           suffixIcon: suffix != null ? Icon(suffix, size: 16, color: OrgColors.darkGray) : null,
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(8),
-            borderSide: BorderSide(color: OrgColors.mediumGray),
+            borderSide: BorderSide(color: OrgColors.primaryLight),
           ),
           enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(8),
-            borderSide: BorderSide(color: OrgColors.mediumGray),
+            borderSide: BorderSide(color: OrgColors.primaryLight),
           ),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(8),
@@ -1417,11 +1468,11 @@ class _SubmitProposalModalState extends State<_SubmitProposalModal> {
           fillColor: OrgColors.lightGray,
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(8),
-            borderSide: BorderSide(color: OrgColors.mediumGray),
+            borderSide: BorderSide(color: OrgColors.primaryLight),
           ),
           enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(8),
-            borderSide: BorderSide(color: OrgColors.mediumGray),
+            borderSide: BorderSide(color: OrgColors.primaryLight),
           ),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(8),
@@ -1470,7 +1521,7 @@ class _ViewProposalModal extends StatelessWidget {
             decoration: BoxDecoration(
               color: OrgColors.lightGray,
               borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
-              border: Border(bottom: BorderSide(color: OrgColors.mediumGray)),
+              border: Border(bottom: BorderSide(color: OrgColors.primaryLight)),
             ),
             child: Row(children: [
               Icon(Icons.description_outlined, color: OrgColors.primaryDark, size: 20),
@@ -1546,7 +1597,7 @@ class _ViewProposalModal extends StatelessWidget {
           Container(
             padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
             decoration: BoxDecoration(
-              border: Border(top: BorderSide(color: OrgColors.mediumGray)),
+              border: Border(top: BorderSide(color: OrgColors.primaryLight)),
             ),
             child: Row(mainAxisAlignment: MainAxisAlignment.end, children: [
               ElevatedButton(
@@ -1653,4 +1704,6 @@ class _ViewProposalModal extends StatelessWidget {
         ]),
       );
 }
+
+
 

@@ -146,7 +146,7 @@ class _OrgEventsScheduleScreenState extends State<OrgEventsScheduleScreen> {
           // View toggle
           Container(
             decoration: BoxDecoration(
-              border: Border.all(color: OrgColors.mediumGray),
+              border: Border.all(color: OrgColors.primaryLight),
               borderRadius: BorderRadius.circular(8),
             ),
             child: Row(children: [
@@ -176,7 +176,7 @@ class _OrgEventsScheduleScreenState extends State<OrgEventsScheduleScreen> {
             decoration: BoxDecoration(
               color: OrgColors.white,
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: OrgColors.mediumGray),
+              border: Border.all(color: OrgColors.primaryLight),
             ),
             child: Column(children: [
               // Calendar toolbar
@@ -234,7 +234,7 @@ class _OrgEventsScheduleScreenState extends State<OrgEventsScheduleScreen> {
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
             decoration: BoxDecoration(
-              border: Border.all(color: OrgColors.mediumGray),
+              border: Border.all(color: OrgColors.primaryLight),
               borderRadius: BorderRadius.circular(6),
             ),
             child: Text('TODAY', style: GoogleFonts.beVietnamPro(fontSize: 11, fontWeight: FontWeight.w600, color: OrgColors.darkGray)),
@@ -398,8 +398,8 @@ class _CalendarGrid extends StatelessWidget {
                               ? const Color(0xFFFAFAFA)
                               : OrgColors.white,
                           border: Border(
-                            right: col < 6 ? BorderSide(color: OrgColors.mediumGray, width: 0.5) : BorderSide.none,
-                            bottom: row < rows - 1 ? BorderSide(color: OrgColors.mediumGray, width: 0.5) : BorderSide.none,
+                            right: col < 6 ? BorderSide(color: OrgColors.primaryLight, width: 0.5) : BorderSide.none,
+                            bottom: row < rows - 1 ? BorderSide(color: OrgColors.primaryLight, width: 0.5) : BorderSide.none,
                           ),
                         ),
                         child: inMonth
@@ -729,7 +729,7 @@ class _EventDetailModal extends StatelessWidget {
                           children: event.tags.map((tag) => Container(
                             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                             decoration: BoxDecoration(color: OrgColors.lightGray, borderRadius: BorderRadius.circular(20),
-                              border: Border.all(color: OrgColors.mediumGray)),
+                              border: Border.all(color: OrgColors.primaryLight)),
                             child: Text(tag, style: GoogleFonts.beVietnamPro(fontSize: 11, color: OrgColors.darkGray)),
                           )).toList(),
                         ),
@@ -746,7 +746,7 @@ class _EventDetailModal extends StatelessWidget {
                       onPressed: () => Navigator.pop(context),
                       style: OutlinedButton.styleFrom(
                         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                        side: BorderSide(color: OrgColors.mediumGray),
+                        side: BorderSide(color: OrgColors.primaryLight),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                       ),
                       child: Text('Close', style: GoogleFonts.beVietnamPro(color: OrgColors.darkGray)),
@@ -792,7 +792,7 @@ class _EventDetailModal extends StatelessWidget {
       decoration: BoxDecoration(
         color: OrgColors.lightGray,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: OrgColors.mediumGray),
+        border: Border.all(color: OrgColors.primaryLight),
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [
@@ -955,7 +955,7 @@ class _EventModalState extends State<_EventModal> {
               decoration: BoxDecoration(
                 color: OrgColors.lightGray,
                 borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
-                border: Border(bottom: BorderSide(color: OrgColors.mediumGray)),
+                border: Border(bottom: BorderSide(color: OrgColors.primaryLight)),
               ),
               child: Row(children: [
                 Icon(Icons.event_note, color: OrgColors.primaryDark, size: 20),
@@ -1016,13 +1016,13 @@ class _EventModalState extends State<_EventModal> {
             // Footer
             Container(
               padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
-              decoration: BoxDecoration(border: Border(top: BorderSide(color: OrgColors.mediumGray))),
+              decoration: BoxDecoration(border: Border(top: BorderSide(color: OrgColors.primaryLight))),
               child: Row(mainAxisAlignment: MainAxisAlignment.end, children: [
                 OutlinedButton(
                   onPressed: () => Navigator.pop(context),
                   style: OutlinedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                    side: BorderSide(color: OrgColors.mediumGray),
+                    side: BorderSide(color: OrgColors.primaryLight),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                   ),
                   child: Text('Cancel', style: GoogleFonts.beVietnamPro(color: OrgColors.darkGray)),
@@ -1067,8 +1067,8 @@ class _EventModalState extends State<_EventModal> {
         hintText: hint,
         hintStyle: GoogleFonts.beVietnamPro(fontSize: 13, color: OrgColors.darkGray),
         filled: true, fillColor: OrgColors.lightGray,
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: OrgColors.mediumGray)),
-        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: OrgColors.mediumGray)),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: OrgColors.primaryLight)),
+        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: OrgColors.primaryLight)),
         focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: OrgColors.primaryDark, width: 1.5)),
         errorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: OrgColors.error)),
         contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: maxLines > 1 ? 10 : 0),
@@ -1087,8 +1087,8 @@ class _EventModalState extends State<_EventModal> {
     style: GoogleFonts.beVietnamPro(fontSize: 13, color: OrgColors.charcoal),
     decoration: InputDecoration(
       filled: true, fillColor: OrgColors.lightGray,
-      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: OrgColors.mediumGray)),
-      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: OrgColors.mediumGray)),
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: OrgColors.primaryLight)),
+      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: OrgColors.primaryLight)),
       focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: OrgColors.primaryDark, width: 1.5)),
       contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
     ),
@@ -1105,7 +1105,7 @@ class _EventModalState extends State<_EventModal> {
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
         color: OrgColors.lightGray, borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: OrgColors.mediumGray),
+        border: Border.all(color: OrgColors.primaryLight),
       ),
       child: Row(children: [
         Icon(Icons.calendar_today, size: 15, color: OrgColors.darkGray),
@@ -1128,7 +1128,7 @@ class _EventModalState extends State<_EventModal> {
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
         color: OrgColors.lightGray, borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: OrgColors.mediumGray),
+        border: Border.all(color: OrgColors.primaryLight),
       ),
       child: Row(children: [
         Icon(Icons.access_time, size: 15, color: OrgColors.darkGray),
@@ -1196,4 +1196,6 @@ class EventModel {
     );
   }
 }
+
+
 

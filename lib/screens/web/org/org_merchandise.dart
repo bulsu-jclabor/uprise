@@ -121,7 +121,7 @@ class _OrgMerchandiseScreenState extends State<OrgMerchandiseScreen>
                 decoration: BoxDecoration(
                   color: OrgColors.lightGray,
                   borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: OrgColors.mediumGray),
+                  border: Border.all(color: OrgColors.primaryLight),
                 ),
                 child: Row(
                   children: [
@@ -154,7 +154,7 @@ class _OrgMerchandiseScreenState extends State<OrgMerchandiseScreen>
                         fontSize: 13, fontWeight: FontWeight.w500)),
                 style: OutlinedButton.styleFrom(
                   foregroundColor: OrgColors.charcoal,
-                  side: BorderSide(color: OrgColors.mediumGray),
+                  side: BorderSide(color: OrgColors.primaryLight),
                   shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(8)),
                   padding:
@@ -319,7 +319,7 @@ class _StatCard extends StatelessWidget {
         decoration: BoxDecoration(
           color: OrgColors.white,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: OrgColors.mediumGray),
+          border: Border.all(color: OrgColors.primaryLight),
         ),
         child: Row(
           children: [
@@ -503,12 +503,12 @@ class _ProductsTabState extends State<_ProductsTab> {
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(8),
                     borderSide:
-                        const BorderSide(color: OrgColors.mediumGray),
+                        const BorderSide(color: OrgColors.primaryLight),
                   ),
                   enabledBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(8),
                     borderSide:
-                        const BorderSide(color: OrgColors.mediumGray),
+                        const BorderSide(color: OrgColors.primaryLight),
                   ),
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(8),
@@ -1198,7 +1198,7 @@ class _ProductModalState extends State<_ProductModal> {
                         color: OrgColors.lightGray,
                         borderRadius: BorderRadius.circular(8),
                         border:
-                            Border.all(color: OrgColors.mediumGray),
+                            Border.all(color: OrgColors.primaryLight),
                       ),
                       child: Row(
                         children: ['Apparel', 'Accessories'].map((c) {
@@ -1246,7 +1246,7 @@ class _ProductModalState extends State<_ProductModal> {
                           color: OrgColors.lightGray,
                           borderRadius: BorderRadius.circular(8),
                           border: Border.all(
-                              color: OrgColors.mediumGray,
+                              color: OrgColors.primaryLight,
                               style: BorderStyle.solid),
                         ),
                         child: Row(
@@ -1380,7 +1380,7 @@ class _ProductModalState extends State<_ProductModal> {
                     style: OutlinedButton.styleFrom(
                       foregroundColor: OrgColors.charcoal,
                       side: const BorderSide(
-                          color: OrgColors.mediumGray),
+                          color: OrgColors.primaryLight),
                       shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(8)),
                       padding: const EdgeInsets.symmetric(
@@ -1554,12 +1554,12 @@ class _OrdersTabState extends State<_OrdersTab> {
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(8),
                         borderSide: const BorderSide(
-                            color: OrgColors.mediumGray),
+                            color: OrgColors.primaryLight),
                       ),
                       enabledBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(8),
                         borderSide: const BorderSide(
-                            color: OrgColors.mediumGray),
+                            color: OrgColors.primaryLight),
                       ),
                       focusedBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(8),
@@ -1585,7 +1585,7 @@ class _OrdersTabState extends State<_OrdersTab> {
                   style: OutlinedButton.styleFrom(
                     foregroundColor: OrgColors.charcoal,
                     side:
-                        const BorderSide(color: OrgColors.mediumGray),
+                        const BorderSide(color: OrgColors.primaryLight),
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(8)),
                     padding: const EdgeInsets.symmetric(
@@ -1655,7 +1655,7 @@ class _OrderCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: OrgColors.white,
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: OrgColors.mediumGray),
+        border: Border.all(color: OrgColors.primaryLight),
       ),
       child: Row(
         children: [
@@ -1948,7 +1948,7 @@ class _OrderDetailsModal extends StatelessWidget {
                         color: OrgColors.lightGray,
                         borderRadius: BorderRadius.circular(8),
                         border:
-                            Border.all(color: OrgColors.mediumGray),
+                            Border.all(color: OrgColors.primaryLight),
                       ),
                       child: Column(
                         children: [
@@ -2007,7 +2007,7 @@ class _OrderDetailsModal extends StatelessWidget {
                     style: OutlinedButton.styleFrom(
                       foregroundColor: OrgColors.charcoal,
                       side: const BorderSide(
-                          color: OrgColors.mediumGray),
+                          color: OrgColors.primaryLight),
                       shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(8)),
                       padding: const EdgeInsets.symmetric(
@@ -2185,7 +2185,7 @@ class _SalesReportModal extends StatelessWidget {
                         style: OutlinedButton.styleFrom(
                           foregroundColor: OrgColors.charcoal,
                           side: const BorderSide(
-                              color: OrgColors.mediumGray),
+                              color: OrgColors.primaryLight),
                           shape: RoundedRectangleBorder(
                               borderRadius:
                                   BorderRadius.circular(8)),
@@ -2628,11 +2628,11 @@ class _TextField extends StatelessWidget {
             fontSize: 13, color: OrgColors.mediumGray),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
-          borderSide: const BorderSide(color: OrgColors.mediumGray),
+          borderSide: const BorderSide(color: OrgColors.primaryLight),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
-          borderSide: const BorderSide(color: OrgColors.mediumGray),
+          borderSide: const BorderSide(color: OrgColors.primaryLight),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
@@ -2793,4 +2793,6 @@ class OrderModel {
     );
   }
 }
+
+
 

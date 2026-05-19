@@ -197,11 +197,11 @@ class _OrgAnnouncementsScreenState extends State<OrgAnnouncementsScreen> {
                     fillColor: OrgColors.lightGray,
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(10),
-                      borderSide: const BorderSide(color: OrgColors.mediumGray),
+                      borderSide: const BorderSide(color: OrgColors.primaryLight),
                     ),
                     enabledBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(10),
-                      borderSide: const BorderSide(color: OrgColors.mediumGray),
+                      borderSide: const BorderSide(color: OrgColors.primaryLight),
                     ),
                     focusedBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(10),
@@ -310,7 +310,7 @@ class _AnnouncementCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: OrgColors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: OrgColors.mediumGray),
+        border: Border.all(color: OrgColors.primaryLight),
         boxShadow: [
           BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8, offset: const Offset(0, 2)),
         ],
@@ -494,7 +494,7 @@ class _AttachmentTile extends StatelessWidget {
       decoration: BoxDecoration(
         color: OrgColors.lightGray,
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: OrgColors.mediumGray),
+        border: Border.all(color: OrgColors.primaryLight),
       ),
       child: Row(
         children: [
@@ -745,7 +745,7 @@ class _AnnouncementSheetState extends State<_AnnouncementSheet> {
             Container(
               padding: const EdgeInsets.fromLTRB(24, 20, 16, 20),
               decoration: const BoxDecoration(
-                border: Border(bottom: BorderSide(color: OrgColors.mediumGray)),
+                border: Border(bottom: BorderSide(color: OrgColors.primaryLight)),
               ),
               child: Row(children: [
                 Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -827,7 +827,7 @@ class _AnnouncementSheetState extends State<_AnnouncementSheet> {
                           decoration: BoxDecoration(
                             color: OrgColors.lightGray,
                             borderRadius: BorderRadius.circular(10),
-                            border: Border.all(color: OrgColors.mediumGray),
+                            border: Border.all(color: OrgColors.primaryLight),
                           ),
                           child: Column(children: [
                             if (_isUploadingFile)
@@ -851,7 +851,7 @@ class _AnnouncementSheetState extends State<_AnnouncementSheet> {
                               margin: const EdgeInsets.only(bottom: 6),
                               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                               decoration: BoxDecoration(
-                                border: Border.all(color: OrgColors.mediumGray),
+                                border: Border.all(color: OrgColors.primaryLight),
                                 borderRadius: BorderRadius.circular(8),
                               ),
                               child: Row(children: [
@@ -883,7 +883,7 @@ class _AnnouncementSheetState extends State<_AnnouncementSheet> {
                           decoration: BoxDecoration(
                             color: OrgColors.lightGray,
                             borderRadius: BorderRadius.circular(10),
-                            border: Border.all(color: OrgColors.mediumGray),
+                            border: Border.all(color: OrgColors.primaryLight),
                           ),
                           clipBehavior: Clip.antiAlias,
                           child: _imageUrl != null
@@ -939,7 +939,7 @@ class _AnnouncementSheetState extends State<_AnnouncementSheet> {
             Container(
               padding: const EdgeInsets.fromLTRB(24, 16, 24, 20),
               decoration: const BoxDecoration(
-                border: Border(top: BorderSide(color: OrgColors.mediumGray)),
+                border: Border(top: BorderSide(color: OrgColors.primaryLight)),
               ),
               child: Row(
                 children: [
@@ -949,7 +949,7 @@ class _AnnouncementSheetState extends State<_AnnouncementSheet> {
                       style: OutlinedButton.styleFrom(
                         padding: const EdgeInsets.symmetric(vertical: 14),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                        side: const BorderSide(color: OrgColors.mediumGray),
+                        side: const BorderSide(color: OrgColors.primaryLight),
                       ),
                       child: Text('Cancel',
                           style: GoogleFonts.beVietnamPro(
@@ -993,9 +993,9 @@ class _AnnouncementSheetState extends State<_AnnouncementSheet> {
         fillColor: OrgColors.lightGray,
         contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: OrgColors.mediumGray)),
+            borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: OrgColors.primaryLight)),
         enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: OrgColors.mediumGray)),
+            borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: OrgColors.primaryLight)),
         focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(10),
             borderSide: const BorderSide(color: OrgColors.primaryLight, width: 1.5)),
@@ -1071,4 +1071,6 @@ class AnnouncementModel {
     );
   }
 }
+
+
 

@@ -282,7 +282,7 @@ class _OrgProfileScreenState extends State<OrgProfileScreen> {
                                 decoration: BoxDecoration(
                                   color: OrgColors.lightGray,
                                   borderRadius: BorderRadius.circular(12),
-                                  border: Border.all(color: OrgColors.mediumGray),
+                                  border: Border.all(color: OrgColors.primaryLight),
                                 ),
                                 clipBehavior: Clip.antiAlias,
                                 child: _orgLogoUrl.isNotEmpty
@@ -392,7 +392,7 @@ class _OrgProfileScreenState extends State<OrgProfileScreen> {
                                 decoration: BoxDecoration(
                                   color: OrgColors.lightGray,
                                   borderRadius: BorderRadius.circular(10),
-                                  border: Border.all(color: OrgColors.mediumGray),
+                                  border: Border.all(color: OrgColors.primaryLight),
                                 ),
                                 child: Row(children: [
                                   const Icon(Icons.people_outline, size: 16, color: OrgColors.darkGray),
@@ -513,7 +513,7 @@ class _OrgProfileScreenState extends State<OrgProfileScreen> {
         decoration: BoxDecoration(
           color: OrgColors.white,
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: OrgColors.mediumGray),
+          border: Border.all(color: OrgColors.primaryLight),
           boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 6, offset: const Offset(0, 2))],
         ),
         child: child,
@@ -527,7 +527,7 @@ class _OrgProfileScreenState extends State<OrgProfileScreen> {
         decoration: BoxDecoration(
           color: OrgColors.lightGray,
           borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: OrgColors.mediumGray),
+          border: Border.all(color: OrgColors.primaryLight),
         ),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text(label, style: GoogleFonts.beVietnamPro(fontSize: 11, color: OrgColors.darkGray)),
@@ -581,7 +581,7 @@ class _OfficerTile extends StatelessWidget {
       decoration: BoxDecoration(
         color: OrgColors.lightGray,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: OrgColors.mediumGray),
+        border: Border.all(color: OrgColors.primaryLight),
       ),
       child: Row(
         children: [
@@ -822,7 +822,7 @@ class _MembersRow extends StatelessWidget {
       decoration: BoxDecoration(
         color: OrgColors.lightGray,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: OrgColors.mediumGray),
+        border: Border.all(color: OrgColors.primaryLight),
       ),
       child: Column(children: [
         Text('Members (${members.length}+)',
@@ -998,7 +998,7 @@ class _EditOrgProfileSheetState extends State<_EditOrgProfileSheet> {
                     decoration: BoxDecoration(
                       color: OrgColors.lightGray,
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: OrgColors.mediumGray),
+                      border: Border.all(color: OrgColors.primaryLight),
                     ),
                     clipBehavior: Clip.antiAlias,
                     child: _logoUrl != null
@@ -1123,7 +1123,7 @@ class _EditOrgProfileSheetState extends State<_EditOrgProfileSheet> {
 
   Widget _sheetHeader(String title, String subtitle) => Container(
         padding: const EdgeInsets.fromLTRB(24, 20, 16, 20),
-        decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: OrgColors.mediumGray))),
+        decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: OrgColors.primaryLight))),
         child: Row(children: [
           Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(title, style: GoogleFonts.beVietnamPro(fontSize: 16, fontWeight: FontWeight.w800, color: OrgColors.charcoal)),
@@ -1149,14 +1149,14 @@ class _EditOrgProfileSheetState extends State<_EditOrgProfileSheet> {
   Widget _sheetFooter({required VoidCallback onCancel, required VoidCallback? onSave, required bool isSaving, required String saveLabel}) =>
       Container(
         padding: const EdgeInsets.fromLTRB(24, 14, 24, 20),
-        decoration: const BoxDecoration(border: Border(top: BorderSide(color: OrgColors.mediumGray))),
+        decoration: const BoxDecoration(border: Border(top: BorderSide(color: OrgColors.primaryLight))),
         child: Row(children: [
           Expanded(child: OutlinedButton(
             onPressed: onCancel,
             style: OutlinedButton.styleFrom(
               padding: const EdgeInsets.symmetric(vertical: 14),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-              side: const BorderSide(color: OrgColors.mediumGray),
+              side: const BorderSide(color: OrgColors.primaryLight),
             ),
             child: Text('Cancel', style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.w600, color: OrgColors.charcoal)),
           )),
@@ -1189,8 +1189,8 @@ class _EditOrgProfileSheetState extends State<_EditOrgProfileSheet> {
           filled: true,
           fillColor: OrgColors.lightGray,
           contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: OrgColors.mediumGray)),
-          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: OrgColors.mediumGray)),
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: OrgColors.primaryLight)),
+          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: OrgColors.primaryLight)),
           focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: OrgColors.primaryLight, width: 1.5)),
         ),
       );
@@ -1339,7 +1339,7 @@ class _OfficerModalState extends State<_OfficerModal> {
             Container(
               padding: const EdgeInsets.fromLTRB(20, 18, 16, 18),
               decoration: const BoxDecoration(
-                border: Border(bottom: BorderSide(color: OrgColors.mediumGray)),
+                border: Border(bottom: BorderSide(color: OrgColors.primaryLight)),
               ),
               child: Row(children: [
                 Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -1378,7 +1378,7 @@ class _OfficerModalState extends State<_OfficerModal> {
                             decoration: BoxDecoration(
                               color: OrgColors.lightGray,
                               shape: BoxShape.circle,
-                              border: Border.all(color: OrgColors.mediumGray, width: 2),
+                              border: Border.all(color: OrgColors.primaryLight, width: 2),
                             ),
                             clipBehavior: Clip.antiAlias,
                             child: _isUploadingPhoto
@@ -1466,14 +1466,14 @@ class _OfficerModalState extends State<_OfficerModal> {
             // Footer
             Container(
               padding: const EdgeInsets.fromLTRB(20, 14, 20, 18),
-              decoration: const BoxDecoration(border: Border(top: BorderSide(color: OrgColors.mediumGray))),
+              decoration: const BoxDecoration(border: Border(top: BorderSide(color: OrgColors.primaryLight))),
               child: Row(children: [
                 Expanded(child: OutlinedButton(
                   onPressed: () => Navigator.pop(context),
                   style: OutlinedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 13),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                    side: const BorderSide(color: OrgColors.mediumGray),
+                    side: const BorderSide(color: OrgColors.primaryLight),
                   ),
                   child: Text('Cancel', style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.w600, color: OrgColors.charcoal)),
                 )),
@@ -1516,8 +1516,8 @@ class _OfficerModalState extends State<_OfficerModal> {
           filled: true,
           fillColor: OrgColors.lightGray,
           contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: OrgColors.mediumGray)),
-          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: OrgColors.mediumGray)),
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: OrgColors.primaryLight)),
+          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: OrgColors.primaryLight)),
           focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: OrgColors.primaryLight, width: 1.5)),
         ),
       );
@@ -1591,7 +1591,7 @@ class _PositionDropdownState extends State<_PositionDropdown> {
             decoration: BoxDecoration(
               color: OrgColors.white,
               borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: OrgColors.mediumGray),
+              border: Border.all(color: OrgColors.primaryLight),
               boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 8, offset: const Offset(0, 2))],
             ),
             child: Column(
@@ -1657,4 +1657,6 @@ class OfficerModel {
     );
   }
 }
+
+
 

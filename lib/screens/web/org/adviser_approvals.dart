@@ -145,7 +145,7 @@ class _AdviserApprovalsScreenState extends State<AdviserApprovalsScreen>
           Container(
             decoration: const BoxDecoration(
               color: OrgColors.white,
-              border: Border(bottom: BorderSide(color: OrgColors.mediumGray)),
+              border: Border(bottom: BorderSide(color: OrgColors.primaryLight)),
             ),
             child: TabBar(
               controller: _tab,
@@ -356,7 +356,7 @@ class _StatCard extends StatelessWidget {
             decoration: BoxDecoration(
               color: OrgColors.white,
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: OrgColors.mediumGray),
+              border: Border.all(color: OrgColors.primaryLight),
             ),
             child: Row(children: [
               Container(
@@ -993,7 +993,7 @@ class _ItemCardState extends State<_ItemCard> {
                 decoration: BoxDecoration(
                   color: OrgColors.lightGray,
                   borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: OrgColors.mediumGray),
+                  border: Border.all(color: OrgColors.primaryLight),
                 ),
                 child: Row(children: [
                   const Icon(Icons.visibility_outlined, size: 14, color: OrgColors.darkGray),
@@ -1136,7 +1136,7 @@ class _DetailDialog extends StatelessWidget {
             decoration: BoxDecoration(
               color: OrgColors.lightGray,
               borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-              border: const Border(bottom: BorderSide(color: OrgColors.mediumGray)),
+              border: const Border(bottom: BorderSide(color: OrgColors.primaryLight)),
             ),
             child: Row(children: [
               Container(
@@ -1230,7 +1230,7 @@ class _DetailDialog extends StatelessWidget {
           Container(
             padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
             decoration: const BoxDecoration(
-              border: Border(top: BorderSide(color: OrgColors.mediumGray)),
+              border: Border(top: BorderSide(color: OrgColors.primaryLight)),
             ),
             child: Row(mainAxisAlignment: MainAxisAlignment.end, children: [
               ElevatedButton(
@@ -1403,7 +1403,7 @@ Future<bool> _confirm(
                 onPressed: () => Navigator.pop(dctx, false),
                 style: OutlinedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(vertical: 12),
-                  side: const BorderSide(color: OrgColors.mediumGray),
+                  side: const BorderSide(color: OrgColors.primaryLight),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                 ),
                 child: Text('Cancel',
@@ -1445,4 +1445,6 @@ void _snack(BuildContext ctx, String msg, Color color) {
     duration: const Duration(seconds: 3),
   ));
 }
+
+
 

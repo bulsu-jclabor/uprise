@@ -329,7 +329,7 @@ class _OrgAttendanceQRScreenState extends State<OrgAttendanceQRScreen> {
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                     decoration: BoxDecoration(
-                      border: Border.all(color: OrgColors.mediumGray),
+                      border: Border.all(color: OrgColors.primaryLight),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Row(
@@ -470,7 +470,7 @@ class _OrgAttendanceQRScreenState extends State<OrgAttendanceQRScreen> {
       decoration: BoxDecoration(
         color: OrgColors.white,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: OrgColors.mediumGray),
+        border: Border.all(color: OrgColors.primaryLight),
       ),
       child: Row(
         children: [
@@ -554,7 +554,7 @@ class _OrgAttendanceQRScreenState extends State<OrgAttendanceQRScreen> {
       decoration: BoxDecoration(
         color: OrgColors.white,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: OrgColors.mediumGray),
+        border: Border.all(color: OrgColors.primaryLight),
       ),
       child: Row(
         children: [
@@ -629,7 +629,7 @@ class _OrgAttendanceQRScreenState extends State<OrgAttendanceQRScreen> {
       decoration: BoxDecoration(
         color: OrgColors.white,
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: OrgColors.mediumGray),
+        border: Border.all(color: OrgColors.primaryLight),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -785,7 +785,7 @@ class _OrgAttendanceQRScreenState extends State<OrgAttendanceQRScreen> {
           decoration: BoxDecoration(
             color: OrgColors.white,
             borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: OrgColors.mediumGray),
+            border: Border.all(color: OrgColors.primaryLight),
           ),
           child: Row(
             children: [
@@ -837,7 +837,7 @@ class _OrgAttendanceQRScreenState extends State<OrgAttendanceQRScreen> {
       decoration: BoxDecoration(
         color: OrgColors.white,
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: OrgColors.mediumGray),
+        border: Border.all(color: OrgColors.primaryLight),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -882,11 +882,11 @@ class _OrgAttendanceQRScreenState extends State<OrgAttendanceQRScreen> {
                 contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(8),
-                  borderSide: const BorderSide(color: OrgColors.mediumGray),
+                  borderSide: const BorderSide(color: OrgColors.primaryLight),
                 ),
                 enabledBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(8),
-                  borderSide: const BorderSide(color: OrgColors.mediumGray),
+                  borderSide: const BorderSide(color: OrgColors.primaryLight),
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(8),
@@ -982,7 +982,7 @@ class _OrgAttendanceQRScreenState extends State<OrgAttendanceQRScreen> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
             decoration: const BoxDecoration(
-              border: Border(top: BorderSide(color: OrgColors.mediumGray)),
+              border: Border(top: BorderSide(color: OrgColors.primaryLight)),
             ),
             child: StreamBuilder<QuerySnapshot>(
               stream: _attendanceStream,
@@ -1002,7 +1002,7 @@ class _OrgAttendanceQRScreenState extends State<OrgAttendanceQRScreen> {
                           style: GoogleFonts.beVietnamPro(fontSize: 11, fontWeight: FontWeight.w500)),
                       style: OutlinedButton.styleFrom(
                         foregroundColor: OrgColors.charcoal,
-                        side: const BorderSide(color: OrgColors.mediumGray),
+                        side: const BorderSide(color: OrgColors.primaryLight),
                         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                         minimumSize: Size.zero,
                         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
@@ -1026,7 +1026,7 @@ class _OrgAttendanceQRScreenState extends State<OrgAttendanceQRScreen> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
         decoration: BoxDecoration(
-          border: Border.all(color: OrgColors.mediumGray),
+          border: Border.all(color: OrgColors.primaryLight),
           borderRadius: BorderRadius.circular(6),
         ),
         child: Row(
@@ -1076,7 +1076,7 @@ class _OrgAttendanceQRScreenState extends State<OrgAttendanceQRScreen> {
               decoration: BoxDecoration(
                 color: OrgColors.white,
                 borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: OrgColors.mediumGray),
+                border: Border.all(color: OrgColors.primaryLight),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -1155,7 +1155,7 @@ class _OrgAttendanceQRScreenState extends State<OrgAttendanceQRScreen> {
       decoration: BoxDecoration(
         color: OrgColors.white,
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: OrgColors.mediumGray),
+        border: Border.all(color: OrgColors.primaryLight),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1185,7 +1185,7 @@ class _OrgAttendanceQRScreenState extends State<OrgAttendanceQRScreen> {
           decoration: BoxDecoration(
             color: OrgColors.white,
             borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: OrgColors.mediumGray),
+            border: Border.all(color: OrgColors.primaryLight),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -1336,8 +1336,8 @@ class _AttendanceChart extends StatelessWidget {
               borderData: FlBorderData(
                 show: true,
                 border: const Border(
-                  bottom: BorderSide(color: OrgColors.mediumGray),
-                  left: BorderSide(color: OrgColors.mediumGray),
+                  bottom: BorderSide(color: OrgColors.primaryLight),
+                  left: BorderSide(color: OrgColors.primaryLight),
                 ),
               ),
               minX: 0,
@@ -1408,4 +1408,6 @@ class EventModel {
     );
   }
 }
+
+
 

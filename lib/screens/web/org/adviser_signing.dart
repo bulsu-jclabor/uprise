@@ -195,7 +195,7 @@ class _AdviserSigningScreenState extends State<AdviserSigningScreen>
           Container(
             decoration: const BoxDecoration(
               color: OrgColors.white,
-              border: Border(bottom: BorderSide(color: OrgColors.mediumGray)),
+              border: Border(bottom: BorderSide(color: OrgColors.primaryLight)),
             ),
             child: TabBar(
               controller: _tab,
@@ -484,7 +484,7 @@ class _CardShell extends StatelessWidget {
       decoration: BoxDecoration(
         color: OrgColors.white,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: OrgColors.mediumGray),
+        border: Border.all(color: OrgColors.primaryLight),
       ),
       child: Row(children: [
         Container(
@@ -1023,7 +1023,7 @@ Future<bool> _confirmSign(
             decoration: BoxDecoration(
               color: OrgColors.lightGray,
               borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: OrgColors.mediumGray),
+              border: Border.all(color: OrgColors.primaryLight),
             ),
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Text('Document',
@@ -1078,7 +1078,7 @@ Future<bool> _confirmSign(
                 onPressed: () => Navigator.pop(dctx, false),
                 style: OutlinedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(vertical: 12),
-                  side: const BorderSide(color: OrgColors.mediumGray),
+                  side: const BorderSide(color: OrgColors.primaryLight),
                   shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(8)),
                 ),
@@ -1152,7 +1152,7 @@ void _showDetail(
             decoration: BoxDecoration(
               color: OrgColors.lightGray,
               borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-              border: const Border(bottom: BorderSide(color: OrgColors.mediumGray)),
+              border: const Border(bottom: BorderSide(color: OrgColors.primaryLight)),
             ),
             child: Row(children: [
               Container(
@@ -1299,7 +1299,7 @@ void _showDetail(
           Container(
             padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
             decoration: const BoxDecoration(
-              border: Border(top: BorderSide(color: OrgColors.mediumGray)),
+              border: Border(top: BorderSide(color: OrgColors.primaryLight)),
             ),
             child: Row(mainAxisAlignment: MainAxisAlignment.end, children: [
               ElevatedButton(
@@ -1415,4 +1415,6 @@ void _snack(BuildContext ctx, String msg, Color color) {
     duration: const Duration(seconds: 3),
   ));
 }
+
+
 

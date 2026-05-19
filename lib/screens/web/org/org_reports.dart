@@ -311,7 +311,7 @@ class _OrgReportsScreenState extends State<OrgReportsScreen> {
               style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600)),
           style: OutlinedButton.styleFrom(
             foregroundColor: OrgColors.darkGray,
-            side: const BorderSide(color: OrgColors.mediumGray),
+            side: const BorderSide(color: OrgColors.primaryLight),
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
           ),
@@ -347,7 +347,7 @@ class _OrgReportsScreenState extends State<OrgReportsScreen> {
       decoration: BoxDecoration(
         color: OrgColors.white,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: OrgColors.mediumGray, width: 0.5),
+        border: Border.all(color: OrgColors.primaryLight, width: 0.5),
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Padding(
@@ -429,7 +429,7 @@ class _OrgReportsScreenState extends State<OrgReportsScreen> {
         decoration: BoxDecoration(
           color: OrgColors.lightGray,
           borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: OrgColors.mediumGray, width: 0.5),
+          border: Border.all(color: OrgColors.primaryLight, width: 0.5),
         ),
         child: DropdownButtonHideUnderline(
           child: DropdownButton<String>(
@@ -481,7 +481,7 @@ class _OrgReportsScreenState extends State<OrgReportsScreen> {
           headingRowColor: WidgetStateProperty.all(OrgColors.lightGray),
           dividerThickness: 0.5,
           border: const TableBorder(
-              horizontalInside: BorderSide(color: OrgColors.mediumGray, width: 0.5)),
+              horizontalInside: BorderSide(color: OrgColors.primaryLight, width: 0.5)),
           columns: ['Report ID', 'Report Title', 'Type', 'Date Submitted', 'Status', 'Actions']
               .map((c) => DataColumn(
                     label: Text(c,
@@ -614,7 +614,7 @@ class _StatCard extends StatelessWidget {
           decoration: BoxDecoration(
             color: OrgColors.white,
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: OrgColors.mediumGray, width: 0.5),
+            border: Border.all(color: OrgColors.primaryLight, width: 0.5),
           ),
           child: Row(children: [
             Container(
@@ -794,7 +794,7 @@ class _CountdownCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: OrgColors.white,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: OrgColors.mediumGray, width: 0.5),
+        border: Border.all(color: OrgColors.primaryLight, width: 0.5),
       ),
       child: Row(children: [
         Container(
@@ -924,7 +924,7 @@ class _ConfirmDialog extends StatelessWidget {
                   onPressed: () => Navigator.pop(context, false),
                   style: OutlinedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 11),
-                    side: const BorderSide(color: OrgColors.mediumGray),
+                    side: const BorderSide(color: OrgColors.primaryLight),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                   ),
                   child: Text('Cancel',
@@ -1147,7 +1147,7 @@ class _ReportModalState extends State<_ReportModal> {
               decoration: const BoxDecoration(
                 color: OrgColors.lightGray,
                 borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
-                border: Border(bottom: BorderSide(color: OrgColors.mediumGray, width: 0.5)),
+                border: Border(bottom: BorderSide(color: OrgColors.primaryLight, width: 0.5)),
               ),
               child: Row(children: [
                 Container(
@@ -1228,7 +1228,7 @@ class _ReportModalState extends State<_ReportModal> {
                         width: double.infinity,
                         padding: const EdgeInsets.symmetric(vertical: 28),
                         decoration: BoxDecoration(
-                          border: Border.all(color: OrgColors.mediumGray, width: 1.5),
+                          border: Border.all(color: OrgColors.primaryLight, width: 1.5),
                           borderRadius: BorderRadius.circular(8),
                           color: OrgColors.lightGray,
                         ),
@@ -1285,12 +1285,12 @@ class _ReportModalState extends State<_ReportModal> {
             Container(
               padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
               decoration: const BoxDecoration(
-                  border: Border(top: BorderSide(color: OrgColors.mediumGray, width: 0.5))),
+                  border: Border(top: BorderSide(color: OrgColors.primaryLight, width: 0.5))),
               child: Row(mainAxisAlignment: MainAxisAlignment.end, children: [
                 OutlinedButton(
                   onPressed: () => Navigator.pop(context),
                   style: OutlinedButton.styleFrom(
-                    side: const BorderSide(color: OrgColors.mediumGray),
+                    side: const BorderSide(color: OrgColors.primaryLight),
                     padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 11),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                   ),
@@ -1407,7 +1407,7 @@ class _ViewReportModal extends StatelessWidget {
             decoration: const BoxDecoration(
               color: OrgColors.lightGray,
               borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
-              border: Border(bottom: BorderSide(color: OrgColors.mediumGray, width: 0.5)),
+              border: Border(bottom: BorderSide(color: OrgColors.primaryLight, width: 0.5)),
             ),
             child: Row(children: [
               Container(
@@ -1499,12 +1499,12 @@ class _ViewReportModal extends StatelessWidget {
           Container(
             padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
             decoration: const BoxDecoration(
-                border: Border(top: BorderSide(color: OrgColors.mediumGray, width: 0.5))),
+                border: Border(top: BorderSide(color: OrgColors.primaryLight, width: 0.5))),
             child: Row(mainAxisAlignment: MainAxisAlignment.end, children: [
               OutlinedButton(
                 onPressed: () => Navigator.pop(context),
                 style: OutlinedButton.styleFrom(
-                  side: const BorderSide(color: OrgColors.mediumGray),
+                  side: const BorderSide(color: OrgColors.primaryLight),
                   padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 11),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                 ),
@@ -1576,4 +1576,6 @@ class ReportModel {
     );
   }
 }
+
+
 

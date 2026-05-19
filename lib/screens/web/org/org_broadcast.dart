@@ -270,7 +270,7 @@ class _OrgBroadcastScreenState extends State<OrgBroadcastScreen> {
           padding: const EdgeInsets.fromLTRB(24, 18, 24, 18),
           decoration: const BoxDecoration(
             color: OrgColors.white,
-            border: Border(bottom: BorderSide(color: OrgColors.mediumGray)),
+            border: Border(bottom: BorderSide(color: OrgColors.primaryLight)),
           ),
           child: Row(
             children: [
@@ -407,7 +407,7 @@ class _OrgBroadcastScreenState extends State<OrgBroadcastScreen> {
                       decoration: BoxDecoration(
                         color: OrgColors.lightGray,
                         borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: OrgColors.mediumGray),
+                        border: Border.all(color: OrgColors.primaryLight),
                       ),
                       child: Row(mainAxisSize: MainAxisSize.min, children: [
                         const Icon(Icons.insert_drive_file_outlined, size: 14, color: OrgColors.info),
@@ -431,7 +431,7 @@ class _OrgBroadcastScreenState extends State<OrgBroadcastScreen> {
           padding: const EdgeInsets.fromLTRB(20, 10, 20, 16),
           decoration: const BoxDecoration(
             color: OrgColors.white,
-            border: Border(top: BorderSide(color: OrgColors.mediumGray)),
+            border: Border(top: BorderSide(color: OrgColors.primaryLight)),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -469,7 +469,7 @@ class _OrgBroadcastScreenState extends State<OrgBroadcastScreen> {
                       decoration: BoxDecoration(
                         color: OrgColors.lightGray,
                         borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: OrgColors.mediumGray),
+                        border: Border.all(color: OrgColors.primaryLight),
                       ),
                       child: TextField(
                         controller: _messageCtrl,
@@ -812,4 +812,5 @@ extension _TextExt on Text {
         child: this,
       );
 }
+
 

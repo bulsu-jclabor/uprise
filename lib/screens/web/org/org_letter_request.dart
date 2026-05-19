@@ -297,7 +297,7 @@ class _OrgLetterRequestScreenState extends State<OrgLetterRequestScreen> {
                       style: OutlinedButton.styleFrom(
                         padding: const EdgeInsets.symmetric(vertical: 11),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                        side: const BorderSide(color: OrgColors.mediumGray),
+                        side: const BorderSide(color: OrgColors.primaryLight),
                       ),
                       child: Text('Cancel', style: GoogleFonts.beVietnamPro(color: OrgColors.darkGray, fontWeight: FontWeight.w600)),
                     ),
@@ -369,7 +369,7 @@ class _OrgLetterRequestScreenState extends State<OrgLetterRequestScreen> {
           label: Text('Export CSV', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600)),
           style: OutlinedButton.styleFrom(
             foregroundColor: OrgColors.darkGray,
-            side: const BorderSide(color: OrgColors.mediumGray),
+            side: const BorderSide(color: OrgColors.primaryLight),
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
           ),
@@ -416,7 +416,7 @@ class _OrgLetterRequestScreenState extends State<OrgLetterRequestScreen> {
       decoration: BoxDecoration(
         color: OrgColors.white,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: OrgColors.mediumGray, width: 0.5),
+        border: Border.all(color: OrgColors.primaryLight, width: 0.5),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -436,7 +436,7 @@ class _OrgLetterRequestScreenState extends State<OrgLetterRequestScreen> {
   Widget _buildTabs(List<LetterRequestModel> all) {
     return Container(
       decoration: const BoxDecoration(
-        border: Border(bottom: BorderSide(color: OrgColors.mediumGray, width: 0.5)),
+        border: Border(bottom: BorderSide(color: OrgColors.primaryLight, width: 0.5)),
       ),
       child: Row(
         children: LetterStatus.values.map((tab) {
@@ -570,7 +570,7 @@ class _OrgLetterRequestScreenState extends State<OrgLetterRequestScreen> {
           headingRowColor: WidgetStateProperty.all(OrgColors.lightGray),
           dividerThickness: 0.5,
           border: const TableBorder(
-            horizontalInside: BorderSide(color: OrgColors.mediumGray, width: 0.5),
+            horizontalInside: BorderSide(color: OrgColors.primaryLight, width: 0.5),
           ),
           columns: columns.map((c) => DataColumn(
             label: Text(c,
@@ -696,7 +696,7 @@ class _StatCard extends StatelessWidget {
         decoration: BoxDecoration(
           color: OrgColors.white,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: OrgColors.mediumGray, width: 0.5),
+          border: Border.all(color: OrgColors.primaryLight, width: 0.5),
         ),
         child: Row(children: [
           Container(
@@ -740,7 +740,7 @@ class _DropdownFilter extends StatelessWidget {
       decoration: BoxDecoration(
         color: OrgColors.lightGray,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: OrgColors.mediumGray, width: 0.5),
+        border: Border.all(color: OrgColors.primaryLight, width: 0.5),
       ),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<String>(
@@ -988,7 +988,7 @@ class _LetterRequestModalState extends State<_LetterRequestModal> {
                 child: OutlinedButton(
                   onPressed: () => Navigator.pop(ctx, false),
                   style: OutlinedButton.styleFrom(
-                    side: const BorderSide(color: OrgColors.mediumGray),
+                    side: const BorderSide(color: OrgColors.primaryLight),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                     padding: const EdgeInsets.symmetric(vertical: 11),
                   ),
@@ -1113,7 +1113,7 @@ class _LetterRequestModalState extends State<_LetterRequestModal> {
                 decoration: const BoxDecoration(
                   color: OrgColors.lightGray,
                   borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
-                  border: Border(bottom: BorderSide(color: OrgColors.mediumGray, width: 0.5)),
+                  border: Border(bottom: BorderSide(color: OrgColors.primaryLight, width: 0.5)),
                 ),
                 child: Row(children: [
                   Container(
@@ -1206,7 +1206,7 @@ class _LetterRequestModalState extends State<_LetterRequestModal> {
                           width: double.infinity,
                           padding: const EdgeInsets.symmetric(vertical: 24),
                           decoration: BoxDecoration(
-                            border: Border.all(color: OrgColors.mediumGray, style: BorderStyle.solid, width: 1.5),
+                            border: Border.all(color: OrgColors.primaryLight, style: BorderStyle.solid, width: 1.5),
                             borderRadius: BorderRadius.circular(8),
                             color: OrgColors.lightGray,
                           ),
@@ -1252,7 +1252,7 @@ class _LetterRequestModalState extends State<_LetterRequestModal> {
               Container(
                 padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
                 decoration: const BoxDecoration(
-                  border: Border(top: BorderSide(color: OrgColors.mediumGray, width: 0.5)),
+                  border: Border(top: BorderSide(color: OrgColors.primaryLight, width: 0.5)),
                 ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.end,
@@ -1260,7 +1260,7 @@ class _LetterRequestModalState extends State<_LetterRequestModal> {
                     OutlinedButton(
                       onPressed: () => Navigator.pop(context),
                       style: OutlinedButton.styleFrom(
-                        side: const BorderSide(color: OrgColors.mediumGray),
+                        side: const BorderSide(color: OrgColors.primaryLight),
                         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 11),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                       ),
@@ -1344,4 +1344,6 @@ class LetterRequestModel {
     );
   }
 }
+
+
 
