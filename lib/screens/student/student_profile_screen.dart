@@ -1,4 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import '../auth/role_router.dart';
+import '../../models/profile_model.dart';
+
+
 
 // ─────────────────────────────────────────────────────────────
 // Shared constants
@@ -8,33 +14,69 @@ const kOrangeLight = Color(0xFFFFEDD5);
 const kBg = Color(0xFFF5F5F5);
 
 // ─────────────────────────────────────────────────────────────
-// ProfileModel — single source of truth, passed by reference
+// ProfileModel — single source of truth
 // ─────────────────────────────────────────────────────────────
 class ProfileModel extends ChangeNotifier {
-  String fullName;
-  String studentId;
-  String email;
-  String mobile;
-  String address;
+  String fullName = '';
+  String studentId = '';
+  String email = '';
+  String mobile = '';
+  String address = '';
+  String photoUrl = ''; // ✅ Added for profile image
 
-  ProfileModel({
-    this.fullName = 'Juan Dela Cruz',
-    this.studentId = 'ID: 2021-10234',
-    this.email = 'juan.delacruz@cict.edu.ph',
-    this.mobile = '+63 912 345 6789',
-    this.address = 'CICT Bldg, Room 302, Main Campus',
-  });
+  ProfileModel() {
+    _loadUserData();
+  }
 
-  void update({
+  Future<void> _loadUserData() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      email = user.email ?? '';
+
+      final doc = await FirebaseFirestore.instance
+          .collection('students')
+          .doc(user.uid)
+          .get();
+
+      if (doc.exists) {
+        final data = doc.data()!;
+        fullName = data['fullName'] ?? '';
+        studentId = data['studentId'] ?? '';
+        mobile = data['mobile'] ?? '';
+        address = data['address'] ?? '';
+        photoUrl = data['photoUrl'] ?? ''; // ✅ Load image URL if available
+      }
+      notifyListeners();
+    }
+  }
+
+  Future<void> update({
     required String fullName,
     required String email,
     required String mobile,
     required String address,
-  }) {
+    String? photoUrl,
+  }) async {
     this.fullName = fullName;
     this.email = email;
     this.mobile = mobile;
     this.address = address;
+    if (photoUrl != null) this.photoUrl = photoUrl;
+
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      await FirebaseFirestore.instance
+          .collection('students')
+          .doc(user.uid)
+          .set({
+        'fullName': fullName,
+        'studentId': studentId,
+        'email': email,
+        'mobile': mobile,
+        'address': address,
+        'photoUrl': this.photoUrl,
+      }, SetOptions(merge: true));
+    }
     notifyListeners();
   }
 }
@@ -101,14 +143,17 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
                                   Border.all(color: Colors.white, width: 3),
                             ),
                             child: ClipOval(
-                              child: Image.network(
-                                'https://i.pravatar.cc/150?img=11',
-                                fit: BoxFit.cover,
-                                errorBuilder: (_, __, ___) => const Icon(
-                                    Icons.person,
-                                    size: 50,
-                                    color: Colors.white),
-                              ),
+                              child: _profile.photoUrl.isNotEmpty
+                                  ? Image.network(
+                                      _profile.photoUrl,
+                                      fit: BoxFit.cover,
+                                      errorBuilder: (_, __, ___) =>
+                                          const Icon(Icons.person,
+                                              size: 50,
+                                              color: Colors.white),
+                                    )
+                                  : const Icon(Icons.person,
+                                      size: 50, color: Colors.white),
                             ),
                           ),
                           Positioned(
@@ -297,14 +342,21 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
                   padding: const EdgeInsets.symmetric(
                       horizontal: 16, vertical: 8),
                   child: TextButton.icon(
-                    onPressed: () {},
-                    icon: const Icon(Icons.logout, color: kOrange),
-                    label: const Text('Log Out',
-                        style: TextStyle(
-                            color: kOrange,
-                            fontSize: 15,
-                            fontWeight: FontWeight.w600)),
-                  ),
+  onPressed: () async {
+    await FirebaseAuth.instance.signOut();
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (_) => const RoleRouter()),
+    );
+  },
+  icon: const Icon(Icons.logout, color: kOrange),
+  label: const Text('Log Out',
+      style: TextStyle(
+          color: kOrange,
+          fontSize: 15,
+          fontWeight: FontWeight.w600)),
+),
+
                 ),
                 const SizedBox(height: 16),
               ],
