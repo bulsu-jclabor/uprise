@@ -2,7 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'role_router.dart';
+import 'role_router.dart'; // RoleRouter handles login vs home
 import 'utils/theme.dart';
 import 'firebase_options.dart';
 
@@ -14,7 +14,8 @@ void main() async {
       options: DefaultFirebaseOptions.currentPlatform,
     );
     if (kIsWeb) {
-      FirebaseFirestore.instance.settings = const Settings(persistenceEnabled: false);
+      FirebaseFirestore.instance.settings =
+          const Settings(persistenceEnabled: false);
     }
     print('✅ Firebase initialized!');
   } catch (e) {
@@ -37,7 +38,7 @@ class MyApp extends StatelessWidget {
       title: 'UPRISE',
       theme: appTheme,
       debugShowCheckedModeBanner: false,
-      home: RoleRouter(),
+      home: const RoleRouter(), // ✅ Always start here
     );
   }
 }
