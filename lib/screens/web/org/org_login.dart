@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../auth_service.dart';
+import '../../auth/change_password_screen.dart';
 import 'org_dashboard.dart';
 
 class OrganizationLogin extends StatefulWidget {
@@ -77,6 +78,7 @@ Future<void> _login() async {
 
     // 2. Verify role once and stop extra network work
     final String role = await _auth.getUserRole(user.uid) ?? '';
+    debugPrint('OrgLogin successful uid=${user.uid} role=$role');
     if (role != 'org') {
       await FirebaseAuth.instance.signOut();
       _showError('This account is not authorized for the Organization Portal');
@@ -89,8 +91,20 @@ Future<void> _login() async {
 
     // 4. Save email preference
     await _saveEmail(email);
+    // 5. If first login, redirect to Change Password flow
+    final bool needsChange = await _auth.needsPasswordChange(user.uid);
+    debugPrint('OrgLogin: needsPasswordChange=$needsChange for uid=${user.uid}');
+    if (needsChange) {
+      if (mounted) {
+        setState(() => _isLoading = false);
+        Navigator.of(context).pushReplacement(MaterialPageRoute(
+          builder: (_) => ChangePasswordScreen(userId: user.uid, isFirstLogin: true),
+        ));
+      }
+      return;
+    }
 
-    // 5. Directly open OrgDashboard on successful login
+    // 6. Directly open OrgDashboard on successful login
     if (mounted) {
       setState(() => _isLoading = false);
       Navigator.of(context).pushReplacement(

@@ -14,6 +14,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 
+import '../../auth/change_password_screen.dart';
 import 'org_event_proposals.dart';
 import 'org_events_schedule.dart';
 import 'org_attendance_qr.dart';
@@ -103,23 +104,47 @@ class _OrgDashboardState extends State<OrgDashboard> {
 
     try {
       final user = FirebaseAuth.instance.currentUser;
-      if (user == null) return; // AuthGate will redirect
+      if (user == null) {
+        if (mounted) setState(() => _isLoading = false);
+        return; // AuthGate will redirect
+      }
 
       final userDoc = await FirebaseFirestore.instance
           .collection('users').doc(user.uid).get();
 
       if (!userDoc.exists) {
-        if (mounted) setState(() => _loadError = 'User record not found. Please sign in again.');
+        if (mounted) setState(() {
+          _loadError = 'User record not found. Please sign in again.';
+          _isLoading = false;
+        });
         return;
       }
 
       final userData = userDoc.data()!;
-      final orgId    = userData['orgId']  as String?;
-      final orgRole  = (userData['orgRole'] as String?)?.toLowerCase() ?? 'officer';
+      final orgId = (userData['orgId'] as String?) ??
+          (userData['organizationId'] as String?);
+      final orgRole = (userData['orgRole'] as String?)?.toLowerCase() ?? 'officer';
+      final bool needsChange =
+          (userData['isFirstLogin'] == true) ||
+          (userData['mustChangePassword'] == true) ||
+          (userData['needsPasswordChange'] == true) ||
+          (userData['firstLogin'] == true);
+
+      debugPrint('OrgDashboard load: uid=${user.uid} orgId=$orgId orgRole=$orgRole needsChange=$needsChange userData=$userData');
+
+      if (needsChange) {
+        if (!mounted) return;
+        Navigator.of(context).pushReplacement(MaterialPageRoute(
+          builder: (_) => ChangePasswordScreen(userId: user.uid, isFirstLogin: true),
+        ));
+        return;
+      }
 
       if (orgId == null || orgId.isEmpty) {
-        if (mounted) setState(() => _loadError =
-            'This account is not linked to an organization.\nContact your administrator.');
+        if (mounted) setState(() {
+          _loadError = 'This account is not linked to an organization.\nContact your administrator.';
+          _isLoading = false;
+        });
         return;
       }
 
@@ -127,8 +152,10 @@ class _OrgDashboardState extends State<OrgDashboard> {
           .collection('organizations').doc(orgId).get();
 
       if (!orgDoc.exists) {
-        if (mounted) setState(() =>
-            _loadError = 'Organization data not found. Contact your administrator.');
+        if (mounted) setState(() {
+          _loadError = 'Organization data not found. Contact your administrator.';
+          _isLoading = false;
+        });
         return;
       }
 

@@ -24,10 +24,12 @@ class AuthService {
   // Check if user needs to change password (first login)
   Future<bool> needsPasswordChange(String userId) async {
     final doc = await _firestore.collection(FirebaseConstants.usersCollection).doc(userId).get();
-    if (doc.exists) {
-      return doc.data()?['isFirstLogin'] ?? false;
-    }
-    return false;
+    if (!doc.exists) return false;
+    final data = doc.data();
+    return (data?['isFirstLogin'] == true) ||
+        (data?['mustChangePassword'] == true) ||
+        (data?['needsPasswordChange'] == true) ||
+        (data?['firstLogin'] == true);
   }
 
   // Change password
@@ -36,10 +38,13 @@ class AuthService {
     if (user != null) {
       await user.updatePassword(newPassword);
       
-      // Update Firestore to mark first login as false
+      // Update Firestore to mark password-change flags as false
       if (isFirstLogin) {
         await _firestore.collection(FirebaseConstants.usersCollection).doc(userId).update({
           'isFirstLogin': false,
+          'mustChangePassword': false,
+          'needsPasswordChange': false,
+          'firstLogin': false,
         });
       }
     }

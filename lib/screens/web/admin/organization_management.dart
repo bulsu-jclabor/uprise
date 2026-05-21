@@ -1885,9 +1885,13 @@ class _CreateOrganizationDialogState extends State<CreateOrganizationDialog> {
         'name': orgName,
         'email': orgEmail,
         'role': 'org',
+        'orgId': orgId,
         'organizationId': orgId,
         'organizationName': orgName,
         'mustChangePassword': true,
+        'isFirstLogin': true,
+        'needsPasswordChange': true,
+        'firstLogin': true,
         'createdAt': FieldValue.serverTimestamp(),
         'createdBy': FirebaseAuth.instance.currentUser?.uid,
       });

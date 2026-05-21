@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../auth_service.dart';
+import '../../auth/change_password_screen.dart';
 import 'admin_dashboard.dart';
 
 class AdminLogin extends StatefulWidget {
@@ -84,12 +85,25 @@ class _AdminLoginState extends State<AdminLogin> {
             .get();
         if (doc.exists && doc.data()?['role'] == 'admin') {
           await _saveEmail(_emailController.text.trim());
-          if (mounted) {
-            Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(builder: (_) => AdminDashboard()),
-            );
-          }
+            debugPrint('AdminLogin successful uid=${user.uid}');
+            // Check first-login and redirect to change-password if necessary
+            final bool needsChange = await _auth.needsPasswordChange(user.uid);
+            debugPrint('AdminLogin: needsPasswordChange=$needsChange for uid=${user.uid}');
+            if (needsChange) {
+              if (mounted) {
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(builder: (_) => ChangePasswordScreen(userId: user.uid, isFirstLogin: true)),
+                );
+              }
+            } else {
+              if (mounted) {
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(builder: (_) => AdminDashboard()),
+                );
+              }
+            }
         } else {
           await FirebaseAuth.instance.signOut();
           _showError('This account is not authorized as Admin');

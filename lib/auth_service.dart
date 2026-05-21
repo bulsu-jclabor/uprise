@@ -89,12 +89,20 @@ class AuthService {
   Future<bool> needsPasswordChange(String uid) async {
     try {
       final doc = await _firestore.collection('users').doc(uid).get();
-      if (doc.exists) {
-        final data = doc.data() as Map<String, dynamic>?;
-        return data?['isFirstLogin'] ?? false;
+      if (!doc.exists) {
+        print('AuthService.needsPasswordChange: user doc not found for uid=$uid');
+        return false;
       }
-      return false;
-    } catch (_) {
+      final data = doc.data() as Map<String, dynamic>? ?? {};
+      final bool isFirstLogin = data['isFirstLogin'] == true;
+      final bool mustChangePassword = data['mustChangePassword'] == true;
+      final bool needsPasswordChange = data['needsPasswordChange'] == true;
+      final bool firstLogin = data['firstLogin'] == true;
+      final bool result = isFirstLogin || mustChangePassword || needsPasswordChange || firstLogin;
+      print('AuthService.needsPasswordChange uid=$uid data=$data result=$result');
+      return result;
+    } catch (e, st) {
+      print('AuthService.needsPasswordChange error uid=$uid: $e\n$st');
       return false;
     }
   }
