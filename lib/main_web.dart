@@ -6,6 +6,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import 'firebase_options.dart';
+import 'auth_service.dart';
 import 'screens/web/admin/admin_login.dart';
 import 'screens/web/admin/admin_dashboard.dart';
 import 'screens/web/org/org_login.dart';
@@ -60,19 +61,26 @@ class _AuthGateState extends State<AuthGate> {
   Future<String?> _getRoleFuture(String uid) {
     if (_cachedUid != uid) {
       _cachedUid = uid;
-      _roleFuture = Future<String?>(() async {
-        try {
-          final doc = await FirebaseFirestore.instance
-              .collection('users')
-              .doc(uid)
-              .get();
-          if (!doc.exists) return null;
-          return (doc.data()?['role'] as String?)?.toLowerCase();
-        } catch (e) {
-          debugPrint('AuthGate role fetch error: $e');
-          return null;
-        }
-      });
+      final cachedRole = AuthService.getCachedRole(uid);
+      if (cachedRole != null) {
+        _roleFuture = Future.value(cachedRole);
+      } else {
+        _roleFuture = Future<String?>(() async {
+          try {
+            final doc = await FirebaseFirestore.instance
+                .collection('users')
+                .doc(uid)
+                .get();
+            if (!doc.exists) return null;
+            final role = (doc.data()?['role'] as String?)?.toLowerCase();
+            if (role != null) AuthService.cacheRole(uid, role);
+            return role;
+          } catch (e) {
+            debugPrint('AuthGate role fetch error: $e');
+            return null;
+          }
+        });
+      }
     }
     return _roleFuture!;
   }

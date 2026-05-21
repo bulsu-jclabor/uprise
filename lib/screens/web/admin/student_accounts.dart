@@ -1,4 +1,6 @@
 import 'dart:io';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 import 'dart:math';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
@@ -942,38 +944,36 @@ Widget _buildFilterDropdown({
 
   // ✅ FIX #4: Replace SMTP with Firestore mail collection (works with Firebase Extensions or Cloud Function)
   Future<void> _sendCredentialsEmail(String email, String studentId, String password) async {
-    try {
-      await FirebaseFirestore.instance.collection('mail').add({
-        'to': [email],
-        'message': {
-          'subject': 'UPRISE — Your Student Login Credentials',
-          'html': '''
-            <div style="font-family:sans-serif;max-width:480px;margin:auto;">
-              <div style="background:linear-gradient(135deg,#D97706,#B45309);padding:24px 32px;border-radius:12px 12px 0 0;">
-                <h1 style="color:white;margin:0;letter-spacing:2px;font-size:22px;">UPRISE</h1>
-                <p style="color:rgba(255,255,255,0.85);margin:4px 0 0;font-size:12px;">CICT Student Portal</p>
-              </div>
-              <div style="padding:24px 32px;border:1px solid #FDE68A;border-top:none;border-radius:0 0 12px 12px;">
-                <p style="color:#1E293B;">Your student account has been created.</p>
-                <div style="background:#FFF7ED;border:1px solid #FDE68A;border-radius:8px;padding:16px;margin:16px 0;">
-                  <p style="margin:0 0 8px;font-size:11px;color:#92400E;font-weight:700;letter-spacing:1px;">LOGIN CREDENTIALS</p>
-                  <table style="font-size:13px;color:#1E293B;width:100%;">
-                    <tr><td style="color:#64748B;padding:4px 0;width:100px;">Student ID</td><td style="font-weight:600;">$studentId</td></tr>
-                    <tr><td style="color:#64748B;padding:4px 0;">Email</td><td style="font-weight:600;">$email</td></tr>
-                    <tr><td style="color:#64748B;padding:4px 0;">Password</td><td style="font-weight:700;font-family:monospace;font-size:15px;color:#B45309;">$password</td></tr>
-                  </table>
-                </div>
-                <p style="color:#94A3B8;font-size:11px;">Please change your password after first login.</p>
-              </div>
-            </div>
-          ''',
+  try {
+    final url = Uri.parse('https://api.emailjs.com/api/v1.0/email/send');
+
+    final response = await http.post(
+      url,
+      headers: {
+        'Content-Type': 'application/json',
+        'origin': 'http://localhost',
+      },
+      body: jsonEncode({
+        'service_id':  'service_s3ke8zd',   // from Step 1
+        'template_id': 'template_76fn2md',  // from Step 2
+        'user_id':     'tmx47wQJmb1uMNUpr',   // from Step 3
+        'template_params': {
+          'to_email':   email,
+          'student_id': studentId,
+          'password':   password,
         },
-        'createdAt': FieldValue.serverTimestamp(),
-      });
-    } catch (e) {
-      debugPrint('Failed to queue email: $e');
+      }),
+    );
+
+    if (response.statusCode == 200) {
+      debugPrint('✅ Email sent to $email');
+    } else {
+      debugPrint('❌ EmailJS error ${response.statusCode}: ${response.body}');
     }
+  } catch (e) {
+    debugPrint('❌ Failed to send email: $e');
   }
+}
 
   // ---------- MANUAL ADD DIALOG (FIXED: isCreating/errorMessage moved outside builder) ----------
   void _showManualAddDialog() {

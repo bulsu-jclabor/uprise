@@ -3,7 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../auth_service.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'org_dashboard.dart';
 
 class OrganizationLogin extends StatefulWidget {
   const OrganizationLogin({super.key});
@@ -75,28 +75,8 @@ Future<void> _login() async {
       return;
     }
 
-    // 2. Verify role with retry
-    String? role;
-    for (int i = 0; i < 3; i++) {
-      try {
-        final doc = await FirebaseFirestore.instance
-            .collection('users')
-            .doc(user.uid)
-            .get();
-        role = doc.exists ? (doc.data()?['role'] as String?)?.toLowerCase() : null;
-        break;
-      } catch (e) {
-        debugPrint('Role fetch attempt ${i + 1}: $e');
-        if (i == 2) {
-          await FirebaseAuth.instance.signOut();
-          _showError('Connection error. Please try again.');
-          if (mounted) setState(() => _isLoading = false);
-          return;
-        }
-        await Future.delayed(Duration(milliseconds: 400 * (i + 1)));
-      }
-    }
-
+    // 2. Verify role once and stop extra network work
+    final String role = await _auth.getUserRole(user.uid) ?? '';
     if (role != 'org') {
       await FirebaseAuth.instance.signOut();
       _showError('This account is not authorized for the Organization Portal');
@@ -104,12 +84,18 @@ Future<void> _login() async {
       return;
     }
 
-    // 3. Save email preference
+    // 3. Cache role so the landing gate can resolve immediately.
+    AuthService.cacheRole(user.uid, role);
+
+    // 4. Save email preference
     await _saveEmail(email);
 
-    // 4. Navigate back to AuthGate root — it will render OrgDashboard
+    // 5. Directly open OrgDashboard on successful login
     if (mounted) {
-      Navigator.of(context).popUntil((route) => route.isFirst);
+      setState(() => _isLoading = false);
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => OrgDashboard()),
+      );
     }
 
   } on FirebaseAuthException catch (e) {
@@ -383,7 +369,7 @@ Future<void> _login() async {
                         ),
                         const SizedBox(height: 8),
                         TextButton(
-                          onPressed: () => Navigator.pop(context),
+                          onPressed: () => Navigator.of(context).popUntil((route) => route.isFirst),
                           child: Text('← Back to Portal Selection',
                               style: GoogleFonts.beVietnamPro(
                                 color: const Color(0xFFD97706),

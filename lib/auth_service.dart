@@ -2,6 +2,18 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 class AuthService {
+  static final Map<String, String> _roleCache = {};
+
+  static void cacheRole(String uid, String role) {
+    if (uid.isNotEmpty) {
+      _roleCache[uid] = role.toLowerCase();
+    }
+  }
+
+  static String? getCachedRole(String uid) {
+    return uid.isNotEmpty ? _roleCache[uid] : null;
+  }
+
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
@@ -51,7 +63,9 @@ class AuthService {
       final doc = await _firestore.collection('users').doc(uid).get();
       if (doc.exists) {
         final data = doc.data() as Map<String, dynamic>?;
-        return data?['role'] as String? ?? 'student';
+        final role = (data?['role'] as String?)?.toLowerCase() ?? 'student';
+        cacheRole(uid, role);
+        return role;
       }
       return 'student';
     } catch (e) {
