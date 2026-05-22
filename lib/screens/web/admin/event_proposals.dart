@@ -2,15 +2,97 @@ import 'dart:io';
 import 'dart:typed_data';
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../../../services/activity_logger.dart' as activity_log;
 import 'package:share_plus/share_plus.dart';
-import 'package:path_provider/path_provider.dart';  // 👈 ADD THIS
-import 'package:open_file/open_file.dart';          // 👈 ADD THIS
-// TANGGALIN ANG 'dart:html' import!
+import 'package:cross_file/cross_file.dart';
+import 'package:open_file/open_file.dart';
+import 'package:path_provider/path_provider.dart';
+import '../../../services/activity_logger.dart' as activity_log;
+import '../../theme/app_theme.dart';
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Design tokens — mirrors student_accounts.dart exactly
+// ─────────────────────────────────────────────────────────────────────────────
+class _DS {
+  static const double radiusSm   = 8;
+  static const double radiusMd   = 12;
+  static const double radiusLg   = 16;
+  static const double radiusPill = 100;
+
+  static final cardShadow = [
+    BoxShadow(
+      color: Colors.black.withOpacity(0.06),
+      blurRadius: 12,
+      offset: const Offset(0, 4),
+    ),
+  ];
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Shared helpers
+// ─────────────────────────────────────────────────────────────────────────────
+Widget _sectionLabel(String text, {IconData? icon}) {
+  return Padding(
+    padding: const EdgeInsets.only(bottom: 12),
+    child: Row(children: [
+      if (icon != null) ...[
+        Icon(icon, size: 16, color: UpriseColors.primaryDark),
+        const SizedBox(width: 8),
+      ],
+      Text(
+        text,
+        style: GoogleFonts.beVietnamPro(
+          fontSize: 13,
+          fontWeight: FontWeight.w700,
+          color: UpriseColors.primaryDark,
+          letterSpacing: 0.3,
+        ),
+      ),
+      const SizedBox(width: 12),
+      Expanded(child: Divider(color: const Color(0xFFE2E6EA), thickness: 1)),
+    ]),
+  );
+}
+
+Widget _statusBadge(String status) {
+  const Map<String, _BadgeStyle> styles = {
+    'approved': _BadgeStyle(Color(0xFFECFDF5), Color(0xFF059669), 'APPROVED'),
+    'pending':  _BadgeStyle(Color(0xFFFFFBEB), Color(0xFFD97706), 'PENDING'),
+    'rejected': _BadgeStyle(Color(0xFFFEF2F2), Color(0xFFDC2626), 'REJECTED'),
+    'archived': _BadgeStyle(Color(0xFFF3F4F6), Color(0xFF6B7280), 'ARCHIVED'),
+  };
+  final s = styles[status.toLowerCase()] ??
+      const _BadgeStyle(Color(0xFFF3F4F6), Color(0xFF6B7280), '—');
+  return Container(
+    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+    decoration: BoxDecoration(
+      color: s.bg,
+      borderRadius: BorderRadius.circular(_DS.radiusPill),
+    ),
+    child: Text(
+      s.label,
+      style: GoogleFonts.beVietnamPro(
+        fontSize: 10,
+        fontWeight: FontWeight.w700,
+        color: s.fg,
+        letterSpacing: 0.8,
+      ),
+    ),
+  );
+}
+
+class _BadgeStyle {
+  final Color bg, fg;
+  final String label;
+  const _BadgeStyle(this.bg, this.fg, this.label);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Main Widget
+// ─────────────────────────────────────────────────────────────────────────────
 class EventProposals extends StatefulWidget {
   const EventProposals({super.key});
 
@@ -24,25 +106,20 @@ class _EventProposalsState extends State<EventProposals> {
   int _currentPage = 1;
   static const int _pageSize = 10;
 
-  // Colors
-  final Color primaryDark = const Color(0xFFB45309);
-  final Color primaryLight = const Color(0xFFD97706);
-  final Color lightGray = const Color(0xFFF9FAFB);
-  final Color mediumGray = const Color(0xFFE5E7EB);
-  final Color darkGray = const Color(0xFF6B7280);
-  final Color charcoal = const Color(0xFF111827);
-  final Color success = const Color(0xFF10B981);
-  final Color warning = const Color(0xFFF59E0B);
-  final Color error = const Color(0xFFEF4444);
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
 
+  // ── Build ─────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: lightGray,
+      backgroundColor: const Color(0xFFFBFCFE),
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildHeader(),
           _buildStatsRow(),
           _buildToolbar(),
           const SizedBox(height: 16),
@@ -53,683 +130,895 @@ class _EventProposalsState extends State<EventProposals> {
     );
   }
 
-  Widget _buildHeader() {
-    return Container(
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        border: Border(bottom: BorderSide(color: mediumGray)),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text('Event Proposals',
-                style: GoogleFonts.beVietnamPro(fontSize: 24, fontWeight: FontWeight.bold, color: charcoal)),
-            const SizedBox(height: 4),
-            Text('Manage and review pending event applications from CICT student organizations.',
-                style: GoogleFonts.beVietnamPro(fontSize: 14, color: darkGray)),
-          ]),
-        ],
-      ),
-    );
-  }
-
+  // ── Stats row ─────────────────────────────────────────────────────
   Widget _buildStatsRow() {
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance.collection('event_proposals').snapshots(),
       builder: (context, snapshot) {
         int total = 0, pending = 0, approved = 0, rejected = 0, archived = 0;
         if (snapshot.hasData) {
-          final docs = snapshot.data!.docs;
-          total = docs.length;
-          for (var doc in docs) {
+          total = snapshot.data!.docs.length;
+          for (final doc in snapshot.data!.docs) {
             final status = (doc.data() as Map)['status'] ?? 'pending';
-            switch (status) {
-              case 'pending': pending++; break;
-              case 'approved': approved++; break;
-              case 'rejected': rejected++; break;
-              case 'archived': archived++; break;
-            }
+            if (status == 'pending')  pending++;
+            if (status == 'approved') approved++;
+            if (status == 'rejected') rejected++;
+            if (status == 'archived') archived++;
           }
         }
         return Padding(
-          padding: const EdgeInsets.all(24),
+          padding: const EdgeInsets.fromLTRB(28, 24, 28, 0),
           child: Row(children: [
-            _statCard('TOTAL PROPOSALS', '$total', primaryDark),
-            const SizedBox(width: 16),
-            _statCard('PENDING', '$pending', warning),
-            const SizedBox(width: 16),
-            _statCard('APPROVED', '$approved', success),
-            const SizedBox(width: 16),
-            _statCard('REJECTED', '$rejected', error),
-            const SizedBox(width: 16),
-            _statCard('ARCHIVED', '$archived', darkGray),
+            _StatCard(
+              label: 'Total Proposals',
+              value: '$total',
+              icon: Icons.event_note_rounded,
+              color: UpriseColors.primaryDark,
+            ),
+            const SizedBox(width: 14),
+            _StatCard(
+              label: 'Approved',
+              value: '$approved',
+              icon: Icons.check_circle_rounded,
+              color: const Color(0xFF059669),
+            ),
+            const SizedBox(width: 14),
+            _StatCard(
+              label: 'Pending',
+              value: '$pending',
+              icon: Icons.pending_rounded,
+              color: const Color(0xFFD97706),
+            ),
+            const SizedBox(width: 14),
+            _StatCard(
+              label: 'Rejected',
+              value: '$rejected',
+              icon: Icons.cancel_rounded,
+              color: const Color(0xFFDC2626),
+            ),
+            const SizedBox(width: 14),
+            _StatCard(
+              label: 'Archived',
+              value: '$archived',
+              icon: Icons.archive_rounded,
+              color: const Color(0xFF6B7280),
+            ),
           ]),
         );
       },
     );
   }
 
-  Widget _statCard(String label, String value, Color color) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: primaryDark, width: 1),
-        ),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(label, style: GoogleFonts.beVietnamPro(fontSize: 11, color: darkGray, fontWeight: FontWeight.w600)),
-          const SizedBox(height: 6),
-          Text(value, style: GoogleFonts.beVietnamPro(fontSize: 28, fontWeight: FontWeight.bold, color: color)),
-        ]),
-      ),
-    );
-  }
-
+  // ── Toolbar ───────────────────────────────────────────────────────
   Widget _buildToolbar() {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 24),
-      child: Row(
-        children: [
-          Expanded(
-            child: SizedBox(
-              height: 40,
-              child: TextField(
-                controller: _searchController,
-                decoration: InputDecoration(
-                  hintText: 'Search events...',
-                  hintStyle: GoogleFonts.beVietnamPro(fontSize: 13, color: darkGray),
-                  prefixIcon: Icon(Icons.search, size: 18, color: darkGray),
-                  filled: true,
-                  fillColor: Colors.white,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    borderSide: BorderSide(color: mediumGray),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    borderSide: BorderSide(color: mediumGray),
-                  ),
-                  contentPadding: const EdgeInsets.symmetric(vertical: 0),
-                ),
-                onChanged: (_) => setState(() => _currentPage = 1),
-              ),
-            ),
-          ),
-          const SizedBox(width: 16),
-          Container(
-            height: 40,
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: primaryDark, width: 1),
-            ),
-            child: DropdownButtonHideUnderline(
-              child: DropdownButton<String>(
-                value: _statusFilter,
-                items: ['All', 'Pending', 'Approved', 'Rejected', 'Archived']
-                    .map((status) => DropdownMenuItem(
-                          value: status,
-                          child: Row(children: [
-                            Icon(_statusIcon(status), size: 16, color: _statusColor(status)),
-                            const SizedBox(width: 8),
-                            Text(status, style: GoogleFonts.beVietnamPro(fontSize: 13)),
-                          ]),
-                        ))
-                    .toList(),
-                onChanged: (value) => setState(() {
-                  _statusFilter = value!;
-                  _currentPage = 1;
-                }),
-                style: GoogleFonts.beVietnamPro(fontSize: 13, color: charcoal),
-                icon: Icon(Icons.arrow_drop_down, color: darkGray),
-              ),
-            ),
-          ),
-          const SizedBox(width: 12),
-          OutlinedButton.icon(
-            onPressed: _exportToCSV,
-            icon: const Icon(Icons.download, size: 16),
-            label: const Text('Export'),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: primaryDark,
-              side: BorderSide(color: mediumGray),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  IconData _statusIcon(String status) {
-    switch (status) {
-      case 'Pending': return Icons.pending_actions;
-      case 'Approved': return Icons.check_circle;
-      case 'Rejected': return Icons.cancel;
-      case 'Archived': return Icons.archive;
-      default: return Icons.list;
-    }
-  }
-
-  Color _statusColor(String status) {
-    switch (status) {
-      case 'Pending': return warning;
-      case 'Approved': return success;
-      case 'Rejected': return error;
-      case 'Archived': return darkGray;
-      default: return primaryDark;
-    }
-  }
-
-  Widget _buildTable() {
-  return Container(
-    margin: const EdgeInsets.symmetric(horizontal: 24),
-    decoration: BoxDecoration(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(12),
-      border: Border.all(color: primaryDark, width: 1),
-    ),
-    child: Column(children: [
-      Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        decoration: BoxDecoration(
-          color: lightGray,
-          border: Border(bottom: BorderSide(color: mediumGray)),
-          borderRadius: const BorderRadius.only(topLeft: Radius.circular(12), topRight: Radius.circular(12)),
-        ),
-        child: Row(children: [
-          Expanded(flex: 3, child: Text('EVENT TITLE', style: _headerStyle())),
-          Expanded(flex: 2, child: Text('ORGANIZATION', style: _headerStyle())),
-          Expanded(flex: 1, child: Text('DATE', style: _headerStyle())),
-          Expanded(flex: 1, child: Text('STATUS', style: _headerStyle())),
-          Expanded(flex: 1, child: Text('ACTIONS', style: _headerStyle())),
-        ]),
-      ),
-      Expanded(
-        child: StreamBuilder<QuerySnapshot>(
-          // 👇 REMOVE orderBy MUNA PARA MAKITA LAHAT
-          stream: FirebaseFirestore.instance
-              .collection('event_proposals')
-              .snapshots(),  // 👈 TANGGALIN MUNA ANG .orderBy
-          builder: (context, snap) {
-            if (snap.connectionState == ConnectionState.waiting) {
-              return Center(child: CircularProgressIndicator(color: primaryDark));
-            }
-            if (snap.hasError) {
-              print('❌ Error: ${snap.error}');
-              return Center(child: Text('Error: ${snap.error}', style: TextStyle(color: error)));
-            }
-            
-            var docs = snap.data!.docs;
-            print('📊 Total proposals in Firebase: ${docs.length}');  // 👈 CHECK ITO
-            
-            if (_statusFilter != 'All') {
-              docs = docs.where((d) => (d.data() as Map)['status'] == _statusFilter.toLowerCase()).toList();
-            }
-            final term = _searchController.text.trim().toLowerCase();
-            if (term.isNotEmpty) {
-              docs = docs.where((d) {
-                final data = d.data() as Map;
-                final title = (data['title'] ?? '').toString().toLowerCase();
-                final org = (data['orgName'] ?? '').toString().toLowerCase();
-                return title.contains(term) || org.contains(term);
-              }).toList();
-            }
-            
-            print('📊 After filter: ${docs.length} proposals');
-            
-            if (docs.isEmpty) return _emptyState();
-
-            final totalPages = (docs.length / _pageSize).ceil();
-            final safePage = _currentPage.clamp(1, totalPages);
-            final start = (safePage - 1) * _pageSize;
-            final end = (start + _pageSize).clamp(0, docs.length);
-            final pageDocs = docs.sublist(start, end);
-
-            return Column(children: [
-              Expanded(
-                child: ListView.builder(
-                  itemCount: pageDocs.length,
-                  itemBuilder: (_, i) {
-                    final data = pageDocs[i].data() as Map<String, dynamic>;
-                    final docId = pageDocs[i].id;
-                    print('📄 Showing: ${data['title']} - ${data['orgName']}');  // 👈 CHECK ITO
-                    return _buildRow(data, docId);
-                  },
-                ),
-              ),
-              _buildFooter(docs.length, totalPages, start, end),
-            ]);
-          },
-        ),
-      ),
-    ]),
-  );
-}
-
-  TextStyle _headerStyle() => GoogleFonts.beVietnamPro(
-      fontSize: 11, fontWeight: FontWeight.w700, color: darkGray, letterSpacing: 0.5);
-
-  Widget _buildRow(Map<String, dynamic> data, String docId) {
-    final status = data['status'] ?? 'pending';
-    final statusColor = status == 'approved'
-        ? success
-        : status == 'rejected'
-            ? error
-            : status == 'archived'
-                ? darkGray
-                : warning;
-    final statusLabel = status.toUpperCase();
-    final dateStr = _formatDate(data['date']);
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      decoration: BoxDecoration(border: Border(bottom: BorderSide(color: mediumGray.withOpacity(0.5)))),
+      padding: const EdgeInsets.fromLTRB(28, 20, 28, 0),
       child: Row(children: [
+        // Search
         Expanded(
-          flex: 3,
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(data['title'] ?? 'Untitled',
-                style: GoogleFonts.beVietnamPro(fontSize: 14, fontWeight: FontWeight.w600, color: charcoal)),
-            const SizedBox(height: 2),
-            Text(data['category'] ?? 'No category', 
-                style: GoogleFonts.beVietnamPro(fontSize: 11, color: darkGray)),
-          ]),
-        ),
-        Expanded(flex: 2, child: Text(data['orgName'] ?? 'Unknown', style: GoogleFonts.beVietnamPro(fontSize: 13))),
-        Expanded(flex: 1, child: Text(dateStr, style: GoogleFonts.beVietnamPro(fontSize: 13, color: darkGray))),
-        Expanded(
-          flex: 1,
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            decoration: BoxDecoration(color: statusColor.withOpacity(0.1), borderRadius: BorderRadius.circular(12)),
-            child: Text(statusLabel,
-                textAlign: TextAlign.center,
-                style: GoogleFonts.beVietnamPro(fontSize: 11, fontWeight: FontWeight.w600, color: statusColor)),
+          child: SizedBox(
+            height: 40,
+            child: TextField(
+              controller: _searchController,
+              style: GoogleFonts.beVietnamPro(fontSize: 13),
+              decoration: InputDecoration(
+                hintText: 'Search by title or organization…',
+                hintStyle: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF9AA5B4)),
+                prefixIcon: const Icon(Icons.search_rounded, size: 18, color: Color(0xFF9AA5B4)),
+                filled: true,
+                fillColor: Colors.white,
+                contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: const BorderSide(color: Color(0xFFE2E6EA)),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: const BorderSide(color: Color(0xFFE2E6EA)),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: BorderSide(color: UpriseColors.primaryDark, width: 1.5),
+                ),
+              ),
+              onChanged: (_) => setState(() => _currentPage = 1),
+            ),
           ),
         ),
-        Expanded(
-          flex: 1,
-          child: Row(children: [
-            IconButton(
-                icon: Icon(Icons.visibility_outlined, size: 18, color: darkGray),
-                onPressed: () => _showViewDialog(data, docId),
-                tooltip: 'View'),
-            if (status != 'approved' && status != 'rejected' && status != 'archived')
-              IconButton(
-                  icon: Icon(Icons.check_circle_outline, size: 18, color: success),
-                  onPressed: () => _setStatus(docId, 'approved'),
-                  tooltip: 'Approve'),
-            if (status != 'approved' && status != 'rejected' && status != 'archived')
-              IconButton(
-                  icon: Icon(Icons.cancel_outlined, size: 18, color: error),
-                  onPressed: () => _setStatus(docId, 'rejected'),
-                  tooltip: 'Reject'),
-            if (status != 'archived')
-              IconButton(
-                  icon: Icon(Icons.archive_outlined, size: 18, color: darkGray),
-                  onPressed: () => _setStatus(docId, 'archived'),
-                  tooltip: 'Archive'),
-          ]),
+        const SizedBox(width: 10),
+        _FilterDropdown(
+          value: _statusFilter,
+          items: const ['All', 'Pending', 'Approved', 'Rejected', 'Archived'],
+          hint: 'Status',
+          icon: Icons.tune_rounded,
+          onChanged: (v) => setState(() {
+            _statusFilter = v!;
+            _currentPage = 1;
+          }),
+        ),
+        const SizedBox(width: 10),
+        _ExportProposalsButton(
+          statusFilter: _statusFilter,
+          searchTerm: _searchController.text.trim(),
         ),
       ]),
     );
   }
 
-  Widget _emptyState() {
+  // ── Table ─────────────────────────────────────────────────────────
+  Widget _buildTable() {
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('event_proposals')
+          .orderBy('createdAt', descending: true)
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (snapshot.hasError) {
+          return Center(child: Text('Error: ${snapshot.error}'));
+        }
+
+        var docs = snapshot.data!.docs;
+
+        // Filters
+        if (_statusFilter != 'All') {
+          docs = docs
+              .where((d) => (d.data() as Map)['status'] == _statusFilter.toLowerCase())
+              .toList();
+        }
+        final term = _searchController.text.trim().toLowerCase();
+        if (term.isNotEmpty) {
+          docs = docs.where((d) {
+            final data = d.data() as Map;
+            return (data['title'] ?? '').toString().toLowerCase().contains(term) ||
+                (data['orgName'] ?? '').toString().toLowerCase().contains(term);
+          }).toList();
+        }
+
+        final totalPages = docs.isEmpty ? 1 : (docs.length / _pageSize).ceil();
+        final safePage   = _currentPage.clamp(1, totalPages);
+        final start      = (safePage - 1) * _pageSize;
+        final end        = (start + _pageSize).clamp(0, docs.length);
+        final pageDocs   = docs.isEmpty ? <QueryDocumentSnapshot>[] : docs.sublist(start, end);
+
+        return Container(
+          margin: const EdgeInsets.symmetric(horizontal: 28),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: const Color(0xFFE8ECF0)),
+            boxShadow: _DS.cardShadow,
+          ),
+          child: Column(children: [
+            _buildTableHeader(),
+            Expanded(
+              child: docs.isEmpty
+                  ? _buildEmptyState()
+                  : ListView.builder(
+                      itemCount: pageDocs.length,
+                      itemBuilder: (_, i) {
+                        final data = pageDocs[i].data() as Map<String, dynamic>;
+                        return _buildProposalRow(
+                          docId: pageDocs[i].id,
+                          data: data,
+                          isLast: i == pageDocs.length - 1,
+                        );
+                      },
+                    ),
+            ),
+            _buildFooter(docs.length, totalPages, start, end),
+          ]),
+        );
+      },
+    );
+  }
+
+  Widget _buildTableHeader() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 13),
+      decoration: const BoxDecoration(
+        color: Color(0xFFF8F9FB),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(14)),
+        border: Border(bottom: BorderSide(color: Color(0xFFE8ECF0))),
+      ),
+      child: Row(children: [
+        Expanded(flex: 3, child: _headerCell('EVENT TITLE')),
+        Expanded(flex: 2, child: _headerCell('ORGANIZATION')),
+        Expanded(flex: 2, child: _headerCell('CATEGORY')),
+        Expanded(flex: 2, child: _headerCell('DATE')),
+        Expanded(flex: 1, child: _headerCell('STATUS')),
+        Expanded(
+          flex: 2,
+          child: Align(
+            alignment: Alignment.centerRight,
+            child: _headerCell('ACTIONS'),
+          ),
+        ),
+      ]),
+    );
+  }
+
+  Widget _headerCell(String text) => Text(
+        text,
+        style: GoogleFonts.beVietnamPro(
+          fontSize: 11,
+          fontWeight: FontWeight.w700,
+          color: const Color(0xFF64748B),
+          letterSpacing: 0.7,
+        ),
+      );
+
+  Widget _buildProposalRow({
+    required String docId,
+    required Map<String, dynamic> data,
+    required bool isLast,
+  }) {
+    final status  = (data['status'] ?? 'pending') as String;
+    final dateStr = _formatDate(data['date']);
+
+    return InkWell(
+      hoverColor: const Color(0xFFF8F9FB),
+      onTap: () => _showProposalDetailDialog(docId, data),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+        decoration: BoxDecoration(
+          border: isLast
+              ? null
+              : const Border(bottom: BorderSide(color: Color(0xFFF1F5F9))),
+        ),
+        child: Row(children: [
+          // Title + category
+          Expanded(
+            flex: 3,
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(
+                data['title'] ?? '—',
+                style: GoogleFonts.beVietnamPro(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: const Color(0xFF1A202C),
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(height: 2),
+              Text(
+                data['category'] ?? '—',
+                style: GoogleFonts.beVietnamPro(fontSize: 11, color: const Color(0xFF9AA5B4)),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ]),
+          ),
+          // Organization with avatar
+          Expanded(
+            flex: 2,
+            child: Row(children: [
+              _OrgAvatar(name: data['orgName'] ?? ''),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  data['orgName'] ?? '—',
+                  style: GoogleFonts.beVietnamPro(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                    color: const Color(0xFF1A202C),
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ]),
+          ),
+          // Category chip
+          Expanded(
+            flex: 2,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(
+                color: UpriseColors.primaryDark.withOpacity(0.07),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Text(
+                data['category'] ?? '—',
+                style: GoogleFonts.beVietnamPro(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: UpriseColors.primaryDark,
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ),
+          // Date
+          Expanded(
+            flex: 2,
+            child: Text(
+              dateStr,
+              style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF64748B)),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          // Status badge
+          Expanded(flex: 1, child: _statusBadge(status)),
+          // Actions
+          Expanded(
+            flex: 2,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                _ActionIconButton(
+                  icon: Icons.visibility_outlined,
+                  tooltip: 'View Details',
+                  onTap: () => _showProposalDetailDialog(docId, data),
+                ),
+                const SizedBox(width: 4),
+                _ActionIconButton(
+                  icon: Icons.check_circle_outline_rounded,
+                  tooltip: status == 'approved' ? 'Already Approved' : 'Approve',
+                  color: const Color(0xFF059669),
+                  onTap: status != 'approved' && status != 'rejected' && status != 'archived'
+                      ? () => _confirmSetStatus(docId, data['title'] ?? 'this event', 'approved')
+                      : null,
+                ),
+                const SizedBox(width: 4),
+                _ActionIconButton(
+                  icon: Icons.cancel_outlined,
+                  tooltip: status == 'rejected' ? 'Already Rejected' : 'Reject',
+                  color: const Color(0xFFDC2626),
+                  onTap: status != 'approved' && status != 'rejected' && status != 'archived'
+                      ? () => _confirmSetStatus(docId, data['title'] ?? 'this event', 'rejected')
+                      : null,
+                ),
+                const SizedBox(width: 4),
+                _ActionIconButton(
+                  icon: Icons.archive_outlined,
+                  tooltip: status == 'archived' ? 'Already Archived' : 'Archive',
+                  color: const Color(0xFF6B7280),
+                  onTap: status != 'archived'
+                      ? () => _confirmSetStatus(docId, data['title'] ?? 'this event', 'archived')
+                      : null,
+                ),
+              ],
+            ),
+          ),
+        ]),
+      ),
+    );
+  }
+
+  Widget _buildEmptyState() {
     return Center(
-        child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-      Icon(Icons.event_busy, size: 64, color: mediumGray),
-      const SizedBox(height: 16),
-      Text('No proposals found', style: GoogleFonts.beVietnamPro(color: darkGray, fontSize: 15)),
-    ]));
+      child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+        Container(
+          width: 80,
+          height: 80,
+          decoration: BoxDecoration(
+            color: const Color(0xFFF1F5F9),
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: const Icon(Icons.event_busy_rounded, size: 40, color: Color(0xFF9AA5B4)),
+        ),
+        const SizedBox(height: 16),
+        Text(
+          'No proposals found',
+          style: GoogleFonts.beVietnamPro(
+            fontSize: 15,
+            fontWeight: FontWeight.w600,
+            color: const Color(0xFF374151),
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          'Try adjusting your filters or wait for new submissions.',
+          style: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF64748B)),
+        ),
+      ]),
+    );
   }
 
   Widget _buildFooter(int total, int totalPages, int start, int end) {
     const int maxVisible = 5;
     int firstPage = (_currentPage - maxVisible ~/ 2).clamp(1, totalPages);
-    int lastPage = (firstPage + maxVisible - 1).clamp(1, totalPages);
+    int lastPage  = (firstPage + maxVisible - 1).clamp(1, totalPages);
     if (lastPage - firstPage + 1 < maxVisible && firstPage > 1) {
       firstPage = (lastPage - maxVisible + 1).clamp(1, totalPages);
     }
     final pages = List.generate(lastPage - firstPage + 1, (i) => firstPage + i);
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-      decoration: BoxDecoration(
-        border: Border(top: BorderSide(color: mediumGray)),
-        color: lightGray,
-        borderRadius: const BorderRadius.only(bottomLeft: Radius.circular(12), bottomRight: Radius.circular(12)),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+      decoration: const BoxDecoration(
+        border: Border(top: BorderSide(color: Color(0xFFE8ECF0))),
+        color: Color(0xFFF8F9FB),
+        borderRadius: BorderRadius.vertical(bottom: Radius.circular(14)),
       ),
-      child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-        Text('Showing ${total == 0 ? 0 : start + 1}–$end of $total proposals',
-            style: GoogleFonts.beVietnamPro(fontSize: 13, color: darkGray)),
-        Row(children: [
-          IconButton(
-            icon: const Icon(Icons.chevron_left, size: 20),
-            color: _currentPage > 1 ? charcoal : mediumGray,
-            onPressed: _currentPage > 1 ? () => setState(() => _currentPage--) : null,
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            'Showing ${total == 0 ? 0 : start + 1}–$end of $total proposals',
+            style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF64748B)),
           ),
-          ...pages.map((page) => GestureDetector(
-                onTap: () => setState(() => _currentPage = page),
-                child: Container(
-                  margin: const EdgeInsets.symmetric(horizontal: 2),
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: page == _currentPage ? primaryDark : Colors.transparent,
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: Text('$page',
-                      style: GoogleFonts.beVietnamPro(
-                        fontSize: 12,
-                        color: page == _currentPage ? Colors.white : charcoal,
-                        fontWeight: page == _currentPage ? FontWeight.w600 : FontWeight.normal,
-                      )),
-                ),
-              )),
-          if (lastPage < totalPages) ...[
-            Text('...', style: TextStyle(color: darkGray)),
-            GestureDetector(
-              onTap: () => setState(() => _currentPage = totalPages),
-              child: Container(
-                margin: const EdgeInsets.symmetric(horizontal: 2),
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                child: Text('$totalPages',
-                    style: GoogleFonts.beVietnamPro(fontSize: 12, color: charcoal)),
-              ),
+          Row(children: [
+            _PageButton(
+              icon: Icons.chevron_left_rounded,
+              enabled: _currentPage > 1,
+              onTap: () => setState(() => _currentPage--),
             ),
-          ],
-          IconButton(
-            icon: const Icon(Icons.chevron_right, size: 20),
-            color: _currentPage < totalPages ? charcoal : mediumGray,
-            onPressed: _currentPage < totalPages ? () => setState(() => _currentPage++) : null,
+            const SizedBox(width: 4),
+            ...pages.map((p) => _PageNumButton(
+                  page: p,
+                  isActive: p == _currentPage,
+                  onTap: () => setState(() => _currentPage = p),
+                )),
+            if (lastPage < totalPages) ...[
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                child: Text('…',
+                    style: GoogleFonts.beVietnamPro(color: const Color(0xFF64748B), fontSize: 12)),
+              ),
+              _PageNumButton(
+                page: totalPages,
+                isActive: _currentPage == totalPages,
+                onTap: () => setState(() => _currentPage = totalPages),
+              ),
+            ],
+            const SizedBox(width: 4),
+            _PageButton(
+              icon: Icons.chevron_right_rounded,
+              enabled: _currentPage < totalPages,
+              onTap: () => setState(() => _currentPage++),
+            ),
+          ]),
+        ],
+      ),
+    );
+  }
+
+  // ── Actions ───────────────────────────────────────────────────────
+
+  void _confirmSetStatus(String docId, String title, String newStatus) {
+    final Map<String, _ConfirmStyle> styles = {
+      'approved': _ConfirmStyle(
+        icon: Icons.check_circle_outline_rounded,
+        iconBg: const Color(0xFFECFDF5),
+        iconColor: const Color(0xFF059669),
+        btnColor: const Color(0xFF059669),
+        heading: 'Approve Proposal',
+        body: 'Are you sure you want to approve "$title"?',
+        btnLabel: 'Approve',
+      ),
+      'rejected': _ConfirmStyle(
+        icon: Icons.cancel_outlined,
+        iconBg: const Color(0xFFFEF2F2),
+        iconColor: const Color(0xFFDC2626),
+        btnColor: const Color(0xFFDC2626),
+        heading: 'Reject Proposal',
+        body: 'Are you sure you want to reject "$title"? This action can be reversed.',
+        btnLabel: 'Reject',
+      ),
+      'archived': _ConfirmStyle(
+        icon: Icons.archive_outlined,
+        iconBg: const Color(0xFFF3F4F6),
+        iconColor: const Color(0xFF6B7280),
+        btnColor: const Color(0xFF6B7280),
+        heading: 'Archive Proposal',
+        body: 'Are you sure you want to archive "$title"?',
+        btnLabel: 'Archive',
+      ),
+    };
+    final s = styles[newStatus]!;
+
+    showDialog(
+      context: context,
+      barrierColor: Colors.black54,
+      builder: (ctx) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        child: Container(
+          width: 420,
+          padding: const EdgeInsets.all(28),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(children: [
+                Container(
+                  width: 42,
+                  height: 42,
+                  decoration: BoxDecoration(color: s.iconBg, borderRadius: BorderRadius.circular(10)),
+                  child: Icon(s.icon, color: s.iconColor, size: 20),
+                ),
+                const SizedBox(width: 14),
+                Text(s.heading,
+                    style: GoogleFonts.beVietnamPro(
+                        fontSize: 17, fontWeight: FontWeight.w700, color: const Color(0xFF1A202C))),
+              ]),
+              const SizedBox(height: 16),
+              Text(s.body,
+                  style: GoogleFonts.beVietnamPro(
+                      fontSize: 14, color: const Color(0xFF64748B), height: 1.5)),
+              const SizedBox(height: 24),
+              Row(mainAxisAlignment: MainAxisAlignment.end, children: [
+                OutlinedButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: Color(0xFFE2E6EA)),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 11),
+                  ),
+                  child: Text('Cancel',
+                      style: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF374151))),
+                ),
+                const SizedBox(width: 10),
+                ElevatedButton(
+                  onPressed: () async {
+                    Navigator.pop(ctx);
+                    await _setStatus(docId, title, newStatus);
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: s.btnColor,
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 11),
+                  ),
+                  child: Text(s.btnLabel,
+                      style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600)),
+                ),
+              ]),
+            ],
           ),
-        ]),
-      ]),
+        ),
+      ),
     );
   }
 
-  Future<void> _setStatus(String docId, String newStatus) async {
-    String title = '';
+  Future<void> _setStatus(String docId, String title, String newStatus) async {
     try {
-      final docSnap = await FirebaseFirestore.instance.collection('event_proposals').doc(docId).get();
-      title = docSnap.data()?['title'] ?? 'Unknown event';
+      await FirebaseFirestore.instance.collection('event_proposals').doc(docId).update({
+        'status':     newStatus,
+        'reviewedAt': FieldValue.serverTimestamp(),
+        'reviewedBy': FirebaseAuth.instance.currentUser?.uid ?? '',
+      });
+      await activity_log.ActivityLogger.log(
+        action: '${newStatus.toUpperCase()} proposal: $title',
+        module: 'Event Management',
+        severity: newStatus == 'rejected' ? 'warning' : 'info',
+        details: {'proposalId': docId},
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Proposal ${newStatus[0].toUpperCase()}${newStatus.substring(1)}'),
+          backgroundColor: newStatus == 'approved'
+              ? const Color(0xFF059669)
+              : newStatus == 'rejected'
+                  ? const Color(0xFFDC2626)
+                  : const Color(0xFF6B7280),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        ));
+      }
     } catch (e) {
-      title = 'Unknown event';
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Error: $e'),
+          backgroundColor: UpriseColors.error,
+          behavior: SnackBarBehavior.floating,
+        ));
+      }
     }
-
-    await FirebaseFirestore.instance.collection('event_proposals').doc(docId).update({
-      'status': newStatus,
-      'reviewedAt': FieldValue.serverTimestamp(),
-      'reviewedBy': FirebaseAuth.instance.currentUser?.uid ?? '',
-    });
-
-    await activity_log.ActivityLogger.log(
-      action: '${newStatus.toUpperCase()} proposal: $title',
-      module: 'Event Management',
-      severity: newStatus == 'rejected' ? 'warning' : 'info',
-      details: {'proposalId': docId},
-    );
-
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Proposal ${newStatus.toUpperCase()}')));
   }
 
-  void _showViewDialog(Map<String, dynamic> data, String docId) {
-  final status = data['status'] ?? 'pending';
-  final hasAttachment = data['attachmentBase64'] != null && data['attachmentBase64'].toString().isNotEmpty;
-  
-  showDialog(
-    context: context,
-    builder: (ctx) => AlertDialog(
-      title: Row(children: [
-        Icon(Icons.event_note, color: primaryDark),
-        const SizedBox(width: 8),
-        Expanded(child: Text(data['title'] ?? 'Event Proposal', style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.bold))),
-      ]),
-      content: SingleChildScrollView(
-        child: SizedBox(
-          width: 500,
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
-            _detailRow('Organization', data['orgName'] ?? '—'),
-            _detailRow('Category', data['category'] ?? '—'),
-            _detailRow('Audience', data['audience'] ?? 'Public'),
-            _detailRow('Proposed Date', _formatDate(data['date'])),
-            _detailRow('Time', data['time'] ?? '—'),
-            _detailRow('Location', data['location'] ?? '—'),
-            _detailRow('Description', data['description'] ?? 'No description provided.'),
-            _detailRow('Submitted By', data['submittedByEmail'] ?? '—'),
-            const SizedBox(height: 12),
-            const Divider(),
-            _detailRow('Status', status.toUpperCase(),
-                isStatus: true,
-                statusColor: status == 'approved'
-                    ? success
-                    : status == 'rejected'
-                        ? error
-                        : warning),
-            _detailRow('Submitted', _formatTimestamp(data['createdAt'])),
-            if (data['reviewedAt'] != null) _detailRow('Reviewed', _formatTimestamp(data['reviewedAt'])),
-            
-            if (hasAttachment) ...[
-              const SizedBox(height: 12),
-              const Divider(),
-              const SizedBox(height: 8),
-              Text('Attachment', style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.w600, fontSize: 13)),
-              const SizedBox(height: 8),
+  void _showProposalDetailDialog(String docId, Map<String, dynamic> data) {
+    final status         = (data['status'] ?? 'pending') as String;
+    final hasAttachment  = data['attachmentBase64'] != null &&
+        data['attachmentBase64'].toString().isNotEmpty;
+
+    showDialog(
+      context: context,
+      barrierColor: Colors.black54,
+      builder: (ctx) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        child: Container(
+          width: 540,
+          constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.85),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // ── Header
               Container(
-                padding: const EdgeInsets.all(12),
+                padding: const EdgeInsets.fromLTRB(24, 20, 20, 20),
                 decoration: BoxDecoration(
-                  color: lightGray,
-                  borderRadius: BorderRadius.circular(8),
+                  color: UpriseColors.primaryDark,
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(18)),
                 ),
                 child: Row(children: [
-                  Icon(Icons.insert_drive_file, size: 24, color: primaryDark),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          data['attachmentName'] ?? 'Attached File',
-                          style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w500),
-                        ),
-                        if (data['attachmentSize'] != null)
-                          Text(
-                            data['attachmentSize'],
-                            style: GoogleFonts.beVietnamPro(fontSize: 11, color: darkGray),
-                          ),
-                      ],
+                  Container(
+                    width: 38,
+                    height: 38,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(10),
                     ),
+                    child: const Icon(Icons.event_note_rounded, color: Colors.white, size: 18),
                   ),
-                  TextButton.icon(
-                    onPressed: () => _saveAndOpenFile(data),  // 👈 CHANGE THIS
-                    icon: Icon(Icons.download, size: 16),
-                    label: Text('Open'),
-                    style: TextButton.styleFrom(foregroundColor: primaryDark),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Text(
+                        data['title'] ?? 'Event Proposal',
+                        style: GoogleFonts.beVietnamPro(
+                            fontSize: 17, fontWeight: FontWeight.w700, color: Colors.white),
+                      ),
+                      Text(
+                        data['orgName'] ?? '',
+                        style: GoogleFonts.beVietnamPro(
+                            fontSize: 12, color: Colors.white.withOpacity(0.7)),
+                      ),
+                    ]),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close_rounded, color: Colors.white, size: 20),
+                    onPressed: () => Navigator.pop(ctx),
+                  ),
+                ]),
+              ),
+              // ── Body
+              Expanded(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _sectionLabel('Proposal Details', icon: Icons.info_outline_rounded),
+                      Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        Expanded(
+                          child: _detailItem('Status',
+                              status[0].toUpperCase() + status.substring(1),
+                              Icons.circle_outlined,
+                              valueColor: status == 'approved'
+                                  ? const Color(0xFF059669)
+                                  : status == 'rejected'
+                                      ? const Color(0xFFDC2626)
+                                      : status == 'archived'
+                                          ? const Color(0xFF6B7280)
+                                          : const Color(0xFFD97706)),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: _detailItem('Category', data['category'] ?? '—',
+                              Icons.category_outlined),
+                        ),
+                      ]),
+                      const SizedBox(height: 14),
+                      Row(children: [
+                        Expanded(
+                          child: _detailItem('Proposed Date', _formatDate(data['date']),
+                              Icons.calendar_today_outlined),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: _detailItem('Time', data['time'] ?? '—', Icons.access_time_rounded),
+                        ),
+                      ]),
+                      const SizedBox(height: 14),
+                      Row(children: [
+                        Expanded(
+                          child: _detailItem('Location', data['location'] ?? '—',
+                              Icons.location_on_outlined),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: _detailItem('Audience', data['audience'] ?? '—',
+                              Icons.people_outline_rounded),
+                        ),
+                      ]),
+                      const SizedBox(height: 14),
+                      _detailItem('Description',
+                          data['description'] ?? 'No description provided.',
+                          Icons.description_outlined),
+                      const SizedBox(height: 14),
+                      _detailItem('Submitted By', data['submittedByEmail'] ?? '—',
+                          Icons.person_outline_rounded),
+                      if (data['reviewedAt'] != null) ...[
+                        const SizedBox(height: 14),
+                        _detailItem('Reviewed', _formatTimestamp(data['reviewedAt']),
+                            Icons.rate_review_outlined),
+                      ],
+                      if (hasAttachment) ...[
+                        const SizedBox(height: 20),
+                        _sectionLabel('Attachment', icon: Icons.attach_file_rounded),
+                        Container(
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF8F9FB),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: const Color(0xFFE2E6EA)),
+                          ),
+                          child: Row(children: [
+                            Container(
+                              width: 40,
+                              height: 40,
+                              decoration: BoxDecoration(
+                                color: UpriseColors.primaryDark.withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Icon(Icons.insert_drive_file_rounded,
+                                  size: 20, color: UpriseColors.primaryDark),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                                Text(
+                                  data['attachmentName'] ?? 'Attached File',
+                                  style: GoogleFonts.beVietnamPro(
+                                      fontSize: 13, fontWeight: FontWeight.w600),
+                                ),
+                                if (data['attachmentSize'] != null)
+                                  Text(data['attachmentSize'],
+                                      style: GoogleFonts.beVietnamPro(
+                                          fontSize: 11, color: const Color(0xFF9AA5B4))),
+                              ]),
+                            ),
+                            ElevatedButton.icon(
+                              onPressed: () => _saveAndOpenFile(data),
+                              icon: const Icon(Icons.open_in_new_rounded, size: 14),
+                              label: Text('Open',
+                                  style: GoogleFonts.beVietnamPro(
+                                      fontSize: 13, fontWeight: FontWeight.w600)),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: UpriseColors.primaryDark,
+                                foregroundColor: Colors.white,
+                                elevation: 0,
+                                shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(8)),
+                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                              ),
+                            ),
+                          ]),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+              // ── Footer actions
+              Container(
+                padding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
+                decoration: const BoxDecoration(
+                  border: Border(top: BorderSide(color: Color(0xFFE8ECF0))),
+                  color: Color(0xFFF8F9FB),
+                  borderRadius: BorderRadius.vertical(bottom: Radius.circular(18)),
+                ),
+                child: Row(children: [
+                  if (status != 'approved' && status != 'rejected' && status != 'archived') ...[
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: () {
+                          Navigator.pop(ctx);
+                          _confirmSetStatus(docId, data['title'] ?? 'this event', 'approved');
+                        },
+                        icon: const Icon(Icons.check_circle_rounded, size: 15),
+                        label: Text('Approve',
+                            style: GoogleFonts.beVietnamPro(
+                                fontSize: 13, fontWeight: FontWeight.w600)),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF059669),
+                          foregroundColor: Colors.white,
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          padding: const EdgeInsets.symmetric(vertical: 11),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: () {
+                          Navigator.pop(ctx);
+                          _confirmSetStatus(docId, data['title'] ?? 'this event', 'rejected');
+                        },
+                        icon: const Icon(Icons.cancel_outlined, size: 15),
+                        label: Text('Reject',
+                            style: GoogleFonts.beVietnamPro(fontSize: 13)),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: const Color(0xFFDC2626),
+                          side: const BorderSide(color: Color(0xFFDC2626)),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          padding: const EdgeInsets.symmetric(vertical: 11),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                  ],
+                  if (status != 'archived')
+                    OutlinedButton.icon(
+                      onPressed: () {
+                        Navigator.pop(ctx);
+                        _confirmSetStatus(docId, data['title'] ?? 'this event', 'archived');
+                      },
+                      icon: const Icon(Icons.archive_outlined, size: 15),
+                      label: Text('Archive',
+                          style: GoogleFonts.beVietnamPro(fontSize: 13)),
+                      style: OutlinedButton.styleFrom(
+                        side: const BorderSide(color: Color(0xFFE2E6EA)),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 11),
+                      ),
+                    ),
+                  const Spacer(),
+                  ElevatedButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: UpriseColors.primaryDark,
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 11),
+                    ),
+                    child: Text('Close',
+                        style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600)),
                   ),
                 ]),
               ),
             ],
-          ]),
+          ),
         ),
       ),
-      actions: [
-        if (status == 'pending') ...[
-          TextButton.icon(
-            onPressed: () async {
-              await _setStatus(docId, 'approved');
-              Navigator.pop(ctx);
-            },
-            icon: Icon(Icons.check_circle, color: success),
-            label: Text('Approve', style: TextStyle(color: success)),
-          ),
-          TextButton.icon(
-            onPressed: () async {
-              await _setStatus(docId, 'rejected');
-              Navigator.pop(ctx);
-            },
-            icon: Icon(Icons.cancel, color: error),
-            label: Text('Reject', style: TextStyle(color: error)),
-          ),
-        ],
-        if (status != 'archived')
-          TextButton.icon(
-            onPressed: () async {
-              await _setStatus(docId, 'archived');
-              Navigator.pop(ctx);
-            },
-            icon: Icon(Icons.archive, color: darkGray),
-            label: Text('Archive', style: TextStyle(color: darkGray)),
-          ),
-        ElevatedButton(
-          onPressed: () => Navigator.pop(ctx),
-          style: ElevatedButton.styleFrom(backgroundColor: primaryDark),
-          child: const Text('Close', style: TextStyle(color: Colors.white)),
-        ),
-      ],
-    ),
-  );
-}
-
-// 👇 ADD THIS NEW FUNCTION (same sa org file)
-Future<void> _saveAndOpenFile(Map<String, dynamic> data) async {
-  try {
-    final String base64String = data['attachmentBase64'];
-    final String fileName = data['attachmentName'] ?? 'document';
-    final Uint8List fileBytes = base64Decode(base64String);
-    
-    final directory = await getTemporaryDirectory();
-    final file = File('${directory.path}/$fileName');
-    await file.writeAsBytes(fileBytes);
-    
-    await OpenFile.open(file.path);
-  } catch (e) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Error opening file: $e'), backgroundColor: error),
     );
   }
-}
 
-  // 👇 FIXED: Ito ang may error dati
-  // void _viewAttachment(Map<String, dynamic> data) {
-  //   final String base64String = data['attachmentBase64'];
-  //   final String fileName = data['attachmentName'] ?? 'document';
-  //   final String fileExtension = fileName.split('.').last.toLowerCase();
-    
-  //   try {
-  //     final Uint8List fileBytes = base64Decode(base64String);  // 👈 FIXED: base64Decode hindi base64.decode
-      
-  //     String contentType;
-  //     switch (fileExtension) {
-  //       case 'pdf':
-  //         contentType = 'application/pdf';
-  //         break;
-  //       case 'doc':
-  //         contentType = 'application/msword';
-  //         break;
-  //       case 'docx':
-  //         contentType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
-  //         break;
-  //       case 'txt':
-  //         contentType = 'text/plain';
-  //         break;
-  //       case 'jpg':
-  //       case 'jpeg':
-  //         contentType = 'image/jpeg';
-  //         break;
-  //       case 'png':
-  //         contentType = 'image/png';
-  //         break;
-  //       default:
-  //         contentType = 'application/octet-stream';
-  //     }
-      
-  //     final blob = html.Blob([fileBytes], contentType);
-  //     final url = html.Url.createObjectUrlFromBlob(blob);
-      
-  //     showDialog(
-  //       context: context,
-  //       builder: (ctx) => AlertDialog(
-  //         title: Text('Open File: $fileName'),
-  //         content: Column(
-  //           mainAxisSize: MainAxisSize.min,
-  //           children: [
-  //             Icon(Icons.insert_drive_file, size: 48, color: primaryDark),
-  //             const SizedBox(height: 16),
-  //             Text('File size: ${data['attachmentSize'] ?? 'Unknown'}'),
-  //             const SizedBox(height: 8),
-  //             Text('Extension: $fileExtension', style: GoogleFonts.beVietnamPro(fontSize: 12)),
-  //           ],
-  //         ),
-  //         actions: [
-  //           TextButton(
-  //             onPressed: () {
-  //               final anchor = html.AnchorElement(href: url)
-  //                 ..setAttribute('download', fileName)
-  //                 ..click();
-  //               html.Url.revokeObjectUrl(url);
-  //               Navigator.pop(ctx);
-  //             },
-  //             child: const Text('Download'),
-  //           ),
-  //           TextButton(
-  //             onPressed: () {
-  //               html.window.open(url, '_blank');
-  //               html.Url.revokeObjectUrl(url);
-  //               Navigator.pop(ctx);
-  //             },
-  //             child: const Text('View'),
-  //           ),
-  //           TextButton(
-  //             onPressed: () {
-  //               html.Url.revokeObjectUrl(url);
-  //               Navigator.pop(ctx);
-  //             },
-  //             child: const Text('Close'),
-  //           ),
-  //         ],
-  //       ),
-  //     );
-  //   } catch (e) {
-  //     ScaffoldMessenger.of(context).showSnackBar(
-  //       SnackBar(content: Text('Error opening file: $e'), backgroundColor: error),
-  //     );
-  //   }
-  // }
-
-  Widget _detailRow(String label, String value, {bool isStatus = false, Color? statusColor}) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        SizedBox(
-            width: 120,
-            child: Text('$label:',
-                style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.w600, color: darkGray))),
-        Expanded(
-          child: isStatus
-              ? Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                  decoration: BoxDecoration(
-                      color: statusColor?.withOpacity(0.1) ?? Colors.transparent, borderRadius: BorderRadius.circular(4)),
-                  child: Text(value,
-                      style: GoogleFonts.beVietnamPro(fontSize: 12, color: statusColor, fontWeight: FontWeight.w600)),
-                )
-              : Text(value, style: GoogleFonts.beVietnamPro(fontSize: 12)),
-        ),
+  Widget _detailItem(String label, String value, IconData icon, {Color? valueColor}) {
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Row(children: [
+        Icon(icon, size: 13, color: const Color(0xFF9AA5B4)),
+        const SizedBox(width: 5),
+        Text(label,
+            style: GoogleFonts.beVietnamPro(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: const Color(0xFF64748B),
+                letterSpacing: 0.4)),
       ]),
-    );
+      const SizedBox(height: 4),
+      Text(
+        value,
+        style: GoogleFonts.beVietnamPro(
+          fontSize: 13,
+          fontWeight: FontWeight.w500,
+          color: valueColor ?? const Color(0xFF1A202C),
+        ),
+      ),
+    ]);
+  }
+
+  // ── Helpers ───────────────────────────────────────────────────────
+
+  Future<void> _saveAndOpenFile(Map<String, dynamic> data) async {
+    try {
+      final String base64String = data['attachmentBase64'];
+      final String fileName     = data['attachmentName'] ?? 'document';
+      final Uint8List fileBytes = base64Decode(base64String);
+      final directory           = await getTemporaryDirectory();
+      final file                = File('${directory.path}/$fileName');
+      await file.writeAsBytes(fileBytes);
+      await OpenFile.open(file.path);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Error opening file: $e'),
+          backgroundColor: UpriseColors.error,
+          behavior: SnackBarBehavior.floating,
+        ));
+      }
+    }
   }
 
   String _formatDate(dynamic dateField) {
     if (dateField == null) return 'TBD';
     if (dateField is Timestamp) {
-      final date = dateField.toDate();
-      return '${date.month}/${date.day}/${date.year}';
+      final d = dateField.toDate();
+      return '${d.month}/${d.day}/${d.year}';
     }
     return dateField.toString();
   }
@@ -737,39 +1026,389 @@ Future<void> _saveAndOpenFile(Map<String, dynamic> data) async {
   String _formatTimestamp(dynamic ts) {
     if (ts == null) return '—';
     if (ts is Timestamp) {
-      final date = ts.toDate();
-      return '${date.month}/${date.day}/${date.year} ${date.hour}:${date.minute.toString().padLeft(2, '0')}';
+      final d = ts.toDate();
+      return '${d.month}/${d.day}/${d.year} ${d.hour}:${d.minute.toString().padLeft(2, '0')}';
     }
     return ts.toString();
   }
+}
 
-  Future<void> _exportToCSV() async {
+// ─────────────────────────────────────────────────────────────────────────────
+// Helper model for confirm dialogs
+// ─────────────────────────────────────────────────────────────────────────────
+class _ConfirmStyle {
+  final IconData icon;
+  final Color iconBg, iconColor, btnColor;
+  final String heading, body, btnLabel;
+  const _ConfirmStyle({
+    required this.icon,
+    required this.iconBg,
+    required this.iconColor,
+    required this.btnColor,
+    required this.heading,
+    required this.body,
+    required this.btnLabel,
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Reusable widgets — mirrors student_accounts.dart exactly
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _StatCard extends StatelessWidget {
+  final String label, value;
+  final IconData icon;
+  final Color color;
+  const _StatCard({
+    required this.label,
+    required this.value,
+    required this.icon,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.all(18),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: const Color(0xFFE8ECF0)),
+          boxShadow: _DS.cardShadow,
+        ),
+        child: Row(children: [
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.10),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(icon, color: color, size: 22),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(label,
+                  style: GoogleFonts.beVietnamPro(
+                      fontSize: 11,
+                      color: const Color(0xFF64748B),
+                      fontWeight: FontWeight.w500)),
+              const SizedBox(height: 2),
+              Text(value,
+                  style: GoogleFonts.beVietnamPro(
+                      fontSize: 28,
+                      fontWeight: FontWeight.w700,
+                      color: const Color(0xFF1A202C))),
+            ]),
+          ),
+        ]),
+      ),
+    );
+  }
+}
+
+class _FilterDropdown extends StatelessWidget {
+  final String value;
+  final List<String> items;
+  final String hint;
+  final IconData icon;
+  final ValueChanged<String?> onChanged;
+
+  const _FilterDropdown({
+    required this.value,
+    required this.items,
+    required this.hint,
+    required this.icon,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 40,
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: const Color(0xFFE2E6EA)),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String>(
+          value: value,
+          icon: const Icon(Icons.keyboard_arrow_down_rounded,
+              size: 18, color: Color(0xFF9AA5B4)),
+          style: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF374151)),
+          items: items
+              .map((s) => DropdownMenuItem(
+                    value: s,
+                    child: Text(s, style: GoogleFonts.beVietnamPro(fontSize: 13)),
+                  ))
+              .toList(),
+          onChanged: onChanged,
+        ),
+      ),
+    );
+  }
+}
+
+class _ExportProposalsButton extends StatelessWidget {
+  final String statusFilter, searchTerm;
+  const _ExportProposalsButton({
+    required this.statusFilter,
+    required this.searchTerm,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 40,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: const Color(0xFFE2E6EA)),
+      ),
+      child: PopupMenuButton<String>(
+        onSelected: (choice) => _doExport(context, choice),
+        itemBuilder: (_) => [
+          _item('csv',  Icons.table_chart_rounded, 'Export as CSV'),
+          _item('json', Icons.data_object_rounded,  'Export as JSON'),
+        ],
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          child: Row(children: [
+            const Icon(Icons.download_rounded, size: 16, color: Color(0xFF374151)),
+            const SizedBox(width: 6),
+            Text('Export',
+                style: GoogleFonts.beVietnamPro(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                    color: const Color(0xFF374151))),
+            const SizedBox(width: 4),
+            const Icon(Icons.keyboard_arrow_down_rounded,
+                size: 16, color: Color(0xFF9AA5B4)),
+          ]),
+        ),
+      ),
+    );
+  }
+
+  PopupMenuItem<String> _item(String value, IconData icon, String label) {
+    return PopupMenuItem(
+      value: value,
+      child: Row(children: [
+        Icon(icon, size: 16, color: const Color(0xFF64748B)),
+        const SizedBox(width: 10),
+        Text(label, style: GoogleFonts.beVietnamPro(fontSize: 13)),
+      ]),
+    );
+  }
+
+  Future<void> _doExport(BuildContext context, String format) async {
     try {
-      final snap = await FirebaseFirestore.instance.collection('event_proposals').get();
-      final lines = <String>['Title,Organization,Category,Date,Status,Description'];
-      for (var doc in snap.docs) {
-        final d = doc.data();
-        lines.add([
-          d['title'] ?? '',
-          d['orgName'] ?? '',
-          d['category'] ?? '',
-          _formatDate(d['date']),
-          d['status'] ?? 'pending',
-          (d['description'] ?? '').replaceAll(',', ';'),
-        ].map((v) => '"$v"').join(','));
+      var snap = await FirebaseFirestore.instance
+          .collection('event_proposals')
+          .orderBy('createdAt', descending: true)
+          .get();
+      var docs = snap.docs;
+
+      if (statusFilter != 'All') {
+        docs = docs
+            .where((d) => (d.data())['status'] == statusFilter.toLowerCase())
+            .toList();
       }
-      final file = File('${Directory.systemTemp.path}/event_proposals.csv');
-      await file.writeAsString(lines.join('\n'));
-      await Share.shareXFiles([XFile(file.path)], text: 'Event Proposals Export');
+      if (searchTerm.isNotEmpty) {
+        docs = docs.where((d) {
+          final data = d.data();
+          return (data['title']   ?? '').toString().toLowerCase().contains(searchTerm) ||
+              (data['orgName'] ?? '').toString().toLowerCase().contains(searchTerm);
+        }).toList();
+      }
+
+      if (docs.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('No data to export.'),
+          behavior: SnackBarBehavior.floating,
+        ));
+        return;
+      }
+
+      String content, fileName;
+      final now = DateTime.now().toString().substring(0, 10);
+
+      if (format == 'csv') {
+        final buf = StringBuffer();
+        buf.writeln('Title,Organization,Category,Date,Status,Description');
+        for (final doc in docs) {
+          final d = doc.data();
+          String esc(String s) => '"${s.replaceAll('"', '""')}"';
+          buf.writeln([
+            esc(d['title']       ?? ''),
+            esc(d['orgName']     ?? ''),
+            esc(d['category']    ?? ''),
+            esc(_fmtDate(d['date'])),
+            esc(d['status']      ?? ''),
+            esc(d['description'] ?? ''),
+          ].join(','));
+        }
+        content  = buf.toString();
+        fileName = 'event_proposals_$now.csv';
+      } else {
+        final list = docs.map((doc) {
+          final d = doc.data();
+          return {
+            'id':          doc.id,
+            'title':       d['title']       ?? '',
+            'orgName':     d['orgName']     ?? '',
+            'category':    d['category']    ?? '',
+            'date':        _fmtDate(d['date']),
+            'status':      d['status']      ?? '',
+            'description': d['description'] ?? '',
+          };
+        }).toList();
+        content  = const JsonEncoder.withIndent('  ').convert(list);
+        fileName = 'event_proposals_$now.json';
+      }
+
+      if (kIsWeb) {
+        await Share.share(content, subject: fileName);
+      } else {
+        final file = File('${Directory.systemTemp.path}/$fileName');
+        await file.writeAsString(content);
+        await Share.shareXFiles([XFile(file.path)], subject: fileName);
+      }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Export failed: $e'), backgroundColor: error));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Export failed: $e'),
+        backgroundColor: UpriseColors.error,
+        behavior: SnackBarBehavior.floating,
+      ));
     }
   }
 
+  String _fmtDate(dynamic d) {
+    if (d == null) return 'TBD';
+    if (d is Timestamp) {
+      final dt = d.toDate();
+      return '${dt.month}/${dt.day}/${dt.year}';
+    }
+    return d.toString();
+  }
+}
+
+class _OrgAvatar extends StatelessWidget {
+  final String name;
+  const _OrgAvatar({required this.name});
+
   @override
-  void dispose() {
-    _searchController.dispose();
-    super.dispose();
+  Widget build(BuildContext context) {
+    final parts    = name.trim().split(' ');
+    final initials = parts.length >= 2
+        ? '${parts[0][0]}${parts[1][0]}'.toUpperCase()
+        : (name.isNotEmpty ? name[0].toUpperCase() : '?');
+    return Container(
+      width: 32,
+      height: 32,
+      decoration: BoxDecoration(
+        color: UpriseColors.primaryDark.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Center(
+        child: Text(
+          initials,
+          style: GoogleFonts.beVietnamPro(
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
+            color: UpriseColors.primaryDark,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ActionIconButton extends StatelessWidget {
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback? onTap;
+  final Color? color;
+  const _ActionIconButton({
+    required this.icon,
+    required this.tooltip,
+    required this.onTap,
+    this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(6),
+        child: Padding(
+          padding: const EdgeInsets.all(5),
+          child: Icon(icon,
+              size: 16,
+              color: onTap == null
+                  ? const Color(0xFFD1D5DB)
+                  : (color ?? const Color(0xFF64748B))),
+        ),
+      ),
+    );
+  }
+}
+
+class _PageButton extends StatelessWidget {
+  final IconData icon;
+  final bool enabled;
+  final VoidCallback onTap;
+  const _PageButton({required this.icon, required this.enabled, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: enabled ? onTap : null,
+      borderRadius: BorderRadius.circular(6),
+      child: Padding(
+        padding: const EdgeInsets.all(4),
+        child: Icon(icon,
+            size: 20,
+            color: enabled ? const Color(0xFF374151) : const Color(0xFFD1D5DB)),
+      ),
+    );
+  }
+}
+
+class _PageNumButton extends StatelessWidget {
+  final int page;
+  final bool isActive;
+  final VoidCallback onTap;
+  const _PageNumButton({required this.page, required this.isActive, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 2),
+        width: 28,
+        height: 28,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: isActive ? UpriseColors.primaryDark : Colors.transparent,
+          borderRadius: BorderRadius.circular(6),
+        ),
+        child: Text(
+          '$page',
+          style: GoogleFonts.beVietnamPro(
+            fontSize: 12,
+            fontWeight: isActive ? FontWeight.w700 : FontWeight.normal,
+            color: isActive ? Colors.white : const Color(0xFF374151),
+          ),
+        ),
+      ),
+    );
   }
 }

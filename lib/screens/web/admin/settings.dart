@@ -9,7 +9,9 @@ import 'package:intl/intl.dart';
 import '../../theme/app_theme.dart';
 import 'admin_login.dart';
 
-// ============ ACTIVITY LOGGER ============
+// ─────────────────────────────────────────────────────────────────────────────
+// Activity Logger
+// ─────────────────────────────────────────────────────────────────────────────
 class ActivityLogger {
   static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   static Future<void> log({
@@ -18,35 +20,162 @@ class ActivityLogger {
     String severity = 'info',
     Map<String, dynamic>? details,
   }) async {
-    final user = FirebaseAuth.instance.currentUser;
+    final user     = FirebaseAuth.instance.currentUser;
     final userName = user?.email ?? 'Unknown User';
     await _firestore.collection('activity_logs').add({
-      'user': userName,
-      'action': action,
-      'module': module,
-      'severity': severity,
+      'user':      userName,
+      'action':    action,
+      'module':    module,
+      'severity':  severity,
       'timestamp': FieldValue.serverTimestamp(),
       'ipAddress': '',
-      'details': details,
+      'details':   details,
     });
   }
 }
 
-// ============ SIDEBAR ICONS ============
-const Map<String, IconData> _sidebarIcons = {
-  'Dashboard': Icons.dashboard_outlined,
-  'Organization Management': Icons.business_outlined,
-  'Student Accounts': Icons.people_outline,
-  'Adviser Roles': Icons.school_outlined,
-  'Event Proposals': Icons.pending_actions_outlined,
-  'College Event Calendar': Icons.calendar_today_outlined,
-  'Letter Request': Icons.mail_outline,
-  'External Account': Icons.link_outlined,
-  'Reports Management': Icons.assessment_outlined,
-  'Activity Logs': Icons.history_outlined,
-  'Settings': Icons.settings_outlined,
-};
+// ─────────────────────────────────────────────────────────────────────────────
+// Design tokens
+// ─────────────────────────────────────────────────────────────────────────────
+class _DS {
+  static const double radiusSm  = 8;
+  static const double radiusMd  = 12;
+  static const double radiusLg  = 16;
+  static const double radiusPill = 100;
 
+  static final cardShadow = [
+    BoxShadow(
+      color: Colors.black.withOpacity(0.06),
+      blurRadius: 12,
+      offset: const Offset(0, 4),
+    ),
+  ];
+
+  static InputDecoration inputDecoration(
+    String label, {
+    String? hint,
+    IconData? icon,
+    bool enabled = true,
+  }) {
+    return InputDecoration(
+      labelText: label,
+      hintText: hint,
+      prefixIcon: icon != null
+          ? Icon(icon, size: 18, color: const Color(0xFF9AA5B4))
+          : null,
+      labelStyle: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF64748B)),
+      hintStyle: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF9AA5B4)),
+      filled: true,
+      fillColor: enabled ? const Color(0xFFF8F9FB) : const Color(0xFFF1F5F9),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(radiusSm),
+        borderSide: const BorderSide(color: Color(0xFFE2E6EA), width: 1),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(radiusSm),
+        borderSide: const BorderSide(color: Color(0xFFE2E6EA), width: 1),
+      ),
+      disabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(radiusSm),
+        borderSide: const BorderSide(color: Color(0xFFE8ECF0), width: 1),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(radiusSm),
+        borderSide: BorderSide(color: UpriseColors.primaryDark, width: 1.5),
+      ),
+      errorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(radiusSm),
+        borderSide: BorderSide(color: UpriseColors.error, width: 1),
+      ),
+      focusedErrorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(radiusSm),
+        borderSide: BorderSide(color: UpriseColors.error, width: 1.5),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Severity badge (reused from activity logs)
+// ─────────────────────────────────────────────────────────────────────────────
+class _SeverityBadge extends StatelessWidget {
+  final String severity;
+  const _SeverityBadge(this.severity);
+
+  @override
+  Widget build(BuildContext context) {
+    final Map<String, _BadgeStyle> styles = {
+      'info':     _BadgeStyle(const Color(0xFFEFF6FF), const Color(0xFF2563EB), 'INFO'),
+      'warning':  _BadgeStyle(const Color(0xFFFFFBEB), const Color(0xFFD97706), 'WARNING'),
+      'error':    _BadgeStyle(const Color(0xFFFEF2F2), const Color(0xFFDC2626), 'ERROR'),
+      'critical': _BadgeStyle(const Color(0xFFFDF2F8), const Color(0xFF9333EA), 'CRITICAL'),
+    };
+    final s = styles[severity.toLowerCase()] ??
+        _BadgeStyle(const Color(0xFFF3F4F6), const Color(0xFF6B7280), severity.toUpperCase());
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
+      decoration: BoxDecoration(
+        color: s.bg,
+        borderRadius: BorderRadius.circular(_DS.radiusPill),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(width: 6, height: 6, decoration: BoxDecoration(color: s.fg, shape: BoxShape.circle)),
+          const SizedBox(width: 5),
+          Text(
+            s.label,
+            style: GoogleFonts.beVietnamPro(
+              fontSize: 10,
+              fontWeight: FontWeight.w700,
+              color: s.fg,
+              letterSpacing: 0.6,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _BadgeStyle {
+  final Color bg, fg;
+  final String label;
+  const _BadgeStyle(this.bg, this.fg, this.label);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Section label helper
+// ─────────────────────────────────────────────────────────────────────────────
+Widget _sectionLabel(String text, {IconData? icon}) {
+  return Padding(
+    padding: const EdgeInsets.only(bottom: 16),
+    child: Row(
+      children: [
+        if (icon != null) ...[
+          Icon(icon, size: 16, color: UpriseColors.primaryDark),
+          const SizedBox(width: 8),
+        ],
+        Text(
+          text,
+          style: GoogleFonts.beVietnamPro(
+            fontSize: 13,
+            fontWeight: FontWeight.w700,
+            color: UpriseColors.primaryDark,
+            letterSpacing: 0.3,
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(child: Divider(color: const Color(0xFFE2E6EA), thickness: 1)),
+      ],
+    ),
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Main Widget
+// ─────────────────────────────────────────────────────────────────────────────
 class AdminSettings extends StatefulWidget {
   const AdminSettings({super.key});
 
@@ -58,33 +187,82 @@ class _AdminSettingsState extends State<AdminSettings>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
 
-  // Profile data
-  final TextEditingController _fullNameController = TextEditingController();
-  final TextEditingController _emailController = TextEditingController();
-  bool _isLoading = false;
-  User? _currentUser;
+  // Profile
+  final _fullNameController    = TextEditingController();
+  final _emailController       = TextEditingController();
+  bool   _isLoading            = false;
+  User?  _currentUser;
   String? _profileImageBase64;
-  File? _selectedImageFile;
 
-  // Password change
-  final TextEditingController _newPasswordController = TextEditingController();
-  final TextEditingController _confirmPasswordController = TextEditingController();
+  // Password
+  final _newPasswordController     = TextEditingController();
+  final _confirmPasswordController = TextEditingController();
+  bool _showNewPassword            = false;
+  bool _showConfirmPassword        = false;
 
   // Notification settings
   bool _emailNotifications = true;
-  bool _desktopAlerts = true;
-  bool _dailySummary = true;
-  bool _urgentAlerts = true;
-  bool _eventReminders = true;
+  bool _desktopAlerts      = true;
+  bool _dailySummary       = true;
+  bool _urgentAlerts       = true;
+  bool _eventReminders     = true;
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 4, vsync: this);
-    _currentUser = FirebaseAuth.instance.currentUser;
+    _currentUser   = FirebaseAuth.instance.currentUser;
     _loadUserData();
     _loadSettings();
     _loadProfileImage();
+  }
+
+  Future<List<Map<String, dynamic>>> _fetchUserAuditLogs(String email) async {
+    final col = FirebaseFirestore.instance.collection('activity_logs');
+    try {
+      final qs = await col
+          .where('user', isEqualTo: email)
+          .orderBy('timestamp', descending: true)
+          .limit(20)
+          .get();
+      return qs.docs.map((d) {
+        final m = Map<String, dynamic>.from(d.data() as Map<String, dynamic>);
+        final tsField = m['timestamp'];
+        DateTime? ts;
+        if (tsField is Timestamp) ts = tsField.toDate();
+        else if (tsField is DateTime) ts = tsField;
+        m['_ts'] = ts;
+        m['_id'] = d.id;
+        return m;
+      }).toList();
+    } catch (e) {
+      final msg = e.toString().toLowerCase();
+      // Firestore returns a failed-precondition indicating an index is required.
+      if (msg.contains('requires an index') || msg.contains('failed-precondition')) {
+        // Fallback: fetch matching docs without ordering and sort client-side.
+        final qs = await col.where('user', isEqualTo: email).limit(50).get();
+        final list = qs.docs.map((d) {
+          final m = Map<String, dynamic>.from(d.data() as Map<String, dynamic>);
+          final tsField = m['timestamp'];
+          DateTime? ts;
+          if (tsField is Timestamp) ts = tsField.toDate();
+          else if (tsField is DateTime) ts = tsField;
+          m['_ts'] = ts;
+          m['_id'] = d.id;
+          return m;
+        }).toList();
+        list.sort((a, b) {
+          final at = a['_ts'] as DateTime?;
+          final bt = b['_ts'] as DateTime?;
+          if (at == null && bt == null) return 0;
+          if (at == null) return 1;
+          if (bt == null) return -1;
+          return bt.compareTo(at);
+        });
+        return list.take(20).toList();
+      }
+      rethrow;
+    }
   }
 
   @override
@@ -97,10 +275,11 @@ class _AdminSettingsState extends State<AdminSettings>
     super.dispose();
   }
 
+  // ── Data loaders ──────────────────────────────────────────────────
   Future<void> _loadUserData() async {
     if (_currentUser != null) {
       _fullNameController.text = _currentUser!.displayName ?? '';
-      _emailController.text = _currentUser!.email ?? '';
+      _emailController.text    = _currentUser!.email ?? '';
     }
     final doc = await FirebaseFirestore.instance
         .collection('users')
@@ -110,7 +289,7 @@ class _AdminSettingsState extends State<AdminSettings>
       final data = doc.data();
       if (data != null) {
         _fullNameController.text = data['fullName'] ?? _fullNameController.text;
-        _emailController.text = data['email'] ?? _emailController.text;
+        _emailController.text    = data['email']    ?? _emailController.text;
       }
     }
     setState(() {});
@@ -129,42 +308,6 @@ class _AdminSettingsState extends State<AdminSettings>
     }
   }
 
-  Future<void> _pickAndUploadImage() async {
-    final picker = ImagePicker();
-    final picked = await picker.pickImage(source: ImageSource.gallery, imageQuality: 50);
-    if (picked == null) return;
-
-    setState(() => _selectedImageFile = File(picked.path));
-    setState(() => _isLoading = true);
-
-    try {
-      final bytes = await File(picked.path).readAsBytes();
-      final base64String = base64Encode(bytes);
-      await FirebaseFirestore.instance
-          .collection('users')
-          .doc(_currentUser!.uid)
-          .set({'photoBase64': base64String}, SetOptions(merge: true));
-      setState(() {
-        _profileImageBase64 = base64String;
-        _selectedImageFile = null;
-      });
-      await ActivityLogger.log(
-        action: 'Updated profile picture',
-        module: 'Admin Settings',
-        severity: 'info',
-      );
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Profile picture updated')),
-      );
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error saving picture: $e'), backgroundColor: UpriseColors.error),
-      );
-    } finally {
-      setState(() => _isLoading = false);
-    }
-  }
-
   Future<void> _loadSettings() async {
     final doc = await FirebaseFirestore.instance
         .collection('user_settings')
@@ -175,75 +318,78 @@ class _AdminSettingsState extends State<AdminSettings>
       if (data != null) {
         setState(() {
           _emailNotifications = data['emailNotifications'] ?? true;
-          _desktopAlerts = data['desktopAlerts'] ?? true;
-          _dailySummary = data['dailySummary'] ?? true;
-          _urgentAlerts = data['urgentAlerts'] ?? true;
-          _eventReminders = data['eventReminders'] ?? true;
+          _desktopAlerts      = data['desktopAlerts']      ?? true;
+          _dailySummary       = data['dailySummary']       ?? true;
+          _urgentAlerts       = data['urgentAlerts']       ?? true;
+          _eventReminders     = data['eventReminders']     ?? true;
         });
       }
     }
   }
 
-  Future<void> _saveSettings() async {
+  // ── Actions ───────────────────────────────────────────────────────
+  Future<void> _pickAndUploadImage() async {
+    final picker = ImagePicker();
+    final picked = await picker.pickImage(source: ImageSource.gallery, imageQuality: 50);
+    if (picked == null) return;
+    setState(() => _isLoading = true);
+    try {
+      final bytes        = await File(picked.path).readAsBytes();
+      final base64String = base64Encode(bytes);
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(_currentUser!.uid)
+          .set({'photoBase64': base64String}, SetOptions(merge: true));
+      setState(() => _profileImageBase64 = base64String);
+      await ActivityLogger.log(
+          action: 'Updated profile picture', module: 'Admin Settings');
+      _showSnack('Profile picture updated', success: true);
+    } catch (e) {
+      _showSnack('Error saving picture: $e', success: false);
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _saveNotificationSettings() async {
     await FirebaseFirestore.instance
         .collection('user_settings')
         .doc(_currentUser?.uid)
         .set({
       'emailNotifications': _emailNotifications,
-      'desktopAlerts': _desktopAlerts,
-      'dailySummary': _dailySummary,
-      'urgentAlerts': _urgentAlerts,
-      'eventReminders': _eventReminders,
-      'updatedAt': FieldValue.serverTimestamp(),
+      'desktopAlerts':      _desktopAlerts,
+      'dailySummary':       _dailySummary,
+      'urgentAlerts':       _urgentAlerts,
+      'eventReminders':     _eventReminders,
+      'updatedAt':          FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
     await ActivityLogger.log(
-      action: 'Updated notification preferences',
-      module: 'Admin Settings',
-      severity: 'info',
-    );
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Settings saved')),
-      );
-    }
+        action: 'Updated notification preferences', module: 'Admin Settings');
+    _showSnack('Preferences saved', success: true);
   }
 
   Future<void> _updateProfile() async {
     if (_fullNameController.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Name cannot be empty'), backgroundColor: UpriseColors.error),
-      );
+      _showSnack('Name cannot be empty', success: false);
       return;
     }
     setState(() => _isLoading = true);
     try {
-      if (_currentUser != null) {
-        await _currentUser!.updateDisplayName(_fullNameController.text);
-        await FirebaseFirestore.instance
-            .collection('users')
-            .doc(_currentUser!.uid)
-            .set({
-          'fullName': _fullNameController.text,
-          'email': _emailController.text,
-          'updatedAt': FieldValue.serverTimestamp(),
-        }, SetOptions(merge: true));
-        await ActivityLogger.log(
-          action: 'Updated profile name to ${_fullNameController.text}',
-          module: 'Admin Settings',
-          severity: 'info',
-        );
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Profile updated')),
-          );
-        }
-      }
+      await _currentUser!.updateDisplayName(_fullNameController.text.trim());
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(_currentUser!.uid)
+          .set({
+        'fullName':  _fullNameController.text.trim(),
+        'email':     _emailController.text.trim(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+      await ActivityLogger.log(
+          action: 'Updated profile name to ${_fullNameController.text.trim()}',
+          module: 'Admin Settings');
+      _showSnack('Profile updated successfully', success: true);
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e'), backgroundColor: UpriseColors.error),
-        );
-      }
+      _showSnack('Error: $e', success: false);
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -251,15 +397,11 @@ class _AdminSettingsState extends State<AdminSettings>
 
   Future<void> _changePassword() async {
     if (_newPasswordController.text != _confirmPasswordController.text) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Passwords do not match'), backgroundColor: UpriseColors.error),
-      );
+      _showSnack('Passwords do not match', success: false);
       return;
     }
     if (_newPasswordController.text.length < 6) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Password must be at least 6 characters'), backgroundColor: UpriseColors.error),
-      );
+      _showSnack('Password must be at least 6 characters', success: false);
       return;
     }
     setState(() => _isLoading = true);
@@ -268,54 +410,302 @@ class _AdminSettingsState extends State<AdminSettings>
       _newPasswordController.clear();
       _confirmPasswordController.clear();
       await ActivityLogger.log(
-        action: 'Changed account password',
-        module: 'Admin Settings',
-        severity: 'info',
-      );
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Password changed successfully')),
-        );
-      }
+          action: 'Changed account password', module: 'Admin Settings');
+      _showSnack('Password changed successfully', success: true);
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e'), backgroundColor: UpriseColors.error),
-        );
-      }
+      _showSnack('Error: $e', success: false);
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
   }
 
+  void _showSnack(String message, {required bool success}) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message, style: GoogleFonts.beVietnamPro(fontSize: 13)),
+        backgroundColor: success ? const Color(0xFF059669) : UpriseColors.error,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      ),
+    );
+  }
+
+  // ── Build ─────────────────────────────────────────────────────────
   @override
-Widget build(BuildContext context) {
-  return Container(  // <-- Scaffold naging Container
-    color: UpriseColors.lightGray,
-    child: Column(
-      children: [
-        // Header
-        Container(
-          padding: const EdgeInsets.all(24),
-          decoration: BoxDecoration(
-            color: UpriseColors.white,
-            border: Border(bottom: BorderSide(color: UpriseColors.mediumGray)),
+  Widget build(BuildContext context) {
+    return Container(
+      color: const Color(0xFFFBFCFE),
+      child: Column(
+        children: [
+          _buildHeader(),
+          _buildTabBar(),
+          Expanded(
+            child: TabBarView(
+              controller: _tabController,
+              children: [
+                _buildProfileTab(),
+                _buildPreferencesTab(),
+                _buildSecurityTab(),
+                _buildAuditLogsTab(),
+              ],
+            ),
           ),
-          child: Row(
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHeader() {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(28, 28, 28, 20),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: Border(bottom: BorderSide(color: Color(0xFFE8ECF0))),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: UpriseColors.primaryDark.withOpacity(0.10),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(Icons.settings_rounded, color: UpriseColors.primaryDark, size: 22),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Admin System Settings',
+                  style: GoogleFonts.beVietnamPro(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w700,
+                    color: const Color(0xFF1A202C),
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  'Manage your profile, security, and notification preferences.',
+                  style: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF64748B)),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTabBar() {
+    return Container(
+      color: Colors.white,
+      child: TabBar(
+        controller: _tabController,
+        tabs: const [
+          Tab(text: 'Profile'),
+          Tab(text: 'Preferences'),
+          Tab(text: 'Security'),
+          Tab(text: 'Audit Logs'),
+        ],
+        labelColor: UpriseColors.primaryDark,
+        unselectedLabelColor: const Color(0xFF64748B),
+        indicatorColor: UpriseColors.primaryDark,
+        indicatorWeight: 2.5,
+        indicatorSize: TabBarIndicatorSize.label,
+        labelStyle: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w700),
+        unselectedLabelStyle: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w500),
+      ),
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // PROFILE TAB
+  // ═══════════════════════════════════════════════════════════════════
+  Widget _buildProfileTab() {
+    ImageProvider? imageProvider;
+    if (_profileImageBase64 != null && _profileImageBase64!.isNotEmpty) {
+      imageProvider = MemoryImage(base64Decode(_profileImageBase64!));
+    }
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(28),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 680),
+          child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(
+              // Avatar card
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(28),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(_DS.radiusLg),
+                  border: Border.all(color: const Color(0xFFE8ECF0)),
+                  boxShadow: _DS.cardShadow,
+                ),
                 child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    Stack(
+                      children: [
+                        Container(
+                          width: 96,
+                          height: 96,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                                color: UpriseColors.primaryDark.withOpacity(0.15),
+                                width: 3),
+                            boxShadow: _DS.cardShadow,
+                          ),
+                          child: ClipOval(
+                            child: imageProvider != null
+                                ? Image(image: imageProvider, fit: BoxFit.cover)
+                                : Container(
+                                    color: UpriseColors.primaryDark.withOpacity(0.08),
+                                    child: Icon(Icons.person_rounded,
+                                        size: 48, color: UpriseColors.primaryDark.withOpacity(0.4)),
+                                  ),
+                          ),
+                        ),
+                        Positioned(
+                          bottom: 0,
+                          right: 0,
+                          child: GestureDetector(
+                            onTap: _isLoading ? null : _pickAndUploadImage,
+                            child: Container(
+                              width: 30,
+                              height: 30,
+                              decoration: BoxDecoration(
+                                color: UpriseColors.primaryDark,
+                                shape: BoxShape.circle,
+                                border: Border.all(color: Colors.white, width: 2),
+                              ),
+                              child: _isLoading
+                                  ? const Padding(
+                                      padding: EdgeInsets.all(6),
+                                      child: CircularProgressIndicator(
+                                          strokeWidth: 2, color: Colors.white),
+                                    )
+                                  : const Icon(Icons.camera_alt_rounded,
+                                      size: 14, color: Colors.white),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 14),
                     Text(
-                      'Admin System Settings',
-                      style: GoogleFonts.beVietnamPro(fontSize: 24, fontWeight: FontWeight.bold, color: UpriseColors.charcoal),
+                      _fullNameController.text.isNotEmpty
+                          ? _fullNameController.text
+                          : 'Admin User',
+                      style: GoogleFonts.beVietnamPro(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w700,
+                        color: const Color(0xFF1A202C),
+                      ),
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      'Manage your profile, security, and notification preferences.',
-                      style: GoogleFonts.beVietnamPro(fontSize: 14, color: UpriseColors.darkGray),
+                      _emailController.text,
+                      style: GoogleFonts.beVietnamPro(
+                          fontSize: 13, color: const Color(0xFF64748B)),
+                    ),
+                    const SizedBox(height: 12),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+                      decoration: BoxDecoration(
+                        color: UpriseColors.primaryDark.withOpacity(0.08),
+                        borderRadius: BorderRadius.circular(_DS.radiusPill),
+                      ),
+                      child: Text(
+                        'System Administrator',
+                        style: GoogleFonts.beVietnamPro(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          color: UpriseColors.primaryDark,
+                          letterSpacing: 0.4,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'Tap the camera icon to change your photo',
+                      style: GoogleFonts.beVietnamPro(
+                          fontSize: 11, color: const Color(0xFF9AA5B4)),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 20),
+              // Personal info card
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(_DS.radiusLg),
+                  border: Border.all(color: const Color(0xFFE8ECF0)),
+                  boxShadow: _DS.cardShadow,
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _sectionLabel('Personal Information', icon: Icons.badge_outlined),
+                    TextFormField(
+                      controller: _fullNameController,
+                      style: GoogleFonts.beVietnamPro(fontSize: 13),
+                      decoration: _DS.inputDecoration('Full Name',
+                          hint: 'e.g., Juan dela Cruz', icon: Icons.person_outline_rounded),
+                      onChanged: (_) => setState(() {}),
+                    ),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: _emailController,
+                      enabled: false,
+                      style: GoogleFonts.beVietnamPro(
+                          fontSize: 13, color: const Color(0xFF9AA5B4)),
+                      decoration: _DS.inputDecoration('Email Address',
+                          icon: Icons.email_outlined, enabled: false),
+                    ),
+                    const SizedBox(height: 8),
+                    Padding(
+                      padding: const EdgeInsets.only(left: 2),
+                      child: Text(
+                        'Email address cannot be changed here.',
+                        style: GoogleFonts.beVietnamPro(
+                            fontSize: 11, color: const Color(0xFF9AA5B4)),
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    ElevatedButton.icon(
+                      onPressed: _isLoading ? null : _updateProfile,
+                      icon: _isLoading
+                          ? const SizedBox(
+                              width: 14,
+                              height: 14,
+                              child: CircularProgressIndicator(
+                                  strokeWidth: 2, color: Colors.white))
+                          : const Icon(Icons.save_rounded, size: 16),
+                      label: Text(
+                        'Save Changes',
+                        style: GoogleFonts.beVietnamPro(
+                            fontSize: 13, fontWeight: FontWeight.w600),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: UpriseColors.primaryDark,
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        minimumSize: const Size(double.infinity, 44),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(_DS.radiusSm)),
+                      ),
                     ),
                   ],
                 ),
@@ -323,347 +713,380 @@ Widget build(BuildContext context) {
             ],
           ),
         ),
-        // Tab Bar
-        Container(
-          color: UpriseColors.white,
-          child: TabBar(
-            controller: _tabController,
-            tabs: const [
-              Tab(text: 'Profile'),
-              Tab(text: 'Preferences'),
-              Tab(text: 'Security'),
-              Tab(text: 'Audit Logs'),
-            ],
-            labelColor: UpriseColors.primaryDark,
-            unselectedLabelColor: UpriseColors.darkGray,
-            indicatorColor: UpriseColors.primaryDark,
-            indicatorWeight: 3,
-            labelStyle: GoogleFonts.beVietnamPro(fontWeight: FontWeight.w600),
-          ),
-        ),
-        // Tab Bar View - ito ang pinalitan ko
-        Expanded(
-          child: TabBarView(
-            controller: _tabController,
-            children: [
-              _buildProfileTab(),
-              _buildPreferencesTab(),
-              _buildSecurityTab(),
-              _buildAuditLogsTab(),
-            ],
-          ),
-        ),
-      ],
-    ),
-  );
-}
+      ),
+    );
+  }
 
-  // ========== PROFILE TAB ==========
-  Widget _buildProfileTab() {
-    ImageProvider? imageProvider;
-    if (_profileImageBase64 != null && _profileImageBase64!.isNotEmpty) {
-      imageProvider = MemoryImage(base64Decode(_profileImageBase64!));
-    }
+  // ═══════════════════════════════════════════════════════════════════
+  // PREFERENCES TAB
+  // ═══════════════════════════════════════════════════════════════════
+  Widget _buildPreferencesTab() {
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        children: [
-          Container(
+      padding: const EdgeInsets.all(28),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 680),
+          child: Container(
+            width: double.infinity,
             padding: const EdgeInsets.all(24),
             decoration: BoxDecoration(
-              color: UpriseColors.white,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: UpriseColors.primaryDark, width: 1),
-            ),
-            child: Column(
-              children: [
-                Center(
-                  child: Stack(
-                    children: [
-                      CircleAvatar(
-                        radius: 60,
-                        backgroundColor: UpriseColors.lightGray,
-                        backgroundImage: imageProvider,
-                        child: _profileImageBase64 == null
-                            ? Icon(Icons.person, size: 60, color: UpriseColors.darkGray)
-                            : null,
-                      ),
-                      Positioned(
-                        bottom: 0,
-                        right: 0,
-                        child: GestureDetector(
-                          onTap: _pickAndUploadImage,
-                          child: Container(
-                            padding: const EdgeInsets.all(8),
-                            decoration: BoxDecoration(
-                              color: UpriseColors.primaryDark,
-                              shape: BoxShape.circle,
-                            ),
-                            child: const Icon(Icons.camera_alt, size: 20, color: Colors.white),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 20),
-                Text(
-                  'Tap the camera icon to change your profile picture',
-                  style: GoogleFonts.beVietnamPro(fontSize: 12, color: UpriseColors.darkGray),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 24),
-          Container(
-            padding: const EdgeInsets.all(24),
-            decoration: BoxDecoration(
-              color: UpriseColors.white,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: UpriseColors.primaryDark, width: 1),
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(_DS.radiusLg),
+              border: Border.all(color: const Color(0xFFE8ECF0)),
+              boxShadow: _DS.cardShadow,
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  'Personal Information',
-                  style: GoogleFonts.beVietnamPro(fontSize: 18, fontWeight: FontWeight.bold, color: UpriseColors.charcoal),
+                _sectionLabel('Notification Settings', icon: Icons.notifications_outlined),
+                _notificationTile(
+                  title: 'Email Notifications',
+                  subtitle: 'Receive daily summary of pending approvals via email',
+                  icon: Icons.email_outlined,
+                  value: _emailNotifications,
+                  onChanged: (v) => setState(() => _emailNotifications = v),
+                ),
+                _notificationTile(
+                  title: 'Desktop Alerts',
+                  subtitle: 'In-browser push notifications for urgent alerts',
+                  icon: Icons.desktop_windows_outlined,
+                  value: _desktopAlerts,
+                  onChanged: (v) => setState(() => _desktopAlerts = v),
+                ),
+                const SizedBox(height: 8),
+                _sectionLabel('Advanced Notifications', icon: Icons.tune_rounded),
+                _notificationTile(
+                  title: 'Daily Summary',
+                  subtitle: 'Get a daily digest of all system activities',
+                  icon: Icons.summarize_outlined,
+                  value: _dailySummary,
+                  onChanged: (v) => setState(() => _dailySummary = v),
+                ),
+                _notificationTile(
+                  title: 'Urgent Alerts',
+                  subtitle: 'Receive immediate notifications for critical issues',
+                  icon: Icons.warning_amber_rounded,
+                  value: _urgentAlerts,
+                  onChanged: (v) => setState(() => _urgentAlerts = v),
+                ),
+                _notificationTile(
+                  title: 'Event Reminders',
+                  subtitle: 'Get reminded about upcoming events and deadlines',
+                  icon: Icons.event_rounded,
+                  value: _eventReminders,
+                  onChanged: (v) => setState(() => _eventReminders = v),
                 ),
                 const SizedBox(height: 20),
-                TextFormField(
-                  controller: _fullNameController,
-                  decoration: InputDecoration(
-                    labelText: 'Full Name',
-                    prefixIcon: Icon(Icons.person_outline, color: UpriseColors.primaryDark),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                    filled: true,
-                    fillColor: UpriseColors.lightGray,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                TextFormField(
-                  controller: _emailController,
-                  enabled: false,
-                  decoration: InputDecoration(
-                    labelText: 'Email Address',
-                    prefixIcon: Icon(Icons.email_outlined, color: UpriseColors.primaryDark),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                    filled: true,
-                    fillColor: UpriseColors.lightGray,
-                  ),
-                ),
-                const SizedBox(height: 24),
                 ElevatedButton.icon(
-                  onPressed: _isLoading ? null : _updateProfile,
-                  icon: const Icon(Icons.save),
-                  label: const Text('Save Changes'),
+                  onPressed: _saveNotificationSettings,
+                  icon: const Icon(Icons.save_rounded, size: 16),
+                  label: Text(
+                    'Save Preferences',
+                    style: GoogleFonts.beVietnamPro(
+                        fontSize: 13, fontWeight: FontWeight.w600),
+                  ),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: UpriseColors.primaryDark,
-                    foregroundColor: UpriseColors.white,
-                    minimumSize: const Size(double.infinity, 48),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    minimumSize: const Size(double.infinity, 44),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(_DS.radiusSm)),
                   ),
                 ),
               ],
             ),
           ),
-        ],
-      ),
-    );
-  }
-
-  // ========== PREFERENCES TAB ==========
-  Widget _buildPreferencesTab() {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
-      child: Container(
-        padding: const EdgeInsets.all(24),
-        decoration: BoxDecoration(
-          color: UpriseColors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: UpriseColors.primaryDark, width: 1),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Notification Settings',
-              style: GoogleFonts.beVietnamPro(fontSize: 18, fontWeight: FontWeight.bold, color: UpriseColors.charcoal),
-            ),
-            const SizedBox(height: 16),
-            _notificationSwitch(
-              title: 'Email Notifications',
-              subtitle: 'Receive daily summary of pending approvals',
-              value: _emailNotifications,
-              onChanged: (v) => setState(() { _emailNotifications = v; _saveSettings(); }),
-            ),
-            _notificationSwitch(
-              title: 'Desktop Alerts',
-              subtitle: 'In-browser push notifications for urgent alerts',
-              value: _desktopAlerts,
-              onChanged: (v) => setState(() { _desktopAlerts = v; _saveSettings(); }),
-            ),
-            const Divider(),
-            Text(
-              'Advanced Notifications',
-              style: GoogleFonts.beVietnamPro(fontSize: 14, fontWeight: FontWeight.w600, color: UpriseColors.charcoal),
-            ),
-            const SizedBox(height: 8),
-            _notificationSwitch(
-              title: 'Daily Summary',
-              subtitle: 'Get a daily digest of all system activities',
-              value: _dailySummary,
-              onChanged: (v) => setState(() { _dailySummary = v; _saveSettings(); }),
-            ),
-            _notificationSwitch(
-              title: 'Urgent Alerts',
-              subtitle: 'Receive immediate notifications for critical issues',
-              value: _urgentAlerts,
-              onChanged: (v) => setState(() { _urgentAlerts = v; _saveSettings(); }),
-            ),
-            _notificationSwitch(
-              title: 'Event Reminders',
-              subtitle: 'Get reminded about upcoming events and deadlines',
-              value: _eventReminders,
-              onChanged: (v) => setState(() { _eventReminders = v; _saveSettings(); }),
-            ),
-          ],
         ),
       ),
     );
   }
 
-  Widget _notificationSwitch({
+  Widget _notificationTile({
     required String title,
     required String subtitle,
+    required IconData icon,
     required bool value,
     required ValueChanged<bool> onChanged,
   }) {
-    return SwitchListTile(
-      contentPadding: EdgeInsets.zero,
-      title: Text(title, style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.w500)),
-      subtitle: Text(subtitle, style: GoogleFonts.beVietnamPro(fontSize: 12, color: UpriseColors.darkGray)),
-      value: value,
-      onChanged: onChanged,
-      activeThumbColor: UpriseColors.primaryDark,
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8F9FB),
+        borderRadius: BorderRadius.circular(_DS.radiusSm),
+        border: Border.all(
+          color: value
+              ? UpriseColors.primaryDark.withOpacity(0.3)
+              : const Color(0xFFE2E6EA),
+        ),
+      ),
+      child: Row(children: [
+        Container(
+          width: 36,
+          height: 36,
+          decoration: BoxDecoration(
+            color: value
+                ? UpriseColors.primaryDark.withOpacity(0.10)
+                : const Color(0xFFE8ECF0),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Icon(icon,
+              size: 18,
+              color: value
+                  ? UpriseColors.primaryDark
+                  : const Color(0xFF9AA5B4)),
+        ),
+        const SizedBox(width: 14),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(title,
+                  style: GoogleFonts.beVietnamPro(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: const Color(0xFF1A202C),
+                  )),
+              const SizedBox(height: 2),
+              Text(subtitle,
+                  style: GoogleFonts.beVietnamPro(
+                      fontSize: 11, color: const Color(0xFF64748B))),
+            ],
+          ),
+        ),
+        Switch(
+          value: value,
+          onChanged: onChanged,
+          activeColor: UpriseColors.primaryDark,
+          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        ),
+      ]),
     );
   }
 
-  // ========== SECURITY TAB ==========
+  // ═══════════════════════════════════════════════════════════════════
+  // SECURITY TAB
+  // ═══════════════════════════════════════════════════════════════════
   Widget _buildSecurityTab() {
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(24),
-            decoration: BoxDecoration(
-              color: UpriseColors.white,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: UpriseColors.primaryDark, width: 1),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Change Password',
-                  style: GoogleFonts.beVietnamPro(fontSize: 18, fontWeight: FontWeight.bold, color: UpriseColors.charcoal),
+      padding: const EdgeInsets.all(28),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 680),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Change password card
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(_DS.radiusLg),
+                  border: Border.all(color: const Color(0xFFE8ECF0)),
+                  boxShadow: _DS.cardShadow,
                 ),
-                const SizedBox(height: 8),
-                Text(
-                  'Regularly updating your password increases account security.',
-                  style: GoogleFonts.beVietnamPro(fontSize: 13, color: UpriseColors.darkGray),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _sectionLabel('Change Password', icon: Icons.lock_outline_rounded),
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF0F6FF),
+                        borderRadius: BorderRadius.circular(_DS.radiusSm),
+                        border: Border.all(color: const Color(0xFFBFD7FF)),
+                      ),
+                      child: Row(children: [
+                        const Icon(Icons.info_outline_rounded,
+                            size: 15, color: Color(0xFF2563EB)),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Regularly updating your password keeps your account secure.',
+                            style: GoogleFonts.beVietnamPro(
+                                fontSize: 12, color: const Color(0xFF1D4ED8), height: 1.4),
+                          ),
+                        ),
+                      ]),
+                    ),
+                    const SizedBox(height: 16),
+                    TextFormField(
+                      controller: _newPasswordController,
+                      obscureText: !_showNewPassword,
+                      style: GoogleFonts.beVietnamPro(fontSize: 13),
+                      decoration: _DS
+                          .inputDecoration('New Password', icon: Icons.lock_outline_rounded)
+                          .copyWith(
+                            suffixIcon: IconButton(
+                              icon: Icon(
+                                _showNewPassword
+                                    ? Icons.visibility_off_outlined
+                                    : Icons.visibility_outlined,
+                                size: 18,
+                                color: const Color(0xFF9AA5B4),
+                              ),
+                              onPressed: () =>
+                                  setState(() => _showNewPassword = !_showNewPassword),
+                            ),
+                          ),
+                    ),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: _confirmPasswordController,
+                      obscureText: !_showConfirmPassword,
+                      style: GoogleFonts.beVietnamPro(fontSize: 13),
+                      decoration: _DS
+                          .inputDecoration('Confirm New Password',
+                              icon: Icons.lock_outline_rounded)
+                          .copyWith(
+                            suffixIcon: IconButton(
+                              icon: Icon(
+                                _showConfirmPassword
+                                    ? Icons.visibility_off_outlined
+                                    : Icons.visibility_outlined,
+                                size: 18,
+                                color: const Color(0xFF9AA5B4),
+                              ),
+                              onPressed: () =>
+                                  setState(() => _showConfirmPassword = !_showConfirmPassword),
+                            ),
+                          ),
+                    ),
+                    const SizedBox(height: 20),
+                    ElevatedButton.icon(
+                      onPressed: _isLoading ? null : _changePassword,
+                      icon: _isLoading
+                          ? const SizedBox(
+                              width: 14,
+                              height: 14,
+                              child: CircularProgressIndicator(
+                                  strokeWidth: 2, color: Colors.white))
+                          : const Icon(Icons.update_rounded, size: 16),
+                      label: Text(
+                        'Update Password',
+                        style: GoogleFonts.beVietnamPro(
+                            fontSize: 13, fontWeight: FontWeight.w600),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: UpriseColors.primaryDark,
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        minimumSize: const Size(double.infinity, 44),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(_DS.radiusSm)),
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 20),
-                TextFormField(
-                  controller: _newPasswordController,
-                  obscureText: true,
-                  decoration: InputDecoration(
-                    labelText: 'New Password',
-                    prefixIcon: Icon(Icons.lock_outline, color: UpriseColors.primaryDark),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                    filled: true,
-                    fillColor: UpriseColors.lightGray,
-                  ),
+              ),
+              const SizedBox(height: 20),
+              // 2FA card
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(_DS.radiusLg),
+                  border: Border.all(color: const Color(0xFFE8ECF0)),
+                  boxShadow: _DS.cardShadow,
                 ),
-                const SizedBox(height: 16),
-                TextFormField(
-                  controller: _confirmPasswordController,
-                  obscureText: true,
-                  decoration: InputDecoration(
-                    labelText: 'Confirm New Password',
-                    prefixIcon: Icon(Icons.lock_outline, color: UpriseColors.primaryDark),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                    filled: true,
-                    fillColor: UpriseColors.lightGray,
-                  ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _sectionLabel('Two-Factor Authentication', icon: Icons.shield_outlined),
+                    _notificationTile(
+                      title: 'Enable 2FA',
+                      subtitle:
+                          'Receive a verification code via email on each login',
+                      icon: Icons.verified_user_outlined,
+                      value: false,
+                      onChanged: (_) {},
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 24),
-                ElevatedButton.icon(
-                  onPressed: _isLoading ? null : _changePassword,
-                  icon: const Icon(Icons.update),
-                  label: const Text('Update Password'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: UpriseColors.primaryDark,
-                    foregroundColor: UpriseColors.white,
-                    minimumSize: const Size(double.infinity, 48),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
+              ),
+              const SizedBox(height: 20),
+              // Danger zone
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(_DS.radiusLg),
+                  border: Border.all(color: const Color(0xFFFCA5A5)),
+                  boxShadow: _DS.cardShadow,
                 ),
-              ],
-            ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(children: [
+                      const Icon(Icons.warning_amber_rounded,
+                          size: 16, color: Color(0xFFDC2626)),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Danger Zone',
+                        style: GoogleFonts.beVietnamPro(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: const Color(0xFFDC2626),
+                          letterSpacing: 0.3,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                          child: Divider(
+                              color: const Color(0xFFFCA5A5),
+                              thickness: 1)),
+                    ]),
+                    const SizedBox(height: 16),
+                    OutlinedButton.icon(
+                      onPressed: () async {
+                        await FirebaseAuth.instance.signOut();
+                        if (context.mounted) {
+                          Navigator.of(context).pushAndRemoveUntil(
+                            MaterialPageRoute(
+                                builder: (_) => const AdminLogin()),
+                            (_) => false,
+                          );
+                        }
+                      },
+                      icon: const Icon(Icons.logout_rounded, size: 16),
+                      label: Text(
+                        'Sign Out',
+                        style: GoogleFonts.beVietnamPro(
+                            fontSize: 13, fontWeight: FontWeight.w600),
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: const Color(0xFFDC2626),
+                        side: const BorderSide(color: Color(0xFFFCA5A5)),
+                        minimumSize: const Size(double.infinity, 44),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(_DS.radiusSm)),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
-          const SizedBox(height: 24),
-          Container(
-            padding: const EdgeInsets.all(24),
-            decoration: BoxDecoration(
-              color: UpriseColors.white,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: UpriseColors.primaryDark, width: 1),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Two-Factor Authentication',
-                  style: GoogleFonts.beVietnamPro(fontSize: 18, fontWeight: FontWeight.bold, color: UpriseColors.charcoal),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'Add an extra layer of security to your account.',
-                  style: GoogleFonts.beVietnamPro(fontSize: 13, color: UpriseColors.darkGray),
-                ),
-                const SizedBox(height: 16),
-                SwitchListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: Text('Enable 2FA', style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.w500)),
-                  subtitle: Text('Receive a verification code via email on each login', style: GoogleFonts.beVietnamPro(fontSize: 12)),
-                  value: false,
-                  onChanged: (v) {},
-                  activeThumbColor: UpriseColors.primaryDark,
-                ),
-              ],
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
 
-  // ========== AUDIT LOGS TAB ==========
+  // ═══════════════════════════════════════════════════════════════════
+  // AUDIT LOGS TAB
+  // ═══════════════════════════════════════════════════════════════════
   Widget _buildAuditLogsTab() {
     final email = _currentUser?.email ?? '';
     if (email.isEmpty) {
       return const Center(child: Text('Unable to load logs: user not found'));
     }
 
-    return FutureBuilder<QuerySnapshot>(
-      future: FirebaseFirestore.instance
-          .collection('activity_logs')
-          .where('user', isEqualTo: email)
-          .orderBy('timestamp', descending: true)
-          .limit(20)
-          .get(),
+    return FutureBuilder<List<Map<String, dynamic>>>(
+      future: _fetchUserAuditLogs(email),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
@@ -673,77 +1096,269 @@ Widget build(BuildContext context) {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(Icons.error_outline, size: 48, color: UpriseColors.error),
-                const SizedBox(height: 12),
-                Text('Error loading logs: ${snapshot.error}',
-                    style: GoogleFonts.beVietnamPro(color: UpriseColors.darkGray)),
+                Container(
+                  width: 64,
+                  height: 64,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFEF2F2),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: const Icon(Icons.error_outline_rounded,
+                      size: 32, color: Color(0xFFDC2626)),
+                ),
+                const SizedBox(height: 14),
+                Text('Error loading logs',
+                    style: GoogleFonts.beVietnamPro(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                        color: const Color(0xFF374151))),
+                const SizedBox(height: 6),
+                Text('${snapshot.error}',
+                    style: GoogleFonts.beVietnamPro(
+                        fontSize: 12, color: const Color(0xFF64748B))),
               ],
             ),
           );
         }
-        final logs = snapshot.data!.docs;
+
+        final logs = snapshot.data ?? [];
         if (logs.isEmpty) {
           return Center(
-            child: Padding(
-              padding: const EdgeInsets.all(40),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.history, size: 48, color: UpriseColors.mediumGray),
-                  const SizedBox(height: 16),
-                  Text('No recent activity found.',
-                      style: GoogleFonts.beVietnamPro(color: UpriseColors.darkGray)),
-                  const SizedBox(height: 8),
-                  Text('Actions you perform will appear here.',
-                      style: GoogleFonts.beVietnamPro(fontSize: 12, color: UpriseColors.darkGray)),
-                ],
-              ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  width: 80,
+                  height: 80,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF1F5F9),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: const Icon(Icons.history_rounded,
+                      size: 40, color: Color(0xFF9AA5B4)),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'No recent activity',
+                  style: GoogleFonts.beVietnamPro(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: const Color(0xFF374151),
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  'Actions you perform will appear here.',
+                  style: GoogleFonts.beVietnamPro(
+                      fontSize: 13, color: const Color(0xFF64748B)),
+                ),
+              ],
             ),
           );
         }
-        return ListView.separated(
-          padding: const EdgeInsets.all(16),
-          itemCount: logs.length,
-          separatorBuilder: (_, __) => const Divider(),
-          itemBuilder: (context, index) {
-            final data = logs[index].data() as Map<String, dynamic>;
-            final timestamp = data['timestamp'] as Timestamp;
-            final dateTime = timestamp.toDate();
-            return ListTile(
-              leading: CircleAvatar(
-                backgroundColor: UpriseColors.primaryDark.withOpacity(0.1),
-                child: Icon(Icons.history, color: UpriseColors.primaryDark, size: 18),
-              ),
-              title: Text(data['action'] ?? 'Action',
-                  style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.w500)),
-              subtitle: Text(
-                '${data['module'] ?? 'System'} • ${DateFormat('MMM dd, yyyy hh:mm a').format(dateTime)}',
-                style: GoogleFonts.beVietnamPro(fontSize: 12),
-              ),
-              trailing: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: (data['severity'] == 'error' || data['severity'] == 'critical')
-                      ? UpriseColors.error.withOpacity(0.1)
-                      : UpriseColors.success.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Text(
-                  data['severity']?.toUpperCase() ?? 'INFO',
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Log count header
+            Padding(
+              padding: const EdgeInsets.fromLTRB(28, 20, 28, 12),
+              child: Row(children: [
+                Text(
+                  'Your Recent Actions',
                   style: GoogleFonts.beVietnamPro(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w600,
-                    color: (data['severity'] == 'error' || data['severity'] == 'critical')
-                        ? UpriseColors.error
-                        : UpriseColors.success,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: const Color(0xFF1A202C),
                   ),
                 ),
+                const SizedBox(width: 10),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: UpriseColors.primaryDark.withOpacity(0.08),
+                    borderRadius: BorderRadius.circular(_DS.radiusPill),
+                  ),
+                  child: Text(
+                    '${logs.length} entries',
+                    style: GoogleFonts.beVietnamPro(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: UpriseColors.primaryDark,
+                    ),
+                  ),
+                ),
+              ]),
+            ),
+            // Table
+            Expanded(
+              child: Container(
+                margin: const EdgeInsets.symmetric(horizontal: 28),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: const Color(0xFFE8ECF0)),
+                  boxShadow: _DS.cardShadow,
+                ),
+                child: Column(children: [
+                  // Table header
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 20, vertical: 13),
+                    decoration: const BoxDecoration(
+                      color: Color(0xFFF8F9FB),
+                      borderRadius:
+                          BorderRadius.vertical(top: Radius.circular(14)),
+                      border: Border(
+                          bottom: BorderSide(color: Color(0xFFE8ECF0))),
+                    ),
+                    child: Row(children: [
+                      Expanded(
+                          flex: 5,
+                          child: _headerCell('ACTION')),
+                      Expanded(
+                          flex: 3,
+                          child: _headerCell('MODULE')),
+                      Expanded(
+                          flex: 2,
+                          child: _headerCell('SEVERITY')),
+                      Expanded(
+                          flex: 3,
+                          child: _headerCell('TIMESTAMP')),
+                    ]),
+                  ),
+                  // Rows
+                  Expanded(
+                    child: ListView.builder(
+                      itemCount: logs.length,
+                      itemBuilder: (_, i) {
+                      final data = logs[i] as Map<String, dynamic>;
+                      final ts = data['_ts'] as DateTime?;
+                      final severity = (data['severity'] ?? 'info').toString();
+                      final module = (data['module'] ?? 'System').toString();
+                      final action = (data['action'] ?? '—').toString();
+                      final isLast = i == logs.length - 1;
+
+                        return Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 20, vertical: 14),
+                          decoration: BoxDecoration(
+                            border: isLast
+                                ? null
+                                : const Border(
+                                    bottom: BorderSide(
+                                        color: Color(0xFFF1F5F9))),
+                          ),
+                          child: Row(children: [
+                            Expanded(
+                              flex: 5,
+                              child: Text(
+                                action,
+                                style: GoogleFonts.beVietnamPro(
+                                  fontSize: 13,
+                                  color: const Color(0xFF374151),
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                                maxLines: 2,
+                              ),
+                            ),
+                            Expanded(
+                              flex: 3,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 8, vertical: 3),
+                                decoration: BoxDecoration(
+                                  color: UpriseColors.primaryDark
+                                      .withOpacity(0.07),
+                                  borderRadius:
+                                      BorderRadius.circular(6),
+                                ),
+                                child: Text(
+                                  module,
+                                  style: GoogleFonts.beVietnamPro(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                    color: UpriseColors.primaryDark,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ),
+                            Expanded(
+                              flex: 2,
+                              child: _SeverityBadge(severity),
+                            ),
+                            Expanded(
+                              flex: 3,
+                              child: ts != null
+                                  ? Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Text(
+                                          DateFormat('MMM dd, yyyy')
+                                              .format(ts),
+                                          style: GoogleFonts.beVietnamPro(
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w500,
+                                            color: const Color(0xFF374151),
+                                          ),
+                                        ),
+                                        Text(
+                                          DateFormat('hh:mm a').format(ts),
+                                          style: GoogleFonts.beVietnamPro(
+                                              fontSize: 11,
+                                              color:
+                                                  const Color(0xFF9AA5B4)),
+                                        ),
+                                      ],
+                                    )
+                                  : Text('—',
+                                      style: GoogleFonts.beVietnamPro(
+                                          fontSize: 12,
+                                          color:
+                                              const Color(0xFF9AA5B4))),
+                            ),
+                          ]),
+                        );
+                      },
+                    ),
+                  ),
+                  // Footer note
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 20, vertical: 11),
+                    decoration: const BoxDecoration(
+                      border: Border(
+                          top: BorderSide(color: Color(0xFFE8ECF0))),
+                      color: Color(0xFFF8F9FB),
+                      borderRadius: BorderRadius.vertical(
+                          bottom: Radius.circular(14)),
+                    ),
+                    child: Text(
+                      'Showing your last ${logs.length} actions. Visit Activity Logs for the full audit trail.',
+                      style: GoogleFonts.beVietnamPro(
+                          fontSize: 11, color: const Color(0xFF9AA5B4)),
+                    ),
+                  ),
+                ]),
               ),
-            );
-          },
+            ),
+            const SizedBox(height: 24),
+          ],
         );
       },
     );
   }
-}
 
+  Widget _headerCell(String text) => Text(
+        text,
+        style: GoogleFonts.beVietnamPro(
+          fontSize: 11,
+          fontWeight: FontWeight.w700,
+          color: const Color(0xFF64748B),
+          letterSpacing: 0.7,
+        ),
+      );
+}

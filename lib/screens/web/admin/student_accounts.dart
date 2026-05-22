@@ -1,20 +1,158 @@
 import 'dart:io';
-import 'package:http/http.dart' as http;
-import 'dart:convert';
 import 'dart:math';
-import 'package:firebase_core/firebase_core.dart';
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:excel/excel.dart' hide Border;
 import 'package:csv/csv.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:http/http.dart' as http;
 import 'package:share_plus/share_plus.dart';
-import 'package:cross_file/cross_file.dart'; // For XFile
+import 'package:cross_file/cross_file.dart';
 import '../../theme/app_theme.dart';
 import '../../../services/activity_logger.dart' as activity_log;
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Design tokens (mirrors org_management.dart)
+// ─────────────────────────────────────────────────────────────────────────────
+class _DS {
+  static const double radiusSm  = 8;
+  static const double radiusMd  = 12;
+  static const double radiusLg  = 16;
+  static const double radiusPill = 100;
+
+  static final cardShadow = [
+    BoxShadow(
+      color: Colors.black.withOpacity(0.06),
+      blurRadius: 12,
+      offset: const Offset(0, 4),
+    ),
+  ];
+
+  static InputDecoration inputDecoration(
+    String label, {
+    String? hint,
+    IconData? icon,
+  }) {
+    return InputDecoration(
+      labelText: label,
+      hintText: hint,
+      prefixIcon: icon != null
+          ? Icon(icon, size: 18, color: const Color(0xFF9AA5B4))
+          : null,
+      labelStyle: GoogleFonts.beVietnamPro(
+          fontSize: 13, color: const Color(0xFF64748B)),
+      hintStyle: GoogleFonts.beVietnamPro(
+          fontSize: 13, color: const Color(0xFF9AA5B4)),
+      filled: true,
+      fillColor: const Color(0xFFF8F9FB),
+      contentPadding:
+          const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(radiusSm),
+        borderSide:
+            const BorderSide(color: Color(0xFFE2E6EA), width: 1),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(radiusSm),
+        borderSide:
+            const BorderSide(color: Color(0xFFE2E6EA), width: 1),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(radiusSm),
+        borderSide:
+            BorderSide(color: UpriseColors.primaryDark, width: 1.5),
+      ),
+      errorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(radiusSm),
+        borderSide:
+            BorderSide(color: UpriseColors.error, width: 1),
+      ),
+      focusedErrorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(radiusSm),
+        borderSide:
+            BorderSide(color: UpriseColors.error, width: 1.5),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Shared small widgets
+// ─────────────────────────────────────────────────────────────────────────────
+
+Widget _sectionLabel(String text, {IconData? icon}) {
+  return Padding(
+    padding: const EdgeInsets.only(bottom: 12),
+    child: Row(
+      children: [
+        if (icon != null) ...[
+          Icon(icon, size: 16, color: UpriseColors.primaryDark),
+          const SizedBox(width: 8),
+        ],
+        Text(
+          text,
+          style: GoogleFonts.beVietnamPro(
+            fontSize: 13,
+            fontWeight: FontWeight.w700,
+            color: UpriseColors.primaryDark,
+            letterSpacing: 0.3,
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+            child: Divider(
+                color: const Color(0xFFE2E6EA), thickness: 1)),
+      ],
+    ),
+  );
+}
+
+// Status badge — mirrors org_management
+Widget _statusBadge(String status) {
+  final Map<String, _BadgeStyle> styles = {
+    'verified': _BadgeStyle(
+        const Color(0xFFECFDF5), const Color(0xFF059669), 'VERIFIED'),
+    'pending': _BadgeStyle(
+        const Color(0xFFFFFBEB), const Color(0xFFD97706), 'PENDING'),
+    'suspended': _BadgeStyle(
+        const Color(0xFFFEF2F2), const Color(0xFFDC2626), 'SUSPENDED'),
+  };
+  final s = styles[status.toLowerCase()] ??
+      _BadgeStyle(const Color(0xFFF3F4F6), const Color(0xFF6B7280),
+          status.toUpperCase());
+  return Container(
+    padding:
+        const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+    decoration: BoxDecoration(
+      color: s.bg,
+      borderRadius: BorderRadius.circular(_DS.radiusPill),
+    ),
+    child: Text(
+      s.label,
+      style: GoogleFonts.beVietnamPro(
+        fontSize: 10,
+        fontWeight: FontWeight.w700,
+        color: s.fg,
+        letterSpacing: 0.8,
+      ),
+    ),
+  );
+}
+
+class _BadgeStyle {
+  final Color bg, fg;
+  final String label;
+  const _BadgeStyle(this.bg, this.fg, this.label);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Main Widget
+// ─────────────────────────────────────────────────────────────────────────────
 class StudentAccounts extends StatefulWidget {
   const StudentAccounts({super.key});
 
@@ -23,43 +161,27 @@ class StudentAccounts extends StatefulWidget {
 }
 
 class _StudentAccountsState extends State<StudentAccounts> {
-  final TextEditingController _searchController = TextEditingController();
-  String _statusFilter = 'All';      // All, pending, verified
+  final TextEditingController _searchController =
+      TextEditingController();
+  String _statusFilter = 'All';
   String _courseFilter = 'All';
   int _currentPage = 1;
   static const int _pageSize = 10;
 
-  // For batch import
-  File? _uploadedFile;
-  String _selectedFileName = '';
-  bool _isUploading = false;
-
-  // For manual add
-  final _formKey = GlobalKey<FormState>();
-  final _manualIdController = TextEditingController();
-  final _manualNameController = TextEditingController();
-  String _manualCourse = 'BSIT';
-  final _manualYearController = TextEditingController();
-  final _manualEmailController = TextEditingController();
-  String _manualStatus = 'pending';
-
   @override
   void dispose() {
     _searchController.dispose();
-    _manualIdController.dispose();
-    _manualNameController.dispose();
-    _manualYearController.dispose();
-    _manualEmailController.dispose();
     super.dispose();
   }
 
+  // ── Build ─────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: UpriseColors.lightGray,
+      backgroundColor: const Color(0xFFFBFCFE),
       body: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildHeader(),
           _buildStatsRow(),
           _buildToolbar(),
           const SizedBox(height: 16),
@@ -70,812 +192,2469 @@ class _StudentAccountsState extends State<StudentAccounts> {
     );
   }
 
-  // ---------- HEADER ----------
-  Widget _buildHeader() {
-    return Container(
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: UpriseColors.white,
-        border: Border(bottom: BorderSide(color: UpriseColors.mediumGray)),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Student Accounts',
-                    style: GoogleFonts.beVietnamPro(
-                        fontSize: 24, fontWeight: FontWeight.bold, color: UpriseColors.charcoal)),
-                const SizedBox(height: 4),
-                Text('Manage and verify student accounts. Batch import via Excel/CSV or add manually.',
-                    style: GoogleFonts.beVietnamPro(fontSize: 14, color: UpriseColors.darkGray)),
-              ],
-            ),
-          ),
-          ElevatedButton.icon(
-            onPressed: _showUploadDialog,
-            icon: const Icon(Icons.upload_file),
-            label: const Text('Batch Import'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: UpriseColors.primaryDark,
-              foregroundColor: UpriseColors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ---------- REAL‑TIME STATS ROW ----------
+  // ── Stats row ─────────────────────────────────────────────────────
   Widget _buildStatsRow() {
     return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance.collection('students').snapshots(),
+      stream: FirebaseFirestore.instance
+          .collection('students')
+          .snapshots(),
       builder: (context, snapshot) {
         int total = 0, pending = 0, verified = 0;
         if (snapshot.hasData) {
           total = snapshot.data!.docs.length;
-          for (var doc in snapshot.data!.docs) {
-            final status = (doc.data() as Map)['status'] ?? 'pending';
-            if (status == 'pending') {
-              pending++;
-            } else if (status == 'verified') verified++;
+          for (final doc in snapshot.data!.docs) {
+            final status =
+                (doc.data() as Map)['status'] ?? 'pending';
+            if (status == 'pending') pending++;
+            if (status == 'verified') verified++;
           }
         }
         return Padding(
-          padding: const EdgeInsets.all(24),
+          padding: const EdgeInsets.fromLTRB(28, 24, 28, 0),
           child: Row(children: [
-            _statCard('TOTAL STUDENTS', '$total', UpriseColors.primaryDark),
-            const SizedBox(width: 16),
-            _statCard('PENDING', '$pending', UpriseColors.warning),
-            const SizedBox(width: 16),
-            _statCard('VERIFIED', '$verified', UpriseColors.success),
+            _StatCard(
+              label: 'Total Students',
+              value: '$total',
+              icon: Icons.school_rounded,
+              color: UpriseColors.primaryDark,
+            ),
+            const SizedBox(width: 14),
+            _StatCard(
+              label: 'Verified',
+              value: '$verified',
+              icon: Icons.verified_rounded,
+              color: const Color(0xFF059669),
+            ),
+            const SizedBox(width: 14),
+            _StatCard(
+              label: 'Pending',
+              value: '$pending',
+              icon: Icons.pending_rounded,
+              color: const Color(0xFFD97706),
+            ),
+            const SizedBox(width: 14),
+            _StatCard(
+              label: 'Unverified',
+              value: '${total - verified - pending}',
+              icon: Icons.block_rounded,
+              color: const Color(0xFF6B7280),
+            ),
           ]),
         );
       },
     );
   }
 
-Widget _statCard(String label, String value, Color color) {
-  return Expanded(
-    child: Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: UpriseColors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: UpriseColors.primaryDark, width: 1),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+  // ── Toolbar ───────────────────────────────────────────────────────
+  Widget _buildToolbar() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(28, 20, 28, 0),
+      child: Row(
         children: [
-          Text(label,
-              style: GoogleFonts.beVietnamPro(
-                  fontSize: 11, fontWeight: FontWeight.w600, color: UpriseColors.darkGray)),
-          const SizedBox(height: 6),
-          Text(value,
-              style: GoogleFonts.beVietnamPro(
-                  fontSize: 28, fontWeight: FontWeight.bold, color: color)),
+          // Search
+          Expanded(
+            child: SizedBox(
+              height: 40,
+              child: TextField(
+                controller: _searchController,
+                style: GoogleFonts.beVietnamPro(fontSize: 13),
+                decoration: InputDecoration(
+                  hintText: 'Search by name, ID, or email…',
+                  hintStyle: GoogleFonts.beVietnamPro(
+                      fontSize: 13,
+                      color: const Color(0xFF9AA5B4)),
+                  prefixIcon: const Icon(
+                      Icons.search_rounded,
+                      size: 18,
+                      color: Color(0xFF9AA5B4)),
+                  filled: true,
+                  fillColor: Colors.white,
+                  contentPadding: const EdgeInsets.symmetric(
+                      vertical: 0, horizontal: 16),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide:
+                        const BorderSide(color: Color(0xFFE2E6EA)),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide:
+                        const BorderSide(color: Color(0xFFE2E6EA)),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: BorderSide(
+                        color: UpriseColors.primaryDark,
+                        width: 1.5),
+                  ),
+                ),
+                onChanged: (_) =>
+                    setState(() => _currentPage = 1),
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          _FilterDropdown(
+            value: _statusFilter,
+            items: const [
+              'All',
+              'Verified',
+              'Pending',
+              'Suspended'
+            ],
+            hint: 'Status',
+            icon: Icons.tune_rounded,
+            onChanged: (v) => setState(() {
+              _statusFilter = v!;
+              _currentPage = 1;
+            }),
+          ),
+          const SizedBox(width: 10),
+          _FilterDropdown(
+            value: _courseFilter,
+            items: const [
+              'All',
+              'BSIT',
+              'BSIS',
+              'BLIS'
+            ],
+            hint: 'Course',
+            icon: Icons.school_outlined,
+            onChanged: (v) => setState(() {
+              _courseFilter = v!;
+              _currentPage = 1;
+            }),
+          ),
+          const SizedBox(width: 10),
+          _ExportStudentsButton(
+            statusFilter: _statusFilter,
+            courseFilter: _courseFilter,
+            searchTerm: _searchController.text.trim(),
+          ),
+          const SizedBox(width: 10),
+          // Batch import
+          _ToolbarButton(
+            label: 'Batch Import',
+            icon: Icons.upload_file_rounded,
+            onPressed: _showBatchImportDialog,
+            outlined: true,
+          ),
+          const SizedBox(width: 10),
+          // Add manually
+          _ToolbarButton(
+            label: 'Add Student',
+            icon: Icons.person_add_rounded,
+            onPressed: _showManualAddDialog,
+          ),
         ],
       ),
-    ),
-  );
-}
+    );
+  }
 
-  // ---------- TOOLBAR ----------
-  Widget _buildToolbar() {
-  return Container(
-    margin: const EdgeInsets.symmetric(horizontal: 24),
-    padding: const EdgeInsets.all(16),
-    decoration: BoxDecoration(
-      color: UpriseColors.white,
-      borderRadius: BorderRadius.circular(12),
-      border: Border.all(color: UpriseColors.primaryDark, width: 1),
-    ),
-    child: LayoutBuilder(
-      builder: (context, constraints) {
-        if (constraints.maxWidth < 800) {
-          // compact layout: search field above filters
-          return Column(
-            children: [
-              SizedBox(
-                height: 40,
-                child: TextField(
-                  controller: _searchController,
-                  decoration: InputDecoration(
-                    hintText: 'Search by name, ID, or email...',
-                    hintStyle: GoogleFonts.beVietnamPro(fontSize: 13, color: UpriseColors.darkGray),
-                    prefixIcon: const Icon(Icons.search, size: 18, color: UpriseColors.darkGray),
-                    filled: true,
-                    fillColor: UpriseColors.white,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                      borderSide: BorderSide(color: UpriseColors.mediumGray),
-                    ),
-                    contentPadding: const EdgeInsets.symmetric(vertical: 0),
-                  ),
-                  onChanged: (_) => setState(() => _currentPage = 1),
-                ),
-              ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(child: _buildFilterDropdown(
-                    label: 'Status', value: _statusFilter,
-                    items: const ['All', 'Pending', 'Verified'],
-                    onChanged: (val) => setState(() { _statusFilter = val!; _currentPage = 1; }),
-                  )),
-                  const SizedBox(width: 12),
-                  Expanded(child: _buildCourseDropdown()),
-                  const SizedBox(width: 12),
-                  _buildExportButton(),
-                  const SizedBox(width: 12),
-                  _buildManualAddButton(),
-                ],
-              ),
-            ],
-          );
+  // ── Table ─────────────────────────────────────────────────────────
+  Widget _buildTable() {
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('students')
+          .orderBy('createdAt', descending: true)
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
         }
-        // wide layout: all controls in one row
-        return Row(
-          children: [
-            Expanded(
-              child: SizedBox(
-                height: 40,
-                child: TextField(
-                  controller: _searchController,
-                  decoration: InputDecoration(
-                    hintText: 'Search by name, ID, or email...',
-                    hintStyle: GoogleFonts.beVietnamPro(fontSize: 13, color: UpriseColors.darkGray),
-                    prefixIcon: const Icon(Icons.search, size: 18, color: UpriseColors.darkGray),
-                    filled: true,
-                    fillColor: UpriseColors.white,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                      borderSide: BorderSide(color: UpriseColors.mediumGray),
-                    ),
-                    contentPadding: const EdgeInsets.symmetric(vertical: 0),
-                  ),
-                  onChanged: (_) => setState(() => _currentPage = 1),
-                ),
+        if (snapshot.hasError) {
+          return Center(
+              child: Text('Error: ${snapshot.error}'));
+        }
+
+        var docs = snapshot.data!.docs;
+
+        // Filters
+        final term =
+            _searchController.text.trim().toLowerCase();
+        if (term.isNotEmpty) {
+          docs = docs.where((d) {
+            final data = d.data() as Map;
+            return (data['fullName'] ?? '')
+                    .toString()
+                    .toLowerCase()
+                    .contains(term) ||
+                (data['studentId'] ?? '')
+                    .toString()
+                    .toLowerCase()
+                    .contains(term) ||
+                (data['email'] ?? '')
+                    .toString()
+                    .toLowerCase()
+                    .contains(term);
+          }).toList();
+        }
+        if (_statusFilter != 'All') {
+          docs = docs
+              .where((d) =>
+                  (d.data() as Map)['status'] ==
+                  _statusFilter.toLowerCase())
+              .toList();
+        }
+        if (_courseFilter != 'All') {
+          docs = docs
+              .where((d) =>
+                  (d.data() as Map)['course'] == _courseFilter)
+              .toList();
+        }
+
+        final totalPages =
+            docs.isEmpty ? 1 : (docs.length / _pageSize).ceil();
+        final safePage = _currentPage.clamp(1, totalPages);
+        final start = (safePage - 1) * _pageSize;
+        final end =
+            (start + _pageSize).clamp(0, docs.length);
+        final pageDocs = docs.isEmpty
+            ? <QueryDocumentSnapshot>[]
+            : docs.sublist(start, end);
+
+        return Container(
+          margin:
+              const EdgeInsets.symmetric(horizontal: 28),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+                color: const Color(0xFFE8ECF0)),
+            boxShadow: _DS.cardShadow,
+          ),
+          child: Column(
+            children: [
+              // Table header
+              _buildTableHeader(),
+              // Table body
+              Expanded(
+                child: docs.isEmpty
+                    ? _buildEmptyState()
+                    : ListView.builder(
+                        itemCount: pageDocs.length,
+                        itemBuilder: (_, i) {
+                          final data = pageDocs[i].data()
+                              as Map<String, dynamic>;
+                          return _buildStudentRow(
+                            docId: pageDocs[i].id,
+                            data: data,
+                            isLast:
+                                i == pageDocs.length - 1,
+                          );
+                        },
+                      ),
               ),
-            ),
-            const SizedBox(width: 16),
-            _buildFilterDropdown(
-              label: 'Status', value: _statusFilter,
-              items: const ['All', 'Pending', 'Verified'],
-              onChanged: (val) => setState(() { _statusFilter = val!; _currentPage = 1; }),
-            ),
-            const SizedBox(width: 12),
-            _buildCourseDropdown(),
-            const SizedBox(width: 12),
-            _buildExportButton(),
-            const SizedBox(width: 12),
-            _buildManualAddButton(),
-          ],
+              // Footer pagination
+              _buildFooter(
+                  docs.length, totalPages, start, end),
+            ],
+          ),
         );
       },
-    ),
-  );
-}
-Widget _buildFilterDropdown({
-  required String label,
-  required String value,
-  required List<String> items,
-  required ValueChanged<String?> onChanged,
-}) {
-  return Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      Text(label,
-          style: GoogleFonts.beVietnamPro(fontSize: 11, fontWeight: FontWeight.w600, color: UpriseColors.darkGray)),
-      const SizedBox(height: 4),
-      Container(
-        height: 40,
-        padding: const EdgeInsets.symmetric(horizontal: 12),
-        decoration: BoxDecoration(
-          color: UpriseColors.white,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: UpriseColors.mediumGray),
+    );
+  }
+
+  Widget _buildTableHeader() {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+          horizontal: 20, vertical: 13),
+      decoration: const BoxDecoration(
+        color: Color(0xFFF8F9FB),
+        borderRadius: BorderRadius.vertical(
+            top: Radius.circular(14)),
+        border: Border(
+            bottom:
+                BorderSide(color: Color(0xFFE8ECF0))),
+      ),
+      child: Row(children: [
+        Expanded(flex: 2, child: _headerCell('STUDENT ID')),
+        Expanded(flex: 3, child: _headerCell('FULL NAME')),
+        Expanded(flex: 2, child: _headerCell('COURSE')),
+        Expanded(flex: 1, child: _headerCell('YEAR')),
+        Expanded(flex: 3, child: _headerCell('EMAIL')),
+        Expanded(flex: 1, child: _headerCell('STATUS')),
+        Expanded(
+            flex: 2,
+            child: Align(
+                alignment: Alignment.centerRight,
+                child: _headerCell('ACTIONS'))),
+      ]),
+    );
+  }
+
+  Widget _headerCell(String text) => Text(
+        text,
+        style: GoogleFonts.beVietnamPro(
+          fontSize: 11,
+          fontWeight: FontWeight.w700,
+          color: const Color(0xFF64748B),
+          letterSpacing: 0.7,
         ),
-        child: DropdownButtonHideUnderline(
-          child: DropdownButton<String>(
-            value: value,
-            items: items.map((item) {
-              final display = item == 'All' ? 'All' : item;
-              return DropdownMenuItem(
-                value: item,
-                child: Text(display, style: GoogleFonts.beVietnamPro(fontSize: 13)),
-              );
-            }).toList(),
-            onChanged: onChanged,
-            style: GoogleFonts.beVietnamPro(fontSize: 13, color: UpriseColors.charcoal),
-            icon: Icon(Icons.arrow_drop_down, color: UpriseColors.darkGray),
+      );
+
+  Widget _buildStudentRow({
+    required String docId,
+    required Map<String, dynamic> data,
+    required bool isLast,
+  }) {
+    final status = (data['status'] ?? 'pending') as String;
+    return InkWell(
+      hoverColor: const Color(0xFFF8F9FB),
+      onTap: () => _showStudentDetailDialog(docId, data),
+      child: Container(
+        padding: const EdgeInsets.symmetric(
+            horizontal: 20, vertical: 14),
+        decoration: BoxDecoration(
+          border: isLast
+              ? null
+              : const Border(
+                  bottom: BorderSide(
+                      color: Color(0xFFF1F5F9))),
+        ),
+        child: Row(
+          children: [
+            // Student ID
+            Expanded(
+              flex: 2,
+              child: Text(
+                data['studentId'] ?? '—',
+                style: GoogleFonts.beVietnamPro(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: UpriseColors.primaryDark,
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            // Full name with avatar
+            Expanded(
+              flex: 3,
+              child: Row(
+                children: [
+                  _StudentAvatar(
+                      name: data['fullName'] ?? ''),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      data['fullName'] ?? '—',
+                      style: GoogleFonts.beVietnamPro(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                        color: const Color(0xFF1A202C),
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            // Course
+            Expanded(
+              flex: 2,
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: UpriseColors.primaryDark
+                      .withOpacity(0.07),
+                  borderRadius:
+                      BorderRadius.circular(6),
+                ),
+                child: Text(
+                  data['course'] ?? '—',
+                  style: GoogleFonts.beVietnamPro(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: UpriseColors.primaryDark,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ),
+            // Year
+            Expanded(
+              flex: 1,
+              child: Text(
+                data['yearLevel'] ?? '—',
+                style: GoogleFonts.beVietnamPro(
+                    fontSize: 12,
+                    color: const Color(0xFF64748B)),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            // Email
+            Expanded(
+              flex: 3,
+              child: Text(
+                data['email'] ?? '—',
+                style: GoogleFonts.beVietnamPro(
+                    fontSize: 12,
+                    color: const Color(0xFF374151)),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            // Status
+            Expanded(
+                flex: 1, child: _statusBadge(status)),
+            // Actions
+            Expanded(
+              flex: 2,
+              child: Row(
+                mainAxisAlignment:
+                    MainAxisAlignment.end,
+                children: [
+                  _ActionIconButton(
+                    icon: Icons.key_rounded,
+                    tooltip: 'View Credentials',
+                    onTap: () => _showPasswordDialog(
+                        data['studentId'] ?? '',
+                        data['tempPassword']),
+                  ),
+                  const SizedBox(width: 4),
+                  _ActionIconButton(
+                    icon: Icons.email_outlined,
+                    tooltip: 'Resend Credentials',
+                    onTap: () => _resendCredentials(
+                      docId,
+                      data['email'] ?? '',
+                      data['studentId'] ?? '',
+                      data['tempPassword'],
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  _ActionIconButton(
+                    icon: Icons.verified_outlined,
+                    tooltip: status == 'verified'
+                        ? 'Already Verified'
+                        : 'Verify Student',
+                    color: status == 'verified'
+                        ? const Color(0xFF9AA5B4)
+                        : const Color(0xFF059669),
+                    onTap: status != 'verified'
+                        ? () => _verifyStudent(docId)
+                        : null,
+                  ),
+                  const SizedBox(width: 4),
+                  _ActionIconButton(
+                    icon: Icons.delete_outline_rounded,
+                    tooltip: 'Delete',
+                    color: const Color(0xFFDC2626),
+                    onTap: () => _confirmDeleteStudent(
+                        docId,
+                        data['email'] ?? '',
+                        data['fullName'] ?? 'this student'),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            width: 80,
+            height: 80,
+            decoration: BoxDecoration(
+              color: const Color(0xFFF1F5F9),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: const Icon(Icons.school_rounded,
+                size: 40,
+                color: Color(0xFF9AA5B4)),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'No students found',
+            style: GoogleFonts.beVietnamPro(
+              fontSize: 15,
+              fontWeight: FontWeight.w600,
+              color: const Color(0xFF374151),
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Try adjusting your filters or add a new student.',
+            style: GoogleFonts.beVietnamPro(
+              fontSize: 13,
+              color: const Color(0xFF64748B),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFooter(
+      int total, int totalPages, int start, int end) {
+    const int maxVisible = 5;
+    int firstPage =
+        (_currentPage - maxVisible ~/ 2).clamp(1, totalPages);
+    int lastPage =
+        (firstPage + maxVisible - 1).clamp(1, totalPages);
+    if (lastPage - firstPage + 1 < maxVisible &&
+        firstPage > 1) {
+      firstPage =
+          (lastPage - maxVisible + 1).clamp(1, totalPages);
+    }
+    final pages = List.generate(
+        lastPage - firstPage + 1, (i) => firstPage + i);
+
+    return Container(
+      padding: const EdgeInsets.symmetric(
+          horizontal: 20, vertical: 12),
+      decoration: const BoxDecoration(
+        border: Border(
+            top: BorderSide(color: Color(0xFFE8ECF0))),
+        color: Color(0xFFF8F9FB),
+        borderRadius:
+            BorderRadius.vertical(bottom: Radius.circular(14)),
+      ),
+      child: Row(
+        mainAxisAlignment:
+            MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            'Showing ${total == 0 ? 0 : start + 1}–$end of $total students',
+            style: GoogleFonts.beVietnamPro(
+                fontSize: 12,
+                color: const Color(0xFF64748B)),
+          ),
+          Row(children: [
+            _PageButton(
+              icon: Icons.chevron_left_rounded,
+              enabled: _currentPage > 1,
+              onTap: () =>
+                  setState(() => _currentPage--),
+            ),
+            const SizedBox(width: 4),
+            ...pages.map((p) => _PageNumButton(
+                  page: p,
+                  isActive: p == _currentPage,
+                  onTap: () =>
+                      setState(() => _currentPage = p),
+                )),
+            if (lastPage < totalPages) ...[
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 4),
+                child: Text('…',
+                    style: GoogleFonts.beVietnamPro(
+                        color: const Color(0xFF64748B),
+                        fontSize: 12)),
+              ),
+              _PageNumButton(
+                page: totalPages,
+                isActive: _currentPage == totalPages,
+                onTap: () => setState(
+                    () => _currentPage = totalPages),
+              ),
+            ],
+            const SizedBox(width: 4),
+            _PageButton(
+              icon: Icons.chevron_right_rounded,
+              enabled: _currentPage < totalPages,
+              onTap: () =>
+                  setState(() => _currentPage++),
+            ),
+          ]),
+        ],
+      ),
+    );
+  }
+
+  // ── Actions ───────────────────────────────────────────────────────
+
+  void _showPasswordDialog(
+      String studentId, String? password) {
+    showDialog(
+      context: context,
+      barrierColor: Colors.black54,
+      builder: (ctx) => Dialog(
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18)),
+        child: Container(
+          width: 420,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Header
+              Container(
+                padding: const EdgeInsets.fromLTRB(
+                    24, 20, 20, 20),
+                decoration: BoxDecoration(
+                  color: UpriseColors.primaryDark,
+                  borderRadius:
+                      const BorderRadius.vertical(
+                          top: Radius.circular(18)),
+                ),
+                child: Row(children: [
+                  Container(
+                    width: 38,
+                    height: 38,
+                    decoration: BoxDecoration(
+                      color: Colors.white
+                          .withOpacity(0.15),
+                      borderRadius:
+                          BorderRadius.circular(10),
+                    ),
+                    child: const Icon(
+                        Icons.key_rounded,
+                        color: Colors.white,
+                        size: 18),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Text(
+                      'Student Credentials',
+                      style: GoogleFonts.beVietnamPro(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(
+                        Icons.close_rounded,
+                        color: Colors.white,
+                        size: 20),
+                    onPressed: () =>
+                        Navigator.pop(ctx),
+                  ),
+                ]),
+              ),
+              // Body
+              Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  crossAxisAlignment:
+                      CrossAxisAlignment.start,
+                  children: [
+                    _credentialRow(
+                      label: 'Student ID',
+                      value: studentId.isEmpty
+                          ? '—'
+                          : studentId,
+                      icon: Icons.badge_outlined,
+                    ),
+                    const SizedBox(height: 14),
+                    _credentialRow(
+                      label: 'Temporary Password',
+                      value: password ??
+                          'Not stored — use Resend to generate a new one.',
+                      icon: Icons.lock_outline_rounded,
+                      isPassword: true,
+                    ),
+                    const SizedBox(height: 20),
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFFFBEB),
+                        borderRadius:
+                            BorderRadius.circular(8),
+                        border: Border.all(
+                            color: const Color(
+                                0xFFFED7AA)),
+                      ),
+                      child: Row(children: [
+                        const Icon(
+                            Icons
+                                .info_outline_rounded,
+                            size: 15,
+                            color:
+                                Color(0xFFD97706)),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Students are prompted to change their password on first login.',
+                            style: GoogleFonts
+                                .beVietnamPro(
+                              fontSize: 12,
+                              color: const Color(
+                                  0xFF92400E),
+                            ),
+                          ),
+                        ),
+                      ]),
+                    ),
+                  ],
+                ),
+              ),
+              // Footer
+              Container(
+                padding: const EdgeInsets.fromLTRB(
+                    24, 0, 24, 20),
+                child: Row(
+                  mainAxisAlignment:
+                      MainAxisAlignment.end,
+                  children: [
+                    ElevatedButton(
+                      onPressed: () =>
+                          Navigator.pop(ctx),
+                      style:
+                          ElevatedButton.styleFrom(
+                        backgroundColor:
+                            UpriseColors.primaryDark,
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        shape:
+                            RoundedRectangleBorder(
+                                borderRadius:
+                                    BorderRadius
+                                        .circular(8)),
+                        padding:
+                            const EdgeInsets.symmetric(
+                                horizontal: 20,
+                                vertical: 11),
+                      ),
+                      child: Text('Done',
+                          style: GoogleFonts
+                              .beVietnamPro(
+                                  fontSize: 13,
+                                  fontWeight:
+                                      FontWeight
+                                          .w600)),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
         ),
       ),
-    ],
-  );
-}
-
-  Widget _buildCourseDropdown() {
-    return _buildFilterDropdown(
-      label: 'Course',
-      value: _courseFilter,
-      items: const ['All', 'BSIT', 'BSIS', 'BLIS'],
-      onChanged: (val) => setState(() { _courseFilter = val!; _currentPage = 1; }),
     );
   }
 
-  Widget _buildExportButton() {
-    return ElevatedButton.icon(
-      onPressed: () {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Export feature coming soon')),
-        );
-      },
-      icon: Icon(Icons.download, size: 18),
-      label: Text('Export', style: TextStyle(fontSize: 13)),
-      style: ElevatedButton.styleFrom(
-        backgroundColor: UpriseColors.white,
-        foregroundColor: UpriseColors.primaryDark,
-        side: BorderSide(color: UpriseColors.primaryDark),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-        padding: EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-      ),
+  Widget _credentialRow({
+    required String label,
+    required String value,
+    required IconData icon,
+    bool isPassword = false,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(children: [
+          Icon(icon,
+              size: 14,
+              color: const Color(0xFF64748B)),
+          const SizedBox(width: 6),
+          Text(label,
+              style: GoogleFonts.beVietnamPro(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: const Color(0xFF64748B),
+                  letterSpacing: 0.5)),
+        ]),
+        const SizedBox(height: 6),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(
+              horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF8F9FB),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+                color: const Color(0xFFE2E6EA)),
+          ),
+          child: SelectableText(
+            value,
+            style: GoogleFonts.beVietnamPro(
+              fontSize: isPassword ? 15 : 14,
+              fontWeight: isPassword
+                  ? FontWeight.w700
+                  : FontWeight.w500,
+              color: isPassword
+                  ? UpriseColors.primaryDark
+                  : const Color(0xFF1A202C),
+              letterSpacing: isPassword ? 1.5 : 0,
+            ),
+          ),
+        ),
+      ],
     );
   }
 
-  Widget _buildManualAddButton() {
-    return ElevatedButton.icon(
-      onPressed: _showManualAddDialog,
-      icon: const Icon(Icons.person_add),
-      label: const Text('Add Manually'),
-      style: ElevatedButton.styleFrom(
-        backgroundColor: UpriseColors.white,
-        foregroundColor: UpriseColors.primaryDark,
-        side: BorderSide(color: UpriseColors.primaryDark),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-      ),
-    );
-  }
-
-  // ---------- TABLE ----------
-  Widget _buildTable() {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 24),
-      decoration: BoxDecoration(
-        color: UpriseColors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: UpriseColors.primaryDark, width: 1),
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(12),
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final double w = constraints.maxWidth;
-            final double colId      = w * 0.13;
-            final double colName    = w * 0.17;
-            final double colCourse  = w * 0.08;
-            final double colYear    = w * 0.09;
-            final double colEmail   = w * 0.24;
-            final double colStatus  = w * 0.12;
-            final double colActions = w * 0.17;
-
-            return StreamBuilder<QuerySnapshot>(
-              stream: FirebaseFirestore.instance
-                  .collection('students')
-                  .orderBy('createdAt', descending: true)
-                  .snapshots(),
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const SizedBox(height: 400, child: Center(child: CircularProgressIndicator()));
-                }
-                if (snapshot.hasError) {
-                  return SizedBox(
-                      height: 400,
-                      child: Center(child: Text('Error: ${snapshot.error}', style: TextStyle(color: UpriseColors.error))));
-                }
-
-                var docs = snapshot.data!.docs;
-
-                final term = _searchController.text.trim().toLowerCase();
-                if (term.isNotEmpty) {
-                  docs = docs.where((doc) {
-                    final d = doc.data() as Map<String, dynamic>;
-                    return (d['fullName']?.toLowerCase() ?? '').contains(term) ||
-                        (d['studentId']?.toLowerCase() ?? '').contains(term) ||
-                        (d['email']?.toLowerCase() ?? '').contains(term);
-                  }).toList();
-                }
-                if (_statusFilter != 'All') {
-                  docs = docs.where((doc) {
-                    final status = (doc.data() as Map)['status'] ?? 'pending';
-                    return status == _statusFilter.toLowerCase();
-                  }).toList();
-                }
-                if (_courseFilter != 'All') {
-                  docs = docs
-                      .where((doc) => (doc.data() as Map)['course'] == _courseFilter)
-                      .toList();
-                }
-
-                Widget header = _buildTableHeader(colId, colName, colCourse, colYear, colEmail, colStatus, colActions);
-
-                if (docs.isEmpty) {
-                  return Column(children: [
-                    header,
-                    const Expanded(
-                      child: Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.filter_alt_off, size: 64, color: UpriseColors.mediumGray),
-                            SizedBox(height: 16),
-                            Text('No students match the filters', style: TextStyle(color: UpriseColors.darkGray)),
-                          ],
+  void _showStudentDetailDialog(
+      String docId, Map<String, dynamic> data) {
+    showDialog(
+      context: context,
+      barrierColor: Colors.black54,
+      builder: (ctx) => Dialog(
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18)),
+        child: Container(
+          width: 500,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Header
+              Container(
+                padding: const EdgeInsets.fromLTRB(
+                    24, 20, 20, 20),
+                decoration: BoxDecoration(
+                  color: UpriseColors.primaryDark,
+                  borderRadius:
+                      const BorderRadius.vertical(
+                          top: Radius.circular(18)),
+                ),
+                child: Row(children: [
+                  Container(
+                    width: 38,
+                    height: 38,
+                    decoration: BoxDecoration(
+                      color: Colors.white
+                          .withOpacity(0.15),
+                      borderRadius:
+                          BorderRadius.circular(10),
+                    ),
+                    child: const Icon(
+                        Icons.person_rounded,
+                        color: Colors.white,
+                        size: 18),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment:
+                          CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          data['fullName'] ??
+                              'Student Details',
+                          style:
+                              GoogleFonts.beVietnamPro(
+                            fontSize: 17,
+                            fontWeight:
+                                FontWeight.w700,
+                            color: Colors.white,
+                          ),
+                        ),
+                        Text(
+                          data['studentId'] ?? '',
+                          style:
+                              GoogleFonts.beVietnamPro(
+                            fontSize: 12,
+                            color: Colors.white
+                                .withOpacity(0.7),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(
+                        Icons.close_rounded,
+                        color: Colors.white,
+                        size: 20),
+                    onPressed: () =>
+                        Navigator.pop(ctx),
+                  ),
+                ]),
+              ),
+              // Body
+              Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  crossAxisAlignment:
+                      CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                        crossAxisAlignment:
+                            CrossAxisAlignment.start,
+                        children: [
+                      Expanded(
+                        child: _detailItem(
+                            'Student ID',
+                            data['studentId'] ?? '—',
+                            Icons.badge_outlined),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: _detailItem(
+                            'Status',
+                            (data['status'] ?? 'pending')
+                                .toString()
+                                .toUpperCase(),
+                            Icons.circle_outlined,
+                            valueColor: data['status'] ==
+                                    'verified'
+                                ? const Color(0xFF059669)
+                                : const Color(
+                                    0xFFD97706)),
+                      ),
+                    ]),
+                    const SizedBox(height: 14),
+                    Row(children: [
+                      Expanded(
+                        child: _detailItem(
+                            'Course',
+                            data['course'] ?? '—',
+                            Icons.school_outlined),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: _detailItem(
+                            'Year Level',
+                            data['yearLevel'] ?? '—',
+                            Icons.calendar_today_outlined),
+                      ),
+                    ]),
+                    const SizedBox(height: 14),
+                    _detailItem(
+                        'Email',
+                        data['email'] ?? '—',
+                        Icons.email_outlined),
+                  ],
+                ),
+              ),
+              // Footer actions
+              Container(
+                padding: const EdgeInsets.fromLTRB(
+                    24, 0, 24, 20),
+                child: Row(children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () {
+                        Navigator.pop(ctx);
+                        _showPasswordDialog(
+                          data['studentId'] ?? '',
+                          data['tempPassword'],
+                        );
+                      },
+                      icon: const Icon(
+                          Icons.key_rounded,
+                          size: 15),
+                      label: Text('Credentials',
+                          style:
+                              GoogleFonts.beVietnamPro(
+                                  fontSize: 13)),
+                      style: OutlinedButton.styleFrom(
+                        side: const BorderSide(
+                            color: Color(0xFFE2E6EA)),
+                        shape: RoundedRectangleBorder(
+                            borderRadius:
+                                BorderRadius.circular(
+                                    8)),
+                        padding:
+                            const EdgeInsets.symmetric(
+                                vertical: 11),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  if (data['status'] != 'verified')
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: () {
+                          Navigator.pop(ctx);
+                          _verifyStudent(docId);
+                        },
+                        icon: const Icon(
+                            Icons.verified_rounded,
+                            size: 15),
+                        label: Text('Verify',
+                            style: GoogleFonts
+                                .beVietnamPro(
+                                    fontSize: 13,
+                                    fontWeight:
+                                        FontWeight
+                                            .w600)),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor:
+                              const Color(0xFF059669),
+                          foregroundColor: Colors.white,
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                              borderRadius:
+                                  BorderRadius.circular(
+                                      8)),
+                          padding:
+                              const EdgeInsets.symmetric(
+                                  vertical: 11),
                         ),
                       ),
                     ),
-                  ]);
-                }
-
-                final totalPages = (docs.length / _pageSize).ceil().clamp(1, 99999);
-                final safePage = _currentPage.clamp(1, totalPages);
-                final start = (safePage - 1) * _pageSize;
-                final end = (start + _pageSize).clamp(0, docs.length);
-                final pageDocs = docs.sublist(start, end);
-
-                return Column(children: [
-                  header,
-                  Expanded(
-                    child: ListView.builder(
-                      itemCount: pageDocs.length,
-                      itemBuilder: (context, index) {
-                        final doc = pageDocs[index];
-                        final data = doc.data() as Map<String, dynamic>;
-                        final status = data['status'] ?? 'pending';
-                        final bool isPending = status == 'pending';
-                        final Color badgeBg = isPending
-                            ? Colors.orange.withOpacity(0.15)
-                            : UpriseColors.success.withOpacity(0.1);
-                        final Color badgeText = isPending
-                            ? Colors.orange.shade800
-                            : UpriseColors.success;
-
-                        return Container(
-                          height: 56,
-                          decoration: BoxDecoration(
-                            border: Border(bottom: BorderSide(color: UpriseColors.mediumGray)),
-                          ),
-                          child: Row(
-                            children: [
-                              _cell(colId, child: Text(data['studentId'] ?? '', style: GoogleFonts.beVietnamPro(fontSize: 13), overflow: TextOverflow.ellipsis)),
-                              _cell(colName, child: Text(data['fullName'] ?? '', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w500), overflow: TextOverflow.ellipsis)),
-                              _cell(colCourse, child: Text(data['course'] ?? '', style: GoogleFonts.beVietnamPro(fontSize: 13), overflow: TextOverflow.ellipsis)),
-                              _cell(colYear, child: Text(data['yearLevel'] ?? '', style: GoogleFonts.beVietnamPro(fontSize: 13), overflow: TextOverflow.ellipsis)),
-                              _cell(colEmail, child: Text(data['email'] ?? '', style: GoogleFonts.beVietnamPro(fontSize: 13), overflow: TextOverflow.ellipsis)),
-                              SizedBox(
-                                width: colStatus,
-                                child: Center(
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                    decoration: BoxDecoration(
-                                      color: badgeBg,
-                                      borderRadius: BorderRadius.circular(20),
-                                    ),
-                                    child: Text(
-                                      status.toUpperCase(),
-                                      style: GoogleFonts.beVietnamPro(fontSize: 11, fontWeight: FontWeight.w700, color: badgeText),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                              SizedBox(
-                                width: colActions,
-                                child: Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    _iconBtn(
-                                      icon: Icons.key,
-                                      color: UpriseColors.primaryDark,
-                                      tip: 'View Password',
-                                      onTap: () => _showPasswordDialog(data['studentId'], data['tempPassword']),
-                                    ),
-                                    _iconBtn(
-                                      icon: Icons.email_outlined,
-                                      color: UpriseColors.primaryDark,
-                                      tip: 'Resend Credentials',
-                                      onTap: () => _resendCredentials(doc.id, data['email'], data['studentId'], data['tempPassword']),
-                                    ),
-                                    _iconBtn(
-                                      icon: Icons.verified_outlined,
-                                      color: status != 'verified' ? UpriseColors.success : UpriseColors.mediumGray,
-                                      tip: 'Verify',
-                                      onTap: status != 'verified' ? () => _verifyStudent(doc.id) : null,
-                                    ),
-                                    _iconBtn(
-                                      icon: Icons.delete_outline,
-                                      color: UpriseColors.error,
-                                      tip: 'Delete',
-                                      onTap: () => _deleteStudent(doc.id, data['email']),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                  _buildFooter(docs.length, totalPages, start, end),
-                ]);
-              },
-            );
-          },
-        ),
-      ),
-    );
-  }
-
-  Widget _cell(double width, {required Widget child}) {
-    return SizedBox(width: width, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 8), child: child));
-  }
-
-  Widget _iconBtn({required IconData icon, required Color color, required String tip, VoidCallback? onTap}) {
-    return Tooltip(
-      message: tip,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(6),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 6),
-          child: Icon(icon, size: 18, color: onTap == null ? UpriseColors.mediumGray : color),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildTableHeader(double colId, double colName, double colCourse, double colYear, double colEmail, double colStatus, double colActions) {
-    return Container(
-      height: 44,
-      decoration: BoxDecoration(
-        color: UpriseColors.lightGray,
-        border: Border(bottom: BorderSide(color: UpriseColors.mediumGray)),
-      ),
-      child: Row(
-        children: [
-          _cell(colId, child: Text('STUDENT ID', style: _headerStyle())),
-          _cell(colName, child: Text('FULL NAME', style: _headerStyle())),
-          _cell(colCourse, child: Text('COURSE', style: _headerStyle())),
-          _cell(colYear, child: Text('YEAR', style: _headerStyle())),
-          _cell(colEmail, child: Text('EMAIL', style: _headerStyle())),
-          SizedBox(width: colStatus, child: Center(child: Text('STATUS', style: _headerStyle()))),
-          SizedBox(width: colActions, child: Center(child: Text('ACTIONS', style: _headerStyle()))),
-        ],
-      ),
-    );
-  }
-
-  TextStyle _headerStyle() {
-    return GoogleFonts.beVietnamPro(fontSize: 11, fontWeight: FontWeight.w700, color: UpriseColors.darkGray, letterSpacing: 0.6);
-  }
-
-  Widget _buildFooter(int total, int totalPages, int start, int end) {
-    const int maxVisible = 5;
-    int firstPage = (_currentPage - maxVisible ~/ 2).clamp(1, totalPages);
-    int lastPage = (firstPage + maxVisible - 1).clamp(1, totalPages);
-    if (lastPage - firstPage + 1 < maxVisible && firstPage > 1) {
-      firstPage = (lastPage - maxVisible + 1).clamp(1, totalPages);
-    }
-    final pages = List.generate(lastPage - firstPage + 1, (i) => firstPage + i);
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-      decoration: BoxDecoration(
-        border: Border(top: BorderSide(color: UpriseColors.mediumGray)),
-        color: UpriseColors.lightGray,
-        borderRadius: const BorderRadius.only(bottomLeft: Radius.circular(12), bottomRight: Radius.circular(12)),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text('Showing ${total == 0 ? 0 : start + 1}–$end of $total students',
-              style: GoogleFonts.beVietnamPro(fontSize: 13, color: UpriseColors.darkGray)),
-          Row(children: [
-            IconButton(
-              icon: const Icon(Icons.chevron_left, size: 20),
-              color: _currentPage > 1 ? UpriseColors.charcoal : UpriseColors.mediumGray,
-              onPressed: _currentPage > 1 ? () => setState(() => _currentPage--) : null,
-            ),
-            ...pages.map((page) => GestureDetector(
-                  onTap: () => setState(() => _currentPage = page),
-                  child: Container(
-                    margin: const EdgeInsets.symmetric(horizontal: 2),
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: page == _currentPage ? UpriseColors.primaryDark : Colors.transparent,
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: Text('$page',
-                        style: GoogleFonts.beVietnamPro(
-                          fontSize: 12,
-                          color: page == _currentPage ? Colors.white : UpriseColors.charcoal,
-                          fontWeight: page == _currentPage ? FontWeight.w600 : FontWeight.normal,
-                        )),
-                  ),
-                )),
-            if (lastPage < totalPages) ...[
-              Text('...', style: TextStyle(color: UpriseColors.darkGray)),
-              GestureDetector(
-                onTap: () => setState(() => _currentPage = totalPages),
-                child: Container(
-                  margin: const EdgeInsets.symmetric(horizontal: 2),
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  child: Text('$totalPages',
-                      style: GoogleFonts.beVietnamPro(fontSize: 12, color: UpriseColors.charcoal)),
-                ),
+                ]),
               ),
             ],
-            IconButton(
-              icon: const Icon(Icons.chevron_right, size: 20),
-              color: _currentPage < totalPages ? UpriseColors.charcoal : UpriseColors.mediumGray,
-              onPressed: _currentPage < totalPages ? () => setState(() => _currentPage++) : null,
-            ),
-          ]),
-        ],
-      ),
-    );
-  }
-
-  // ---------- ACTIONS WITH ACTIVITY LOGGING ----------
-  void _showPasswordDialog(String studentId, String? password) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Student Credentials'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Student ID: $studentId', style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.bold)),
-            const SizedBox(height: 8),
-            const Text('Password:'),
-            const SizedBox(height: 4),
-            SelectableText(
-              password ?? 'No password stored. Use "Resend Credentials" to generate a new one.',
-              style: GoogleFonts.beVietnamPro(fontSize: 16, fontWeight: FontWeight.w500, color: UpriseColors.primaryDark),
-            ),
-          ],
+          ),
         ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close')),
-        ],
       ),
     );
   }
 
-  Future<void> _resendCredentials(String docId, String email, String studentId, String? existingPassword) async {
-    String password = existingPassword ?? _generateRandomPassword();
-    await FirebaseFirestore.instance.collection('students').doc(docId).update({'tempPassword': password});
-    await _sendCredentialsEmail(email, studentId, password);
+  Widget _detailItem(String label, String value,
+      IconData icon,
+      {Color? valueColor}) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(children: [
+          Icon(icon,
+              size: 13,
+              color: const Color(0xFF9AA5B4)),
+          const SizedBox(width: 5),
+          Text(label,
+              style: GoogleFonts.beVietnamPro(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: const Color(0xFF64748B),
+                  letterSpacing: 0.4)),
+        ]),
+        const SizedBox(height: 4),
+        Text(
+          value,
+          style: GoogleFonts.beVietnamPro(
+            fontSize: 13,
+            fontWeight: FontWeight.w500,
+            color: valueColor ??
+                const Color(0xFF1A202C),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _resendCredentials(
+    String docId,
+    String email,
+    String studentId,
+    String? existingPassword,
+  ) async {
+    final password =
+        existingPassword ?? _generatePassword();
+    await FirebaseFirestore.instance
+        .collection('students')
+        .doc(docId)
+        .update({'tempPassword': password});
+    await _sendCredentialsEmail(
+        email, studentId, password);
     await activity_log.ActivityLogger.log(
-      action: 'Resent credentials for student: $studentId ($email)',
+      action:
+          'Resent credentials for student: $studentId ($email)',
       module: 'User Directory',
       severity: 'info',
     );
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Credentials resent to $email')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content:
+              Text('Credentials resent to $email'),
+          backgroundColor: const Color(0xFF059669),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8)),
+        ),
+      );
     }
   }
 
   Future<void> _verifyStudent(String docId) async {
     try {
-      await FirebaseFirestore.instance.collection('students').doc(docId).update({'status': 'verified'});
-      final doc = await FirebaseFirestore.instance.collection('students').doc(docId).get();
-      final studentId = doc.data()?['studentId'] ?? 'Unknown';
+      await FirebaseFirestore.instance
+          .collection('students')
+          .doc(docId)
+          .update({'status': 'verified'});
+      final doc = await FirebaseFirestore.instance
+          .collection('students')
+          .doc(docId)
+          .get();
+      final studentId =
+          doc.data()?['studentId'] ?? 'Unknown';
       await activity_log.ActivityLogger.log(
-        action: 'Verified student account: $studentId',
+        action:
+            'Verified student account: $studentId',
         module: 'User Directory',
         severity: 'info',
       );
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Student account verified')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text(
+                'Student account verified'),
+            backgroundColor:
+                const Color(0xFF059669),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+                borderRadius:
+                    BorderRadius.circular(8)),
+          ),
+        );
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: $e'),
+            backgroundColor: UpriseColors.error,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
       }
     }
   }
 
-  Future<void> _deleteStudent(String docId, String email) async {
+  void _confirmDeleteStudent(
+    String docId,
+    String email,
+    String name,
+  ) {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Delete Student Account'),
-        content: const Text('Are you sure you want to delete this student account? This action cannot be undone.'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-          ElevatedButton(
-            onPressed: () async {
-              try {
-                final doc = await FirebaseFirestore.instance.collection('students').doc(docId).get();
-                final studentId = doc.data()?['studentId'] ?? 'Unknown';
-                await FirebaseFirestore.instance.collection('students').doc(docId).delete();
-                await activity_log.ActivityLogger.log(
-                  action: 'Deleted student account: $studentId ($email)',
-                  module: 'User Directory',
-                  severity: 'info',
-                );
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Student record deleted')));
-                  Navigator.pop(context);
-                }
-              } catch (e) {
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red));
-                }
-              }
-            },
-            style: ElevatedButton.styleFrom(backgroundColor: UpriseColors.error),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ---------- BATCH IMPORT (fixed setState vs setDialogState) ----------
-  void _showUploadDialog() {
-    _selectedFileName = '';
-    _uploadedFile = null;
-    showDialog(
-      context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setDialogState) {
-          return AlertDialog(
-            title: Row(children: [
-              Icon(Icons.upload_file, color: UpriseColors.primaryDark),
-              const SizedBox(width: 8),
-              Text('Batch Import Students', style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.bold)),
-            ]),
-            content: SizedBox(
-              width: 500,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
+      barrierColor: Colors.black54,
+      builder: (ctx) => Dialog(
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16)),
+        child: Container(
+          width: 420,
+          padding: const EdgeInsets.all(28),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment:
+                CrossAxisAlignment.start,
+            children: [
+              Row(children: [
+                Container(
+                  width: 42,
+                  height: 42,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFEF2F2),
+                    borderRadius:
+                        BorderRadius.circular(10),
+                  ),
+                  child: const Icon(
+                      Icons.delete_outline_rounded,
+                      color: Color(0xFFDC2626),
+                      size: 20),
+                ),
+                const SizedBox(width: 14),
+                Text('Delete Student Account',
+                    style: GoogleFonts.beVietnamPro(
+                      fontSize: 17,
+                      fontWeight: FontWeight.w700,
+                      color: const Color(0xFF1A202C),
+                    )),
+              ]),
+              const SizedBox(height: 16),
+              Text(
+                'Are you sure you want to delete "$name"? This action cannot be undone.',
+                style: GoogleFonts.beVietnamPro(
+                    fontSize: 14,
+                    color: const Color(0xFF64748B),
+                    height: 1.5),
+              ),
+              const SizedBox(height: 24),
+              Row(
+                mainAxisAlignment:
+                    MainAxisAlignment.end,
                 children: [
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: UpriseColors.lightGray,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: UpriseColors.primaryDark, width: 1),
+                  OutlinedButton(
+                    onPressed: () =>
+                        Navigator.pop(ctx),
+                    style: OutlinedButton.styleFrom(
+                      side: const BorderSide(
+                          color: Color(0xFFE2E6EA)),
+                      shape: RoundedRectangleBorder(
+                          borderRadius:
+                              BorderRadius.circular(
+                                  8)),
+                      padding:
+                          const EdgeInsets.symmetric(
+                              horizontal: 18,
+                              vertical: 11),
                     ),
-                    child: Row(children: [
-                      Icon(Icons.description, color: UpriseColors.primaryDark),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Text(_selectedFileName.isEmpty ? 'No file selected' : _selectedFileName,
-                            style: GoogleFonts.beVietnamPro(fontSize: 14)),
-                      ),
-                      OutlinedButton(
-                        onPressed: () async {
-                          FilePickerResult? result = await FilePicker.platform.pickFiles(
-                            type: FileType.custom,
-                            allowedExtensions: ['xlsx', 'xls', 'csv'],
-                          );
-                          if (result != null) {
-                            // ✅ Use setDialogState to update dialog state (not outer setState)
-                            setDialogState(() {
-                              _uploadedFile = File(result.files.single.path!);
-                              _selectedFileName = result.files.single.name;
-                            });
-                          }
-                        },
-                        child: const Text('Browse'),
-                      ),
-                    ]),
+                    child: Text('Cancel',
+                        style:
+                            GoogleFonts.beVietnamPro(
+                                fontSize: 13,
+                                color: const Color(
+                                    0xFF374151))),
                   ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Supported: Excel (.xlsx, .xls) or CSV. Columns: Student ID, Full Name, Course, Year Level, Email',
-                    style: GoogleFonts.beVietnamPro(fontSize: 12, color: UpriseColors.darkGray),
+                  const SizedBox(width: 10),
+                  ElevatedButton(
+                    onPressed: () async {
+                      Navigator.pop(ctx);
+                      try {
+                        final doc =
+                            await FirebaseFirestore
+                                .instance
+                                .collection('students')
+                                .doc(docId)
+                                .get();
+                        final sid =
+                            doc.data()?['studentId'] ??
+                                'Unknown';
+                        await FirebaseFirestore
+                            .instance
+                            .collection('students')
+                            .doc(docId)
+                            .delete();
+                        await activity_log
+                            .ActivityLogger.log(
+                          action:
+                              'Deleted student: $sid ($email)',
+                          module: 'User Directory',
+                          severity: 'info',
+                        );
+                        if (mounted) {
+                          ScaffoldMessenger.of(context)
+                              .showSnackBar(SnackBar(
+                            content: const Text(
+                                'Student record deleted'),
+                            backgroundColor:
+                                UpriseColors.primaryDark,
+                            behavior: SnackBarBehavior
+                                .floating,
+                            shape: RoundedRectangleBorder(
+                                borderRadius:
+                                    BorderRadius.circular(
+                                        8)),
+                          ));
+                        }
+                      } catch (e) {
+                        if (mounted) {
+                          ScaffoldMessenger.of(context)
+                              .showSnackBar(SnackBar(
+                            content: Text('Error: $e'),
+                            backgroundColor:
+                                UpriseColors.error,
+                          ));
+                        }
+                      }
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor:
+                          const Color(0xFFDC2626),
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                          borderRadius:
+                              BorderRadius.circular(8)),
+                      padding:
+                          const EdgeInsets.symmetric(
+                              horizontal: 18,
+                              vertical: 11),
+                    ),
+                    child: Text('Delete',
+                        style: GoogleFonts.beVietnamPro(
+                            fontSize: 13,
+                            fontWeight:
+                                FontWeight.w600)),
                   ),
-                  if (_isUploading) ...[
-                    const SizedBox(height: 16),
-                    LinearProgressIndicator(color: UpriseColors.primaryDark),
-                  ],
                 ],
               ),
-            ),
-            actions: [
-              TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-              ElevatedButton(
-                onPressed: _isUploading || _uploadedFile == null ? null : () async {
-                  // Use setState for outer loading indicator, but dialog is still open
-                  setState(() => _isUploading = true);
-                  try {
-                    List<Map<String, String>> students = await _parseFile(_uploadedFile!);
-                    if (students.isEmpty) throw Exception('No valid data');
-                    int success = 0, failed = 0;
-                    for (var student in students) {
-                      try {
-                        await _createStudentAccount(student);
-                        success++;
-                      } catch (e) {
-                        failed++;
-                      }
-                    }
-                    if (mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                          content: Text('Upload complete: $success created, $failed failed')));
-                    }
-                    setState(() {
-                      _uploadedFile = null;
-                      _selectedFileName = '';
-                    });
-                    Navigator.pop(context);
-                  } catch (e) {
-                    if (mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                          content: Text('Error: $e'), backgroundColor: Colors.red));
-                    }
-                  } finally {
-                    setState(() => _isUploading = false);
-                  }
-                },
-                style: ElevatedButton.styleFrom(backgroundColor: UpriseColors.primaryDark),
-                child: const Text('Upload & Create'),
-              ),
             ],
-          );
-        },
+          ),
+        ),
       ),
     );
   }
 
-  Future<List<Map<String, String>>> _parseFile(File file) async {
-    List<Map<String, String>> students = [];
-    final extension = file.path.split('.').last.toLowerCase();
-    if (extension == 'csv') {
+  // ── Batch Import Dialog ────────────────────────────────────────────
+  void _showBatchImportDialog() {
+    XFile? pickedFile;
+    String fileName = '';
+    bool isUploading = false;
+    String? resultMessage;
+    bool resultIsError = false;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      barrierColor: Colors.black54,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => Dialog(
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(18)),
+          child: Container(
+            width: 540,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Header
+                Container(
+                  padding: const EdgeInsets.fromLTRB(
+                      24, 20, 20, 20),
+                  decoration: BoxDecoration(
+                    color: UpriseColors.primaryDark,
+                    borderRadius:
+                        const BorderRadius.vertical(
+                            top: Radius.circular(18)),
+                  ),
+                  child: Row(children: [
+                    Container(
+                      width: 38,
+                      height: 38,
+                      decoration: BoxDecoration(
+                        color: Colors.white
+                            .withOpacity(0.15),
+                        borderRadius:
+                            BorderRadius.circular(10),
+                      ),
+                      child: const Icon(
+                          Icons.upload_file_rounded,
+                          color: Colors.white,
+                          size: 18),
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Text(
+                        'Batch Import Students',
+                        style:
+                            GoogleFonts.beVietnamPro(
+                          fontSize: 17,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(
+                          Icons.close_rounded,
+                          color: Colors.white,
+                          size: 20),
+                      onPressed: isUploading
+                          ? null
+                          : () => Navigator.pop(ctx),
+                    ),
+                  ]),
+                ),
+                // Body
+                Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    crossAxisAlignment:
+                        CrossAxisAlignment.start,
+                    children: [
+                      _sectionLabel('Select File',
+                          icon: Icons.attach_file_rounded),
+                      // File picker zone
+                      GestureDetector(
+                        onTap: isUploading
+                            ? null
+                            : () async {
+                                final result =
+                                    await FilePicker.platform
+                                        .pickFiles(
+                                  type: FileType.custom,
+                                  allowedExtensions: [
+                                    'xlsx',
+                                    'xls',
+                                    'csv'
+                                  ],
+                                );
+                                if (result != null) {
+                                  setDialogState(() {
+                                    if (kIsWeb) {
+                                      pickedFile = XFile.fromData(
+                                        result.files.single.bytes!,
+                                        name: result.files.single.name,
+                                        mimeType: 'application/octet-stream',
+                                      );
+                                    } else {
+                                      pickedFile = XFile(result.files.single.path!);
+                                    }
+                                    fileName = result.files.single.name;
+                                    resultMessage = null;
+                                  });
+                                }
+                              },
+                        child: Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(
+                              20),
+                          decoration: BoxDecoration(
+                            color: fileName.isEmpty
+                                ? const Color(0xFFF8F9FB)
+                                : const Color(
+                                    0xFFECFDF5),
+                            borderRadius:
+                                BorderRadius.circular(
+                                    10),
+                            border: Border.all(
+                              color: fileName.isEmpty
+                                  ? const Color(
+                                      0xFFE2E6EA)
+                                  : const Color(
+                                      0xFF059669),
+                              width: fileName.isEmpty
+                                  ? 1
+                                  : 1.5,
+                            ),
+                          ),
+                          child: Column(
+                            children: [
+                              Icon(
+                                fileName.isEmpty
+                                    ? Icons
+                                        .cloud_upload_rounded
+                                    : Icons
+                                        .check_circle_rounded,
+                                size: 36,
+                                color: fileName.isEmpty
+                                    ? const Color(
+                                        0xFF9AA5B4)
+                                    : const Color(
+                                        0xFF059669),
+                              ),
+                              const SizedBox(height: 10),
+                              Text(
+                                fileName.isEmpty
+                                    ? 'Click to browse or drop your file here'
+                                    : fileName,
+                                style: GoogleFonts
+                                    .beVietnamPro(
+                                  fontSize: 13,
+                                  fontWeight:
+                                      FontWeight.w600,
+                                  color: fileName.isEmpty
+                                      ? const Color(
+                                          0xFF64748B)
+                                      : const Color(
+                                          0xFF059669),
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                'Supported: .xlsx, .xls, .csv',
+                                style: GoogleFonts
+                                    .beVietnamPro(
+                                  fontSize: 11,
+                                  color: const Color(
+                                      0xFF9AA5B4),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      // Column guide
+                      Container(
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color:
+                              const Color(0xFFF0F6FF),
+                          borderRadius:
+                              BorderRadius.circular(8),
+                          border: Border.all(
+                              color: const Color(
+                                  0xFFBFD7FF)),
+                        ),
+                        child: Row(
+                          crossAxisAlignment:
+                              CrossAxisAlignment.start,
+                          children: [
+                          const Icon(
+                              Icons
+                                  .info_outline_rounded,
+                              size: 15,
+                              color:
+                                  Color(0xFF2563EB)),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              'Required columns (in order):\nStudent ID · Full Name · Course · Year Level · Email',
+                              style: GoogleFonts
+                                  .beVietnamPro(
+                                fontSize: 12,
+                                color: const Color(
+                                    0xFF1D4ED8),
+                                height: 1.5,
+                              ),
+                            ),
+                          ),
+                        ]),
+                      ),
+                      if (isUploading) ...[
+                        const SizedBox(height: 16),
+                        ClipRRect(
+                          borderRadius:
+                              BorderRadius.circular(4),
+                          child: LinearProgressIndicator(
+                            backgroundColor: const Color(
+                                0xFFE2E6EA),
+                            color:
+                                UpriseColors.primaryDark,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Text('Importing students…',
+                            style:
+                                GoogleFonts.beVietnamPro(
+                              fontSize: 12,
+                              color: const Color(
+                                  0xFF64748B),
+                            )),
+                      ],
+                      if (resultMessage != null) ...[
+                        const SizedBox(height: 14),
+                        Container(
+                          padding:
+                              const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: resultIsError
+                                ? const Color(
+                                    0xFFFEF2F2)
+                                : const Color(
+                                    0xFFECFDF5),
+                            borderRadius:
+                                BorderRadius.circular(
+                                    8),
+                            border: Border.all(
+                              color: resultIsError
+                                  ? const Color(
+                                      0xFFFCA5A5)
+                                  : const Color(
+                                      0xFF6EE7B7),
+                            ),
+                          ),
+                          child: Row(children: [
+                            Icon(
+                              resultIsError
+                                  ? Icons
+                                      .error_outline_rounded
+                                  : Icons
+                                      .check_circle_outline_rounded,
+                              size: 16,
+                              color: resultIsError
+                                  ? const Color(
+                                      0xFFDC2626)
+                                  : const Color(
+                                      0xFF059669),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                resultMessage!,
+                                style: GoogleFonts
+                                    .beVietnamPro(
+                                  fontSize: 12,
+                                  color: resultIsError
+                                      ? const Color(
+                                          0xFF991B1B)
+                                      : const Color(
+                                          0xFF065F46),
+                                ),
+                              ),
+                            ),
+                          ]),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                // Footer
+                Container(
+                  padding: const EdgeInsets.fromLTRB(
+                      24, 0, 24, 20),
+                  decoration: const BoxDecoration(
+                    border: Border(
+                        top: BorderSide(
+                            color:
+                                Color(0xFFE8ECF0))),
+                    color: Color(0xFFF8F9FB),
+                    borderRadius:
+                        BorderRadius.vertical(
+                            bottom:
+                                Radius.circular(18)),
+                  ),
+                  child: Row(
+                    mainAxisAlignment:
+                        MainAxisAlignment
+                            .spaceBetween,
+                    children: [
+                      TextButton(
+                        onPressed: isUploading
+                            ? null
+                            : () =>
+                                Navigator.pop(ctx),
+                        child: Text('Cancel',
+                            style: GoogleFonts
+                                .beVietnamPro(
+                              fontSize: 13,
+                              color: const Color(
+                                  0xFF64748B),
+                            )),
+                      ),
+                      ElevatedButton.icon(
+                        onPressed: isUploading ||
+                                pickedFile == null
+                            ? null
+                            : () async {
+                                setDialogState(() {
+                                  isUploading = true;
+                                  resultMessage =
+                                      null;
+                                });
+                                try {
+                                  List<
+                                      Map<String,
+                                          String>> students;
+                                  if (kIsWeb) {
+                                    students =
+                                        await _parseXFile(
+                                            pickedFile!);
+                                  } else {
+                                    students =
+                                        await _parseFile(
+                                            File(pickedFile!
+                                                .path));
+                                  }
+                                  if (students
+                                      .isEmpty) {
+                                    throw Exception(
+                                        'No valid data found. Check column order.');
+                                  }
+                                  int success = 0,
+                                      failed = 0;
+                                  for (final s
+                                      in students) {
+                                    try {
+                                      await _createStudentAccount(
+                                          s);
+                                      success++;
+                                    } catch (_) {
+                                      failed++;
+                                    }
+                                  }
+                                  setDialogState(
+                                      () {
+                                    isUploading =
+                                        false;
+                                    resultMessage =
+                                        'Import complete: $success created, $failed skipped.';
+                                    resultIsError =
+                                        failed > 0 &&
+                                            success ==
+                                                0;
+                                  });
+                                  if (success > 0) {
+                                    Future.delayed(
+                                      const Duration(
+                                          seconds: 2),
+                                      () {
+                                        if (mounted) {
+                                          Navigator.pop(
+                                              ctx);
+                                          ScaffoldMessenger.of(
+                                                  context)
+                                              .showSnackBar(SnackBar(
+                                            content: Text(
+                                                '$success students imported successfully.'),
+                                            backgroundColor:
+                                                const Color(
+                                                    0xFF059669),
+                                            behavior:
+                                                SnackBarBehavior
+                                                    .floating,
+                                            shape: RoundedRectangleBorder(
+                                                borderRadius:
+                                                    BorderRadius.circular(8)),
+                                          ));
+                                        }
+                                      },
+                                    );
+                                  }
+                                } catch (e) {
+                                  setDialogState(
+                                      () {
+                                    isUploading =
+                                        false;
+                                    resultMessage =
+                                        'Error: $e';
+                                    resultIsError =
+                                        true;
+                                  });
+                                }
+                              },
+                        icon: isUploading
+                            ? const SizedBox(
+                                width: 14,
+                                height: 14,
+                                child:
+                                    CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        color:
+                                            Colors
+                                                .white))
+                            : const Icon(
+                                Icons
+                                    .upload_rounded,
+                                size: 16),
+                        label: Text(
+                          'Upload & Import',
+                          style:
+                              GoogleFonts.beVietnamPro(
+                            fontSize: 13,
+                            fontWeight:
+                                FontWeight.w600,
+                          ),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor:
+                              UpriseColors.primaryDark,
+                          foregroundColor: Colors.white,
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                              borderRadius:
+                                  BorderRadius.circular(
+                                      8)),
+                          padding:
+                              const EdgeInsets.symmetric(
+                                  horizontal: 20,
+                                  vertical: 11),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ── Manual Add Dialog ─────────────────────────────────────────────
+  void _showManualAddDialog() {
+    final formKey = GlobalKey<FormState>();
+    final idCtrl = TextEditingController();
+    final nameCtrl = TextEditingController();
+    final emailCtrl = TextEditingController();
+    String course = 'BSIT';
+    String yearLevel = '1st Year';
+    String status = 'pending';
+    bool isCreating = false;
+    String? errorMsg;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      barrierColor: Colors.black54,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => Dialog(
+          insetPadding: const EdgeInsets.symmetric(
+              horizontal: 32, vertical: 24),
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(18)),
+          child: Container(
+            width: 520,
+            constraints: BoxConstraints(
+                maxHeight:
+                    MediaQuery.of(context).size.height *
+                        0.85),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Header
+                Container(
+                  padding: const EdgeInsets.fromLTRB(
+                      24, 20, 20, 20),
+                  decoration: BoxDecoration(
+                    color: UpriseColors.primaryDark,
+                    borderRadius:
+                        const BorderRadius.vertical(
+                            top: Radius.circular(18)),
+                  ),
+                  child: Row(children: [
+                    Container(
+                      width: 38,
+                      height: 38,
+                      decoration: BoxDecoration(
+                        color: Colors.white
+                            .withOpacity(0.15),
+                        borderRadius:
+                            BorderRadius.circular(10),
+                      ),
+                      child: const Icon(
+                          Icons.person_add_rounded,
+                          color: Colors.white,
+                          size: 18),
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Text(
+                        'Add Student Manually',
+                        style:
+                            GoogleFonts.beVietnamPro(
+                          fontSize: 17,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(
+                          Icons.close_rounded,
+                          color: Colors.white,
+                          size: 20),
+                      onPressed: isCreating
+                          ? null
+                          : () => Navigator.pop(ctx),
+                    ),
+                  ]),
+                ),
+                // Body
+                Expanded(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.all(24),
+                    child: Form(
+                      key: formKey,
+                      child: Column(
+                        crossAxisAlignment:
+                            CrossAxisAlignment.start,
+                        children: [
+                          _sectionLabel(
+                              'Student Information',
+                              icon: Icons.badge_outlined),
+                          // ID + Name row
+                          Row(children: [
+                            Expanded(
+                              child: TextFormField(
+                                controller: idCtrl,
+                                decoration: _DS
+                                    .inputDecoration(
+                                  'Student ID',
+                                  hint:
+                                      'e.g., 2021-00001',
+                                  icon: Icons
+                                      .badge_outlined,
+                                ),
+                                style: GoogleFonts
+                                    .beVietnamPro(
+                                        fontSize: 13),
+                                validator: (v) => v ==
+                                            null ||
+                                        v.trim().isEmpty
+                                    ? 'Required'
+                                    : null,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: TextFormField(
+                                controller: nameCtrl,
+                                decoration: _DS
+                                    .inputDecoration(
+                                  'Full Name',
+                                  hint:
+                                      'e.g., Juan dela Cruz',
+                                  icon: Icons
+                                      .person_outline,
+                                ),
+                                style: GoogleFonts
+                                    .beVietnamPro(
+                                        fontSize: 13),
+                                validator: (v) => v ==
+                                            null ||
+                                        v.trim().isEmpty
+                                    ? 'Required'
+                                    : null,
+                              ),
+                            ),
+                          ]),
+                          const SizedBox(height: 12),
+                          // Course + Year row
+                          Row(children: [
+                            Expanded(
+                              child:
+                                  DropdownButtonFormField<
+                                      String>(
+                                value: course,
+                                decoration:
+                                    _DS.inputDecoration(
+                                        'Course'),
+                                style: GoogleFonts
+                                    .beVietnamPro(
+                                  fontSize: 13,
+                                  color: const Color(
+                                      0xFF1A202C),
+                                ),
+                                items: const [
+                                  'BSIT',
+                                  'BSIS',
+                                  'BLIS'
+                                ]
+                                    .map((c) =>
+                                        DropdownMenuItem(
+                                            value: c,
+                                            child:
+                                                Text(c)))
+                                    .toList(),
+                                onChanged: (v) =>
+                                    setDialogState(() =>
+                                        course = v!),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child:
+                                  DropdownButtonFormField<
+                                      String>(
+                                value: yearLevel,
+                                decoration:
+                                    _DS.inputDecoration(
+                                        'Year Level'),
+                                style: GoogleFonts
+                                    .beVietnamPro(
+                                  fontSize: 13,
+                                  color: const Color(
+                                      0xFF1A202C),
+                                ),
+                                items: const [
+                                  '1st Year',
+                                  '2nd Year',
+                                  '3rd Year',
+                                  '4th Year',
+                                  '5th Year'
+                                ]
+                                    .map((y) =>
+                                        DropdownMenuItem(
+                                            value: y,
+                                            child:
+                                                Text(y)))
+                                    .toList(),
+                                onChanged: (v) =>
+                                    setDialogState(() =>
+                                        yearLevel = v!),
+                              ),
+                            ),
+                          ]),
+                          const SizedBox(height: 12),
+                          // Email
+                          TextFormField(
+                            controller: emailCtrl,
+                            decoration:
+                                _DS.inputDecoration(
+                              'Email Address',
+                              hint:
+                                  'e.g., student@university.edu.ph',
+                              icon:
+                                  Icons.email_outlined,
+                            ),
+                            style: GoogleFonts
+                                .beVietnamPro(
+                                    fontSize: 13),
+                            keyboardType: TextInputType
+                                .emailAddress,
+                            validator: (v) {
+                              if (v == null ||
+                                  v.trim().isEmpty) {
+                                return 'Required';
+                              }
+                              if (!v.contains('@') ||
+                                  !v.contains('.')) {
+                                return 'Enter a valid email';
+                              }
+                              return null;
+                            },
+                          ),
+                          const SizedBox(height: 12),
+                          // Status
+                          DropdownButtonFormField<
+                              String>(
+                            value: status,
+                            decoration:
+                                _DS.inputDecoration(
+                                    'Initial Status'),
+                            style:
+                                GoogleFonts.beVietnamPro(
+                              fontSize: 13,
+                              color: const Color(
+                                  0xFF1A202C),
+                            ),
+                            items: const [
+                              'pending',
+                              'verified'
+                            ]
+                                .map((s) =>
+                                    DropdownMenuItem(
+                                      value: s,
+                                      child: Text(s[0]
+                                              .toUpperCase() +
+                                          s.substring(1)),
+                                    ))
+                                .toList(),
+                            onChanged: (v) =>
+                                setDialogState(
+                                    () => status = v!),
+                          ),
+                          if (errorMsg != null) ...[
+                            const SizedBox(height: 14),
+                            Container(
+                              padding:
+                                  const EdgeInsets.all(
+                                      12),
+                              decoration: BoxDecoration(
+                                color: const Color(
+                                    0xFFFEF2F2),
+                                borderRadius:
+                                    BorderRadius.circular(
+                                        8),
+                                border: Border.all(
+                                    color: const Color(
+                                        0xFFFCA5A5)),
+                              ),
+                              child: Row(children: [
+                                const Icon(
+                                    Icons
+                                        .error_outline_rounded,
+                                    size: 15,
+                                    color: Color(
+                                        0xFFDC2626)),
+                                const SizedBox(
+                                    width: 8),
+                                Expanded(
+                                    child: Text(
+                                  errorMsg!,
+                                  style: GoogleFonts
+                                      .beVietnamPro(
+                                          fontSize: 12,
+                                          color: const Color(
+                                              0xFF991B1B)),
+                                )),
+                              ]),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                // Footer
+                Container(
+                  padding: const EdgeInsets.fromLTRB(
+                      24, 16, 24, 20),
+                  decoration: const BoxDecoration(
+                    border: Border(
+                        top: BorderSide(
+                            color:
+                                Color(0xFFE8ECF0))),
+                    color: Color(0xFFF8F9FB),
+                    borderRadius:
+                        BorderRadius.vertical(
+                            bottom:
+                                Radius.circular(18)),
+                  ),
+                  child: Row(
+                    mainAxisAlignment:
+                        MainAxisAlignment.end,
+                    children: [
+                      OutlinedButton(
+                        onPressed: isCreating
+                            ? null
+                            : () => Navigator.pop(ctx),
+                        style: OutlinedButton.styleFrom(
+                          side: const BorderSide(
+                              color:
+                                  Color(0xFFE2E6EA)),
+                          shape: RoundedRectangleBorder(
+                              borderRadius:
+                                  BorderRadius.circular(
+                                      8)),
+                          padding:
+                              const EdgeInsets.symmetric(
+                                  horizontal: 18,
+                                  vertical: 11),
+                        ),
+                        child: Text('Cancel',
+                            style: GoogleFonts
+                                .beVietnamPro(
+                              fontSize: 13,
+                              color: const Color(
+                                  0xFF374151),
+                            )),
+                      ),
+                      const SizedBox(width: 12),
+                      ElevatedButton.icon(
+                        onPressed: isCreating
+                            ? null
+                            : () async {
+                                if (!formKey
+                                    .currentState!
+                                    .validate()) return;
+                                setDialogState(() {
+                                  isCreating = true;
+                                  errorMsg = null;
+                                });
+                                try {
+                                  await _createStudentAccount({
+                                    'studentId': idCtrl
+                                        .text
+                                        .trim(),
+                                    'fullName': nameCtrl
+                                        .text
+                                        .trim(),
+                                    'course': course,
+                                    'yearLevel':
+                                        yearLevel,
+                                    'email': emailCtrl
+                                        .text
+                                        .trim()
+                                        .toLowerCase(),
+                                  });
+                                  // Override status if verified
+                                  if (status ==
+                                      'verified') {
+                                    final q =
+                                        await FirebaseFirestore
+                                            .instance
+                                            .collection(
+                                                'students')
+                                            .where(
+                                              'email',
+                                              isEqualTo:
+                                                  emailCtrl
+                                                      .text
+                                                      .trim()
+                                                      .toLowerCase(),
+                                            )
+                                            .get();
+                                    if (q.docs
+                                        .isNotEmpty) {
+                                      await q.docs.first
+                                          .reference
+                                          .update({
+                                        'status':
+                                            'verified'
+                                      });
+                                    }
+                                  }
+                                  if (mounted) {
+                                    Navigator.pop(ctx);
+                                    ScaffoldMessenger
+                                            .of(context)
+                                        .showSnackBar(SnackBar(
+                                      content: Text(
+                                          'Student account created for ${nameCtrl.text.trim()}.'),
+                                      backgroundColor:
+                                          const Color(
+                                              0xFF059669),
+                                      behavior:
+                                          SnackBarBehavior
+                                              .floating,
+                                      shape: RoundedRectangleBorder(
+                                          borderRadius:
+                                              BorderRadius.circular(
+                                                  8)),
+                                    ));
+                                  }
+                                } catch (e) {
+                                  setDialogState(() {
+                                    errorMsg =
+                                        e.toString();
+                                    isCreating = false;
+                                  });
+                                }
+                              },
+                        icon: isCreating
+                            ? const SizedBox(
+                                width: 14,
+                                height: 14,
+                                child:
+                                    CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        color:
+                                            Colors
+                                                .white))
+                            : const Icon(
+                                Icons.person_add_rounded,
+                                size: 16),
+                        label: Text(
+                          'Create Account',
+                          style:
+                              GoogleFonts.beVietnamPro(
+                            fontSize: 13,
+                            fontWeight:
+                                FontWeight.w600,
+                          ),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor:
+                              UpriseColors.primaryDark,
+                          foregroundColor: Colors.white,
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                              borderRadius:
+                                  BorderRadius.circular(
+                                      8)),
+                          padding:
+                              const EdgeInsets.symmetric(
+                                  horizontal: 20,
+                                  vertical: 11),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ── Helpers ───────────────────────────────────────────────────────
+
+  String _generatePassword() {
+    const chars =
+        'ABCDEFGHJKLMNPQRSTUVWXYZ0123456789';
+    final rng = Random.secure();
+    return 'STU-${List.generate(6, (_) => chars[rng.nextInt(chars.length)]).join()}';
+  }
+
+  Future<void> _createStudentAccount(
+      Map<String, String> student) async {
+    final email = student['email']!;
+    final studentId = student['studentId']!;
+    final fullName = student['fullName']!;
+    final password = _generatePassword();
+
+    FirebaseApp secondaryApp;
+    try {
+      secondaryApp = Firebase.app('secondaryApp');
+    } catch (_) {
+      secondaryApp = await Firebase.initializeApp(
+        name: 'secondaryApp',
+        options: Firebase.app().options,
+      );
+    }
+    final secondaryAuth =
+        FirebaseAuth.instanceFor(app: secondaryApp);
+    UserCredential cred;
+    try {
+      cred = await secondaryAuth
+          .createUserWithEmailAndPassword(
+              email: email, password: password);
+    } catch (e) {
+      await secondaryAuth.signOut();
+      if (e.toString().contains('email-already-in-use')) {
+        throw Exception(
+            'Email already registered: $email');
+      }
+      throw Exception(
+          'Account creation failed: ${e.toString()}');
+    }
+    await cred.user?.updateDisplayName(fullName);
+    await FirebaseFirestore.instance
+        .collection('students')
+        .doc(cred.user!.uid)
+        .set({
+      'studentId': studentId,
+      'fullName': fullName,
+      'course': student['course'],
+      'yearLevel': student['yearLevel'],
+      'email': email,
+      'status': 'pending',
+      'tempPassword': password,
+      'createdAt': FieldValue.serverTimestamp(),
+      'uid': cred.user!.uid,
+    });
+    await secondaryAuth.signOut();
+    await _sendCredentialsEmail(
+        email, studentId, password);
+    await activity_log.ActivityLogger.log(
+      action:
+          'Created student account: $studentId ($email)',
+      module: 'User Directory',
+      severity: 'info',
+    );
+  }
+
+  Future<void> _sendCredentialsEmail(
+    String email,
+    String studentId,
+    String password,
+  ) async {
+    try {
+      final response = await http.post(
+        Uri.parse(
+            'https://api.emailjs.com/api/v1.0/email/send'),
+        headers: {
+          'Content-Type': 'application/json',
+          'origin': 'http://localhost',
+        },
+        body: jsonEncode({
+          'service_id': 'service_s3ke8zd',
+          'template_id': 'template_76fn2md',
+          'user_id': 'tmx47wQJmb1uMNUpr',
+          'template_params': {
+            'to_email': email,
+            'student_id': studentId,
+            'password': password,
+          },
+        }),
+      );
+      if (response.statusCode == 200) {
+        debugPrint('✅ Email sent to $email');
+      } else {
+        debugPrint(
+            '❌ EmailJS ${response.statusCode}: ${response.body}');
+      }
+    } catch (e) {
+      debugPrint('❌ Failed to send email: $e');
+    }
+  }
+
+  Future<List<Map<String, String>>> _parseFile(
+      File file) async {
+    final List<Map<String, String>> students = [];
+    final ext =
+        file.path.split('.').last.toLowerCase();
+    if (ext == 'csv') {
       final csvString = await file.readAsString();
-      final rows = const CsvToListConverter().convert(csvString);
+      final rows =
+          const CsvToListConverter().convert(csvString);
       for (int i = 1; i < rows.length; i++) {
         final row = rows[i];
         if (row.length >= 5) {
           students.add({
-            'studentId': row[0]?.toString().trim() ?? '',
-            'fullName': row[1]?.toString().trim() ?? '',
-            'course': _normalizeCourse(row[2]?.toString().trim() ?? ''),
-            'yearLevel': row[3]?.toString().trim() ?? '',
-            'email': row[4]?.toString().trim() ?? '',
+            'studentId':
+                row[0]?.toString().trim() ?? '',
+            'fullName':
+                row[1]?.toString().trim() ?? '',
+            'course': _normalizeCourse(
+                row[2]?.toString().trim() ?? ''),
+            'yearLevel':
+                row[3]?.toString().trim() ?? '',
+            'email':
+                row[4]?.toString().trim() ?? '',
           });
         }
       }
     } else {
       final bytes = await file.readAsBytes();
       final excel = Excel.decodeBytes(bytes);
-      for (var table in excel.tables.keys) {
+      for (final table in excel.tables.keys) {
         final sheet = excel.tables[table];
-        for (int i = 1; i < sheet!.rows.length; i++) {
-          final row = sheet.rows[i];
+        for (int i = 1;
+            i < (sheet?.rows.length ?? 0);
+            i++) {
+          final row = sheet!.rows[i];
           if (row.length >= 5) {
             students.add({
-              'studentId': row[0]?.value?.toString().trim() ?? '',
-              'fullName': row[1]?.value?.toString().trim() ?? '',
-              'course': _normalizeCourse(row[2]?.value?.toString().trim() ?? ''),
-              'yearLevel': row[3]?.value?.toString().trim() ?? '',
-              'email': row[4]?.value?.toString().trim() ?? '',
+              'studentId': row[0]
+                      ?.value
+                      ?.toString()
+                      .trim() ??
+                  '',
+              'fullName': row[1]
+                      ?.value
+                      ?.toString()
+                      .trim() ??
+                  '',
+              'course': _normalizeCourse(
+                  row[2]
+                          ?.value
+                          ?.toString()
+                          .trim() ??
+                      ''),
+              'yearLevel': row[3]
+                      ?.value
+                      ?.toString()
+                      .trim() ??
+                  '',
+              'email': row[4]
+                      ?.value
+                      ?.toString()
+                      .trim() ??
+                  '',
             });
           }
         }
         break;
       }
     }
-    students.removeWhere((s) => s['studentId']!.isEmpty || s['email']!.isEmpty);
+    students.removeWhere((s) =>
+        s['studentId']!.isEmpty ||
+        s['email']!.isEmpty);
+    return students;
+  }
+
+  Future<List<Map<String, String>>> _parseXFile(
+      XFile xfile) async {
+    final bytes = await xfile.readAsBytes();
+    final name = xfile.name.toLowerCase();
+    final List<Map<String, String>> students = [];
+    if (name.endsWith('.csv')) {
+      final csvString =
+          String.fromCharCodes(bytes);
+      final rows =
+          const CsvToListConverter().convert(csvString);
+      for (int i = 1; i < rows.length; i++) {
+        final row = rows[i];
+        if (row.length >= 5) {
+          students.add({
+            'studentId':
+                row[0]?.toString().trim() ?? '',
+            'fullName':
+                row[1]?.toString().trim() ?? '',
+            'course': _normalizeCourse(
+                row[2]?.toString().trim() ?? ''),
+            'yearLevel':
+                row[3]?.toString().trim() ?? '',
+            'email':
+                row[4]?.toString().trim() ?? '',
+          });
+        }
+      }
+    } else {
+      final excel = Excel.decodeBytes(bytes);
+      for (final table in excel.tables.keys) {
+        final sheet = excel.tables[table];
+        for (int i = 1;
+            i < (sheet?.rows.length ?? 0);
+            i++) {
+          final row = sheet!.rows[i];
+          if (row.length >= 5) {
+            students.add({
+              'studentId': row[0]
+                      ?.value
+                      ?.toString()
+                      .trim() ??
+                  '',
+              'fullName': row[1]
+                      ?.value
+                      ?.toString()
+                      .trim() ??
+                  '',
+              'course': _normalizeCourse(
+                  row[2]
+                          ?.value
+                          ?.toString()
+                          .trim() ??
+                      ''),
+              'yearLevel': row[3]
+                      ?.value
+                      ?.toString()
+                      .trim() ??
+                  '',
+              'email': row[4]
+                      ?.value
+                      ?.toString()
+                      .trim() ??
+                  '',
+            });
+          }
+        }
+        break;
+      }
+    }
+    students.removeWhere((s) =>
+        s['studentId']!.isEmpty ||
+        s['email']!.isEmpty);
     return students;
   }
 
@@ -886,268 +2665,509 @@ Widget _buildFilterDropdown({
     if (upper.contains('BLIS')) return 'BLIS';
     return 'BSIT';
   }
+}
 
-  // ---------- ACCOUNT CREATION & EMAIL (FIXED: secondary app + Firestore mail) ----------
-  Future<void> _createStudentAccount(Map<String, String> student) async {
-    final email = student['email']!;
-    final studentId = student['studentId']!;
-    final fullName = student['fullName']!;
-    final password = _generateRandomPassword();
+// ─────────────────────────────────────────────────────────────────────────────
+// Reusable widgets (mirrors org_management style)
+// ─────────────────────────────────────────────────────────────────────────────
 
-    // ✅ FIX #1: Properly check for existing secondary app
-    FirebaseApp secondaryApp;
-    try {
-      secondaryApp = Firebase.app('secondaryApp');
-    } catch (_) {
-      secondaryApp = await Firebase.initializeApp(
-        name: 'secondaryApp',
-        options: Firebase.app().options,
-      );
-    }
-    final secondaryAuth = FirebaseAuth.instanceFor(app: secondaryApp);
-    UserCredential userCred;
-    try {
-      userCred = await secondaryAuth.createUserWithEmailAndPassword(email: email, password: password);
-    } catch (e) {
-      if (e.toString().contains('email-already-in-use')) {
-        throw Exception('Email already registered: $email');
-      } else {
-        throw Exception('Account creation failed: ${e.toString()}');
-      }
-    }
-    await userCred.user?.updateDisplayName(fullName);
-    await FirebaseFirestore.instance.collection('students').doc(userCred.user!.uid).set({
-      'studentId': studentId,
-      'fullName': fullName,
-      'course': student['course'],
-      'yearLevel': student['yearLevel'],
-      'email': email,
-      'status': 'pending',
-      'tempPassword': password,
-      'createdAt': FieldValue.serverTimestamp(),
-      'uid': userCred.user!.uid,
-    });
-    await secondaryAuth.signOut();
-    await _sendCredentialsEmail(email, studentId, password);
-    await activity_log.ActivityLogger.log(
-      action: 'Created student account: $studentId ($email)',
-      module: 'User Directory',
-      severity: 'info',
+class _StatCard extends StatelessWidget {
+  final String label, value;
+  final IconData icon;
+  final Color color;
+  const _StatCard({
+    required this.label,
+    required this.value,
+    required this.icon,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.all(18),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border:
+              Border.all(color: const Color(0xFFE8ECF0)),
+          boxShadow: _DS.cardShadow,
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: color.withOpacity(0.10),
+                borderRadius:
+                    BorderRadius.circular(12),
+              ),
+              child: Icon(icon, color: color, size: 22),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment:
+                    CrossAxisAlignment.start,
+                children: [
+                  Text(label,
+                      style: GoogleFonts.beVietnamPro(
+                          fontSize: 11,
+                          color: const Color(
+                              0xFF64748B),
+                          fontWeight:
+                              FontWeight.w500)),
+                  const SizedBox(height: 2),
+                  Text(value,
+                      style: GoogleFonts.beVietnamPro(
+                          fontSize: 28,
+                          fontWeight: FontWeight.w700,
+                          color: const Color(
+                              0xFF1A202C))),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
     );
-  }
-
-  String _generateRandomPassword() {
-    const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#%&*';
-    final random = Random();
-    return List.generate(12, (index) => chars[random.nextInt(chars.length)]).join();
-  }
-
-  // ✅ FIX #4: Replace SMTP with Firestore mail collection (works with Firebase Extensions or Cloud Function)
-  Future<void> _sendCredentialsEmail(String email, String studentId, String password) async {
-  try {
-    final url = Uri.parse('https://api.emailjs.com/api/v1.0/email/send');
-
-    final response = await http.post(
-      url,
-      headers: {
-        'Content-Type': 'application/json',
-        'origin': 'http://localhost',
-      },
-      body: jsonEncode({
-        'service_id':  'service_s3ke8zd',   // from Step 1
-        'template_id': 'template_76fn2md',  // from Step 2
-        'user_id':     'tmx47wQJmb1uMNUpr',   // from Step 3
-        'template_params': {
-          'to_email':   email,
-          'student_id': studentId,
-          'password':   password,
-        },
-      }),
-    );
-
-    if (response.statusCode == 200) {
-      debugPrint('✅ Email sent to $email');
-    } else {
-      debugPrint('❌ EmailJS error ${response.statusCode}: ${response.body}');
-    }
-  } catch (e) {
-    debugPrint('❌ Failed to send email: $e');
   }
 }
 
-  // ---------- MANUAL ADD DIALOG (FIXED: isCreating/errorMessage moved outside builder) ----------
-  void _showManualAddDialog() {
-    _manualIdController.clear();
-    _manualNameController.clear();
-    _manualCourse = 'BSIT';
-    _manualYearController.clear();
-    _manualEmailController.clear();
-    _manualStatus = 'pending';
+class _FilterDropdown extends StatelessWidget {
+  final String value;
+  final List<String> items;
+  final String hint;
+  final IconData icon;
+  final ValueChanged<String?> onChanged;
 
-    // ✅ FIX #2: These belong to the outer function, not inside StatefulBuilder
-    bool isCreating = false;
-    String? errorMessage;
+  const _FilterDropdown({
+    required this.value,
+    required this.items,
+    required this.hint,
+    required this.icon,
+    required this.onChanged,
+  });
 
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setDialogState) {
-          return AlertDialog(
-            title: Row(children: [
-              Icon(Icons.person_add, color: UpriseColors.primaryDark),
-              const SizedBox(width: 8),
-              Text('Add Student Manually', style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.bold)),
-            ]),
-            content: SingleChildScrollView(
-              child: Form(
-                key: _formKey,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    TextFormField(
-                      controller: _manualIdController,
-                      decoration: const InputDecoration(labelText: 'Student ID'),
-                      validator: (v) => v!.isEmpty ? 'Required' : null,
-                    ),
-                    const SizedBox(height: 12),
-                    TextFormField(
-                      controller: _manualNameController,
-                      decoration: const InputDecoration(labelText: 'Full Name'),
-                      validator: (v) => v!.isEmpty ? 'Required' : null,
-                    ),
-                    const SizedBox(height: 12),
-                    DropdownButtonFormField<String>(
-                      initialValue: _manualCourse,
-                      items: const ['BSIT', 'BSIS', 'BLIS']
-                          .map((c) => DropdownMenuItem(value: c, child: Text(c)))
-                          .toList(),
-                      onChanged: (v) => setDialogState(() => _manualCourse = v!),
-                      decoration: const InputDecoration(labelText: 'Course'),
-                    ),
-                    const SizedBox(height: 12),
-                    DropdownButtonFormField<String>(
-                      initialValue: _manualYearController.text.isNotEmpty ? _manualYearController.text : null,
-                      items: const ['1st Year', '2nd Year', '3rd Year', '4th Year', '5th Year']
-                          .map((y) => DropdownMenuItem(value: y, child: Text(y)))
-                          .toList(),
-                      onChanged: (v) => _manualYearController.text = v!,
-                      decoration: const InputDecoration(labelText: 'Year Level'),
-                      validator: (v) => v == null ? 'Required' : null,
-                    ),
-                    const SizedBox(height: 12),
-                    TextFormField(
-                      controller: _manualEmailController,
-                      decoration: const InputDecoration(labelText: 'Email'),
-                      validator: (v) => v!.isEmpty || !v.contains('@') ? 'Valid email required' : null,
-                    ),
-                    const SizedBox(height: 12),
-                    DropdownButtonFormField<String>(
-                      initialValue: _manualStatus,
-                      items: const ['pending', 'verified'].map((s) => DropdownMenuItem(value: s, child: Text(s.toUpperCase()))).toList(),
-                      onChanged: (v) => setDialogState(() => _manualStatus = v!),
-                      decoration: const InputDecoration(labelText: 'Status'),
-                    ),
-                    if (errorMessage != null) ...[
-                      const SizedBox(height: 8),
-                      Text(errorMessage!, style: TextStyle(color: UpriseColors.error)),
-                    ],
-                  ],
-                ),
-              ),
-            ),
-            actions: [
-              TextButton(onPressed: isCreating ? null : () => Navigator.pop(context), child: const Text('Cancel')),
-              ElevatedButton(
-                onPressed: isCreating
-                    ? null
-                    : () async {
-                        if (_formKey.currentState!.validate()) {
-                          // Update dialog state to show loading
-                          setDialogState(() => isCreating = true);
-                          try {
-                            final student = {
-                              'studentId': _manualIdController.text.trim(),
-                              'fullName': _manualNameController.text.trim(),
-                              'course': _manualCourse,
-                              'yearLevel': _manualYearController.text.trim(),
-                              'email': _manualEmailController.text.trim(),
-                            };
-                            await _createStudentAccount(student);
-                            if (_manualStatus == 'verified') {
-                              final query = await FirebaseFirestore.instance
-                                  .collection('students')
-                                  .where('email', isEqualTo: student['email'])
-                                  .get();
-                              if (query.docs.isNotEmpty) {
-                                await query.docs.first.reference.update({'status': 'verified'});
-                              }
-                            }
-                            if (mounted) {
-                              Navigator.pop(context);
-                              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Student account created')));
-                              setState(() {}); // refresh table
-                            }
-                          } catch (e) {
-                            setDialogState(() => errorMessage = e.toString());
-                          } finally {
-                            setDialogState(() => isCreating = false);
-                          }
-                        }
-                      },
-                child: isCreating
-                    ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
-                    : const Text('Create Account'),
-              ),
-            ],
-          );
-        },
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 40,
+      padding:
+          const EdgeInsets.symmetric(horizontal: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+            color: const Color(0xFFE2E6EA)),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String>(
+          value: value,
+          icon: const Icon(
+              Icons.keyboard_arrow_down_rounded,
+              size: 18,
+              color: Color(0xFF9AA5B4)),
+          style: GoogleFonts.beVietnamPro(
+              fontSize: 13,
+              color: const Color(0xFF374151)),
+          items: items
+              .map((s) => DropdownMenuItem(
+                    value: s,
+                    child: Text(s,
+                        style: GoogleFonts
+                            .beVietnamPro(
+                                fontSize: 13)),
+                  ))
+              .toList(),
+          onChanged: onChanged,
+        ),
+      ),
+    );
+  }
+}
+
+class _ToolbarButton extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final VoidCallback onPressed;
+  final bool outlined;
+
+  const _ToolbarButton({
+    required this.label,
+    required this.icon,
+    required this.onPressed,
+    this.outlined = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (outlined) {
+      return OutlinedButton.icon(
+        onPressed: onPressed,
+        icon: Icon(icon, size: 15),
+        label: Text(label,
+            style: GoogleFonts.beVietnamPro(
+                fontSize: 13,
+                fontWeight: FontWeight.w600)),
+        style: OutlinedButton.styleFrom(
+          foregroundColor: UpriseColors.primaryDark,
+          side: BorderSide(
+              color: UpriseColors.primaryDark),
+          padding: const EdgeInsets.symmetric(
+              horizontal: 16, vertical: 10),
+          shape: RoundedRectangleBorder(
+              borderRadius:
+                  BorderRadius.circular(10)),
+        ),
+      );
+    }
+    return ElevatedButton.icon(
+      onPressed: onPressed,
+      icon: Icon(icon, size: 15),
+      label: Text(label,
+          style: GoogleFonts.beVietnamPro(
+              fontSize: 13,
+              fontWeight: FontWeight.w600)),
+      style: ElevatedButton.styleFrom(
+        backgroundColor: UpriseColors.primaryDark,
+        foregroundColor: Colors.white,
+        padding: const EdgeInsets.symmetric(
+            horizontal: 16, vertical: 10),
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10)),
+        elevation: 0,
+      ),
+    );
+  }
+}
+
+class _ExportStudentsButton extends StatelessWidget {
+  final String statusFilter,
+      courseFilter,
+      searchTerm;
+  const _ExportStudentsButton({
+    required this.statusFilter,
+    required this.courseFilter,
+    required this.searchTerm,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 40,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+            color: const Color(0xFFE2E6EA)),
+      ),
+      child: PopupMenuButton<String>(
+        onSelected: (choice) =>
+            _doExport(context, choice),
+        itemBuilder: (_) => [
+          _item('csv', Icons.table_chart_rounded,
+              'Export as CSV'),
+          _item('json',
+              Icons.data_object_rounded,
+              'Export as JSON'),
+        ],
+        child: Padding(
+          padding: const EdgeInsets.symmetric(
+              horizontal: 14),
+          child: Row(children: [
+            const Icon(Icons.download_rounded,
+                size: 16,
+                color: Color(0xFF374151)),
+            const SizedBox(width: 6),
+            Text('Export',
+                style: GoogleFonts.beVietnamPro(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                    color:
+                        const Color(0xFF374151))),
+            const SizedBox(width: 4),
+            const Icon(
+                Icons.keyboard_arrow_down_rounded,
+                size: 16,
+                color: Color(0xFF9AA5B4)),
+          ]),
+        ),
       ),
     );
   }
 
-  // ---------- EXPORT CSV ----------
-  Future<void> _exportToCSV() async {
+  PopupMenuItem<String> _item(
+      String value, IconData icon, String label) {
+    return PopupMenuItem(
+      value: value,
+      child: Row(children: [
+        Icon(icon,
+            size: 16,
+            color: const Color(0xFF64748B)),
+        const SizedBox(width: 10),
+        Text(label,
+            style: GoogleFonts.beVietnamPro(
+                fontSize: 13)),
+      ]),
+    );
+  }
+
+  Future<void> _doExport(
+      BuildContext context, String format) async {
     try {
-      QuerySnapshot snapshot = await FirebaseFirestore.instance.collection('students').get();
-      var docs = snapshot.docs;
-      final term = _searchController.text.trim().toLowerCase();
-      if (term.isNotEmpty) {
-        docs = docs.where((doc) {
-          final data = doc.data() as Map<String, dynamic>;
-          return (data['fullName']?.toLowerCase() ?? '').contains(term) ||
-              (data['studentId']?.toLowerCase() ?? '').contains(term) ||
-              (data['email']?.toLowerCase() ?? '').contains(term);
+      var snap = await FirebaseFirestore.instance
+          .collection('students')
+          .orderBy('createdAt', descending: true)
+          .get();
+      var docs = snap.docs;
+      if (statusFilter != 'All') {
+        docs = docs
+            .where((d) =>
+                (d.data())['status'] ==
+                statusFilter.toLowerCase())
+            .toList();
+      }
+      if (courseFilter != 'All') {
+        docs = docs
+            .where((d) =>
+                (d.data())['course'] == courseFilter)
+            .toList();
+      }
+      if (searchTerm.isNotEmpty) {
+        docs = docs.where((d) {
+          final data = d.data();
+          return (data['fullName'] ?? '')
+                  .toString()
+                  .toLowerCase()
+                  .contains(searchTerm) ||
+              (data['studentId'] ?? '')
+                  .toString()
+                  .toLowerCase()
+                  .contains(searchTerm) ||
+              (data['email'] ?? '')
+                  .toString()
+                  .toLowerCase()
+                  .contains(searchTerm);
         }).toList();
       }
-      if (_statusFilter != 'All') {
-        docs = docs.where((doc) => (doc.data() as Map)['status'] == _statusFilter.toLowerCase()).toList();
+
+      if (docs.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content:
+                const Text('No data to export.'),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+                borderRadius:
+                    BorderRadius.circular(8)),
+          ),
+        );
+        return;
       }
-      if (_courseFilter != 'All') {
-        docs = docs.where((doc) => (doc.data() as Map)['course'] == _courseFilter).toList();
+
+      String content, fileName;
+      final now = DateTime.now()
+          .toString()
+          .substring(0, 10);
+
+      if (format == 'csv') {
+        final buf = StringBuffer();
+        buf.writeln(
+            'Student ID,Full Name,Course,Year Level,Email,Status');
+        for (final doc in docs) {
+          final d = doc.data();
+          String esc(String s) =>
+              '"${s.replaceAll('"', '""')}"';
+          buf.writeln([
+            esc(d['studentId'] ?? ''),
+            esc(d['fullName'] ?? ''),
+            esc(d['course'] ?? ''),
+            esc(d['yearLevel'] ?? ''),
+            esc(d['email'] ?? ''),
+            esc(d['status'] ?? ''),
+          ].join(','));
+        }
+        content = buf.toString();
+        fileName = 'students_$now.csv';
+      } else {
+        final list = docs.map((doc) {
+          final d = doc.data();
+          return {
+            'id': doc.id,
+            'studentId': d['studentId'] ?? '',
+            'fullName': d['fullName'] ?? '',
+            'course': d['course'] ?? '',
+            'yearLevel': d['yearLevel'] ?? '',
+            'email': d['email'] ?? '',
+            'status': d['status'] ?? '',
+          };
+        }).toList();
+        content = const JsonEncoder.withIndent('  ')
+            .convert(list);
+        fileName = 'students_$now.json';
       }
-      final rows = <List<dynamic>>[
-        ['Student ID', 'Full Name', 'Course', 'Year Level', 'Email', 'Status']
-      ];
-      for (var doc in docs) {
-        final data = doc.data() as Map<String, dynamic>;
-        rows.add([
-          data['studentId'] ?? '',
-          data['fullName'] ?? '',
-          data['course'] ?? '',
-          data['yearLevel'] ?? '',
-          data['email'] ?? '',
-          data['status'] ?? 'pending'
-        ]);
+
+      if (kIsWeb) {
+        await Share.share(content,
+            subject: fileName);
+      } else {
+        final file = File(
+            '${Directory.systemTemp.path}/$fileName');
+        await file.writeAsString(content);
+        await Share.shareXFiles([XFile(file.path)],
+            subject: fileName);
       }
-      final csv = const ListToCsvConverter().convert(rows);
-      final file = File('${Directory.systemTemp.path}/students_export.csv');
-      await file.writeAsString(csv);
-      await Share.shareXFiles([XFile(file.path)], text: 'Student list export');
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Export failed: $e'), backgroundColor: Colors.red));
-      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Export failed: $e'),
+          backgroundColor: UpriseColors.error,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+              borderRadius:
+                  BorderRadius.circular(8)),
+        ),
+      );
     }
+  }
+}
+
+class _StudentAvatar extends StatelessWidget {
+  final String name;
+  const _StudentAvatar({required this.name});
+
+  @override
+  Widget build(BuildContext context) {
+    final parts = name.trim().split(' ');
+    final initials = parts.length >= 2
+        ? '${parts[0][0]}${parts[1][0]}'.toUpperCase()
+        : (name.isNotEmpty
+            ? name[0].toUpperCase()
+            : '?');
+    return Container(
+      width: 32,
+      height: 32,
+      decoration: BoxDecoration(
+        color: UpriseColors.primaryDark
+            .withOpacity(0.1),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Center(
+        child: Text(
+          initials,
+          style: GoogleFonts.beVietnamPro(
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
+            color: UpriseColors.primaryDark,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ActionIconButton extends StatelessWidget {
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback? onTap;
+  final Color? color;
+  const _ActionIconButton({
+    required this.icon,
+    required this.tooltip,
+    required this.onTap,
+    this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(6),
+        child: Padding(
+          padding: const EdgeInsets.all(5),
+          child: Icon(icon,
+              size: 16,
+              color: onTap == null
+                  ? const Color(0xFFD1D5DB)
+                  : (color ??
+                      const Color(0xFF64748B))),
+        ),
+      ),
+    );
+  }
+}
+
+class _PageButton extends StatelessWidget {
+  final IconData icon;
+  final bool enabled;
+  final VoidCallback onTap;
+  const _PageButton({
+    required this.icon,
+    required this.enabled,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: enabled ? onTap : null,
+      borderRadius: BorderRadius.circular(6),
+      child: Padding(
+        padding: const EdgeInsets.all(4),
+        child: Icon(icon,
+            size: 20,
+            color: enabled
+                ? const Color(0xFF374151)
+                : const Color(0xFFD1D5DB)),
+      ),
+    );
+  }
+}
+
+class _PageNumButton extends StatelessWidget {
+  final int page;
+  final bool isActive;
+  final VoidCallback onTap;
+  const _PageNumButton({
+    required this.page,
+    required this.isActive,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        margin: const EdgeInsets.symmetric(
+            horizontal: 2),
+        width: 28,
+        height: 28,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: isActive
+              ? UpriseColors.primaryDark
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(6),
+        ),
+        child: Text(
+          '$page',
+          style: GoogleFonts.beVietnamPro(
+            fontSize: 12,
+            fontWeight: isActive
+                ? FontWeight.w700
+                : FontWeight.normal,
+            color: isActive
+                ? Colors.white
+                : const Color(0xFF374151),
+          ),
+        ),
+      ),
+    );
   }
 }

@@ -4,15 +4,172 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../services/activity_logger.dart' as activity_log;
 import 'dart:io';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:share_plus/share_plus.dart';
 import '../../theme/app_theme.dart';
 
-class OrgModel {
-  final String id;
-  final String name;
+// ─────────────────────────────────────────────────────────────────────────────
+// Design tokens — identical to student_accounts.dart
+// ─────────────────────────────────────────────────────────────────────────────
+class _DS {
+  static const double radiusSm   = 8;
+  static const double radiusMd   = 12;
+  static const double radiusLg   = 16;
+  static const double radiusPill = 100;
+
+  static final List<BoxShadow> cardShadow = [
+    BoxShadow(
+      color: Colors.black.withOpacity(0.06),
+      blurRadius: 12,
+      offset: const Offset(0, 4),
+    ),
+  ];
+
+  static InputDecoration inputDecoration(
+    String label, {
+    String? hint,
+    IconData? icon,
+  }) {
+    return InputDecoration(
+      labelText: label,
+      hintText: hint,
+      prefixIcon: icon != null
+          ? Icon(icon, size: 18, color: const Color(0xFF9AA5B4))
+          : null,
+      labelStyle: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF64748B)),
+      hintStyle: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF9AA5B4)),
+      filled: true,
+      fillColor: const Color(0xFFF8F9FB),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(radiusSm),
+        borderSide: const BorderSide(color: Color(0xFFE2E6EA), width: 1),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(radiusSm),
+        borderSide: const BorderSide(color: Color(0xFFE2E6EA), width: 1),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(radiusSm),
+        borderSide: BorderSide(color: UpriseColors.primaryDark, width: 1.5),
+      ),
+      errorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(radiusSm),
+        borderSide: BorderSide(color: UpriseColors.error, width: 1),
+      ),
+      focusedErrorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(radiusSm),
+        borderSide: BorderSide(color: UpriseColors.error, width: 1.5),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Shared small widgets
+// ─────────────────────────────────────────────────────────────────────────────
+Widget _sectionDivider(String text, {IconData? icon}) {
+  return Padding(
+    padding: const EdgeInsets.only(bottom: 12),
+    child: Row(children: [
+      if (icon != null) ...[
+        Icon(icon, size: 15, color: UpriseColors.primaryDark),
+        const SizedBox(width: 7),
+      ],
+      Text(text,
+          style: GoogleFonts.beVietnamPro(
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              color: UpriseColors.primaryDark,
+              letterSpacing: 0.3)),
+      const SizedBox(width: 12),
+      const Expanded(child: Divider(color: Color(0xFFE2E6EA), thickness: 1)),
+    ]),
+  );
+}
+
+class _RankBadge extends StatelessWidget {
+  final String rank;
+  const _RankBadge(this.rank);
+
+  static Color colorOf(String rank) {
+    switch (rank.toLowerCase()) {
+      case 'senior':    return const Color(0xFF2563EB);
+      case 'junior':    return const Color(0xFFD97706);
+      case 'professor': return const Color(0xFF7C3AED);
+      default:          return const Color(0xFF059669);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = colorOf(rank);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: c.withOpacity(0.10),
+        borderRadius: BorderRadius.circular(_DS.radiusPill),
+      ),
+      child: Text(rank,
+          style: GoogleFonts.beVietnamPro(
+              fontSize: 10, fontWeight: FontWeight.w700, color: c, letterSpacing: 0.5)),
+    );
+  }
+}
+
+class _OrgAvatar extends StatelessWidget {
   final String abbrev;
-  final String tag;
-  OrgModel({required this.id, required this.name, required this.abbrev, required this.tag});
+  const _OrgAvatar(this.abbrev);
+
+  @override
+  Widget build(BuildContext context) {
+    final label = abbrev.length > 2 ? abbrev.substring(0, 2).toUpperCase() : abbrev.toUpperCase();
+    return Container(
+      width: 34,
+      height: 34,
+      decoration: BoxDecoration(
+        color: UpriseColors.primaryDark.withOpacity(0.10),
+        borderRadius: BorderRadius.circular(_DS.radiusSm),
+      ),
+      alignment: Alignment.center,
+      child: Text(label,
+          style: GoogleFonts.beVietnamPro(
+              fontSize: 11, fontWeight: FontWeight.w800, color: UpriseColors.primaryDark)),
+    );
+  }
+}
+
+class _ActionIcon extends StatelessWidget {
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback? onTap;
+  final Color? color;
+  const _ActionIcon({required this.icon, required this.tooltip, this.onTap, this.color});
+
+  @override
+  Widget build(BuildContext context) => Tooltip(
+        message: tooltip,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(6),
+          child: Padding(
+            padding: const EdgeInsets.all(5),
+            child: Icon(icon,
+                size: 16,
+                color: onTap == null
+                    ? const Color(0xFFD1D5DB)
+                    : (color ?? const Color(0xFF64748B))),
+          ),
+        ),
+      );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// OrgModel
+// ─────────────────────────────────────────────────────────────────────────────
+class OrgModel {
+  final String id, name, abbrev, tag;
+  const OrgModel({required this.id, required this.name, required this.abbrev, required this.tag});
   factory OrgModel.fromDoc(DocumentSnapshot doc) {
     final d = doc.data() as Map<String, dynamic>;
     return OrgModel(
@@ -24,27 +181,28 @@ class OrgModel {
   }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Main widget
+// ─────────────────────────────────────────────────────────────────────────────
 class AdviserRoles extends StatefulWidget {
   const AdviserRoles({super.key});
-
   @override
-  _AdviserRolesState createState() => _AdviserRolesState();
+  State<AdviserRoles> createState() => _AdviserRolesState();
 }
 
 class _AdviserRolesState extends State<AdviserRoles> {
   final TextEditingController _searchController = TextEditingController();
-  String _statusFilter = 'All';
-  String _filterOrgId = 'All';
+  String _statusFilter    = 'All';   // 'All' | 'Archived'
+  String _filterOrgId     = 'All';
   String _filterAdviserName = 'All';
-  int _currentPage = 1;
+  int    _currentPage     = 1;
   static const int _pageSize = 10;
 
-  List<OrgModel> _orgs = [];
-  List<String> _adviserNames = [];
-  bool _loadingMeta = true;
-
-  int _totalAdvisers = 0;
-  int _totalOfficers = 0;
+  List<OrgModel> _orgs          = [];
+  List<String>   _adviserNames  = [];
+  bool           _loadingMeta   = true;
+  int            _totalAdvisers = 0;
+  int            _totalOfficers = 0;
 
   @override
   void initState() {
@@ -52,52 +210,57 @@ class _AdviserRolesState extends State<AdviserRoles> {
     _loadMeta();
   }
 
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  // ── Data ──────────────────────────────────────────────────────────
   Future<void> _loadMeta() async {
     setState(() => _loadingMeta = true);
     try {
       final orgSnap = await FirebaseFirestore.instance.collection('organizations').get();
-      final orgs = orgSnap.docs.map((d) => OrgModel.fromDoc(d)).toList()
+      final orgs    = orgSnap.docs.map(OrgModel.fromDoc).toList()
         ..sort((a, b) => a.name.compareTo(b.name));
 
       final rolesSnap = await FirebaseFirestore.instance
           .collection('adviser_roles')
           .where('archived', isEqualTo: false)
           .get();
-      int officers = 0;
-      for (var doc in rolesSnap.docs) {
-        final d = doc.data();
-        if ((d['president'] ?? '').toString().trim().isNotEmpty) officers++;
-        if ((d['vicePresident'] ?? '').toString().trim().isNotEmpty) officers++;
-        if ((d['secretary'] ?? '').toString().trim().isNotEmpty) officers++;
-      }
 
-      final adviserNamesSet = <String>{};
-      for (var doc in rolesSnap.docs) {
-        final name = (doc.data() as Map)['adviserName']?.toString().trim();
-        if (name != null && name.isNotEmpty) adviserNamesSet.add(name);
+      int officers = 0;
+      final namesSet = <String>{};
+      for (final doc in rolesSnap.docs) {
+        final d = doc.data();
+        if ((d['president']     ?? '').toString().trim().isNotEmpty) officers++;
+        if ((d['vicePresident'] ?? '').toString().trim().isNotEmpty) officers++;
+        if ((d['secretary']     ?? '').toString().trim().isNotEmpty) officers++;
+        final n = d['adviserName']?.toString().trim();
+        if (n != null && n.isNotEmpty) namesSet.add(n);
       }
 
       setState(() {
-        _orgs = orgs;
-        _adviserNames = adviserNamesSet.toList()..sort();
+        _orgs          = orgs;
+        _adviserNames  = namesSet.toList()..sort();
         _totalAdvisers = rolesSnap.docs.length;
         _totalOfficers = officers;
-        _loadingMeta = false;
+        _loadingMeta   = false;
       });
     } catch (e) {
       setState(() => _loadingMeta = false);
-      debugPrint('loadMeta error: $e');
     }
   }
 
+  // ── Build ─────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: UpriseColors.lightGray,
+      backgroundColor: const Color(0xFFFBFCFE),
       body: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildHeader(),
-          _buildStats(),
+          _buildStatsRow(),
           _buildToolbar(),
           const SizedBox(height: 16),
           Expanded(child: _buildTable()),
@@ -107,910 +270,1270 @@ class _AdviserRolesState extends State<AdviserRoles> {
     );
   }
 
-  Widget _buildHeader() {
-    return Container(
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: UpriseColors.white,
-        border: Border(bottom: BorderSide(color: UpriseColors.mediumGray)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Adviser Roles',
-                        style: GoogleFonts.beVietnamPro(fontSize: 24, fontWeight: FontWeight.bold, color: UpriseColors.charcoal)),
-                    const SizedBox(height: 4),
-                    Text('Manage key leadership roles for CICT student organizations.',
-                        style: GoogleFonts.beVietnamPro(fontSize: 14, color: UpriseColors.darkGray)),
-                  ],
-                ),
-              ),
-              ElevatedButton.icon(
-                onPressed: _loadingMeta ? null : _showAddDialog,
-                icon: const Icon(Icons.add, size: 18),
-                label: const Text('Assign Adviser Role'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: UpriseColors.primaryDark,
-                  foregroundColor: UpriseColors.white,
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              FilterChip(
-                label: Text('All'),
-                selected: _statusFilter == 'All',
-                onSelected: (selected) => setState(() => _statusFilter = 'All'),
-                backgroundColor: UpriseColors.lightGray,
-                selectedColor: UpriseColors.primaryDark,
-                labelStyle: TextStyle(
-                  color: _statusFilter == 'All' ? UpriseColors.white : UpriseColors.darkGray,
-                  fontSize: 13,
-                ),
-                shape: StadiumBorder(),
-              ),
-              const SizedBox(width: 8),
-              FilterChip(
-                label: Text('Archived'),
-                selected: _statusFilter == 'Archived',
-                onSelected: (selected) => setState(() => _statusFilter = 'Archived'),
-                backgroundColor: UpriseColors.lightGray,
-                selectedColor: UpriseColors.primaryDark,
-                labelStyle: TextStyle(
-                  color: _statusFilter == 'Archived' ? UpriseColors.white : UpriseColors.darkGray,
-                  fontSize: 13,
-                ),
-                shape: StadiumBorder(),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildStats() {
+  // ── Stats row ─────────────────────────────────────────────────────
+  Widget _buildStatsRow() {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 8, 24, 16),
-      child: Row(
-        children: [
-          Expanded(child: _buildStatCard('Total Advisers', _totalAdvisers, UpriseColors.primaryDark, Icons.people_outline)),
-          const SizedBox(width: 16),
-          Expanded(child: _buildStatCard('Total Officers', _totalOfficers, UpriseColors.success, Icons.groups_outlined)),
-        ],
-      ),
+      padding: const EdgeInsets.fromLTRB(28, 24, 28, 0),
+      child: Row(children: [
+        _StatCard(label: 'Total Advisers',   value: '$_totalAdvisers', icon: Icons.supervisor_account_rounded, color: UpriseColors.primaryDark),
+        const SizedBox(width: 14),
+        _StatCard(label: 'Total Officers',   value: '$_totalOfficers', icon: Icons.groups_rounded,             color: const Color(0xFF059669)),
+        const SizedBox(width: 14),
+        _StatCard(label: 'Organizations',    value: '${_orgs.length}', icon: Icons.business_rounded,           color: const Color(0xFF2563EB)),
+        const SizedBox(width: 14),
+        _StatCard(label: 'Archived Records', value: '—',              icon: Icons.archive_rounded,            color: const Color(0xFF64748B),
+            stream: FirebaseFirestore.instance
+                .collection('adviser_roles')
+                .where('archived', isEqualTo: true)
+                .snapshots()),
+      ]),
     );
   }
 
-  Widget _buildStatCard(String title, int count, Color color, IconData icon) {
-    return Container(
-      padding: EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: UpriseColors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: UpriseColors.primaryDark, width: 1),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(title, style: TextStyle(fontSize: 13, color: UpriseColors.darkGray, fontWeight: FontWeight.w500)),
-          SizedBox(height: 12),
-          Text(count.toString(), style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: UpriseColors.primaryDark)),
-        ],
-      ),
-    );
-  }
-
+  // ── Toolbar ───────────────────────────────────────────────────────
   Widget _buildToolbar() {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 24),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-      decoration: BoxDecoration(
-        color: UpriseColors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: UpriseColors.primaryDark, width: 1),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: SizedBox(
-              height: 40,
-              child: TextField(
-                controller: _searchController,
-                decoration: InputDecoration(
-                  hintText: 'Search...',
-                  hintStyle: TextStyle(fontSize: 13, color: UpriseColors.darkGray),
-                  prefixIcon: Icon(Icons.search, size: 20, color: UpriseColors.darkGray),
-                  filled: true,
-                  fillColor: UpriseColors.lightGray,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(24),
-                    borderSide: BorderSide.none,
-                  ),
-                  contentPadding: EdgeInsets.symmetric(vertical: 0, horizontal: 16),
-                ),
-                onChanged: (_) => setState(() => _currentPage = 1),
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(28, 20, 28, 0),
+      child: Row(children: [
+        // Search
+        Expanded(
+          child: SizedBox(
+            height: 40,
+            child: TextField(
+              controller: _searchController,
+              style: GoogleFonts.beVietnamPro(fontSize: 13),
+              decoration: InputDecoration(
+                hintText: 'Search by org, adviser, or officer…',
+                hintStyle: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF9AA5B4)),
+                prefixIcon: const Icon(Icons.search_rounded, size: 18, color: Color(0xFF9AA5B4)),
+                filled: true,
+                fillColor: Colors.white,
+                contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
+                border:        OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE2E6EA))),
+                enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE2E6EA))),
+                focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: UpriseColors.primaryDark, width: 1.5)),
               ),
+              onChanged: (_) => setState(() => _currentPage = 1),
             ),
           ),
-          Padding(
-            padding: EdgeInsets.only(left: 12),
-            child: Container(
-              padding: EdgeInsets.symmetric(horizontal: 12, vertical: 0),
-              decoration: BoxDecoration(
-                border: Border.all(color: UpriseColors.primaryDark, width: 1),
-                borderRadius: BorderRadius.circular(24),
-              ),
-              child: DropdownButton<String>(
-                value: _filterOrgId,
-                hint: Text('Filter', style: TextStyle(fontSize: 13, color: UpriseColors.darkGray)),
-                underline: SizedBox(),
-                items: [
-                  DropdownMenuItem(value: 'All', child: Text('All Orgs')),
-                  ..._orgs.map((o) => DropdownMenuItem(
-                        value: o.id,
-                        child: Text(o.abbrev.isNotEmpty ? o.abbrev : o.name),
-                      )),
-                ],
-                onChanged: (val) => setState(() => _filterOrgId = val ?? 'All'),
-              ),
-            ),
-          ),
-          Padding(
-            padding: EdgeInsets.only(left: 12),
-            child: Container(
-              padding: EdgeInsets.symmetric(horizontal: 12, vertical: 0),
-              decoration: BoxDecoration(
-                border: Border.all(color: UpriseColors.primaryDark, width: 1),
-                borderRadius: BorderRadius.circular(24),
-              ),
-              child: DropdownButton<String>(
-                value: _filterAdviserName,
-                hint: Text('Filter', style: TextStyle(fontSize: 13, color: UpriseColors.darkGray)),
-                underline: SizedBox(),
-                items: [
-                  DropdownMenuItem(value: 'All', child: Text('All Advisers')),
-                  ..._adviserNames.map((name) => DropdownMenuItem(
-                        value: name,
-                        child: Text(name),
-                      )),
-                ],
-                onChanged: (val) => setState(() => _filterAdviserName = val ?? 'All'),
-              ),
-            ),
-          ),
-          Padding(
-            padding: EdgeInsets.only(left: 12),
-            child: ElevatedButton.icon(
-              onPressed: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Export feature coming soon')),
-                );
-              },
-              icon: Icon(Icons.download, size: 18),
-              label: Text('Export', style: TextStyle(fontSize: 13)),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: UpriseColors.white,
-                foregroundColor: UpriseColors.primaryDark,
-                side: BorderSide(color: UpriseColors.primaryDark),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-                padding: EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              ),
-            ),
-          ),
-        ],
-      ),
+        ),
+        const SizedBox(width: 10),
+
+        // Status tabs
+        _TabToggle(
+          options: const ['All', 'Archived'],
+          selected: _statusFilter,
+          onChanged: (v) => setState(() { _statusFilter = v; _currentPage = 1; }),
+        ),
+        const SizedBox(width: 10),
+
+        // Org filter
+        _FilterDropdown(
+          value: _filterOrgId,
+          hint: 'All Orgs',
+          icon: Icons.business_outlined,
+          items: [
+            const DropdownMenuItem(value: 'All', child: Text('All Orgs')),
+            ..._orgs.map((o) => DropdownMenuItem(
+                  value: o.id,
+                  child: Text(o.abbrev.isNotEmpty ? o.abbrev : o.name),
+                )),
+          ],
+          onChanged: (v) => setState(() { _filterOrgId = v ?? 'All'; _currentPage = 1; }),
+        ),
+        const SizedBox(width: 10),
+
+        // Adviser filter
+        _FilterDropdown(
+          value: _filterAdviserName,
+          hint: 'All Advisers',
+          icon: Icons.person_outline_rounded,
+          items: [
+            const DropdownMenuItem(value: 'All', child: Text('All Advisers')),
+            ..._adviserNames.map((n) => DropdownMenuItem(value: n, child: Text(n))),
+          ],
+          onChanged: (v) => setState(() { _filterAdviserName = v ?? 'All'; _currentPage = 1; }),
+        ),
+        const SizedBox(width: 10),
+
+        // Export
+        _ToolbarButton(
+          label: 'Export',
+          icon: Icons.download_rounded,
+          onPressed: _exportCSV,
+          outlined: true,
+        ),
+        const SizedBox(width: 10),
+
+        // Add
+        _ToolbarButton(
+          label: 'Assign Role',
+          icon: Icons.add_rounded,
+          onPressed: _loadingMeta ? null : _showAddDialog,
+        ),
+      ]),
     );
   }
 
+  // ── Table ─────────────────────────────────────────────────────────
   Widget _buildTable() {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 24),
-      decoration: BoxDecoration(
-        color: UpriseColors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: UpriseColors.primaryDark, width: 1),
-      ),
-      child: Column(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              border: Border(bottom: BorderSide(color: UpriseColors.mediumGray)),
-              color: UpriseColors.lightGray,
-              borderRadius: const BorderRadius.only(topLeft: Radius.circular(12), topRight: Radius.circular(12)),
-            ),
-            child: Row(
-              children: [
-                Expanded(flex: 3, child: Text('ORGANIZATION', style: _headerStyle())),
-                Expanded(flex: 2, child: Text('ADVISER', style: _headerStyle())),
-                Expanded(flex: 2, child: Text('PRESIDENT', style: _headerStyle())),
-                Expanded(flex: 2, child: Text('VICE PRESIDENT', style: _headerStyle())),
-                Expanded(flex: 2, child: Text('SECRETARY', style: _headerStyle())),
-                Expanded(flex: 1, child: Text('ACTIONS', style: _headerStyle())),
-              ],
-            ),
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('adviser_roles')
+          .where('archived', isEqualTo: _statusFilter == 'Archived')
+          .orderBy('createdAt', descending: true)
+          .snapshots(),
+      builder: (context, snap) {
+        if (snap.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (snap.hasError) {
+          return Center(child: Text('Error: ${snap.error}'));
+        }
+
+        var docs = snap.data?.docs ?? [];
+
+        // Filters
+        final term = _searchController.text.trim().toLowerCase();
+        if (term.isNotEmpty) {
+          docs = docs.where((d) {
+            final data = d.data() as Map<String, dynamic>;
+            return (data['orgName']     ?? '').toString().toLowerCase().contains(term) ||
+                   (data['orgAbbrev']   ?? '').toString().toLowerCase().contains(term) ||
+                   (data['adviserName'] ?? '').toString().toLowerCase().contains(term) ||
+                   (data['president']   ?? '').toString().toLowerCase().contains(term);
+          }).toList();
+        }
+        if (_filterOrgId != 'All') {
+          docs = docs.where((d) => (d.data() as Map)['orgId'] == _filterOrgId).toList();
+        }
+        if (_filterAdviserName != 'All') {
+          docs = docs.where((d) => (d.data() as Map)['adviserName'] == _filterAdviserName).toList();
+        }
+
+        final totalPages = docs.isEmpty ? 1 : (docs.length / _pageSize).ceil();
+        final safePage   = _currentPage.clamp(1, totalPages);
+        final start      = (safePage - 1) * _pageSize;
+        final end        = (start + _pageSize).clamp(0, docs.length);
+        final pageDocs   = docs.isEmpty ? <QueryDocumentSnapshot>[] : docs.sublist(start, end);
+
+        return Container(
+          margin: const EdgeInsets.symmetric(horizontal: 28),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: const Color(0xFFE8ECF0)),
+            boxShadow: _DS.cardShadow,
           ),
-          Expanded(
-            child: StreamBuilder<QuerySnapshot>(
-              stream: FirebaseFirestore.instance
-                  .collection('adviser_roles')
-                  .where('archived', isEqualTo: _statusFilter == 'Archived')
-                  .orderBy('createdAt', descending: true)
-                  .snapshots(),
-              builder: (context, snap) {
-                if (snap.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-                if (snap.hasError) {
-                  return Center(child: Text('Error: ${snap.error}'));
-                }
-
-                var docs = snap.data?.docs ?? [];
-
-                final term = _searchController.text.toLowerCase();
-                if (term.isNotEmpty) {
-                  docs = docs.where((d) {
-                    final data = d.data() as Map<String, dynamic>;
-                    return (data['orgName'] ?? '').toString().toLowerCase().contains(term) ||
-                        (data['orgAbbrev'] ?? '').toString().toLowerCase().contains(term) ||
-                        (data['adviserName'] ?? '').toString().toLowerCase().contains(term);
-                  }).toList();
-                }
-                if (_filterOrgId != 'All') {
-                  docs = docs.where((d) => (d.data() as Map)['orgId'] == _filterOrgId).toList();
-                }
-                if (_filterAdviserName != 'All') {
-                  docs = docs.where((d) => (d.data() as Map)['adviserName'] == _filterAdviserName).toList();
-                }
-
-                if (docs.isEmpty) return _emptyState();
-
-                final totalPages = (docs.length / _pageSize).ceil().clamp(1, 999);
-                final safePage = _currentPage.clamp(1, totalPages);
-                final start = (safePage - 1) * _pageSize;
-                final end = (start + _pageSize).clamp(0, docs.length);
-                final pageDocs = docs.sublist(start, end);
-
-                return Column(
-                  children: [
-                    Expanded(
-                      child: ListView.builder(
-                        itemCount: pageDocs.length,
-                        itemBuilder: (_, i) {
-                          final data = pageDocs[i].data() as Map<String, dynamic>;
-                          return _buildRow(data, pageDocs[i].id);
-                        },
-                      ),
+          child: Column(children: [
+            _buildTableHeader(),
+            Expanded(
+              child: docs.isEmpty
+                  ? _buildEmptyState()
+                  : ListView.builder(
+                      itemCount: pageDocs.length,
+                      itemBuilder: (_, i) {
+                        final data = pageDocs[i].data() as Map<String, dynamic>;
+                        return _buildRow(docId: pageDocs[i].id, data: data, isLast: i == pageDocs.length - 1);
+                      },
                     ),
-                    _buildFooter(docs.length, totalPages, start, end),
-                  ],
-                );
-              },
             ),
-          ),
-        ],
-      ),
+            _buildFooter(docs.length, totalPages, start, end),
+          ]),
+        );
+      },
     );
   }
 
-  TextStyle _headerStyle() => GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.w600, color: UpriseColors.darkGray, letterSpacing: 0.5);
-
-  Widget _buildRow(Map<String, dynamic> data, String docId) {
-    final rank = data['adviserRank'] ?? 'Instructor';
-    final rankColor = _rankColor(rank);
+  Widget _buildTableHeader() {
     return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(border: Border(bottom: BorderSide(color: UpriseColors.mediumGray.withOpacity(0.5)))),
-      child: Row(
-        children: [
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 13),
+      decoration: const BoxDecoration(
+        color: Color(0xFFF8F9FB),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(14)),
+        border: Border(bottom: BorderSide(color: Color(0xFFE8ECF0))),
+      ),
+      child: Row(children: [
+        Expanded(flex: 3, child: _headerCell('ORGANIZATION')),
+        Expanded(flex: 2, child: _headerCell('ADVISER')),
+        Expanded(flex: 2, child: _headerCell('PRESIDENT')),
+        Expanded(flex: 2, child: _headerCell('VICE PRESIDENT')),
+        Expanded(flex: 2, child: _headerCell('SECRETARY')),
+        Expanded(flex: 2, child: Align(alignment: Alignment.centerRight, child: _headerCell('ACTIONS'))),
+      ]),
+    );
+  }
+
+  Widget _headerCell(String text) => Text(text,
+      style: GoogleFonts.beVietnamPro(
+          fontSize: 11, fontWeight: FontWeight.w700, color: const Color(0xFF64748B), letterSpacing: 0.7));
+
+  Widget _buildRow({required String docId, required Map<String, dynamic> data, required bool isLast}) {
+    final rank     = data['adviserRank'] ?? 'Instructor';
+    final archived = data['archived'] == true;
+
+    return InkWell(
+      hoverColor: const Color(0xFFF8F9FB),
+      onTap: () => _showViewDialog(data, docId),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+        decoration: BoxDecoration(
+          border: isLast ? null : const Border(bottom: BorderSide(color: Color(0xFFF1F5F9))),
+        ),
+        child: Row(children: [
+          // Org
           Expanded(
             flex: 3,
-            child: Row(
-              children: [
-                _orgAvatar(data['orgAbbrev'] ?? '??'),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(data['orgName'] ?? '', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600, color: UpriseColors.charcoal)),
-                      if ((data['orgTag'] ?? '').toString().isNotEmpty)
-                        Text(data['orgTag'] ?? '', style: GoogleFonts.beVietnamPro(fontSize: 11, color: UpriseColors.darkGray)),
-                    ],
-                  ),
-                ),
-              ],
-            ),
+            child: Row(children: [
+              _OrgAvatar(data['orgAbbrev'] ?? '??'),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text(data['orgName'] ?? '—',
+                      style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600, color: const Color(0xFF1A202C)),
+                      overflow: TextOverflow.ellipsis),
+                  if ((data['orgTag'] ?? '').toString().isNotEmpty)
+                    Text(data['orgTag'] ?? '',
+                        style: GoogleFonts.beVietnamPro(fontSize: 11, color: const Color(0xFF64748B)),
+                        overflow: TextOverflow.ellipsis),
+                ]),
+              ),
+            ]),
           ),
+
+          // Adviser
           Expanded(
             flex: 2,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(data['adviserName'] ?? '', style: GoogleFonts.beVietnamPro(fontSize: 13, color: UpriseColors.charcoal)),
-                const SizedBox(height: 2),
-                Text(data['adviserPhone'] ?? '', style: GoogleFonts.beVietnamPro(fontSize: 11, color: UpriseColors.darkGray)),
-                const SizedBox(height: 2),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                  decoration: BoxDecoration(color: rankColor.withOpacity(0.12), borderRadius: BorderRadius.circular(4)),
-                  child: Text(rank, style: GoogleFonts.beVietnamPro(fontSize: 11, color: rankColor, fontWeight: FontWeight.w600)),
-                ),
-              ],
-            ),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(data['adviserName'] ?? '—',
+                  style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w500, color: const Color(0xFF1A202C)),
+                  overflow: TextOverflow.ellipsis),
+              const SizedBox(height: 3),
+              _RankBadge(rank),
+            ]),
           ),
-          Expanded(flex: 2, child: Text(data['president'] ?? '—', style: GoogleFonts.beVietnamPro(fontSize: 13))),
-          Expanded(flex: 2, child: Text(data['vicePresident'] ?? '—', style: GoogleFonts.beVietnamPro(fontSize: 13))),
-          Expanded(flex: 2, child: Text(data['secretary'] ?? '—', style: GoogleFonts.beVietnamPro(fontSize: 13))),
+
+          // President
           Expanded(
-            flex: 1,
-            child: Row(
-              children: [
-                IconButton(
-                  icon: Icon(Icons.remove_red_eye_outlined, size: 18, color: UpriseColors.darkGray),
-                  onPressed: () => _showViewDialog(data, docId),
-                  tooltip: 'View',
-                ),
-                IconButton(
-                  icon: Icon(Icons.edit_outlined, size: 18, color: UpriseColors.primaryDark),
-                  onPressed: () => _showEditDialog(data, docId),
-                  tooltip: 'Edit',
-                ),
-                IconButton(
-                  icon: Icon(Icons.delete_outline, size: 18, color: UpriseColors.error),
-                  onPressed: () => _confirmDelete(docId, data['orgName'] ?? ''),
-                  tooltip: 'Delete',
-                ),
-              ],
-            ),
+            flex: 2,
+            child: Text(data['president'] ?? '—',
+                style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF374151)),
+                overflow: TextOverflow.ellipsis),
           ),
-        ],
+
+          // VP
+          Expanded(
+            flex: 2,
+            child: Text(data['vicePresident'] ?? '—',
+                style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF374151)),
+                overflow: TextOverflow.ellipsis),
+          ),
+
+          // Secretary
+          Expanded(
+            flex: 2,
+            child: Text(data['secretary'] ?? '—',
+                style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF374151)),
+                overflow: TextOverflow.ellipsis),
+          ),
+
+          // Actions
+          Expanded(
+            flex: 2,
+            child: Row(mainAxisAlignment: MainAxisAlignment.end, children: [
+              _ActionIcon(
+                icon: Icons.visibility_outlined,
+                tooltip: 'View Details',
+                onTap: () => _showViewDialog(data, docId),
+              ),
+              const SizedBox(width: 2),
+              _ActionIcon(
+                icon: Icons.edit_outlined,
+                tooltip: 'Edit',
+                color: UpriseColors.primaryDark,
+                onTap: () => _showEditDialog(data, docId),
+              ),
+              const SizedBox(width: 2),
+              _ActionIcon(
+                icon: archived ? Icons.unarchive_outlined : Icons.archive_outlined,
+                tooltip: archived ? 'Restore' : 'Archive',
+                color: const Color(0xFF64748B),
+                onTap: archived
+                    ? () => _restoreRecord(docId, data['orgName'] ?? '')
+                    : () => _confirmArchive(docId, data['orgName'] ?? ''),
+              ),
+              const SizedBox(width: 2),
+              _ActionIcon(
+                icon: Icons.delete_outline_rounded,
+                tooltip: 'Delete',
+                color: UpriseColors.error,
+                onTap: () => _confirmDelete(docId, data['orgName'] ?? ''),
+              ),
+            ]),
+          ),
+        ]),
       ),
     );
   }
 
-  Widget _orgAvatar(String abbrev) {
-    final label = abbrev.length > 2 ? abbrev.substring(0, 2) : abbrev;
-    return Container(
-      width: 36,
-      height: 36,
-      decoration: BoxDecoration(color: UpriseColors.primaryDark.withOpacity(0.12), borderRadius: BorderRadius.circular(8)),
-      alignment: Alignment.center,
-      child: Text(label, style: GoogleFonts.beVietnamPro(fontSize: 11, fontWeight: FontWeight.bold, color: UpriseColors.primaryDark)),
-    );
-  }
-
-  Color _rankColor(String rank) {
-    switch (rank) {
-      case 'Senior': return Colors.blue;
-      case 'Junior': return Colors.orange;
-      case 'Professor': return Colors.purple;
-      default: return Colors.green;
-    }
-  }
-
-  Widget _emptyState() {
+  Widget _buildEmptyState() {
     return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.supervisor_account_outlined, size: 64, color: UpriseColors.mediumGray),
-          const SizedBox(height: 16),
-          Text(_statusFilter == 'Archived' ? 'No archived records' : 'No adviser roles assigned yet',
-              style: GoogleFonts.beVietnamPro(color: UpriseColors.darkGray, fontSize: 15)),
-        ],
-      ),
+      child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+        Container(
+          width: 72, height: 72,
+          decoration: BoxDecoration(
+            color: const Color(0xFFF1F5F9),
+            borderRadius: BorderRadius.circular(18),
+          ),
+          child: const Icon(Icons.supervisor_account_rounded, size: 36, color: Color(0xFF9AA5B4)),
+        ),
+        const SizedBox(height: 16),
+        Text(
+          _statusFilter == 'Archived' ? 'No archived records' : 'No adviser roles assigned yet',
+          style: GoogleFonts.beVietnamPro(fontSize: 15, fontWeight: FontWeight.w600, color: const Color(0xFF374151)),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          _statusFilter == 'Archived'
+              ? 'Archived roles will appear here.'
+              : 'Tap "Assign Role" to get started.',
+          style: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF64748B)),
+        ),
+      ]),
     );
   }
 
   Widget _buildFooter(int total, int totalPages, int start, int end) {
+    const int maxVisible = 5;
+    int firstPage = (_currentPage - maxVisible ~/ 2).clamp(1, totalPages);
+    int lastPage  = (firstPage + maxVisible - 1).clamp(1, totalPages);
+    if (lastPage - firstPage + 1 < maxVisible && firstPage > 1) {
+      firstPage = (lastPage - maxVisible + 1).clamp(1, totalPages);
+    }
+    final pages = List.generate(lastPage - firstPage + 1, (i) => firstPage + i);
+
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-      decoration: BoxDecoration(
-        border: Border(top: BorderSide(color: UpriseColors.mediumGray)),
-        color: UpriseColors.lightGray,
-        borderRadius: const BorderRadius.only(bottomLeft: Radius.circular(12), bottomRight: Radius.circular(12)),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+      decoration: const BoxDecoration(
+        border: Border(top: BorderSide(color: Color(0xFFE8ECF0))),
+        color: Color(0xFFF8F9FB),
+        borderRadius: BorderRadius.vertical(bottom: Radius.circular(14)),
       ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text('Showing ${total == 0 ? 0 : start + 1}–$end of $total organizations',
-              style: GoogleFonts.beVietnamPro(fontSize: 13, color: UpriseColors.darkGray)),
-          Row(
-            children: [
-              IconButton(
-                icon: Icon(Icons.chevron_left, size: 20),
-                color: _currentPage > 1 ? UpriseColors.charcoal : UpriseColors.mediumGray,
-                onPressed: _currentPage > 1 ? () => setState(() => _currentPage--) : null,
-              ),
-              ...List.generate(totalPages, (i) {
-                final page = i + 1;
-                final sel = page == _currentPage;
-                return GestureDetector(
-                  onTap: () => setState(() => _currentPage = page),
-                  child: Container(
-                    margin: const EdgeInsets.symmetric(horizontal: 2),
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: sel ? UpriseColors.primaryDark : Colors.transparent,
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: Text('$page',
-                        style: GoogleFonts.beVietnamPro(
-                          fontSize: 12,
-                          color: sel ? Colors.white : UpriseColors.charcoal,
-                          fontWeight: sel ? FontWeight.w600 : FontWeight.normal,
-                        )),
-                  ),
-                );
-              }),
-              IconButton(
-                icon: Icon(Icons.chevron_right, size: 20),
-                color: _currentPage < totalPages ? UpriseColors.charcoal : UpriseColors.mediumGray,
-                onPressed: _currentPage < totalPages ? () => setState(() => _currentPage++) : null,
-              ),
-            ],
-          ),
-        ],
-      ),
+      child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+        Text(
+          'Showing ${total == 0 ? 0 : start + 1}–$end of $total records',
+          style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF64748B)),
+        ),
+        Row(children: [
+          _PageButton(icon: Icons.chevron_left_rounded,  enabled: _currentPage > 1,          onTap: () => setState(() => _currentPage--)),
+          const SizedBox(width: 4),
+          ...pages.map((p) => _PageNumButton(
+                page: p, isActive: p == _currentPage,
+                onTap: () => setState(() => _currentPage = p),
+              )),
+          if (lastPage < totalPages) ...[
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              child: Text('…', style: GoogleFonts.beVietnamPro(color: const Color(0xFF64748B), fontSize: 12)),
+            ),
+            _PageNumButton(
+              page: totalPages, isActive: _currentPage == totalPages,
+              onTap: () => setState(() => _currentPage = totalPages),
+            ),
+          ],
+          const SizedBox(width: 4),
+          _PageButton(icon: Icons.chevron_right_rounded, enabled: _currentPage < totalPages, onTap: () => setState(() => _currentPage++)),
+        ]),
+      ]),
     );
   }
 
-  // ---------- Add / Edit Dialog (fixed nullable errors) ----------
-  void _showAddDialog() => _showFormDialog(isEdit: false, docId: null, existing: null);
-  void _showEditDialog(Map<String, dynamic> data, String docId) => _showFormDialog(isEdit: true, docId: docId, existing: data);
+  // ── Form dialog (Add / Edit) ───────────────────────────────────────
+  void _showAddDialog()  => _showFormDialog(isEdit: false, docId: null, existing: null);
+  void _showEditDialog(Map<String, dynamic> data, String docId) =>
+      _showFormDialog(isEdit: true, docId: docId, existing: data);
 
-  void _showFormDialog({required bool isEdit, required String? docId, required Map<String, dynamic>? existing}) {
+  void _showFormDialog({
+    required bool isEdit,
+    required String? docId,
+    required Map<String, dynamic>? existing,
+  }) {
     OrgModel? selectedOrg = isEdit
         ? _orgs.cast<OrgModel?>().firstWhere((o) => o?.id == existing?['orgId'], orElse: () => null)
         : null;
 
-    final advNameCtrl = TextEditingController(text: existing?['adviserName'] ?? '');
+    final advNameCtrl  = TextEditingController(text: existing?['adviserName']  ?? '');
     final advEmailCtrl = TextEditingController(text: existing?['adviserEmail'] ?? '');
     final advPhoneCtrl = TextEditingController(text: existing?['adviserPhone'] ?? '');
-    final advRankCtrl = TextEditingController(text: existing?['adviserRank'] ?? 'Instructor');
-
-    final presCtrl = TextEditingController(text: existing?['president'] ?? '');
-    final vpCtrl = TextEditingController(text: existing?['vicePresident'] ?? '');
-    final secCtrl = TextEditingController(text: existing?['secretary'] ?? '');
-    final formKey = GlobalKey<FormState>();
+    final advRankCtrl  = TextEditingController(text: existing?['adviserRank']  ?? 'Instructor');
+    final presCtrl     = TextEditingController(text: existing?['president']    ?? '');
+    final vpCtrl       = TextEditingController(text: existing?['vicePresident'] ?? '');
+    final secCtrl      = TextEditingController(text: existing?['secretary']    ?? '');
+    final formKey      = GlobalKey<FormState>();
 
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (context) => StatefulBuilder(
+      barrierColor: Colors.black54,
+      builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDlg) {
-          bool isSaving = false;
+          bool    isSaving = false;
           String? errorMsg;
 
-          void onOrgChanged(OrgModel? org) async {
+          Future<void> onOrgChanged(OrgModel? org) async {
             if (org == null || isEdit) return;
             final orgDoc = await FirebaseFirestore.instance.collection('organizations').doc(org.id).get();
             if (orgDoc.exists) {
-              final data = orgDoc.data()!;
+              final d = orgDoc.data()!;
               setDlg(() {
-                advNameCtrl.text = data['adviserName'] ?? '';
-                advEmailCtrl.text = data['adviserEmail'] ?? '';
-                advPhoneCtrl.text = data['adviserPhone'] ?? '';
-                advRankCtrl.text = data['adviserTitle'] ?? 'Instructor';
+                advNameCtrl.text  = d['adviserName']  ?? '';
+                advEmailCtrl.text = d['adviserEmail'] ?? '';
+                advPhoneCtrl.text = d['adviserPhone'] ?? '';
+                advRankCtrl.text  = d['adviserTitle'] ?? 'Instructor';
               });
             }
           }
 
           Future<void> save() async {
             if (!formKey.currentState!.validate()) return;
-            final OrgModel? org = selectedOrg;
-            if (org == null) {
+            if (selectedOrg == null) {
               setDlg(() => errorMsg = 'Please select an organization.');
               return;
             }
             setDlg(() { isSaving = true; errorMsg = null; });
             try {
               final payload = <String, dynamic>{
-                'orgId': org.id,
-                'orgName': org.name,
-                'orgAbbrev': org.abbrev,
-                'orgTag': org.tag,
-                'adviserName': advNameCtrl.text.trim(),
+                'orgId':        selectedOrg!.id,
+                'orgName':      selectedOrg!.name,
+                'orgAbbrev':    selectedOrg!.abbrev,
+                'orgTag':       selectedOrg!.tag,
+                'adviserName':  advNameCtrl.text.trim(),
                 'adviserEmail': advEmailCtrl.text.trim(),
                 'adviserPhone': advPhoneCtrl.text.trim(),
-                'adviserRank': advRankCtrl.text.trim(),
-                'president': presCtrl.text.trim(),
+                'adviserRank':  advRankCtrl.text.trim(),
+                'president':    presCtrl.text.trim(),
                 'vicePresident': vpCtrl.text.trim(),
-                'secretary': secCtrl.text.trim(),
-                'archived': false,
+                'secretary':    secCtrl.text.trim(),
+                'archived':     false,
               };
-
               if (isEdit && docId != null) {
                 await FirebaseFirestore.instance.collection('adviser_roles').doc(docId).update(payload);
                 await activity_log.ActivityLogger.log(
-                  action: 'Updated adviser role for ${org.name}',
-                  module: 'Adviser Roles',
-                  severity: 'info',
-                  details: {'orgId': org.id, 'adviser': advNameCtrl.text.trim()},
+                  action: 'Updated adviser role for ${selectedOrg!.name}',
+                  module: 'Adviser Roles', severity: 'info',
+                  details: {'orgId': selectedOrg!.id, 'adviser': advNameCtrl.text.trim()},
                 );
               } else {
                 final dup = await FirebaseFirestore.instance
                     .collection('adviser_roles')
-                    .where('orgId', isEqualTo: org.id)
+                    .where('orgId', isEqualTo: selectedOrg!.id)
                     .where('archived', isEqualTo: false)
                     .get();
                 if (dup.docs.isNotEmpty) {
-                  setDlg(() { isSaving = false; errorMsg = '${org.name} already has an active adviser role assigned.'; });
+                  setDlg(() { isSaving = false; errorMsg = '${selectedOrg!.name} already has an active adviser role.'; });
                   return;
                 }
                 payload['createdAt'] = FieldValue.serverTimestamp();
                 await FirebaseFirestore.instance.collection('adviser_roles').add(payload);
                 await activity_log.ActivityLogger.log(
-                  action: 'Assigned new adviser role for ${org.name}',
-                  module: 'Adviser Roles',
-                  severity: 'info',
-                  details: {'orgId': org.id, 'adviser': advNameCtrl.text.trim()},
+                  action: 'Assigned new adviser role for ${selectedOrg!.name}',
+                  module: 'Adviser Roles', severity: 'info',
+                  details: {'orgId': selectedOrg!.id, 'adviser': advNameCtrl.text.trim()},
                 );
               }
               _loadMeta();
-              Navigator.pop(ctx);
-              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(isEdit ? 'Adviser role updated.' : 'Adviser role assigned.')));
+              if (mounted) {
+                Navigator.pop(ctx);
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                  content: Text(isEdit ? 'Adviser role updated.' : 'Adviser role assigned.'),
+                  backgroundColor: const Color(0xFF059669),
+                  behavior: SnackBarBehavior.floating,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ));
+              }
             } catch (e) {
               setDlg(() { isSaving = false; errorMsg = e.toString(); });
             }
           }
 
-          return AlertDialog(
-            title: Row(children: [
-              Icon(isEdit ? Icons.edit_outlined : Icons.add_circle_outline, color: UpriseColors.primaryDark),
-              const SizedBox(width: 8),
-              Text(isEdit ? 'Edit Adviser Role' : 'Assign Adviser Role', style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.bold)),
-            ]),
-            content: SingleChildScrollView(
-              child: SizedBox(
-                width: 500,
-                child: Form(
-                  key: formKey,
-                  child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    _sectionLabel('Organization'),
-                    const SizedBox(height: 8),
-                    DropdownButtonFormField<OrgModel>(
-                      initialValue: selectedOrg,
-                      isExpanded: true,
-                      decoration: InputDecoration(
-                        labelText: 'Select Organization',
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+          return Dialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+            child: Container(
+              width: 540,
+              constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.88),
+              child: Column(mainAxisSize: MainAxisSize.min, children: [
+                // ── Header
+                Container(
+                  padding: const EdgeInsets.fromLTRB(24, 20, 20, 20),
+                  decoration: BoxDecoration(
+                    color: UpriseColors.primaryDark,
+                    borderRadius: const BorderRadius.vertical(top: Radius.circular(18)),
+                  ),
+                  child: Row(children: [
+                    Container(
+                      width: 38, height: 38,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.15),
+                        borderRadius: BorderRadius.circular(10),
                       ),
-                      items: _orgs.map((o) => DropdownMenuItem(
-                        value: o,
-                        child: Row(children: [
-                          _orgAvatar(o.abbrev.isNotEmpty ? (o.abbrev.length > 2 ? o.abbrev.substring(0, 2) : o.abbrev) : (o.name.length > 2 ? o.name.substring(0, 2) : o.name)),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
-                              Text(o.name, style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600)),
-                              if (o.tag.isNotEmpty) Text(o.tag, style: GoogleFonts.beVietnamPro(fontSize: 11, color: UpriseColors.darkGray)),
-                            ]),
-                          ),
-                        ]),
-                      )).toList(),
-                      onChanged: (v) {
-                        setDlg(() => selectedOrg = v);
-                        if (!isEdit) onOrgChanged(v);
-                      },
-                      validator: (_) => selectedOrg == null ? 'Select an organization' : null,
+                      child: Icon(
+                          isEdit ? Icons.edit_outlined : Icons.person_add_alt_1_rounded,
+                          color: Colors.white, size: 18),
                     ),
-                    const SizedBox(height: 20),
-                    _sectionLabel('Adviser Information (editable)'),
-                    const SizedBox(height: 8),
-                    TextFormField(
-                      controller: advNameCtrl,
-                      decoration: InputDecoration(labelText: 'Full Name', border: OutlineInputBorder()),
-                      validator: (v) => v!.trim().isEmpty ? 'Required' : null,
-                    ),
-                    const SizedBox(height: 10),
-                    TextFormField(
-                      controller: advEmailCtrl,
-                      decoration: InputDecoration(labelText: 'Email', border: OutlineInputBorder()),
-                      validator: (v) => v!.trim().isEmpty ? 'Required' : null,
-                    ),
-                    const SizedBox(height: 10),
-                    TextFormField(
-                      controller: advPhoneCtrl,
-                      decoration: InputDecoration(labelText: 'Phone Number', border: OutlineInputBorder()),
-                      validator: (v) => v!.trim().isEmpty ? 'Required' : null,
-                    ),
-                    const SizedBox(height: 10),
-                    TextFormField(
-                      controller: advRankCtrl,
-                      decoration: InputDecoration(labelText: 'Rank / Title', border: OutlineInputBorder()),
-                      validator: (v) => v!.trim().isEmpty ? 'Required' : null,
-                    ),
-                    const SizedBox(height: 20),
-                    _sectionLabel('Officers'),
-                    const SizedBox(height: 8),
-                    TextFormField(
-                      controller: presCtrl,
-                      decoration: InputDecoration(labelText: 'President', prefixIcon: const Icon(Icons.person_outline, size: 18), border: OutlineInputBorder()),
-                      validator: (v) => v!.trim().isEmpty ? 'Required' : null,
-                    ),
-                    const SizedBox(height: 10),
-                    TextFormField(
-                      controller: vpCtrl,
-                      decoration: InputDecoration(labelText: 'Vice President', prefixIcon: const Icon(Icons.person_outline, size: 18), border: OutlineInputBorder()),
-                      validator: (v) => v!.trim().isEmpty ? 'Required' : null,
-                    ),
-                    const SizedBox(height: 10),
-                    TextFormField(
-                      controller: secCtrl,
-                      decoration: InputDecoration(labelText: 'Secretary', prefixIcon: const Icon(Icons.person_outline, size: 18), border: OutlineInputBorder()),
-                      validator: (v) => v!.trim().isEmpty ? 'Required' : null,
-                    ),
-                    if (errorMsg != null) ...[
-                      const SizedBox(height: 12),
-                      Container(
-                        padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(color: UpriseColors.error.withOpacity(0.08), borderRadius: BorderRadius.circular(8)),
-                        child: Row(children: [
-                          Icon(Icons.error_outline, size: 16, color: UpriseColors.error),
-                          const SizedBox(width: 8),
-                          Expanded(child: Text(errorMsg!, style: GoogleFonts.beVietnamPro(fontSize: 12, color: UpriseColors.error))),
-                        ]),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Text(
+                        isEdit ? 'Edit Adviser Role' : 'Assign Adviser Role',
+                        style: GoogleFonts.beVietnamPro(fontSize: 17, fontWeight: FontWeight.w700, color: Colors.white),
                       ),
-                    ],
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close_rounded, color: Colors.white, size: 20),
+                      onPressed: isSaving ? null : () => Navigator.pop(ctx),
+                    ),
                   ]),
                 ),
-              ),
+
+                // ── Body
+                Expanded(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.all(24),
+                    child: Form(
+                      key: formKey,
+                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        _sectionDivider('Organization', icon: Icons.business_outlined),
+
+                        // Org dropdown
+                        DropdownButtonFormField<OrgModel>(
+                          value: selectedOrg,
+                          isExpanded: true,
+                          decoration: _DS.inputDecoration('Select Organization', icon: Icons.business_outlined),
+                          style: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF1A202C)),
+                          items: _orgs.map((o) => DropdownMenuItem(
+                            value: o,
+                            child: Row(children: [
+                              _OrgAvatar(o.abbrev.isNotEmpty ? o.abbrev : o.name.substring(0, o.name.length.clamp(0, 2))),
+                              const SizedBox(width: 10),
+                              Expanded(child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(o.name, style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600)),
+                                  if (o.tag.isNotEmpty)
+                                    Text(o.tag, style: GoogleFonts.beVietnamPro(fontSize: 11, color: const Color(0xFF64748B))),
+                                ],
+                              )),
+                            ]),
+                          )).toList(),
+                          onChanged: (v) { setDlg(() => selectedOrg = v); onOrgChanged(v); },
+                          validator: (_) => selectedOrg == null ? 'Select an organization' : null,
+                        ),
+
+                        const SizedBox(height: 20),
+                        _sectionDivider('Adviser Information', icon: Icons.person_outline_rounded),
+
+                        TextFormField(
+                          controller: advNameCtrl,
+                          decoration: _DS.inputDecoration('Full Name', hint: 'e.g., Dr. Juan dela Cruz', icon: Icons.badge_outlined),
+                          style: GoogleFonts.beVietnamPro(fontSize: 13),
+                          validator: (v) => v!.trim().isEmpty ? 'Required' : null,
+                        ),
+                        const SizedBox(height: 10),
+                        Row(children: [
+                          Expanded(
+                            child: TextFormField(
+                              controller: advEmailCtrl,
+                              decoration: _DS.inputDecoration('Email', icon: Icons.email_outlined),
+                              style: GoogleFonts.beVietnamPro(fontSize: 13),
+                              keyboardType: TextInputType.emailAddress,
+                              validator: (v) => v!.trim().isEmpty ? 'Required' : null,
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: TextFormField(
+                              controller: advPhoneCtrl,
+                              decoration: _DS.inputDecoration('Phone', icon: Icons.phone_outlined),
+                              style: GoogleFonts.beVietnamPro(fontSize: 13),
+                              keyboardType: TextInputType.phone,
+                              validator: (v) => v!.trim().isEmpty ? 'Required' : null,
+                            ),
+                          ),
+                        ]),
+                        const SizedBox(height: 10),
+                        DropdownButtonFormField<String>(
+                          value: ['Instructor', 'Junior', 'Senior', 'Professor'].contains(advRankCtrl.text)
+                              ? advRankCtrl.text
+                              : 'Instructor',
+                          decoration: _DS.inputDecoration('Rank / Title'),
+                          style: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF1A202C)),
+                          items: ['Instructor', 'Junior', 'Senior', 'Professor']
+                              .map((r) => DropdownMenuItem(value: r, child: Text(r)))
+                              .toList(),
+                          onChanged: (v) { if (v != null) advRankCtrl.text = v; },
+                          validator: (v) => v == null || v.isEmpty ? 'Required' : null,
+                        ),
+
+                        const SizedBox(height: 20),
+                        _sectionDivider('Officers', icon: Icons.groups_outlined),
+
+                        TextFormField(
+                          controller: presCtrl,
+                          decoration: _DS.inputDecoration('President', icon: Icons.star_outline_rounded),
+                          style: GoogleFonts.beVietnamPro(fontSize: 13),
+                          validator: (v) => v!.trim().isEmpty ? 'Required' : null,
+                        ),
+                        const SizedBox(height: 10),
+                        TextFormField(
+                          controller: vpCtrl,
+                          decoration: _DS.inputDecoration('Vice President', icon: Icons.person_outline_rounded),
+                          style: GoogleFonts.beVietnamPro(fontSize: 13),
+                          validator: (v) => v!.trim().isEmpty ? 'Required' : null,
+                        ),
+                        const SizedBox(height: 10),
+                        TextFormField(
+                          controller: secCtrl,
+                          decoration: _DS.inputDecoration('Secretary', icon: Icons.person_outline_rounded),
+                          style: GoogleFonts.beVietnamPro(fontSize: 13),
+                          validator: (v) => v!.trim().isEmpty ? 'Required' : null,
+                        ),
+
+                        if (errorMsg != null) ...[
+                          const SizedBox(height: 14),
+                          Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFEF2F2),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: const Color(0xFFFCA5A5)),
+                            ),
+                            child: Row(children: [
+                              const Icon(Icons.error_outline_rounded, size: 15, color: Color(0xFFDC2626)),
+                              const SizedBox(width: 8),
+                              Expanded(child: Text(errorMsg!,
+                                  style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF991B1B)))),
+                            ]),
+                          ),
+                        ],
+                      ]),
+                    ),
+                  ),
+                ),
+
+                // ── Footer
+                Container(
+                  padding: const EdgeInsets.fromLTRB(24, 16, 24, 20),
+                  decoration: const BoxDecoration(
+                    border: Border(top: BorderSide(color: Color(0xFFE8ECF0))),
+                    color: Color(0xFFF8F9FB),
+                    borderRadius: BorderRadius.vertical(bottom: Radius.circular(18)),
+                  ),
+                  child: Row(mainAxisAlignment: MainAxisAlignment.end, children: [
+                    OutlinedButton(
+                      onPressed: isSaving ? null : () => Navigator.pop(ctx),
+                      style: OutlinedButton.styleFrom(
+                        side: const BorderSide(color: Color(0xFFE2E6EA)),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 11),
+                      ),
+                      child: Text('Cancel', style: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF374151))),
+                    ),
+                    const SizedBox(width: 10),
+                    ElevatedButton.icon(
+                      onPressed: isSaving ? null : save,
+                      icon: isSaving
+                          ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                          : Icon(isEdit ? Icons.save_rounded : Icons.add_rounded, size: 16),
+                      label: Text(isEdit ? 'Save Changes' : 'Assign Role',
+                          style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600)),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: UpriseColors.primaryDark,
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 11),
+                      ),
+                    ),
+                  ]),
+                ),
+              ]),
             ),
-            actions: [
-              TextButton(onPressed: isSaving ? null : () => Navigator.pop(ctx), child: const Text('Cancel')),
-              ElevatedButton(
-                onPressed: isSaving ? null : save,
-                style: ElevatedButton.styleFrom(backgroundColor: UpriseColors.primaryDark),
-                child: isSaving
-                    ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                    : Text(isEdit ? 'Save Changes' : 'Assign Role', style: const TextStyle(color: Colors.white)),
-              ),
-            ],
           );
         },
       ),
     );
   }
 
-  Widget _sectionLabel(String label) => Text(label,
-      style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.w700, color: UpriseColors.darkGray, letterSpacing: 0.5));
-
+  // ── View dialog ───────────────────────────────────────────────────
   void _showViewDialog(Map<String, dynamic> data, String docId) {
-    final rank = data['adviserRank'] ?? 'Instructor';
+    final rank     = data['adviserRank'] ?? 'Instructor';
+    final archived = data['archived'] == true;
+
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Row(
-          children: [
-            _orgAvatar(data['orgAbbrev'] ?? '??'),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(data['orgName'] ?? '', style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.bold, fontSize: 16)),
-                  if ((data['orgTag'] ?? '').toString().isNotEmpty)
-                    Text(data['orgTag'] ?? '', style: GoogleFonts.beVietnamPro(fontSize: 12, color: UpriseColors.darkGray)),
-                ],
+      barrierColor: Colors.black54,
+      builder: (ctx) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        child: Container(
+          width: 480,
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            // Header
+            Container(
+              padding: const EdgeInsets.fromLTRB(24, 20, 20, 20),
+              decoration: BoxDecoration(
+                color: UpriseColors.primaryDark,
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(18)),
               ),
-            ),
-          ],
-        ),
-        content: SizedBox(
-          width: 400,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _viewSection('Adviser', [
-                _vRow('Name', data['adviserName'] ?? '—'),
-                _vRow('Email', data['adviserEmail'] ?? '—'),
-                _vRow('Phone', data['adviserPhone'] ?? '—'),
-                _vRowBadge('Rank', rank, _rankColor(rank)),
+              child: Row(children: [
+                _OrgAvatar(data['orgAbbrev'] ?? '??'),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text(data['orgName'] ?? '—',
+                        style: GoogleFonts.beVietnamPro(fontSize: 16, fontWeight: FontWeight.w700, color: Colors.white)),
+                    if ((data['orgTag'] ?? '').toString().isNotEmpty)
+                      Text(data['orgTag'] ?? '',
+                          style: GoogleFonts.beVietnamPro(fontSize: 11, color: Colors.white.withOpacity(0.70))),
+                  ]),
+                ),
+                if (archived)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.20),
+                      borderRadius: BorderRadius.circular(100),
+                    ),
+                    child: Text('ARCHIVED',
+                        style: GoogleFonts.beVietnamPro(fontSize: 10, fontWeight: FontWeight.w700, color: Colors.white)),
+                  ),
+                const SizedBox(width: 6),
+                IconButton(
+                  icon: const Icon(Icons.close_rounded, color: Colors.white, size: 20),
+                  onPressed: () => Navigator.pop(ctx),
+                ),
               ]),
-              const SizedBox(height: 12),
-              _viewSection('Officers', [
-                _vRow('President', data['president'] ?? '—'),
-                _vRow('Vice President', data['vicePresident'] ?? '—'),
-                _vRow('Secretary', data['secretary'] ?? '—'),
+            ),
+
+            // Body
+            Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(children: [
+                // Adviser section
+                _viewCard('Adviser', [
+                  _vDetailRow('Name',  data['adviserName']  ?? '—', Icons.badge_outlined),
+                  _vDetailRow('Email', data['adviserEmail'] ?? '—', Icons.email_outlined),
+                  _vDetailRow('Phone', data['adviserPhone'] ?? '—', Icons.phone_outlined),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 5),
+                    child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                      Row(children: [
+                        const Icon(Icons.workspace_premium_outlined, size: 13, color: Color(0xFF9AA5B4)),
+                        const SizedBox(width: 6),
+                        Text('Rank', style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF64748B))),
+                      ]),
+                      _RankBadge(rank),
+                    ]),
+                  ),
+                ]),
+                const SizedBox(height: 12),
+                // Officers section
+                _viewCard('Officers', [
+                  _vDetailRow('President',      data['president']     ?? '—', Icons.star_outline_rounded),
+                  _vDetailRow('Vice President',  data['vicePresident'] ?? '—', Icons.person_outline_rounded),
+                  _vDetailRow('Secretary',       data['secretary']     ?? '—', Icons.person_outline_rounded),
+                ]),
               ]),
-            ],
-          ),
+            ),
+
+            // Footer
+            Container(
+              padding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
+              child: Row(children: [
+                if (!archived)
+                  OutlinedButton.icon(
+                    onPressed: () { Navigator.pop(ctx); _confirmArchive(docId, data['orgName'] ?? ''); },
+                    icon: const Icon(Icons.archive_outlined, size: 15),
+                    label: Text('Archive', style: GoogleFonts.beVietnamPro(fontSize: 13)),
+                    style: OutlinedButton.styleFrom(
+                      side: const BorderSide(color: Color(0xFFE2E6EA)),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+                    ),
+                  ),
+                if (archived)
+                  OutlinedButton.icon(
+                    onPressed: () { Navigator.pop(ctx); _restoreRecord(docId, data['orgName'] ?? ''); },
+                    icon: const Icon(Icons.unarchive_outlined, size: 15, color: Color(0xFF059669)),
+                    label: Text('Restore', style: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF059669))),
+                    style: OutlinedButton.styleFrom(
+                      side: const BorderSide(color: Color(0xFF6EE7B7)),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+                    ),
+                  ),
+                const Spacer(),
+                ElevatedButton.icon(
+                  onPressed: () { Navigator.pop(ctx); _showEditDialog(data, docId); },
+                  icon: const Icon(Icons.edit_outlined, size: 15),
+                  label: Text('Edit', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: UpriseColors.primaryDark,
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 11),
+                  ),
+                ),
+              ]),
+            ),
+          ]),
         ),
-        actions: [
-          if (!(data['archived'] ?? false))
-            TextButton.icon(
-              onPressed: () {
-                Navigator.pop(ctx);
-                _confirmArchive(docId, data['orgName'] ?? '');
-              },
-              icon: Icon(Icons.archive_outlined, size: 16, color: UpriseColors.darkGray),
-              label: Text('Archive', style: TextStyle(color: UpriseColors.darkGray)),
-            ),
-          if (data['archived'] == true)
-            TextButton.icon(
-              onPressed: () async {
-                await FirebaseFirestore.instance.collection('adviser_roles').doc(docId).update({'archived': false});
-                await activity_log.ActivityLogger.log(
-                  action: 'Restored adviser role for ${data['orgName'] ?? 'unknown organization'}',
-                  module: 'Adviser Roles',
-                  severity: 'info',
-                );
-                _loadMeta();
-                Navigator.pop(ctx);
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Record restored.')));
-              },
-              icon: Icon(Icons.unarchive_outlined, size: 16, color: Colors.green),
-              label: Text('Restore', style: TextStyle(color: Colors.green)),
-            ),
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Close')),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(ctx);
-              _showEditDialog(data, docId);
-            },
-            style: ElevatedButton.styleFrom(backgroundColor: UpriseColors.primaryDark),
-            child: const Text('Edit', style: TextStyle(color: Colors.white)),
-          ),
-        ],
       ),
     );
   }
 
-  Widget _viewSection(String title, List<Widget> rows) {
+  Widget _viewCard(String title, List<Widget> rows) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(color: UpriseColors.lightGray, borderRadius: BorderRadius.circular(8)),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(title, style: GoogleFonts.beVietnamPro(fontSize: 11, fontWeight: FontWeight.w700, color: UpriseColors.darkGray, letterSpacing: 0.5)),
-          const SizedBox(height: 8),
-          ...rows,
-        ],
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8F9FB),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: const Color(0xFFE8ECF0)),
       ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Text(title,
+              style: GoogleFonts.beVietnamPro(
+                  fontSize: 11, fontWeight: FontWeight.w700,
+                  color: UpriseColors.primaryDark, letterSpacing: 0.5)),
+          const SizedBox(width: 10),
+          const Expanded(child: Divider(color: Color(0xFFE2E6EA), thickness: 1)),
+        ]),
+        const SizedBox(height: 8),
+        ...rows,
+      ]),
     );
   }
 
-  Widget _vRow(String label, String value) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 3),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(label, style: GoogleFonts.beVietnamPro(fontSize: 13, color: UpriseColors.darkGray)),
-            Flexible(child: Text(value, style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w500), textAlign: TextAlign.right)),
-          ],
+  Widget _vDetailRow(String label, String value, IconData icon) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 5),
+      child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+        Row(children: [
+          Icon(icon, size: 13, color: const Color(0xFF9AA5B4)),
+          const SizedBox(width: 6),
+          Text(label, style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF64748B))),
+        ]),
+        Flexible(
+          child: Text(value,
+              style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w500, color: const Color(0xFF1A202C)),
+              textAlign: TextAlign.right, overflow: TextOverflow.ellipsis),
         ),
-      );
-
-  Widget _vRowBadge(String label, String value, Color color) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 3),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(label, style: GoogleFonts.beVietnamPro(fontSize: 13, color: UpriseColors.darkGray)),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-              decoration: BoxDecoration(color: color.withOpacity(0.12), borderRadius: BorderRadius.circular(4)),
-              child: Text(value, style: GoogleFonts.beVietnamPro(fontSize: 11, color: color, fontWeight: FontWeight.w600)),
-            ),
-          ],
-        ),
-      );
-
-  void _confirmArchive(String docId, String orgName) {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Archive Record'),
-        content: Text('Archive "$orgName"? It will be moved to the Archived tab.'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-          ElevatedButton(
-            onPressed: () async {
-              await FirebaseFirestore.instance.collection('adviser_roles').doc(docId).update({'archived': true});
-              await activity_log.ActivityLogger.log(
-                action: 'Archived adviser role for $orgName',
-                module: 'Adviser Roles',
-                severity: 'info',
-              );
-              _loadMeta();
-              Navigator.pop(ctx);
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Record archived.')));
-            },
-            style: ElevatedButton.styleFrom(backgroundColor: UpriseColors.primaryDark),
-            child: const Text('Archive', style: TextStyle(color: Colors.white)),
-          ),
-        ],
-      ),
+      ]),
     );
+  }
+
+  // ── Confirm dialogs ───────────────────────────────────────────────
+  void _confirmArchive(String docId, String orgName) {
+    _confirmAction(
+      title: 'Archive Record',
+      message: 'Archive "$orgName"? It will be moved to the Archived tab and can be restored later.',
+      confirmLabel: 'Archive',
+      confirmColor: const Color(0xFF64748B),
+      icon: Icons.archive_outlined,
+      iconBg: const Color(0xFFF1F5F9),
+      onConfirm: () async {
+        await FirebaseFirestore.instance.collection('adviser_roles').doc(docId).update({'archived': true});
+        await activity_log.ActivityLogger.log(
+            action: 'Archived adviser role for $orgName', module: 'Adviser Roles', severity: 'info');
+        _loadMeta();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: const Text('Record archived.'),
+            backgroundColor: const Color(0xFF64748B),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          ));
+        }
+      },
+    );
+  }
+
+  Future<void> _restoreRecord(String docId, String orgName) async {
+    await FirebaseFirestore.instance.collection('adviser_roles').doc(docId).update({'archived': false});
+    await activity_log.ActivityLogger.log(
+        action: 'Restored adviser role for $orgName', module: 'Adviser Roles', severity: 'info');
+    _loadMeta();
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: const Text('Record restored.'),
+        backgroundColor: const Color(0xFF059669),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      ));
+    }
   }
 
   void _confirmDelete(String docId, String orgName) {
+    _confirmAction(
+      title: 'Delete Record',
+      message: 'Permanently delete "$orgName"? This cannot be undone.',
+      confirmLabel: 'Delete',
+      confirmColor: UpriseColors.error,
+      icon: Icons.delete_outline_rounded,
+      iconBg: const Color(0xFFFEF2F2),
+      onConfirm: () async {
+        await FirebaseFirestore.instance.collection('adviser_roles').doc(docId).delete();
+        await activity_log.ActivityLogger.log(
+            action: 'Deleted adviser role for $orgName', module: 'Adviser Roles', severity: 'warning');
+        _loadMeta();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: const Text('Record deleted.'),
+            backgroundColor: UpriseColors.error,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          ));
+        }
+      },
+    );
+  }
+
+  void _confirmAction({
+    required String title,
+    required String message,
+    required String confirmLabel,
+    required Color confirmColor,
+    required IconData icon,
+    required Color iconBg,
+    required VoidCallback onConfirm,
+  }) {
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Row(
-          children: [
-            Icon(Icons.warning_amber_rounded, color: UpriseColors.error),
-            const SizedBox(width: 8),
-            const Text('Delete Record'),
-          ],
+      barrierColor: Colors.black54,
+      builder: (ctx) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(_DS.radiusLg)),
+        child: Container(
+          width: 420,
+          padding: const EdgeInsets.all(28),
+          child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Row(children: [
+              Container(
+                width: 42, height: 42,
+                decoration: BoxDecoration(color: iconBg, borderRadius: BorderRadius.circular(10)),
+                child: Icon(icon, color: confirmColor, size: 20),
+              ),
+              const SizedBox(width: 14),
+              Text(title,
+                  style: GoogleFonts.beVietnamPro(fontSize: 17, fontWeight: FontWeight.w700, color: const Color(0xFF1A202C))),
+            ]),
+            const SizedBox(height: 14),
+            Text(message,
+                style: GoogleFonts.beVietnamPro(fontSize: 14, color: const Color(0xFF64748B), height: 1.5)),
+            const SizedBox(height: 24),
+            Row(mainAxisAlignment: MainAxisAlignment.end, children: [
+              OutlinedButton(
+                onPressed: () => Navigator.pop(ctx),
+                style: OutlinedButton.styleFrom(
+                  side: const BorderSide(color: Color(0xFFE2E6EA)),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 11),
+                ),
+                child: Text('Cancel', style: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF374151))),
+              ),
+              const SizedBox(width: 10),
+              ElevatedButton(
+                onPressed: () { Navigator.pop(ctx); onConfirm(); },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: confirmColor,
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 11),
+                ),
+                child: Text(confirmLabel, style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600)),
+              ),
+            ]),
+          ]),
         ),
-        content: Text('Permanently delete "$orgName"? This cannot be undone.'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-          ElevatedButton(
-            onPressed: () async {
-              await FirebaseFirestore.instance.collection('adviser_roles').doc(docId).delete();
-              await activity_log.ActivityLogger.log(
-                action: 'Deleted adviser role for $orgName',
-                module: 'Adviser Roles',
-                severity: 'warning',
-              );
-              _loadMeta();
-              Navigator.pop(ctx);
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Record deleted.'), backgroundColor: UpriseColors.error));
-            },
-            style: ElevatedButton.styleFrom(backgroundColor: UpriseColors.error),
-            child: const Text('Delete', style: TextStyle(color: Colors.white)),
-          ),
-        ],
       ),
     );
   }
 
+  // ── Export ────────────────────────────────────────────────────────
   Future<void> _exportCSV() async {
     try {
       final snap = await FirebaseFirestore.instance
           .collection('adviser_roles')
           .where('archived', isEqualTo: _statusFilter == 'Archived')
           .get();
-      final lines = <String>['Organization,Abbreviation,Tag,Adviser,Adviser Email,Adviser Phone,Rank,President,Vice President,Secretary,Status'];
-      for (var doc in snap.docs) {
-        final d = doc.data();
-        lines.add([
-          d['orgName'] ?? '',
-          d['orgAbbrev'] ?? '',
-          d['orgTag'] ?? '',
-          d['adviserName'] ?? '',
-          d['adviserEmail'] ?? '',
-          d['adviserPhone'] ?? '',
-          d['adviserRank'] ?? '',
-          d['president'] ?? '',
-          d['vicePresident'] ?? '',
-          d['secretary'] ?? '',
-          (d['archived'] ?? false) ? 'Archived' : 'Active',
-        ].map((v) => '"$v"').join(','));
+      if (snap.docs.isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: const Text('No data to export.'),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          ));
+        }
+        return;
       }
-      final file = File('${Directory.systemTemp.path}/adviser_roles_export.csv');
-      await file.writeAsString(lines.join('\n'));
-      await Share.shareXFiles([XFile(file.path)], text: 'Adviser Roles Export');
+      String esc(String s) => '"${s.replaceAll('"', '""')}"';
+      final buf = StringBuffer();
+      buf.writeln('Organization,Abbreviation,Tag,Adviser,Email,Phone,Rank,President,Vice President,Secretary,Status');
+      for (final doc in snap.docs) {
+        final d = doc.data();
+        buf.writeln([
+          esc(d['orgName'] ?? ''), esc(d['orgAbbrev'] ?? ''), esc(d['orgTag'] ?? ''),
+          esc(d['adviserName'] ?? ''), esc(d['adviserEmail'] ?? ''), esc(d['adviserPhone'] ?? ''),
+          esc(d['adviserRank'] ?? ''), esc(d['president'] ?? ''), esc(d['vicePresident'] ?? ''),
+          esc(d['secretary'] ?? ''), esc((d['archived'] ?? false) ? 'Archived' : 'Active'),
+        ].join(','));
+      }
+      final now  = DateTime.now().toString().substring(0, 10);
+      final name = 'adviser_roles_$now.csv';
+      if (kIsWeb) {
+        await Share.share(buf.toString(), subject: name);
+      } else {
+        final file = File('${Directory.systemTemp.path}/$name');
+        await file.writeAsString(buf.toString());
+        await Share.shareXFiles([XFile(file.path)], subject: name);
+      }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Export failed: $e'), backgroundColor: UpriseColors.error),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Export failed: $e'),
+          backgroundColor: UpriseColors.error,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        ));
+      }
     }
   }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Reusable widgets
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _StatCard extends StatelessWidget {
+  final String label, value;
+  final IconData icon;
+  final Color color;
+  final Stream<QuerySnapshot>? stream;
+
+  const _StatCard({
+    required this.label,
+    required this.value,
+    required this.icon,
+    required this.color,
+    this.stream,
+  });
 
   @override
-  void dispose() {
-    _searchController.dispose();
-    super.dispose();
+  Widget build(BuildContext context) {
+    Widget countWidget;
+    if (stream != null) {
+      countWidget = StreamBuilder<QuerySnapshot>(
+        stream: stream,
+        builder: (ctx, snap) {
+          if (snap.connectionState == ConnectionState.waiting) {
+            return SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: color));
+          }
+          final count = snap.hasData ? snap.data!.docs.length : 0;
+          return Text('$count',
+              style: GoogleFonts.beVietnamPro(fontSize: 28, fontWeight: FontWeight.w800, color: const Color(0xFF1A202C)));
+        },
+      );
+    } else {
+      countWidget = Text(value,
+          style: GoogleFonts.beVietnamPro(fontSize: 28, fontWeight: FontWeight.w800, color: const Color(0xFF1A202C)));
+    }
+
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.all(18),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: const Color(0xFFE8ECF0)),
+          boxShadow: _DS.cardShadow,
+        ),
+        child: Row(children: [
+          Container(
+            width: 44, height: 44,
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.10),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(icon, color: color, size: 22),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(label,
+                  style: GoogleFonts.beVietnamPro(fontSize: 11, color: const Color(0xFF64748B), fontWeight: FontWeight.w500)),
+              const SizedBox(height: 2),
+              countWidget,
+            ]),
+          ),
+        ]),
+      ),
+    );
   }
+}
+
+class _TabToggle extends StatelessWidget {
+  final List<String> options;
+  final String selected;
+  final ValueChanged<String> onChanged;
+  const _TabToggle({required this.options, required this.selected, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 40,
+      padding: const EdgeInsets.all(3),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: const Color(0xFFE2E6EA)),
+      ),
+      child: Row(
+        children: options.map((opt) {
+          final isActive = opt == selected;
+          return GestureDetector(
+            onTap: () => onChanged(opt),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 150),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
+              decoration: BoxDecoration(
+                color: isActive ? UpriseColors.primaryDark : Colors.transparent,
+                borderRadius: BorderRadius.circular(7),
+              ),
+              child: Text(opt,
+                  style: GoogleFonts.beVietnamPro(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: isActive ? Colors.white : const Color(0xFF64748B))),
+            ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+}
+
+class _FilterDropdown<T> extends StatelessWidget {
+  final T value;
+  final String hint;
+  final IconData icon;
+  final List<DropdownMenuItem<T>> items;
+  final ValueChanged<T?> onChanged;
+  const _FilterDropdown({
+    required this.value, required this.hint, required this.icon,
+    required this.items, required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 40,
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: const Color(0xFFE2E6EA)),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<T>(
+          value: value,
+          icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 18, color: Color(0xFF9AA5B4)),
+          style: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF374151)),
+          items: items,
+          onChanged: onChanged,
+        ),
+      ),
+    );
+  }
+}
+
+class _ToolbarButton extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final VoidCallback? onPressed;
+  final bool outlined;
+  const _ToolbarButton({required this.label, required this.icon, this.onPressed, this.outlined = false});
+
+  @override
+  Widget build(BuildContext context) {
+    if (outlined) {
+      return OutlinedButton.icon(
+        onPressed: onPressed,
+        icon: Icon(icon, size: 15),
+        label: Text(label, style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600)),
+        style: OutlinedButton.styleFrom(
+          foregroundColor: UpriseColors.primaryDark,
+          side: BorderSide(color: UpriseColors.primaryDark),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        ),
+      );
+    }
+    return ElevatedButton.icon(
+      onPressed: onPressed,
+      icon: Icon(icon, size: 15),
+      label: Text(label, style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600)),
+      style: ElevatedButton.styleFrom(
+        backgroundColor: UpriseColors.primaryDark,
+        foregroundColor: Colors.white,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        elevation: 0,
+      ),
+    );
+  }
+}
+
+class _PageButton extends StatelessWidget {
+  final IconData icon;
+  final bool enabled;
+  final VoidCallback onTap;
+  const _PageButton({required this.icon, required this.enabled, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) => InkWell(
+        onTap: enabled ? onTap : null,
+        borderRadius: BorderRadius.circular(6),
+        child: Padding(
+          padding: const EdgeInsets.all(4),
+          child: Icon(icon, size: 20, color: enabled ? const Color(0xFF374151) : const Color(0xFFD1D5DB)),
+        ),
+      );
+}
+
+class _PageNumButton extends StatelessWidget {
+  final int page;
+  final bool isActive;
+  final VoidCallback onTap;
+  const _PageNumButton({required this.page, required this.isActive, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) => GestureDetector(
+        onTap: onTap,
+        child: Container(
+          margin: const EdgeInsets.symmetric(horizontal: 2),
+          width: 28, height: 28,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: isActive ? UpriseColors.primaryDark : Colors.transparent,
+            borderRadius: BorderRadius.circular(6),
+          ),
+          child: Text('$page',
+              style: GoogleFonts.beVietnamPro(
+                  fontSize: 12,
+                  fontWeight: isActive ? FontWeight.w700 : FontWeight.normal,
+                  color: isActive ? Colors.white : const Color(0xFF374151))),
+        ),
+      );
 }
