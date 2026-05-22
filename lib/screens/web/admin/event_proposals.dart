@@ -1,20 +1,20 @@
-import 'dart:io';
 import 'dart:typed_data';
 import 'dart:convert';
-import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:http/http.dart' as http; // 👈 ADD THIS for NetworkAssetBundle replacement
+import '../../../utils/platform_file_utils.dart' as platform_file_utils;
+import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:cross_file/cross_file.dart';
-import 'package:open_file/open_file.dart';
-import 'package:path_provider/path_provider.dart';
 import '../../../services/activity_logger.dart' as activity_log;
 import '../../theme/app_theme.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Design tokens — mirrors student_accounts.dart exactly
+// Design tokens
 // ─────────────────────────────────────────────────────────────────────────────
 class _DS {
   static const double radiusSm   = 8;
@@ -112,6 +112,9 @@ class _EventProposalsState extends State<EventProposals> {
     super.dispose();
   }
 
+  // Helper to check if widget is still mounted (for async gaps)
+  bool get _isMounted => mounted;
+
   // ── Build ─────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
@@ -194,7 +197,6 @@ class _EventProposalsState extends State<EventProposals> {
     return Padding(
       padding: const EdgeInsets.fromLTRB(28, 20, 28, 0),
       child: Row(children: [
-        // Search
         Expanded(
           child: SizedBox(
             height: 40,
@@ -262,7 +264,6 @@ class _EventProposalsState extends State<EventProposals> {
 
         var docs = snapshot.data!.docs;
 
-        // Filters
         if (_statusFilter != 'All') {
           docs = docs
               .where((d) => (d.data() as Map)['status'] == _statusFilter.toLowerCase())
@@ -281,7 +282,7 @@ class _EventProposalsState extends State<EventProposals> {
         final safePage   = _currentPage.clamp(1, totalPages);
         final start      = (safePage - 1) * _pageSize;
         final end        = (start + _pageSize).clamp(0, docs.length);
-        final pageDocs   = docs.isEmpty ? <QueryDocumentSnapshot>[] : docs.sublist(start, end);
+        final pageDocs   = docs.isEmpty ? [] : docs.sublist(start, end);
 
         return Container(
           margin: const EdgeInsets.symmetric(horizontal: 28),
@@ -369,7 +370,6 @@ class _EventProposalsState extends State<EventProposals> {
               : const Border(bottom: BorderSide(color: Color(0xFFF1F5F9))),
         ),
         child: Row(children: [
-          // Title + category
           Expanded(
             flex: 3,
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -390,7 +390,6 @@ class _EventProposalsState extends State<EventProposals> {
               ),
             ]),
           ),
-          // Organization with avatar
           Expanded(
             flex: 2,
             child: Row(children: [
@@ -409,7 +408,6 @@ class _EventProposalsState extends State<EventProposals> {
               ),
             ]),
           ),
-          // Category chip
           Expanded(
             flex: 2,
             child: Container(
@@ -429,7 +427,6 @@ class _EventProposalsState extends State<EventProposals> {
               ),
             ),
           ),
-          // Date
           Expanded(
             flex: 2,
             child: Text(
@@ -438,9 +435,7 @@ class _EventProposalsState extends State<EventProposals> {
               overflow: TextOverflow.ellipsis,
             ),
           ),
-          // Status badge
           Expanded(flex: 1, child: _statusBadge(status)),
-          // Actions
           Expanded(
             flex: 2,
             child: Row(
@@ -686,7 +681,8 @@ class _EventProposalsState extends State<EventProposals> {
         severity: newStatus == 'rejected' ? 'warning' : 'info',
         details: {'proposalId': docId},
       );
-      if (mounted) {
+      // ✅ FIXED: Use _isMounted instead of direct mounted check
+      if (_isMounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text('Proposal ${newStatus[0].toUpperCase()}${newStatus.substring(1)}'),
           backgroundColor: newStatus == 'approved'
@@ -699,7 +695,7 @@ class _EventProposalsState extends State<EventProposals> {
         ));
       }
     } catch (e) {
-      if (mounted) {
+      if (_isMounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text('Error: $e'),
           backgroundColor: UpriseColors.error,
@@ -725,7 +721,6 @@ class _EventProposalsState extends State<EventProposals> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // ── Header
               Container(
                 padding: const EdgeInsets.fromLTRB(24, 20, 20, 20),
                 decoration: BoxDecoration(
@@ -763,7 +758,6 @@ class _EventProposalsState extends State<EventProposals> {
                   ),
                 ]),
               ),
-              // ── Body
               Expanded(
                 child: SingleChildScrollView(
                   padding: const EdgeInsets.all(24),
@@ -882,7 +876,6 @@ class _EventProposalsState extends State<EventProposals> {
                   ),
                 ),
               ),
-              // ── Footer actions
               Container(
                 padding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
                 decoration: const BoxDecoration(
@@ -994,23 +987,223 @@ class _EventProposalsState extends State<EventProposals> {
 
   // ── Helpers ───────────────────────────────────────────────────────
 
+  // ── Helpers ───────────────────────────────────────────────────────
+
   Future<void> _saveAndOpenFile(Map<String, dynamic> data) async {
     try {
-      final String base64String = data['attachmentBase64'];
-      final String fileName     = data['attachmentName'] ?? 'document';
-      final Uint8List fileBytes = base64Decode(base64String);
-      final directory           = await getTemporaryDirectory();
-      final file                = File('${directory.path}/$fileName');
-      await file.writeAsBytes(fileBytes);
-      await OpenFile.open(file.path);
+      Uint8List bytes = Uint8List(0);
+      final String fileName = data['attachmentName'] ?? 'document';
+
+      if (data['attachmentBase64'] != null && data['attachmentBase64'].toString().isNotEmpty) {
+        bytes = base64Decode(data['attachmentBase64']);
+      } else if (data['attachmentUrl'] != null && data['attachmentUrl'].toString().isNotEmpty) {
+        final url = data['attachmentUrl'] as String;
+        try {
+          final ref = FirebaseStorage.instance.refFromURL(url);
+          bytes = await ref.getData(50 * 1024 * 1024) ?? Uint8List(0);
+        } catch (_) {
+          try {
+            final uri = Uri.parse(url);
+            final response = await http.get(uri);
+            if (response.statusCode == 200) {
+              bytes = response.bodyBytes;
+            }
+          } catch (e) {
+            if (_isMounted) {
+              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                content: Text('Cannot download attachment: $e'),
+                backgroundColor: UpriseColors.error,
+              ));
+            }
+            return;
+          }
+        }
+      }
+
+      if (bytes.isEmpty) {
+        if (_isMounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Empty attachment'), backgroundColor: UpriseColors.error)
+          );
+        }
+        return;
+      }
+
+      // ✅ ADD THIS: Show in-app preview dialog (same as Org side!)
+      await _showAttachmentPreview(context, bytes, fileName);
+      
     } catch (e) {
-      if (mounted) {
+      if (_isMounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text('Error opening file: $e'),
           backgroundColor: UpriseColors.error,
           behavior: SnackBarBehavior.floating,
         ));
       }
+    }
+  }
+
+  // ✅ ADD THIS NEW METHOD - Same as Org side preview!
+  Future<void> _showAttachmentPreview(BuildContext context, Uint8List bytes, String fileName) async {
+    final ext = fileName.contains('.') ? fileName.split('.').last.toLowerCase() : '';
+    final mime = _getMimeType(ext);
+
+    // For text files - show content in dialog
+    if (mime.startsWith('text/')) {
+      final content = utf8.decode(bytes);
+      if (_isMounted) {
+        showDialog(
+          context: context,
+          builder: (_) => AlertDialog(
+            title: Text(fileName),
+            content: SingleChildScrollView(
+              child: Container(
+                width: 500,
+                child: SelectableText(content),
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Close'),
+              ),
+              TextButton(
+                onPressed: () async {
+                  Navigator.pop(context);
+                  await platform_file_utils.saveBytesToTempAndOpen(bytes, fileName);
+                },
+                child: const Text('Download'),
+              ),
+            ],
+          ),
+        );
+      }
+      return;
+    }
+
+    // For images - show image preview
+    if (mime.startsWith('image/')) {
+      if (_isMounted) {
+        showDialog(
+          context: context,
+          builder: (_) => Dialog(
+            child: Container(
+              width: 500,
+              constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.8),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Header
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: const BoxDecoration(
+                      border: Border(bottom: BorderSide(color: Color(0xFFE2E6EA))),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.image, color: UpriseColors.primaryDark),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            fileName,
+                            style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.w600),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  // Image content
+                  Flexible(
+                    child: InteractiveViewer(
+                      minScale: 0.5,
+                      maxScale: 4.0,
+                      child: Image.memory(bytes),
+                    ),
+                  ),
+                  // Buttons
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: const BoxDecoration(
+                      border: Border(top: BorderSide(color: Color(0xFFE2E6EA))),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(context),
+                          child: const Text('Close'),
+                        ),
+                        const SizedBox(width: 8),
+                        ElevatedButton.icon(
+                          onPressed: () async {
+                            Navigator.pop(context);
+                            await platform_file_utils.saveBytesToTempAndOpen(bytes, fileName);
+                          },
+                          icon: const Icon(Icons.download, size: 16),
+                          label: const Text('Download'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: UpriseColors.primaryDark,
+                            foregroundColor: Colors.white,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      }
+      return;
+    }
+
+    // For PDF and other files - show download option
+    if (_isMounted) {
+      showDialog(
+        context: context,
+        builder: (_) => AlertDialog(
+          title: Text(fileName),
+          content: Text('This file type (${ext.toUpperCase()}) cannot be previewed in the app.'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton.icon(
+              onPressed: () async {
+                Navigator.pop(context);
+                await platform_file_utils.saveBytesToTempAndOpen(bytes, fileName);
+              },
+              icon: const Icon(Icons.download, size: 16),
+              label: const Text('Download'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: UpriseColors.primaryDark,
+                foregroundColor: Colors.white,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+  }
+
+  // ✅ ADD THIS helper method for MIME types
+  String _getMimeType(String ext) {
+    switch (ext) {
+      case 'txt': return 'text/plain';
+      case 'md': return 'text/markdown';
+      case 'json': return 'application/json';
+      case 'html': case 'htm': return 'text/html';
+      case 'png': return 'image/png';
+      case 'jpg': case 'jpeg': return 'image/jpeg';
+      case 'gif': return 'image/gif';
+      case 'pdf': return 'application/pdf';
+      case 'doc': return 'application/msword';
+      case 'docx': return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+      case 'csv': return 'text/csv';
+      default: return 'application/octet-stream';
     }
   }
 
@@ -1033,9 +1226,6 @@ class _EventProposalsState extends State<EventProposals> {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Helper model for confirm dialogs
-// ─────────────────────────────────────────────────────────────────────────────
 class _ConfirmStyle {
   final IconData icon;
   final Color iconBg, iconColor, btnColor;
@@ -1050,10 +1240,6 @@ class _ConfirmStyle {
     required this.btnLabel,
   });
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Reusable widgets — mirrors student_accounts.dart exactly
-// ─────────────────────────────────────────────────────────────────────────────
 
 class _StatCard extends StatelessWidget {
   final String label, value;
@@ -1271,13 +1457,12 @@ class _ExportProposalsButton extends StatelessWidget {
         fileName = 'event_proposals_$now.json';
       }
 
-      if (kIsWeb) {
-        await Share.share(content, subject: fileName);
-      } else {
-        final file = File('${Directory.systemTemp.path}/$fileName');
-        await file.writeAsString(content);
-        await Share.shareXFiles([XFile(file.path)], subject: fileName);
-      }
+        final tempPath = await platform_file_utils.saveStringToTemp(content, fileName);
+        if (kIsWeb) {
+          await Share.share(content, subject: fileName);
+        } else {
+          await Share.shareXFiles([XFile(tempPath)], subject: fileName);
+        }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text('Export failed: $e'),

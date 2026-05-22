@@ -273,82 +273,95 @@ class _OrgDashboardState extends State<OrgDashboard> {
     } catch (_) {}
   }
 
-  // ── Logout ────────────────────────────────────────────────────────
-  Future<void> _logout() async => FirebaseAuth.instance.signOut();
-
-  void _confirmLogout() {
-    showDialog(
-      context: context,
-      barrierColor: Colors.black54,
-      builder: (ctx) => Dialog(
-        shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(_DS.radiusLg)),
-        child: Container(
-          width: 400,
-          padding: const EdgeInsets.all(28),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(children: [
-                Container(
-                  width: 42, height: 42,
-                  decoration: BoxDecoration(
-                      color: OrgColors.errorBg,
-                      borderRadius: BorderRadius.circular(10)),
-                  child: const Icon(Icons.logout_rounded,
-                      color: OrgColors.error, size: 20),
-                ),
-                const SizedBox(width: 14),
-                Text('Confirm Logout',
-                    style: GoogleFonts.beVietnamPro(
-                        fontSize: 17, fontWeight: FontWeight.w700,
-                        color: OrgColors.charcoal)),
-              ]),
-              const SizedBox(height: 14),
-              Text(
-                'Are you sure you want to sign out from the organization portal?',
-                style: GoogleFonts.beVietnamPro(
-                    fontSize: 14, color: OrgColors.darkGray, height: 1.5),
-              ),
-              const SizedBox(height: 24),
-              Row(mainAxisAlignment: MainAxisAlignment.end, children: [
-                OutlinedButton(
-                  onPressed: () => Navigator.pop(ctx),
-                  style: OutlinedButton.styleFrom(
-                    side: const BorderSide(color: OrgColors.borderSoft),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(_DS.radiusSm)),
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 18, vertical: 11),
-                  ),
-                  child: Text('Cancel',
-                      style: GoogleFonts.beVietnamPro(
-                          fontSize: 13, color: OrgColors.textMid)),
-                ),
-                const SizedBox(width: 10),
-                ElevatedButton(
-                  onPressed: () { Navigator.pop(ctx); _logout(); },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: OrgColors.error,
-                    foregroundColor: Colors.white,
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(_DS.radiusSm)),
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 18, vertical: 11),
-                  ),
-                  child: Text('Sign Out',
-                      style: GoogleFonts.beVietnamPro(
-                          fontSize: 13, fontWeight: FontWeight.w600)),
-                ),
-              ]),
-            ],
-          ),
-        ),
-      ),
+  Future<void> _logout() async {
+  await FirebaseAuth.instance.signOut();
+  // Navigate to login page and clear all previous routes
+  if (mounted) {
+    Navigator.pushNamedAndRemoveUntil(
+      context,
+      '/login', // Replace with your login route name malii
+      (route) => false,
     );
   }
+}
+
+void _confirmLogout() {
+  showDialog(
+    context: context,
+    barrierColor: Colors.black54,
+    builder: (ctx) => Dialog(
+      shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(_DS.radiusLg)),
+      child: Container(
+        width: 400,
+        padding: const EdgeInsets.all(28),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(children: [
+              Container(
+                width: 42, 
+                height: 42,
+                decoration: BoxDecoration(
+                    color: OrgColors.errorBg,
+                    borderRadius: BorderRadius.circular(10)),
+                child: const Icon(Icons.logout_rounded,
+                    color: OrgColors.error, size: 20),
+              ),
+              const SizedBox(width: 14),
+              Text('Confirm Logout',
+                  style: GoogleFonts.beVietnamPro(
+                      fontSize: 17, fontWeight: FontWeight.w700,
+                      color: OrgColors.charcoal)),
+            ]),
+            const SizedBox(height: 14),
+            Text(
+              'Are you sure you want to sign out from the organization portal?',
+              style: GoogleFonts.beVietnamPro(
+                  fontSize: 14, color: OrgColors.darkGray, height: 1.5),
+            ),
+            const SizedBox(height: 24),
+            Row(mainAxisAlignment: MainAxisAlignment.end, children: [
+              OutlinedButton(
+                onPressed: () => Navigator.pop(ctx),
+                style: OutlinedButton.styleFrom(
+                  side: const BorderSide(color: OrgColors.borderSoft),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(_DS.radiusSm)),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 18, vertical: 11),
+                ),
+                child: Text('Cancel',
+                    style: GoogleFonts.beVietnamPro(
+                        fontSize: 13, color: OrgColors.textMid)),
+              ),
+              const SizedBox(width: 10),
+              ElevatedButton(
+                onPressed: () async { 
+                  Navigator.pop(ctx); 
+                  await _logout();
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: OrgColors.error,
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(_DS.radiusSm)),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 18, vertical: 11),
+                ),
+                child: Text('Sign Out',
+                    style: GoogleFonts.beVietnamPro(
+                        fontSize: 13, fontWeight: FontWeight.w600)),
+              ),
+            ]),
+          ],
+        ),
+      ),
+    ),
+  );
+}
 
   String _getCurrentTitle() {
     if (_selectedIndex == -1) return 'Settings';
