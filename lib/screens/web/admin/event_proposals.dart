@@ -573,100 +573,228 @@ class _EventProposalsState extends State<EventProposals> {
   // ── Actions ───────────────────────────────────────────────────────
 
   void _confirmSetStatus(String docId, String title, String newStatus) {
-    final Map<String, _ConfirmStyle> styles = {
-      'approved': _ConfirmStyle(
-        icon: Icons.check_circle_outline_rounded,
-        iconBg: const Color(0xFFECFDF5),
-        iconColor: const Color(0xFF059669),
-        btnColor: const Color(0xFF059669),
-        heading: 'Approve Proposal',
-        body: 'Are you sure you want to approve "$title"?',
-        btnLabel: 'Approve',
-      ),
-      'rejected': _ConfirmStyle(
-        icon: Icons.cancel_outlined,
-        iconBg: const Color(0xFFFEF2F2),
-        iconColor: const Color(0xFFDC2626),
-        btnColor: const Color(0xFFDC2626),
-        heading: 'Reject Proposal',
-        body: 'Are you sure you want to reject "$title"? This action can be reversed.',
-        btnLabel: 'Reject',
-      ),
-      'archived': _ConfirmStyle(
-        icon: Icons.archive_outlined,
-        iconBg: const Color(0xFFF3F4F6),
-        iconColor: const Color(0xFF6B7280),
-        btnColor: const Color(0xFF6B7280),
-        heading: 'Archive Proposal',
-        body: 'Are you sure you want to archive "$title"?',
-        btnLabel: 'Archive',
-      ),
-    };
-    final s = styles[newStatus]!;
+  final Map<String, _ConfirmStyle> styles = {
+    'approved': _ConfirmStyle(
+      icon: Icons.check_circle_outline_rounded,
+      iconBg: const Color(0xFFECFDF5),
+      iconColor: const Color(0xFF059669),
+      btnColor: const Color(0xFF059669),
+      heading: 'Approve Proposal',
+      body: 'Are you sure you want to approve "$title"? This will automatically add it to the calendar.',
+      btnLabel: 'Approve',
+    ),
+    'rejected': _ConfirmStyle(
+      icon: Icons.cancel_outlined,
+      iconBg: const Color(0xFFFEF2F2),
+      iconColor: const Color(0xFFDC2626),
+      btnColor: const Color(0xFFDC2626),
+      heading: 'Reject Proposal',
+      body: 'Are you sure you want to reject "$title"? This action can be reversed.',
+      btnLabel: 'Reject',
+    ),
+    'archived': _ConfirmStyle(
+      icon: Icons.archive_outlined,
+      iconBg: const Color(0xFFF3F4F6),
+      iconColor: const Color(0xFF6B7280),
+      btnColor: const Color(0xFF6B7280),
+      heading: 'Archive Proposal',
+      body: 'Are you sure you want to archive "$title"?',
+      btnLabel: 'Archive',
+    ),
+  };
+  final s = styles[newStatus]!;
 
-    showDialog(
-      context: context,
-      barrierColor: Colors.black54,
-      builder: (ctx) => Dialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        child: Container(
-          width: 420,
-          padding: const EdgeInsets.all(28),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(children: [
-                Container(
-                  width: 42,
-                  height: 42,
-                  decoration: BoxDecoration(color: s.iconBg, borderRadius: BorderRadius.circular(10)),
-                  child: Icon(s.icon, color: s.iconColor, size: 20),
-                ),
-                const SizedBox(width: 14),
-                Text(s.heading,
-                    style: GoogleFonts.beVietnamPro(
-                        fontSize: 17, fontWeight: FontWeight.w700, color: const Color(0xFF1A202C))),
-              ]),
-              const SizedBox(height: 16),
-              Text(s.body,
+  showDialog(
+    context: context,
+    barrierColor: Colors.black54,
+    builder: (ctx) => Dialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: Container(
+        width: 420,
+        padding: const EdgeInsets.all(28),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(children: [
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(color: s.iconBg, borderRadius: BorderRadius.circular(10)),
+                child: Icon(s.icon, color: s.iconColor, size: 20),
+              ),
+              const SizedBox(width: 14),
+              Text(s.heading,
                   style: GoogleFonts.beVietnamPro(
-                      fontSize: 14, color: const Color(0xFF64748B), height: 1.5)),
-              const SizedBox(height: 24),
-              Row(mainAxisAlignment: MainAxisAlignment.end, children: [
-                OutlinedButton(
-                  onPressed: () => Navigator.pop(ctx),
-                  style: OutlinedButton.styleFrom(
-                    side: const BorderSide(color: Color(0xFFE2E6EA)),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 11),
-                  ),
-                  child: Text('Cancel',
-                      style: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF374151))),
+                      fontSize: 17, fontWeight: FontWeight.w700, color: const Color(0xFF1A202C))),
+            ]),
+            const SizedBox(height: 16),
+            Text(s.body,
+                style: GoogleFonts.beVietnamPro(
+                    fontSize: 14, color: const Color(0xFF64748B), height: 1.5)),
+            const SizedBox(height: 24),
+            Row(mainAxisAlignment: MainAxisAlignment.end, children: [
+              OutlinedButton(
+                onPressed: () => Navigator.pop(ctx),
+                style: OutlinedButton.styleFrom(
+                  side: const BorderSide(color: Color(0xFFE2E6EA)),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 11),
                 ),
-                const SizedBox(width: 10),
-                ElevatedButton(
-                  onPressed: () async {
-                    Navigator.pop(ctx);
-                    await _setStatus(docId, title, newStatus);
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: s.btnColor,
-                    foregroundColor: Colors.white,
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 11),
-                  ),
-                  child: Text(s.btnLabel,
-                      style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600)),
+                child: Text('Cancel',
+                    style: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF374151))),
+              ),
+              const SizedBox(width: 10),
+              ElevatedButton(
+                onPressed: () async {
+                  Navigator.pop(ctx);
+                  if (newStatus == 'approved') {
+                    // ✅ Auto-create event from proposal FIRST
+                    await _createEventFromProposal(docId);
+                  }
+                  // Then update proposal status
+                  await _setStatus(docId, title, newStatus);
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: s.btnColor,
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 11),
                 ),
-              ]),
-            ],
-          ),
+                child: Text(s.btnLabel,
+                    style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600)),
+              ),
+            ]),
+          ],
         ),
       ),
+    ),
+  );
+}
+
+// ✅ NEW METHOD: Auto-create event from approved proposal
+Future<void> _createEventFromProposal(String proposalId) async {
+  try {
+    // Get proposal data
+    final doc = await FirebaseFirestore.instance
+        .collection('event_proposals')
+        .doc(proposalId)
+        .get();
+    
+    if (!doc.exists) return;
+    
+    final data = doc.data() as Map<String, dynamic>;
+    
+    // Extract data from proposal
+    final title = data['title'] ?? 'Untitled Event';
+    final description = data['description'] ?? '';
+    final location = data['location'] ?? 'TBA';
+    final category = data['category'] ?? 'Other';
+    final orgId = data['orgId'] ?? '';
+    final orgName = data['orgName'] ?? 'Unknown Organization';
+    final proposalDate = data['date'] as Timestamp?;
+    final date = proposalDate?.toDate() ?? DateTime.now();
+    final timeStr = data['time'] ?? '09:00 AM';
+    
+    // Parse time from proposal (e.g., "7:00 AM" -> startTime)
+    String startTime = timeStr;
+    String endTime = _addOneHourToTimeString(timeStr);
+    
+    // Default values for missing fields
+    final int capacity = 100;
+    final String guestSpeaker = 'TBA';
+    final List<String> resources = [];
+    final List<String> labPreparation = [];
+    final List<String> tags = [];
+    
+    // Prepare event data
+    final eventData = {
+      'orgId': orgId,
+      'orgName': orgName,
+      'title': title,
+      'description': description,
+      'location': location,
+      'category': category,
+      'date': Timestamp.fromDate(date),
+      'startTime': startTime,
+      'endTime': endTime,
+      'capacity': capacity,
+      'guestSpeaker': guestSpeaker,
+      'resources': resources,
+      'labPreparation': labPreparation,
+      'tags': tags,
+      'status': 'approved',
+      'createdAt': FieldValue.serverTimestamp(),
+      'createdFromProposalId': proposalId,
+    };
+    
+    // Create event in 'events' collection
+    await FirebaseFirestore.instance.collection('events').add(eventData);
+    
+    // Log activity
+    await activity_log.ActivityLogger.log(
+      action: 'auto_create_event_from_approved_proposal',
+      module: 'Event Management',
+      details: {
+        'proposalId': proposalId,
+        'eventTitle': title,
+        'orgId': orgId,
+      },
     );
+    
+    if (_isMounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('✅ Event automatically added to calendar!'),
+          backgroundColor: Color(0xFF059669),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  } catch (e) {
+    print('Error creating event from proposal: $e');
+    if (_isMounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('⚠️ Proposal approved but event creation failed: $e'),
+          backgroundColor: Colors.orange,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
   }
+}
+
+// Helper: Add 1 hour to time string (e.g., "7:00 AM" -> "8:00 AM")
+String _addOneHourToTimeString(String timeStr) {
+  try {
+    // Parse time like "7:00 AM" or "07:00 AM"
+    final match = RegExp(r'(\d+):(\d+)\s*(AM|PM)', caseSensitive: false).firstMatch(timeStr);
+    if (match != null) {
+      int hour = int.parse(match.group(1)!);
+      final minute = int.parse(match.group(2)!);
+      final isPM = match.group(3)!.toUpperCase() == 'PM';
+      
+      if (isPM && hour != 12) hour += 12;
+      if (!isPM && hour == 12) hour = 0;
+      
+      final dateTime = DateTime(2024, 1, 1, hour, minute);
+      final newDateTime = dateTime.add(const Duration(hours: 1));
+      
+      int newHour = newDateTime.hour;
+      final newMinute = newDateTime.minute;
+      final newIsPM = newHour >= 12;
+      if (newHour > 12) newHour -= 12;
+      if (newHour == 0) newHour = 12;
+      
+      return '$newHour:${newMinute.toString().padLeft(2, '0')} ${newIsPM ? 'PM' : 'AM'}';
+    }
+  } catch (e) {
+    // If parsing fails, return default
+  }
+  return '10:00 AM';
+}
 
   Future<void> _setStatus(String docId, String title, String newStatus) async {
     try {
@@ -987,8 +1115,6 @@ class _EventProposalsState extends State<EventProposals> {
 
   // ── Helpers ───────────────────────────────────────────────────────
 
-  // ── Helpers ───────────────────────────────────────────────────────
-
   Future<void> _saveAndOpenFile(Map<String, dynamic> data) async {
     try {
       Uint8List bytes = Uint8List(0);
@@ -1002,6 +1128,7 @@ class _EventProposalsState extends State<EventProposals> {
           final ref = FirebaseStorage.instance.refFromURL(url);
           bytes = await ref.getData(50 * 1024 * 1024) ?? Uint8List(0);
         } catch (_) {
+          // ✅ FIXED: Use http.get instead of NetworkAssetBundle
           try {
             final uri = Uri.parse(url);
             final response = await http.get(uri);
@@ -1021,17 +1148,11 @@ class _EventProposalsState extends State<EventProposals> {
       }
 
       if (bytes.isEmpty) {
-        if (_isMounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Empty attachment'), backgroundColor: UpriseColors.error)
-          );
-        }
+        if (_isMounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Empty attachment'), backgroundColor: UpriseColors.error));
         return;
       }
 
-      // ✅ ADD THIS: Show in-app preview dialog (same as Org side!)
-      await _showAttachmentPreview(context, bytes, fileName);
-      
+      await platform_file_utils.saveBytesToTempAndOpen(bytes, fileName);
     } catch (e) {
       if (_isMounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -1040,170 +1161,6 @@ class _EventProposalsState extends State<EventProposals> {
           behavior: SnackBarBehavior.floating,
         ));
       }
-    }
-  }
-
-  // ✅ ADD THIS NEW METHOD - Same as Org side preview!
-  Future<void> _showAttachmentPreview(BuildContext context, Uint8List bytes, String fileName) async {
-    final ext = fileName.contains('.') ? fileName.split('.').last.toLowerCase() : '';
-    final mime = _getMimeType(ext);
-
-    // For text files - show content in dialog
-    if (mime.startsWith('text/')) {
-      final content = utf8.decode(bytes);
-      if (_isMounted) {
-        showDialog(
-          context: context,
-          builder: (_) => AlertDialog(
-            title: Text(fileName),
-            content: SingleChildScrollView(
-              child: Container(
-                width: 500,
-                child: SelectableText(content),
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('Close'),
-              ),
-              TextButton(
-                onPressed: () async {
-                  Navigator.pop(context);
-                  await platform_file_utils.saveBytesToTempAndOpen(bytes, fileName);
-                },
-                child: const Text('Download'),
-              ),
-            ],
-          ),
-        );
-      }
-      return;
-    }
-
-    // For images - show image preview
-    if (mime.startsWith('image/')) {
-      if (_isMounted) {
-        showDialog(
-          context: context,
-          builder: (_) => Dialog(
-            child: Container(
-              width: 500,
-              constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.8),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // Header
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: const BoxDecoration(
-                      border: Border(bottom: BorderSide(color: Color(0xFFE2E6EA))),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(Icons.image, color: UpriseColors.primaryDark),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            fileName,
-                            style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.w600),
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  // Image content
-                  Flexible(
-                    child: InteractiveViewer(
-                      minScale: 0.5,
-                      maxScale: 4.0,
-                      child: Image.memory(bytes),
-                    ),
-                  ),
-                  // Buttons
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: const BoxDecoration(
-                      border: Border(top: BorderSide(color: Color(0xFFE2E6EA))),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      children: [
-                        TextButton(
-                          onPressed: () => Navigator.pop(context),
-                          child: const Text('Close'),
-                        ),
-                        const SizedBox(width: 8),
-                        ElevatedButton.icon(
-                          onPressed: () async {
-                            Navigator.pop(context);
-                            await platform_file_utils.saveBytesToTempAndOpen(bytes, fileName);
-                          },
-                          icon: const Icon(Icons.download, size: 16),
-                          label: const Text('Download'),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: UpriseColors.primaryDark,
-                            foregroundColor: Colors.white,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        );
-      }
-      return;
-    }
-
-    // For PDF and other files - show download option
-    if (_isMounted) {
-      showDialog(
-        context: context,
-        builder: (_) => AlertDialog(
-          title: Text(fileName),
-          content: Text('This file type (${ext.toUpperCase()}) cannot be previewed in the app.'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel'),
-            ),
-            ElevatedButton.icon(
-              onPressed: () async {
-                Navigator.pop(context);
-                await platform_file_utils.saveBytesToTempAndOpen(bytes, fileName);
-              },
-              icon: const Icon(Icons.download, size: 16),
-              label: const Text('Download'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: UpriseColors.primaryDark,
-                foregroundColor: Colors.white,
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-  }
-
-  // ✅ ADD THIS helper method for MIME types
-  String _getMimeType(String ext) {
-    switch (ext) {
-      case 'txt': return 'text/plain';
-      case 'md': return 'text/markdown';
-      case 'json': return 'application/json';
-      case 'html': case 'htm': return 'text/html';
-      case 'png': return 'image/png';
-      case 'jpg': case 'jpeg': return 'image/jpeg';
-      case 'gif': return 'image/gif';
-      case 'pdf': return 'application/pdf';
-      case 'doc': return 'application/msword';
-      case 'docx': return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
-      case 'csv': return 'text/csv';
-      default: return 'application/octet-stream';
     }
   }
 
