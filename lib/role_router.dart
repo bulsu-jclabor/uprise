@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 import 'auth_service.dart';
 import 'screens/web/admin/admin_login.dart';
@@ -8,6 +9,7 @@ import 'screens/web/admin/admin_dashboard.dart';
 import 'package:uprise/screens/web/org/org_dashboard.dart';
 import 'screens/student/student_login.dart';
 import 'screens/student/student_home_screen.dart';
+import 'screens/student/student_change_password_screen.dart';
 
 class RoleRouter extends StatefulWidget {
   const RoleRouter({super.key});
@@ -20,7 +22,6 @@ class _RoleRouterState extends State<RoleRouter> {
   final AuthService _auth = AuthService();
   late Stream<User?> _authStream;
 
-  // ✅ FIX BUG 1: Cache the role future per user so it doesn't re-fire on every rebuild
   String? _cachedUid;
   Future<String?>? _roleFuture;
 
@@ -30,7 +31,6 @@ class _RoleRouterState extends State<RoleRouter> {
     _authStream = _auth.user;
   }
 
-  // Returns a cached future for the same uid, or creates a fresh one if the user changed
   Future<String?> _getRoleFuture(String uid) {
     if (_cachedUid != uid || _roleFuture == null) {
       _cachedUid = uid;
@@ -51,17 +51,15 @@ class _RoleRouterState extends State<RoleRouter> {
 
         if (!snapshot.hasData) {
           debugPrint('🔐 No user logged in');
-          // ✅ Clear cached role when user logs out
           _cachedUid = null;
           _roleFuture = null;
-          if (!kIsWeb) return StudentLogin();
-          return AdminLogin();
+          if (!kIsWeb) return const StudentLogin();
+          return const AdminLogin();
         }
 
         final user = snapshot.data!;
 
         return FutureBuilder<String?>(
-          // ✅ FIX BUG 1: Use cached future — won't re-call Firestore on rebuild
           future: _getRoleFuture(user.uid),
           builder: (context, roleSnapshot) {
             if (roleSnapshot.connectionState == ConnectionState.waiting) {
@@ -77,7 +75,35 @@ class _RoleRouterState extends State<RoleRouter> {
             if (!kIsWeb) {
               // Mobile
               if (role == 'student') {
-                screen = const StudentHomeScreen();
+                screen = FutureBuilder<DocumentSnapshot>(
+                  future: FirebaseFirestore.instance
+                      .collection('students') // ✅ correct collection
+                      .doc(user.uid)
+                      .get(),
+                  builder: (context, userDocSnapshot) {
+                    if (userDocSnapshot.connectionState ==
+                        ConnectionState.waiting) {
+                      return const Scaffold(
+                          body: Center(child: CircularProgressIndicator()));
+                    }
+
+                    if (userDocSnapshot.hasData &&
+                        userDocSnapshot.data!.exists) {
+                      final data = userDocSnapshot.data!.data() as Map<String, dynamic>;
+                      final mustChange = data['mustChangePassword'] ?? false;
+
+                      if (mustChange == true) {
+                        // ✅ First login → Change Password
+                        return const StudentChangePasswordScreen();
+                      } else {
+                        // ✅ Normal flow → Home
+                        return const StudentHomeScreen();
+                      }
+                    } else {
+                      return const StudentHomeScreen();
+                    }
+                  },
+                );
               } else if (role == 'admin') {
                 screen = const WrongPlatformScreen(
                   message: 'Admin accounts are only available on Web.',
@@ -90,15 +116,13 @@ class _RoleRouterState extends State<RoleRouter> {
                   icon: Icons.business,
                 );
               } else {
-                screen = StudentLogin();
+                screen = const StudentLogin();
               }
             } else {
               // Web
               if (role == 'admin') {
                 screen = const AdminDashboard();
               } else if (role == 'org') {
-                // ✅ FIX BUG 3: RoleRouter handles routing — OrgLogin no longer
-                // pushes OrgDashboard manually, so there's only one navigation
                 screen = OrgDashboard();
               } else if (role == 'student') {
                 screen = const WrongPlatformScreen(
@@ -107,7 +131,7 @@ class _RoleRouterState extends State<RoleRouter> {
                   icon: Icons.phone_android,
                 );
               } else {
-                screen = AdminLogin();
+                screen = const AdminLogin();
               }
             }
 
