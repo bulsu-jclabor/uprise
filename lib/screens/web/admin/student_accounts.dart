@@ -1,3 +1,4 @@
+// ignore_for_file: unused_field, duplicate_ignore, use_build_context_synchronously, deprecated_member_use
 import 'dart:io';
 import 'dart:math';
 import 'dart:convert';
@@ -13,6 +14,8 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
 import 'package:share_plus/share_plus.dart';
 import 'package:cross_file/cross_file.dart';
+import 'export_util.dart';
+import 'export_pdf.dart';
 import '../../theme/app_theme.dart';
 import '../../../services/activity_logger.dart' as activity_log;
 
@@ -157,6 +160,7 @@ class StudentAccounts extends StatefulWidget {
   const StudentAccounts({super.key});
 
   @override
+  // ignore: library_private_types_in_public_api
   _StudentAccountsState createState() => _StudentAccountsState();
 }
 
@@ -332,6 +336,13 @@ class _StudentAccountsState extends State<StudentAccounts> {
             searchTerm: _searchController.text.trim(),
           ),
           const SizedBox(width: 10),
+          _ToolbarButton(
+            label: 'Email Queue',
+            icon: Icons.email_outlined,
+            onPressed: _showEmailQueueDialog,
+            outlined: true,
+          ),
+          const SizedBox(width: 10),
           // Batch import
           _ToolbarButton(
             label: 'Batch Import',
@@ -347,6 +358,78 @@ class _StudentAccountsState extends State<StudentAccounts> {
             onPressed: _showManualAddDialog,
           ),
         ],
+      ),
+    );
+  }
+
+  void _showEmailQueueDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: true,
+      barrierColor: Colors.black54,
+      builder: (ctx) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        child: Container(
+          width: 720,
+          padding: const EdgeInsets.all(18),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(children: [
+                const Icon(Icons.email_outlined, size: 20),
+                const SizedBox(width: 10),
+                Expanded(child: Text('Queued Credential Emails', style: GoogleFonts.beVietnamPro(fontSize: 16, fontWeight: FontWeight.w700))),
+                IconButton(icon: const Icon(Icons.close_rounded), onPressed: () => Navigator.pop(ctx)),
+              ]),
+              const SizedBox(height: 8),
+              StreamBuilder<QuerySnapshot>(
+                stream: FirebaseFirestore.instance.collection('email_queue').orderBy('createdAt', descending: false).snapshots(),
+                builder: (c, snap) {
+                  if (snap.connectionState == ConnectionState.waiting) return const Padding(padding: EdgeInsets.all(24), child: Center(child: CircularProgressIndicator()));
+                  if (!snap.hasData || snap.data!.docs.isEmpty) return Padding(padding: const EdgeInsets.all(24), child: Text('No queued emails', style: GoogleFonts.beVietnamPro()));
+                  return ConstrainedBox(
+                    constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.6),
+                    child: ListView.builder(
+                      shrinkWrap: true,
+                      itemCount: snap.data!.docs.length,
+                      itemBuilder: (_, i) {
+                        final doc = snap.data!.docs[i];
+                        final data = doc.data() as Map<String, dynamic>;
+                        return ListTile(
+                          title: Text(data['to_email'] ?? '—', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600)),
+                          subtitle: Text('Student ID: ${data['student_id'] ?? ''} • Attempts: ${data['attempts'] ?? 0}', style: GoogleFonts.beVietnamPro(fontSize: 12)),
+                          trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+                            TextButton(
+                              onPressed: () async {
+                                final sent = await _sendCredentialsEmail(data['to_email'], data['student_id'], data['password']);
+                                if (sent) {
+                                  await doc.reference.delete();
+                                  if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Sent to ${data['to_email']}'), backgroundColor: const Color(0xFF059669)));
+                                } else {
+                                  await doc.reference.update({'attempts': (data['attempts'] ?? 0) + 1, 'updatedAt': FieldValue.serverTimestamp()});
+                                  if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Send failed for ${data['to_email']}, will retry later.'), backgroundColor: const Color(0xFFF59E0B)));
+                                }
+                              },
+                              child: const Text('Retry'),
+                            ),
+                            const SizedBox(width: 8),
+                            TextButton(
+                              onPressed: () async {
+                                await doc.reference.delete();
+                                if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Removed ${data['to_email']} from queue.')));
+                              },
+                              child: const Text('Delete'),
+                            ),
+                          ]),
+                        );
+                      },
+                    ),
+                  );
+                },
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -557,6 +640,7 @@ class _StudentAccountsState extends State<StudentAccounts> {
                     horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
                   color: UpriseColors.primaryDark
+                      // ignore: deprecated_member_use
                       .withOpacity(0.07),
                   borderRadius:
                       BorderRadius.circular(6),
@@ -780,7 +864,7 @@ class _StudentAccountsState extends State<StudentAccounts> {
       builder: (ctx) => Dialog(
         shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(18)),
-        child: Container(
+        child: SizedBox(
           width: 420,
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -801,6 +885,8 @@ class _StudentAccountsState extends State<StudentAccounts> {
                     height: 38,
                     decoration: BoxDecoration(
                       color: Colors.white
+                          // ignore: duplicate_ignore
+                          // ignore: deprecated_member_use
                           .withOpacity(0.15),
                       borderRadius:
                           BorderRadius.circular(10),
@@ -991,7 +1077,7 @@ class _StudentAccountsState extends State<StudentAccounts> {
       builder: (ctx) => Dialog(
         shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(18)),
-        child: Container(
+        child: SizedBox(
           width: 500,
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -1232,12 +1318,10 @@ class _StudentAccountsState extends State<StudentAccounts> {
   ) async {
     final password =
         existingPassword ?? _generatePassword();
-    await FirebaseFirestore.instance
-        .collection('students')
-        .doc(docId)
-        .update({'tempPassword': password});
-    await _sendCredentialsEmail(
-        email, studentId, password);
+        final sent = await _sendCredentialsEmail(email, studentId, password);
+        if (!sent) {
+          await _queueCredentialEmail(email, studentId, password);
+        }
     await activity_log.ActivityLogger.log(
       action:
           'Resent credentials for student: $studentId ($email)',
@@ -1248,8 +1332,8 @@ class _StudentAccountsState extends State<StudentAccounts> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content:
-              Text('Credentials resent to $email'),
-          backgroundColor: const Color(0xFF059669),
+                  Text(sent ? 'Credentials resent to $email.' : 'Credentials queued but sending failed for $email.'),
+          backgroundColor: sent ? const Color(0xFF059669) : const Color(0xFFF59E0B),
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(8)),
@@ -1475,7 +1559,7 @@ class _StudentAccountsState extends State<StudentAccounts> {
         builder: (ctx, setDialogState) => Dialog(
           shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(18)),
-          child: Container(
+          child: SizedBox(
             width: 540,
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -1816,12 +1900,23 @@ class _StudentAccountsState extends State<StudentAccounts> {
                                         'No valid data found. Check column order.');
                                   }
                                   int success = 0,
-                                      failed = 0;
-                                  for (final s
-                                      in students) {
+                                      failed = 0,
+                                      failedEmails = 0;
+                                  for (final s in students) {
                                     try {
-                                      await _createStudentAccount(
-                                          s);
+                                      final cred = await _createStudentAccount(s);
+                                      // send credentials email after creation (non-fatal)
+                                      try {
+                                        final sent = await _sendCredentialsEmail(
+                                            cred['email']!, cred['studentId']!, cred['password']!);
+                                        if (!sent) {
+                                          failedEmails++;
+                                          await _queueCredentialEmail(cred['email']!, cred['studentId']!, cred['password']!);
+                                        }
+                                      } catch (e) {
+                                        failedEmails++;
+                                        debugPrint("⚠️ Failed to send credentials to ${cred['email']}: $e");
+                                      }
                                       success++;
                                     } catch (_) {
                                       failed++;
@@ -1832,7 +1927,7 @@ class _StudentAccountsState extends State<StudentAccounts> {
                                     isUploading =
                                         false;
                                     resultMessage =
-                                        'Import complete: $success created, $failed skipped.';
+                                      'Import complete: $success created, $failed skipped.${failedEmails > 0 ? ' $failedEmails credential emails failed to send.' : ''}';
                                     resultIsError =
                                         failed > 0 &&
                                             success ==
@@ -2283,27 +2378,39 @@ class _StudentAccountsState extends State<StudentAccounts> {
                             : () async {
                                 if (!formKey
                                     .currentState!
-                                    .validate()) return;
+                                    .validate()) {
+                                  return;
+                                }
                                 setDialogState(() {
                                   isCreating = true;
                                   errorMsg = null;
                                 });
                                 try {
-                                  await _createStudentAccount({
-                                    'studentId': idCtrl
-                                        .text
-                                        .trim(),
-                                    'fullName': nameCtrl
-                                        .text
-                                        .trim(),
-                                    'course': course,
-                                    'yearLevel':
-                                        yearLevel,
-                                    'email': emailCtrl
-                                        .text
-                                        .trim()
-                                        .toLowerCase(),
-                                  });
+                                          final cred = await _createStudentAccount({
+                                            'studentId': idCtrl.text.trim(),
+                                            'fullName': nameCtrl.text.trim(),
+                                            'course': course,
+                                            'yearLevel': yearLevel,
+                                            'email': emailCtrl.text.trim().toLowerCase(),
+                                          });
+                                          // send credentials email after creation (manual flow, non-fatal)
+                                          try {
+                                                  final sent = await _sendCredentialsEmail(
+                                                      cred['email']!, cred['studentId']!, cred['password']!);
+                                                  if (!sent) {
+                                                    await _queueCredentialEmail(cred['email']!, cred['studentId']!, cred['password']!);
+                                                    if (mounted) {
+                                                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                                                        content: Text("Account created but sending credentials failed for ${cred['email']}.") ,
+                                                        backgroundColor: const Color(0xFFF59E0B),
+                                                        duration: const Duration(seconds: 4),
+                                                      ));
+                                                    }
+                                                  }
+                                                } catch (e) {
+                                                  await _queueCredentialEmail(cred['email']!, cred['studentId']!, cred['password']!);
+                                                  debugPrint("⚠️ Failed to send credentials to ${cred['email']}: $e");
+                                                }
                                   // Override status if verified
                                   if (status ==
                                       'verified') {
@@ -2415,7 +2522,7 @@ class _StudentAccountsState extends State<StudentAccounts> {
     return 'STU-${List.generate(6, (_) => chars[rng.nextInt(chars.length)]).join()}';
   }
 
-  Future<void> _createStudentAccount(
+  Future<Map<String, String>> _createStudentAccount(
       Map<String, String> student) async {
     final email = student['email']!;
     final studentId = student['studentId']!;
@@ -2463,48 +2570,64 @@ class _StudentAccountsState extends State<StudentAccounts> {
       'uid': cred.user!.uid,
     });
     await secondaryAuth.signOut();
-    await _sendCredentialsEmail(
-        email, studentId, password);
     await activity_log.ActivityLogger.log(
-      action:
-          'Created student account: $studentId ($email)',
+      action: 'Created student account: $studentId ($email)',
       module: 'User Directory',
       severity: 'info',
     );
+    return {'email': email, 'studentId': studentId, 'password': password};
   }
 
-  Future<void> _sendCredentialsEmail(
+  Future<bool> _sendCredentialsEmail(
     String email,
     String studentId,
     String password,
   ) async {
-    try {
-      final response = await http.post(
-        Uri.parse(
-            'https://api.emailjs.com/api/v1.0/email/send'),
-        headers: {
-          'Content-Type': 'application/json',
-          'origin': 'http://localhost',
-        },
-        body: jsonEncode({
-          'service_id': 'service_s3ke8zd',
-          'template_id': 'template_76fn2md',
-          'user_id': 'tmx47wQJmb1uMNUpr',
-          'template_params': {
-            'to_email': email,
-            'student_id': studentId,
-            'password': password,
+    const int maxAttempts = 3;
+    for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        final response = await http.post(
+          Uri.parse('https://api.emailjs.com/api/v1.0/email/send'),
+          headers: {
+            'Content-Type': 'application/json',
+            'origin': 'http://localhost',
           },
-        }),
-      );
-      if (response.statusCode == 200) {
-        debugPrint('✅ Email sent to $email');
-      } else {
-        debugPrint(
-            '❌ EmailJS ${response.statusCode}: ${response.body}');
+          body: jsonEncode({
+            'service_id': 'service_s3ke8zd',
+            'template_id': 'template_76fn2md',
+            'user_id': 'tmx47wQJmb1uMNUpr',
+            'template_params': {
+              'to_email': email,
+              'student_id': studentId,
+              'password': password,
+            },
+          }),
+        );
+        if (response.statusCode == 200) {
+          debugPrint('✅ Email sent to $email (attempt $attempt)');
+          return true;
+        }
+        debugPrint('❌ EmailJS ${response.statusCode}: ${response.body} (attempt $attempt)');
+      } catch (e) {
+        debugPrint('❌ Failed to send email to $email (attempt $attempt): $e');
       }
+      if (attempt < maxAttempts) await Future.delayed(Duration(seconds: attempt));
+    }
+    return false;
+  }
+
+  Future<void> _queueCredentialEmail(String email, String studentId, String password) async {
+    try {
+      await FirebaseFirestore.instance.collection('email_queue').add({
+        'to_email': email,
+        'student_id': studentId,
+        'password': password,
+        'attempts': 0,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+      debugPrint('Queued credential email for $email');
     } catch (e) {
-      debugPrint('❌ Failed to send email: $e');
+      debugPrint('Failed to queue credential email for $email: $e');
     }
   }
 
@@ -2870,9 +2993,8 @@ class _ExportStudentsButton extends StatelessWidget {
         itemBuilder: (_) => [
           _item('csv', Icons.table_chart_rounded,
               'Export as CSV'),
-          _item('json',
-              Icons.data_object_rounded,
-              'Export as JSON'),
+          _item('pdf', Icons.picture_as_pdf_rounded,
+              'Export as PDF'),
         ],
         child: Padding(
           padding: const EdgeInsets.symmetric(
@@ -2955,6 +3077,8 @@ class _ExportStudentsButton extends StatelessWidget {
       }
 
       if (docs.isEmpty) {
+        // ignore: duplicate_ignore
+        // ignore: use_build_context_synchronously
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content:
@@ -2992,33 +3116,37 @@ class _ExportStudentsButton extends StatelessWidget {
         }
         content = buf.toString();
         fileName = 'students_$now.csv';
-      } else {
-        final list = docs.map((doc) {
+        await AdminExportUtil.saveText(
+          content,
+          fileName,
+          mimeType: 'text/csv',
+        );
+      } else if (format == 'pdf') {
+        final rows = docs.map((doc) {
           final d = doc.data();
-          return {
-            'id': doc.id,
-            'studentId': d['studentId'] ?? '',
-            'fullName': d['fullName'] ?? '',
-            'course': d['course'] ?? '',
-            'yearLevel': d['yearLevel'] ?? '',
-            'email': d['email'] ?? '',
-            'status': d['status'] ?? '',
-          };
+          return [
+            d['studentId'] ?? '',
+            d['fullName'] ?? '',
+            d['course'] ?? '',
+            d['yearLevel'] ?? '',
+            d['email'] ?? '',
+            d['status'] ?? '',
+          ].map((value) => value.toString()).toList();
         }).toList();
-        content = const JsonEncoder.withIndent('  ')
-            .convert(list);
-        fileName = 'students_$now.json';
-      }
 
-      if (kIsWeb) {
-        await Share.share(content,
-            subject: fileName);
+        final pdfBytes = await AdminExportPdf.generateTablePdf(
+          title: 'Student Accounts Report',
+          headers: const ['Student ID', 'Full Name', 'Course', 'Year Level', 'Email', 'Status'],
+          rows: rows,
+        );
+
+        await AdminExportUtil.saveBytes(
+          pdfBytes,
+          'students_$now.pdf',
+          mimeType: 'application/pdf',
+        );
       } else {
-        final file = File(
-            '${Directory.systemTemp.path}/$fileName');
-        await file.writeAsString(content);
-        await Share.shareXFiles([XFile(file.path)],
-            subject: fileName);
+        throw UnsupportedError('Unsupported export format: $format');
       }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(

@@ -6,10 +6,47 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
+import 'dart:convert';
 import 'package:file_picker/file_picker.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'dart:io';
 import '../../../services/activity_logger.dart' as activity_log;
+
+String _mimeTypeFromPath(String? path) {
+  if (path == null) return 'image/png';
+  final ext = path.split('.').last.toLowerCase();
+  switch (ext) {
+    case 'jpg':
+    case 'jpeg':
+      return 'image/jpeg';
+    case 'png':
+      return 'image/png';
+    case 'gif':
+      return 'image/gif';
+    case 'bmp':
+      return 'image/bmp';
+    case 'webp':
+      return 'image/webp';
+    default:
+      return 'image/png';
+  }
+}
+
+ImageProvider _imageProviderFromUrl(String url) {
+  if (url.startsWith('data:image')) {
+    final base64Part = url.split(',').last;
+    return MemoryImage(base64Decode(base64Part));
+  }
+  return NetworkImage(url);
+}
+
+Widget _buildImageWidget(String url, {BoxFit fit = BoxFit.cover, Widget? errorWidget}) {
+  return Image(
+    image: _imageProviderFromUrl(url),
+    fit: fit,
+    errorBuilder: (_, __, ___) => errorWidget ?? const SizedBox.shrink(),
+  );
+}
 
 // ─── Color Scheme ────────────────────────────────────────────────────────────
 class OrgColors {
@@ -117,7 +154,7 @@ class _OrgAnnouncementsScreenState extends State<OrgAnnouncementsScreen> {
       for (final attachment in announcement.attachments) {
         try { await FirebaseStorage.instance.refFromURL(attachment.url).delete(); } catch (_) {}
       }
-      if (announcement.imageUrl != null && announcement.imageUrl!.isNotEmpty) {
+      if (announcement.imageUrl != null && announcement.imageUrl!.isNotEmpty && !announcement.imageUrl!.startsWith('data:image')) {
         try { await FirebaseStorage.instance.refFromURL(announcement.imageUrl!).delete(); } catch (_) {}
       }
       await FirebaseFirestore.instance.collection('announcements').doc(announcement.id).delete();
@@ -624,22 +661,17 @@ class _AnnouncementSheetState extends State<_AnnouncementSheet> {
     final result = await FilePicker.platform.pickFiles(
       type: FileType.image,
       allowMultiple: false,
+      withData: true,
     );
     if (result == null || result.files.isEmpty) return;
     setState(() => _isUploadingImage = true);
     try {
       final file = result.files.first;
-      final fileName = '${DateTime.now().millisecondsSinceEpoch}_${file.name}';
-      final ref = FirebaseStorage.instance
-          .ref()
-          .child('announcements/${widget.orgId}/images/$fileName');
-      if (file.bytes != null) {
-        await ref.putData(file.bytes!);
-      } else if (file.path != null) {
-        await ref.putFile(File(file.path!));
-      }
-      final url = await ref.getDownloadURL();
-      setState(() => _imageUrl = url);
+      final bytes = file.bytes;
+      if (bytes == null) throw 'Image bytes not available';
+      final mimeType = _mimeTypeFromPath(file.path);
+      final uri = 'data:$mimeType;base64,${base64Encode(bytes)}';
+      setState(() => _imageUrl = uri);
     } catch (e) {
       _showError('Image upload failed: $e');
     } finally {

@@ -1,18 +1,26 @@
-import 'dart:io';
+// ignore_for_file: avoid_web_libraries_in_flutter, deprecated_member_use, library_private_types_in_public_api, use_build_context_synchronously, unused_element_parameter, prefer_final_fields
+
 import 'dart:math';
 import 'dart:convert';
+import 'dart:html' as html; // for web download
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'package:firebase_storage/firebase_storage.dart';
 import 'package:http/http.dart' as http;
+import 'package:file_picker/file_picker.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
-import 'package:share_plus/share_plus.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
 import '../../theme/app_theme.dart';
+
+// ============ GLOBAL CONTEXT FOR SNACKBAR ============
+final GlobalKey<ScaffoldMessengerState> globalMessengerKey = GlobalKey<ScaffoldMessengerState>();
+BuildContext? globalContext;
 
 // ============ ACTIVITY LOGGER ============
 class ActivityLogger {
@@ -53,7 +61,6 @@ class Officer {
       );
 }
 
-/// Represents a faculty adviser attached to an organization
 class Adviser {
   final String name;
   final String title;
@@ -95,7 +102,6 @@ class Organization {
   final String shortName;
   final String type;
   final String description;
-  // Legacy single-adviser fields (kept for backward compat display)
   final String adviserName;
   final String adviserTitle;
   final String adviserEmail;
@@ -106,7 +112,6 @@ class Organization {
   final DateTime? createdAt;
   final List<String> categories;
   final List<Officer> officers;
-  // Multi-adviser list (primary data source going forward)
   final List<Adviser> advisers;
 
   Organization({
@@ -131,15 +136,7 @@ class Organization {
 
 // ============ SHARED DESIGN TOKENS ============
 class _DS {
-  static const double xs = 4;
-  static const double sm = 8;
-  static const double md = 16;
-  static const double lg = 24;
-  static const double xl = 32;
-
   static const double radiusSm = 8;
-  static const double radiusMd = 12;
-  static const double radiusLg = 16;
   static const double radiusPill = 100;
 
   static final cardShadow = [
@@ -147,14 +144,6 @@ class _DS {
       color: Colors.black.withOpacity(0.06),
       blurRadius: 12,
       offset: const Offset(0, 4),
-    ),
-  ];
-
-  static final modalShadow = [
-    BoxShadow(
-      color: Colors.black.withOpacity(0.18),
-      blurRadius: 40,
-      offset: const Offset(0, 16),
     ),
   ];
 
@@ -189,7 +178,6 @@ class _DS {
 }
 
 // ============ SHARED WIDGETS ============
-
 Widget _sectionLabel(String text, {IconData? icon}) {
   return Padding(
     padding: const EdgeInsets.only(bottom: 12),
@@ -291,11 +279,17 @@ class _OrganizationManagementState extends State<OrganizationManagement> {
   Organization? _selectedOrganization;
 
   @override
+  void initState() {
+    super.initState();
+    globalContext = context;
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFFBFCFE),
       body: _selectedOrganization != null
-          ? OrganizationDetailPage(
+          ? _OrganizationDetailPage(
               organization: _selectedOrganization!,
               onBack: () => setState(() => _selectedOrganization = null),
             )
@@ -307,7 +301,6 @@ class _OrganizationManagementState extends State<OrganizationManagement> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // ── Stats row replaces the old header ──
         _buildStatsRow(),
         _buildToolbar(),
         const SizedBox(height: 16),
@@ -317,7 +310,6 @@ class _OrganizationManagementState extends State<OrganizationManagement> {
     );
   }
 
-  // ── Stats at the very top (no separate header) ──
   Widget _buildStatsRow() {
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance.collection('organizations').snapshots(),
@@ -326,7 +318,8 @@ class _OrganizationManagementState extends State<OrganizationManagement> {
         if (snapshot.hasData) {
           total = snapshot.data!.docs.length;
           for (var doc in snapshot.data!.docs) {
-            final status = (doc.data() as Map)['status'] ?? 'active';
+            final data = doc.data() as Map<String, dynamic>? ?? {};
+            final status = data['status'] ?? 'active';
             switch (status) {
               case 'active':
                 active++;
@@ -453,7 +446,6 @@ class _OrganizationManagementState extends State<OrganizationManagement> {
           docs = docs.where((d) {
             final data = d.data() as Map;
             final adviserMatch = (data['adviserName'] ?? '').toString().toLowerCase().contains(term);
-            // Also search in multi-adviser list
             final advisers = (data['advisers'] as List?) ?? [];
             final multiAdviserMatch = advisers.any((a) =>
                 (a['name'] ?? '').toString().toLowerCase().contains(term));
@@ -467,7 +459,7 @@ class _OrganizationManagementState extends State<OrganizationManagement> {
         final safePage = _currentPage.clamp(1, totalPages);
         final start = (safePage - 1) * _pageSize;
         final end = (start + _pageSize).clamp(0, docs.length);
-        final pageDocs = docs.isEmpty ? <QueryDocumentSnapshot>[] : docs.sublist(start, end);
+        final pageDocs = docs.isEmpty ? [] : docs.sublist(start, end);
 
         return Container(
           margin: const EdgeInsets.symmetric(horizontal: 28),
@@ -479,7 +471,6 @@ class _OrganizationManagementState extends State<OrganizationManagement> {
           ),
           child: Column(
             children: [
-              // ── Table toolbar row with "Create Organization" button ──
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 13),
                 decoration: const BoxDecoration(
@@ -496,7 +487,6 @@ class _OrganizationManagementState extends State<OrganizationManagement> {
                   Expanded(flex: 1, child: Align(alignment: Alignment.centerRight, child: _headerCell('ACTIONS'))),
                 ]),
               ),
-              // Table body
               Expanded(
                 child: docs.isEmpty
                     ? _emptyState()
@@ -509,7 +499,6 @@ class _OrganizationManagementState extends State<OrganizationManagement> {
                         },
                       ),
               ),
-              // Footer
               _buildFooter(docs.length, totalPages, start, end),
             ],
           ),
@@ -554,13 +543,11 @@ class _OrganizationManagementState extends State<OrganizationManagement> {
   }
 
   Organization _mapToOrg(String id, Map<String, dynamic> data) {
-    // Parse multi-adviser list; fall back to legacy single adviser
     final rawAdvisers = data['advisers'] as List?;
     List<Adviser> advisers = rawAdvisers != null
         ? rawAdvisers.map((e) => Adviser.fromMap(e as Map<String, dynamic>)).toList()
         : [];
 
-    // If no multi-adviser data but legacy fields exist, synthesise one
     if (advisers.isEmpty && (data['adviserName'] ?? '').toString().isNotEmpty) {
       advisers = [
         Adviser(
@@ -593,7 +580,6 @@ class _OrganizationManagementState extends State<OrganizationManagement> {
   }
 
   Widget _buildOrganizationRow(Organization org, bool isLast) {
-    // Build adviser summary string
     final adviserSummary = org.advisers.isEmpty
         ? 'No Adviser'
         : org.advisers.map((a) => a.name).join(', ');
@@ -612,7 +598,6 @@ class _OrganizationManagementState extends State<OrganizationManagement> {
         ),
         child: Row(
           children: [
-            // Organization column
             Expanded(
               flex: 3,
               child: Row(
@@ -643,7 +628,6 @@ class _OrganizationManagementState extends State<OrganizationManagement> {
                 ],
               ),
             ),
-            // Advisers column
             Expanded(
               flex: 2,
               child: Column(
@@ -663,7 +647,6 @@ class _OrganizationManagementState extends State<OrganizationManagement> {
                 ],
               ),
             ),
-            // Type column
             Expanded(
               flex: 1,
               child: Text(
@@ -672,9 +655,7 @@ class _OrganizationManagementState extends State<OrganizationManagement> {
                 overflow: TextOverflow.ellipsis,
               ),
             ),
-            // Status column
             Expanded(flex: 1, child: _statusBadge(org.status)),
-            // Date column
             Expanded(
               flex: 1,
               child: Text(
@@ -682,7 +663,6 @@ class _OrganizationManagementState extends State<OrganizationManagement> {
                 style: GoogleFonts.beVietnamPro(fontSize: 12, color: UpriseColors.darkGray),
               ),
             ),
-            // Actions column
             Expanded(
               flex: 1,
               child: Row(
@@ -769,14 +749,12 @@ class _OrganizationManagementState extends State<OrganizationManagement> {
     );
   }
 
-  // ── Dialogs ──
-
   void _showCreateOrganizationDialog() {
     showDialog(
       context: context,
       barrierDismissible: false,
       barrierColor: Colors.black54,
-      builder: (ctx) => CreateOrganizationDialog(onCreated: () => setState(() {})),
+      builder: (ctx) => _CreateOrganizationDialog(onCreated: () => setState(() {})),
     );
   }
 
@@ -785,7 +763,7 @@ class _OrganizationManagementState extends State<OrganizationManagement> {
       context: context,
       barrierDismissible: false,
       barrierColor: Colors.black54,
-      builder: (ctx) => EditOrganizationDialog(organization: org, onUpdated: () => setState(() {})),
+      builder: (ctx) => _EditOrganizationDialog(organization: org, onUpdated: () => setState(() {})),
     );
   }
 
@@ -825,8 +803,7 @@ class _OrganizationManagementState extends State<OrganizationManagement> {
   String _formatDate(DateTime d) => DateFormat('MMM d, yyyy').format(d);
 }
 
-// ============ SMALL REUSABLE WIDGETS ============
-
+// ============ STAT CARD ============
 class _StatCard extends StatelessWidget {
   final String label, value;
   final IconData icon;
@@ -875,6 +852,7 @@ class _StatCard extends StatelessWidget {
   }
 }
 
+// ============ FILTER DROPDOWN ============
 class _FilterDropdown extends StatelessWidget {
   final String value;
   final List<String> items;
@@ -918,9 +896,151 @@ class _FilterDropdown extends StatelessWidget {
   }
 }
 
+// ============ EXPORT BUTTON WITH DOWNLOAD (CSV & PDF) ============
 class _ExportButton extends StatelessWidget {
   final String statusFilter, typeFilter, searchTerm;
   const _ExportButton({required this.statusFilter, required this.typeFilter, required this.searchTerm});
+
+  Future<List<QueryDocumentSnapshot>> _getFilteredDocs() async {
+    final snapshot = await FirebaseFirestore.instance
+        .collection('organizations')
+        .orderBy('createdAt', descending: true)
+        .get();
+    var docs = snapshot.docs;
+
+    if (statusFilter != 'All') {
+      docs = docs.where((d) {
+        final data = d.data() as Map<String, dynamic>? ?? {};
+        return data['status'] == statusFilter.toLowerCase();
+      }).toList();
+    }
+    if (typeFilter != 'All Types') {
+      docs = docs.where((d) {
+        final data = d.data() as Map<String, dynamic>? ?? {};
+        return data['type'] == typeFilter;
+      }).toList();
+    }
+    if (searchTerm.isNotEmpty) {
+      docs = docs.where((d) {
+        final data = d.data() as Map<String, dynamic>? ?? {};
+        return (data['name'] ?? '').toString().toLowerCase().contains(searchTerm) ||
+            (data['adviserName'] ?? '').toString().toLowerCase().contains(searchTerm);
+      }).toList();
+    }
+    return docs;
+  }
+
+  Future<void> _exportCSV(BuildContext context, List<QueryDocumentSnapshot> docs) async {
+    final buffer = StringBuffer();
+    buffer.writeln('Organization Name,Short Name,Type,Status,Adviser(s),Org Email,Description,Date Created');
+    for (final doc in docs) {
+      final d = doc.data() as Map<String, dynamic>? ?? {};
+      final date = (d['createdAt'] as Timestamp?)?.toDate();
+      final dateStr = date != null ? DateFormat('yyyy-MM-dd').format(date) : '';
+      String csvEscape(String s) => '"${s.replaceAll('"', '""')}"';
+      final advisers = (d['advisers'] as List?)
+              ?.map((a) => (a['name'] ?? '').toString())
+              .join('; ') ??
+          (d['adviserName'] ?? '');
+      buffer.writeln([
+        csvEscape(d['name'] ?? ''),
+        csvEscape(d['shortName'] ?? ''),
+        csvEscape(d['type'] ?? ''),
+        csvEscape(d['status'] ?? ''),
+        csvEscape(advisers),
+        csvEscape(d['orgEmail'] ?? ''),
+        csvEscape(d['description'] ?? ''),
+        csvEscape(dateStr),
+      ].join(','));
+    }
+    final content = buffer.toString();
+    final bytes = utf8.encode(content);
+    final fileName = 'organizations_${DateFormat('yyyy-MM-dd').format(DateTime.now())}.csv';
+    await _FileDownloader.downloadBytes(context, bytes, fileName, 'text/csv');
+  }
+
+  Future<void> _exportPDF(BuildContext context, List<QueryDocumentSnapshot> docs) async {
+    final pdfBytes = await _generatePdf(docs, 'Organizations Export');
+    final fileName = 'organizations_${DateFormat('yyyy-MM-dd').format(DateTime.now())}.pdf';
+    await _FileDownloader.downloadBytes(context, pdfBytes, fileName, 'application/pdf');
+  }
+
+  Future<Uint8List> _generatePdf(List<QueryDocumentSnapshot> docs, String title) async {
+    final pdf = pw.Document();
+
+    // Load logos from assets (you must place these images in your assets folder)
+    final bsuLogo = await _loadImageFromAsset('assets/images/bsu_logo.png');
+    final cictLogo = await _loadImageFromAsset('assets/images/cict_logo.png');
+    final upriseLogo = await _loadImageFromAsset('assets/images/logo.png');
+
+    pdf.addPage(
+      pw.MultiPage(
+        pageFormat: PdfPageFormat.a4,
+        margin: const pw.EdgeInsets.all(32),
+        header: (context) {
+          return pw.Container(
+            padding: const pw.EdgeInsets.only(bottom: 20),
+            child: pw.Row(
+              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+              children: [
+                if (bsuLogo != null) pw.Image(bsuLogo, height: 40),
+                if (cictLogo != null) pw.Image(cictLogo, height: 40),
+                if (upriseLogo != null) pw.Image(upriseLogo, height: 30),
+              ],
+            ),
+          );
+        },
+        footer: (context) {
+          return pw.Container(
+            alignment: pw.Alignment.centerRight,
+            margin: const pw.EdgeInsets.only(top: 20),
+            child: pw.Text('Page ${context.pageNumber}', style: pw.TextStyle(fontSize: 10, color: PdfColors.grey)),
+          );
+        },
+        build: (context) => [
+          pw.Header(level: 0, title: 'Organizations Report'),
+          pw.SizedBox(height: 10),
+          pw.Text('Bulacan State University - College of Information and Communications Technology (CICT)',
+              style: pw.TextStyle(fontSize: 12, fontStyle: pw.FontStyle.italic)),
+          pw.Text('Generated: ${DateFormat('yyyy-MM-dd HH:mm').format(DateTime.now())}',
+              style: pw.TextStyle(fontSize: 10, color: PdfColors.grey)),
+          pw.Divider(),
+          pw.SizedBox(height: 20),
+          pw.TableHelper.fromTextArray(
+            headers: ['Organization', 'Acronym', 'Type', 'Status', 'Adviser(s)'],
+            data: docs.map((doc) {
+              final d = doc.data() as Map<String, dynamic>? ?? {};
+              final advisers = (d['advisers'] as List?)
+                      ?.map((a) => (a['name'] ?? '').toString())
+                      .join(', ') ??
+                  (d['adviserName'] ?? 'No Adviser');
+              return [
+                d['name'] ?? '',
+                d['shortName'] ?? '',
+                d['type'] ?? '',
+                d['status']?.toString().toUpperCase() ?? '',
+                advisers,
+              ];
+            }).toList(),
+            headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+            cellAlignment: pw.Alignment.centerLeft,
+            headerDecoration: const pw.BoxDecoration(color: PdfColors.grey300),
+          ),
+        ],
+      ),
+    );
+    return await pdf.save();
+  }
+
+  Future<pw.MemoryImage?> _loadImageFromAsset(String path) async {
+    try {
+      final byteData = await rootBundle.load(path);
+      return pw.MemoryImage(byteData.buffer.asUint8List());
+    } catch (e) {
+      debugPrint('Could not load image: $path');
+      return null;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -932,10 +1052,42 @@ class _ExportButton extends StatelessWidget {
         border: Border.all(color: const Color(0xFFE2E6EA)),
       ),
       child: PopupMenuButton<String>(
-        onSelected: (choice) => _doExport(context, choice),
+        onSelected: (choice) async {
+          final docs = await _getFilteredDocs();
+          if (docs.isEmpty) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: const Text('No data to export.'),
+                backgroundColor: UpriseColors.error,
+                behavior: SnackBarBehavior.floating,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+            );
+            return;
+          }
+          if (choice == 'csv') {
+            await _exportCSV(context, docs);
+          } else if (choice == 'pdf') {
+            await _exportPDF(context, docs);
+          }
+        },
         itemBuilder: (_) => [
-          _exportMenuItem('csv', Icons.table_chart_rounded, 'Export as CSV'),
-          _exportMenuItem('json', Icons.data_object_rounded, 'Export as JSON'),
+          PopupMenuItem(
+            value: 'csv',
+            child: Row(children: [
+              const Icon(Icons.table_chart_rounded, size: 16, color: Color(0xFF64748B)),
+              const SizedBox(width: 10),
+              Text('Export as CSV', style: GoogleFonts.beVietnamPro(fontSize: 13)),
+            ]),
+          ),
+          PopupMenuItem(
+            value: 'pdf',
+            child: Row(children: [
+              const Icon(Icons.picture_as_pdf_rounded, size: 16, color: Color(0xFF64748B)),
+              const SizedBox(width: 10),
+              Text('Export as PDF', style: GoogleFonts.beVietnamPro(fontSize: 13)),
+            ]),
+          ),
         ],
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 14),
@@ -952,122 +1104,26 @@ class _ExportButton extends StatelessWidget {
       ),
     );
   }
+}
 
-  PopupMenuItem<String> _exportMenuItem(String value, IconData icon, String label) {
-    return PopupMenuItem(
-      value: value,
-      child: Row(children: [
-        Icon(icon, size: 16, color: const Color(0xFF64748B)),
-        const SizedBox(width: 10),
-        Text(label, style: GoogleFonts.beVietnamPro(fontSize: 13)),
-      ]),
-    );
-  }
-
-  Future<void> _doExport(BuildContext context, String format) async {
-    try {
-      final snapshot = await FirebaseFirestore.instance
-          .collection('organizations')
-          .orderBy('createdAt', descending: true)
-          .get();
-      var docs = snapshot.docs;
-
-      if (statusFilter != 'All') {
-        docs = docs.where((d) => (d.data())['status'] == statusFilter.toLowerCase()).toList();
-      }
-      if (typeFilter != 'All Types') {
-        docs = docs.where((d) => (d.data())['type'] == typeFilter).toList();
-      }
-      if (searchTerm.isNotEmpty) {
-        docs = docs.where((d) {
-          final data = d.data();
-          return (data['name'] ?? '').toString().toLowerCase().contains(searchTerm) ||
-              (data['adviserName'] ?? '').toString().toLowerCase().contains(searchTerm);
-        }).toList();
-      }
-
-      if (docs.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text('No data to export.'),
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-          ),
-        );
-        return;
-      }
-
-      String content;
-      String fileName;
-      final now = DateFormat('yyyy-MM-dd').format(DateTime.now());
-
-      if (format == 'csv') {
-        final buffer = StringBuffer();
-        buffer.writeln('Organization Name,Short Name,Type,Status,Adviser(s),Org Email,Description,Date Created');
-        for (final doc in docs) {
-          final d = doc.data();
-          final date = (d['createdAt'] as Timestamp?)?.toDate();
-          final dateStr = date != null ? DateFormat('yyyy-MM-dd').format(date) : '';
-          String csvEscape(String s) => '"${s.replaceAll('"', '""')}"';
-          final advisers = (d['advisers'] as List?)
-                  ?.map((a) => (a['name'] ?? '').toString())
-                  .join('; ') ??
-              (d['adviserName'] ?? '');
-          buffer.writeln([
-            csvEscape(d['name'] ?? ''),
-            csvEscape(d['shortName'] ?? ''),
-            csvEscape(d['type'] ?? ''),
-            csvEscape(d['status'] ?? ''),
-            csvEscape(advisers),
-            csvEscape(d['orgEmail'] ?? ''),
-            csvEscape(d['description'] ?? ''),
-            csvEscape(dateStr),
-          ].join(','));
-        }
-        content = buffer.toString();
-        fileName = 'organizations_$now.csv';
-      } else {
-        final list = docs.map((doc) {
-          final d = doc.data();
-          final date = (d['createdAt'] as Timestamp?)?.toDate();
-          return {
-            'id': doc.id,
-            'name': d['name'] ?? '',
-            'shortName': d['shortName'] ?? '',
-            'type': d['type'] ?? '',
-            'status': d['status'] ?? '',
-            'advisers': d['advisers'] ?? [],
-            'orgEmail': d['orgEmail'] ?? '',
-            'description': d['description'] ?? '',
-            'createdAt': date?.toIso8601String() ?? '',
-          };
-        }).toList();
-        content = const JsonEncoder.withIndent('  ').convert(list);
-        fileName = 'organizations_$now.json';
-      }
-
-      if (kIsWeb) {
-        // Web: share as text (no File system access)
-        await Share.share(content, subject: fileName);
-      } else {
-        final tempDir = Directory.systemTemp;
-        final file = File('${tempDir.path}/$fileName');
-        await file.writeAsString(content);
-        await Share.shareXFiles([XFile(file.path)], subject: fileName);
-      }
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Export failed: $e'),
-          backgroundColor: UpriseColors.error,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-        ),
-      );
+// ============ FILE DOWNLOADER (Web & Mobile) ============
+class _FileDownloader {
+  static Future<void> downloadBytes(BuildContext context, List<int> bytes, String fileName, String mimeType) async {
+    if (kIsWeb) {
+      // Web: use anchor download
+      final blob = html.Blob([bytes], mimeType);
+      final url = html.Url.createObjectUrlFromBlob(blob);
+      html.AnchorElement(href: url)
+        ..setAttribute('download', fileName)
+        ..click();
+      html.Url.revokeObjectUrl(url);
+    } else {
+      throw Exception('Download is only supported on web for this widget.');
     }
   }
 }
 
+// ============ PRIMARY BUTTON ============
 class _PrimaryButton extends StatelessWidget {
   final String label;
   final IconData icon;
@@ -1091,6 +1147,7 @@ class _PrimaryButton extends StatelessWidget {
   }
 }
 
+// ============ ORGANIZATION AVATAR ============
 class _OrgAvatar extends StatelessWidget {
   final String logoUrl, name;
   const _OrgAvatar({required this.logoUrl, required this.name});
@@ -1108,7 +1165,13 @@ class _OrgAvatar extends StatelessWidget {
       child: logoUrl.isNotEmpty
           ? ClipRRect(
               borderRadius: BorderRadius.circular(10),
-              child: Image.network(logoUrl, fit: BoxFit.cover, errorBuilder: (_, __, ___) => _initials()),
+              child: logoUrl.startsWith('data:')
+                  ? Image.memory(
+                      base64Decode(logoUrl.split(',').last),
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => _initials(),
+                    )
+                  : Image.network(logoUrl, fit: BoxFit.cover, errorBuilder: (_, __, ___) => _initials()),
             )
           : _initials(),
     );
@@ -1126,6 +1189,7 @@ class _OrgAvatar extends StatelessWidget {
   }
 }
 
+// ============ ACTION ICON BUTTON ============
 class _ActionIconButton extends StatelessWidget {
   final IconData icon;
   final String tooltip;
@@ -1149,6 +1213,7 @@ class _ActionIconButton extends StatelessWidget {
   }
 }
 
+// ============ PAGE BUTTONS ============
 class _PageButton extends StatelessWidget {
   final IconData icon;
   final bool enabled;
@@ -1277,7 +1342,6 @@ class _ConfirmDialog extends StatelessWidget {
 }
 
 // ============ ADVISER FORM WIDGET ============
-/// Inline form for entering one adviser's details.
 class _AdviserForm extends StatelessWidget {
   final Adviser adviser;
   final int index;
@@ -1377,27 +1441,26 @@ class _AdviserForm extends StatelessWidget {
 }
 
 // ============ CREATE ORGANIZATION DIALOG ============
-class CreateOrganizationDialog extends StatefulWidget {
+class _CreateOrganizationDialog extends StatefulWidget {
   final VoidCallback onCreated;
-  const CreateOrganizationDialog({super.key, required this.onCreated});
+  const _CreateOrganizationDialog({super.key, required this.onCreated});
 
   @override
   _CreateOrganizationDialogState createState() => _CreateOrganizationDialogState();
 }
 
-class _CreateOrganizationDialogState extends State<CreateOrganizationDialog> {
+class _CreateOrganizationDialogState extends State<_CreateOrganizationDialog> {
   final _formKey = GlobalKey<FormState>();
   int _step = 0;
 
-  // Step 1 — Basic Info
   final _nameCtrl = TextEditingController();
   final _shortNameCtrl = TextEditingController();
   final _orgEmailCtrl = TextEditingController();
   final _descCtrl = TextEditingController();
   String _type = 'Academic Organization';
-  XFile? _logoXFile; // Use XFile for cross-platform compatibility
+  XFile? _logoXFile;
+  Uint8List? _logoBytes;
 
-  // Step 2 — Advisers (supports multiple)
   List<Adviser> _advisers = [Adviser(name: '', title: '', email: '', phone: '')];
 
   bool _isLoading = false;
@@ -1533,10 +1596,10 @@ class _CreateOrganizationDialogState extends State<CreateOrganizationDialog> {
               borderRadius: BorderRadius.circular(16),
               border: Border.all(color: const Color(0xFFE2E6EA), width: 1.5),
             ),
-            child: _logoXFile != null
+            child: _logoBytes != null
                 ? ClipRRect(
                     borderRadius: BorderRadius.circular(15),
-                    child: Image.network(_logoXFile!.path, fit: BoxFit.cover),
+                    child: Image.memory(_logoBytes!, fit: BoxFit.cover),
                   )
                 : Column(mainAxisAlignment: MainAxisAlignment.center, children: [
                     Icon(Icons.add_photo_alternate_rounded, size: 32, color: UpriseColors.darkGray),
@@ -1624,7 +1687,6 @@ class _CreateOrganizationDialogState extends State<CreateOrganizationDialog> {
       ),
       const SizedBox(height: 16),
 
-      // Render adviser forms
       ..._advisers.asMap().entries.map((entry) {
         final idx = entry.key;
         final adviser = entry.value;
@@ -1637,7 +1699,6 @@ class _CreateOrganizationDialogState extends State<CreateOrganizationDialog> {
         );
       }),
 
-      // "Add another adviser" button — max 2
       if (_advisers.length < 2)
         TextButton.icon(
           onPressed: () => setState(() => _advisers.add(Adviser(name: '', title: '', email: '', phone: ''))),
@@ -1707,12 +1768,68 @@ class _CreateOrganizationDialogState extends State<CreateOrganizationDialog> {
   }
 
   Future<void> _pickImage() async {
+    if (kIsWeb) {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.image,
+        allowMultiple: false,
+        withData: true,
+      );
+      if (result != null && result.files.isNotEmpty) {
+        final file = result.files.single;
+        final bytes = file.bytes;
+        if (bytes != null) {
+          setState(() {
+            _logoXFile = XFile.fromData(bytes, name: file.name);
+            _logoBytes = bytes;
+          });
+        }
+      }
+      return;
+    }
+
     final picker = ImagePicker();
-    final picked = await picker.pickImage(source: ImageSource.gallery);
-    if (picked != null) setState(() => _logoXFile = picked);
+    final picked = await picker.pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 70,
+      maxWidth: 500,
+      maxHeight: 500,
+    );
+    if (picked != null) {
+      final bytes = await picked.readAsBytes();
+      setState(() {
+        _logoXFile = picked;
+        _logoBytes = bytes;
+      });
+    }
   }
 
-  /// Check if an org with the same name OR short name already exists
+  String _createLogoDataUri(Uint8List bytes, String fileName) {
+    final lowerName = fileName.toLowerCase();
+    String mimeType;
+
+    if (bytes.length >= 4 && bytes[0] == 0x89 && bytes[1] == 0x50 && bytes[2] == 0x4E && bytes[3] == 0x47) {
+      mimeType = 'image/png';
+    } else if (bytes.length >= 3 && bytes[0] == 0xFF && bytes[1] == 0xD8 && bytes[2] == 0xFF) {
+      mimeType = 'image/jpeg';
+    } else if (bytes.length >= 3 && bytes[0] == 0x47 && bytes[1] == 0x49 && bytes[2] == 0x46) {
+      mimeType = 'image/gif';
+    } else if (bytes.length >= 12 && bytes[0] == 0x52 && bytes[1] == 0x49 && bytes[2] == 0x46 && bytes[3] == 0x46 &&
+        bytes[8] == 0x57 && bytes[9] == 0x45 && bytes[10] == 0x42 && bytes[11] == 0x50) {
+      mimeType = 'image/webp';
+    } else if (lowerName.endsWith('.png')) {
+      mimeType = 'image/png';
+    } else if (lowerName.endsWith('.gif')) {
+      mimeType = 'image/gif';
+    } else if (lowerName.endsWith('.webp')) {
+      mimeType = 'image/webp';
+    } else {
+      mimeType = 'image/jpeg';
+    }
+
+    final base64Data = base64Encode(bytes);
+    return 'data:$mimeType;base64,$base64Data';
+  }
+
   Future<String?> _checkDuplicateOrg(String name, String shortName) async {
     final byNameFuture = FirebaseFirestore.instance
         .collection('organizations')
@@ -1749,21 +1866,6 @@ class _CreateOrganizationDialogState extends State<CreateOrganizationDialog> {
     return 'UPR-${List.generate(6, (_) => chars[random.nextInt(chars.length)]).join()}';
   }
 
-  /// Web-safe logo upload using XFile.readAsBytes()
-  Future<String?> _uploadLogo(XFile? xFile, String orgId) async {
-    if (xFile == null) return null;
-    try {
-      final ref = FirebaseStorage.instance.ref().child('organizations/$orgId/logo.png');
-      final bytes = await xFile.readAsBytes();
-      await ref.putData(bytes, SettableMetadata(contentType: 'image/png'));
-      return await ref.getDownloadURL();
-    } catch (e) {
-      debugPrint('Logo upload error: $e');
-      return null;
-    }
-  }
-
-  /// Send login credentials to the organization email address
   Future<bool> _sendCredentialsEmail({
     required String toEmail,
     required String orgName,
@@ -1812,18 +1914,15 @@ class _CreateOrganizationDialogState extends State<CreateOrganizationDialog> {
     final orgDesc = _descCtrl.text.trim();
     final orgEmail = _orgEmailCtrl.text.trim().toLowerCase();
 
-    // Filter out empty adviser rows (only keep rows with at least a name)
     final validAdvisers = _advisers.where((a) => a.name.trim().isNotEmpty).toList();
 
     try {
-      // ── Duplicate org check ──
       final dupError = await _checkDuplicateOrg(orgName, orgShortName);
       if (dupError != null) {
         _showError(dupError);
         return;
       }
 
-      // ── Org portal login email check ──
       if (orgEmail.isEmpty) {
         _showError('Organization email is required for portal login.');
         return;
@@ -1833,15 +1932,15 @@ class _CreateOrganizationDialogState extends State<CreateOrganizationDialog> {
         return;
       }
 
-      // ── Create org document first to get the ID ──
+      String? logoUrl;
+      if (_logoBytes != null) {
+        logoUrl = _createLogoDataUri(_logoBytes!, _logoXFile?.name ?? 'logo');
+      }
+
       final orgRef = FirebaseFirestore.instance.collection('organizations').doc();
       final orgId = orgRef.id;
-
-      final logoUrl = await _uploadLogo(_logoXFile, orgId);
-
       final batch = FirebaseFirestore.instance.batch();
 
-      // ── Create Firebase Auth account and user doc for the organization portal ──
       final List<Map<String, dynamic>> adviserMaps = validAdvisers
           .map((a) => {
                 'name': a.name,
@@ -1898,8 +1997,6 @@ class _CreateOrganizationDialogState extends State<CreateOrganizationDialog> {
 
       await secondaryAuth.signOut();
 
-      // ── Set org document ──
-      // Primary adviser fields use the first adviser for backwards compat
       final primaryAdviser = validAdvisers.isNotEmpty ? validAdvisers.first : Adviser(name: '', title: '', email: '', phone: '');
 
       batch.set(orgRef, {
@@ -1911,13 +2008,11 @@ class _CreateOrganizationDialogState extends State<CreateOrganizationDialog> {
         'description': orgDesc,
         'orgEmail': orgEmail,
         'logoUrl': logoUrl ?? '',
-        // Legacy single-adviser fields (backwards compat)
         'adviserId': '',
         'adviserName': primaryAdviser.name,
         'adviserEmail': primaryAdviser.email.trim().toLowerCase(),
         'adviserTitle': primaryAdviser.title,
         'adviserPhone': primaryAdviser.phone,
-        // Multi-adviser list
         'advisers': adviserMaps,
         'categories': [],
         'status': 'active',
@@ -1928,7 +2023,6 @@ class _CreateOrganizationDialogState extends State<CreateOrganizationDialog> {
 
       await batch.commit();
 
-      // ── Send login credentials asynchronously so org creation returns immediately ──
       final account = createdAccounts.first;
       _sendCredentialsEmail(
         toEmail: account['email']!,
@@ -1979,16 +2073,16 @@ class _CreateOrganizationDialogState extends State<CreateOrganizationDialog> {
 }
 
 // ============ EDIT ORGANIZATION DIALOG ============
-class EditOrganizationDialog extends StatefulWidget {
+class _EditOrganizationDialog extends StatefulWidget {
   final Organization organization;
   final VoidCallback onUpdated;
-  const EditOrganizationDialog({super.key, required this.organization, required this.onUpdated});
+  const _EditOrganizationDialog({super.key, required this.organization, required this.onUpdated});
 
   @override
   _EditOrganizationDialogState createState() => _EditOrganizationDialogState();
 }
 
-class _EditOrganizationDialogState extends State<EditOrganizationDialog> {
+class _EditOrganizationDialogState extends State<_EditOrganizationDialog> {
   late TextEditingController _nameCtrl, _shortCtrl, _orgEmailCtrl, _descCtrl;
   late String _type, _status;
   late List<Adviser> _advisers;
@@ -2004,7 +2098,6 @@ class _EditOrganizationDialogState extends State<EditOrganizationDialog> {
     _descCtrl = TextEditingController(text: org.description);
     _type = org.type;
     _status = org.status;
-    // Initialise adviser list from org; guarantee at least one entry
     _advisers = org.advisers.isNotEmpty
         ? List<Adviser>.from(org.advisers)
         : [Adviser(name: org.adviserName, title: org.adviserTitle, email: org.adviserEmail, phone: org.adviserPhone)];
@@ -2027,7 +2120,6 @@ class _EditOrganizationDialogState extends State<EditOrganizationDialog> {
         width: 640,
         constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.88),
         child: Column(children: [
-          // Header
           Container(
             padding: const EdgeInsets.fromLTRB(24, 20, 20, 20),
             decoration: BoxDecoration(
@@ -2056,14 +2148,12 @@ class _EditOrganizationDialogState extends State<EditOrganizationDialog> {
               ),
             ]),
           ),
-          // Body
           Expanded(
             child: SingleChildScrollView(
               padding: const EdgeInsets.all(28),
               child: Form(
                 key: GlobalKey<FormState>(),
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  // Organization info
                   _sectionLabel('Organization Information', icon: Icons.business_rounded),
                   _fieldGroup([
                     TextFormField(
@@ -2118,7 +2208,6 @@ class _EditOrganizationDialogState extends State<EditOrganizationDialog> {
                   ]),
                   const SizedBox(height: 24),
 
-                  // Multi-adviser section
                   _sectionLabel('Faculty Advisers', icon: Icons.people_rounded),
                   ..._advisers.asMap().entries.map((entry) {
                     final idx = entry.key;
@@ -2143,7 +2232,6 @@ class _EditOrganizationDialogState extends State<EditOrganizationDialog> {
               ),
             ),
           ),
-          // Footer
           Container(
             padding: const EdgeInsets.fromLTRB(28, 16, 28, 20),
             decoration: const BoxDecoration(
@@ -2202,18 +2290,15 @@ class _EditOrganizationDialogState extends State<EditOrganizationDialog> {
           'description': _descCtrl.text.trim(),
           'orgEmail': _orgEmailCtrl.text.trim().toLowerCase(),
           'status': _status,
-          // Legacy fields
           'adviserName': primaryAdviser.name,
           'adviserTitle': primaryAdviser.title,
           'adviserEmail': primaryAdviser.email,
           'adviserPhone': primaryAdviser.phone,
-          // Multi-adviser
           'advisers': adviserMaps,
           'updatedAt': FieldValue.serverTimestamp(),
         },
       );
 
-      // Update adviser_roles for first adviser
       final existingRoles = await FirebaseFirestore.instance
           .collection('adviser_roles')
           .where('orgId', isEqualTo: widget.organization.id)
@@ -2265,23 +2350,22 @@ class _EditOrganizationDialogState extends State<EditOrganizationDialog> {
 }
 
 // ============ ORGANIZATION DETAIL PAGE ============
-class OrganizationDetailPage extends StatefulWidget {
+class _OrganizationDetailPage extends StatefulWidget {
   final Organization organization;
   final VoidCallback onBack;
-  const OrganizationDetailPage({super.key, required this.organization, required this.onBack});
+  const _OrganizationDetailPage({super.key, required this.organization, required this.onBack});
 
   @override
   _OrganizationDetailPageState createState() => _OrganizationDetailPageState();
 }
 
-class _OrganizationDetailPageState extends State<OrganizationDetailPage> {
+class _OrganizationDetailPageState extends State<_OrganizationDetailPage> {
   @override
   Widget build(BuildContext context) {
     final org = widget.organization;
     return SingleChildScrollView(
       padding: const EdgeInsets.all(28),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        // Breadcrumb / Back
         Row(children: [
           InkWell(
             onTap: widget.onBack,
@@ -2304,7 +2388,6 @@ class _OrganizationDetailPageState extends State<OrganizationDetailPage> {
         ]),
         const SizedBox(height: 20),
 
-        // Hero card
         Container(
           padding: const EdgeInsets.all(28),
           decoration: BoxDecoration(
@@ -2375,7 +2458,6 @@ class _OrganizationDetailPageState extends State<OrganizationDetailPage> {
         ),
         const SizedBox(height: 20),
 
-        // Description + Advisers
         Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Expanded(
             flex: 3,
@@ -2389,7 +2471,6 @@ class _OrganizationDetailPageState extends State<OrganizationDetailPage> {
             ),
           ),
           const SizedBox(width: 16),
-          // Multi-adviser card
           Expanded(
             flex: 2,
             child: _detailCard(

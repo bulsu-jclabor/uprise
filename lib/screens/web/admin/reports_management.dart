@@ -1,11 +1,10 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
-import 'package:share_plus/share_plus.dart';
 import 'package:printing/printing.dart';
 import 'package:pdf/pdf.dart';
+import 'export_util.dart';
 import 'package:pdf/widgets.dart' as pw;
 import '../../../services/activity_logger.dart' as activity_log;
 
@@ -421,7 +420,11 @@ class _ReportsManagementState extends State<ReportsManagement>
         ),
       ],
     ));
-    await Printing.sharePdf(bytes: await pdfDoc.save(), filename: fileName);
+    await AdminExportUtil.saveBytes(
+      await pdfDoc.save(),
+      fileName,
+      mimeType: 'application/pdf',
+    );
     await _logGeneratedReport(fileName, 'PDF', 'Financial');
   }
 
@@ -436,8 +439,11 @@ class _ReportsManagementState extends State<ReportsManagement>
     final csv      = rows.map((r) => r.join(',')).join('\n');
     final ts       = DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
     final fileName = 'financial_report_$ts.csv';
-    final file     = await File('${Directory.systemTemp.path}/$fileName').writeAsString(csv);
-    await Share.shareXFiles([XFile(file.path)], text: 'Financial Report');
+    await AdminExportUtil.saveText(
+      csv,
+      fileName,
+      mimeType: 'text/csv',
+    );
     await _logGeneratedReport(fileName, 'CSV', 'Financial');
   }
 
@@ -452,8 +458,11 @@ class _ReportsManagementState extends State<ReportsManagement>
     final csv      = rows.map((r) => r.join(',')).join('\n');
     final ts       = DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
     final fileName = 'accomplishment_report_$ts.csv';
-    final file     = await File('${Directory.systemTemp.path}/$fileName').writeAsString(csv);
-    await Share.shareXFiles([XFile(file.path)], text: 'Accomplishment Report');
+    await AdminExportUtil.saveText(
+      csv,
+      fileName,
+      mimeType: 'text/csv',
+    );
     await _logGeneratedReport(fileName, 'CSV', 'Accomplishment');
   }
 
@@ -469,9 +478,12 @@ class _ReportsManagementState extends State<ReportsManagement>
         isSubmitted ? 'Submitted' : (isOverdue ? 'Overdue' : 'Pending')]);
     }
     final csv  = rows.map((r) => r.join(',')).join('\n');
-    final file = await File(
-        '${Directory.systemTemp.path}/${reportType.toLowerCase()}_submissions.csv').writeAsString(csv);
-    await Share.shareXFiles([XFile(file.path)], text: '$reportType Submissions');
+    await AdminExportUtil.saveText(
+      csv,
+      '${reportType.toLowerCase()}_submissions.csv',
+      mimeType: 'text/csv',
+    );
+
   }
 
   // ── Build ─────────────────────────────────────────────────────────

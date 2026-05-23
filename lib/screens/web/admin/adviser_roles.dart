@@ -1,11 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../services/activity_logger.dart' as activity_log;
-import 'dart:io';
-import 'package:flutter/foundation.dart' show kIsWeb;
-import 'package:share_plus/share_plus.dart';
+import 'export_util.dart';
+import 'export_pdf.dart';
 import '../../theme/app_theme.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -174,8 +174,8 @@ class OrgModel {
     final d = doc.data() as Map<String, dynamic>;
     return OrgModel(
       id: doc.id,
-      name: d['name'] ?? d['orgName'] ?? '',
-      abbrev: d['abbrev'] ?? d['abbreviation'] ?? '',
+      name: d['name'] ?? d['orgName'] ?? d['organizationName'] ?? '',
+      abbrev: d['shortName'] ?? d['abbrev'] ?? d['abbreviation'] ?? d['acronym'] ?? '',
       tag: d['tag'] ?? d['department'] ?? d['type'] ?? '',
     );
   }
@@ -203,17 +203,27 @@ class _AdviserRolesState extends State<AdviserRoles> {
   bool           _loadingMeta   = true;
   int            _totalAdvisers = 0;
   int            _totalOfficers = 0;
+  late StreamSubscription _metaListener;
 
   @override
   void initState() {
     super.initState();
     _loadMeta();
+    _setupMetaListener();
   }
 
   @override
   void dispose() {
+    _metaListener.cancel();
     _searchController.dispose();
     super.dispose();
+  }
+
+  void _setupMetaListener() {
+    _metaListener = FirebaseFirestore.instance
+        .collection('adviser_roles')
+        .snapshots()
+        .listen((_) => _loadMeta());
   }
 
   // ── Data ──────────────────────────────────────────────────────────
@@ -229,10 +239,17 @@ class _AdviserRolesState extends State<AdviserRoles> {
           .where('archived', isEqualTo: false)
           .get();
 
+      final validRoles = rolesSnap.docs.where((doc) {
+        final d = doc.data() as Map<String, dynamic>;
+        final orgId = (d['orgId'] ?? '').toString().trim();
+        final orgName = (d['orgName'] ?? '').toString().trim();
+        return orgId.isNotEmpty && orgName.isNotEmpty;
+      }).toList();
+
       int officers = 0;
       final namesSet = <String>{};
-      for (final doc in rolesSnap.docs) {
-        final d = doc.data();
+      for (final doc in validRoles) {
+        final d = doc.data() as Map<String, dynamic>;
         if ((d['president']     ?? '').toString().trim().isNotEmpty) officers++;
         if ((d['vicePresident'] ?? '').toString().trim().isNotEmpty) officers++;
         if ((d['secretary']     ?? '').toString().trim().isNotEmpty) officers++;
@@ -243,7 +260,7 @@ class _AdviserRolesState extends State<AdviserRoles> {
       setState(() {
         _orgs          = orgs;
         _adviserNames  = namesSet.toList()..sort();
-        _totalAdvisers = rolesSnap.docs.length;
+        _totalAdvisers = validRoles.length;
         _totalOfficers = officers;
         _loadingMeta   = false;
       });
@@ -356,11 +373,19 @@ class _AdviserRolesState extends State<AdviserRoles> {
         ),
         const SizedBox(width: 10),
 
-        // Export
+        // Export CSV
         _ToolbarButton(
-          label: 'Export',
-          icon: Icons.download_rounded,
+          label: 'Export CSV',
+          icon: Icons.table_chart_rounded,
           onPressed: _exportCSV,
+          outlined: true,
+        ),
+        const SizedBox(width: 10),
+        // Export PDF
+        _ToolbarButton(
+          label: 'Export PDF',
+          icon: Icons.picture_as_pdf_rounded,
+          onPressed: _exportPDF,
           outlined: true,
         ),
         const SizedBox(width: 10),
@@ -392,6 +417,13 @@ class _AdviserRolesState extends State<AdviserRoles> {
         }
 
         var docs = snap.data?.docs ?? [];
+
+        docs = docs.where((d) {
+          final data = d.data() as Map<String, dynamic>;
+          final orgId = (data['orgId'] ?? '').toString().trim();
+          final orgName = (data['orgName'] ?? '').toString().trim();
+          return orgId.isNotEmpty && orgName.isNotEmpty;
+        }).toList();
 
         // Filters
         final term = _searchController.text.trim().toLowerCase();
@@ -760,7 +792,7 @@ class _AdviserRolesState extends State<AdviserRoles> {
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
             child: Container(
               width: 540,
-              constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.88),
+              constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.92),
               child: Column(mainAxisSize: MainAxisSize.min, children: [
                 // ── Header
                 Container(
@@ -1292,13 +1324,68 @@ class _AdviserRolesState extends State<AdviserRoles> {
       }
       final now  = DateTime.now().toString().substring(0, 10);
       final name = 'adviser_roles_$now.csv';
-      if (kIsWeb) {
-        await Share.share(buf.toString(), subject: name);
-      } else {
-        final file = File('${Directory.systemTemp.path}/$name');
-        await file.writeAsString(buf.toString());
-        await Share.shareXFiles([XFile(file.path)], subject: name);
+      await AdminExportUtil.saveText(
+        buf.toString(),
+        name,
+        mimeType: 'text/csv',
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Export failed: $e'),
+          backgroundColor: UpriseColors.error,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        ));
       }
+    }
+  }
+
+  Future<void> _exportPDF() async {
+    try {
+      final snap = await FirebaseFirestore.instance
+          .collection('adviser_roles')
+          .where('archived', isEqualTo: _statusFilter == 'Archived')
+          .get();
+      if (snap.docs.isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: const Text('No data to export.'),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          ));
+        }
+        return;
+      }
+
+      final rows = snap.docs.map((doc) {
+        final d = doc.data();
+        return [
+          d['orgName'] ?? '',
+          d['orgAbbrev'] ?? '',
+          d['orgTag'] ?? '',
+          d['adviserName'] ?? '',
+          d['adviserEmail'] ?? '',
+          d['adviserPhone'] ?? '',
+          d['adviserRank'] ?? '',
+          d['president'] ?? '',
+          d['vicePresident'] ?? '',
+          d['secretary'] ?? '',
+          ((d['archived'] ?? false) ? 'Archived' : 'Active'),
+        ].map((value) => value.toString()).toList();
+      }).toList();
+
+      final pdfBytes = await AdminExportPdf.generateTablePdf(
+        title: 'Adviser Roles Report',
+        headers: const ['Organization', 'Abbreviation', 'Tag', 'Adviser', 'Email', 'Phone', 'Rank', 'President', 'Vice President', 'Secretary', 'Status'],
+        rows: rows,
+      );
+      final now = DateTime.now().toString().substring(0, 10);
+      await AdminExportUtil.saveBytes(
+        pdfBytes,
+        'adviser_roles_$now.pdf',
+        mimeType: 'application/pdf',
+      );
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(

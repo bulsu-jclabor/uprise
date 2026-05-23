@@ -9,7 +9,6 @@ Future<String> saveBytesToTemp(Uint8List bytes, String filename) async {
 
 Future<void> saveBytesToTempAndOpen(Uint8List bytes, String filename) async {
   final url = await saveBytesToTemp(bytes, filename);
-  // Try to open in a new tab for preview; if not supported, trigger download
   try {
     html.window.open(url, '_blank');
   } catch (_) {
@@ -17,7 +16,15 @@ Future<void> saveBytesToTempAndOpen(Uint8List bytes, String filename) async {
       ..setAttribute('download', filename)
       ..click();
   }
-  // Note: Not revoking immediately because the browser may still need it.
+}
+
+Future<void> downloadBytes(Uint8List bytes, String filename) async {
+  final blob = html.Blob([bytes]);
+  final url = html.Url.createObjectUrlFromBlob(blob);
+  final anchor = html.AnchorElement(href: url)
+    ..setAttribute('download', filename)
+    ..click();
+  html.Url.revokeObjectUrl(url);
 }
 
 Future<void> openUrl(String url) async {
