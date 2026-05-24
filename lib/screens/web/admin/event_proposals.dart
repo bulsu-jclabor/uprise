@@ -1,6 +1,5 @@
 import 'dart:typed_data';
 import 'dart:convert';
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:http/http.dart' as http; // 👈 ADD THIS for NetworkAssetBundle replacement
 import '../../../utils/platform_file_utils.dart' as platform_file_utils;
 import 'package:flutter/material.dart';
@@ -8,8 +7,9 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:share_plus/share_plus.dart';
-import 'package:cross_file/cross_file.dart';
+import 'package:uprise/widgets/admin_export_button.dart';
+import 'export_util.dart';
+import 'export_pdf.dart';
 import '../../../services/activity_logger.dart' as activity_log;
 import '../../theme/app_theme.dart';
 
@@ -1305,47 +1305,7 @@ class _ExportProposalsButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      height: 40,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: const Color(0xFFE2E6EA)),
-      ),
-      child: PopupMenuButton<String>(
-        onSelected: (choice) => _doExport(context, choice),
-        itemBuilder: (_) => [
-          _item('csv',  Icons.table_chart_rounded, 'Export as CSV'),
-          _item('json', Icons.data_object_rounded,  'Export as JSON'),
-        ],
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 14),
-          child: Row(children: [
-            const Icon(Icons.download_rounded, size: 16, color: Color(0xFF374151)),
-            const SizedBox(width: 6),
-            Text('Export',
-                style: GoogleFonts.beVietnamPro(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w500,
-                    color: const Color(0xFF374151))),
-            const SizedBox(width: 4),
-            const Icon(Icons.keyboard_arrow_down_rounded,
-                size: 16, color: Color(0xFF9AA5B4)),
-          ]),
-        ),
-      ),
-    );
-  }
-
-  PopupMenuItem<String> _item(String value, IconData icon, String label) {
-    return PopupMenuItem(
-      value: value,
-      child: Row(children: [
-        Icon(icon, size: 16, color: const Color(0xFF64748B)),
-        const SizedBox(width: 10),
-        Text(label, style: GoogleFonts.beVietnamPro(fontSize: 13)),
-      ]),
-    );
+    return AdminExportButton(onSelected: (choice) => _doExport(context, choice));
   }
 
   Future<void> _doExport(BuildContext context, String format) async {
@@ -1397,29 +1357,37 @@ class _ExportProposalsButton extends StatelessWidget {
         }
         content  = buf.toString();
         fileName = 'event_proposals_$now.csv';
-      } else {
-        final list = docs.map((doc) {
+        await AdminExportUtil.saveText(
+          content,
+          fileName,
+          mimeType: 'text/csv',
+        );
+      } else if (format == 'pdf') {
+        final rows = docs.map((doc) {
           final d = doc.data();
-          return {
-            'id':          doc.id,
-            'title':       d['title']       ?? '',
-            'orgName':     d['orgName']     ?? '',
-            'category':    d['category']    ?? '',
-            'date':        _fmtDate(d['date']),
-            'status':      d['status']      ?? '',
-            'description': d['description'] ?? '',
-          };
+          return [
+            d['title']       ?? '',
+            d['orgName']     ?? '',
+            d['category']    ?? '',
+            _fmtDate(d['date']),
+            d['status']      ?? '',
+            d['description'] ?? '',
+          ].map((value) => value.toString()).toList();
         }).toList();
-        content  = const JsonEncoder.withIndent('  ').convert(list);
-        fileName = 'event_proposals_$now.json';
-      }
 
-        final tempPath = await platform_file_utils.saveStringToTemp(content, fileName);
-        if (kIsWeb) {
-          await Share.share(content, subject: fileName);
-        } else {
-          await Share.shareXFiles([XFile(tempPath)], subject: fileName);
-        }
+        final pdfBytes = await AdminExportPdf.generateTablePdf(
+          title: 'Event Proposals Report',
+          headers: const ['Title', 'Organization', 'Category', 'Date', 'Status', 'Description'],
+          rows: rows,
+        );
+        await AdminExportUtil.saveBytes(
+          pdfBytes,
+          'event_proposals_$now.pdf',
+          mimeType: 'application/pdf',
+        );
+      } else {
+        throw UnsupportedError('Unsupported export format: $format');
+      }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text('Export failed: $e'),

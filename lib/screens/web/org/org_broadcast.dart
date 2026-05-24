@@ -6,6 +6,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
+import 'dart:convert';
 import '../../../services/activity_logger.dart' as activity_log;
 import 'package:file_picker/file_picker.dart';
 import 'package:firebase_storage/firebase_storage.dart';
@@ -118,22 +119,17 @@ class _OrgBroadcastScreenState extends State<OrgBroadcastScreen> {
     final result = await FilePicker.platform.pickFiles(
       type: FileType.image,
       allowMultiple: false,
+      withData: true,
     );
     if (result == null || result.files.isEmpty) return;
     setState(() => _isUploadingImage = true);
     try {
       final file = result.files.first;
-      final fileName = '${DateTime.now().millisecondsSinceEpoch}_${file.name}';
-      final ref = FirebaseStorage.instance
-          .ref()
-          .child('broadcasts/${widget.orgId}/images/$fileName');
-      if (file.bytes != null) {
-        await ref.putData(file.bytes!);
-      } else if (file.path != null) {
-        await ref.putFile(File(file.path!));
-      }
-      final url = await ref.getDownloadURL();
-      setState(() => _pendingImageUrl = url);
+      final bytes = file.bytes;
+      if (bytes == null) throw 'Image bytes not available';
+      final mimeType = _mimeTypeFromPath(file.path);
+      final uri = 'data:$mimeType;base64,${base64Encode(bytes)}';
+      setState(() => _pendingImageUrl = uri);
     } catch (e) {
       _showError('Image upload failed: $e');
     } finally {
@@ -243,7 +239,7 @@ class _OrgBroadcastScreenState extends State<OrgBroadcastScreen> {
       for (final att in broadcast.attachments) {
         try { await FirebaseStorage.instance.refFromURL(att.url).delete(); } catch (_) {}
       }
-      if (broadcast.imageUrl != null && broadcast.imageUrl!.isNotEmpty) {
+      if (broadcast.imageUrl != null && broadcast.imageUrl!.isNotEmpty && !broadcast.imageUrl!.startsWith('data:')) {
         try { await FirebaseStorage.instance.refFromURL(broadcast.imageUrl!).delete(); } catch (_) {}
       }
       await FirebaseFirestore.instance.collection('broadcasts').doc(broadcast.id).delete();
@@ -383,8 +379,12 @@ class _OrgBroadcastScreenState extends State<OrgBroadcastScreen> {
                     children: [
                       ClipRRect(
                         borderRadius: BorderRadius.circular(8),
-                        child: Image.network(_pendingImageUrl!,
-                            width: 60, height: 60, fit: BoxFit.cover),
+                        child: Image(
+                          image: _imageProviderFromUrl(_pendingImageUrl!),
+                          width: 60,
+                          height: 60,
+                          fit: BoxFit.cover,
+                        ),
                       ),
                       Positioned(
                         top: 2, right: 2,
@@ -678,8 +678,8 @@ class _BroadcastBubbleState extends State<_BroadcastBubble> {
                     if (b.imageUrl != null && b.imageUrl!.isNotEmpty) ...[
                       ClipRRect(
                         borderRadius: BorderRadius.circular(10),
-                        child: Image.network(
-                          b.imageUrl!,
+                        child: Image(
+                          image: _imageProviderFromUrl(b.imageUrl!),
                           width: double.infinity,
                           fit: BoxFit.cover,
                           errorBuilder: (_, __, ___) => const SizedBox(),
@@ -761,6 +761,34 @@ class _BroadcastBubbleState extends State<_BroadcastBubble> {
       ),
     );
   }
+}
+
+String _mimeTypeFromPath(String? path) {
+  if (path == null) return 'image/png';
+  final ext = path.split('.').last.toLowerCase();
+  switch (ext) {
+    case 'jpg':
+    case 'jpeg':
+      return 'image/jpeg';
+    case 'png':
+      return 'image/png';
+    case 'gif':
+      return 'image/gif';
+    case 'bmp':
+      return 'image/bmp';
+    case 'webp':
+      return 'image/webp';
+    default:
+      return 'image/png';
+  }
+}
+
+ImageProvider _imageProviderFromUrl(String url) {
+  if (url.startsWith('data:image')) {
+    final base64Part = url.split(',').last;
+    return MemoryImage(base64Decode(base64Part));
+  }
+  return NetworkImage(url);
 }
 
 // ─── Model Classes ────────────────────────────────────────────────────────────

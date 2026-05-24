@@ -20,6 +20,10 @@ Future<void> openUrl(String url) async {
   // Keeping minimal here; the caller can use url_launcher separately.
 }
 
+Future<void> downloadBytes(Uint8List bytes, String filename) async {
+  await saveBytesToTempAndOpen(bytes, filename);
+}
+
 Future<String> saveStringToTemp(String content, String filename) async {
   final dir = await getTemporaryDirectory();
   final file = File('${dir.path}/$filename');

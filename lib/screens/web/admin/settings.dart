@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -334,7 +333,7 @@ class _AdminSettingsState extends State<AdminSettings>
     if (picked == null) return;
     setState(() => _isLoading = true);
     try {
-      final bytes        = await File(picked.path).readAsBytes();
+      final bytes = await picked.readAsBytes();
       final base64String = base64Encode(bytes);
       await FirebaseFirestore.instance
           .collection('users')

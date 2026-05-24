@@ -1,14 +1,11 @@
 import 'dart:convert' show JsonEncoder;
-import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
-import 'package:share_plus/share_plus.dart';
-import 'package:cross_file/cross_file.dart';
+import 'export_util.dart';
+import 'export_pdf.dart';
 import '../../theme/app_theme.dart';
-import '../../../services/activity_logger.dart' as activity_log;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Design tokens (mirrors student_accounts.dart)
@@ -1001,7 +998,7 @@ class _ExportLogsButton extends StatelessWidget {
         onSelected: (choice) => _doExport(context, choice),
         itemBuilder: (_) => [
           _item('csv',  Icons.table_chart_rounded,  'Export as CSV'),
-          _item('json', Icons.data_object_rounded,  'Export as JSON'),
+          _item('pdf',  Icons.picture_as_pdf_rounded, 'Export as PDF'),
         ],
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 14),
@@ -1079,33 +1076,44 @@ class _ExportLogsButton extends StatelessWidget {
         }
         content  = buf.toString();
         fileName = 'activity_logs_$now.csv';
-      } else {
-        final list = snap.docs.map((doc) {
+        await AdminExportUtil.saveText(
+          content,
+          fileName,
+          mimeType: 'text/csv',
+        );
+      } else if (format == 'pdf') {
+        final rows = snap.docs.map((doc) {
           final d = doc.data();
           dynamic tsField = d['timestamp'];
           String tsStr = '';
           if (tsField is Timestamp) tsStr = tsField.toDate().toIso8601String();
-          return {
-            'id':        doc.id,
-            'user':      d['user']      ?? '',
-            'action':    d['action']    ?? '',
-            'module':    d['module']    ?? '',
-            'severity':  d['severity']  ?? '',
-            'timestamp': tsStr,
-            'ipAddress': d['ipAddress'] ?? '',
-            'orgId':     d['orgId']     ?? '',
-          };
+          final orgId = (d['orgId'] ??
+                  (d['details'] is Map ? d['details']['orgId'] : '') ??
+                  '')
+              .toString();
+          return [
+            d['user'] ?? '',
+            d['action'] ?? '',
+            d['module'] ?? '',
+            d['severity'] ?? '',
+            tsStr,
+            d['ipAddress'] ?? '',
+            orgId,
+          ].map((value) => value.toString()).toList();
         }).toList();
-        content  = const JsonEncoder.withIndent('  ').convert(list);
-        fileName = 'activity_logs_$now.json';
-      }
 
-      if (kIsWeb) {
-        await Share.share(content, subject: fileName);
+        final pdfBytes = await AdminExportPdf.generateTablePdf(
+          title: 'Activity Logs Report',
+          headers: const ['User', 'Action', 'Module', 'Severity', 'Timestamp', 'IP Address', 'Org ID'],
+          rows: rows,
+        );
+        await AdminExportUtil.saveBytes(
+          pdfBytes,
+          'activity_logs_$now.pdf',
+          mimeType: 'application/pdf',
+        );
       } else {
-        final file = File('${Directory.systemTemp.path}/$fileName');
-        await file.writeAsString(content);
-        await Share.shareXFiles([XFile(file.path)], subject: fileName);
+        throw UnsupportedError('Unsupported export format: $format');
       }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(

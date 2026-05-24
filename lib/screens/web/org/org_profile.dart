@@ -1,13 +1,48 @@
 // lib/screens/web/org/org_profile.dart
 
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:firebase_storage/firebase_storage.dart';
-import 'dart:io';
 import '../../../services/activity_logger.dart' as activity_log;
+
+String _mimeTypeFromPath(String? path) {
+  if (path == null) return 'image/png';
+  final ext = path.split('.').last.toLowerCase();
+  switch (ext) {
+    case 'jpg':
+    case 'jpeg':
+      return 'image/jpeg';
+    case 'png':
+      return 'image/png';
+    case 'gif':
+      return 'image/gif';
+    case 'bmp':
+      return 'image/bmp';
+    case 'webp':
+      return 'image/webp';
+    default:
+      return 'image/png';
+  }
+}
+
+ImageProvider _imageProviderFromUrl(String url) {
+  if (url.startsWith('data:image')) {
+    final base64Part = url.split(',').last;
+    return MemoryImage(base64Decode(base64Part));
+  }
+  return NetworkImage(url);
+}
+
+Widget _buildImageWidget(String url, {BoxFit fit = BoxFit.cover, Widget? errorWidget}) {
+  return Image(
+    image: _imageProviderFromUrl(url),
+    fit: fit,
+    errorBuilder: (_, __, ___) => errorWidget ?? const SizedBox.shrink(),
+  );
+}
 
 // ─── Color Scheme ─────────────────────────────────────────────────────────────
 class OrgColors {
@@ -81,7 +116,9 @@ class _OrgProfileScreenState extends State<OrgProfileScreen> {
         .doc(widget.orgId)
         .get();
     final data = doc.data();
-    if (data != null && mounted) {
+    if (data != null) {
+      await _syncOrganizationOfficersIfNeeded(data);
+      if (!mounted) return;
       setState(() {
         _orgName        = data['name'] ?? widget.orgName;
         _orgShortName   = data['shortName'] ?? widget.orgShortName;
@@ -100,8 +137,50 @@ class _OrgProfileScreenState extends State<OrgProfileScreen> {
         _loading = false;
       });
     } else {
-      setState(() => _loading = false);
+      if (mounted) setState(() => _loading = false);
     }
+  }
+
+  Future<void> _syncOrganizationOfficersIfNeeded(Map<String, dynamic> data) async {
+    final storedOfficers = data['officers'] as List<dynamic>?;
+    final officerSnap = await FirebaseFirestore.instance
+        .collection('organizations')
+        .doc(widget.orgId)
+        .collection('officers')
+        .orderBy('positionRank', descending: false)
+        .orderBy('name', descending: false)
+        .get();
+
+    final officers = officerSnap.docs.map((d) {
+      final ddata = d.data();
+      return {
+        'name': ddata['name'] ?? '',
+        'role': ddata['position'] ?? '',
+        'email': ddata['email'] ?? '',
+        'phone': ddata['phone'] ?? '',
+        'photoUrl': ddata['photoUrl'] ?? '',
+      };
+    }).toList();
+
+    if (!_officersMatch(storedOfficers, officers)) {
+      await FirebaseFirestore.instance
+          .collection('organizations')
+          .doc(widget.orgId)
+          .update({'officers': officers});
+    }
+  }
+
+  bool _officersMatch(List<dynamic>? stored, List<Map<String, dynamic>> expected) {
+    if (stored == null || stored.length != expected.length) return false;
+    for (var i = 0; i < expected.length; i++) {
+      final storedOfficer = stored[i];
+      if (storedOfficer is! Map) return false;
+      final expectedOfficer = expected[i];
+      for (final key in expectedOfficer.keys) {
+        if ((storedOfficer[key] ?? '') != expectedOfficer[key]) return false;
+      }
+    }
+    return true;
   }
 
   void _openEditProfileSheet() {
@@ -202,9 +281,26 @@ class _OrgProfileScreenState extends State<OrgProfileScreen> {
         .collection('officers')
         .doc(officer.id)
         .delete();
+    await _syncOrganizationOfficers();
     await activity_log.ActivityLogger.log(action: 'delete_officer', module: 'org_profile',
         details: {'orgId': widget.orgId, 'name': officer.name});
     setState(() {});
+  }
+
+  Future<void> _syncOrganizationOfficers() async {
+    final orgDoc = FirebaseFirestore.instance.collection('organizations').doc(widget.orgId);
+    final officerSnap = await orgDoc.collection('officers').get();
+    final officers = officerSnap.docs.map((d) {
+      final ddata = d.data();
+      return {
+        'name': ddata['name'] ?? '',
+        'role': ddata['position'] ?? '',
+        'email': ddata['email'] ?? '',
+        'phone': ddata['phone'] ?? '',
+        'photoUrl': ddata['photoUrl'] ?? '',
+      };
+    }).toList();
+    await orgDoc.update({'officers': officers});
   }
 
   Stream<QuerySnapshot> get _officersStream => FirebaseFirestore.instance
@@ -286,8 +382,7 @@ class _OrgProfileScreenState extends State<OrgProfileScreen> {
                                 ),
                                 clipBehavior: Clip.antiAlias,
                                 child: _orgLogoUrl.isNotEmpty
-                                    ? Image.network(_orgLogoUrl, fit: BoxFit.cover,
-                                        errorBuilder: (_, __, ___) => const Icon(Icons.business, color: OrgColors.darkGray))
+                                    ? _buildImageWidget(_orgLogoUrl, fit: BoxFit.cover, errorWidget: const Icon(Icons.business, color: OrgColors.darkGray))
                                     : const Icon(Icons.business, color: OrgColors.darkGray, size: 32),
                               ),
                               const SizedBox(width: 16),
@@ -595,8 +690,7 @@ class _OfficerTile extends StatelessWidget {
             ),
             clipBehavior: Clip.antiAlias,
             child: officer.photoUrl.isNotEmpty
-                ? Image.network(officer.photoUrl, fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => _initials(officer.name))
+                ? _buildImageWidget(officer.photoUrl, fit: BoxFit.cover, errorWidget: _initials(officer.name))
                 : _initials(officer.name),
           ),
           const SizedBox(width: 12),
@@ -770,8 +864,7 @@ class _HierarchyBox extends StatelessWidget {
           ),
           clipBehavior: Clip.antiAlias,
           child: officer.photoUrl.isNotEmpty
-              ? Image.network(officer.photoUrl, fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) => _initials(isTop))
+              ? _buildImageWidget(officer.photoUrl, fit: BoxFit.cover, errorWidget: _initials(isTop))
               : _initials(isTop),
         ),
         const SizedBox(height: 8),
@@ -922,16 +1015,16 @@ class _EditOrgProfileSheetState extends State<_EditOrgProfileSheet> {
   }
 
   Future<void> _pickLogo() async {
-    final result = await FilePicker.platform.pickFiles(type: FileType.image, allowMultiple: false);
+    final result = await FilePicker.platform.pickFiles(type: FileType.image, allowMultiple: false, withData: true);
     if (result == null || result.files.isEmpty) return;
     setState(() => _isUploadingLogo = true);
     try {
       final file = result.files.first;
-      final ref = FirebaseStorage.instance.ref().child('organizations/${widget.orgId}/logo_${DateTime.now().millisecondsSinceEpoch}');
-      if (file.bytes != null) await ref.putData(file.bytes!);
-      else if (file.path != null) await ref.putFile(File(file.path!));
-      final url = await ref.getDownloadURL();
-      setState(() => _logoUrl = url);
+      final bytes = file.bytes;
+      if (bytes == null) throw 'Image bytes not available';
+      final mimeType = _mimeTypeFromPath(file.path);
+      final uri = 'data:$mimeType;base64,${base64Encode(bytes)}';
+      setState(() => _logoUrl = uri);
     } catch (e) {
       _snack('Logo upload failed: $e');
     } finally {
@@ -941,21 +1034,23 @@ class _EditOrgProfileSheetState extends State<_EditOrgProfileSheet> {
 
   Future<void> _save() async {
     setState(() => _isSaving = true);
+    final orgPayload = {
+      'name': _nameCtrl.text.trim(),
+      'schoolYear': _yearCtrl.text.trim(),
+      'semester': _semester,
+      'description': _descCtrl.text.trim(),
+      'adviserName': _aNameCtrl.text.trim(),
+      'adviserEmail': _aEmailCtrl.text.trim(),
+      'adviserPhone': _aPhoneCtrl.text.trim(),
+      'facebook': _fbCtrl.text.trim(),
+      'instagram': _igCtrl.text.trim(),
+      'twitter': _twCtrl.text.trim(),
+      'gmail': _gmCtrl.text.trim(),
+      if (_logoUrl != null) 'logoUrl': _logoUrl,
+    };
     try {
-      await FirebaseFirestore.instance.collection('organizations').doc(widget.orgId).update({
-        'name': _nameCtrl.text.trim(),
-        'schoolYear': _yearCtrl.text.trim(),
-        'semester': _semester,
-        'description': _descCtrl.text.trim(),
-        'adviserName': _aNameCtrl.text.trim(),
-        'adviserEmail': _aEmailCtrl.text.trim(),
-        'adviserPhone': _aPhoneCtrl.text.trim(),
-        'facebook': _fbCtrl.text.trim(),
-        'instagram': _igCtrl.text.trim(),
-        'twitter': _twCtrl.text.trim(),
-        'gmail': _gmCtrl.text.trim(),
-        if (_logoUrl != null) 'logoUrl': _logoUrl,
-      });
+      await FirebaseFirestore.instance.collection('organizations').doc(widget.orgId).update(orgPayload);
+      await _syncAdviserRoleDocs(orgPayload);
       await activity_log.ActivityLogger.log(action: 'update_org_profile', module: 'org_profile',
           details: {'orgId': widget.orgId});
       widget.onSaved();
@@ -964,6 +1059,30 @@ class _EditOrgProfileSheetState extends State<_EditOrgProfileSheet> {
       _snack('Error: $e');
     } finally {
       if (mounted) setState(() => _isSaving = false);
+    }
+  }
+
+  Future<void> _syncAdviserRoleDocs(Map<String, dynamic> orgPayload) async {
+    try {
+      final roleSnap = await FirebaseFirestore.instance
+          .collection('adviser_roles')
+          .where('orgId', isEqualTo: widget.orgId)
+          .get();
+      final updates = <String, dynamic>{
+        'orgName': orgPayload['name'],
+        'adviserName': orgPayload['adviserName'],
+        'adviserEmail': orgPayload['adviserEmail'],
+        'adviserPhone': orgPayload['adviserPhone'],
+      };
+      if (widget.shortName.isNotEmpty) {
+        updates['shortName'] = widget.shortName;
+      }
+      for (final doc in roleSnap.docs) {
+        await doc.reference.update(updates);
+      }
+    } catch (e) {
+      // Keep profile update success if role syncing fails, but log the error for debugging.
+      debugPrint('Failed to sync adviser_roles for org ${widget.orgId}: $e');
     }
   }
 
@@ -1002,7 +1121,7 @@ class _EditOrgProfileSheetState extends State<_EditOrgProfileSheet> {
                     ),
                     clipBehavior: Clip.antiAlias,
                     child: _logoUrl != null
-                        ? Image.network(_logoUrl!, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const Icon(Icons.business))
+                        ? _buildImageWidget(_logoUrl!, fit: BoxFit.cover, errorWidget: const Icon(Icons.business))
                         : const Icon(Icons.business, color: OrgColors.darkGray),
                   ),
                   const SizedBox(width: 14),
@@ -1255,18 +1374,16 @@ class _OfficerModalState extends State<_OfficerModal> {
   }
 
   Future<void> _pickPhoto() async {
-    final result = await FilePicker.platform.pickFiles(type: FileType.image, allowMultiple: false);
+    final result = await FilePicker.platform.pickFiles(type: FileType.image, allowMultiple: false, withData: true);
     if (result == null || result.files.isEmpty) return;
     setState(() => _isUploadingPhoto = true);
     try {
       final file = result.files.first;
-      final ref = FirebaseStorage.instance
-          .ref()
-          .child('organizations/${widget.orgId}/officers/${DateTime.now().millisecondsSinceEpoch}_${file.name}');
-      if (file.bytes != null) await ref.putData(file.bytes!);
-      else if (file.path != null) await ref.putFile(File(file.path!));
-      final url = await ref.getDownloadURL();
-      setState(() => _photoUrl = url);
+      final bytes = file.bytes;
+      if (bytes == null) throw 'Image bytes not available';
+      final mimeType = _mimeTypeFromPath(file.path);
+      final uri = 'data:$mimeType;base64,${base64Encode(bytes)}';
+      setState(() => _photoUrl = uri);
     } catch (e) {
       _snack('Photo upload failed: $e');
     } finally {
@@ -1305,6 +1422,7 @@ class _OfficerModalState extends State<_OfficerModal> {
         await activity_log.ActivityLogger.log(action: 'add_officer', module: 'org_profile',
             details: {'orgId': widget.orgId});
       }
+      await _syncOrganizationOfficers();
       widget.onSuccess();
       if (mounted) Navigator.pop(context);
     } catch (e) {
@@ -1312,6 +1430,25 @@ class _OfficerModalState extends State<_OfficerModal> {
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }
+  }
+
+  Future<void> _syncOrganizationOfficers() async {
+    final orgDoc = FirebaseFirestore.instance.collection('organizations').doc(widget.orgId);
+    final officerSnap = await orgDoc.collection('officers')
+        .orderBy('positionRank', descending: false)
+        .orderBy('name', descending: false)
+        .get();
+    final officers = officerSnap.docs.map((d) {
+      final ddata = d.data();
+      return {
+        'name': ddata['name'] ?? '',
+        'role': ddata['position'] ?? '',
+        'email': ddata['email'] ?? '',
+        'phone': ddata['phone'] ?? '',
+        'photoUrl': ddata['photoUrl'] ?? '',
+      };
+    }).toList();
+    await orgDoc.update({'officers': officers});
   }
 
   void _snack(String msg) {
@@ -1384,7 +1521,7 @@ class _OfficerModalState extends State<_OfficerModal> {
                             child: _isUploadingPhoto
                                 ? const Center(child: SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2)))
                                 : _photoUrl != null
-                                    ? Image.network(_photoUrl!, fit: BoxFit.cover, errorBuilder: (_, __, ___) => _uploadIcon())
+                                    ? _buildImageWidget(_photoUrl!, fit: BoxFit.cover, errorWidget: _uploadIcon())
                                     : _uploadIcon(),
                           ),
                         ),

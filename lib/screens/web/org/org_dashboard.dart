@@ -93,7 +93,7 @@ const List<Map<String, dynamic>> _navItems = [
 // OrgDashboard shell
 // ─────────────────────────────────────────────────────────────────────────────
 class OrgDashboard extends StatefulWidget {
-  OrgDashboard({super.key});
+  const OrgDashboard({super.key});
 
   @override
   State<OrgDashboard> createState() => _OrgDashboardState();
@@ -155,10 +155,12 @@ class _OrgDashboardState extends State<OrgDashboard> {
           .collection('users').doc(user.uid).get();
 
       if (!userDoc.exists) {
-        if (mounted) setState(() {
+        if (mounted) {
+          setState(() {
           _loadError = 'User record not found. Please sign in again.';
           _isLoading = false;
         });
+        }
         return;
       }
 
@@ -181,11 +183,13 @@ class _OrgDashboardState extends State<OrgDashboard> {
       }
 
       if (orgId == null || orgId.isEmpty) {
-        if (mounted) setState(() {
+        if (mounted) {
+          setState(() {
           _loadError =
               'This account is not linked to an organization.\nContact your administrator.';
           _isLoading = false;
         });
+        }
         return;
       }
 
@@ -193,10 +197,12 @@ class _OrgDashboardState extends State<OrgDashboard> {
           .collection('organizations').doc(orgId).get();
 
       if (!orgDoc.exists) {
-        if (mounted) setState(() {
+        if (mounted) {
+          setState(() {
           _loadError = 'Organization data not found. Contact your administrator.';
           _isLoading = false;
         });
+        }
         return;
       }
 
@@ -214,10 +220,12 @@ class _OrgDashboardState extends State<OrgDashboard> {
       }
     } catch (e, st) {
       debugPrint('OrgDashboard load error: $e\n$st');
-      if (mounted) setState(() {
+      if (mounted) {
+        setState(() {
         _loadError = 'Unable to load dashboard.\nPlease refresh or sign in again.';
         _isLoading = false;
       });
+      }
     }
   }
 
@@ -253,7 +261,8 @@ class _OrgDashboardState extends State<OrgDashboard> {
           .where('orgId', isEqualTo: _orgId)
           .where('isRead', isEqualTo: false)
           .get();
-      if (mounted) setState(() {
+      if (mounted) {
+        setState(() {
         _unreadNotifications = snap.docs.length;
         _notifications = snap.docs.map((d) => {
           'id': d.id,
@@ -262,6 +271,7 @@ class _OrgDashboardState extends State<OrgDashboard> {
           'isRead': d.data()['isRead'] ?? false,
         }).toList();
       });
+      }
     } catch (_) {}
   }
 
@@ -273,95 +283,82 @@ class _OrgDashboardState extends State<OrgDashboard> {
     } catch (_) {}
   }
 
-  Future<void> _logout() async {
-  await FirebaseAuth.instance.signOut();
-  // Navigate to login page and clear all previous routes
-  if (mounted) {
-    Navigator.pushNamedAndRemoveUntil(
-      context,
-      '/login', // Replace with your login route name malii
-      (route) => false,
-    );
-  }
-}
+  // ── Logout ────────────────────────────────────────────────────────
+  Future<void> _logout() async => FirebaseAuth.instance.signOut();
 
-void _confirmLogout() {
-  showDialog(
-    context: context,
-    barrierColor: Colors.black54,
-    builder: (ctx) => Dialog(
-      shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(_DS.radiusLg)),
-      child: Container(
-        width: 400,
-        padding: const EdgeInsets.all(28),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(children: [
-              Container(
-                width: 42, 
-                height: 42,
-                decoration: BoxDecoration(
-                    color: OrgColors.errorBg,
-                    borderRadius: BorderRadius.circular(10)),
-                child: const Icon(Icons.logout_rounded,
-                    color: OrgColors.error, size: 20),
-              ),
-              const SizedBox(width: 14),
-              Text('Confirm Logout',
-                  style: GoogleFonts.beVietnamPro(
-                      fontSize: 17, fontWeight: FontWeight.w700,
-                      color: OrgColors.charcoal)),
-            ]),
-            const SizedBox(height: 14),
-            Text(
-              'Are you sure you want to sign out from the organization portal?',
-              style: GoogleFonts.beVietnamPro(
-                  fontSize: 14, color: OrgColors.darkGray, height: 1.5),
-            ),
-            const SizedBox(height: 24),
-            Row(mainAxisAlignment: MainAxisAlignment.end, children: [
-              OutlinedButton(
-                onPressed: () => Navigator.pop(ctx),
-                style: OutlinedButton.styleFrom(
-                  side: const BorderSide(color: OrgColors.borderSoft),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(_DS.radiusSm)),
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 18, vertical: 11),
+  void _confirmLogout() {
+    showDialog(
+      context: context,
+      barrierColor: Colors.black54,
+      builder: (ctx) => Dialog(
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(_DS.radiusLg)),
+        child: Container(
+          width: 400,
+          padding: const EdgeInsets.all(28),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(children: [
+                Container(
+                  width: 42, height: 42,
+                  decoration: BoxDecoration(
+                      color: OrgColors.errorBg,
+                      borderRadius: BorderRadius.circular(10)),
+                  child: const Icon(Icons.logout_rounded,
+                      color: OrgColors.error, size: 20),
                 ),
-                child: Text('Cancel',
+                const SizedBox(width: 14),
+                Text('Confirm Logout',
                     style: GoogleFonts.beVietnamPro(
-                        fontSize: 13, color: OrgColors.textMid)),
+                        fontSize: 17, fontWeight: FontWeight.w700,
+                        color: OrgColors.charcoal)),
+              ]),
+              const SizedBox(height: 14),
+              Text(
+                'Are you sure you want to sign out from the organization portal?',
+                style: GoogleFonts.beVietnamPro(
+                    fontSize: 14, color: OrgColors.darkGray, height: 1.5),
               ),
-              const SizedBox(width: 10),
-              ElevatedButton(
-                onPressed: () async { 
-                  Navigator.pop(ctx); 
-                  await _logout();
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: OrgColors.error,
-                  foregroundColor: Colors.white,
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(_DS.radiusSm)),
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 18, vertical: 11),
+              const SizedBox(height: 24),
+              Row(mainAxisAlignment: MainAxisAlignment.end, children: [
+                OutlinedButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: OrgColors.borderSoft),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(_DS.radiusSm)),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 18, vertical: 11),
+                  ),
+                  child: Text('Cancel',
+                      style: GoogleFonts.beVietnamPro(
+                          fontSize: 13, color: OrgColors.textMid)),
                 ),
-                child: Text('Sign Out',
-                    style: GoogleFonts.beVietnamPro(
-                        fontSize: 13, fontWeight: FontWeight.w600)),
-              ),
-            ]),
-          ],
+                const SizedBox(width: 10),
+                ElevatedButton(
+                  onPressed: () { Navigator.pop(ctx); _logout(); },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: OrgColors.error,
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(_DS.radiusSm)),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 18, vertical: 11),
+                  ),
+                  child: Text('Sign Out',
+                      style: GoogleFonts.beVietnamPro(
+                          fontSize: 13, fontWeight: FontWeight.w600)),
+                ),
+              ]),
+            ],
+          ),
         ),
       ),
-    ),
-  );
-}
+    );
+  }
 
   String _getCurrentTitle() {
     if (_selectedIndex == -1) return 'Settings';
@@ -895,8 +892,9 @@ class _OrgDashboardHomeState extends State<_OrgDashboardHome> {
 
   String _getCurrentSemester() {
     final now = DateTime.now();
-    if (now.month >= 8)
+    if (now.month >= 8) {
       return '1st Semester AY ${now.year}-${now.year + 1}';
+    }
     return '2nd Semester AY ${now.year - 1}-${now.year}';
   }
 
@@ -983,8 +981,9 @@ class _OrgDashboardHomeState extends State<_OrgDashboardHome> {
         }
         if (idx >= 0 && idx < 6) counts[idx]++;
       }
-      if (mounted)
+      if (mounted) {
         setState(() { _chartData = counts; _chartLoading = false; });
+      }
     }).catchError((_) {
       if (mounted) setState(() => _chartLoading = false);
     });
@@ -1153,11 +1152,12 @@ class _OrgDashboardHomeState extends State<_OrgDashboardHome> {
                           DropdownMenuItem(value: s, child: Text(s)))
                       .toList(),
                   onChanged: (v) {
-                    if (v != null)
+                    if (v != null) {
                       setState(() {
                         _selectedSemester = v;
                         _fetchChartData();
                       });
+                    }
                   },
                 ),
               ),
@@ -1908,12 +1908,15 @@ class _ActivityRow extends StatelessWidget {
 
   Color _dotColor() {
     final l = title.toLowerCase();
-    if (l.contains('proposal') || l.contains('pending'))
+    if (l.contains('proposal') || l.contains('pending')) {
       return OrgColors.warning;
-    if (l.contains('verified') || l.contains('created'))
+    }
+    if (l.contains('verified') || l.contains('created')) {
       return OrgColors.success;
-    if (l.contains('deleted')  || l.contains('error'))
+    }
+    if (l.contains('deleted')  || l.contains('error')) {
       return OrgColors.error;
+    }
     return OrgColors.primaryDark;
   }
 
