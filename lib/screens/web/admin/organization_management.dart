@@ -2,20 +2,19 @@
 
 import 'dart:math';
 import 'dart:convert';
-import 'dart:html' as html; // for web download
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'export_util.dart';
+import 'export_pdf.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:http/http.dart' as http;
 import 'package:file_picker/file_picker.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
-import 'package:pdf/pdf.dart';
-import 'package:pdf/widgets.dart' as pw;
 import '../../theme/app_theme.dart';
 
 // ============ GLOBAL CONTEXT FOR SNACKBAR ============
@@ -907,6 +906,7 @@ class _ExportButton extends StatelessWidget {
         .orderBy('createdAt', descending: true)
         .get();
     var docs = snapshot.docs;
+    final query = searchTerm.toLowerCase();
 
     if (statusFilter != 'All') {
       docs = docs.where((d) {
@@ -920,11 +920,11 @@ class _ExportButton extends StatelessWidget {
         return data['type'] == typeFilter;
       }).toList();
     }
-    if (searchTerm.isNotEmpty) {
+    if (query.isNotEmpty) {
       docs = docs.where((d) {
         final data = d.data() as Map<String, dynamic>? ?? {};
-        return (data['name'] ?? '').toString().toLowerCase().contains(searchTerm) ||
-            (data['adviserName'] ?? '').toString().toLowerCase().contains(searchTerm);
+        return (data['name'] ?? '').toString().toLowerCase().contains(query) ||
+            (data['adviserName'] ?? '').toString().toLowerCase().contains(query);
       }).toList();
     }
     return docs;
@@ -954,91 +954,51 @@ class _ExportButton extends StatelessWidget {
       ].join(','));
     }
     final content = buffer.toString();
-    final bytes = utf8.encode(content);
     final fileName = 'organizations_${DateFormat('yyyy-MM-dd').format(DateTime.now())}.csv';
-    await _FileDownloader.downloadBytes(context, bytes, fileName, 'text/csv');
+    await AdminExportUtil.saveText(content, fileName, mimeType: 'text/csv');
   }
 
   Future<void> _exportPDF(BuildContext context, List<QueryDocumentSnapshot> docs) async {
-    final pdfBytes = await _generatePdf(docs, 'Organizations Export');
-    final fileName = 'organizations_${DateFormat('yyyy-MM-dd').format(DateTime.now())}.pdf';
-    await _FileDownloader.downloadBytes(context, pdfBytes, fileName, 'application/pdf');
-  }
-
-  Future<Uint8List> _generatePdf(List<QueryDocumentSnapshot> docs, String title) async {
-    final pdf = pw.Document();
-
-    // Load logos from assets (you must place these images in your assets folder)
-    final bsuLogo = await _loadImageFromAsset('assets/images/bsu_logo.png');
-    final cictLogo = await _loadImageFromAsset('assets/images/cict_logo.png');
-    final upriseLogo = await _loadImageFromAsset('assets/images/logo.png');
-
-    pdf.addPage(
-      pw.MultiPage(
-        pageFormat: PdfPageFormat.a4,
-        margin: const pw.EdgeInsets.all(32),
-        header: (context) {
-          return pw.Container(
-            padding: const pw.EdgeInsets.only(bottom: 20),
-            child: pw.Row(
-              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-              children: [
-                if (bsuLogo != null) pw.Image(bsuLogo, height: 40),
-                if (cictLogo != null) pw.Image(cictLogo, height: 40),
-                if (upriseLogo != null) pw.Image(upriseLogo, height: 30),
-              ],
-            ),
-          );
-        },
-        footer: (context) {
-          return pw.Container(
-            alignment: pw.Alignment.centerRight,
-            margin: const pw.EdgeInsets.only(top: 20),
-            child: pw.Text('Page ${context.pageNumber}', style: pw.TextStyle(fontSize: 10, color: PdfColors.grey)),
-          );
-        },
-        build: (context) => [
-          pw.Header(level: 0, title: 'Organizations Report'),
-          pw.SizedBox(height: 10),
-          pw.Text('Bulacan State University - College of Information and Communications Technology (CICT)',
-              style: pw.TextStyle(fontSize: 12, fontStyle: pw.FontStyle.italic)),
-          pw.Text('Generated: ${DateFormat('yyyy-MM-dd HH:mm').format(DateTime.now())}',
-              style: pw.TextStyle(fontSize: 10, color: PdfColors.grey)),
-          pw.Divider(),
-          pw.SizedBox(height: 20),
-          pw.TableHelper.fromTextArray(
-            headers: ['Organization', 'Acronym', 'Type', 'Status', 'Adviser(s)'],
-            data: docs.map((doc) {
-              final d = doc.data() as Map<String, dynamic>? ?? {};
-              final advisers = (d['advisers'] as List?)
-                      ?.map((a) => (a['name'] ?? '').toString())
-                      .join(', ') ??
-                  (d['adviserName'] ?? 'No Adviser');
-              return [
-                d['name'] ?? '',
-                d['shortName'] ?? '',
-                d['type'] ?? '',
-                d['status']?.toString().toUpperCase() ?? '',
-                advisers,
-              ];
-            }).toList(),
-            headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold),
-            cellAlignment: pw.Alignment.centerLeft,
-            headerDecoration: const pw.BoxDecoration(color: PdfColors.grey300),
-          ),
-        ],
-      ),
-    );
-    return await pdf.save();
-  }
-
-  Future<pw.MemoryImage?> _loadImageFromAsset(String path) async {
     try {
-      final byteData = await rootBundle.load(path);
-      return pw.MemoryImage(byteData.buffer.asUint8List());
+      final rows = docs.map<List<String>>((doc) {
+        final d = doc.data() as Map<String, dynamic>? ?? {};
+        final advisers = (d['advisers'] as List?)
+            ?.map((a) => ((a as Map<String, dynamic>?)?['name'] ?? '').toString())
+            .where((name) => name.isNotEmpty)
+            .join(', ');
+        final adviserText = advisers != null && advisers.isNotEmpty
+            ? advisers
+            : (d['adviserName']?.toString() ?? 'No Adviser');
+        return <String>[
+          d['name']?.toString() ?? '',
+          d['shortName']?.toString() ?? '',
+          d['type']?.toString() ?? '',
+          d['status']?.toString().toUpperCase() ?? '',
+          adviserText,
+        ];
+      }).toList();
+
+      final pdfBytes = await AdminExportPdf.generateTablePdf(
+        title: 'Organizations Report',
+        headers: const ['Organization', 'Acronym', 'Type', 'Status', 'Adviser(s)'],
+        rows: rows,
+        subtitle: 'Bulacan State University - College of Information and Communications Technology (CICT)',
+      );
+      final fileName = 'organizations_${DateFormat('yyyy-MM-dd').format(DateTime.now())}.pdf';
+      await AdminExportUtil.saveBytes(pdfBytes, fileName, mimeType: 'application/pdf');
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Download started: $fileName'),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      ));
     } catch (e) {
-      debugPrint('Could not load image: $path');
-      return null;
+      debugPrint('Export PDF failed: $e');
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Export failed: $e'),
+        backgroundColor: UpriseColors.error,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      ));
     }
   }
 
@@ -1103,23 +1063,6 @@ class _ExportButton extends StatelessWidget {
         ),
       ),
     );
-  }
-}
-
-// ============ FILE DOWNLOADER (Web & Mobile) ============
-class _FileDownloader {
-  static Future<void> downloadBytes(BuildContext context, List<int> bytes, String fileName, String mimeType) async {
-    if (kIsWeb) {
-      // Web: use anchor download
-      final blob = html.Blob([bytes], mimeType);
-      final url = html.Url.createObjectUrlFromBlob(blob);
-      html.AnchorElement(href: url)
-        ..setAttribute('download', fileName)
-        ..click();
-      html.Url.revokeObjectUrl(url);
-    } else {
-      throw Exception('Download is only supported on web for this widget.');
-    }
   }
 }
 
