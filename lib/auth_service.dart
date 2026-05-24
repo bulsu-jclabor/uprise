@@ -1,5 +1,6 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../screens/guest/guest_home_screen.dart';
 
 class AuthService {
   static final Map<String, String> _roleCache = {};
@@ -108,4 +109,17 @@ class AuthService {
   }
 
   Stream<User?> get user => _auth.authStateChanges();
+
+  Future<User?> signInAsGuest() async {
+  try {
+    final result = await _auth.signInAnonymously();
+    return result.user;
+  } on FirebaseAuthException catch (e) {
+    print('❌ Guest login error: ${e.message}');
+    return null;
+  } catch (e) {
+    print('❌ Guest login error: $e');
+    return null;
+  }
+}
 }

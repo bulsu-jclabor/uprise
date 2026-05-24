@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../auth_service.dart';
+import '../guest/guest_home_screen.dart';
 
 class StudentLogin extends StatefulWidget {
   const StudentLogin({super.key});
@@ -21,12 +22,14 @@ class _StudentLoginState extends State<StudentLogin> {
   final AuthService _auth = AuthService();
 
   Future<void> _login() async {
-    if (_emailController.text.trim().isEmpty || _passwordController.text.trim().isEmpty) {
+    if (_emailController.text.trim().isEmpty ||
+        _passwordController.text.trim().isEmpty) {
       _showError('Please enter email and password');
       return;
     }
 
     if (!mounted) return;
+
     setState(() => _isLoading = true);
 
     try {
@@ -40,13 +43,13 @@ class _StudentLoginState extends State<StudentLogin> {
       if (user == null) {
         _showError('Invalid email or password');
       } else {
-        // ✅ No manual navigation here.
-        // RoleRouter will automatically redirect to StudentHomeScreen.
+        // ✅ RoleRouter handles navigation automatically
       }
     } on FirebaseAuthException catch (e) {
       if (!mounted) return;
 
       String message = 'Login failed';
+
       if (e.code == 'user-not-found') {
         message = 'No account found with this email';
       } else if (e.code == 'wrong-password') {
@@ -57,15 +60,19 @@ class _StudentLoginState extends State<StudentLogin> {
 
       _showError(message);
     } catch (_) {
-      if (mounted) _showError('An error occurred. Please try again.');
+      if (mounted) {
+        _showError('An error occurred. Please try again.');
+      }
     }
 
     if (!mounted) return;
+
     setState(() => _isLoading = false);
   }
 
   void _showError(String message) {
     if (!mounted) return;
+
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
@@ -95,6 +102,7 @@ class _StudentLoginState extends State<StudentLogin> {
                   Container(color: Colors.grey[200]),
             ),
           ),
+
           Positioned.fill(
             child: Container(
               decoration: BoxDecoration(
@@ -109,6 +117,7 @@ class _StudentLoginState extends State<StudentLogin> {
               ),
             ),
           ),
+
           SafeArea(
             child: Center(
               child: SingleChildScrollView(
@@ -128,7 +137,9 @@ class _StudentLoginState extends State<StudentLogin> {
                           ),
                         ),
                       ),
+
                       const SizedBox(height: 18),
+
                       Container(
                         padding: const EdgeInsets.all(28),
                         decoration: BoxDecoration(
@@ -142,16 +153,20 @@ class _StudentLoginState extends State<StudentLogin> {
                             ),
                           ],
                         ),
+
                         child: Column(
                           children: [
                             const SizedBox(height: 20),
+
                             TextField(
                               controller: _emailController,
                               decoration: const InputDecoration(
                                 labelText: 'Email Address',
                               ),
                             ),
+
                             const SizedBox(height: 18),
+
                             TextField(
                               controller: _passwordController,
                               obscureText: _obscurePassword,
@@ -165,6 +180,7 @@ class _StudentLoginState extends State<StudentLogin> {
                                   ),
                                   onPressed: () {
                                     if (!mounted) return;
+
                                     setState(() {
                                       _obscurePassword = !_obscurePassword;
                                     });
@@ -172,7 +188,9 @@ class _StudentLoginState extends State<StudentLogin> {
                                 ),
                               ),
                             ),
+
                             const SizedBox(height: 24),
+
                             SizedBox(
                               width: double.infinity,
                               height: 52,
@@ -183,6 +201,27 @@ class _StudentLoginState extends State<StudentLogin> {
                                         color: Colors.white,
                                       )
                                     : const Text('Login'),
+                              ),
+                            ),
+
+                            const SizedBox(height: 12),
+
+                            TextButton(
+                              onPressed: () {
+                                Navigator.pushReplacement(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) =>
+                                        const GuestHomeScreen(),
+                                  ),
+                                );
+                              },
+                              child: const Text(
+                                'Continue as Guest',
+                                style: TextStyle(
+                                  color: Colors.grey,
+                                  fontSize: 13,
+                                ),
                               ),
                             ),
                           ],

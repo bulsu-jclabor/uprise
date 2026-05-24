@@ -20,6 +20,7 @@ class EventData {
   final bool isRegistered;
   final int slots;
   final int slotsLeft;
+  final bool isPublic;
 
   const EventData({
     required this.id,
@@ -37,9 +38,10 @@ class EventData {
     this.isRegistered = false,
     required this.slots,
     required this.slotsLeft,
+   this.isPublic = true,
   });
 
-  EventData copyWith({bool? isRegistered}) => EventData(
+  EventData copyWith({bool? isRegistered, bool? isPublic}) => EventData(
         id: id,
         title: title,
         subtitle: subtitle,
@@ -55,6 +57,7 @@ class EventData {
         isRegistered: isRegistered ?? this.isRegistered,
         slots: slots,
         slotsLeft: slotsLeft,
+        isPublic: isPublic ?? this.isPublic,
       );
 }
 
@@ -81,6 +84,7 @@ final List<EventData> allEvents = [
     isRegistered: false,
     slots: 200,
     slotsLeft: 47,
+    isPublic: true,
   ),
   EventData(
     id: 'EVT-2025-002',
@@ -101,6 +105,7 @@ final List<EventData> allEvents = [
     isRegistered: false,
     slots: 120,
     slotsLeft: 22,
+    isPublic: true,
   ),
   EventData(
     id: 'EVT-2025-003',
@@ -121,6 +126,7 @@ final List<EventData> allEvents = [
     isRegistered: true,
     slots: 80,
     slotsLeft: 5,
+    isPublic: true,
   ),
 ];
 
