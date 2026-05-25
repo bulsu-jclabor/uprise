@@ -1113,56 +1113,197 @@ String _addOneHourToTimeString(String timeStr) {
     ]);
   }
 
-  // ── Helpers ───────────────────────────────────────────────────────
-
-  Future<void> _saveAndOpenFile(Map<String, dynamic> data) async {
-    try {
-      Uint8List bytes = Uint8List(0);
-      final String fileName = data['attachmentName'] ?? 'document';
-
-      if (data['attachmentBase64'] != null && data['attachmentBase64'].toString().isNotEmpty) {
-        bytes = base64Decode(data['attachmentBase64']);
-      } else if (data['attachmentUrl'] != null && data['attachmentUrl'].toString().isNotEmpty) {
-        final url = data['attachmentUrl'] as String;
+  // ── Fixed Attachment Viewer (same as org side) ─────────────────────────────
+Future<void> _saveAndOpenFile(Map<String, dynamic> data) async {
+  try {
+    Uint8List bytes = Uint8List(0);
+    final String fileName = data['attachmentName'] ?? 'document';
+    
+    // Check kung may Base64 (this is the primary source!)
+    final hasBase64 = data['attachmentBase64'] != null && 
+                      data['attachmentBase64'].toString().isNotEmpty;
+    final hasUrl = data['attachmentUrl'] != null && 
+                   data['attachmentUrl'].toString().isNotEmpty;
+    
+    if (!hasBase64 && !hasUrl) {
+      if (_isMounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No attachment found'), backgroundColor: UpriseColors.error),
+        );
+      }
+      return;
+    }
+    
+    // Get the file bytes
+    if (hasBase64) {
+      // ✅ DIRECT FROM BASE64 - same as org side!
+      final String base64String = data['attachmentBase64'];
+      bytes = base64Decode(base64String);
+      print('✅ Loaded from Base64, size: ${bytes.length} bytes');
+    } else if (hasUrl) {
+      // Fallback to URL if no Base64
+      final String url = data['attachmentUrl'];
+      try {
+        final ref = FirebaseStorage.instance.refFromURL(url);
+        bytes = await ref.getData(50 * 1024 * 1024) ?? Uint8List(0);
+      } catch (_) {
         try {
-          final ref = FirebaseStorage.instance.refFromURL(url);
-          bytes = await ref.getData(50 * 1024 * 1024) ?? Uint8List(0);
-        } catch (_) {
-          // ✅ FIXED: Use http.get instead of NetworkAssetBundle
-          try {
-            final uri = Uri.parse(url);
-            final response = await http.get(uri);
-            if (response.statusCode == 200) {
-              bytes = response.bodyBytes;
-            }
-          } catch (e) {
-            if (_isMounted) {
-              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                content: Text('Cannot download attachment: $e'),
-                backgroundColor: UpriseColors.error,
-              ));
-            }
-            return;
+          final uri = Uri.parse(url);
+          final response = await http.get(uri);
+          if (response.statusCode == 200) {
+            bytes = response.bodyBytes;
           }
+        } catch (e) {
+          if (_isMounted) {
+            showDialog(
+              context: context,
+              builder: (_) => AlertDialog(
+                title: const Text('Open Attachment'),
+                content: Text('Cannot download attachment. Open in browser instead?'),
+                actions: [
+                  TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+                  TextButton(
+                    onPressed: () {
+                      Navigator.pop(context);
+                      platform_file_utils.openUrl(url);
+                    },
+                    child: const Text('Open'),
+                  ),
+                ],
+              ),
+            );
+          }
+          return;
         }
       }
-
-      if (bytes.isEmpty) {
-        if (_isMounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Empty attachment'), backgroundColor: UpriseColors.error));
-        return;
-      }
-
-      await platform_file_utils.saveBytesToTempAndOpen(bytes, fileName);
-    } catch (e) {
+    }
+    
+    if (bytes.isEmpty) {
       if (_isMounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('Error opening file: $e'),
-          backgroundColor: UpriseColors.error,
-          behavior: SnackBarBehavior.floating,
-        ));
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Empty attachment'), backgroundColor: UpriseColors.error),
+        );
       }
+      return;
+    }
+    
+    // Get file extension and MIME type
+    final ext = fileName.contains('.') ? fileName.split('.').last.toLowerCase() : '';
+    final mime = _getMimeTypeFromExtension(ext);
+    
+    // For text files - show inline with preview
+    if (mime.startsWith('text/')) {
+      final content = utf8.decode(bytes);
+      if (_isMounted) {
+        showDialog(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: Text(fileName),
+            content: SingleChildScrollView(
+              child: SelectableText(
+                content,
+                style: GoogleFonts.beVietnamPro(fontSize: 12),
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Close'),
+              ),
+              TextButton(
+                onPressed: () {
+                  Navigator.pop(ctx);
+                  platform_file_utils.saveBytesToTempAndOpen(bytes, fileName);
+                },
+                child: const Text('Download'),
+              ),
+            ],
+          ),
+        );
+      }
+      return;
+    }
+    
+    // For images - show inline preview
+    if (mime.startsWith('image/')) {
+      if (_isMounted) {
+        showDialog(
+          context: context,
+          builder: (ctx) => Dialog(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Text(
+                    fileName,
+                    style: GoogleFonts.beVietnamPro(fontSize: 14, fontWeight: FontWeight.w600),
+                  ),
+                ),
+                Flexible(
+                  child: InteractiveViewer(
+                    minScale: 0.5,
+                    maxScale: 4.0,
+                    child: Image.memory(bytes),
+                  ),
+                ),
+                ButtonBar(
+                  children: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(ctx),
+                      child: const Text('Close'),
+                    ),
+                    TextButton(
+                      onPressed: () {
+                        Navigator.pop(ctx);
+                        platform_file_utils.saveBytesToTempAndOpen(bytes, fileName);
+                      },
+                      child: const Text('Download'),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      }
+      return;
+    }
+    
+    // For PDFs and other files - save and open with native app
+    await platform_file_utils.saveBytesToTempAndOpen(bytes, fileName);
+    
+  } catch (e) {
+    print('❌ Error opening attachment: $e');
+    if (_isMounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Error opening file: $e'),
+        backgroundColor: UpriseColors.error,
+        behavior: SnackBarBehavior.floating,
+      ));
     }
   }
+}
+
+// Helper method to get MIME type from extension
+String _getMimeTypeFromExtension(String ext) {
+  switch (ext.toLowerCase()) {
+    case 'txt': return 'text/plain';
+    case 'md': return 'text/markdown';
+    case 'html': case 'htm': return 'text/html';
+    case 'json': return 'application/json';
+    case 'png': return 'image/png';
+    case 'jpg': case 'jpeg': return 'image/jpeg';
+    case 'gif': return 'image/gif';
+    case 'pdf': return 'application/pdf';
+    case 'doc': return 'application/msword';
+    case 'docx': return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+    case 'xls': return 'application/vnd.ms-excel';
+    case 'xlsx': return 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+    case 'csv': return 'text/csv';
+    default: return 'application/octet-stream';
+  }
+}
 
   String _formatDate(dynamic dateField) {
     if (dateField == null) return 'TBD';
