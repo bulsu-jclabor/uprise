@@ -1,5 +1,3 @@
-// lib/screens/web/org/org_events_schedule.dart
-
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -30,6 +28,7 @@ class CategoryColors {
     'Technical': Color(0xFFDBEAFE),
     'Cultural':  Color(0xFFFCE7F3),
     'Sports':    Color(0xFFFFEDD5),
+    'Workshop':  Color(0xFFFEF3C7),
     'Other':     Color(0xFFF3F4F6),
   };
   static const Map<String, Color> fg = {
@@ -37,6 +36,7 @@ class CategoryColors {
     'Technical': Color(0xFF1D4ED8),
     'Cultural':  Color(0xFFBE185D),
     'Sports':    Color(0xFFEA580C),
+    'Workshop':  Color(0xFFB45309),
     'Other':     Color(0xFF374151),
   };
   static const Map<String, Color> dot = {
@@ -44,6 +44,7 @@ class CategoryColors {
     'Technical': Color(0xFF3B82F6),
     'Cultural':  Color(0xFFEC4899),
     'Sports':    Color(0xFFF97316),
+    'Workshop':  Color(0xFFF59E0B),
     'Other':     Color(0xFF9CA3AF),
   };
 
@@ -65,12 +66,20 @@ class _OrgEventsScheduleScreenState extends State<OrgEventsScheduleScreen> {
   String    _viewMode     = 'calendar';
   DateTime  _focusedMonth = DateTime.now();
   EventModel? _selectedEvent;
+  List<EventModel> _cachedEvents = [];
 
   Stream<QuerySnapshot> get _eventsStream => FirebaseFirestore.instance
       .collection('events')
       .where('orgId', isEqualTo: widget.orgId)
       .orderBy('date', descending: false)
-      .snapshots();
+      .snapshots()
+      .distinct();
+
+  @override
+  void initState() {
+    super.initState();
+    _cachedEvents = [];
+  }
 
   void _openEventModal({EventModel? event}) {
     showDialog(
@@ -133,7 +142,6 @@ class _OrgEventsScheduleScreenState extends State<OrgEventsScheduleScreen> {
     return Padding(
       padding: const EdgeInsets.all(24),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        // ---- Header ----
         Row(children: [
           Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text('Events and Schedules',
@@ -143,7 +151,6 @@ class _OrgEventsScheduleScreenState extends State<OrgEventsScheduleScreen> {
               style: GoogleFonts.beVietnamPro(fontSize: 13, color: OrgColors.darkGray)),
           ]),
           const Spacer(),
-          // View toggle
           Container(
             decoration: BoxDecoration(
               border: Border.all(color: OrgColors.primaryLight),
@@ -170,7 +177,6 @@ class _OrgEventsScheduleScreenState extends State<OrgEventsScheduleScreen> {
         ]),
         const SizedBox(height: 24),
 
-        // ---- Main content ----
         Expanded(
           child: Container(
             decoration: BoxDecoration(
@@ -179,7 +185,6 @@ class _OrgEventsScheduleScreenState extends State<OrgEventsScheduleScreen> {
               border: Border.all(color: OrgColors.primaryLight),
             ),
             child: Column(children: [
-              // Calendar toolbar
               _buildCalendarToolbar(),
               Expanded(
                 child: _viewMode == 'calendar'
@@ -212,12 +217,10 @@ class _OrgEventsScheduleScreenState extends State<OrgEventsScheduleScreen> {
     );
   }
 
-  // Month nav + category legend
   Widget _buildCalendarToolbar() {
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 14, 20, 0),
       child: Row(children: [
-        // Month navigation
         IconButton(
           onPressed: () => setState(() =>
             _focusedMonth = DateTime(_focusedMonth.year, _focusedMonth.month - 1)),
@@ -228,7 +231,6 @@ class _OrgEventsScheduleScreenState extends State<OrgEventsScheduleScreen> {
         Text(DateFormat('MMMM yyyy').format(_focusedMonth),
           style: GoogleFonts.beVietnamPro(fontSize: 16, fontWeight: FontWeight.w600, color: OrgColors.charcoal)),
         const SizedBox(width: 8),
-        // Today button
         GestureDetector(
           onTap: () => setState(() => _focusedMonth = DateTime.now()),
           child: Container(
@@ -247,12 +249,12 @@ class _OrgEventsScheduleScreenState extends State<OrgEventsScheduleScreen> {
           padding: EdgeInsets.zero, constraints: const BoxConstraints(),
         ),
         const Spacer(),
-        // Category legend
         ...[
           ('Academic', CategoryColors.getDot('Academic')),
           ('Technical', CategoryColors.getDot('Technical')),
           ('Cultural', CategoryColors.getDot('Cultural')),
           ('Sports', CategoryColors.getDot('Sports')),
+          ('Workshop', CategoryColors.getDot('Workshop')),
         ].map((item) => Padding(
           padding: const EdgeInsets.only(left: 14),
           child: Row(children: [
@@ -265,14 +267,21 @@ class _OrgEventsScheduleScreenState extends State<OrgEventsScheduleScreen> {
     );
   }
 
-  // ============ CALENDAR VIEW ============
   Widget _buildCalendarView() {
     return StreamBuilder<QuerySnapshot>(
+      key: ValueKey('calendar_${widget.orgId}_${_focusedMonth.year}_${_focusedMonth.month}'),
       stream: _eventsStream,
       builder: (context, snapshot) {
-        final events = snapshot.hasData
+        if (snapshot.connectionState == ConnectionState.waiting && snapshot.data == null) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        
+        final events = snapshot.hasData && snapshot.data!.docs.isNotEmpty
             ? snapshot.data!.docs.map((d) => EventModel.fromFirestore(d)).toList()
-            : <EventModel>[];
+            : _cachedEvents;
+          
+        _cachedEvents = events;
+        
         return _CalendarGrid(
           focusedMonth: _focusedMonth,
           events: events,
@@ -282,7 +291,6 @@ class _OrgEventsScheduleScreenState extends State<OrgEventsScheduleScreen> {
     );
   }
 
-  // ============ LIST VIEW ============
   Widget _buildListView() {
     return StreamBuilder<QuerySnapshot>(
       stream: _eventsStream,
@@ -349,7 +357,6 @@ class _CalendarGrid extends StatelessWidget {
     final today = DateTime.now();
 
     return Column(children: [
-      // Weekday headers
       Padding(
         padding: const EdgeInsets.fromLTRB(8, 8, 8, 0),
         child: Row(
@@ -365,11 +372,9 @@ class _CalendarGrid extends StatelessWidget {
       ),
       Divider(height: 1, color: OrgColors.mediumGray),
 
-      // Day cells
       Expanded(
         child: LayoutBuilder(builder: (context, constraints) {
           final rows = (totalCells / 7).ceil();
-          final cellH = constraints.maxHeight / rows;
 
           return Column(
             children: List.generate(rows, (row) {
@@ -442,7 +447,6 @@ class _DayCell extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.all(4),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        // Day number
         Align(
           alignment: Alignment.topRight,
           child: Container(
@@ -463,7 +467,6 @@ class _DayCell extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 2),
-        // Event chips — show up to 2, then "+N more"
         ...events.take(2).map((e) => _EventChip(event: e, onTap: () => onEventTap(e))),
         if (events.length > 2)
           Padding(
@@ -476,7 +479,7 @@ class _DayCell extends StatelessWidget {
   }
 }
 
-// ============ EVENT CHIP (on calendar cell) ============
+// ============ EVENT CHIP ============
 class _EventChip extends StatelessWidget {
   final EventModel event;
   final VoidCallback onTap;
@@ -540,7 +543,7 @@ class _CategoryChip extends StatelessWidget {
   }
 }
 
-// ============ EVENT DETAIL MODAL (dark design from screenshot) ============
+// ============ EVENT DETAIL MODAL ============
 class _EventDetailModal extends StatelessWidget {
   final EventModel event;
   final String orgId;
@@ -575,7 +578,6 @@ class _EventDetailModal extends StatelessWidget {
           boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.3), blurRadius: 32, offset: const Offset(0, 12))],
         ),
         child: Row(children: [
-          // ---- Left: dark panel ----
           Container(
             width: 220,
             decoration: BoxDecoration(
@@ -584,7 +586,6 @@ class _EventDetailModal extends StatelessWidget {
             ),
             padding: const EdgeInsets.all(20),
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              // Category badge
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
@@ -599,7 +600,6 @@ class _EventDetailModal extends StatelessWidget {
                   )),
               ),
               const SizedBox(height: 14),
-              // Title
               Text(event.title,
                 style: GoogleFonts.beVietnamPro(
                   fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white, height: 1.2)),
@@ -609,7 +609,6 @@ class _EventDetailModal extends StatelessWidget {
               const SizedBox(height: 20),
               const Divider(color: Colors.white12),
               const SizedBox(height: 16),
-              // Date & time
               _darkInfoRow(Icons.calendar_today_outlined,
                 'DATE & TIME',
                 '${DateFormat('MMMM d, yyyy').format(event.date)}\n${event.startTime} - ${event.endTime}'),
@@ -618,7 +617,6 @@ class _EventDetailModal extends StatelessWidget {
               const SizedBox(height: 14),
               _darkInfoRow(Icons.person_outline, 'GUEST SPEAKER', event.guestSpeaker.isNotEmpty ? event.guestSpeaker : '—'),
               const Spacer(),
-              // Registration progress
               FutureBuilder<int>(
                 future: _getAttendeeCount(),
                 builder: (context, snap) {
@@ -647,7 +645,6 @@ class _EventDetailModal extends StatelessWidget {
             ]),
           ),
 
-          // ---- Right: white panel ----
           Expanded(
             child: Container(
               decoration: BoxDecoration(
@@ -655,7 +652,6 @@ class _EventDetailModal extends StatelessWidget {
                 borderRadius: const BorderRadius.horizontal(right: Radius.circular(16)),
               ),
               child: Column(children: [
-                // Header
                 Padding(
                   padding: const EdgeInsets.fromLTRB(20, 16, 16, 12),
                   child: Row(children: [
@@ -663,7 +659,6 @@ class _EventDetailModal extends StatelessWidget {
                       style: GoogleFonts.beVietnamPro(fontSize: 11, fontWeight: FontWeight.w700,
                         color: OrgColors.darkGray, letterSpacing: 0.8)),
                     const Spacer(),
-                    // Edit & Delete actions
                     IconButton(
                       onPressed: onEdit,
                       icon: Icon(Icons.edit_outlined, size: 18, color: OrgColors.primaryDark),
@@ -693,17 +688,14 @@ class _EventDetailModal extends StatelessWidget {
                 ),
                 Divider(height: 1, color: OrgColors.mediumGray),
 
-                // Body
                 Expanded(
                   child: SingleChildScrollView(
                     padding: const EdgeInsets.all(20),
                     child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      // Description
                       Text(event.description.isNotEmpty ? event.description : 'No description provided.',
                         style: GoogleFonts.beVietnamPro(fontSize: 13, color: OrgColors.charcoal, height: 1.6)),
                       const SizedBox(height: 20),
 
-                      // Resources & Lab Preparation cards
                       Row(children: [
                         Expanded(child: _infoCard(
                           icon: Icons.folder_outlined,
@@ -719,7 +711,6 @@ class _EventDetailModal extends StatelessWidget {
                       ]),
                       const SizedBox(height: 20),
 
-                      // Tags / additional info row
                       if (event.tags.isNotEmpty) ...[
                         Text('Tags',
                           style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.w600, color: OrgColors.darkGray)),
@@ -738,7 +729,6 @@ class _EventDetailModal extends StatelessWidget {
                   ),
                 ),
 
-                // Footer
                 Padding(
                   padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
                   child: Row(mainAxisAlignment: MainAxisAlignment.end, children: [
@@ -854,7 +844,7 @@ class _EventModalState extends State<_EventModal> {
   String _selectedCategory = 'Academic';
   bool _isSubmitting = false;
 
-  static const _categories = ['Academic', 'Technical', 'Cultural', 'Sports', 'Other'];
+  static const _categories = ['Academic', 'Technical', 'Cultural', 'Sports', 'Workshop', 'Other'];
 
   @override
   void initState() {
@@ -872,7 +862,7 @@ class _EventModalState extends State<_EventModal> {
       _labPrepCtrl.text   = e.labPreparation.join(', ');
       _tagsCtrl.text      = e.tags.join(', ');
       _selectedDate       = e.date;
-      _selectedCategory   = e.category;
+      _selectedCategory   = _categories.contains(e.category) ? e.category : 'Other';
     } else {
       _selectedDate = DateTime.now();
     }
@@ -949,7 +939,6 @@ class _EventModalState extends State<_EventModal> {
         child: Form(
           key: _formKey,
           child: Column(mainAxisSize: MainAxisSize.min, children: [
-            // Header
             Container(
               padding: const EdgeInsets.fromLTRB(20, 16, 16, 16),
               decoration: BoxDecoration(
@@ -971,7 +960,6 @@ class _EventModalState extends State<_EventModal> {
               ]),
             ),
 
-            // Body
             Flexible(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.all(20),
@@ -1013,7 +1001,6 @@ class _EventModalState extends State<_EventModal> {
               ),
             ),
 
-            // Footer
             Container(
               padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
               decoration: BoxDecoration(border: Border(top: BorderSide(color: OrgColors.primaryLight))),
@@ -1076,23 +1063,31 @@ class _EventModalState extends State<_EventModal> {
     );
   }
 
-  Widget _dropdownInput() => DropdownButtonFormField<String>(
-    value: _selectedCategory,
-    items: _categories.map((c) => DropdownMenuItem(value: c, child: Row(children: [
-      Container(width: 8, height: 8, decoration: BoxDecoration(color: CategoryColors.getDot(c), shape: BoxShape.circle)),
-      const SizedBox(width: 8),
-      Text(c),
-    ]))).toList(),
-    onChanged: (v) => setState(() => _selectedCategory = v!),
-    style: GoogleFonts.beVietnamPro(fontSize: 13, color: OrgColors.charcoal),
-    decoration: InputDecoration(
-      filled: true, fillColor: OrgColors.lightGray,
-      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: OrgColors.primaryLight)),
-      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: OrgColors.primaryLight)),
-      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: OrgColors.primaryDark, width: 1.5)),
-      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
-    ),
-  );
+  Widget _dropdownInput() {
+    String safeValue = _categories.contains(_selectedCategory) ? _selectedCategory : 'Other';
+    if (safeValue != _selectedCategory) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) setState(() => _selectedCategory = safeValue);
+      });
+    }
+    return DropdownButtonFormField<String>(
+      value: safeValue,
+      items: _categories.map((c) => DropdownMenuItem(value: c, child: Row(children: [
+        Container(width: 8, height: 8, decoration: BoxDecoration(color: CategoryColors.getDot(c), shape: BoxShape.circle)),
+        const SizedBox(width: 8),
+        Text(c),
+      ]))).toList(),
+      onChanged: (v) => setState(() => _selectedCategory = v!),
+      style: GoogleFonts.beVietnamPro(fontSize: 13, color: OrgColors.charcoal),
+      decoration: InputDecoration(
+        filled: true, fillColor: OrgColors.lightGray,
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: OrgColors.primaryLight)),
+        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: OrgColors.primaryLight)),
+        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: OrgColors.primaryDark, width: 1.5)),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
+      ),
+    );
+  }
 
   Widget _dateInput() => GestureDetector(
     onTap: () async {
@@ -1196,6 +1191,3 @@ class EventModel {
     );
   }
 }
-
-
-
