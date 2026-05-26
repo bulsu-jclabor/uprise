@@ -5,8 +5,16 @@
 import 'package:flutter/material.dart';
 import '../student/student_events_screen.dart' show EventData, allEvents;
 
-// ── Sample public-only events (CICT-only / Members-only events excluded) ──
-final List<EventData> _publicEvents = allEvents.where((e) => e.isPublic).toList();
+// ─────────────────────────────────────────────────────────────
+//  THEME CONSTANTS
+// ─────────────────────────────────────────────────────────────
+const _kPrimary    = Color(0xFFFF6B00);
+const _kPrimaryBg  = Color(0xFFFFF3EB);
+const _kBg         = Color(0xFFF5F5F5);
+
+// ── Sample public-only events ──
+final List<EventData> _publicEvents =
+    allEvents.where((e) => e.isPublic).toList();
 
 // ─────────────────────────────────────────────────────────────
 //  MAIN SCREEN
@@ -29,20 +37,19 @@ class _GuestEventsScreenState extends State<GuestEventsScreen> {
 
   void _onRegistered(String id) {
     setState(() {
-      _events = _events.map((e) {
-        if (e.id == id) return e.copyWith(isRegistered: true);
-        return e;
-      }).toList();
+      _events = _events
+          .map((e) => e.id == id ? e.copyWith(isRegistered: true) : e)
+          .toList();
     });
   }
 
   @override
   Widget build(BuildContext context) {
     final featured = _events.isNotEmpty ? _events.first : null;
-    final rest = _events.length > 1 ? _events.sublist(1) : <EventData>[];
+    final rest     = _events.length > 1 ? _events.sublist(1) : <EventData>[];
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF2F2F2),
+      backgroundColor: _kBg,
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
@@ -51,20 +58,22 @@ class _GuestEventsScreenState extends State<GuestEventsScreen> {
           'Public Events',
           style: TextStyle(
             fontSize: 18,
-            fontWeight: FontWeight.w700,
+            fontWeight: FontWeight.w800,
             color: Colors.black87,
           ),
+        ),
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(1),
+          child: Container(height: 1, color: const Color(0xFFF0F0F0)),
         ),
         actions: [
           Container(
             margin: const EdgeInsets.only(right: 14),
-            padding:
-                const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
             decoration: BoxDecoration(
               color: const Color(0xFFE8F5E9),
               borderRadius: BorderRadius.circular(20),
-              border:
-                  Border.all(color: const Color(0xFF81C784)),
+              border: Border.all(color: const Color(0xFF81C784)),
             ),
             child: const Text(
               'Open to All',
@@ -82,27 +91,27 @@ class _GuestEventsScreenState extends State<GuestEventsScreen> {
           : ListView(
               padding: const EdgeInsets.only(bottom: 24),
               children: [
-                // ── "CICT-only" notice ──
+                // ── CICT-only notice ──
                 Container(
                   margin: const EdgeInsets.fromLTRB(14, 14, 14, 0),
                   padding: const EdgeInsets.symmetric(
                       horizontal: 14, vertical: 10),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFFFF8E1),
+                    color: _kPrimaryBg,
                     borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: const Color(0xFFFFCC02)),
+                    border: Border.all(color: _kPrimary.withOpacity(0.3)),
                   ),
                   child: Row(
                     children: const [
                       Icon(Icons.info_outline_rounded,
-                          size: 16, color: Color(0xFFF57F17)),
+                          size: 16, color: _kPrimary),
                       SizedBox(width: 8),
                       Expanded(
                         child: Text(
                           'Some events are exclusive to CICT students. Sign in to see all events.',
                           style: TextStyle(
                             fontSize: 11,
-                            color: Color(0xFF6D4C00),
+                            color: Color(0xFF7A3300),
                           ),
                         ),
                       ),
@@ -110,11 +119,10 @@ class _GuestEventsScreenState extends State<GuestEventsScreen> {
                   ),
                 ),
 
-                // Featured
+                // Featured card
                 if (featured != null)
                   Padding(
-                    padding:
-                        const EdgeInsets.fromLTRB(14, 14, 14, 0),
+                    padding: const EdgeInsets.fromLTRB(14, 14, 14, 0),
                     child: _GuestFeaturedCard(
                       event: featured,
                       onTap: () => _openDetail(featured),
@@ -124,8 +132,7 @@ class _GuestEventsScreenState extends State<GuestEventsScreen> {
                 // Rest
                 ...rest.map(
                   (e) => Padding(
-                    padding:
-                        const EdgeInsets.fromLTRB(14, 12, 14, 0),
+                    padding: const EdgeInsets.fromLTRB(14, 12, 14, 0),
                     child: _GuestCompactCard(
                         event: e, onTap: () => _openDetail(e)),
                   ),
@@ -152,7 +159,7 @@ class _GuestEventsScreenState extends State<GuestEventsScreen> {
 //  FEATURED CARD
 // ─────────────────────────────────────────────────────────────
 class _GuestFeaturedCard extends StatelessWidget {
-  final EventData event;
+  final EventData    event;
   final VoidCallback onTap;
   const _GuestFeaturedCard({required this.event, required this.onTap});
 
@@ -162,46 +169,47 @@ class _GuestFeaturedCard extends StatelessWidget {
       onTap: onTap,
       child: Container(
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(18),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.12),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
+              color: Colors.black.withOpacity(0.15),
+              blurRadius: 12,
+              offset: const Offset(0, 5),
             ),
           ],
         ),
         clipBehavior: Clip.antiAlias,
         child: Stack(
           children: [
+            // Banner image
             Image.network(
               event.bannerUrl,
-              height: 210,
+              height: 220,
               width: double.infinity,
               fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) => Container(
-                height: 210,
-                color: Colors.grey[800],
-              ),
+              errorBuilder: (_, __, ___) =>
+                  Container(height: 220, color: Colors.grey[800]),
             ),
+            // Dark gradient overlay
             Positioned.fill(
               child: Container(
                 decoration: const BoxDecoration(
                   gradient: LinearGradient(
                     begin: Alignment.topCenter,
                     end: Alignment.bottomCenter,
-                    colors: [Color(0x00000000), Color(0xCC000000)],
-                    stops: [0.35, 1.0],
+                    colors: [Color(0x00000000), Color(0xD9000000)],
+                    stops: [0.3, 1.0],
                   ),
                 ),
               ),
             ),
+            // Content
             Positioned(
               bottom: 0,
               left: 0,
               right: 0,
               child: Padding(
-                padding: const EdgeInsets.all(14),
+                padding: const EdgeInsets.all(16),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -213,7 +221,7 @@ class _GuestFeaturedCard extends StatelessWidget {
                         fontSize: 22,
                         fontWeight: FontWeight.w900,
                         color: Colors.white,
-                        letterSpacing: 0.5,
+                        letterSpacing: 0.3,
                       ),
                     ),
                     Text(
@@ -221,7 +229,7 @@ class _GuestFeaturedCard extends StatelessWidget {
                       style: const TextStyle(
                         fontSize: 10,
                         fontWeight: FontWeight.w600,
-                        color: Colors.white70,
+                        color: Colors.white60,
                         letterSpacing: 1.2,
                       ),
                     ),
@@ -234,7 +242,7 @@ class _GuestFeaturedCard extends StatelessWidget {
                         Text(event.date,
                             style: const TextStyle(
                                 fontSize: 11, color: Colors.white70)),
-                        const SizedBox(width: 12),
+                        const SizedBox(width: 14),
                         const Icon(Icons.location_on_outlined,
                             size: 12, color: Colors.white70),
                         const SizedBox(width: 4),
@@ -259,10 +267,17 @@ class _GuestFeaturedCard extends StatelessWidget {
                         const SizedBox(width: 12),
                         Container(
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 16, vertical: 7),
+                              horizontal: 18, vertical: 8),
                           decoration: BoxDecoration(
-                            color: const Color(0xFFE53935),
+                            color: _kPrimary,
                             borderRadius: BorderRadius.circular(20),
+                            boxShadow: [
+                              BoxShadow(
+                                color: _kPrimary.withOpacity(0.4),
+                                blurRadius: 8,
+                                offset: const Offset(0, 3),
+                              ),
+                            ],
                           ),
                           child: const Text(
                             'View Details',
@@ -290,7 +305,7 @@ class _GuestFeaturedCard extends StatelessWidget {
 //  COMPACT CARD
 // ─────────────────────────────────────────────────────────────
 class _GuestCompactCard extends StatelessWidget {
-  final EventData event;
+  final EventData    event;
   final VoidCallback onTap;
   const _GuestCompactCard({required this.event, required this.onTap});
 
@@ -373,7 +388,7 @@ class _GuestCompactCard extends StatelessWidget {
 //  EVENT DETAIL SCREEN (guest)
 // ─────────────────────────────────────────────────────────────
 class GuestEventDetailScreen extends StatelessWidget {
-  final EventData event;
+  final EventData    event;
   final VoidCallback onRegistered;
 
   const GuestEventDetailScreen({
@@ -385,13 +400,13 @@ class GuestEventDetailScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF2F2F2),
+      backgroundColor: _kBg,
       body: Stack(
         children: [
           CustomScrollView(
             slivers: [
               SliverAppBar(
-                expandedHeight: 240,
+                expandedHeight: 250,
                 pinned: true,
                 backgroundColor: Colors.white,
                 foregroundColor: Colors.black,
@@ -402,11 +417,17 @@ class GuestEventDetailScreen extends StatelessWidget {
                     onTap: () => Navigator.pop(context),
                     child: Container(
                       decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.9),
+                        color: Colors.white.withOpacity(0.92),
                         shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.1),
+                            blurRadius: 6,
+                          ),
+                        ],
                       ),
                       child: const Icon(Icons.arrow_back,
-                          size: 20, color: Colors.black),
+                          size: 20, color: Colors.black87),
                     ),
                   ),
                 ),
@@ -424,8 +445,8 @@ class GuestEventDetailScreen extends StatelessWidget {
                       Image.network(
                         event.bannerUrl,
                         fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => Container(
-                            color: Colors.grey[800]),
+                        errorBuilder: (_, __, ___) =>
+                            Container(color: Colors.grey[800]),
                       ),
                       Container(
                         decoration: const BoxDecoration(
@@ -434,7 +455,7 @@ class GuestEventDetailScreen extends StatelessWidget {
                             end: Alignment.bottomCenter,
                             colors: [
                               Color(0x44000000),
-                              Color(0xBB000000)
+                              Color(0xCC000000),
                             ],
                           ),
                         ),
@@ -462,7 +483,7 @@ class GuestEventDetailScreen extends StatelessWidget {
                               style: const TextStyle(
                                 fontSize: 10,
                                 fontWeight: FontWeight.w600,
-                                color: Colors.white70,
+                                color: Colors.white60,
                                 letterSpacing: 1.4,
                               ),
                             ),
@@ -473,6 +494,7 @@ class GuestEventDetailScreen extends StatelessWidget {
                   ),
                 ),
               ),
+
               SliverToBoxAdapter(
                 child: Container(
                   color: Colors.white,
@@ -480,50 +502,58 @@ class GuestEventDetailScreen extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Organizer
+                      // Organizer row
                       Row(
                         children: [
                           CircleAvatar(
-                            radius: 20,
-                            backgroundImage:
-                                NetworkImage(event.logoUrl),
+                            radius: 22,
+                            backgroundImage: NetworkImage(event.logoUrl),
                             backgroundColor: Colors.grey[200],
                             onBackgroundImageError: (_, __) {},
                           ),
                           const SizedBox(width: 10),
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(event.organizer,
-                                  style: const TextStyle(
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.w700,
-                                      color: Colors.black87)),
-                              Text(event.organizerSub,
-                                  style: const TextStyle(
-                                      fontSize: 11,
-                                      color: Colors.grey)),
-                            ],
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(event.organizer,
+                                    style: const TextStyle(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w700,
+                                        color: Colors.black87)),
+                                Text(event.organizerSub,
+                                    style: const TextStyle(
+                                        fontSize: 11, color: Colors.grey)),
+                              ],
+                            ),
                           ),
-                          const Spacer(),
-                          Text(event.id,
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: _kPrimaryBg,
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(
+                              event.id,
                               style: const TextStyle(
-                                  fontSize: 11,
-                                  color: Color(0xFFAAAAAA))),
+                                  fontSize: 11, color: _kPrimary,
+                                  fontWeight: FontWeight.w600),
+                            ),
+                          ),
                         ],
                       ),
+
                       const SizedBox(height: 16),
-                      const Divider(
-                          height: 1, color: Color(0xFFEEEEEE)),
+                      const Divider(height: 1, color: Color(0xFFF0F0F0)),
                       const SizedBox(height: 16),
 
-                      // Date & slots
+                      // Info tiles
                       _InfoTile(
                         icon: Icons.calendar_today_outlined,
-                        iconColor: const Color(0xFFE53935),
+                        iconColor: _kPrimary,
                         label: 'Date & Time',
-                        value:
-                            '${event.date}  •  ${event.time}',
+                        value: '${event.date}  •  ${event.time}',
                       ),
                       const SizedBox(height: 10),
                       _InfoTile(
@@ -535,8 +565,7 @@ class GuestEventDetailScreen extends StatelessWidget {
                       ),
 
                       const SizedBox(height: 16),
-                      const Divider(
-                          height: 1, color: Color(0xFFEEEEEE)),
+                      const Divider(height: 1, color: Color(0xFFF0F0F0)),
                       const SizedBox(height: 16),
 
                       const Text(
@@ -556,8 +585,7 @@ class GuestEventDetailScreen extends StatelessWidget {
                               height: 1.65)),
 
                       const SizedBox(height: 20),
-                      const Divider(
-                          height: 1, color: Color(0xFFEEEEEE)),
+                      const Divider(height: 1, color: Color(0xFFF0F0F0)),
                       const SizedBox(height: 16),
 
                       const Text(
@@ -578,14 +606,13 @@ class GuestEventDetailScreen extends StatelessWidget {
             ],
           ),
 
-          // Sticky register button
+          // ── Sticky register button ──
           Positioned(
             bottom: 0,
             left: 0,
             right: 0,
             child: Container(
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 16, vertical: 12),
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
               decoration: BoxDecoration(
                 color: Colors.white,
                 boxShadow: [
@@ -613,15 +640,13 @@ class GuestEventDetailScreen extends StatelessWidget {
                               fontSize: 13,
                               fontWeight: FontWeight.w700,
                               color: event.slotsLeft <= 10
-                                  ? const Color(0xFFE53935)
+                                  ? _kPrimary
                                   : Colors.black87,
                             ),
                           ),
-                          Text(
-                            event.date,
-                            style: const TextStyle(
-                                fontSize: 11, color: Colors.grey),
-                          ),
+                          Text(event.date,
+                              style: const TextStyle(
+                                  fontSize: 11, color: Colors.grey)),
                         ],
                       ),
                     ),
@@ -643,8 +668,15 @@ class GuestEventDetailScreen extends StatelessWidget {
                               padding: const EdgeInsets.symmetric(
                                   horizontal: 24, vertical: 14),
                               decoration: BoxDecoration(
-                                color: const Color(0xFFE53935),
+                                color: _kPrimary,
                                 borderRadius: BorderRadius.circular(12),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: _kPrimary.withOpacity(0.3),
+                                    blurRadius: 10,
+                                    offset: const Offset(0, 4),
+                                  ),
+                                ],
                               ),
                               child: const Text(
                                 'Register Now',
@@ -668,10 +700,10 @@ class GuestEventDetailScreen extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────
-//  GUEST REGISTRATION SCREEN (email + OTP verification)
+//  GUEST REGISTRATION SCREEN (email + OTP)
 // ─────────────────────────────────────────────────────────────
 class GuestEventRegistrationScreen extends StatefulWidget {
-  final EventData event;
+  final EventData    event;
   final VoidCallback onRegistered;
 
   const GuestEventRegistrationScreen({
@@ -687,15 +719,15 @@ class GuestEventRegistrationScreen extends StatefulWidget {
 
 class _GuestEventRegistrationScreenState
     extends State<GuestEventRegistrationScreen> {
-  final _formKey = GlobalKey<FormState>();
+  final _formKey       = GlobalKey<FormState>();
   final _firstNameCtrl = TextEditingController();
-  final _lastNameCtrl = TextEditingController();
-  final _emailCtrl = TextEditingController();
-  final _schoolCtrl = TextEditingController();
-  final _otpCtrl = TextEditingController();
+  final _lastNameCtrl  = TextEditingController();
+  final _emailCtrl     = TextEditingController();
+  final _schoolCtrl    = TextEditingController();
+  final _otpCtrl       = TextEditingController();
 
   bool _isLoading = false;
-  bool _otpSent = false;
+  bool _otpSent   = false;
   bool _submitted = false;
 
   @override
@@ -714,22 +746,21 @@ class _GuestEventRegistrationScreenState
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Please enter a valid email address'),
-          backgroundColor: Color(0xFFE53935),
+          backgroundColor: _kPrimary,
         ),
       );
       return;
     }
     setState(() => _isLoading = true);
-    // TODO: Call your OTP service here
     await Future.delayed(const Duration(milliseconds: 1200));
     setState(() {
       _isLoading = false;
-      _otpSent = true;
+      _otpSent   = true;
     });
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(
-            'OTP sent to ${_emailCtrl.text.trim()}'),
+        content: Text('OTP sent to ${_emailCtrl.text.trim()}'),
         backgroundColor: const Color(0xFF2E7D32),
       ),
     );
@@ -738,7 +769,6 @@ class _GuestEventRegistrationScreenState
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _isLoading = true);
-    // TODO: Verify OTP and submit to Firestore
     await Future.delayed(const Duration(milliseconds: 1500));
     widget.onRegistered();
     setState(() {
@@ -750,7 +780,7 @@ class _GuestEventRegistrationScreenState
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF2F2F2),
+      backgroundColor: _kBg,
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
@@ -762,6 +792,10 @@ class _GuestEventRegistrationScreenState
               fontWeight: FontWeight.w700,
               color: Colors.black87),
         ),
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(1),
+          child: Container(height: 1, color: const Color(0xFFF0F0F0)),
+        ),
       ),
       body: _submitted
           ? _GuestSuccessView(event: widget.event)
@@ -772,7 +806,7 @@ class _GuestEventRegistrationScreenState
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Event summary
+                    // ── Event summary card ──
                     Container(
                       padding: const EdgeInsets.all(14),
                       decoration: BoxDecoration(
@@ -780,7 +814,7 @@ class _GuestEventRegistrationScreenState
                         borderRadius: BorderRadius.circular(14),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withOpacity(0.07),
+                            color: Colors.black.withOpacity(0.06),
                             blurRadius: 6,
                             offset: const Offset(0, 2),
                           ),
@@ -795,18 +829,16 @@ class _GuestEventRegistrationScreenState
                               width: 70,
                               height: 70,
                               fit: BoxFit.cover,
-                              errorBuilder: (_, __, ___) =>
-                                  Container(
-                                      width: 70,
-                                      height: 70,
-                                      color: Colors.grey[300]),
+                              errorBuilder: (_, __, ___) => Container(
+                                  width: 70,
+                                  height: 70,
+                                  color: Colors.grey[300]),
                             ),
                           ),
                           const SizedBox(width: 12),
                           Expanded(
                             child: Column(
-                              crossAxisAlignment:
-                                  CrossAxisAlignment.start,
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(widget.event.title,
                                     style: const TextStyle(
@@ -816,17 +848,15 @@ class _GuestEventRegistrationScreenState
                                 const SizedBox(height: 2),
                                 Text(widget.event.date,
                                     style: const TextStyle(
-                                        fontSize: 12,
-                                        color: Colors.grey)),
+                                        fontSize: 12, color: Colors.grey)),
                                 const SizedBox(height: 4),
                                 Text(
                                   '${widget.event.slotsLeft} slots remaining',
                                   style: TextStyle(
                                     fontSize: 11,
                                     fontWeight: FontWeight.w600,
-                                    color: widget.event.slotsLeft <=
-                                            10
-                                        ? const Color(0xFFE53935)
+                                    color: widget.event.slotsLeft <= 10
+                                        ? _kPrimary
                                         : const Color(0xFF2E7D32),
                                   ),
                                 ),
@@ -837,30 +867,29 @@ class _GuestEventRegistrationScreenState
                       ),
                     ),
 
-                    const SizedBox(height: 20),
+                    const SizedBox(height: 16),
 
-                    // Guest badge
+                    // ── Guest notice ──
                     Container(
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 8),
+                          horizontal: 12, vertical: 10),
                       decoration: BoxDecoration(
-                        color: const Color(0xFFFFF8E1),
+                        color: _kPrimaryBg,
                         borderRadius: BorderRadius.circular(10),
                         border: Border.all(
-                            color: const Color(0xFFFFCC02)),
+                            color: _kPrimary.withOpacity(0.3)),
                       ),
                       child: Row(
                         children: const [
                           Icon(Icons.person_outline_rounded,
-                              size: 16,
-                              color: Color(0xFFF57F17)),
+                              size: 16, color: _kPrimary),
                           SizedBox(width: 8),
                           Expanded(
                             child: Text(
                               'Guest Registration — verify your identity with a valid email address.',
                               style: TextStyle(
                                   fontSize: 12,
-                                  color: Color(0xFF6D4C00)),
+                                  color: Color(0xFF7A3300)),
                             ),
                           ),
                         ],
@@ -869,15 +898,7 @@ class _GuestEventRegistrationScreenState
 
                     const SizedBox(height: 20),
 
-                    const Text(
-                      'PERSONAL INFORMATION',
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w800,
-                        color: Colors.black87,
-                        letterSpacing: 0.6,
-                      ),
-                    ),
+                    _SectionLabel(label: 'PERSONAL INFORMATION'),
                     const SizedBox(height: 12),
 
                     Container(
@@ -896,7 +917,7 @@ class _GuestEventRegistrationScreenState
                                   controller: _firstNameCtrl,
                                   hint: 'Juan',
                                   validator: (v) =>
-                                      v == null || v.trim().isEmpty
+                                      (v == null || v.trim().isEmpty)
                                           ? 'Required'
                                           : null,
                                 ),
@@ -908,7 +929,7 @@ class _GuestEventRegistrationScreenState
                                   controller: _lastNameCtrl,
                                   hint: 'Dela Cruz',
                                   validator: (v) =>
-                                      v == null || v.trim().isEmpty
+                                      (v == null || v.trim().isEmpty)
                                           ? 'Required'
                                           : null,
                                 ),
@@ -921,7 +942,7 @@ class _GuestEventRegistrationScreenState
                             controller: _schoolCtrl,
                             hint: 'e.g. DLSU, PLM, MAPUA',
                             validator: (v) =>
-                                v == null || v.trim().isEmpty
+                                (v == null || v.trim().isEmpty)
                                     ? 'Required'
                                     : null,
                           ),
@@ -930,16 +951,7 @@ class _GuestEventRegistrationScreenState
                     ),
 
                     const SizedBox(height: 16),
-
-                    const Text(
-                      'EMAIL VERIFICATION',
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w800,
-                        color: Colors.black87,
-                        letterSpacing: 0.6,
-                      ),
-                    ),
+                    _SectionLabel(label: 'EMAIL VERIFICATION'),
                     const SizedBox(height: 12),
 
                     Container(
@@ -951,8 +963,7 @@ class _GuestEventRegistrationScreenState
                       child: Column(
                         children: [
                           Row(
-                            crossAxisAlignment:
-                                CrossAxisAlignment.end,
+                            crossAxisAlignment: CrossAxisAlignment.end,
                             children: [
                               Expanded(
                                 child: _GuestFormField(
@@ -963,8 +974,7 @@ class _GuestEventRegistrationScreenState
                                       TextInputType.emailAddress,
                                   readOnly: _otpSent,
                                   validator: (v) {
-                                    if (v == null ||
-                                        v.trim().isEmpty) {
+                                    if (v == null || v.trim().isEmpty) {
                                       return 'Required';
                                     }
                                     if (!v.contains('@')) {
@@ -978,12 +988,12 @@ class _GuestEventRegistrationScreenState
                               SizedBox(
                                 height: 48,
                                 child: ElevatedButton(
-                                  onPressed: (_isLoading || _otpSent)
-                                      ? null
-                                      : _sendOtp,
+                                  onPressed:
+                                      (_isLoading || _otpSent)
+                                          ? null
+                                          : _sendOtp,
                                   style: ElevatedButton.styleFrom(
-                                    backgroundColor:
-                                        const Color(0xFFE53935),
+                                    backgroundColor: _kPrimary,
                                     foregroundColor: Colors.white,
                                     elevation: 0,
                                     shape: RoundedRectangleBorder(
@@ -1002,13 +1012,10 @@ class _GuestEventRegistrationScreenState
                                           ),
                                         )
                                       : Text(
-                                          _otpSent
-                                              ? 'Sent ✓'
-                                              : 'Send OTP',
+                                          _otpSent ? 'Sent ✓' : 'Send OTP',
                                           style: const TextStyle(
                                               fontSize: 13,
-                                              fontWeight:
-                                                  FontWeight.w700),
+                                              fontWeight: FontWeight.w700),
                                         ),
                                 ),
                               ),
@@ -1042,19 +1049,14 @@ class _GuestEventRegistrationScreenState
                       width: double.infinity,
                       height: 52,
                       child: ElevatedButton(
-                        onPressed: (!_otpSent || _isLoading)
-                            ? null
-                            : _submit,
+                        onPressed: (!_otpSent || _isLoading) ? null : _submit,
                         style: ElevatedButton.styleFrom(
-                          backgroundColor:
-                              const Color(0xFFE53935),
+                          backgroundColor: _kPrimary,
                           foregroundColor: Colors.white,
                           elevation: 0,
-                          disabledBackgroundColor:
-                              Colors.grey.shade300,
+                          disabledBackgroundColor: Colors.grey.shade300,
                           shape: RoundedRectangleBorder(
-                            borderRadius:
-                                BorderRadius.circular(14),
+                            borderRadius: BorderRadius.circular(14),
                           ),
                         ),
                         child: _isLoading && _otpSent
@@ -1110,14 +1112,14 @@ class _GuestSuccessView extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             Container(
-              width: 80,
-              height: 80,
+              width: 90,
+              height: 90,
               decoration: const BoxDecoration(
                 color: Color(0xFFE8F5E9),
                 shape: BoxShape.circle,
               ),
               child: const Icon(Icons.check_circle_outline,
-                  size: 44, color: Color(0xFF2E7D32)),
+                  size: 48, color: Color(0xFF2E7D32)),
             ),
             const SizedBox(height: 20),
             const Text(
@@ -1145,7 +1147,7 @@ class _GuestSuccessView extends StatelessWidget {
                   Navigator.pop(context);
                 },
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFE53935),
+                  backgroundColor: _kPrimary,
                   foregroundColor: Colors.white,
                   elevation: 0,
                   shape: RoundedRectangleBorder(
@@ -1175,14 +1177,21 @@ class _EmptyEvents extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.event_busy_outlined,
-              size: 64, color: Colors.grey[300]),
-          const SizedBox(height: 16),
+          Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: _kPrimaryBg,
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(Icons.event_busy_outlined,
+                size: 48, color: _kPrimary),
+          ),
+          const SizedBox(height: 20),
           const Text('No public events right now',
               style: TextStyle(
                   fontSize: 15,
-                  color: Colors.black45,
-                  fontWeight: FontWeight.w500)),
+                  color: Colors.black54,
+                  fontWeight: FontWeight.w600)),
           const SizedBox(height: 6),
           const Text('Check back soon for upcoming events.',
               style: TextStyle(fontSize: 12, color: Colors.black38)),
@@ -1195,13 +1204,44 @@ class _EmptyEvents extends StatelessWidget {
 // ─────────────────────────────────────────────────────────────
 //  SHARED HELPERS
 // ─────────────────────────────────────────────────────────────
-class _GuestFormField extends StatelessWidget {
+class _SectionLabel extends StatelessWidget {
   final String label;
-  final TextEditingController controller;
-  final String hint;
-  final TextInputType? keyboardType;
+  const _SectionLabel({required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Container(
+          width: 3,
+          height: 16,
+          decoration: BoxDecoration(
+            color: _kPrimary,
+            borderRadius: BorderRadius.circular(2),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w800,
+            color: Colors.black87,
+            letterSpacing: 0.6,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _GuestFormField extends StatelessWidget {
+  final String                    label;
+  final TextEditingController     controller;
+  final String                    hint;
+  final TextInputType?            keyboardType;
   final String? Function(String?)? validator;
-  final bool readOnly;
+  final bool                      readOnly;
 
   const _GuestFormField({
     required this.label,
@@ -1233,8 +1273,8 @@ class _GuestFormField extends StatelessWidget {
               color: readOnly ? Colors.grey : Colors.black87),
           decoration: InputDecoration(
             hintText: hint,
-            hintStyle: const TextStyle(
-                fontSize: 13, color: Color(0xFFBBBBBB)),
+            hintStyle:
+                const TextStyle(fontSize: 13, color: Color(0xFFBBBBBB)),
             filled: true,
             fillColor: readOnly
                 ? const Color(0xFFF8F8F8)
@@ -1253,21 +1293,20 @@ class _GuestFormField extends StatelessWidget {
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(10),
-              borderSide: const BorderSide(
-                  color: Color(0xFFE53935), width: 1.5),
+              borderSide:
+                  const BorderSide(color: _kPrimary, width: 1.5),
             ),
             errorBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(10),
-              borderSide: const BorderSide(
-                  color: Color(0xFFE53935), width: 1),
+              borderSide:
+                  const BorderSide(color: Color(0xFFE53935), width: 1),
             ),
             focusedErrorBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(10),
-              borderSide: const BorderSide(
-                  color: Color(0xFFE53935), width: 1.5),
+              borderSide:
+                  const BorderSide(color: Color(0xFFE53935), width: 1.5),
             ),
-            errorStyle:
-                const TextStyle(fontSize: 10),
+            errorStyle: const TextStyle(fontSize: 10),
           ),
         ),
       ],
@@ -1281,14 +1320,10 @@ class _CategoryBadge extends StatelessWidget {
 
   Color get _color {
     switch (category) {
-      case 'competition':
-        return const Color(0xFFFF6F00);
-      case 'workshop':
-        return const Color(0xFF1565C0);
-      case 'seminar':
-        return const Color(0xFF6A1B9A);
-      default:
-        return const Color(0xFF37474F);
+      case 'competition': return const Color(0xFFFF6B00);
+      case 'workshop':    return const Color(0xFF1565C0);
+      case 'seminar':     return const Color(0xFF6A1B9A);
+      default:            return const Color(0xFF37474F);
     }
   }
 
@@ -1297,8 +1332,7 @@ class _CategoryBadge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
-          color: _color,
-          borderRadius: BorderRadius.circular(4)),
+          color: _color, borderRadius: BorderRadius.circular(4)),
       child: Text(
         category.toUpperCase(),
         style: const TextStyle(
@@ -1319,17 +1353,18 @@ class _SlotsBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final fraction = (slots - slotsLeft) / slots;
-    final isFull = slotsLeft <= 10;
+    final isFull   = slotsLeft <= 10;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('$slotsLeft slots left',
-            style: TextStyle(
-                fontSize: 10,
-                color: isFull
-                    ? const Color(0xFFFF7043)
-                    : Colors.white70,
-                fontWeight: FontWeight.w600)),
+        Text(
+          '$slotsLeft slots left',
+          style: TextStyle(
+            fontSize: 10,
+            color: isFull ? const Color(0xFFFF7043) : Colors.white70,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
         const SizedBox(height: 4),
         ClipRRect(
           borderRadius: BorderRadius.circular(4),
@@ -1338,9 +1373,7 @@ class _SlotsBar extends StatelessWidget {
             minHeight: 5,
             backgroundColor: Colors.white24,
             valueColor: AlwaysStoppedAnimation<Color>(
-              isFull
-                  ? const Color(0xFFFF7043)
-                  : const Color(0xFF69F0AE),
+              isFull ? const Color(0xFFFF7043) : const Color(0xFF69F0AE),
             ),
           ),
         ),
@@ -1351,14 +1384,15 @@ class _SlotsBar extends StatelessWidget {
 
 class _InfoTile extends StatelessWidget {
   final IconData icon;
-  final Color iconColor;
-  final String label;
-  final String value;
-  const _InfoTile(
-      {required this.icon,
-      required this.iconColor,
-      required this.label,
-      required this.value});
+  final Color    iconColor;
+  final String   label;
+  final String   value;
+  const _InfoTile({
+    required this.icon,
+    required this.iconColor,
+    required this.label,
+    required this.value,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1410,9 +1444,16 @@ class _LocationCard extends StatelessWidget {
         padding: const EdgeInsets.all(12),
         child: Row(
           children: [
-            const Icon(Icons.location_on_outlined,
-                size: 18, color: Color(0xFFE53935)),
-            const SizedBox(width: 8),
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: _kPrimaryBg,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Icon(Icons.location_on_outlined,
+                  size: 18, color: _kPrimary),
+            ),
+            const SizedBox(width: 10),
             Expanded(
               child: Text(location,
                   style: const TextStyle(
@@ -1431,8 +1472,7 @@ class _RegisteredChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(
-          horizontal: 18, vertical: 14),
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
       decoration: BoxDecoration(
         color: const Color(0xFFE8F5E9),
         borderRadius: BorderRadius.circular(12),
@@ -1441,8 +1481,7 @@ class _RegisteredChip extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: const [
-          Icon(Icons.check_circle,
-              size: 16, color: Color(0xFF2E7D32)),
+          Icon(Icons.check_circle, size: 16, color: Color(0xFF2E7D32)),
           SizedBox(width: 6),
           Text('Registered',
               style: TextStyle(
