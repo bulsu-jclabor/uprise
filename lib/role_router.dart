@@ -9,7 +9,6 @@ import 'screens/web/admin/admin_dashboard.dart';
 import 'package:uprise/screens/web/org/org_dashboard.dart';
 import 'screens/student/student_login.dart';
 import 'screens/student/student_home_screen.dart';
-import 'screens/student/student_change_password_screen.dart';
 
 class RoleRouter extends StatefulWidget {
   const RoleRouter({super.key});
@@ -75,35 +74,8 @@ class _RoleRouterState extends State<RoleRouter> {
             if (!kIsWeb) {
               // Mobile
               if (role == 'student') {
-                screen = FutureBuilder<DocumentSnapshot>(
-                  future: FirebaseFirestore.instance
-                      .collection('students') // ✅ correct collection
-                      .doc(user.uid)
-                      .get(),
-                  builder: (context, userDocSnapshot) {
-                    if (userDocSnapshot.connectionState ==
-                        ConnectionState.waiting) {
-                      return const Scaffold(
-                          body: Center(child: CircularProgressIndicator()));
-                    }
-
-                    if (userDocSnapshot.hasData &&
-                        userDocSnapshot.data!.exists) {
-                      final data = userDocSnapshot.data!.data() as Map<String, dynamic>;
-                      final mustChange = data['mustChangePassword'] ?? false;
-
-                      if (mustChange == true) {
-                        // ✅ First login → Change Password
-                        return const StudentChangePasswordScreen();
-                      } else {
-                        // ✅ Normal flow → Home
-                        return const StudentHomeScreen();
-                      }
-                    } else {
-                      return const StudentHomeScreen();
-                    }
-                  },
-                );
+                // ✅ Diretso na sa StudentHomeScreen
+                screen = const StudentHomeScreen();
               } else if (role == 'admin') {
                 screen = const WrongPlatformScreen(
                   message: 'Admin accounts are only available on Web.',

@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../auth/role_router.dart';
+import '../student/student_login.dart';
 import '../../models/profile_model.dart';
+
 
 
 
@@ -33,19 +35,21 @@ class ProfileModel extends ChangeNotifier {
     if (user != null) {
       email = user.email ?? '';
 
-      final doc = await FirebaseFirestore.instance
-          .collection('students')
-          .doc(user.uid)
-          .get();
+      final snapshot = await FirebaseFirestore.instance
+    .collection('students')
+    .where('uid', isEqualTo: user.uid)
+    .limit(1)
+    .get();
 
-      if (doc.exists) {
-        final data = doc.data()!;
-        fullName = data['fullName'] ?? '';
-        studentId = data['studentId'] ?? '';
-        mobile = data['mobile'] ?? '';
-        address = data['address'] ?? '';
-        photoUrl = data['photoUrl'] ?? ''; // ✅ Load image URL if available
-      }
+if (snapshot.docs.isNotEmpty) {
+  final data = snapshot.docs.first.data();
+  fullName = data['fullName'] ?? '';
+  studentId = data['studentId'] ?? '';
+  mobile = data['mobile'] ?? '';
+  address = data['address'] ?? '';
+  photoUrl = data['photoUrl'] ?? '';
+}
+
       notifyListeners();
     }
   }
@@ -64,19 +68,25 @@ class ProfileModel extends ChangeNotifier {
     if (photoUrl != null) this.photoUrl = photoUrl;
 
     final user = FirebaseAuth.instance.currentUser;
-    if (user != null) {
-      await FirebaseFirestore.instance
-          .collection('students')
-          .doc(user.uid)
-          .set({
-        'fullName': fullName,
-        'studentId': studentId,
-        'email': email,
-        'mobile': mobile,
-        'address': address,
-        'photoUrl': this.photoUrl,
-      }, SetOptions(merge: true));
-    }
+if (user != null) {
+  final snapshot = await FirebaseFirestore.instance
+      .collection('students')
+      .where('uid', isEqualTo: user.uid)
+      .limit(1)
+      .get();
+
+  if (snapshot.docs.isNotEmpty) {
+    final docRef = snapshot.docs.first.reference;
+    await docRef.set({
+      'fullName': fullName,
+      'studentId': studentId,
+      'email': email,
+      'mobile': mobile,
+      'address': address,
+      'photoUrl': this.photoUrl,
+    }, SetOptions(merge: true));
+  }
+}
     notifyListeners();
   }
 }
@@ -343,12 +353,15 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
                       horizontal: 16, vertical: 8),
                   child: TextButton.icon(
   onPressed: () async {
-    await FirebaseAuth.instance.signOut();
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(builder: (_) => const RoleRouter()),
+  await FirebaseAuth.instance.signOut();
+  if (context.mounted) {
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => const StudentLogin()),
+      (route) => false,
     );
-  },
+  }
+},
+
   icon: const Icon(Icons.logout, color: kOrange),
   label: const Text('Log Out',
       style: TextStyle(
