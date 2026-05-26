@@ -12,7 +12,7 @@ import 'student_accounts.dart';
 import 'adviser_roles.dart';
 import 'event_proposals.dart';
 import 'event_calendar.dart';
-import 'letter_request.dart';
+import 'letter_request.dart'; 
 import 'external_account.dart';
 import '../../../services/activity_logger.dart' as activity_log;
 import 'reports_management.dart';
@@ -101,7 +101,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
       const AdviserRoles(),
       const EventProposals(),
       const EventCalendar(),
-      const LetterRequest(),
+      const AdminLetterRequestScreen(),
       const ExternalAccount(),
       const ReportsManagement(),
       const ActivityLogs(),
