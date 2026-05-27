@@ -381,14 +381,6 @@ class _AdviserRolesState extends State<AdviserRoles> {
             _exportPDF();
           }
         }),
-        const SizedBox(width: 10),
-
-        // Add
-        _ToolbarButton(
-          label: 'Assign Role',
-          icon: Icons.add_rounded,
-          onPressed: _loadingMeta ? null : _showAddDialog,
-        ),
       ]),
     );
   }
