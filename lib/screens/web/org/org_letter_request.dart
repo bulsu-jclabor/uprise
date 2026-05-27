@@ -267,7 +267,7 @@ class _OrgLetterRequestScreenState extends State<OrgLetterRequestScreen> {
     return StreamBuilder<QuerySnapshot>(
       stream: _requestsStream,
       builder: (context, snapshot) {
-        int total = 0, pending = 0, approved = 0, rejected = 0, revision = 0;
+        int total = 0, pending = 0, approved = 0, rejected = 0, revision = 0, resubmitted = 0;
         if (snapshot.hasData) {
           for (final doc in snapshot.data!.docs) {
             total++;
@@ -276,6 +276,7 @@ class _OrgLetterRequestScreenState extends State<OrgLetterRequestScreen> {
             if (status == 'approved') approved++;
             if (status == 'rejected') rejected++;
             if (status == 'revision') revision++;
+            if (status == 'resubmitted') resubmitted++;
           }
         }
         return Row(children: [
@@ -286,6 +287,8 @@ class _OrgLetterRequestScreenState extends State<OrgLetterRequestScreen> {
           _StatCard(label: 'Approved', value: approved, icon: Icons.check_circle_outline, color: OrgColors.success),
           const SizedBox(width: 14),
           _StatCard(label: 'Rejected', value: rejected, icon: Icons.cancel_outlined, color: OrgColors.error),
+          const SizedBox(width: 14),
+          _StatCard(label: 'Resubmitted', value: resubmitted, icon: Icons.refresh_rounded, color: OrgColors.purple),
           const SizedBox(width: 14),
           _StatCard(label: 'Needs Revision', value: revision, icon: Icons.edit_note_rounded, color: OrgColors.info),
         ]);
@@ -380,7 +383,7 @@ class _OrgLetterRequestScreenState extends State<OrgLetterRequestScreen> {
                                   color: OrgColors.info,
                                   onTap: () => _viewRequestDetails(req),
                                 ),
-                              if (req.status == 'pending' || req.status == 'revision')
+                              if (req.status == 'pending' || req.status == 'revision' || req.status == 'resubmitted')
                                 _ActionIconButton(
                                   icon: Icons.edit_outlined,
                                   tooltip: 'Edit',
@@ -456,6 +459,11 @@ class _OrgLetterRequestScreenState extends State<OrgLetterRequestScreen> {
           onTap: () => setState(() => _statusFilter = 'Rejected'),
         ),
         _FilterChip(
+          label: 'Resubmitted',
+          selected: _statusFilter == 'Resubmitted',
+          onTap: () => setState(() => _statusFilter = 'Resubmitted'),
+        ),
+        _FilterChip(
           label: 'Needs Revision',
           selected: _statusFilter == 'Needs Revision',
           onTap: () => setState(() => _statusFilter = 'Needs Revision'),
@@ -503,6 +511,9 @@ class _OrgLetterRequestScreenState extends State<OrgLetterRequestScreen> {
         break;
       case 'revision':
         style = {'bg': OrgColors.infoBg, 'fg': OrgColors.info, 'label': 'Needs Revision'};
+        break;
+      case 'resubmitted':
+        style = {'bg': OrgColors.purpleBg, 'fg': OrgColors.purple, 'label': 'Resubmitted'};
         break;
       default:
         style = {'bg': OrgColors.warningBg, 'fg': OrgColors.warning, 'label': 'Pending'};
@@ -647,7 +658,7 @@ class _RequestDetailsDialog extends StatelessWidget {
             const SizedBox(height: 20),
             _infoRow('Subject', request.subject),
             const SizedBox(height: 12),
-            _infoRow('Status', request.status.toUpperCase()),
+            _infoRow('Status', _getStatusDisplay(request.status)),
             if (request.revisionNote != null) ...[
               const SizedBox(height: 12),
               Container(
@@ -667,6 +678,22 @@ class _RequestDetailsDialog extends StatelessWidget {
                 ),
               ),
             ],
+            if (request.revisionCount != null && request.revisionCount! > 0) ...[
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: OrgColors.mediumGray.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(children: [
+                  Icon(Icons.history, size: 16, color: OrgColors.darkGray),
+                  const SizedBox(width: 8),
+                  Text('Revision #${request.revisionCount}',
+                      style: GoogleFonts.beVietnamPro(fontSize: 12, color: OrgColors.darkGray)),
+                ]),
+              ),
+            ],
             const SizedBox(height: 12),
             _infoRow('Date Submitted', DateFormat('MMM dd, yyyy hh:mm a').format(request.timestamp.toDate())),
             const SizedBox(height: 20),
@@ -683,6 +710,16 @@ class _RequestDetailsDialog extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  String _getStatusDisplay(String status) {
+    switch (status.toLowerCase()) {
+      case 'approved': return 'APPROVED';
+      case 'rejected': return 'REJECTED';
+      case 'revision': return 'NEEDS REVISION';
+      case 'resubmitted': return 'RESUBMITTED';
+      default: return 'PENDING';
+    }
   }
 
   Widget _infoRow(String label, String value) {
@@ -838,7 +875,12 @@ class _LetterRequestModalState extends State<_LetterRequestModal> {
       final col = FirebaseFirestore.instance.collection('letter_requests');
       
       if (widget.existingRequest != null) {
-        // Keep existing status when editing (don't reset to pending)
+        if (widget.existingRequest!.status == 'revision') {
+          data['status'] = 'resubmitted';
+          data['resubmittedAt'] = FieldValue.serverTimestamp();
+          data['revisionNote'] = null;
+          data['revisionCount'] = FieldValue.increment(1);
+        }
         await col.doc(widget.existingRequest!.id).update(data);
         await activity_log.ActivityLogger.log(
           action: 'edit_letter_request',
@@ -851,6 +893,7 @@ class _LetterRequestModalState extends State<_LetterRequestModal> {
         data['status'] = 'pending';
         data['letterId'] = letterId;
         data['timestamp'] = FieldValue.serverTimestamp();
+        data['revisionCount'] = 0;
         await col.add(data);
         await activity_log.ActivityLogger.log(
           action: 'create_letter_request',
@@ -1146,6 +1189,8 @@ class LetterRequestModel {
   final String? attachmentSize;
   final String status;
   final String? revisionNote;
+  final int? revisionCount;
+  final Timestamp? resubmittedAt;
   final Timestamp timestamp;
 
   LetterRequestModel({
@@ -1160,6 +1205,8 @@ class LetterRequestModel {
     this.attachmentSize,
     required this.status,
     this.revisionNote,
+    this.revisionCount,
+    this.resubmittedAt,
     required this.timestamp,
   });
 
@@ -1177,6 +1224,8 @@ class LetterRequestModel {
       attachmentSize: d['attachmentSize'],
       status: d['status'] ?? 'pending',
       revisionNote: d['revisionNote'],
+      revisionCount: d['revisionCount'] ?? 0,
+      resubmittedAt: d['resubmittedAt'] as Timestamp?,
       timestamp: d['timestamp'] as Timestamp? ?? Timestamp.now(),
     );
   }

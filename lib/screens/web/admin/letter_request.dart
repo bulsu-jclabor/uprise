@@ -23,6 +23,7 @@ class AdminColors {
   static const Color warning = Color(0xFFD97706);
   static const Color error = Color(0xFFDC2626);
   static const Color info = Color(0xFF2563EB);
+  static const Color purple = Color(0xFF7C3AED);
 }
 
 // ============ MAIN WIDGET ============
@@ -67,7 +68,7 @@ class _AdminLetterRequestScreenState extends State<AdminLetterRequestScreen> {
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance.collection('letter_requests').snapshots(),
       builder: (context, snapshot) {
-        int total = 0, pending = 0, approved = 0, rejected = 0, revision = 0;
+        int total = 0, pending = 0, approved = 0, rejected = 0, revision = 0, resubmitted = 0;
         if (snapshot.hasData) {
           for (final doc in snapshot.data!.docs) {
             total++;
@@ -76,6 +77,7 @@ class _AdminLetterRequestScreenState extends State<AdminLetterRequestScreen> {
             if (s == 'approved') approved++;
             if (s == 'rejected') rejected++;
             if (s == 'revision') revision++;
+            if (s == 'resubmitted') resubmitted++;
           }
         }
         return Padding(
@@ -87,9 +89,11 @@ class _AdminLetterRequestScreenState extends State<AdminLetterRequestScreen> {
             const SizedBox(width: 14),
             _StatCard(label: 'Pending', value: '$pending', icon: Icons.pending_rounded, color: AdminColors.warning),
             const SizedBox(width: 14),
-            _StatCard(label: 'Rejected', value: '$rejected', icon: Icons.cancel_rounded, color: AdminColors.error),
+            _StatCard(label: 'Resubmitted', value: '$resubmitted', icon: Icons.refresh_rounded, color: AdminColors.info),
             const SizedBox(width: 14),
-            _StatCard(label: 'Needs Revision', value: '$revision', icon: Icons.edit_note_rounded, color: AdminColors.info),
+            _StatCard(label: 'Needs Revision', value: '$revision', icon: Icons.edit_note_rounded, color: AdminColors.purple),
+            const SizedBox(width: 14),
+            _StatCard(label: 'Rejected', value: '$rejected', icon: Icons.cancel_rounded, color: AdminColors.error),
           ]),
         );
       },
@@ -127,7 +131,7 @@ class _AdminLetterRequestScreenState extends State<AdminLetterRequestScreen> {
         const SizedBox(width: 10),
         _FilterDropdown(
           value: _statusFilter,
-          items: const ['All', 'Pending', 'Approved', 'Rejected', 'Needs Revision'],
+          items: const ['All', 'Pending', 'Approved', 'Rejected', 'Needs Revision', 'Resubmitted'],
           hint: 'Status',
           icon: Icons.tune_rounded,
           onChanged: (v) => setState(() {
@@ -171,6 +175,7 @@ class _AdminLetterRequestScreenState extends State<AdminLetterRequestScreen> {
         
         String filterValue = _statusFilter;
         if (filterValue == 'Needs Revision') filterValue = 'revision';
+        if (filterValue == 'Resubmitted') filterValue = 'resubmitted';
         if (filterValue != 'All') {
           docs = docs.where((d) {
             final status = ((d.data() as Map)['status'] ?? 'pending').toString().toLowerCase();
@@ -297,7 +302,7 @@ class _AdminLetterRequestScreenState extends State<AdminLetterRequestScreen> {
                   onTap: () => _showViewDialog(data, docId),
                 ),
                 const SizedBox(width: 4),
-                if (status == 'pending' || status == 'revision') ...[
+                if (status == 'pending' || status == 'revision' || status == 'resubmitted') ...[
                   _ActionIconButton(
                     icon: Icons.check_circle_outline,
                     tooltip: 'Approve',
@@ -390,6 +395,9 @@ class _AdminLetterRequestScreenState extends State<AdminLetterRequestScreen> {
       case 'revision':
         style = {'bg': const Color(0xFFEFF6FF), 'fg': const Color(0xFF2563EB), 'label': 'NEEDS REVISION'};
         break;
+      case 'resubmitted':
+        style = {'bg': const Color(0xFFF0FDF4), 'fg': const Color(0xFF16A34A), 'label': 'RESUBMITTED'};
+        break;
       default:
         style = {'bg': const Color(0xFFFFFBEB), 'fg': const Color(0xFFD97706), 'label': 'PENDING'};
     }
@@ -444,33 +452,33 @@ class _AdminLetterRequestScreenState extends State<AdminLetterRequestScreen> {
   }
 
   Future<void> _updateStatus(String docId, String newStatus, String orgName, {String? revisionNote}) async {
-  try {
-    final Map<String, dynamic> updateData = {'status': newStatus};
-    if (revisionNote != null) {
-      updateData['revisionNote'] = revisionNote;
-      updateData['revisionRequestedAt'] = FieldValue.serverTimestamp();
-    }
-    await FirebaseFirestore.instance.collection('letter_requests').doc(docId).update(updateData);
-    await activity_log.ActivityLogger.log(
-      action: '${newStatus.toUpperCase()} letter request from: $orgName',
-      module: 'Letter Request',
-      severity: newStatus == 'rejected' ? 'warning' : 'info',
-    );
-    if (mounted) {
-      String message = 'Status updated to ${newStatus[0].toUpperCase()}${newStatus.substring(1)}';
-      if (newStatus == 'revision') message = 'Revision requested with notes';
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(message),
-        backgroundColor: newStatus == 'approved' ? AdminColors.success : (newStatus == 'revision' ? AdminColors.info : AdminColors.error),
-        behavior: SnackBarBehavior.floating,
-      ));
-    }
-  } catch (e) {
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: AdminColors.error));
+    try {
+      final Map<String, dynamic> updateData = {'status': newStatus};
+      if (revisionNote != null) {
+        updateData['revisionNote'] = revisionNote;
+        updateData['revisionRequestedAt'] = FieldValue.serverTimestamp();
+      }
+      await FirebaseFirestore.instance.collection('letter_requests').doc(docId).update(updateData);
+      await activity_log.ActivityLogger.log(
+        action: '${newStatus.toUpperCase()} letter request from: $orgName',
+        module: 'Letter Request',
+        severity: newStatus == 'rejected' ? 'warning' : 'info',
+      );
+      if (mounted) {
+        String message = 'Status updated to ${newStatus[0].toUpperCase()}${newStatus.substring(1)}';
+        if (newStatus == 'revision') message = 'Revision requested with notes';
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(message),
+          backgroundColor: newStatus == 'approved' ? AdminColors.success : (newStatus == 'revision' ? AdminColors.info : AdminColors.error),
+          behavior: SnackBarBehavior.floating,
+        ));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: AdminColors.error));
+      }
     }
   }
-}
 
   void _showViewDialog(Map<String, dynamic> data, String docId) {
     final status = (data['status'] ?? 'pending').toString();
@@ -570,6 +578,22 @@ class _AdminLetterRequestScreenState extends State<AdminLetterRequestScreen> {
                         ),
                       ),
                     ],
+                    if (data['revisionCount'] != null && data['revisionCount'] > 0) ...[
+                      const SizedBox(height: 12),
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: AdminColors.mediumGray.withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Row(children: [
+                          Icon(Icons.history, size: 16, color: AdminColors.darkGray),
+                          const SizedBox(width: 8),
+                          Text('Revision #${data['revisionCount']}',
+                              style: GoogleFonts.beVietnamPro(fontSize: 12, color: AdminColors.darkGray)),
+                        ]),
+                      ),
+                    ],
                     if (hasAttachment) ...[
                       const SizedBox(height: 16),
                       Container(
@@ -610,7 +634,7 @@ class _AdminLetterRequestScreenState extends State<AdminLetterRequestScreen> {
                   ],
                 ),
               ),
-              if (status == 'pending' || status == 'revision')
+              if (status == 'pending' || status == 'revision' || status == 'resubmitted')
                 Container(
                   padding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
                   child: Row(children: [
@@ -892,6 +916,7 @@ class _ExportButton extends StatelessWidget {
       var docs = snap.docs;
       String filterValue = statusFilter;
       if (filterValue == 'Needs Revision') filterValue = 'revision';
+      if (filterValue == 'Resubmitted') filterValue = 'resubmitted';
       if (filterValue != 'All') docs = docs.where((d) => d['status'] == filterValue.toLowerCase()).toList();
       if (searchTerm.isNotEmpty) docs = docs.where((d) {
         final data = d.data();
@@ -903,11 +928,11 @@ class _ExportButton extends StatelessWidget {
         return;
       }
       final buffer = StringBuffer();
-      buffer.writeln('Letter ID,Organization,Email,Subject,Status,Date Submitted,Revision Note');
+      buffer.writeln('Letter ID,Organization,Email,Subject,Status,Date Submitted,Revision Note,Revision Count');
       for (final doc in docs) {
         final d = doc.data();
         final date = (d['timestamp'] as Timestamp?)?.toDate().toString().substring(0, 10) ?? '';
-        buffer.writeln('"${d['letterId']}","${d['orgName']}","${d['orgEmail']}","${d['subject']}","${d['status']}","$date","${d['revisionNote'] ?? ''}"');
+        buffer.writeln('"${d['letterId']}","${d['orgName']}","${d['orgEmail']}","${d['subject']}","${d['status']}","$date","${d['revisionNote'] ?? ''}","${d['revisionCount'] ?? 0}"');
       }
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Exported ${docs.length} records to CSV')));
     } catch (e) {
