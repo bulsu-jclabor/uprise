@@ -773,35 +773,92 @@ class _OrgAnnouncementsScreenState extends State<OrgAnnouncementsScreen> {
   }
 
   Widget _buildImagePickerBase64(String? currentBase64, Function(String) onImageSelected, VoidCallback onRemove) {
-    if (currentBase64 != null && currentBase64.isNotEmpty) {
-      return Stack(children: [
-        ClipRRect(borderRadius: BorderRadius.circular(_DS.radiusSm), child: Image.memory(base64Decode(currentBase64), width: double.infinity, height: 160, fit: BoxFit.cover, errorBuilder: (_, __, ___) => Container(height: 160, color: OrgColors.lightGray))),
-        Positioned(top: 8, right: 8, child: InkWell(onTap: onRemove, child: Container(width: 28, height: 28, decoration: BoxDecoration(color: Colors.black.withOpacity(0.6), shape: BoxShape.circle), child: const Icon(Icons.close_rounded, size: 14, color: Colors.white)))),
-      ]);
-    }
-    return GestureDetector(
-      onTap: () async {
-        final result = await FilePicker.platform.pickFiles(type: FileType.image, withData: true);
-        if (result == null) return;
-        try {
-          final bytes = result.files.first.bytes!;
-          if (bytes.length > 5 * 1024 * 1024) { _showSnack('Image too large! Max 5MB', isError: true); return; }
-          onImageSelected(base64Encode(bytes));
-          _showSnack('Image uploaded');
-        } catch (e) { _showSnack('Upload failed: $e', isError: true); }
-      },
-      child: Container(
-        width: double.infinity, height: 110,
-        decoration: BoxDecoration(color: OrgColors.lightGray, borderRadius: BorderRadius.circular(_DS.radiusSm), border: Border.all(color: OrgColors.borderSoft)),
-        child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-          Container(width: 40, height: 40, decoration: BoxDecoration(color: OrgColors.primaryDark.withOpacity(0.08), borderRadius: BorderRadius.circular(10)), child: const Icon(Icons.image_outlined, color: OrgColors.primaryDark)),
-          const SizedBox(height: 8),
-          Text('Click to upload banner image', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600)),
-          Text('PNG, JPG up to 5MB', style: GoogleFonts.beVietnamPro(fontSize: 11, color: OrgColors.textFaint)),
-        ]),
-      ),
+  if (currentBase64 != null && currentBase64.isNotEmpty) {
+    return Stack(
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(_DS.radiusSm),
+          child: Image.memory(
+            base64Decode(currentBase64),
+            width: double.infinity,
+            height: 300, // ← Changed from 160 to 300
+            fit: BoxFit.cover, // ← This ensures image fills area without distortion
+            errorBuilder: (_, __, ___) => Container(
+              height: 300,
+              color: OrgColors.lightGray,
+              child: const Icon(Icons.broken_image),
+            ),
+          ),
+        ),
+        Positioned(
+          top: 8,
+          right: 8,
+          child: InkWell(
+            onTap: onRemove,
+            child: Container(
+              width: 28,
+              height: 28,
+              decoration: BoxDecoration(
+                color: Colors.black.withOpacity(0.6),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.close_rounded, size: 14, color: Colors.white),
+            ),
+          ),
+        ),
+      ],
     );
   }
+  
+  return GestureDetector(
+    onTap: () async {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.image,
+        withData: true,
+      );
+      if (result == null) return;
+      try {
+        final bytes = result.files.first.bytes!;
+        if (bytes.length > 5 * 1024 * 1024) {
+          _showSnack('Image too large! Max 5MB', isError: true);
+          return;
+        }
+        onImageSelected(base64Encode(bytes));
+        _showSnack('Image uploaded');
+      } catch (e) {
+        _showSnack('Upload failed: $e', isError: true);
+      }
+    },
+    child: Container(
+      width: double.infinity,
+      height: 120, // This stays the same - it's just the upload button area
+      decoration: BoxDecoration(
+        color: OrgColors.lightGray,
+        borderRadius: BorderRadius.circular(_DS.radiusSm),
+        border: Border.all(color: OrgColors.borderSoft),
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: OrgColors.primaryDark.withOpacity(0.08),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: const Icon(Icons.image_outlined, color: OrgColors.primaryDark),
+          ),
+          const SizedBox(height: 8),
+          Text('Click to upload banner image',
+              style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600)),
+          Text('PNG, JPG up to 5MB',
+              style: GoogleFonts.beVietnamPro(fontSize: 11, color: OrgColors.textFaint)),
+        ],
+      ),
+    ),
+  );
+}
 
   Widget _buildAttachmentsPickerBase64(List<AttachmentBase64> attachments, Function(List<AttachmentBase64>) onChanged) {
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -875,11 +932,44 @@ class _AnnouncementCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (hasImage)
-            Stack(children: [
-              SizedBox(height: 180, width: double.infinity, child: Image.memory(base64Decode(announcement.imageBase64!), fit: BoxFit.cover, errorBuilder: (_, __, ___) => Container(color: OrgColors.lightGray))),
-              if (announcement.isPinned)
-                Positioned(top: 12, right: 12, child: Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4), decoration: BoxDecoration(color: OrgColors.warning, borderRadius: BorderRadius.circular(20)), child: Row(children: [const Icon(Icons.push_pin, size: 12, color: Colors.white), const SizedBox(width: 4), Text('Pinned', style: GoogleFonts.beVietnamPro(fontSize: 10, fontWeight: FontWeight.w700, color: Colors.white))]))),
-            ]),
+  Stack(children: [
+    SizedBox(
+      height: 300,  // ← Changed from 180 to 300
+      width: double.infinity,
+      child: Image.memory(
+        base64Decode(announcement.imageBase64!),
+        width: double.infinity,
+        height: 300,
+        fit: BoxFit.cover,  // ← This crops tall images nicely
+        errorBuilder: (_, __, ___) => Container(
+          height: 300,
+          color: OrgColors.lightGray,
+          child: const Icon(Icons.broken_image),
+        ),
+      ),
+    ),
+    if (announcement.isPinned)
+      Positioned(
+        top: 12,
+        right: 12,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+          decoration: BoxDecoration(
+            color: OrgColors.warning,
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Row(children: [
+            const Icon(Icons.push_pin, size: 12, color: Colors.white),
+            const SizedBox(width: 4),
+            Text('Pinned',
+                style: GoogleFonts.beVietnamPro(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.white)),
+          ]),
+        ),
+      ),
+  ]),
           Padding(
             padding: const EdgeInsets.all(20),
             child: Column(
