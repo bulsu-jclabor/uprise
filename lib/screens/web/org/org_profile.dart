@@ -111,14 +111,20 @@ class _OrgProfileScreenState extends State<OrgProfileScreen> {
   }
 
   Future<void> _loadOrgData() async {
+  try {
     final doc = await FirebaseFirestore.instance
         .collection('organizations')
         .doc(widget.orgId)
         .get();
-    final data = doc.data();
-    if (data != null) {
-      await _syncOrganizationOfficersIfNeeded(data);
-      if (!mounted) return;
+    
+    if (!mounted) return;
+    
+    if (doc.exists) {
+      final data = doc.data()!;
+      
+      // DON'T await this - let it run in background
+      _syncOrganizationOfficersIfNeeded(data);
+      
       setState(() {
         _orgName        = data['name'] ?? widget.orgName;
         _orgShortName   = data['shortName'] ?? widget.orgShortName;
@@ -137,18 +143,37 @@ class _OrgProfileScreenState extends State<OrgProfileScreen> {
         _loading = false;
       });
     } else {
-      if (mounted) setState(() => _loading = false);
+      setState(() => _loading = false);
+      _showErrorSnack('Organization not found');
+    }
+  } catch (e) {
+    print('Error: $e');
+    if (mounted) {
+      setState(() => _loading = false);
+      _showErrorSnack('Failed to load: $e');
     }
   }
+}
+
+// Add this helper method after _loadOrgData
+void _showErrorSnack(String message) {
+  ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(
+      content: Text(message),
+      backgroundColor: OrgColors.error,
+    ),
+  );
+}
 
   Future<void> _syncOrganizationOfficersIfNeeded(Map<String, dynamic> data) async {
+  try {
     final storedOfficers = data['officers'] as List<dynamic>?;
+    
     final officerSnap = await FirebaseFirestore.instance
         .collection('organizations')
         .doc(widget.orgId)
         .collection('officers')
         .orderBy('positionRank', descending: false)
-        .orderBy('name', descending: false)
         .get();
 
     final officers = officerSnap.docs.map((d) {
@@ -168,7 +193,11 @@ class _OrgProfileScreenState extends State<OrgProfileScreen> {
           .doc(widget.orgId)
           .update({'officers': officers});
     }
+  } catch (e) {
+    // Just log error, don't break the whole page
+    print('Sync officers error: $e');
   }
+}
 
   bool _officersMatch(List<dynamic>? stored, List<Map<String, dynamic>> expected) {
     if (stored == null || stored.length != expected.length) return false;
