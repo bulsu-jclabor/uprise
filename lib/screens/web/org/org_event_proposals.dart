@@ -1,7 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:typed_data';
-import 'package:flutter/foundation.dart' show kIsWeb;
 import '../../../utils/platform_file_utils.dart' as platform_file_utils;
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -11,9 +9,13 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/services.dart';
-import 'package:url_launcher/url_launcher.dart';
 import '../../../services/activity_logger.dart' as activity_log;
 import 'package:http/http.dart' as http;
+
+// Import export utilities (same as student accounts)
+import '../../../widgets/admin_export_button.dart';
+import 'export_util.dart';
+import 'export_pdf.dart';
 
 // ============ COLOR SCHEME ============
 class OrgColors {
@@ -44,7 +46,10 @@ class _OrgEventProposalsScreenState extends State<OrgEventProposalsScreen> {
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery   = '';
   String _filterStatus  = 'All';
+  int _currentPage = 1;
+  static const int _pageSize = 10;
 
+  // Streams for stats cards
   Stream<QuerySnapshot> get _totalStream => FirebaseFirestore.instance
       .collection('event_proposals')
       .where('orgId', isEqualTo: widget.orgId)
@@ -64,6 +69,8 @@ class _OrgEventProposalsScreenState extends State<OrgEventProposalsScreen> {
       .where('orgId', isEqualTo: widget.orgId)
       .where('status', isEqualTo: 'for_review')
       .snapshots(includeMetadataChanges: true);
+  
+  // Main proposals stream
   Stream<QuerySnapshot> get _proposalsStream => FirebaseFirestore.instance
       .collection('event_proposals')
       .where('orgId', isEqualTo: widget.orgId)
@@ -149,7 +156,7 @@ class _OrgEventProposalsScreenState extends State<OrgEventProposalsScreen> {
     showDialog(context: context, builder: (_) => _ViewProposalModal(data: data));
   }
 
-  List<QueryDocumentSnapshot> _applyFilters(List<QueryDocumentSnapshot> docs) {
+  List<QueryDocumentSnapshot<Map<String, dynamic>>> _applyFilters(List<QueryDocumentSnapshot<Map<String, dynamic>>> docs) {
     var filtered = docs;
     if (_filterStatus != 'All') {
       final statusKey = _filterStatus.toLowerCase().replaceAll(' ', '_');
@@ -169,6 +176,91 @@ class _OrgEventProposalsScreenState extends State<OrgEventProposalsScreen> {
       }).toList();
     }
     return filtered;
+  }
+
+  // ========== EXPORT FUNCTIONALITY (CSV / PDF) ==========
+  Future<void> _exportProposals(String format) async {
+    final snapshot = await FirebaseFirestore.instance
+        .collection('event_proposals')
+        .where('orgId', isEqualTo: widget.orgId)
+        .orderBy('submittedAt', descending: true)
+        .get();
+    
+    final docs = _applyFilters(snapshot.docs.cast<QueryDocumentSnapshot<Map<String, dynamic>>>().toList());
+    
+    if (docs.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No data to export'), behavior: SnackBarBehavior.floating),
+      );
+      return;
+    }
+
+    final now = DateTime.now().toString().substring(0, 10);
+    final fileName = 'event_proposals_$now';
+
+    if (format == 'csv') {
+      final csvContent = StringBuffer();
+      csvContent.writeln('Proposal ID,Title,Category,Audience,Description,Date,Time,Location,Status,Submitted By,Submitted At');
+      for (final doc in docs) {
+        final d = doc.data();
+        final proposalNum = 'EP-${doc.id.substring(0, 4).toUpperCase()}';
+        final row = [
+          proposalNum,
+          _escapeCsv(d['title'] ?? ''),
+          _escapeCsv(d['category'] ?? ''),
+          _escapeCsv(d['audience'] ?? ''),
+          _escapeCsv(d['description'] ?? ''),
+          d['date'] != null ? DateFormat('yyyy-MM-dd').format((d['date'] as Timestamp).toDate()) : '',
+          d['time'] ?? '',
+          _escapeCsv(d['location'] ?? ''),
+          d['status'] ?? 'pending',
+          d['submittedByEmail'] ?? '',
+          d['submittedAt'] != null ? DateFormat('yyyy-MM-dd HH:mm').format((d['submittedAt'] as Timestamp).toDate()) : '',
+        ];
+        csvContent.writeln(row.join(','));
+      }
+      await OrgExportUtil.saveText(csvContent.toString(), '$fileName.csv', mimeType: 'text/csv');
+    } 
+    else if (format == 'pdf') {
+      final List<List<String>> rows = docs.map((doc) {
+        final d = doc.data();
+        final proposalNum = 'EP-${doc.id.substring(0, 4).toUpperCase()}';
+        return <String>[
+          proposalNum,
+          (d['title'] as String?) ?? '',
+          (d['category'] as String?) ?? '',
+          (d['audience'] as String?) ?? '',
+          (d['description'] as String?) ?? '',
+          d['date'] != null ? DateFormat('yyyy-MM-dd').format((d['date'] as Timestamp).toDate()) : '',
+          (d['time'] as String?) ?? '',
+          (d['location'] as String?) ?? '',
+          (d['status'] as String?) ?? 'pending',
+          (d['submittedByEmail'] as String?) ?? '',
+          d['submittedAt'] != null ? DateFormat('yyyy-MM-dd HH:mm').format((d['submittedAt'] as Timestamp).toDate()) : '',
+        ];
+      }).toList();
+      
+      final pdfBytes = await OrgExportPdf.generateTablePdf(
+        title: 'Event Proposals Report',
+        headers: const [
+          'Proposal ID', 'Title', 'Category', 'Audience', 'Description',
+          'Date', 'Time', 'Location', 'Status', 'Submitted By', 'Submitted At'
+        ],
+        rows: rows,
+      );
+      await OrgExportUtil.saveBytes(pdfBytes, '$fileName.pdf', mimeType: 'application/pdf');
+    }
+    
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Exported ${docs.length} proposals as $format'), backgroundColor: OrgColors.success),
+    );
+  }
+
+  String _escapeCsv(String value) {
+    if (value.contains(',') || value.contains('"') || value.contains('\n')) {
+      return '"${value.replaceAll('"', '""')}"';
+    }
+    return value;
   }
 
   @override
@@ -214,6 +306,7 @@ class _OrgEventProposalsScreenState extends State<OrgEventProposalsScreen> {
         ]),
         const SizedBox(height: 24),
 
+        // Stats cards
         Row(children: [
           Expanded(child: _StatCard(label: 'Total Proposals', stream: _totalStream, icon: Icons.description_outlined, iconColor: OrgColors.info)),
           const SizedBox(width: 14),
@@ -225,6 +318,7 @@ class _OrgEventProposalsScreenState extends State<OrgEventProposalsScreen> {
         ]),
         const SizedBox(height: 24),
 
+        // Main table container
         Expanded(
           child: Container(
             decoration: BoxDecoration(
@@ -233,6 +327,7 @@ class _OrgEventProposalsScreenState extends State<OrgEventProposalsScreen> {
               border: Border.all(color: OrgColors.primaryLight),
             ),
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              // Toolbar
               Padding(
                 padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
                 child: Row(children: [
@@ -256,7 +351,7 @@ class _OrgEventProposalsScreenState extends State<OrgEventProposalsScreen> {
                     height: 38,
                     child: TextField(
                       controller: _searchController,
-                      onChanged: (v) => setState(() => _searchQuery = v),
+                      onChanged: (v) => setState(() { _searchQuery = v; _currentPage = 1; }),
                       decoration: InputDecoration(
                         hintText: 'Search proposals...',
                         hintStyle: GoogleFonts.beVietnamPro(fontSize: 12, color: OrgColors.darkGray),
@@ -287,24 +382,19 @@ class _OrgEventProposalsScreenState extends State<OrgEventProposalsScreen> {
                         items: ['All', 'Pending', 'Approved', 'For Review', 'Rejected']
                             .map((s) => DropdownMenuItem(value: s, child: Text(s)))
                             .toList(),
-                        onChanged: (v) => setState(() => _filterStatus = v ?? 'All'),
+                        onChanged: (v) => setState(() { _filterStatus = v ?? 'All'; _currentPage = 1; }),
                       ),
                     ),
                   ),
                   const SizedBox(width: 10),
-                  OutlinedButton.icon(
-                    onPressed: () {},
-                    icon: Icon(Icons.download_outlined, size: 16, color: OrgColors.darkGray),
-                    label: Text('Export', style: GoogleFonts.beVietnamPro(fontSize: 13, color: OrgColors.darkGray)),
-                    style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                      side: BorderSide(color: OrgColors.primaryLight),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                    ),
+                  AdminExportButton(
+                    label: 'Export',
+                    onSelected: (format) => _exportProposals(format),
                   ),
                 ]),
               ),
               const SizedBox(height: 12),
+              // Table header
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
                 decoration: BoxDecoration(
@@ -326,6 +416,7 @@ class _OrgEventProposalsScreenState extends State<OrgEventProposalsScreen> {
                   _headerCell('ACTIONS', flex: 2),
                 ]),
               ),
+              // Table body with pagination
               Expanded(
                 child: StreamBuilder<QuerySnapshot>(
                   key: UniqueKey(),
@@ -334,49 +425,44 @@ class _OrgEventProposalsScreenState extends State<OrgEventProposalsScreen> {
                     if (snapshot.connectionState == ConnectionState.waiting) {
                       return const Center(child: CircularProgressIndicator());
                     }
-                    
                     if (snapshot.hasError) {
-                      return Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.error_outline, size: 48, color: Colors.red),
-                            const SizedBox(height: 8),
-                            Text('Error loading proposals: ${snapshot.error}'),
-                            const SizedBox(height: 8),
-                            ElevatedButton(
-                              onPressed: () => setState(() {}),
-                              child: Text('Retry'),
-                            ),
-                          ],
-                        ),
-                      );
+                      return Center(child: Text('Error: ${snapshot.error}'));
                     }
-                    
                     if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
                       return _emptyState();
                     }
-                    
-                    final filtered = _applyFilters(snapshot.data!.docs);
+                    final filtered = _applyFilters(snapshot.data!.docs.cast<QueryDocumentSnapshot<Map<String, dynamic>>>().toList());
                     if (filtered.isEmpty) {
                       return _emptyState(message: 'No proposals match your filter.');
                     }
+                    final totalPages = (filtered.length / _pageSize).ceil();
+                    final safePage = _currentPage.clamp(1, totalPages);
+                    final start = (safePage - 1) * _pageSize;
+                    final end = (start + _pageSize).clamp(0, filtered.length);
+                    final pageItems = filtered.sublist(start, end);
                     
-                    return ListView.separated(
-                      itemCount: filtered.length,
-                      separatorBuilder: (_, __) => Divider(height: 1, color: OrgColors.mediumGray),
-                      itemBuilder: (context, i) {
-                        final doc = filtered[i];
-                        final data = doc.data() as Map<String, dynamic>;
-                        final proposalNum = 'EP-${doc.id.substring(0, 4).toUpperCase()}';
-                        return _ProposalRow(
-                          proposalNum: proposalNum,
-                          data: data,
-                          onEdit: () => _openEditModal(doc.id, data),
-                          onDelete: () => _confirmDelete(doc.id, data['title'] ?? 'Proposal'),
-                          onView: () => _openViewModal(data),
-                        );
-                      },
+                    return Column(
+                      children: [
+                        Expanded(
+                          child: ListView.separated(
+                            itemCount: pageItems.length,
+                            separatorBuilder: (_, __) => Divider(height: 1, color: OrgColors.mediumGray),
+                            itemBuilder: (context, i) {
+                              final doc = pageItems[i];
+                              final data = doc.data() as Map<String, dynamic>;
+                              final proposalNum = 'EP-${doc.id.substring(0, 4).toUpperCase()}';
+                              return _ProposalRow(
+                                proposalNum: proposalNum,
+                                data: data,
+                                onEdit: () => _openEditModal(doc.id, data),
+                                onDelete: () => _confirmDelete(doc.id, data['title'] ?? 'Proposal'),
+                                onView: () => _openViewModal(data),
+                              );
+                            },
+                          ),
+                        ),
+                        _buildPagination(filtered.length, totalPages, start, end),
+                      ],
                     );
                   },
                 ),
@@ -413,12 +499,77 @@ class _OrgEventProposalsScreenState extends State<OrgEventProposalsScreen> {
               backgroundColor: OrgColors.primaryDark,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
             ),
-            child: Text(
-              'Submit your first proposal',
-              style: GoogleFonts.beVietnamPro(color: Colors.white),
-            ),
+            child: Text('Submit your first proposal', style: GoogleFonts.beVietnamPro(color: Colors.white)),
           ),
         ]),
+      );
+
+  Widget _buildPagination(int totalItems, int totalPages, int start, int end) {
+    const int maxVisible = 5;
+    int firstPage = (_currentPage - maxVisible ~/ 2).clamp(1, totalPages);
+    int lastPage = (firstPage + maxVisible - 1).clamp(1, totalPages);
+    if (lastPage - firstPage + 1 < maxVisible && firstPage > 1) {
+      firstPage = (lastPage - maxVisible + 1).clamp(1, totalPages);
+    }
+    final pages = List.generate(lastPage - firstPage + 1, (i) => firstPage + i);
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+      decoration: BoxDecoration(
+        border: Border(top: BorderSide(color: OrgColors.primaryLight)),
+        color: OrgColors.lightGray,
+        borderRadius: const BorderRadius.vertical(bottom: Radius.circular(12)),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            'Showing ${totalItems == 0 ? 0 : start + 1}–$end of $totalItems proposals',
+            style: GoogleFonts.beVietnamPro(fontSize: 12, color: OrgColors.darkGray),
+          ),
+          Row(children: [
+            _PageButton(icon: Icons.chevron_left, enabled: _currentPage > 1, onTap: () => setState(() => _currentPage--)),
+            const SizedBox(width: 4),
+            ...pages.map((p) => _PageNumberButton(page: p, isActive: p == _currentPage, onTap: () => setState(() => _currentPage = p))),
+            if (lastPage < totalPages) ...[
+              Padding(padding: const EdgeInsets.symmetric(horizontal: 4), child: Text('…', style: GoogleFonts.beVietnamPro(color: OrgColors.darkGray))),
+              _PageNumberButton(page: totalPages, isActive: _currentPage == totalPages, onTap: () => setState(() => _currentPage = totalPages)),
+            ],
+            const SizedBox(width: 4),
+            _PageButton(icon: Icons.chevron_right, enabled: _currentPage < totalPages, onTap: () => setState(() => _currentPage++)),
+          ]),
+        ],
+      ),
+    );
+  }
+}
+
+// Small reusable pagination widgets
+class _PageButton extends StatelessWidget {
+  final IconData icon; final bool enabled; final VoidCallback onTap;
+  const _PageButton({required this.icon, required this.enabled, required this.onTap});
+  @override
+  Widget build(BuildContext context) => InkWell(
+        onTap: enabled ? onTap : null,
+        borderRadius: BorderRadius.circular(6),
+        child: Padding(padding: const EdgeInsets.all(4), child: Icon(icon, size: 20, color: enabled ? OrgColors.charcoal : OrgColors.darkGray.withOpacity(0.5))),
+      );
+}
+
+class _PageNumberButton extends StatelessWidget {
+  final int page; final bool isActive; final VoidCallback onTap;
+  const _PageNumberButton({required this.page, required this.isActive, required this.onTap});
+  @override
+  Widget build(BuildContext context) => GestureDetector(
+        onTap: onTap,
+        child: Container(
+          margin: const EdgeInsets.symmetric(horizontal: 2),
+          width: 28,
+          height: 28,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(color: isActive ? OrgColors.primaryDark : Colors.transparent, borderRadius: BorderRadius.circular(6)),
+          child: Text('$page', style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: isActive ? FontWeight.w700 : FontWeight.normal, color: isActive ? Colors.white : OrgColors.charcoal)),
+        ),
       );
 }
 
@@ -456,11 +607,7 @@ class _StatCard extends StatelessWidget {
             Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Text(
                 count.toString(),
-                style: GoogleFonts.beVietnamPro(
-                  fontSize: 28,
-                  fontWeight: FontWeight.bold,
-                  color: OrgColors.charcoal,
-                ),
+                style: GoogleFonts.beVietnamPro(fontSize: 28, fontWeight: FontWeight.bold, color: OrgColors.charcoal),
               ),
               Text(label, style: GoogleFonts.beVietnamPro(fontSize: 12, color: OrgColors.darkGray)),
             ]),
@@ -503,64 +650,21 @@ class _ProposalRow extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 13),
         child: Row(children: [
-          Expanded(
-            flex: 2,
-            child: Text(
-              proposalNum,
-              style: GoogleFonts.beVietnamPro(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                color: OrgColors.primaryDark,
-              ),
-            ),
-          ),
-          Expanded(
-            flex: 4,
-            child: Text(
-              data['title'] ?? '—',
-              style: GoogleFonts.beVietnamPro(
-                fontSize: 13,
-                fontWeight: FontWeight.w500,
-                color: OrgColors.charcoal,
-              ),
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
+          Expanded(flex: 2, child: Text(proposalNum, style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600, color: OrgColors.primaryDark))),
+          Expanded(flex: 4, child: Text(data['title'] ?? '—', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w500, color: OrgColors.charcoal), overflow: TextOverflow.ellipsis)),
           Expanded(flex: 2, child: _categoryChip(data['category'] ?? '—')),
           Expanded(flex: 2, child: _audienceChip(audience)),
-          Expanded(
-            flex: 2,
-            child: Text(
-              _formatDate(data['date']),
-              style: GoogleFonts.beVietnamPro(fontSize: 12, color: OrgColors.darkGray),
-            ),
-          ),
-          Expanded(
-            flex: 2,
-            child: Text(
-              data['location'] ?? '—',
-              style: GoogleFonts.beVietnamPro(fontSize: 12, color: OrgColors.darkGray),
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
+          Expanded(flex: 2, child: Text(_formatDate(data['date']), style: GoogleFonts.beVietnamPro(fontSize: 12, color: OrgColors.darkGray))),
+          Expanded(flex: 2, child: Text(data['location'] ?? '—', style: GoogleFonts.beVietnamPro(fontSize: 12, color: OrgColors.darkGray), overflow: TextOverflow.ellipsis)),
           Expanded(flex: 2, child: _StatusChip(status: status)),
-          Expanded(
-            flex: 2,
-            child: Text(
-              _formatDate(data['submittedAt']),
-              style: GoogleFonts.beVietnamPro(fontSize: 12, color: OrgColors.darkGray),
-            ),
-          ),
-          Expanded(
-            flex: 2,
-            child: Row(children: [
-              _actionIcon(Icons.visibility_outlined, OrgColors.info, 'View', onView),
-              const SizedBox(width: 6),
-              _actionIcon(Icons.edit_outlined, OrgColors.primaryDark, 'Edit', onEdit),
-              const SizedBox(width: 6),
-              _actionIcon(Icons.delete_outline, OrgColors.error, 'Delete', onDelete),
-            ]),
-          ),
+          Expanded(flex: 2, child: Text(_formatDate(data['submittedAt']), style: GoogleFonts.beVietnamPro(fontSize: 12, color: OrgColors.darkGray))),
+          Expanded(flex: 2, child: Row(children: [
+            _actionIcon(Icons.visibility_outlined, OrgColors.info, 'View', onView),
+            const SizedBox(width: 6),
+            _actionIcon(Icons.edit_outlined, OrgColors.primaryDark, 'Edit', onEdit),
+            const SizedBox(width: 6),
+            _actionIcon(Icons.delete_outline, OrgColors.error, 'Delete', onDelete),
+          ])),
         ]),
       ),
     );
@@ -568,51 +672,25 @@ class _ProposalRow extends StatelessWidget {
 
   Widget _categoryChip(String category) => Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-        decoration: BoxDecoration(
-          color: OrgColors.lightGray,
-          borderRadius: BorderRadius.circular(4),
-          border: Border.all(color: OrgColors.primaryLight),
-        ),
-        child: Text(
-          category,
-          style: GoogleFonts.beVietnamPro(fontSize: 11, color: OrgColors.darkGray),
-          overflow: TextOverflow.ellipsis,
-        ),
+        decoration: BoxDecoration(color: OrgColors.lightGray, borderRadius: BorderRadius.circular(4), border: Border.all(color: OrgColors.primaryLight)),
+        child: Text(category, style: GoogleFonts.beVietnamPro(fontSize: 11, color: OrgColors.darkGray), overflow: TextOverflow.ellipsis),
       );
 
   Widget _audienceChip(String audience) {
     Color bgColor;
-    if (audience == 'Public') {
-      bgColor = OrgColors.success.withOpacity(0.2);
-    } else if (audience == 'CICT Only') {
-      bgColor = OrgColors.info.withOpacity(0.2);
-    } else {
-      bgColor = OrgColors.warning.withOpacity(0.2);
-    }
+    if (audience == 'Public') bgColor = OrgColors.success.withOpacity(0.2);
+    else if (audience == 'CICT Only') bgColor = OrgColors.info.withOpacity(0.2);
+    else bgColor = OrgColors.warning.withOpacity(0.2);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(color: bgColor, borderRadius: BorderRadius.circular(12)),
-      child: Text(
-        audience,
-        style: GoogleFonts.beVietnamPro(
-          fontSize: 11,
-          fontWeight: FontWeight.w500,
-          color: OrgColors.charcoal,
-        ),
-      ),
+      child: Text(audience, style: GoogleFonts.beVietnamPro(fontSize: 11, fontWeight: FontWeight.w500, color: OrgColors.charcoal)),
     );
   }
 
   Widget _actionIcon(IconData icon, Color color, String tip, VoidCallback onTap) => Tooltip(
         message: tip,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(6),
-          child: Padding(
-            padding: const EdgeInsets.all(4),
-            child: Icon(icon, size: 18, color: color),
-          ),
-        ),
+        child: InkWell(onTap: onTap, borderRadius: BorderRadius.circular(6), child: Padding(padding: const EdgeInsets.all(4), child: Icon(icon, size: 18, color: color))),
       );
 }
 
@@ -626,33 +704,15 @@ class _StatusChip extends StatelessWidget {
     Color bg, fg;
     String label;
     switch (status) {
-      case 'approved':
-        bg = OrgColors.success.withOpacity(0.12);
-        fg = OrgColors.success;
-        label = 'Approved';
-        break;
-      case 'rejected':
-        bg = OrgColors.error.withOpacity(0.12);
-        fg = OrgColors.error;
-        label = 'Rejected';
-        break;
-      case 'for_review':
-        bg = OrgColors.info.withOpacity(0.12);
-        fg = OrgColors.info;
-        label = 'For Review';
-        break;
-      default:
-        bg = OrgColors.warning.withOpacity(0.15);
-        fg = const Color(0xFFB45309);
-        label = 'Pending';
+      case 'approved': bg = OrgColors.success.withOpacity(0.12); fg = OrgColors.success; label = 'Approved'; break;
+      case 'rejected': bg = OrgColors.error.withOpacity(0.12); fg = OrgColors.error; label = 'Rejected'; break;
+      case 'for_review': bg = OrgColors.info.withOpacity(0.12); fg = OrgColors.info; label = 'For Review'; break;
+      default: bg = OrgColors.warning.withOpacity(0.15); fg = const Color(0xFFB45309); label = 'Pending';
     }
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(20)),
-      child: Text(
-        label,
-        style: GoogleFonts.beVietnamPro(fontSize: 11, fontWeight: FontWeight.w600, color: fg),
-      ),
+      child: Text(label, style: GoogleFonts.beVietnamPro(fontSize: 11, fontWeight: FontWeight.w600, color: fg)),
     );
   }
 }

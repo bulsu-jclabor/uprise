@@ -1,4 +1,15 @@
+import 'dart:convert';
+
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
+
+ImageProvider _studentImageProvider(String url) {
+  if (url.startsWith('data:image')) {
+    return MemoryImage(base64Decode(url.split(',').last));
+  }
+  return NetworkImage(url);
+}
 
 // ─────────────────────────────────────────────────────────────
 //  DATA MODEL
@@ -41,6 +52,40 @@ class AnnouncementData {
     required this.hashtags,
     required this.attachments,
   });
+
+  factory AnnouncementData.fromFirestore(DocumentSnapshot doc) {
+    final d = doc.data() as Map<String, dynamic>? ?? {};
+    final timestamp = d['timestamp'];
+    final dateTime = timestamp is Timestamp
+        ? timestamp.toDate()
+        : timestamp is DateTime
+            ? timestamp
+            : DateTime.now();
+
+    return AnnouncementData(
+      title: d['title'] as String? ?? '',
+      id: doc.id,
+      org: d['authorName'] as String? ?? 'Organization',
+      orgSub: (d['category'] as String?)?.toUpperCase() ?? 'ANNOUNCEMENT',
+      date: DateFormat('MMM dd, yyyy').format(dateTime),
+      time: DateFormat('h:mm a').format(dateTime),
+      isPinned: false,
+      tag: (d['category'] as String?)?.toUpperCase() ?? 'ANNOUNCEMENT',
+      imageUrl: d['imageUrl'] as String? ?? '',
+      logoUrl: d['logoUrl'] as String? ?? '',
+      likes: 0,
+      reactions: 0,
+      comments: 0,
+      shares: 0,
+      body: d['content'] as String? ?? '',
+      hashtags: [],
+      attachments: ((d['attachments'] as List?) ?? [])
+          .whereType<Map<String, dynamic>>()
+          .map((att) => att['name'] as String? ?? '')
+          .map((name) => {'name': name, 'type': 'pdf'})
+          .toList(),
+    );
+  }
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -130,6 +175,12 @@ final List<AnnouncementData> sampleAnnouncements = [
 class StudentAnnouncementsScreen extends StatelessWidget {
   const StudentAnnouncementsScreen({super.key});
 
+  Stream<QuerySnapshot> get _announcementsStream =>
+      FirebaseFirestore.instance
+          .collection('announcements')
+          .orderBy('timestamp', descending: true)
+          .snapshots();
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -148,22 +199,89 @@ class StudentAnnouncementsScreen extends StatelessWidget {
         centerTitle: false,
       ),
       backgroundColor: const Color(0xFFF2F2F2),
-      body: ListView.builder(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        itemCount: sampleAnnouncements.length,
-        itemBuilder: (context, index) {
-          final ann = sampleAnnouncements[index];
+      body: StreamBuilder<QuerySnapshot>(
+        stream: _announcementsStream,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          if (snapshot.hasError) {
+            return const Center(child: Text('Failed to load announcements.'));
+          }
 
-          return GestureDetector(
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => AnnouncementDetailScreen(announcement: ann),
+          final docs = snapshot.data?.docs ?? [];
+          if (docs.isEmpty) {
+            return Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.campaign_outlined,
+                        size: 56, color: Color(0xFF616161)),
+                    const SizedBox(height: 16),
+                    const Text(
+                      'No announcements yet.',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF424242),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'New posts from your organizations will appear here automatically.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(fontSize: 13, color: Colors.black54),
+                    ),
+                  ],
                 ),
+              ),
+            );
+          }
+
+          final items = docs
+              .map((doc) => AnnouncementData.fromFirestore(doc))
+              .toList();
+
+          // compute quick summary counts
+          final total = items.length;
+          final pinned = items.where((a) => a.isPinned).length;
+          final withAttachments = items.where((a) => a.attachments.isNotEmpty).length;
+
+          // Render a single ListView where index 0 is the summary cards header
+          return ListView.builder(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            itemCount: items.length + 1,
+            itemBuilder: (context, index) {
+              if (index == 0) {
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: Row(
+                    children: [
+                      _SummaryCardSmall(title: 'Total', value: '$total'),
+                      const SizedBox(width: 12),
+                      _SummaryCardSmall(title: 'Pinned', value: '$pinned'),
+                      const SizedBox(width: 12),
+                      _SummaryCardSmall(title: 'With Attachments', value: '$withAttachments'),
+                    ],
+                  ),
+                );
+              }
+
+              final ann = items[index - 1];
+              return GestureDetector(
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => AnnouncementDetailScreen(announcement: ann),
+                    ),
+                  );
+                },
+                child: _AnnouncementCard(ann: ann),
               );
             },
-            child: _AnnouncementCard(ann: ann),
           );
         },
       ),
@@ -200,18 +318,26 @@ class _AnnouncementCard extends StatelessWidget {
           // ── Banner Image with Pinned Badge ──
           Stack(
             children: [
-              Image.network(
-                ann.imageUrl,
-                height: 155,
-                width: double.infinity,
-                fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => Container(
-                  height: 155,
-                  color: Colors.grey[300],
-                  child:
-                      const Icon(Icons.image, size: 50, color: Colors.grey),
-                ),
-              ),
+              ann.imageUrl.isNotEmpty
+                  ? Image(
+                      image: _studentImageProvider(ann.imageUrl),
+                      height: 155,
+                      width: double.infinity,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => Container(
+                        height: 155,
+                        color: Colors.grey[300],
+                        child: const Icon(Icons.image,
+                            size: 50, color: Colors.grey),
+                      ),
+                    )
+                  : Container(
+                      height: 155,
+                      width: double.infinity,
+                      color: Colors.grey[300],
+                      child: const Icon(Icons.image,
+                          size: 50, color: Colors.grey),
+                    ),
               if (ann.isPinned)
                 Positioned(
                   top: 10,
@@ -249,17 +375,25 @@ class _AnnouncementCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // ── Tag row ──
+                // ── Tag / post metadata row ──
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text(
-                      ann.tag,
-                      style: const TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                        color: Color(0xFF888888),
-                        letterSpacing: 0.4,
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 5),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF2F2F2),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        ann.tag,
+                        style: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF555555),
+                          letterSpacing: 0.4,
+                        ),
                       ),
                     ),
                     Text(
@@ -272,76 +406,61 @@ class _AnnouncementCard extends StatelessWidget {
                   ],
                 ),
 
-                const SizedBox(height: 6),
+                const SizedBox(height: 8),
 
                 // ── Title ──
                 Text(
                   ann.title,
                   style: const TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.bold,
+                    fontSize: 17,
+                    fontWeight: FontWeight.w800,
                     color: Colors.black87,
                   ),
                 ),
 
-                const SizedBox(height: 12),
+                const SizedBox(height: 10),
 
-                // ── Org Row ──
-                Row(
-                  children: [
-                    CircleAvatar(
-                      radius: 18,
-                      backgroundImage: NetworkImage(ann.logoUrl),
-                      backgroundColor: Colors.grey[200],
-                      onBackgroundImageError: (_, __) {},
-                    ),
-                    const SizedBox(width: 10),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          ann.org,
-                          style: const TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w700,
-                            color: Colors.black87,
-                          ),
-                        ),
-                        Text(
-                          ann.orgSub,
-                          style: const TextStyle(
-                            fontSize: 11,
-                            color: Colors.grey,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const Spacer(),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        Text(
-                          ann.date,
-                          style: const TextStyle(
-                            fontSize: 12,
-                            color: Colors.black87,
-                          ),
-                        ),
-                        Text(
-                          ann.time,
-                          style: const TextStyle(
-                            fontSize: 12,
-                            color: Colors.black54,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
+                Text(
+                  ann.body,
+                  maxLines: 3,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    color: Colors.black87,
+                    height: 1.6,
+                  ),
                 ),
 
-                const SizedBox(height: 12),
-                const Divider(height: 1, color: Color(0xFFEEEEEE)),
                 const SizedBox(height: 10),
+
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 6,
+                  children: ann.hashtags
+                      .map((tag) => Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 10, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFEDF7FF),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                  color: const Color(0xFFB3E5FC)),
+                            ),
+                            child: Text(
+                              tag,
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: Color(0xFF1565C0),
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ))
+                      .toList(),
+                ),
+
+                const SizedBox(height: 14),
+                const Divider(height: 1, color: Color(0xFFEEEEEE)),
+                const SizedBox(height: 12),
 
                 // ── Engagement Row ──
                 Row(
@@ -349,11 +468,11 @@ class _AnnouncementCard extends StatelessWidget {
                     _EngagementItem(
                         icon: Icons.thumb_up_alt_outlined,
                         count: ann.likes),
-                    const SizedBox(width: 18),
+                    const SizedBox(width: 16),
                     _EngagementItem(
                         icon: Icons.favorite_border,
                         count: ann.reactions),
-                    const SizedBox(width: 18),
+                    const SizedBox(width: 16),
                     _EngagementItem(
                         icon: Icons.mode_comment_outlined,
                         count: ann.comments),
@@ -448,15 +567,21 @@ class _AnnouncementDetailScreenState extends State<AnnouncementDetailScreen> {
                   background: Stack(
                     fit: StackFit.expand,
                     children: [
-                      Image.network(
-                        ann.imageUrl,
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => Container(
-                          color: Colors.grey[300],
-                          child: const Icon(Icons.image,
-                              size: 60, color: Colors.grey),
-                        ),
-                      ),
+                      ann.imageUrl.isNotEmpty
+                          ? Image(
+                              image: _studentImageProvider(ann.imageUrl),
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) => Container(
+                                color: Colors.grey[300],
+                                child: const Icon(Icons.image,
+                                    size: 60, color: Colors.grey),
+                              ),
+                            )
+                          : Container(
+                              color: Colors.grey[300],
+                              child: const Icon(Icons.image,
+                                  size: 60, color: Colors.grey),
+                            ),
                       // gradient overlay so title is readable
                       Container(
                         decoration: const BoxDecoration(
@@ -559,10 +684,14 @@ class _AnnouncementDetailScreenState extends State<AnnouncementDetailScreen> {
                               children: [
                                 CircleAvatar(
                                   radius: 20,
-                                  backgroundImage:
-                                      NetworkImage(ann.logoUrl),
                                   backgroundColor: Colors.grey[200],
-                                  onBackgroundImageError: (_, __) {},
+                                  backgroundImage: ann.logoUrl.isNotEmpty
+                                      ? NetworkImage(ann.logoUrl)
+                                      : null,
+                                  child: ann.logoUrl.isEmpty
+                                      ? const Icon(Icons.campaign,
+                                          size: 20, color: Colors.white)
+                                      : null,
                                 ),
                                 const SizedBox(width: 10),
                                 Column(
@@ -621,7 +750,7 @@ class _AnnouncementDetailScreenState extends State<AnnouncementDetailScreen> {
                               style: const TextStyle(
                                 fontSize: 14,
                                 color: Colors.black87,
-                                height: 1.6,
+                                height: 1.7,
                               ),
                             ),
 
@@ -633,12 +762,20 @@ class _AnnouncementDetailScreenState extends State<AnnouncementDetailScreen> {
                               runSpacing: 6,
                               children: ann.hashtags
                                   .map(
-                                    (tag) => Text(
-                                      tag,
-                                      style: const TextStyle(
-                                        fontSize: 13,
-                                        color: Color(0xFF1565C0),
-                                        fontWeight: FontWeight.w500,
+                                    (tag) => Container(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 10, vertical: 6),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFFEDF7FF),
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                      child: Text(
+                                        tag,
+                                        style: const TextStyle(
+                                          fontSize: 13,
+                                          color: Color(0xFF1565C0),
+                                          fontWeight: FontWeight.w600,
+                                        ),
                                       ),
                                     ),
                                   )
@@ -647,47 +784,61 @@ class _AnnouncementDetailScreenState extends State<AnnouncementDetailScreen> {
 
                             const SizedBox(height: 20),
 
-                            // Attachments
                             if (ann.attachments.isNotEmpty) ...[
-                              Text(
-                                'ATTACHMENTS (${ann.attachments.length})',
-                                style: const TextStyle(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w700,
-                                  color: Color(0xFF888888),
-                                  letterSpacing: 0.5,
+                              Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.all(14),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFF8FAFD),
+                                  borderRadius: BorderRadius.circular(14),
+                                  border: Border.all(
+                                      color: const Color(0xFFDEE7F1)),
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'Attachments',
+                                      style: const TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w700,
+                                        color: Color(0xFF4B5878),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 10),
+                                    ...ann.attachments.map(
+                                      (att) => _AttachmentTile(
+                                          attachment: att),
+                                    ),
+                                  ],
                                 ),
                               ),
-                              const SizedBox(height: 10),
-                              ...ann.attachments.map(
-                                (att) => _AttachmentTile(attachment: att),
-                              ),
-                              const SizedBox(height: 8),
+                              const SizedBox(height: 16),
                             ],
 
                             const Divider(
                                 height: 1, color: Color(0xFFEEEEEE)),
-                            const SizedBox(height: 10),
+                            const SizedBox(height: 14),
 
-                            // Engagement row
+                            // Action buttons
                             Row(
                               children: [
-                                _EngagementItem(
-                                    icon: Icons.thumb_up_alt_outlined,
-                                    count: ann.likes),
-                                const SizedBox(width: 18),
-                                _EngagementItem(
-                                    icon: Icons.favorite_border,
-                                    count: ann.reactions),
-                                const SizedBox(width: 18),
-                                _EngagementItem(
-                                    icon: Icons.mode_comment_outlined,
-                                    count: ann.comments),
-                                const Spacer(),
-                                _EngagementItem(
+                                _PostActionButton(
+                                  icon: Icons.thumb_up_alt_outlined,
+                                  label: 'Like',
+                                  count: ann.likes,
+                                ),
+                                const SizedBox(width: 10),
+                                _PostActionButton(
+                                  icon: Icons.mode_comment_outlined,
+                                  label: 'Comment',
+                                  count: ann.comments,
+                                ),
+                                const SizedBox(width: 10),
+                                _PostActionButton(
                                   icon: Icons.share_outlined,
+                                  label: 'Share',
                                   count: ann.shares,
-                                  showCount: false,
                                 ),
                               ],
                             ),
@@ -829,6 +980,43 @@ class _AttachmentTile extends StatelessWidget {
   }
 }
 
+class _PostActionButton extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final int count;
+
+  const _PostActionButton({
+    required this.icon,
+    required this.label,
+    required this.count,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: TextButton.icon(
+        onPressed: () {},
+        style: TextButton.styleFrom(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          foregroundColor: const Color(0xFF37474F),
+          backgroundColor: const Color(0xFFF7F9FB),
+        ),
+        icon: Icon(icon, size: 18),
+        label: Text(
+          '$label${count > 0 ? ' · $count' : ''}',
+          style: const TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 // ─────────────────────────────────────────────────────────────
 //  DISMISS CONFIRM BOTTOM SHEET
 // ─────────────────────────────────────────────────────────────
@@ -963,6 +1151,51 @@ class _EngagementItem extends StatelessWidget {
           ),
         ],
       ],
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+// Small summary card used at top of the list to match admin UI
+// ─────────────────────────────────────────────────────────────
+class _SummaryCardSmall extends StatelessWidget {
+  final String title;
+  final String value;
+  const _SummaryCardSmall({required this.title, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.06),
+              blurRadius: 10,
+              offset: const Offset(0, 3),
+            ),
+          ],
+          border: Border.all(color: Colors.grey.shade200),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(title,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Colors.grey[700],
+                      fontWeight: FontWeight.w600,
+                    )),
+            const SizedBox(height: 8),
+            Text(value,
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    )),
+          ],
+        ),
+      ),
     );
   }
 }

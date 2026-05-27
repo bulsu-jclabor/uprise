@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../auth_service.dart';
+import '../../../main_web.dart';
 import '../../auth/change_password_screen.dart';
 import 'admin_dashboard.dart';
 
@@ -513,7 +514,10 @@ class _AdminLoginState extends State<AdminLogin>
                   ),
                   const SizedBox(height: 16),
                   TextButton.icon(
-                    onPressed: () => Navigator.pop(context),
+                    onPressed: () => Navigator.pushReplacement(
+                      context,
+                      MaterialPageRoute(builder: (_) => const LandingPage()),
+                    ),
                     icon: const Icon(Icons.arrow_back_ios_new_rounded,
                         size: 13, color: Color(0xFFD97706)),
                     label: Text(

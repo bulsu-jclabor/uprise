@@ -8,7 +8,9 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import '../../../services/activity_logger.dart' as activity_log;
 import 'package:fl_chart/fl_chart.dart';
-import 'package:universal_html/html.dart' as html;
+import '../../../widgets/admin_export_button.dart';
+import 'export_util.dart';
+import 'export_pdf.dart';
 
 // ============ COLOR SCHEME ============
 class OrgColors {
@@ -191,32 +193,65 @@ class _OrgFinanceScreenState extends State<OrgFinanceScreen> {
     }).toList();
   }
 
-  void _exportToCSV(List<TransactionModel> transactions) {
+  Future<void> _exportTransactions(String choice, List<TransactionModel> transactions) async {
     final filtered = _filterTransactions(transactions);
-    final buffer = StringBuffer();
-    buffer.writeln('Event Name,Category,Segment,Amount,Type,Date');
-    for (final t in filtered) {
-      final date = DateFormat('MM/dd/yyyy').format(t.date.toDate());
-      final amount = t.amount.toStringAsFixed(2);
-      buffer.writeln(
-          '"${t.eventName}","${t.category}","${t.segment}","$amount","${t.type}","$date"');
+    if (filtered.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('No transactions to export', style: GoogleFonts.beVietnamPro()),
+          backgroundColor: OrgColors.warning,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        ),
+      );
+      return;
     }
-    final bytes = utf8.encode(buffer.toString());
-    final blob = html.Blob([bytes], 'text/csv');
-    final url = html.Url.createObjectUrlFromBlob(blob);
-    final anchor = html.AnchorElement(href: url)
-      ..setAttribute('download', 'transactions_${DateFormat('yyyyMMdd').format(DateTime.now())}.csv')
-      ..click();
-    html.Url.revokeObjectUrl(url);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Exported ${filtered.length} transactions to CSV',
-            style: GoogleFonts.beVietnamPro()),
-        backgroundColor: OrgColors.success,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-      ),
-    );
+
+    final headers = ['Event Name', 'Category', 'Segment', 'Amount', 'Type', 'Date'];
+    final rows = filtered.map((t) {
+      final date = DateFormat('MM/dd/yyyy').format(t.date.toDate());
+      return [
+        t.eventName,
+        t.category,
+        t.segment,
+        t.amount.toStringAsFixed(2),
+        t.type,
+        date,
+      ];
+    }).toList();
+
+    try {
+      if (choice == 'csv') {
+        final csv = [headers, ...rows]
+            .map((row) => row.map((c) => '"${c.replaceAll('"', '""')}"').join(','))
+            .join('\n');
+        await OrgExportUtil.saveText(csv, 'transactions_${DateFormat('yyyyMMdd').format(DateTime.now())}.csv', mimeType: 'text/csv');
+      } else if (choice == 'pdf') {
+        final pdfBytes = await OrgExportPdf.generateTablePdf(
+          title: 'Transactions',
+          headers: headers,
+          rows: rows,
+        );
+        await OrgExportUtil.saveBytes(pdfBytes, 'transactions_${DateFormat('yyyyMMdd').format(DateTime.now())}.pdf', mimeType: 'application/pdf');
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Exported ${filtered.length} transactions', style: GoogleFonts.beVietnamPro()),
+          backgroundColor: OrgColors.success,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        ),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Export failed: $e', style: GoogleFonts.beVietnamPro()),
+          backgroundColor: OrgColors.error,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        ),
+      );
+    }
   }
 
   @override
@@ -405,23 +440,9 @@ class _OrgFinanceScreenState extends State<OrgFinanceScreen> {
                                         setState(() => _filterCategory = v ?? 'All'),
                                   ),
                                   const SizedBox(width: 8),
-                                  // Export Button
-                                  OutlinedButton.icon(
-                                    onPressed: transactions.isEmpty
-                                        ? null
-                                        : () => _exportToCSV(transactions),
-                                    icon: const Icon(Icons.download_outlined, size: 16),
-                                    label: Text('Export',
-                                        style: GoogleFonts.beVietnamPro(
-                                            fontSize: 13, fontWeight: FontWeight.w500)),
-                                    style: OutlinedButton.styleFrom(
-                                      foregroundColor: OrgColors.charcoal,
-                                      side: BorderSide(color: OrgColors.primaryLight),
-                                      shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.circular(8)),
-                                      padding: const EdgeInsets.symmetric(
-                                          horizontal: 14, vertical: 10),
-                                    ),
+                                  AdminExportButton(
+                                    label: 'Export',
+                                    onSelected: (choice) => _exportTransactions(choice, transactions),
                                   ),
                                 ],
                               ),

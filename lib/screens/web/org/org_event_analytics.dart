@@ -2,16 +2,14 @@
 
 import 'dart:math' as math;
 import 'dart:ui' as ui;
-import 'dart:convert';
-import 'package:flutter/foundation.dart' show kIsWeb;
-// ignore: avoid_web_libraries_in_flutter
-import 'package:universal_html/html.dart' as html;
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import '../../../services/activity_logger.dart' as activity_log;
+import '../../../widgets/admin_export_button.dart';
+import 'export_util.dart';
+import 'export_pdf.dart';
 
 // ── Colors ─────────────────────────────────────────────────────
 class OrgColors {
@@ -170,8 +168,7 @@ class _OrgEventAnalyticsScreenState extends State<OrgEventAnalyticsScreen> {
     }).toList();
   }
 
-  // ── CSV Export ──
-  void _exportCsv(_AnalyticsData data) {
+  Future<void> _exportAnalytics(String choice, _AnalyticsData data) async {
     final filtered = _applyFilters([...data.feedbacks], data)
       ..sort((a, b) {
         final ta = (a['createdAt'] as Timestamp?)?.millisecondsSinceEpoch ?? 0;
@@ -179,51 +176,71 @@ class _OrgEventAnalyticsScreenState extends State<OrgEventAnalyticsScreen> {
         return tb.compareTo(ta);
       });
 
-    final rows = <List<String>>[
-      ['#', 'Event', 'Rating', 'Comment', 'Date'],
-      ...filtered.asMap().entries.map((e) {
-        final f     = e.value;
-        final title = data.eventTitle(f['eventId'] as String? ?? '');
-        final date  = (f['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now();
-        return [
-          '${e.key + 1}',
-          title,
-          '${f['rating'] ?? ''}',
-          (f['comment'] as String? ?? '').replaceAll('"', '""'),
-          DateFormat('MMM dd, yyyy').format(date),
-        ];
-      }),
-    ];
-
-    final csv = rows
-        .map((row) => row.map((cell) => '"$cell"').join(','))
-        .join('\n');
-
-    if (kIsWeb) {
-      final bytes  = utf8.encode(csv);
-      final blob   = html.Blob([bytes], 'text/csv');
-      final url    = html.Url.createObjectUrlFromBlob(blob);
-      final anchor = html.AnchorElement(href: url)
-        ..setAttribute('download', 'event_feedback_${DateFormat('yyyyMMdd').format(DateTime.now())}.csv')
-        ..click();
-      html.Url.revokeObjectUrl(url);
+    if (filtered.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('No records to export', style: GoogleFonts.beVietnamPro()),
+          backgroundColor: OrgColors.warning,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        ),
+      );
+      return;
     }
 
-    activity_log.ActivityLogger.log(
-      action: 'export_csv',
-      module: 'event_analytics',
-      details: {'orgId': widget.orgId, 'rows': filtered.length},
-    );
+    final rows = filtered.asMap().entries.map((e) {
+      final f = e.value;
+      final title = data.eventTitle(f['eventId'] as String? ?? '');
+      final date = (f['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now();
+      return [
+        '${e.key + 1}',
+        title,
+        '${f['rating'] ?? ''}',
+        (f['comment'] as String? ?? '').replaceAll('"', '""'),
+        DateFormat('MMM dd, yyyy').format(date),
+      ];
+    }).toList();
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Exported ${filtered.length} records to CSV',
-            style: GoogleFonts.beVietnamPro()),
-        backgroundColor: OrgColors.success,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-      ),
-    );
+    try {
+      if (choice == 'csv') {
+        final csv = [
+          ['#', 'Event', 'Rating', 'Comment', 'Date'],
+          ...rows,
+        ].map((row) => row.map((cell) => '"$cell"').join(',')).join('\n');
+        await OrgExportUtil.saveText(csv, 'event_feedback_${DateFormat('yyyyMMdd').format(DateTime.now())}.csv', mimeType: 'text/csv');
+      } else if (choice == 'pdf') {
+        final pdfBytes = await OrgExportPdf.generateTablePdf(
+          title: 'Event Feedback',
+          headers: ['#', 'Event', 'Rating', 'Comment', 'Date'],
+          rows: rows,
+        );
+        await OrgExportUtil.saveBytes(pdfBytes, 'event_feedback_${DateFormat('yyyyMMdd').format(DateTime.now())}.pdf', mimeType: 'application/pdf');
+      }
+
+      activity_log.ActivityLogger.log(
+        action: choice == 'csv' ? 'export_csv' : 'export_pdf',
+        module: 'event_analytics',
+        details: {'orgId': widget.orgId, 'rows': filtered.length},
+      );
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Exported ${filtered.length} records', style: GoogleFonts.beVietnamPro()),
+          backgroundColor: OrgColors.success,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        ),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Export failed: $e', style: GoogleFonts.beVietnamPro()),
+          backgroundColor: OrgColors.error,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        ),
+      );
+    }
   }
 
   bool get _hasActiveFilters =>
@@ -296,14 +313,11 @@ class _OrgEventAnalyticsScreenState extends State<OrgEventAnalyticsScreen> {
                       ),
                     ),
                     // Export button
-                    _HeaderButton(
-                      icon: Icons.download_outlined,
-                      label: 'Export CSV',
-                      color: OrgColors.success,
-                      onTap: () => _exportCsv(data),
+                    AdminExportButton(
+                      label: 'Export',
+                      onSelected: (choice) => _exportAnalytics(choice, data),
                     ),
                     const SizedBox(width: 8),
-                    // Refresh button
                     _HeaderButton(
                       icon: Icons.refresh,
                       label: 'Refresh',

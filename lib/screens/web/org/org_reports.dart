@@ -12,6 +12,9 @@ import 'package:intl/intl.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import '../../../services/activity_logger.dart' as activity_log;
+import '../../../widgets/admin_export_button.dart';
+import 'export_util.dart';
+import 'export_pdf.dart';
 
 // ignore_for_file: use_build_context_synchronously
 
@@ -190,24 +193,40 @@ class _OrgReportsScreenState extends State<OrgReportsScreen> {
     }
   }
 
-  void _exportCSV(List<ReportModel> rows) {
-    final lines = [
-      ['Report ID', 'Title', 'Type', 'Date Submitted', 'Status'],
-      ...rows.map((r) => [
-            r.reportId,
-            r.title,
-            r.type == 'financial' ? 'Financial' : 'Accomplishment',
-            DateFormat('yyyy-MM-dd').format(r.submittedAt.toDate()),
-            r.status,
-          ]),
-    ];
-    final csv = lines
-        .map((row) => row.map((c) => '"${c.replaceAll('"', '""')}"').join(','))
-        .join('\n');
-    // On web: use `universal_html` to trigger a download.
-    // On mobile: use `share_plus` or `path_provider` to save/share.
-    debugPrint(csv);
-    _snack('Exported ${rows.length} report(s) to CSV');
+  Future<void> _exportReports(String choice, List<ReportModel> rows) async {
+    if (rows.isEmpty) {
+      _snack('No reports to export', error: true);
+      return;
+    }
+
+    final headers = ['Report ID', 'Title', 'Type', 'Date Submitted', 'Status'];
+    final dataRows = rows.map((r) => [
+          r.reportId,
+          r.title,
+          r.type == 'financial' ? 'Financial' : 'Accomplishment',
+          DateFormat('yyyy-MM-dd').format(r.submittedAt.toDate()),
+          r.status,
+        ]).toList();
+
+    try {
+      if (choice == 'csv') {
+        final lines = [headers, ...dataRows];
+        final csv = lines
+            .map((row) => row.map((c) => '"${c.replaceAll('"', '""')}"').join(','))
+            .join('\n');
+        await OrgExportUtil.saveText(csv, 'reports_${DateTime.now().millisecondsSinceEpoch}.csv', mimeType: 'text/csv');
+      } else if (choice == 'pdf') {
+        final pdfBytes = await OrgExportPdf.generateTablePdf(
+          title: 'Reports',
+          headers: headers,
+          rows: dataRows,
+        );
+        await OrgExportUtil.saveBytes(pdfBytes, 'reports_${DateTime.now().millisecondsSinceEpoch}.pdf', mimeType: 'application/pdf');
+      }
+      _snack('Exported ${rows.length} report(s)', error: false);
+    } catch (e) {
+      _snack('Export failed: $e', error: true);
+    }
   }
 
   void _snack(String msg, {bool error = false}) {
@@ -304,17 +323,9 @@ class _OrgReportsScreenState extends State<OrgReportsScreen> {
               style: GoogleFonts.beVietnamPro(fontSize: 13, color: OrgColors.darkGray)),
         ]),
         const Spacer(),
-        OutlinedButton.icon(
-          onPressed: filtered.isEmpty ? null : () => _exportCSV(filtered),
-          icon: const Icon(Icons.download_outlined, size: 16),
-          label: Text('Export CSV',
-              style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600)),
-          style: OutlinedButton.styleFrom(
-            foregroundColor: OrgColors.darkGray,
-            side: const BorderSide(color: OrgColors.primaryLight),
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-          ),
+        AdminExportButton(
+          label: 'Export',
+          onSelected: (choice) => _exportReports(choice, filtered),
         ),
         const SizedBox(width: 10),
         ElevatedButton.icon(

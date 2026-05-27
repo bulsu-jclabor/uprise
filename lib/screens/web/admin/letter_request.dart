@@ -1,13 +1,19 @@
 // lib/screens/admin/letter_request.dart - FULL WORKING VERSION
 
+// ignore_for_file: unused_field, unused_import
+
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:uprise/widgets/admin_export_button.dart';
 import 'package:intl/intl.dart';
+import 'export_util.dart';
+import 'export_pdf.dart';
 import '../../../services/activity_logger.dart' as activity_log;
 import '../../../utils/platform_file_utils.dart' as platform_file_utils;
+import '../../theme/app_theme.dart';
 
 // ============ COLOR SCHEME ============
 class AdminColors {
@@ -232,17 +238,17 @@ class _AdminLetterRequestScreenState extends State<AdminLetterRequestScreen> {
 
   Widget _buildTableHeader() {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 13),
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
       decoration: const BoxDecoration(
         color: Color(0xFFF8F9FB),
         borderRadius: BorderRadius.vertical(top: Radius.circular(14)),
         border: Border(bottom: BorderSide(color: Color(0xFFE8ECF0))),
       ),
       child: Row(children: [
-        Expanded(flex: 3, child: _headerCell('REQUESTOR')),
-        Expanded(flex: 3, child: _headerCell('SUBJECT / TYPE')),
-        Expanded(flex: 2, child: _headerCell('DATE SUBMITTED')),
-        Expanded(flex: 1, child: _headerCell('STATUS')),
+        Expanded(flex: 3, child: Padding(padding: const EdgeInsets.only(right: 16), child: _headerCell('REQUESTOR'))),
+        Expanded(flex: 3, child: Padding(padding: const EdgeInsets.only(right: 16), child: _headerCell('SUBJECT / TYPE'))),
+        Expanded(flex: 2, child: Padding(padding: const EdgeInsets.only(right: 16), child: _headerCell('DATE SUBMITTED'))),
+        Expanded(flex: 1, child: Padding(padding: const EdgeInsets.only(right: 16), child: _headerCell('STATUS'))),
         Expanded(flex: 2, child: _headerCell('ACTIONS')),
       ]),
     );
@@ -262,102 +268,121 @@ class _AdminLetterRequestScreenState extends State<AdminLetterRequestScreen> {
     final status = (data['status'] ?? 'pending').toString();
     final timestamp = data['timestamp'] as Timestamp?;
     final date = timestamp != null ? DateFormat('MMM dd, yyyy').format(timestamp.toDate()) : 'Unknown';
-    
+
     return InkWell(
       hoverColor: const Color(0xFFF8F9FB),
       onTap: () => _showViewDialog(data, docId),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 18),
         decoration: BoxDecoration(
           border: isLast ? null : const Border(bottom: BorderSide(color: Color(0xFFF1F5F9))),
         ),
-        child: Row(children: [
-          Expanded(
-            flex: 3,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  data['name'] ?? 'Unknown',
-                  style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600, color: const Color(0xFF1A202C)),
+        child: Row(
+          children: [
+            Expanded(
+              flex: 3,
+              child: Padding(
+                padding: const EdgeInsets.only(right: 16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      data['name'] ?? 'Unknown',
+                      style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600, color: const Color(0xFF1A202C)),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      data['email'] ?? '',
+                      style: GoogleFonts.beVietnamPro(fontSize: 11, color: const Color(0xFF9AA5B4)),
+                    ),
+                  ],
                 ),
-                Text(
-                  data['email'] ?? '',
-                  style: GoogleFonts.beVietnamPro(fontSize: 11, color: const Color(0xFF9AA5B4)),
-                ),
-              ],
+              ),
             ),
-          ),
-          Expanded(
-            flex: 3,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: AdminColors.primaryDark.withOpacity(0.08),
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: Text(
-                    data['letterType'] ?? 'General',
-                    style: GoogleFonts.beVietnamPro(fontSize: 10, fontWeight: FontWeight.w600, color: AdminColors.primaryDark),
-                  ),
+            Expanded(
+              flex: 3,
+              child: Padding(
+                padding: const EdgeInsets.only(right: 16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: AdminColors.primaryDark.withOpacity(0.08),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text(
+                        data['letterType'] ?? 'General',
+                        style: GoogleFonts.beVietnamPro(fontSize: 10, fontWeight: FontWeight.w600, color: AdminColors.primaryDark),
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      data['subject'] ?? 'No subject',
+                      style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF374151)),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  data['subject'] ?? 'No subject',
-                  style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF374151)),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
+              ),
             ),
-          ),
-          Expanded(
-            flex: 2,
-            child: Text(
-              date,
-              style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF64748B)),
-            ),
-          ),
-          Expanded(flex: 1, child: _buildStatusBadge(status)),
-          Expanded(
-            flex: 2,
-            child: Row(
-              children: [
-                _ActionIconButton(
-                  icon: Icons.visibility_outlined,
-                  tooltip: 'View Details',
-                  onTap: () => _showViewDialog(data, docId),
+            Expanded(
+              flex: 2,
+              child: Padding(
+                padding: const EdgeInsets.only(right: 16),
+                child: Text(
+                  date,
+                  style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF64748B)),
                 ),
-                const SizedBox(width: 4),
-                if (status == 'pending') ...[
+              ),
+            ),
+            Expanded(
+              flex: 1,
+              child: Padding(
+                padding: const EdgeInsets.only(right: 16),
+                child: _buildStatusBadge(status),
+              ),
+            ),
+            Expanded(
+              flex: 2,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
                   _ActionIconButton(
-                    icon: Icons.check_circle_outline,
-                    tooltip: 'Approve',
-                    color: AdminColors.success,
-                    onTap: () => _updateStatus(docId, 'approved', data['name'] ?? 'Request'),
+                    icon: Icons.visibility_outlined,
+                    tooltip: 'View Details',
+                    onTap: () => _showViewDialog(data, docId),
                   ),
+                  const SizedBox(width: 8),
+                  if (status == 'pending') ...[
+                    _ActionIconButton(
+                      icon: Icons.check_circle_outline,
+                      tooltip: 'Approve',
+                      color: AdminColors.success,
+                      onTap: () => _updateStatus(docId, 'approved', data['name'] ?? 'Request'),
+                    ),
+                    const SizedBox(width: 4),
+                    _ActionIconButton(
+                      icon: Icons.cancel_outlined,
+                      tooltip: 'Reject',
+                      color: AdminColors.error,
+                      onTap: () => _updateStatus(docId, 'rejected', data['name'] ?? 'Request'),
+                    ),
+                  ],
                   const SizedBox(width: 4),
                   _ActionIconButton(
-                    icon: Icons.cancel_outlined,
-                    tooltip: 'Reject',
+                    icon: Icons.delete_outline_rounded,
+                    tooltip: 'Delete',
                     color: AdminColors.error,
-                    onTap: () => _updateStatus(docId, 'rejected', data['name'] ?? 'Request'),
+                    onTap: () => _confirmDelete(docId, data['name'] ?? 'Request'),
                   ),
                 ],
-                const SizedBox(width: 4),
-                _ActionIconButton(
-                  icon: Icons.delete_outline_rounded,
-                  tooltip: 'Delete',
-                  color: AdminColors.error,
-                  onTap: () => _confirmDelete(docId, data['name'] ?? 'Request'),
-                ),
-              ],
+              ),
             ),
-          ),
-        ]),
+          ],
+        ),
       ),
     );
   }
@@ -927,18 +952,10 @@ class _ExportButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return OutlinedButton.icon(
-      onPressed: () => _exportCSV(context),
-      icon: const Icon(Icons.download_outlined, size: 16),
-      label: Text('Export CSV', style: GoogleFonts.beVietnamPro(fontSize: 13)),
-      style: OutlinedButton.styleFrom(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-      ),
-    );
+    return AdminExportButton(onSelected: (choice) => _doExport(context, choice));
   }
 
-  Future<void> _exportCSV(BuildContext context) async {
+  Future<void> _doExport(BuildContext context, String format) async {
     try {
       var snap = await FirebaseFirestore.instance.collection('letter_requests').orderBy('timestamp', descending: true).get();
       var docs = snap.docs;
@@ -956,17 +973,75 @@ class _ExportButton extends StatelessWidget {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No data to export.')));
         return;
       }
-      final buffer = StringBuffer();
-      buffer.writeln('Letter ID,Name,Email,Letter Type,Subject,Message,Status,Date Submitted');
-      for (final doc in docs) {
-        final d = doc.data();
-        final date = (d['timestamp'] as Timestamp?)?.toDate().toString().substring(0, 10) ?? '';
-        buffer.writeln('"${d['letterId']}","${d['name']}","${d['email']}","${d['letterType']}","${d['subject']}","${d['message']}","${d['status']}","$date"');
+
+      String content, fileName;
+      final now = DateTime.now().toString().substring(0, 10);
+
+      if (format == 'csv') {
+        final buffer = StringBuffer();
+        buffer.writeln('Letter ID,Name,Email,Letter Type,Subject,Message,Status,Date Submitted');
+        for (final doc in docs) {
+          final d = doc.data();
+          final date = (d['timestamp'] as Timestamp?)?.toDate().toString().substring(0, 10) ?? '';
+          String esc(String s) => '"${s.replaceAll('"', '""')}"';
+          buffer.writeln([
+            esc(d['letterId']?.toString() ?? ''),
+            esc(d['name']?.toString() ?? ''),
+            esc(d['email']?.toString() ?? ''),
+            esc(d['letterType']?.toString() ?? ''),
+            esc(d['subject']?.toString() ?? ''),
+            esc(d['message']?.toString() ?? ''),
+            esc(d['status']?.toString() ?? ''),
+            esc(date),
+          ].join(','));
+        }
+        content = buffer.toString();
+        fileName = 'letter_requests_$now.csv';
+        await AdminExportUtil.saveText(
+          content,
+          fileName,
+          mimeType: 'text/csv',
+        );
+      } else if (format == 'pdf') {
+        final rows = docs.map((doc) {
+          final d = doc.data();
+          final date = (d['timestamp'] as Timestamp?)?.toDate().toString().substring(0, 10) ?? '';
+          return [
+            d['letterId'] ?? '',
+            d['name'] ?? '',
+            d['email'] ?? '',
+            d['letterType'] ?? '',
+            d['subject'] ?? '',
+            d['status'] ?? '',
+            date,
+          ].map((value) => value.toString()).toList();
+        }).toList();
+
+        final pdfBytes = await AdminExportPdf.generateTablePdf(
+          title: 'Letter Requests Report',
+          headers: const ['Letter ID', 'Name', 'Email', 'Type', 'Subject', 'Status', 'Date'],
+          rows: rows,
+        );
+
+        await AdminExportUtil.saveBytes(
+          pdfBytes,
+          'letter_requests_$now.pdf',
+          mimeType: 'application/pdf',
+        );
+      } else {
+        throw UnsupportedError('Unsupported export format: $format');
       }
-      // For web, you'd use html package to download. For now, show success.
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Exported ${docs.length} records to CSV')));
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Exported ${docs.length} records to ${format.toUpperCase()}')),
+      );
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Export failed: $e'), backgroundColor: AdminColors.error));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Export failed: $e'),
+          backgroundColor: AdminColors.error,
+        ),
+      );
     }
   }
 }

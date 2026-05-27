@@ -12,6 +12,9 @@ import 'package:intl/intl.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import '../../../services/activity_logger.dart' as activity_log;
+import '../../../widgets/admin_export_button.dart';
+import 'export_util.dart';
+import 'export_pdf.dart';
 
 // ignore_for_file: use_build_context_synchronously
 
@@ -210,11 +213,14 @@ class _OrgLetterRequestScreenState extends State<OrgLetterRequestScreen> {
     }
   }
 
-  void _exportCSV(List<LetterRequestModel> filtered) {
-    try {
-      final rows = <List<String>>[
-        ['Letter ID', 'Name', 'Email', 'Letter Type', 'Subject', 'Date Submitted', 'Status', 'Replied'],
-        ...filtered.map((r) => [
+  Future<void> _exportLetters(String choice, List<LetterRequestModel> filtered) async {
+    if (filtered.isEmpty) {
+      _showSnack('No records to export', isError: true);
+      return;
+    }
+
+    final headers = ['Letter ID', 'Name', 'Email', 'Letter Type', 'Subject', 'Date Submitted', 'Status', 'Replied'];
+    final rows = filtered.map((r) => [
           r.letterId,
           r.name,
           r.email,
@@ -223,13 +229,23 @@ class _OrgLetterRequestScreenState extends State<OrgLetterRequestScreen> {
           DateFormat('yyyy-MM-dd').format(r.timestamp.toDate()),
           r.status,
           r.replied ? 'Yes' : 'No',
-        ]),
-      ];
-      final csv = rows.map((row) => row.map((c) => '"${c.replaceAll('"', '""')}"').join(',')).join('\n');
-      // On web, you'd trigger a download; on mobile, share or save.
-      // For now we log and show success — integrate with universal_html or share_plus as needed.
-      debugPrint(csv);
-      _showSnack('Exported ${filtered.length} records to CSV');
+        ]).toList();
+
+    try {
+      if (choice == 'csv') {
+        final csv = [headers, ...rows]
+            .map((row) => row.map((c) => '"${c.replaceAll('"', '""')}"').join(','))
+            .join('\n');
+        await OrgExportUtil.saveText(csv, 'letter_requests_${DateTime.now().millisecondsSinceEpoch}.csv', mimeType: 'text/csv');
+      } else if (choice == 'pdf') {
+        final pdfBytes = await OrgExportPdf.generateTablePdf(
+          title: 'Letter Requests',
+          headers: headers,
+          rows: rows,
+        );
+        await OrgExportUtil.saveBytes(pdfBytes, 'letter_requests_${DateTime.now().millisecondsSinceEpoch}.pdf', mimeType: 'application/pdf');
+      }
+      _showSnack('Exported ${filtered.length} records', isError: false);
     } catch (e) {
       _showSnack('Export failed: $e', isError: true);
     }
@@ -440,16 +456,9 @@ Widget build(BuildContext context) {
               style: GoogleFonts.beVietnamPro(fontSize: 13, color: OrgColors.darkGray)),
         ]),
         const Spacer(),
-        OutlinedButton.icon(
-          onPressed: () => _exportCSV(filtered),
-          icon: const Icon(Icons.download_outlined, size: 16),
-          label: Text('Export CSV', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600)),
-          style: OutlinedButton.styleFrom(
-            foregroundColor: OrgColors.darkGray,
-            side: const BorderSide(color: OrgColors.primaryLight),
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-          ),
+        AdminExportButton(
+          label: 'Export',
+          onSelected: (choice) => _exportLetters(choice, filtered),
         ),
         const SizedBox(width: 10),
         ElevatedButton.icon(
