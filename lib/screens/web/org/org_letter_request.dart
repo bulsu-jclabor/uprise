@@ -80,6 +80,7 @@ class _OrgLetterRequestScreenState extends State<OrgLetterRequestScreen> {
   Stream<QuerySnapshot> get _requestsStream => FirebaseFirestore.instance
       .collection('letter_requests')
       .where('orgId', isEqualTo: widget.orgId)
+      .where('isArchived', isEqualTo: false)  // Only show non-archived
       .orderBy('timestamp', descending: true)
       .snapshots();
 
@@ -121,23 +122,26 @@ class _OrgLetterRequestScreenState extends State<OrgLetterRequestScreen> {
     );
   }
 
-  Future<void> _deleteRequest(LetterRequestModel request) async {
+  Future<void> _archiveRequest(LetterRequestModel request) async {
     final confirm = await _showConfirmDialog(
-      title: 'Delete Request',
-      message: 'Delete request "${request.subject}"? This cannot be undone.',
-      confirmLabel: 'Delete',
-      isDestructive: true,
+      title: 'Archive Request',
+      message: 'Archive request "${request.subject}"? You can still view it in archived section.',
+      confirmLabel: 'Archive',
+      isDestructive: false,
     );
     if (confirm != true) return;
 
     try {
-      await FirebaseFirestore.instance.collection('letter_requests').doc(request.id).delete();
+      await FirebaseFirestore.instance.collection('letter_requests').doc(request.id).update({
+        'isArchived': true,
+        'archivedAt': FieldValue.serverTimestamp(),
+      });
       await activity_log.ActivityLogger.log(
-        action: 'delete_letter_request',
+        action: 'archive_letter_request',
         module: 'letter_request',
         details: {'orgId': widget.orgId, 'requestId': request.id},
       );
-      _showSnack('Request deleted successfully');
+      _showSnack('Request archived successfully');
     } catch (e) {
       _showSnack('Error: $e', isError: true);
     }
@@ -180,7 +184,7 @@ class _OrgLetterRequestScreenState extends State<OrgLetterRequestScreen> {
                   shape: BoxShape.circle,
                 ),
                 child: Icon(
-                  isDestructive ? Icons.delete_outline : Icons.warning_amber_rounded,
+                  isDestructive ? Icons.delete_outline : Icons.archive_outlined,
                   color: isDestructive ? OrgColors.error : OrgColors.primaryDark,
                   size: 28,
                 ),
@@ -376,6 +380,15 @@ class _OrgLetterRequestScreenState extends State<OrgLetterRequestScreen> {
                             ),
                             DataCell(_buildStatusBadge(req.status, req.revisionNote)),
                             DataCell(Row(children: [
+                              // VIEW button - always visible
+                              _ActionIconButton(
+                                icon: Icons.visibility_outlined,
+                                tooltip: 'View Details',
+                                color: OrgColors.primaryDark,
+                                onTap: () => _viewRequestDetails(req),
+                              ),
+                              const SizedBox(width: 4),
+                              // Info button for revision notes (only for revision status)
                               if (req.status == 'revision')
                                 _ActionIconButton(
                                   icon: Icons.info_outline,
@@ -383,6 +396,7 @@ class _OrgLetterRequestScreenState extends State<OrgLetterRequestScreen> {
                                   color: OrgColors.info,
                                   onTap: () => _viewRequestDetails(req),
                                 ),
+                              // Edit button - available for pending, revision, and resubmitted only
                               if (req.status == 'pending' || req.status == 'revision' || req.status == 'resubmitted')
                                 _ActionIconButton(
                                   icon: Icons.edit_outlined,
@@ -390,11 +404,12 @@ class _OrgLetterRequestScreenState extends State<OrgLetterRequestScreen> {
                                   color: OrgColors.info,
                                   onTap: () => _openEditRequestModal(req),
                                 ),
+                              // ARCHIVE button - instead of delete
                               _ActionIconButton(
-                                icon: Icons.delete_outline,
-                                tooltip: 'Delete',
-                                color: OrgColors.error,
-                                onTap: () => _deleteRequest(req),
+                                icon: Icons.archive_outlined,
+                                tooltip: 'Archive',
+                                color: OrgColors.warning,
+                                onTap: () => _archiveRequest(req),
                               ),
                             ])),
                           ])).toList(),
@@ -851,65 +866,71 @@ class _LetterRequestModalState extends State<_LetterRequestModal> {
   }
 
   Future<void> _submit() async {
-    if (!_formKey.currentState!.validate()) return;
+  if (!_formKey.currentState!.validate()) return;
+  
+  if (widget.existingRequest == null && _attachmentBase64 == null) {
+    _showMessage('Please attach a file before submitting!', isError: true);
+    return;
+  }
+
+  setState(() => _isSubmitting = true);
+
+  try {
+    final Map<String, dynamic> data = {
+      'orgId': widget.orgId,
+      'orgName': widget.orgName,
+      'orgEmail': widget.orgEmail,
+      'subject': _subjectCtrl.text.trim(),
+      'attachmentBase64': _attachmentBase64,
+      'attachmentName': _attachmentName,
+      'attachmentSize': _attachmentSize,
+      'updatedAt': FieldValue.serverTimestamp(),
+      'isArchived': false,
+    };
+
+    final col = FirebaseFirestore.instance.collection('letter_requests');
     
-    if (widget.existingRequest == null && _attachmentBase64 == null) {
-      _showMessage('Please attach a file before submitting!', isError: true);
-      return;
-    }
-
-    setState(() => _isSubmitting = true);
-
-    try {
-      final Map<String, dynamic> data = {
-        'orgId': widget.orgId,
-        'orgName': widget.orgName,
-        'orgEmail': widget.orgEmail,
-        'subject': _subjectCtrl.text.trim(),
-        'attachmentBase64': _attachmentBase64,
-        'attachmentName': _attachmentName,
-        'attachmentSize': _attachmentSize,
-        'updatedAt': FieldValue.serverTimestamp(),
-      };
-
-      final col = FirebaseFirestore.instance.collection('letter_requests');
+    if (widget.existingRequest != null) {
+      // EDIT MODE - Update existing document
+      final updateData = Map<String, dynamic>.from(data);
       
-      if (widget.existingRequest != null) {
-        if (widget.existingRequest!.status == 'revision') {
-          data['status'] = 'resubmitted';
-          data['resubmittedAt'] = FieldValue.serverTimestamp();
-          data['revisionNote'] = null;
-          data['revisionCount'] = FieldValue.increment(1);
-        }
-        await col.doc(widget.existingRequest!.id).update(data);
-        await activity_log.ActivityLogger.log(
-          action: 'edit_letter_request',
-          module: 'letter_request',
-          details: {'orgId': widget.orgId, 'requestId': widget.existingRequest!.id},
-        );
-        _showMessage('Letter request updated successfully!');
-      } else {
-        final letterId = 'RLR-${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}';
-        data['status'] = 'pending';
-        data['letterId'] = letterId;
-        data['timestamp'] = FieldValue.serverTimestamp();
-        data['revisionCount'] = 0;
-        await col.add(data);
-        await activity_log.ActivityLogger.log(
-          action: 'create_letter_request',
-          module: 'letter_request',
-          details: {'orgId': widget.orgId, 'subject': data['subject']},
-        );
-        _showMessage('Letter request submitted successfully!');
+      if (widget.existingRequest!.status == 'revision') {
+        updateData['status'] = 'resubmitted';
+        updateData['resubmittedAt'] = FieldValue.serverTimestamp();
+        updateData['revisionNote'] = null;
+        updateData['revisionCount'] = FieldValue.increment(1);
       }
       
-      if (mounted) Navigator.pop(context);
-    } catch (e) {
-      _showMessage('Error: $e', isError: true);
-    } finally {
-      if (mounted) setState(() => _isSubmitting = false);
+      await col.doc(widget.existingRequest!.id).update(updateData);
+      await activity_log.ActivityLogger.log(
+        action: 'edit_letter_request',
+        module: 'letter_request',
+        details: {'orgId': widget.orgId, 'requestId': widget.existingRequest!.id},
+      );
+      _showMessage('Letter request updated successfully!');
+    } else {
+      // NEW MODE - Create new document
+      final letterId = 'RLR-${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}';
+      data['status'] = 'pending';
+      data['letterId'] = letterId;
+      data['timestamp'] = FieldValue.serverTimestamp();
+      data['revisionCount'] = 0;
+      await col.add(data);
+      await activity_log.ActivityLogger.log(
+        action: 'create_letter_request',
+        module: 'letter_request',
+        details: {'orgId': widget.orgId, 'subject': data['subject']},
+      );
+      _showMessage('Letter request submitted successfully!');
     }
+    
+    if (mounted) Navigator.pop(context);
+  } catch (e) {
+    _showMessage('Error: $e', isError: true);
+  } finally {
+    if (mounted) setState(() => _isSubmitting = false);
   }
+}
 
   @override
   Widget build(BuildContext context) {
@@ -1191,6 +1212,7 @@ class LetterRequestModel {
   final String? revisionNote;
   final int? revisionCount;
   final Timestamp? resubmittedAt;
+  final bool isArchived;
   final Timestamp timestamp;
 
   LetterRequestModel({
@@ -1207,6 +1229,7 @@ class LetterRequestModel {
     this.revisionNote,
     this.revisionCount,
     this.resubmittedAt,
+    required this.isArchived,
     required this.timestamp,
   });
 
@@ -1226,6 +1249,7 @@ class LetterRequestModel {
       revisionNote: d['revisionNote'],
       revisionCount: d['revisionCount'] ?? 0,
       resubmittedAt: d['resubmittedAt'] as Timestamp?,
+      isArchived: d['isArchived'] ?? false,
       timestamp: d['timestamp'] as Timestamp? ?? Timestamp.now(),
     );
   }
