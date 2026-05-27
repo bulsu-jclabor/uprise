@@ -349,78 +349,82 @@ class _OrganizationManagementState extends State<OrganizationManagement> {
   }
 
   Widget _buildToolbar() {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(28, 20, 28, 0),
-      child: Row(
-        children: [
-          Expanded(
-            child: SizedBox(
-              height: 40,
-              child: TextField(
-                controller: _searchController,
-                style: GoogleFonts.beVietnamPro(fontSize: 13),
-                decoration: InputDecoration(
-                  hintText: 'Search organization or adviser…',
-                  hintStyle: GoogleFonts.beVietnamPro(fontSize: 13, color: UpriseColors.darkGray),
-                  prefixIcon: const Icon(Icons.search_rounded, size: 18, color: Color(0xFF9AA5B4)),
-                  filled: true,
-                  fillColor: Colors.white,
-                  contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: const BorderSide(color: Color(0xFFE2E6EA)),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: const BorderSide(color: Color(0xFFE2E6EA)),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: BorderSide(color: UpriseColors.primaryDark, width: 1.5),
-                  ),
+  return Padding(
+    padding: const EdgeInsets.fromLTRB(28, 20, 28, 0),
+    child: Row(
+      children: [
+        Expanded(
+          child: SizedBox(
+            height: 40,
+            child: TextField(
+              controller: _searchController,
+              style: GoogleFonts.beVietnamPro(fontSize: 13),
+              decoration: InputDecoration(
+                hintText: 'Search organization or adviser…',
+                hintStyle: GoogleFonts.beVietnamPro(fontSize: 13, color: UpriseColors.darkGray),
+                prefixIcon: const Icon(Icons.search_rounded, size: 18, color: Color(0xFF9AA5B4)),
+                filled: true,
+                fillColor: Colors.white,
+                contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: const BorderSide(color: Color(0xFFE2E6EA)),
                 ),
-                onChanged: (_) => setState(() => _currentPage = 1),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: const BorderSide(color: Color(0xFFE2E6EA)),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: BorderSide(color: UpriseColors.primaryDark, width: 1.5),
+                ),
               ),
+              onChanged: (_) => setState(() => _currentPage = 1),
             ),
           ),
-          const SizedBox(width: 10),
-          _FilterDropdown(
-            value: _statusFilter,
-            items: ['All', 'Active', 'Suspended', 'Archived'],
-            hint: 'Status',
-            icon: Icons.tune_rounded,
-            onChanged: (v) => setState(() {
-              _statusFilter = v!;
-              _currentPage = 1;
-            }),
-          ),
-          const SizedBox(width: 10),
-          _FilterDropdown(
-            value: _typeFilter,
-            items: _orgTypes,
-            hint: 'Type',
-            icon: Icons.category_rounded,
-            onChanged: (v) => setState(() {
-              _typeFilter = v!;
-              _currentPage = 1;
-            }),
-          ),
-          const SizedBox(width: 10),
-          _ExportButton(
-            statusFilter: _statusFilter,
-            typeFilter: _typeFilter,
-            searchTerm: _searchController.text.trim(),
-          ),
-          const SizedBox(width: 10),
-          _PrimaryButton(
-            label: 'Create Organization',
-            icon: Icons.add_rounded,
-            onPressed: _showCreateOrganizationDialog,
-          ),
-        ],
-      ),
-    );
-  }
+        ),
+        const SizedBox(width: 10),
+        _FilterDropdown(
+          value: _statusFilter,
+          items: ['All', 'Active', 'Suspended', 'Archived'],
+          hint: 'Status',
+          icon: Icons.tune_rounded,
+          onChanged: (v) => setState(() {
+            _statusFilter = v!;
+            _currentPage = 1;
+          }),
+        ),
+        const SizedBox(width: 10),
+        _FilterDropdown(
+          value: _typeFilter,
+          items: _orgTypes,
+          hint: 'Type',
+          icon: Icons.category_rounded,
+          onChanged: (v) => setState(() {
+            _typeFilter = v!;
+            _currentPage = 1;
+          }),
+        ),
+        const SizedBox(width: 10),
+        _ExportButton(
+          statusFilter: _statusFilter,
+          typeFilter: _typeFilter,
+          searchTerm: _searchController.text.trim(),
+        ),
+        
+        
+        const SizedBox(width: 10),
+        _PrimaryButton(
+          label: 'Create Organization',
+          icon: Icons.add_rounded,
+          onPressed: _showCreateOrganizationDialog,
+        ),
+      ],
+    ),
+  );
+}
+
+
 
   Widget _buildTable() {
     return StreamBuilder<QuerySnapshot>(
@@ -1849,156 +1853,188 @@ class _CreateOrganizationDialogState extends State<_CreateOrganizationDialog> {
   }
 
   Future<void> _createOrganization() async {
-    if (!_formKey.currentState!.validate()) return;
-    setState(() => _isLoading = true);
+  if (!_formKey.currentState!.validate()) return;
+  setState(() => _isLoading = true);
 
-    final orgName = _nameCtrl.text.trim();
-    final orgShortName = _shortNameCtrl.text.trim();
-    final orgDesc = _descCtrl.text.trim();
-    final orgEmail = _orgEmailCtrl.text.trim().toLowerCase();
+  final orgName = _nameCtrl.text.trim();
+  final orgShortName = _shortNameCtrl.text.trim();
+  final orgDesc = _descCtrl.text.trim();
+  final orgEmail = _orgEmailCtrl.text.trim().toLowerCase();
 
-    final validAdvisers = _advisers.where((a) => a.name.trim().isNotEmpty).toList();
+  final validAdvisers = _advisers.where((a) => a.name.trim().isNotEmpty).toList();
 
-    try {
-      final dupError = await _checkDuplicateOrg(orgName, orgShortName);
-      if (dupError != null) {
-        _showError(dupError);
-        return;
-      }
-
-      if (orgEmail.isEmpty) {
-        _showError('Organization email is required for portal login.');
-        return;
-      }
-      if (await _isEmailRegistered(orgEmail)) {
-        _showError('Email "$orgEmail" already has an account in the system.');
-        return;
-      }
-
-      String? logoUrl;
-      if (_logoBytes != null) {
-        logoUrl = _createLogoDataUri(_logoBytes!, _logoXFile?.name ?? 'logo');
-      }
-
-      final orgRef = FirebaseFirestore.instance.collection('organizations').doc();
-      final orgId = orgRef.id;
-      final batch = FirebaseFirestore.instance.batch();
-
-      final List<Map<String, dynamic>> adviserMaps = validAdvisers
-          .map((a) => {
-                'name': a.name,
-                'title': a.title,
-                'email': a.email.trim().toLowerCase(),
-                'phone': a.phone,
-              })
-          .toList();
-
-      final tempPassword = _generateTemporaryPassword();
-      final List<Map<String, String>> createdAccounts = [
-        {'email': orgEmail, 'name': orgName, 'password': tempPassword}
-      ];
-
-      FirebaseApp secondaryApp;
-      try {
-        secondaryApp = Firebase.app('secondaryApp');
-      } catch (_) {
-        secondaryApp = await Firebase.initializeApp(
-          name: 'secondaryApp',
-          options: Firebase.app().options,
-        );
-      }
-      final secondaryAuth = FirebaseAuth.instanceFor(app: secondaryApp);
-
-      UserCredential cred;
-      try {
-        cred = await secondaryAuth.createUserWithEmailAndPassword(email: orgEmail, password: tempPassword);
-      } on FirebaseAuthException catch (e) {
-        await secondaryAuth.signOut();
-        _showError('Failed to create organization login account: ${e.message}');
-        return;
-      }
-
-      final uid = cred.user!.uid;
-      await cred.user!.updateDisplayName(orgName);
-
-      batch.set(FirebaseFirestore.instance.collection('users').doc(uid), {
-        'uid': uid,
-        'fullName': orgName,
-        'name': orgName,
-        'email': orgEmail,
-        'role': 'org',
-        'orgId': orgId,
-        'organizationId': orgId,
-        'organizationName': orgName,
-        'mustChangePassword': true,
-        'isFirstLogin': true,
-        'needsPasswordChange': true,
-        'firstLogin': true,
-        'createdAt': FieldValue.serverTimestamp(),
-        'createdBy': FirebaseAuth.instance.currentUser?.uid,
-      });
-
-      await secondaryAuth.signOut();
-
-      final primaryAdviser = validAdvisers.isNotEmpty ? validAdvisers.first : Adviser(name: '', title: '', email: '', phone: '');
-
-      batch.set(orgRef, {
-        'id': orgId,
-        'name': orgName,
-        'shortName': orgShortName,
-        'acronym': orgShortName,
-        'type': _type,
-        'description': orgDesc,
-        'orgEmail': orgEmail,
-        'logoUrl': logoUrl ?? '',
-        'adviserId': '',
-        'adviserName': primaryAdviser.name,
-        'adviserEmail': primaryAdviser.email.trim().toLowerCase(),
-        'adviserTitle': primaryAdviser.title,
-        'adviserPhone': primaryAdviser.phone,
-        'advisers': adviserMaps,
-        'categories': [],
-        'status': 'active',
-        'createdAt': FieldValue.serverTimestamp(),
-        'createdBy': FirebaseAuth.instance.currentUser?.uid,
-        'createdByEmail': FirebaseAuth.instance.currentUser?.email,
-      });
-
-      await batch.commit();
-
-      final account = createdAccounts.first;
-      _sendCredentialsEmail(
-        toEmail: account['email']!,
-        orgName: orgName,
-        recipientName: orgName,
-        password: account['password']!,
-      ).then((sent) {
-        if (!sent) {
-          debugPrint('⚠️ Failed to send credentials email to $orgEmail');
-        }
-      });
-
-      await ActivityLogger.log(action: 'Created new organization: $orgName', module: 'Organizations');
-
-      widget.onCreated();
-      if (mounted) {
-        Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Organization "$orgName" created! Credentials are being sent to $orgEmail.'),
-            backgroundColor: const Color(0xFF059669),
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-            duration: const Duration(seconds: 5),
-          ),
-        );
-      }
-    } catch (e) {
-      _showError('Error: $e');
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
+  try {
+    final dupError = await _checkDuplicateOrg(orgName, orgShortName);
+    if (dupError != null) {
+      _showError(dupError);
+      return;
     }
+
+    if (orgEmail.isEmpty) {
+      _showError('Organization email is required for portal login.');
+      return;
+    }
+    if (await _isEmailRegistered(orgEmail)) {
+      _showError('Email "$orgEmail" already has an account in the system.');
+      return;
+    }
+
+    String? logoUrl;
+    if (_logoBytes != null) {
+      logoUrl = _createLogoDataUri(_logoBytes!, _logoXFile?.name ?? 'logo');
+    }
+
+    final orgRef = FirebaseFirestore.instance.collection('organizations').doc();
+    final orgId = orgRef.id;
+    final batch = FirebaseFirestore.instance.batch();
+
+    final List<Map<String, dynamic>> adviserMaps = validAdvisers
+        .map((a) => {
+              'name': a.name,
+              'title': a.title,
+              'email': a.email.trim().toLowerCase(),
+              'phone': a.phone,
+            })
+        .toList();
+
+    final tempPassword = _generateTemporaryPassword();
+    final List<Map<String, String>> createdAccounts = [
+      {'email': orgEmail, 'name': orgName, 'password': tempPassword}
+    ];
+
+    FirebaseApp secondaryApp;
+    try {
+      secondaryApp = Firebase.app('secondaryApp');
+    } catch (_) {
+      secondaryApp = await Firebase.initializeApp(
+        name: 'secondaryApp',
+        options: Firebase.app().options,
+      );
+    }
+    final secondaryAuth = FirebaseAuth.instanceFor(app: secondaryApp);
+
+    UserCredential cred;
+    try {
+      cred = await secondaryAuth.createUserWithEmailAndPassword(email: orgEmail, password: tempPassword);
+    } on FirebaseAuthException catch (e) {
+      await secondaryAuth.signOut();
+      _showError('Failed to create organization login account: ${e.message}');
+      return;
+    }
+
+    final uid = cred.user!.uid;
+    await cred.user!.updateDisplayName(orgName);
+
+    batch.set(FirebaseFirestore.instance.collection('users').doc(uid), {
+      'uid': uid,
+      'fullName': orgName,
+      'name': orgName,
+      'email': orgEmail,
+      'role': 'org',
+      'orgId': orgId,
+      'organizationId': orgId,
+      'organizationName': orgName,
+      'mustChangePassword': true,
+      'isFirstLogin': true,
+      'needsPasswordChange': true,
+      'firstLogin': true,
+      'createdAt': FieldValue.serverTimestamp(),
+      'createdBy': FirebaseAuth.instance.currentUser?.uid,
+    });
+
+    await secondaryAuth.signOut();
+
+    final primaryAdviser = validAdvisers.isNotEmpty ? validAdvisers.first : Adviser(name: '', title: '', email: '', phone: '');
+
+    batch.set(orgRef, {
+      'id': orgId,
+      'name': orgName,
+      'shortName': orgShortName,
+      'acronym': orgShortName,
+      'type': _type,
+      'description': orgDesc,
+      'orgEmail': orgEmail,
+      'logoUrl': logoUrl ?? '',
+      'adviserId': '',
+      'adviserName': primaryAdviser.name,
+      'adviserEmail': primaryAdviser.email.trim().toLowerCase(),
+      'adviserTitle': primaryAdviser.title,
+      'adviserPhone': primaryAdviser.phone,
+      'advisers': adviserMaps,
+      'categories': [],
+      'status': 'active',
+      'createdAt': FieldValue.serverTimestamp(),
+      'createdBy': FirebaseAuth.instance.currentUser?.uid,
+      'createdByEmail': FirebaseAuth.instance.currentUser?.email,
+    });
+
+    await batch.commit();
+
+    // ✅ ✅ ✅ BAGONG CODE: Auto-create ng adviser role ✅ ✅ ✅
+    if (primaryAdviser.name.trim().isNotEmpty) {
+      // Check kung may existing adviser role na (para iwas duplicate)
+      final existingRole = await FirebaseFirestore.instance
+          .collection('adviser_roles')
+          .where('orgId', isEqualTo: orgId)
+          .where('archived', isEqualTo: false)
+          .get();
+      
+      if (existingRole.docs.isEmpty) {
+        // Walang existing role, gumawa ng bago
+        await FirebaseFirestore.instance.collection('adviser_roles').add({
+          'orgId': orgId,
+          'orgName': orgName,
+          'orgAbbrev': orgShortName,
+          'orgTag': _type,
+          'adviserName': primaryAdviser.name,
+          'adviserEmail': primaryAdviser.email.trim().toLowerCase(),
+          'adviserPhone': primaryAdviser.phone,
+          'adviserRank': primaryAdviser.title.isNotEmpty ? primaryAdviser.title : 'Instructor',
+          'president': '',      // i-fi-fill-up later sa org side
+          'vicePresident': '',  // i-fi-fill-up later sa org side
+          'secretary': '',      // i-fi-fill-up later sa org side
+          'archived': false,
+          'createdAt': FieldValue.serverTimestamp(),
+          'createdBy': FirebaseAuth.instance.currentUser?.uid,
+        });
+        
+        debugPrint('✅ Auto-created adviser_role for organization: $orgName');
+      }
+    }
+
+    final account = createdAccounts.first;
+    _sendCredentialsEmail(
+      toEmail: account['email']!,
+      orgName: orgName,
+      recipientName: orgName,
+      password: account['password']!,
+    ).then((sent) {
+      if (!sent) {
+        debugPrint('⚠️ Failed to send credentials email to $orgEmail');
+      }
+    });
+
+    await ActivityLogger.log(action: 'Created new organization: $orgName', module: 'Organizations');
+
+    widget.onCreated();
+    if (mounted) {
+      Navigator.pop(context);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Organization "$orgName" created! Credentials are being sent to $orgEmail.'),
+          backgroundColor: const Color(0xFF059669),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          duration: const Duration(seconds: 5),
+        ),
+      );
+    }
+  } catch (e) {
+    _showError('Error: $e');
+  } finally {
+    if (mounted) setState(() => _isLoading = false);
   }
+}
 
   void _showError(String msg) {
     if (mounted) {
