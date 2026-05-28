@@ -90,52 +90,169 @@ class _OrgBroadcastScreenState extends State<OrgBroadcastScreen> {
   }
 
   Future<void> _pickFiles() async {
-    final result = await FilePicker.platform.pickFiles(allowMultiple: true);
-    if (result == null) return;
-    setState(() => _isUploadingFile = true);
-    try {
-      for (final file in result.files) {
-        if (file.bytes == null && file.path == null) continue;
-        final fileName = '${DateTime.now().millisecondsSinceEpoch}_${file.name}';
-        final ref = FirebaseStorage.instance
-            .ref()
-            .child('broadcasts/${widget.orgId}/$fileName');
-        if (file.bytes != null) {
-          await ref.putData(file.bytes!);
-        } else if (file.path != null) {
-          await ref.putFile(File(file.path!));
-        }
-        final url = await ref.getDownloadURL();
-        setState(() => _pendingAttachments.add(Attachment(name: file.name, url: url)));
+  final result = await FilePicker.platform.pickFiles(allowMultiple: true);
+  if (result == null) return;
+  
+  setState(() => _isUploadingFile = true);
+  
+  try {
+    int uploaded = 0;
+    final total = result.files.length;
+    
+    // Show progress dialog
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          return AlertDialog(
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const CircularProgressIndicator(),
+                const SizedBox(height: 16),
+                Text('Uploading files...', style: GoogleFonts.beVietnamPro()),
+                const SizedBox(height: 8),
+                Text('$uploaded of $total', style: GoogleFonts.beVietnamPro(fontSize: 12)),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+    
+    for (final file in result.files) {
+      final bytes = file.bytes;
+      if (bytes == null) continue;
+      
+      // Check file size (max 10MB)
+      const maxSize = 10 * 1024 * 1024; // 10MB
+      if (bytes.length > maxSize) {
+        _showError('${file.name} is too large. Max 10MB');
+        continue;
       }
-    } catch (e) {
-      _showError('Upload failed: $e');
-    } finally {
-      setState(() => _isUploadingFile = false);
+      
+      final fileName = '${DateTime.now().millisecondsSinceEpoch}_${file.name}';
+      final ref = FirebaseStorage.instance
+          .ref()
+          .child('broadcasts/${widget.orgId}/files/$fileName');
+      
+      await ref.putData(bytes);
+      final url = await ref.getDownloadURL();
+      
+      setState(() {
+        _pendingAttachments.add(Attachment(name: file.name, url: url));
+      });
+      
+      uploaded++;
+      
+      // Update dialog
+      if (mounted) {
+        Navigator.pop(context); // Close old
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => AlertDialog(
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const CircularProgressIndicator(),
+                const SizedBox(height: 16),
+                Text('Uploading files...', style: GoogleFonts.beVietnamPro()),
+                const SizedBox(height: 8),
+                Text('$uploaded of $total', style: GoogleFonts.beVietnamPro(fontSize: 12)),
+              ],
+            ),
+          ),
+        );
+      }
     }
+    
+    // Close dialog
+    if (mounted) Navigator.pop(context);
+    
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('$uploaded files uploaded successfully!'),
+          backgroundColor: OrgColors.success,
+        ),
+      );
+    }
+  } catch (e) {
+    if (mounted) Navigator.pop(context); // Close dialog
+    print('File upload error: $e');
+    _showError('Upload failed: $e');
+  } finally {
+    if (mounted) setState(() => _isUploadingFile = false);
   }
+}
 
   Future<void> _pickImage() async {
-    final result = await FilePicker.platform.pickFiles(
-      type: FileType.image,
-      allowMultiple: false,
-      withData: true,
-    );
-    if (result == null || result.files.isEmpty) return;
-    setState(() => _isUploadingImage = true);
-    try {
-      final file = result.files.first;
-      final bytes = file.bytes;
-      if (bytes == null) throw 'Image bytes not available';
-      final mimeType = _mimeTypeFromPath(file.path);
-      final uri = 'data:$mimeType;base64,${base64Encode(bytes)}';
-      setState(() => _pendingImageUrl = uri);
-    } catch (e) {
-      _showError('Image upload failed: $e');
-    } finally {
-      setState(() => _isUploadingImage = false);
+  final result = await FilePicker.platform.pickFiles(
+    type: FileType.image,
+    allowMultiple: false,
+  );
+  if (result == null || result.files.isEmpty) return;
+  
+  setState(() => _isUploadingImage = true);
+  
+  try {
+    final file = result.files.first;
+    final bytes = file.bytes;
+    if (bytes == null) throw 'No image data';
+    
+    // Check file size (max 5MB)
+    const maxSize = 5 * 1024 * 1024; // 5MB
+    if (bytes.length > maxSize) {
+      _showError('Image too large. Max 5MB');
+      return;
     }
+    
+    // Show loading dialog with progress
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const CircularProgressIndicator(),
+            const SizedBox(height: 16),
+            Text('Uploading image...', style: GoogleFonts.beVietnamPro()),
+          ],
+        ),
+      ),
+    );
+    
+    final fileName = '${DateTime.now().millisecondsSinceEpoch}_${file.name}';
+    final ref = FirebaseStorage.instance
+        .ref()
+        .child('broadcasts/${widget.orgId}/images/$fileName');
+    
+    // Upload with metadata
+    final metadata = SettableMetadata(contentType: 'image/jpeg');
+    await ref.putData(bytes, metadata);
+    final downloadUrl = await ref.getDownloadURL();
+    
+    // Close loading dialog
+    Navigator.pop(context);
+    
+    setState(() => _pendingImageUrl = downloadUrl);
+    
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Image ready!'), backgroundColor: OrgColors.success),
+      );
+    }
+  } catch (e) {
+    if (mounted) Navigator.pop(context); // Close dialog if error
+    print('Image upload error: $e');
+    _showError('Failed to upload image: $e');
+  } finally {
+    if (mounted) setState(() => _isUploadingImage = false);
   }
+}
 
   void _showError(String msg) {
     if (!mounted) return;
@@ -161,76 +278,48 @@ class _OrgBroadcastScreenState extends State<OrgBroadcastScreen> {
     
     final authorName = userDoc.data()?['name'] ?? user.email ?? 'Unknown';
     
-    // ✅ FIX: Make sure imageUrl is null if empty, not empty string
-    final imageUrlValue = (_pendingImageUrl != null && _pendingImageUrl!.isNotEmpty) 
-        ? _pendingImageUrl 
-        : null;
-    
-    // ✅ FIX: Ensure attachments is always a list
-    final attachmentsList = _pendingAttachments.map((a) => {
-      'name': a.name, 
-      'url': a.url
-    }).toList();
-    
+    // Prepare data (imageUrl is already a Storage URL if exists)
     final broadcastData = {
       'orgId': widget.orgId,
       'content': text,
       'authorId': user.uid,
       'authorName': authorName,
-      'attachments': attachmentsList,
+      'attachments': _pendingAttachments.map((a) => {'name': a.name, 'url': a.url}).toList(),
       'timestamp': FieldValue.serverTimestamp(),
     };
     
     // Only add imageUrl if it exists
-    if (imageUrlValue != null) {
-      broadcastData['imageUrl'] = imageUrlValue;
+    if (_pendingImageUrl != null && _pendingImageUrl!.isNotEmpty) {
+      broadcastData['imageUrl'] = _pendingImageUrl;
     }
     
-    // Add to Firestore
-    final docRef = await FirebaseFirestore.instance
-        .collection('broadcasts')
-        .add(broadcastData);
+    await FirebaseFirestore.instance.collection('broadcasts').add(broadcastData);
     
-    print('✅ Broadcast sent successfully! Document ID: ${docRef.id}');
-    
-    // Log activity
     await activity_log.ActivityLogger.log(
       action: 'send_broadcast',
       module: 'broadcast',
-      details: {'orgId': widget.orgId, 'broadcastId': docRef.id},
+      details: {'orgId': widget.orgId},
     );
     
-    // Clear form
+    // Clear everything
     _messageCtrl.clear();
     setState(() {
       _pendingAttachments = [];
       _pendingImageUrl = null;
     });
     
-    // Show success message
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Message sent successfully!'),
-          backgroundColor: OrgColors.success,
-          duration: Duration(seconds: 2),
-        ),
+        const SnackBar(content: Text('Message sent!'), backgroundColor: OrgColors.success),
       );
     }
     
     _scrollToBottom();
-    
-  } catch (e, stackTrace) {
-    print('❌ Error sending broadcast: $e');
-    print('StackTrace: $stackTrace');
-    
-    if (mounted) {
-      _showError('Failed to send: $e');
-    }
+  } catch (e) {
+    print('Send error: $e');
+    _showError('Failed to send: $e');
   } finally {
-    if (mounted) {
-      setState(() => _isSending = false);
-    }
+    if (mounted) setState(() => _isSending = false);
   }
 }
 
