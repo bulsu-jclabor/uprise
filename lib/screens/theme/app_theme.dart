@@ -11,10 +11,14 @@ class UpriseColors {
   
   // Supporting neutrals (from your design system)
   static const Color charcoal = Color(0xFF1F2937);
+  static const Color darkText = Color(0xFF1F2937);
   static const Color darkGray = Color(0xFF6B7280);
+  static const Color greyText = Color(0xFF6B7280);
   static const Color mediumGray = Color(0xFFE5E7EB);
   static const Color lightGray = Color(0xFFF9FAFB);
   static const Color success = Color(0xFF10B981);
+  static const Color info = Color(0xFF2563EB);
+  static const Color infoBg = Color(0xFFDBEAFE);
   static const Color warning = Color(0xFFF59E0B);
   static const Color error = Color(0xFFEF4444);
 }

@@ -205,6 +205,8 @@ class _AdminLetterRequestScreenState extends State<AdminLetterRequestScreen> {
                       itemCount: pageDocs.length,
                       itemBuilder: (_, i) {
                         final data = pageDocs[i].data() as Map<String, dynamic>;
+                        data['name'] = data['name'] ?? data['orgName'];
+                        data['email'] = data['email'] ?? data['orgEmail'];
                         return _buildRow(data: data, docId: pageDocs[i].id, isLast: i == pageDocs.length - 1);
                       },
                     ),
@@ -318,19 +320,26 @@ class _AdminLetterRequestScreenState extends State<AdminLetterRequestScreen> {
                   onTap: () => _showViewDialog(data, docId),
                 ),
                 const SizedBox(width: 4),
-                if (status == 'pending') ...[
+                if (status == 'pending' || status == 'revision' || status == 'resubmitted') ...[
                   _ActionIconButton(
                     icon: Icons.check_circle_outline,
                     tooltip: 'Approve',
                     color: AdminColors.success,
-                    onTap: () => _updateStatus(docId, 'approved', data['name'] ?? 'Request'),
+                    onTap: () => _updateStatus(docId, 'approved', data['name'] ?? data['orgName'] ?? 'Request'),
                   ),
                   const SizedBox(width: 4),
                   _ActionIconButton(
                     icon: Icons.cancel_outlined,
                     tooltip: 'Reject',
                     color: AdminColors.error,
-                    onTap: () => _updateStatus(docId, 'rejected', data['name'] ?? 'Request'),
+                    onTap: () => _updateStatus(docId, 'rejected', data['name'] ?? data['orgName'] ?? 'Request'),
+                  ),
+                  const SizedBox(width: 4),
+                  _ActionIconButton(
+                    icon: Icons.edit_note_rounded,
+                    tooltip: 'Request Revision',
+                    color: AdminColors.info,
+                    onTap: () => _requestRevision(data, docId),
                   ),
                 ],
                 const SizedBox(width: 4),
@@ -462,7 +471,10 @@ class _AdminLetterRequestScreenState extends State<AdminLetterRequestScreen> {
 
   Future<void> _updateStatus(String docId, String newStatus, String orgName, {String? revisionNote}) async {
     try {
-      final Map<String, dynamic> updateData = {'status': newStatus};
+      final Map<String, dynamic> updateData = {
+        'status': newStatus,
+        'updatedAt': FieldValue.serverTimestamp(),
+      };
       if (revisionNote != null) {
         updateData['revisionNote'] = revisionNote;
         updateData['revisionRequestedAt'] = FieldValue.serverTimestamp();
@@ -929,8 +941,10 @@ class _ExportButton extends StatelessWidget {
       if (statusFilter != 'All') docs = docs.where((d) => d['status'] == statusFilter.toLowerCase()).toList();
       if (searchTerm.isNotEmpty) docs = docs.where((d) {
         final data = d.data();
-        return (data['name'] ?? '').toString().toLowerCase().contains(searchTerm) ||
-               (data['email'] ?? '').toString().toLowerCase().contains(searchTerm) ||
+        final name = (data['name'] ?? data['orgName'] ?? '').toString().toLowerCase();
+        final email = (data['email'] ?? data['orgEmail'] ?? '').toString().toLowerCase();
+        return name.contains(searchTerm) ||
+               email.contains(searchTerm) ||
                (data['subject'] ?? '').toString().toLowerCase().contains(searchTerm);
       }).toList();
       if (docs.isEmpty) {

@@ -920,10 +920,10 @@ class _OrgDashboardHomeState extends State<_OrgDashboardHome> {
     final now         = DateTime.now();
 
     _approvedEventsStream = FirebaseFirestore.instance
-        .collection('events')
-        .where('orgId', isEqualTo: widget.orgId)
-        .where('status', isEqualTo: 'approved')
-        .snapshots();
+      .collection('event_proposals')
+      .where('orgId', isEqualTo: widget.orgId)
+      .where('status', isEqualTo: 'approved')
+      .snapshots();
 
     _pendingProposalsStream = FirebaseFirestore.instance
         .collection('event_proposals')
@@ -938,13 +938,13 @@ class _OrgDashboardHomeState extends State<_OrgDashboardHome> {
         .snapshots();
 
     _upcomingEventsStream = FirebaseFirestore.instance
-        .collection('events')
-        .where('orgId', isEqualTo: widget.orgId)
-        .where('status', isEqualTo: 'approved')
-        .where('date',
-            isGreaterThanOrEqualTo: Timestamp.fromDate(now))
-        .orderBy('date')
-        .snapshots();
+      .collection('event_proposals')
+      .where('orgId', isEqualTo: widget.orgId)
+      .where('status', isEqualTo: 'approved')
+      .where('date',
+        isGreaterThanOrEqualTo: Timestamp.fromDate(now))
+      .orderBy('date')
+      .snapshots();
 
     _fetchChartData();
   }
@@ -1259,17 +1259,17 @@ class _OrgDashboardHomeState extends State<_OrgDashboardHome> {
             ],
           ),
           const SizedBox(height: 16),
-          StreamBuilder<QuerySnapshot>(
+            StreamBuilder<QuerySnapshot>(
             stream: FirebaseFirestore.instance
-                .collection('events')
-                .where('orgId', isEqualTo: widget.orgId)
-                .where('status', isEqualTo: 'approved')
-                .where('date',
-                    isGreaterThanOrEqualTo:
-                        Timestamp.fromDate(DateTime.now()))
-                .orderBy('date')
-                .limit(4)
-                .snapshots(),
+              .collection('event_proposals')
+              .where('orgId', isEqualTo: widget.orgId)
+              .where('status', isEqualTo: 'approved')
+              .where('date',
+                isGreaterThanOrEqualTo:
+                  Timestamp.fromDate(DateTime.now()))
+              .orderBy('date')
+              .limit(4)
+              .snapshots(),
             builder: (_, snap) {
               if (snap.connectionState == ConnectionState.waiting) {
                 return const Center(

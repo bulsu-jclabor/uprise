@@ -648,16 +648,16 @@ class _DashboardHomeState extends State<DashboardHome> {
     _organizationsStream = FirebaseFirestore.instance
         .collection('organizations').where('status', isEqualTo: 'active').snapshots();
     _eventsStream = FirebaseFirestore.instance
-        .collection('events').where('status', isEqualTo: 'approved').snapshots();
+      .collection('event_proposals').where('status', isEqualTo: 'approved').snapshots();
     _proposalsStream = FirebaseFirestore.instance
         .collection('event_proposals').where('status', isEqualTo: 'pending').snapshots();
     _reportsStream = FirebaseFirestore.instance
         .collection('reports').where('status', isEqualTo: 'overdue').snapshots();
     _upcomingEventsStream = FirebaseFirestore.instance
-        .collection('events')
-        .where('status', isEqualTo: 'approved')
-        .where('date', isGreaterThanOrEqualTo: Timestamp.fromDate(now))
-        .orderBy('date').snapshots();
+      .collection('event_proposals')
+      .where('status', isEqualTo: 'approved')
+      .where('date', isGreaterThanOrEqualTo: Timestamp.fromDate(now))
+      .orderBy('date').snapshots();
 
     _fetchChartData();
   }
@@ -970,7 +970,7 @@ class _DashboardHomeState extends State<DashboardHome> {
             const SizedBox(height: 16),
             StreamBuilder<QuerySnapshot>(
               stream: FirebaseFirestore.instance
-                  .collection('events')
+                  .collection('event_proposals')
                   .where('status', isEqualTo: 'approved')
                   .where('date', isGreaterThanOrEqualTo: Timestamp.fromDate(DateTime.now()))
                   .orderBy('date').limit(4).snapshots(),

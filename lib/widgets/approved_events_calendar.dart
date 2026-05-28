@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-import '../screens/web/org/org_event_proposals.dart' show OrgColors; // reuse colors
+import '../screens/web/org/org_settings.dart' show OrgColors;
 
 class ApprovedEventsCalendar extends StatefulWidget {
   final String? orgId; // null => show all approved events
