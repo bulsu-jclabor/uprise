@@ -74,7 +74,7 @@ class _OrgBroadcastScreenState extends State<OrgBroadcastScreen> {
   Stream<QuerySnapshot> get _broadcastsStream => FirebaseFirestore.instance
       .collection('broadcasts')
       .where('orgId', isEqualTo: widget.orgId)
-      .orderBy('timestamp', descending: false)
+      .orderBy('timestamp', descending: true)
       .snapshots();
 
   void _scrollToBottom() {
@@ -145,42 +145,94 @@ class _OrgBroadcastScreenState extends State<OrgBroadcastScreen> {
   }
 
   Future<void> _sendMessage() async {
-    final text = _messageCtrl.text.trim();
-    if (text.isEmpty && _pendingAttachments.isEmpty && _pendingImageUrl == null) return;
-    setState(() => _isSending = true);
-    try {
-      final user = FirebaseAuth.instance.currentUser!;
-      final userDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
-      final authorName = userDoc.data()?['name'] ?? user.email ?? 'Unknown';
-
-      await FirebaseFirestore.instance.collection('broadcasts').add({
-        'orgId': widget.orgId,
-        'content': text,
-        'authorId': user.uid,
-        'authorName': authorName,
-        'attachments': _pendingAttachments.map((a) => {'name': a.name, 'url': a.url}).toList(),
-        'imageUrl': _pendingImageUrl ?? '',
-        'timestamp': FieldValue.serverTimestamp(),
-      });
-
-      await activity_log.ActivityLogger.log(
-        action: 'send_broadcast',
-        module: 'broadcast',
-        details: {'orgId': widget.orgId},
+  final text = _messageCtrl.text.trim();
+  if (text.isEmpty && _pendingAttachments.isEmpty && _pendingImageUrl == null) return;
+  
+  setState(() => _isSending = true);
+  
+  try {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) throw 'No user logged in';
+    
+    final userDoc = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(user.uid)
+        .get();
+    
+    final authorName = userDoc.data()?['name'] ?? user.email ?? 'Unknown';
+    
+    // ✅ FIX: Make sure imageUrl is null if empty, not empty string
+    final imageUrlValue = (_pendingImageUrl != null && _pendingImageUrl!.isNotEmpty) 
+        ? _pendingImageUrl 
+        : null;
+    
+    // ✅ FIX: Ensure attachments is always a list
+    final attachmentsList = _pendingAttachments.map((a) => {
+      'name': a.name, 
+      'url': a.url
+    }).toList();
+    
+    final broadcastData = {
+      'orgId': widget.orgId,
+      'content': text,
+      'authorId': user.uid,
+      'authorName': authorName,
+      'attachments': attachmentsList,
+      'timestamp': FieldValue.serverTimestamp(),
+    };
+    
+    // Only add imageUrl if it exists
+    if (imageUrlValue != null) {
+      broadcastData['imageUrl'] = imageUrlValue;
+    }
+    
+    // Add to Firestore
+    final docRef = await FirebaseFirestore.instance
+        .collection('broadcasts')
+        .add(broadcastData);
+    
+    print('✅ Broadcast sent successfully! Document ID: ${docRef.id}');
+    
+    // Log activity
+    await activity_log.ActivityLogger.log(
+      action: 'send_broadcast',
+      module: 'broadcast',
+      details: {'orgId': widget.orgId, 'broadcastId': docRef.id},
+    );
+    
+    // Clear form
+    _messageCtrl.clear();
+    setState(() {
+      _pendingAttachments = [];
+      _pendingImageUrl = null;
+    });
+    
+    // Show success message
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Message sent successfully!'),
+          backgroundColor: OrgColors.success,
+          duration: Duration(seconds: 2),
+        ),
       );
-
-      _messageCtrl.clear();
-      setState(() {
-        _pendingAttachments = [];
-        _pendingImageUrl = null;
-      });
-      _scrollToBottom();
-    } catch (e) {
+    }
+    
+    _scrollToBottom();
+    
+  } catch (e, stackTrace) {
+    print('❌ Error sending broadcast: $e');
+    print('StackTrace: $stackTrace');
+    
+    if (mounted) {
       _showError('Failed to send: $e');
-    } finally {
-      if (mounted) setState(() => _isSending = false);
+    }
+  } finally {
+    if (mounted) {
+      setState(() => _isSending = false);
     }
   }
+}
 
   Future<void> _deleteMessage(BroadcastModel broadcast) async {
     final confirm = await showDialog<bool>(
@@ -300,70 +352,95 @@ class _OrgBroadcastScreenState extends State<OrgBroadcastScreen> {
 
         // ── Message Feed ──────────────────────────────────────────────────
         Expanded(
-          child: Container(
-            color: OrgColors.lightGray,
-            child: StreamBuilder<QuerySnapshot>(
-              stream: _broadcastsStream,
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-                if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                  return Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(20),
-                          decoration: BoxDecoration(
-                            color: OrgColors.accent.withOpacity(0.08),
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(Icons.campaign_outlined, size: 44, color: OrgColors.accent),
-                        ),
-                        const SizedBox(height: 16),
-                        Text('No messages yet',
-                            style: GoogleFonts.beVietnamPro(
-                                fontSize: 16, fontWeight: FontWeight.w700, color: OrgColors.charcoal)),
-                        const SizedBox(height: 6),
-                        Text('Send a broadcast to all members below.',
-                            style: GoogleFonts.beVietnamPro(fontSize: 13, color: OrgColors.darkGray)),
-                      ],
-                    ),
-                  );
-                }
-
-                final items = snapshot.data!.docs
-                    .map((d) => BroadcastModel.fromFirestore(d))
-                    .toList();
-
-                // Scroll to bottom on new messages
-                _scrollToBottom();
-
-                return ListView.builder(
-                  controller: _scrollCtrl,
-                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
-                  itemCount: items.length,
-                  itemBuilder: (ctx, i) {
-                    final msg = items[i];
-                    // Show date separator when date changes
-                    final showDateSep = i == 0 ||
-                        !_sameDay(items[i - 1].timestamp, msg.timestamp);
-                    return Column(
-                      children: [
-                        if (showDateSep) _DateSeparator(timestamp: msg.timestamp),
-                        _BroadcastBubble(
-                          broadcast: msg,
-                          onDelete: () => _deleteMessage(msg),
-                        ),
-                      ],
-                    );
-                  },
-                );
-              },
+  child: Container(
+    color: OrgColors.lightGray,
+    child: StreamBuilder<QuerySnapshot>(
+      stream: _broadcastsStream,
+      builder: (context, snapshot) {
+        // ✅ Add error handling
+        if (snapshot.hasError) {
+          print('❌ Stream error: ${snapshot.error}');
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.error_outline, color: OrgColors.error, size: 48),
+                const SizedBox(height: 16),
+                Text(
+                  'Error loading messages: ${snapshot.error}',
+                  style: GoogleFonts.beVietnamPro(fontSize: 13, color: OrgColors.error),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 12),
+                ElevatedButton(
+                  onPressed: () => setState(() {}), // Refresh
+                  child: const Text('Retry'),
+                ),
+              ],
             ),
-          ),
-        ),
+          );
+        }
+        
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        
+        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    color: OrgColors.accent.withOpacity(0.08),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.campaign_outlined, size: 44, color: OrgColors.accent),
+                ),
+                const SizedBox(height: 16),
+                Text('No messages yet',
+                    style: GoogleFonts.beVietnamPro(
+                        fontSize: 16, fontWeight: FontWeight.w700, color: OrgColors.charcoal)),
+                const SizedBox(height: 6),
+                Text('Send a broadcast to all members below.',
+                    style: GoogleFonts.beVietnamPro(fontSize: 13, color: OrgColors.darkGray)),
+              ],
+            ),
+          );
+        }
+
+        final items = snapshot.data!.docs
+            .map((d) => BroadcastModel.fromFirestore(d))
+            .toList();
+            
+        print('✅ Loaded ${items.length} broadcasts'); // Debug log
+
+        _scrollToBottom();
+
+        return ListView.builder(
+          controller: _scrollCtrl,
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+          itemCount: items.length,
+          itemBuilder: (ctx, i) {
+            final msg = items[i];
+            final showDateSep = i == 0 ||
+                !_sameDay(items[i - 1].timestamp, msg.timestamp);
+            return Column(
+              children: [
+                if (showDateSep) _DateSeparator(timestamp: msg.timestamp),
+                _BroadcastBubble(
+                  broadcast: msg,
+                  onDelete: () => _deleteMessage(msg),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    ),
+  ),
+),
 
         // ── Pending Attachments Preview ───────────────────────────────────
         if (_pendingAttachments.isNotEmpty || _pendingImageUrl != null)
@@ -818,19 +895,24 @@ class BroadcastModel {
   });
 
   factory BroadcastModel.fromFirestore(DocumentSnapshot doc) {
-    final data = doc.data() as Map<String, dynamic>;
-    return BroadcastModel(
-      id: doc.id,
-      content: data['content'] ?? '',
-      authorId: data['authorId'] ?? '',
-      authorName: data['authorName'] ?? 'Unknown',
-      timestamp: data['timestamp'] as Timestamp,
-      attachments: ((data['attachments'] as List?) ?? [])
-          .map((a) => Attachment(name: a['name'], url: a['url']))
-          .toList(),
-      imageUrl: data['imageUrl'] as String?,
-    );
-  }
+  final data = doc.data() as Map<String, dynamic>;
+  
+  // ✅ Handle both null and empty string for imageUrl
+  String? imageUrl = data['imageUrl'];
+  if (imageUrl == '') imageUrl = null;
+  
+  return BroadcastModel(
+    id: doc.id,
+    content: data['content'] ?? '',
+    authorId: data['authorId'] ?? '',
+    authorName: data['authorName'] ?? 'Unknown',
+    timestamp: data['timestamp'] as Timestamp,
+    attachments: ((data['attachments'] as List?) ?? [])
+        .map((a) => Attachment(name: a['name'], url: a['url']))
+        .toList(),
+    imageUrl: imageUrl,
+  );
+}
 }
 
 // Extension helper for Text max width
