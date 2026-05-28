@@ -25,31 +25,36 @@ class _StudentCertificatesScreenState
       'title': 'CICT Symposium 2023',
       'date': 'October 12, 2023',
       'category': 'Academic',
-      'image': 'assets/cert1.png',
+      'image':
+          'https://i.ibb.co/7kYhLhM/cict-symposium-cert.png', // sample image link
     },
     {
       'title': 'Dean’s Lister Q1',
       'date': 'September 05, 2023',
       'category': 'Academic',
-      'image': 'assets/cert2.png',
+      'image':
+          'https://i.ibb.co/0jFhVhM/deans-list-cert.png', // sample image link
     },
     {
       'title': 'UPRISE Hackathon',
       'date': 'July 15, 2023',
       'category': 'Workshops',
-      'image': 'assets/cert3.png',
+      'image':
+          'https://i.ibb.co/9mYwLhM/uprise-hackathon-cert.png', // sample image link
     },
     {
       'title': 'Student Leader Award',
       'date': 'June 02, 2023',
       'category': 'Workshops',
-      'image': 'assets/cert4.png',
+      'image':
+          'https://i.ibb.co/2kYhVhM/student-leader-cert.png', // sample image link
     },
     {
       'title': 'Workshop on UI/UX',
       'date': 'August 20, 2023',
       'category': 'Events',
-      'image': 'assets/cert5.png',
+      'image':
+          'https://i.ibb.co/5mYhVhM/uiux-workshop-cert.png', // sample image link
     },
   ];
 
