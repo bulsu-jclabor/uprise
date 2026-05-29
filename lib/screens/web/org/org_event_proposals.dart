@@ -18,7 +18,7 @@ import 'export_pdf.dart';
 import '../../theme/app_theme.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Design tokens — mirrors student_accounts.dart exactly
+// Design tokens
 // ─────────────────────────────────────────────────────────────────────────────
 class _DS {
   static const double radiusSm   = 8;
@@ -36,7 +36,7 @@ class _DS {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Status badge — mirrors student_accounts _statusBadge
+// Status badge
 // ─────────────────────────────────────────────────────────────────────────────
 class _BadgeStyle {
   final Color bg, fg;
@@ -72,7 +72,7 @@ Widget _statusBadge(String status) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Section label helper — mirrors student_accounts
+// Section label helper
 // ─────────────────────────────────────────────────────────────────────────────
 Widget _sectionLabel(String text, {IconData? icon}) {
   return Padding(
@@ -98,7 +98,7 @@ Widget _sectionLabel(String text, {IconData? icon}) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Input decoration helper — mirrors _DS.inputDecoration from student_accounts
+// Input decoration helper
 // ─────────────────────────────────────────────────────────────────────────────
 InputDecoration _orgEventProposalsInputDecoration(String label, {String? hint, IconData? icon}) {
   return InputDecoration(
@@ -235,6 +235,9 @@ class _OrgEventProposalsScreenState extends State<OrgEventProposalsScreen> {
     );
   }
 
+  // ── FIX: Delete now surfaces errors instead of swallowing them,
+  //         and deletes ALL linked events (by createdFromProposalId OR
+  //         matching orgId+title as a fallback for manually-created events).
   void _confirmDelete(String docId, String title) {
     showDialog(
       context: context,
@@ -263,7 +266,7 @@ class _OrgEventProposalsScreenState extends State<OrgEventProposalsScreen> {
               ]),
               const SizedBox(height: 16),
               Text(
-                'Are you sure you want to delete "$title"? This action cannot be undone.',
+                'Are you sure you want to delete "$title"? This will also remove any linked events from the schedule. This action cannot be undone.',
                 style: GoogleFonts.beVietnamPro(fontSize: 14, color: const Color(0xFF64748B), height: 1.5),
               ),
               const SizedBox(height: 24),
@@ -281,47 +284,7 @@ class _OrgEventProposalsScreenState extends State<OrgEventProposalsScreen> {
                 ElevatedButton(
                   onPressed: () async {
                     Navigator.pop(ctx);
-                    try {
-                      // Delete any events that were created from this proposal
-                      final evQ = await FirebaseFirestore.instance
-                          .collection('events')
-                          .where('createdFromProposalId', isEqualTo: docId)
-                          .get();
-                      for (final ev in evQ.docs) {
-                        try {
-                          await FirebaseFirestore.instance.collection('events').doc(ev.id).delete();
-                          await activity_log.ActivityLogger.log(
-                            action: 'delete_event_from_proposal',
-                            module: 'events',
-                            details: {'orgId': widget.orgId, 'eventId': ev.id, 'proposalId': docId},
-                          );
-                        } catch (_) {}
-                      }
-
-                      // Delete the proposal document
-                      await FirebaseFirestore.instance.collection('event_proposals').doc(docId).delete();
-                      await activity_log.ActivityLogger.log(
-                        action: 'delete_proposal',
-                        module: 'event_proposals',
-                        details: {'orgId': widget.orgId, 'proposalId': docId, 'title': title},
-                      );
-                      if (mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                          content: const Text('Proposal deleted successfully'),
-                          backgroundColor: const Color(0xFF059669),
-                          behavior: SnackBarBehavior.floating,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                        ));
-                      }
-                    } catch (e) {
-                      if (mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                          content: Text('Error: $e'),
-                          backgroundColor: UpriseColors.error,
-                          behavior: SnackBarBehavior.floating,
-                        ));
-                      }
-                    }
+                    await _deleteProposalAndLinkedEvents(docId, title);
                   },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFFDC2626),
@@ -338,6 +301,79 @@ class _OrgEventProposalsScreenState extends State<OrgEventProposalsScreen> {
         ),
       ),
     );
+  }
+
+  // ── FIX: Centralised delete logic – no silent failures ────────────
+  Future<void> _deleteProposalAndLinkedEvents(String docId, String title) async {
+    try {
+      final db = FirebaseFirestore.instance;
+
+      // 1. Find events linked by createdFromProposalId (primary relationship)
+      final byProposalId = await db
+          .collection('events')
+          .where('createdFromProposalId', isEqualTo: docId)
+          .get();
+
+      // 2. Also find events that match orgId + title but lack createdFromProposalId
+      //    (covers events auto-generated from approved proposals that may not have
+      //    the field set, or manually created events with the same title).
+      final byOrgAndTitle = await db
+          .collection('events')
+          .where('orgId', isEqualTo: widget.orgId)
+          .where('title', isEqualTo: title)
+          .get();
+
+      // Merge doc IDs – deduplicate so we don't double-delete.
+      final eventIds = <String>{
+        ...byProposalId.docs.map((d) => d.id),
+        ...byOrgAndTitle.docs.map((d) => d.id),
+      };
+
+      // 3. Delete every linked event (errors are surfaced, not swallowed).
+      for (final eventId in eventIds) {
+        await db.collection('events').doc(eventId).delete();
+        await activity_log.ActivityLogger.log(
+          action: 'delete_event_from_proposal',
+          module: 'events',
+          details: {
+            'orgId': widget.orgId,
+            'eventId': eventId,
+            'proposalId': docId,
+          },
+        );
+      }
+
+      // 4. Delete the proposal itself.
+      await db.collection('event_proposals').doc(docId).delete();
+      await activity_log.ActivityLogger.log(
+        action: 'delete_proposal',
+        module: 'event_proposals',
+        details: {'orgId': widget.orgId, 'proposalId': docId, 'title': title},
+      );
+
+      if (mounted) {
+        final deleted = eventIds.length;
+        final msg = deleted > 0
+            ? 'Proposal and $deleted linked event${deleted == 1 ? '' : 's'} deleted'
+            : 'Proposal deleted successfully';
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(msg),
+          backgroundColor: const Color(0xFF059669),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        ));
+      }
+    } catch (e) {
+      // Surface the error so the user knows something went wrong.
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Delete failed: $e'),
+          backgroundColor: UpriseColors.error,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        ));
+      }
+    }
   }
 
   // ── Export ────────────────────────────────────────────────────────
@@ -648,7 +684,6 @@ class _OrgEventProposalsScreenState extends State<OrgEventProposalsScreen> {
           border: isLast ? null : const Border(bottom: BorderSide(color: Color(0xFFF1F5F9))),
         ),
         child: Row(children: [
-          // Proposal #
           Expanded(
             flex: 2,
             child: Text(
@@ -660,7 +695,6 @@ class _OrgEventProposalsScreenState extends State<OrgEventProposalsScreen> {
               ),
             ),
           ),
-          // Title
           Expanded(
             flex: 4,
             child: Text(
@@ -673,7 +707,6 @@ class _OrgEventProposalsScreenState extends State<OrgEventProposalsScreen> {
               overflow: TextOverflow.ellipsis,
             ),
           ),
-          // Category chip
           Expanded(
             flex: 2,
             child: Container(
@@ -693,18 +726,15 @@ class _OrgEventProposalsScreenState extends State<OrgEventProposalsScreen> {
               ),
             ),
           ),
-          // Audience chip
           Expanded(
             flex: 2,
             child: _audienceChip(data['audience'] ?? 'Public'),
           ),
-          // Date
           Expanded(
             flex: 2,
             child: Text(dateStr,
                 style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF64748B))),
           ),
-          // Location
           Expanded(
             flex: 2,
             child: Text(
@@ -713,15 +743,12 @@ class _OrgEventProposalsScreenState extends State<OrgEventProposalsScreen> {
               overflow: TextOverflow.ellipsis,
             ),
           ),
-          // Status
           Expanded(flex: 2, child: _statusBadge(status)),
-          // Submitted
           Expanded(
             flex: 2,
             child: Text(submittedStr,
                 style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF64748B))),
           ),
-          // Actions
           Expanded(
             flex: 2,
             child: Row(
@@ -869,7 +896,7 @@ class _OrgEventProposalsScreenState extends State<OrgEventProposalsScreen> {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Stat Card — mirrors _StatCard from student_accounts exactly
+// Stat Card
 // ─────────────────────────────────────────────────────────────────────────────
 class _StatCard extends StatelessWidget {
   final String label;
@@ -919,7 +946,7 @@ class _StatCard extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Reusable small widgets — mirrors student_accounts exactly
+// Reusable small widgets
 // ─────────────────────────────────────────────────────────────────────────────
 class _FilterDropdown extends StatelessWidget {
   final String value;
@@ -1062,7 +1089,7 @@ class _PageNumButton extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Submit / Edit Modal — mirrors _showManualAddDialog style from student_accounts
+// Submit / Edit Modal
 // ─────────────────────────────────────────────────────────────────────────────
 class _SubmitProposalModal extends StatefulWidget {
   final String orgId;
@@ -1088,7 +1115,6 @@ class _SubmitProposalModalState extends State<_SubmitProposalModal> {
   String? _errorMsg;
   bool _issuesCertificate = false;
 
-  // attachment
   String? _attachmentBase64;
   String? _attachmentName;
   String? _attachmentSize;
@@ -1261,7 +1287,6 @@ class _SubmitProposalModalState extends State<_SubmitProposalModal> {
         width: 560,
         constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.88),
         child: Column(mainAxisSize: MainAxisSize.min, children: [
-          // ── Header (colored like student_accounts modals)
           Container(
             padding: const EdgeInsets.fromLTRB(24, 20, 20, 20),
             decoration: BoxDecoration(
@@ -1287,7 +1312,6 @@ class _SubmitProposalModalState extends State<_SubmitProposalModal> {
               ),
             ]),
           ),
-          // ── Body
           Expanded(
             child: SingleChildScrollView(
               padding: const EdgeInsets.all(24),
@@ -1295,7 +1319,6 @@ class _SubmitProposalModalState extends State<_SubmitProposalModal> {
                 key: _formKey,
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   _sectionLabel('Event Details', icon: Icons.event_outlined),
-                  // Title + Category
                   Row(children: [
                     Expanded(
                       child: TextFormField(
@@ -1317,7 +1340,6 @@ class _SubmitProposalModalState extends State<_SubmitProposalModal> {
                     ),
                   ]),
                   const SizedBox(height: 12),
-                  // Audience
                   DropdownButtonFormField<String>(
                     value: _audience,
                     decoration: _orgEventProposalsInputDecoration('Audience *'),
@@ -1326,7 +1348,6 @@ class _SubmitProposalModalState extends State<_SubmitProposalModal> {
                     onChanged: (v) => setState(() => _audience = v!),
                   ),
                   const SizedBox(height: 12),
-                  // Description
                   TextFormField(
                     controller: _descCtrl,
                     maxLines: 3,
@@ -1335,7 +1356,6 @@ class _SubmitProposalModalState extends State<_SubmitProposalModal> {
                     validator: (v) => v?.trim().isEmpty == true ? 'Required' : null,
                   ),
                   const SizedBox(height: 12),
-                  // Date + Time
                   Row(children: [
                     Expanded(
                       child: TextFormField(
@@ -1371,7 +1391,6 @@ class _SubmitProposalModalState extends State<_SubmitProposalModal> {
                     ),
                   ]),
                   const SizedBox(height: 12),
-                  // Location
                   TextFormField(
                     controller: _locCtrl,
                     decoration: _orgEventProposalsInputDecoration('Location *', hint: 'e.g. IT Building Room 301', icon: Icons.location_on_outlined),
@@ -1411,7 +1430,6 @@ class _SubmitProposalModalState extends State<_SubmitProposalModal> {
               ),
             ),
           ),
-          // ── Footer
           Container(
             padding: const EdgeInsets.fromLTRB(24, 16, 24, 20),
             decoration: const BoxDecoration(
@@ -1556,7 +1574,7 @@ class _SubmitProposalModalState extends State<_SubmitProposalModal> {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// View Proposal Modal — mirrors _showStudentDetailDialog style
+// View Proposal Modal
 // ─────────────────────────────────────────────────────────────────────────────
 class _ViewProposalModal extends StatelessWidget {
   final String docId;
@@ -1590,7 +1608,6 @@ class _ViewProposalModal extends StatelessWidget {
       child: SizedBox(
         width: 520,
         child: Column(mainAxisSize: MainAxisSize.min, children: [
-          // ── Header
           Container(
             padding: const EdgeInsets.fromLTRB(24, 20, 20, 20),
             decoration: BoxDecoration(
@@ -1617,7 +1634,6 @@ class _ViewProposalModal extends StatelessWidget {
               ),
             ]),
           ),
-          // ── Body
           Flexible(
             child: SingleChildScrollView(
               padding: const EdgeInsets.all(24),
@@ -1677,7 +1693,6 @@ class _ViewProposalModal extends StatelessWidget {
               ]),
             ),
           ),
-          // ── Footer
           Container(
             padding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
             child: Row(mainAxisAlignment: MainAxisAlignment.end, children: [
