@@ -1,4 +1,7 @@
+// lib/screens/web/admin/adviser_roles.dart
+
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -9,8 +12,27 @@ import 'export_util.dart';
 import 'export_pdf.dart';
 import '../../theme/app_theme.dart';
 
+// Helper for image handling
+ImageProvider _imageProviderFromUrl(String url) {
+  if (url.startsWith('data:image')) {
+    final base64Part = url.split(',').last;
+    return MemoryImage(base64Decode(base64Part));
+  }
+  return NetworkImage(url);
+}
+
+Widget _buildImageWidget(String url, {BoxFit fit = BoxFit.cover, double? width, double? height}) {
+  return Image(
+    image: _imageProviderFromUrl(url),
+    fit: fit,
+    width: width,
+    height: height,
+    errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+  );
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
-// Design tokens — identical to student_accounts.dart
+// Design tokens
 // ─────────────────────────────────────────────────────────────────────────────
 class _DS {
   static const double radiusSm   = 8;
@@ -119,10 +141,17 @@ class _RankBadge extends StatelessWidget {
 
 class _OrgAvatar extends StatelessWidget {
   final String abbrev;
-  const _OrgAvatar(this.abbrev);
+  final String? logoUrl;
+  const _OrgAvatar(this.abbrev, {this.logoUrl});
 
   @override
   Widget build(BuildContext context) {
+    if (logoUrl != null && logoUrl!.isNotEmpty) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(_DS.radiusSm),
+        child: _buildImageWidget(logoUrl!, width: 34, height: 34, fit: BoxFit.cover),
+      );
+    }
     final label = abbrev.length > 2 ? abbrev.substring(0, 2).toUpperCase() : abbrev.toUpperCase();
     return Container(
       width: 34,
@@ -165,11 +194,18 @@ class _ActionIcon extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// OrgModel
+// OrgModel with logo
 // ─────────────────────────────────────────────────────────────────────────────
 class OrgModel {
-  final String id, name, abbrev, tag;
-  const OrgModel({required this.id, required this.name, required this.abbrev, required this.tag});
+  final String id, name, abbrev, tag, logoUrl;
+  const OrgModel({
+    required this.id, 
+    required this.name, 
+    required this.abbrev, 
+    required this.tag,
+    required this.logoUrl,
+  });
+  
   factory OrgModel.fromDoc(DocumentSnapshot doc) {
     final d = doc.data() as Map<String, dynamic>;
     return OrgModel(
@@ -177,6 +213,31 @@ class OrgModel {
       name: d['name'] ?? d['orgName'] ?? d['organizationName'] ?? '',
       abbrev: d['shortName'] ?? d['abbrev'] ?? d['abbreviation'] ?? d['acronym'] ?? '',
       tag: d['tag'] ?? d['department'] ?? d['type'] ?? '',
+      logoUrl: d['logoUrl'] ?? '',
+    );
+  }
+}
+
+// Officer info for view dialog
+class OfficerInfo {
+  final String name;
+  final String email;
+  final String phone;
+  final String photoUrl;
+  
+  const OfficerInfo({
+    required this.name,
+    required this.email,
+    required this.phone,
+    required this.photoUrl,
+  });
+  
+  factory OfficerInfo.fromMap(Map<String, dynamic> map) {
+    return OfficerInfo(
+      name: map['name'] ?? '',
+      email: map['email'] ?? '',
+      phone: map['phone'] ?? '',
+      photoUrl: map['photoUrl'] ?? '',
     );
   }
 }
@@ -192,7 +253,7 @@ class AdviserRoles extends StatefulWidget {
 
 class _AdviserRolesState extends State<AdviserRoles> {
   final TextEditingController _searchController = TextEditingController();
-  String _statusFilter    = 'All';   // 'All' | 'Archived'
+  String _statusFilter    = 'All';
   String _filterOrgId     = 'All';
   String _filterAdviserName = 'All';
   int    _currentPage     = 1;
@@ -204,17 +265,23 @@ class _AdviserRolesState extends State<AdviserRoles> {
   int            _totalAdvisers = 0;
   int            _totalOfficers = 0;
   late StreamSubscription _metaListener;
+  late StreamSubscription _officersListener;
+
+  // Cache for officer data by orgId
+  Map<String, Map<String, OfficerInfo>> _officersCache = {};
 
   @override
   void initState() {
     super.initState();
     _loadMeta();
     _setupMetaListener();
+    _setupOfficersListener();
   }
 
   @override
   void dispose() {
     _metaListener.cancel();
+    _officersListener.cancel();
     _searchController.dispose();
     super.dispose();
   }
@@ -226,7 +293,126 @@ class _AdviserRolesState extends State<AdviserRoles> {
         .listen((_) => _loadMeta());
   }
 
-  // ── Data ──────────────────────────────────────────────────────────
+  void _setupOfficersListener() {
+    _officersListener = FirebaseFirestore.instance
+        .collectionGroup('officers')
+        .snapshots()
+        .listen((snapshot) {
+          _loadOfficersForAllOrgs();
+        });
+  }
+
+  Future<void> _loadOfficersForAllOrgs() async {
+    for (final org in _orgs) {
+      await _loadOfficersForOrg(org.id);
+    }
+    setState(() {});
+  }
+
+  Future<void> _loadOfficersForOrg(String orgId) async {
+    try {
+      final orgDoc = await FirebaseFirestore.instance
+          .collection('organizations')
+          .doc(orgId)
+          .get();
+      
+      final orgData = orgDoc.data();
+      final adviserPhotoUrl = orgData?['adviserPhotoUrl'] ?? '';
+      
+      final roleSnap = await FirebaseFirestore.instance
+          .collection('adviser_roles')
+          .where('orgId', isEqualTo: orgId)
+          .where('archived', isEqualTo: false)
+          .get();
+      
+      for (final doc in roleSnap.docs) {
+        if (adviserPhotoUrl.isNotEmpty) {
+          await doc.reference.update({'adviserPhotoUrl': adviserPhotoUrl});
+        }
+      }
+      
+      final officerSnap = await FirebaseFirestore.instance
+          .collection('organizations')
+          .doc(orgId)
+          .collection('officers')
+          .get();
+      
+      final officers = <String, OfficerInfo>{};
+      for (final doc in officerSnap.docs) {
+        final data = doc.data();
+        final position = (data['position'] ?? '').toString().toLowerCase();
+        final officer = OfficerInfo.fromMap(data);
+        
+        if (position == 'president') {
+          officers['president'] = officer;
+        } else if (position == 'vice president') {
+          officers['vicePresident'] = officer;
+        } else if (position == 'secretary') {
+          officers['secretary'] = officer;
+        }
+      }
+      
+      _officersCache[orgId] = officers;
+      await _syncAdviserRoleOfficers(orgId, officers);
+      
+    } catch (e) {
+      debugPrint('Error loading officers for org $orgId: $e');
+    }
+  }
+
+  Future<void> _syncAdviserRoleOfficers(String orgId, Map<String, OfficerInfo> officers) async {
+    try {
+      final orgDoc = await FirebaseFirestore.instance
+          .collection('organizations')
+          .doc(orgId)
+          .get();
+      
+      final orgData = orgDoc.data();
+      final adviserPhotoUrl = orgData?['adviserPhotoUrl'] ?? '';
+      
+      final roleSnap = await FirebaseFirestore.instance
+          .collection('adviser_roles')
+          .where('orgId', isEqualTo: orgId)
+          .where('archived', isEqualTo: false)
+          .get();
+      
+      for (final doc in roleSnap.docs) {
+        final updates = <String, dynamic>{};
+        
+        if (adviserPhotoUrl.isNotEmpty) {
+          updates['adviserPhotoUrl'] = adviserPhotoUrl;
+        }
+        
+        if (officers.containsKey('president')) {
+          updates['president'] = officers['president']!.name;
+          updates['presidentEmail'] = officers['president']!.email;
+          updates['presidentPhone'] = officers['president']!.phone;
+          updates['presidentPhotoUrl'] = officers['president']!.photoUrl;
+        }
+        
+        if (officers.containsKey('vicePresident')) {
+          updates['vicePresident'] = officers['vicePresident']!.name;
+          updates['vicePresidentEmail'] = officers['vicePresident']!.email;
+          updates['vicePresidentPhone'] = officers['vicePresident']!.phone;
+          updates['vicePresidentPhotoUrl'] = officers['vicePresident']!.photoUrl;
+        }
+        
+        if (officers.containsKey('secretary')) {
+          updates['secretary'] = officers['secretary']!.name;
+          updates['secretaryEmail'] = officers['secretary']!.email;
+          updates['secretaryPhone'] = officers['secretary']!.phone;
+          updates['secretaryPhotoUrl'] = officers['secretary']!.photoUrl;
+        }
+        
+        if (updates.isNotEmpty) {
+          await doc.reference.update(updates);
+        }
+      }
+    } catch (e) {
+      debugPrint('Error syncing adviser role officers for org $orgId: $e');
+    }
+  }
+
   Future<void> _loadMeta() async {
     setState(() => _loadingMeta = true);
     try {
@@ -250,9 +436,9 @@ class _AdviserRolesState extends State<AdviserRoles> {
       final namesSet = <String>{};
       for (final doc in validRoles) {
         final d = doc.data();
-        if ((d['president']     ?? '').toString().trim().isNotEmpty) officers++;
+        if ((d['president'] ?? '').toString().trim().isNotEmpty) officers++;
         if ((d['vicePresident'] ?? '').toString().trim().isNotEmpty) officers++;
-        if ((d['secretary']     ?? '').toString().trim().isNotEmpty) officers++;
+        if ((d['secretary'] ?? '').toString().trim().isNotEmpty) officers++;
         final n = d['adviserName']?.toString().trim();
         if (n != null && n.isNotEmpty) namesSet.add(n);
       }
@@ -264,12 +450,16 @@ class _AdviserRolesState extends State<AdviserRoles> {
         _totalOfficers = officers;
         _loadingMeta   = false;
       });
+      
+      for (final org in orgs) {
+        await _loadOfficersForOrg(org.id);
+      }
+      
     } catch (e) {
       setState(() => _loadingMeta = false);
     }
   }
 
-  // ── Build ─────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -287,7 +477,6 @@ class _AdviserRolesState extends State<AdviserRoles> {
     );
   }
 
-  // ── Stats row ─────────────────────────────────────────────────────
   Widget _buildStatsRow() {
     return Padding(
       padding: const EdgeInsets.fromLTRB(28, 24, 28, 0),
@@ -307,12 +496,10 @@ class _AdviserRolesState extends State<AdviserRoles> {
     );
   }
 
-  // ── Toolbar ───────────────────────────────────────────────────────
   Widget _buildToolbar() {
     return Padding(
       padding: const EdgeInsets.fromLTRB(28, 20, 28, 0),
       child: Row(children: [
-        // Search
         Expanded(
           child: SizedBox(
             height: 40,
@@ -335,16 +522,12 @@ class _AdviserRolesState extends State<AdviserRoles> {
           ),
         ),
         const SizedBox(width: 10),
-
-        // Status tabs
         _TabToggle(
           options: const ['All', 'Archived'],
           selected: _statusFilter,
           onChanged: (v) => setState(() { _statusFilter = v; _currentPage = 1; }),
         ),
         const SizedBox(width: 10),
-
-        // Org filter
         _FilterDropdown(
           value: _filterOrgId,
           hint: 'All Orgs',
@@ -359,8 +542,6 @@ class _AdviserRolesState extends State<AdviserRoles> {
           onChanged: (v) => setState(() { _filterOrgId = v ?? 'All'; _currentPage = 1; }),
         ),
         const SizedBox(width: 10),
-
-        // Adviser filter
         _FilterDropdown(
           value: _filterAdviserName,
           hint: 'All Advisers',
@@ -372,8 +553,6 @@ class _AdviserRolesState extends State<AdviserRoles> {
           onChanged: (v) => setState(() { _filterAdviserName = v ?? 'All'; _currentPage = 1; }),
         ),
         const SizedBox(width: 10),
-
-        // Export
         AdminExportButton(onSelected: (choice) {
           if (choice == 'csv') {
             _exportCSV();
@@ -385,7 +564,6 @@ class _AdviserRolesState extends State<AdviserRoles> {
     );
   }
 
-  // ── Table ─────────────────────────────────────────────────────────
   Widget _buildTable() {
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance
@@ -410,7 +588,6 @@ class _AdviserRolesState extends State<AdviserRoles> {
           return orgId.isNotEmpty && orgName.isNotEmpty;
         }).toList();
 
-        // Filters
         final term = _searchController.text.trim().toLowerCase();
         if (term.isNotEmpty) {
           docs = docs.where((d) {
@@ -418,7 +595,9 @@ class _AdviserRolesState extends State<AdviserRoles> {
             return (data['orgName']     ?? '').toString().toLowerCase().contains(term) ||
                    (data['orgAbbrev']   ?? '').toString().toLowerCase().contains(term) ||
                    (data['adviserName'] ?? '').toString().toLowerCase().contains(term) ||
-                   (data['president']   ?? '').toString().toLowerCase().contains(term);
+                   (data['president']   ?? '').toString().toLowerCase().contains(term) ||
+                   (data['vicePresident'] ?? '').toString().toLowerCase().contains(term) ||
+                   (data['secretary']   ?? '').toString().toLowerCase().contains(term);
           }).toList();
         }
         if (_filterOrgId != 'All') {
@@ -488,6 +667,10 @@ class _AdviserRolesState extends State<AdviserRoles> {
   Widget _buildRow({required String docId, required Map<String, dynamic> data, required bool isLast}) {
     final rank     = data['adviserRank'] ?? 'Instructor';
     final archived = data['archived'] == true;
+    final orgId = data['orgId'] ?? '';
+    
+    final org = _orgs.firstWhere((o) => o.id == orgId, orElse: () => const OrgModel(id: '', name: '', abbrev: '', tag: '', logoUrl: ''));
+    final orgLogoUrl = org.logoUrl;
 
     return InkWell(
       hoverColor: const Color(0xFFF8F9FB),
@@ -498,11 +681,10 @@ class _AdviserRolesState extends State<AdviserRoles> {
           border: isLast ? null : const Border(bottom: BorderSide(color: Color(0xFFF1F5F9))),
         ),
         child: Row(children: [
-          // Org
           Expanded(
             flex: 3,
             child: Row(children: [
-              _OrgAvatar(data['orgAbbrev'] ?? '??'),
+              _OrgAvatar(data['orgAbbrev'] ?? '??', logoUrl: orgLogoUrl),
               const SizedBox(width: 10),
               Expanded(
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -517,8 +699,6 @@ class _AdviserRolesState extends State<AdviserRoles> {
               ),
             ]),
           ),
-
-          // Adviser
           Expanded(
             flex: 2,
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -529,32 +709,24 @@ class _AdviserRolesState extends State<AdviserRoles> {
               _RankBadge(rank),
             ]),
           ),
-
-          // President
           Expanded(
             flex: 2,
             child: Text(data['president'] ?? '—',
                 style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF374151)),
                 overflow: TextOverflow.ellipsis),
           ),
-
-          // VP
           Expanded(
             flex: 2,
             child: Text(data['vicePresident'] ?? '—',
                 style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF374151)),
                 overflow: TextOverflow.ellipsis),
           ),
-
-          // Secretary
           Expanded(
             flex: 2,
             child: Text(data['secretary'] ?? '—',
                 style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF374151)),
                 overflow: TextOverflow.ellipsis),
           ),
-
-          // Actions
           Expanded(
             flex: 2,
             child: Row(mainAxisAlignment: MainAxisAlignment.end, children: [
@@ -665,8 +837,260 @@ class _AdviserRolesState extends State<AdviserRoles> {
     );
   }
 
-  // ── Form dialog (Add / Edit) ───────────────────────────────────────
-  void _showAddDialog()  => _showFormDialog(isEdit: false, docId: null, existing: null);
+  // ── View dialog with photos ────────────────────────────────────────────────
+  void _showViewDialog(Map<String, dynamic> data, String docId) {
+    final rank = data['adviserRank'] ?? 'Instructor';
+    final archived = data['archived'] == true;
+    
+    final presidentPhoto = data['presidentPhotoUrl'] ?? '';
+    final vicePresidentPhoto = data['vicePresidentPhotoUrl'] ?? '';
+    final secretaryPhoto = data['secretaryPhotoUrl'] ?? '';
+
+    showDialog(
+      context: context,
+      barrierColor: Colors.black54,
+      builder: (ctx) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        child: SizedBox(
+          width: 520,
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            Container(
+              padding: const EdgeInsets.fromLTRB(24, 20, 20, 20),
+              decoration: BoxDecoration(
+                color: UpriseColors.primaryDark,
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(18)),
+              ),
+              child: Row(children: [
+                _OrgAvatar(data['orgAbbrev'] ?? '??'),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text(data['orgName'] ?? '—',
+                        style: GoogleFonts.beVietnamPro(fontSize: 16, fontWeight: FontWeight.w700, color: Colors.white)),
+                    if ((data['orgTag'] ?? '').toString().isNotEmpty)
+                      Text(data['orgTag'] ?? '',
+                          style: GoogleFonts.beVietnamPro(fontSize: 11, color: Colors.white.withAlpha(179))),
+                  ]),
+                ),
+                if (archived)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withAlpha(51),
+                      borderRadius: BorderRadius.circular(100),
+                    ),
+                    child: Text('ARCHIVED',
+                        style: GoogleFonts.beVietnamPro(fontSize: 10, fontWeight: FontWeight.w700, color: Colors.white)),
+                  ),
+                const SizedBox(width: 6),
+                IconButton(
+                  icon: const Icon(Icons.close_rounded, color: Colors.white, size: 20),
+                  onPressed: () => Navigator.pop(ctx),
+                ),
+              ]),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(children: [
+                _viewCard('Adviser', [
+                  _buildAdviserRow('Name', data['adviserName'] ?? '—', Icons.badge_outlined, data['adviserPhotoUrl'] ?? ''),
+                  _buildInfoRow('Email', data['adviserEmail'] ?? '—', Icons.email_outlined),
+                  _buildInfoRow('Phone', data['adviserPhone'] ?? '—', Icons.phone_outlined),
+                  const SizedBox(height: 10),
+                  Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                    Row(children: [
+                      const Icon(Icons.workspace_premium_outlined, size: 13, color: Color(0xFF9AA5B4)),
+                      const SizedBox(width: 6),
+                      Text('Rank', style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF64748B))),
+                    ]),
+                    _RankBadge(rank),
+                  ]),
+                ]),
+                const SizedBox(height: 12),
+                _viewCard('Officers', [
+                  _buildOfficerRow('President', data['president'] ?? '—', Icons.star_outline_rounded, presidentPhoto),
+                  _buildOfficerRow('Vice President', data['vicePresident'] ?? '—', Icons.person_outline_rounded, vicePresidentPhoto),
+                  _buildOfficerRow('Secretary', data['secretary'] ?? '—', Icons.person_outline_rounded, secretaryPhoto),
+                ]),
+              ]),
+            ),
+            Container(
+              padding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
+              child: Row(children: [
+                if (!archived)
+                  OutlinedButton.icon(
+                    onPressed: () { Navigator.pop(ctx); _confirmArchive(docId, data['orgName'] ?? ''); },
+                    icon: const Icon(Icons.archive_outlined, size: 15),
+                    label: Text('Archive', style: GoogleFonts.beVietnamPro(fontSize: 13)),
+                    style: OutlinedButton.styleFrom(
+                      side: const BorderSide(color: Color(0xFFE2E6EA)),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+                    ),
+                  ),
+                if (archived)
+                  OutlinedButton.icon(
+                    onPressed: () { Navigator.pop(ctx); _restoreRecord(docId, data['orgName'] ?? ''); },
+                    icon: const Icon(Icons.unarchive_outlined, size: 15, color: Color(0xFF059669)),
+                    label: Text('Restore', style: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF059669))),
+                    style: OutlinedButton.styleFrom(
+                      side: const BorderSide(color: Color(0xFF6EE7B7)),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+                    ),
+                  ),
+                const Spacer(),
+                ElevatedButton.icon(
+                  onPressed: () { Navigator.pop(ctx); _showEditDialog(data, docId); },
+                  icon: const Icon(Icons.edit_outlined, size: 15),
+                  label: Text('Edit', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: UpriseColors.primaryDark,
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 11),
+                  ),
+                ),
+              ]),
+            ),
+          ]),
+        ),
+      ),
+    );
+  }
+
+  Widget _viewCard(String title, List<Widget> rows) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8F9FB),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: const Color(0xFFE8ECF0)),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Text(title,
+              style: GoogleFonts.beVietnamPro(
+                  fontSize: 11, fontWeight: FontWeight.w700,
+                  color: UpriseColors.primaryDark, letterSpacing: 0.5)),
+          const SizedBox(width: 10),
+          const Expanded(child: Divider(color: Color(0xFFE2E6EA), thickness: 1)),
+        ]),
+        const SizedBox(height: 8),
+        ...rows,
+      ]),
+    );
+  }
+
+  Widget _buildAdviserRow(String label, String value, IconData icon, String photoUrl) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 5),
+      child: Row(children: [
+        if (photoUrl.isNotEmpty) ...[
+          Container(
+            width: 32, height: 32,
+            decoration: const BoxDecoration(shape: BoxShape.circle),
+            clipBehavior: Clip.antiAlias,
+            child: _buildImageWidget(photoUrl, fit: BoxFit.cover, width: 32, height: 32),
+          ),
+          const SizedBox(width: 10),
+        ],
+        if (photoUrl.isEmpty) ...[
+          Container(
+            width: 32, height: 32,
+            decoration: BoxDecoration(
+              color: UpriseColors.primaryDark.withAlpha(26),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, size: 16, color: UpriseColors.primaryDark),
+          ),
+          const SizedBox(width: 10),
+        ],
+        SizedBox(
+          width: 100,
+          child: Text(label,
+              style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF64748B))),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(value,
+              style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w500, color: const Color(0xFF1A202C)),
+              overflow: TextOverflow.ellipsis),
+        ),
+      ]),
+    );
+  }
+
+  Widget _buildInfoRow(String label, String value, IconData icon) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 5),
+      child: Row(children: [
+        Container(
+          width: 32, height: 32,
+          decoration: BoxDecoration(
+            color: UpriseColors.primaryDark.withAlpha(26),
+            shape: BoxShape.circle,
+          ),
+          child: Icon(icon, size: 16, color: UpriseColors.primaryDark),
+        ),
+        const SizedBox(width: 10),
+        SizedBox(
+          width: 100,
+          child: Text(label,
+              style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF64748B))),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(value,
+              style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w500, color: const Color(0xFF1A202C)),
+              overflow: TextOverflow.ellipsis),
+        ),
+      ]),
+    );
+  }
+
+  Widget _buildOfficerRow(String label, String value, IconData icon, String photoUrl) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 5),
+      child: Row(children: [
+        if (photoUrl.isNotEmpty) ...[
+          Container(
+            width: 28, height: 28,
+            decoration: const BoxDecoration(shape: BoxShape.circle),
+            clipBehavior: Clip.antiAlias,
+            child: _buildImageWidget(photoUrl, fit: BoxFit.cover, width: 28, height: 28),
+          ),
+          const SizedBox(width: 8),
+        ],
+        if (photoUrl.isEmpty) ...[
+          Container(
+            width: 28, height: 28,
+            decoration: BoxDecoration(
+              color: UpriseColors.primaryDark.withAlpha(26),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, size: 14, color: UpriseColors.primaryDark),
+          ),
+          const SizedBox(width: 8),
+        ],
+        SizedBox(
+          width: 100,
+          child: Text(label,
+              style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF64748B))),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(value,
+              style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w500, color: const Color(0xFF1A202C)),
+              overflow: TextOverflow.ellipsis),
+        ),
+      ]),
+    );
+  }
+
+  // ── Form dialog (Edit) ──────────────────────────────────────
   void _showEditDialog(Map<String, dynamic> data, String docId) =>
       _showFormDialog(isEdit: true, docId: docId, existing: data);
 
@@ -778,7 +1202,6 @@ class _AdviserRolesState extends State<AdviserRoles> {
               width: 540,
               constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.92),
               child: Column(mainAxisSize: MainAxisSize.min, children: [
-                // ── Header
                 Container(
                   padding: const EdgeInsets.fromLTRB(24, 20, 20, 20),
                   decoration: BoxDecoration(
@@ -809,8 +1232,6 @@ class _AdviserRolesState extends State<AdviserRoles> {
                     ),
                   ]),
                 ),
-
-                // ── Body
                 Expanded(
                   child: SingleChildScrollView(
                     padding: const EdgeInsets.all(24),
@@ -818,8 +1239,6 @@ class _AdviserRolesState extends State<AdviserRoles> {
                       key: formKey,
                       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                         _sectionDivider('Organization', icon: Icons.business_outlined),
-
-                        // Org dropdown
                         DropdownButtonFormField<OrgModel>(
                           initialValue: selectedOrg,
                           isExpanded: true,
@@ -828,7 +1247,7 @@ class _AdviserRolesState extends State<AdviserRoles> {
                           items: _orgs.map((o) => DropdownMenuItem(
                             value: o,
                             child: Row(children: [
-                              _OrgAvatar(o.abbrev.isNotEmpty ? o.abbrev : o.name.substring(0, o.name.length.clamp(0, 2))),
+                              _OrgAvatar(o.abbrev.isNotEmpty ? o.abbrev : o.name.substring(0, o.name.length.clamp(0, 2)), logoUrl: o.logoUrl),
                               const SizedBox(width: 10),
                               Expanded(child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -844,10 +1263,8 @@ class _AdviserRolesState extends State<AdviserRoles> {
                           onChanged: (v) { setDlg(() => selectedOrg = v); onOrgChanged(v); },
                           validator: (_) => selectedOrg == null ? 'Select an organization' : null,
                         ),
-
                         const SizedBox(height: 20),
                         _sectionDivider('Adviser Information', icon: Icons.person_outline_rounded),
-
                         TextFormField(
                           controller: advNameCtrl,
                           decoration: _DS.inputDecoration('Full Name', hint: 'e.g., Dr. Juan dela Cruz', icon: Icons.badge_outlined),
@@ -889,10 +1306,8 @@ class _AdviserRolesState extends State<AdviserRoles> {
                           onChanged: (v) { if (v != null) advRankCtrl.text = v; },
                           validator: (v) => v == null || v.isEmpty ? 'Required' : null,
                         ),
-
                         const SizedBox(height: 20),
                         _sectionDivider('Officers', icon: Icons.groups_outlined),
-
                         TextFormField(
                           controller: presCtrl,
                           decoration: _DS.inputDecoration('President', icon: Icons.star_outline_rounded),
@@ -913,7 +1328,6 @@ class _AdviserRolesState extends State<AdviserRoles> {
                           style: GoogleFonts.beVietnamPro(fontSize: 13),
                           validator: (v) => v!.trim().isEmpty ? 'Required' : null,
                         ),
-
                         if (errorMsg != null) ...[
                           const SizedBox(height: 14),
                           Container(
@@ -935,8 +1349,6 @@ class _AdviserRolesState extends State<AdviserRoles> {
                     ),
                   ),
                 ),
-
-                // ── Footer
                 Container(
                   padding: const EdgeInsets.fromLTRB(24, 16, 24, 20),
                   decoration: const BoxDecoration(
@@ -977,174 +1389,6 @@ class _AdviserRolesState extends State<AdviserRoles> {
           );
         },
       ),
-    );
-  }
-
-  // ── View dialog ───────────────────────────────────────────────────
-  void _showViewDialog(Map<String, dynamic> data, String docId) {
-    final rank     = data['adviserRank'] ?? 'Instructor';
-    final archived = data['archived'] == true;
-
-    showDialog(
-      context: context,
-      barrierColor: Colors.black54,
-      builder: (ctx) => Dialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-        child: SizedBox(
-          width: 480,
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
-            // Header
-            Container(
-              padding: const EdgeInsets.fromLTRB(24, 20, 20, 20),
-              decoration: BoxDecoration(
-                color: UpriseColors.primaryDark,
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(18)),
-              ),
-              child: Row(children: [
-                _OrgAvatar(data['orgAbbrev'] ?? '??'),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text(data['orgName'] ?? '—',
-                        style: GoogleFonts.beVietnamPro(fontSize: 16, fontWeight: FontWeight.w700, color: Colors.white)),
-                    if ((data['orgTag'] ?? '').toString().isNotEmpty)
-                      Text(data['orgTag'] ?? '',
-                          style: GoogleFonts.beVietnamPro(fontSize: 11, color: Colors.white.withAlpha(179))),
-                  ]),
-                ),
-                if (archived)
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withAlpha(51),
-                      borderRadius: BorderRadius.circular(100),
-                    ),
-                    child: Text('ARCHIVED',
-                        style: GoogleFonts.beVietnamPro(fontSize: 10, fontWeight: FontWeight.w700, color: Colors.white)),
-                  ),
-                const SizedBox(width: 6),
-                IconButton(
-                  icon: const Icon(Icons.close_rounded, color: Colors.white, size: 20),
-                  onPressed: () => Navigator.pop(ctx),
-                ),
-              ]),
-            ),
-
-            // Body
-            Padding(
-              padding: const EdgeInsets.all(24),
-              child: Column(children: [
-                // Adviser section
-                _viewCard('Adviser', [
-                  _vDetailRow('Name',  data['adviserName']  ?? '—', Icons.badge_outlined),
-                  _vDetailRow('Email', data['adviserEmail'] ?? '—', Icons.email_outlined),
-                  _vDetailRow('Phone', data['adviserPhone'] ?? '—', Icons.phone_outlined),
-                  const SizedBox(height: 10),
-                  Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                    Row(children: [
-                      const Icon(Icons.workspace_premium_outlined, size: 13, color: Color(0xFF9AA5B4)),
-                      const SizedBox(width: 6),
-                      Text('Rank', style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF64748B))),
-                    ]),
-                    _RankBadge(rank),
-                  ]),
-                ]),
-                const SizedBox(height: 12),
-                // Officers section
-                _viewCard('Officers', [
-                  _vDetailRow('President',      data['president']     ?? '—', Icons.star_outline_rounded),
-                  _vDetailRow('Vice President',  data['vicePresident'] ?? '—', Icons.person_outline_rounded),
-                  _vDetailRow('Secretary',       data['secretary']     ?? '—', Icons.person_outline_rounded),
-                ]),
-              ]),
-            ),
-
-            // Footer
-            Container(
-              padding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
-              child: Row(children: [
-                if (!archived)
-                  OutlinedButton.icon(
-                    onPressed: () { Navigator.pop(ctx); _confirmArchive(docId, data['orgName'] ?? ''); },
-                    icon: const Icon(Icons.archive_outlined, size: 15),
-                    label: Text('Archive', style: GoogleFonts.beVietnamPro(fontSize: 13)),
-                    style: OutlinedButton.styleFrom(
-                      side: const BorderSide(color: Color(0xFFE2E6EA)),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
-                    ),
-                  ),
-                if (archived)
-                  OutlinedButton.icon(
-                    onPressed: () { Navigator.pop(ctx); _restoreRecord(docId, data['orgName'] ?? ''); },
-                    icon: const Icon(Icons.unarchive_outlined, size: 15, color: Color(0xFF059669)),
-                    label: Text('Restore', style: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF059669))),
-                    style: OutlinedButton.styleFrom(
-                      side: const BorderSide(color: Color(0xFF6EE7B7)),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
-                    ),
-                  ),
-                const Spacer(),
-                ElevatedButton.icon(
-                  onPressed: () { Navigator.pop(ctx); _showEditDialog(data, docId); },
-                  icon: const Icon(Icons.edit_outlined, size: 15),
-                  label: Text('Edit', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600)),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: UpriseColors.primaryDark,
-                    foregroundColor: Colors.white,
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 11),
-                  ),
-                ),
-              ]),
-            ),
-          ]),
-        ),
-      ),
-    );
-  }
-
-  Widget _viewCard(String title, List<Widget> rows) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF8F9FB),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: const Color(0xFFE8ECF0)),
-      ),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(children: [
-          Text(title,
-              style: GoogleFonts.beVietnamPro(
-                  fontSize: 11, fontWeight: FontWeight.w700,
-                  color: UpriseColors.primaryDark, letterSpacing: 0.5)),
-          const SizedBox(width: 10),
-          const Expanded(child: Divider(color: Color(0xFFE2E6EA), thickness: 1)),
-        ]),
-        const SizedBox(height: 8),
-        ...rows,
-      ]),
-    );
-  }
-
-  Widget _vDetailRow(String label, String value, IconData icon) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 5),
-      child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-        Row(children: [
-          Icon(icon, size: 13, color: const Color(0xFF9AA5B4)),
-          const SizedBox(width: 6),
-          Text(label, style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF64748B))),
-        ]),
-        Flexible(
-          child: Text(value,
-              style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w500, color: const Color(0xFF1A202C)),
-              textAlign: TextAlign.right, overflow: TextOverflow.ellipsis),
-        ),
-      ]),
     );
   }
 
@@ -1294,14 +1538,16 @@ class _AdviserRolesState extends State<AdviserRoles> {
       }
       String esc(String s) => '"${s.replaceAll('"', '""')}"';
       final buf = StringBuffer();
-      buf.writeln('Organization,Abbreviation,Tag,Adviser,Email,Phone,Rank,President,Vice President,Secretary,Status');
+      buf.writeln('Organization,Abbreviation,Tag,Adviser,Email,Phone,Rank,President,President Photo,Vice President,Vice President Photo,Secretary,Secretary Photo,Status');
       for (final doc in snap.docs) {
         final d = doc.data();
         buf.writeln([
           esc(d['orgName'] ?? ''), esc(d['orgAbbrev'] ?? ''), esc(d['orgTag'] ?? ''),
           esc(d['adviserName'] ?? ''), esc(d['adviserEmail'] ?? ''), esc(d['adviserPhone'] ?? ''),
-          esc(d['adviserRank'] ?? ''), esc(d['president'] ?? ''), esc(d['vicePresident'] ?? ''),
-          esc(d['secretary'] ?? ''), esc((d['archived'] ?? false) ? 'Archived' : 'Active'),
+          esc(d['adviserRank'] ?? ''), esc(d['president'] ?? ''), esc(d['presidentPhotoUrl'] ?? ''),
+          esc(d['vicePresident'] ?? ''), esc(d['vicePresidentPhotoUrl'] ?? ''),
+          esc(d['secretary'] ?? ''), esc(d['secretaryPhotoUrl'] ?? ''),
+          esc((d['archived'] ?? false) ? 'Archived' : 'Active'),
         ].join(','));
       }
       final now  = DateTime.now().toString().substring(0, 10);
@@ -1527,29 +1773,6 @@ class _FilterDropdown<T> extends StatelessWidget {
   }
 }
 
-class _ToolbarButton extends StatelessWidget {
-  final String label;
-  final IconData icon;
-  final VoidCallback? onPressed;
-  const _ToolbarButton({required this.label, required this.icon, this.onPressed});
-
-  @override
-  Widget build(BuildContext context) {
-    return ElevatedButton.icon(
-      onPressed: onPressed,
-      icon: Icon(icon, size: 15),
-      label: Text(label, style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600)),
-      style: ElevatedButton.styleFrom(
-        backgroundColor: UpriseColors.primaryDark,
-        foregroundColor: Colors.white,
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        elevation: 0,
-      ),
-    );
-  }
-}
-
 class _PageButton extends StatelessWidget {
   final IconData icon;
   final bool enabled;
@@ -1591,4 +1814,8 @@ class _PageNumButton extends StatelessWidget {
                   color: isActive ? Colors.white : const Color(0xFF374151))),
         ),
       );
+}
+
+class OrgColors {
+  static const Color lightGray = Color(0xFFF5F5F5);
 }

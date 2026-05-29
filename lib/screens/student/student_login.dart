@@ -5,6 +5,9 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../auth_service.dart';
 import '../guest/guest_home_screen.dart';
 import '../student/student_home_screen.dart'; // ✅ Import your home screen
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'student_change_password_screen.dart';
+
 
 class StudentLogin extends StatefulWidget {
   const StudentLogin({super.key});
@@ -23,54 +26,72 @@ class _StudentLoginState extends State<StudentLogin> {
   final AuthService _auth = AuthService();
 
   Future<void> _login() async {
-    if (_emailController.text.trim().isEmpty ||
-        _passwordController.text.trim().isEmpty) {
-      _showError('Please enter email and password');
-      return;
-    }
+  if (_emailController.text.trim().isEmpty ||
+      _passwordController.text.trim().isEmpty) {
+    _showError('Please enter email and password');
+    return;
+  }
+
+  if (!mounted) return;
+  setState(() => _isLoading = true);
+
+  try {
+    User? user = await _auth.loginWithEmail(
+      _emailController.text.trim(),
+      _passwordController.text.trim(),
+    );
 
     if (!mounted) return;
-    setState(() => _isLoading = true);
 
-    try {
-      User? user = await _auth.loginWithEmail(
-        _emailController.text.trim(),
-        _passwordController.text.trim(),
-      );
-
-      if (!mounted) return;
-
-      if (user == null) {
-        _showError('Invalid email or password');
+    if (user == null) {
+      _showError('Invalid email or password');
+    } else {
+      // ✅ CHECK IF NEED MAG CHANGE PASSWORD
+      final studentDoc = await FirebaseFirestore.instance
+          .collection('students')
+          .doc(user.uid)
+          .get();
+      
+      final mustChangePassword = studentDoc.data()?['mustChangePassword'] ?? false;
+      
+      if (mustChangePassword == true) {
+        // ✅ GO TO CHANGE PASSWORD SCREEN
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(
+            builder: (_) => StudentChangePasswordScreen(),
+          ),
+          (route) => false,
+        );
       } else {
-        // ✅ Directly navigate to StudentHomeScreen
+        // ✅ NORMAL LOGIN
         Navigator.of(context).pushAndRemoveUntil(
           MaterialPageRoute(builder: (_) => const StudentHomeScreen()),
           (route) => false,
         );
       }
-    } on FirebaseAuthException catch (e) {
-      if (!mounted) return;
+    }
+  } on FirebaseAuthException catch (e) {
+    if (!mounted) return;
 
-      String message = 'Login failed';
-      if (e.code == 'user-not-found') {
-        message = 'No account found with this email';
-      } else if (e.code == 'wrong-password') {
-        message = 'Incorrect password';
-      } else if (e.code == 'invalid-email') {
-        message = 'Please enter a valid email address';
-      }
-
-      _showError(message);
-    } catch (_) {
-      if (mounted) {
-        _showError('An error occurred. Please try again.');
-      }
+    String message = 'Login failed';
+    if (e.code == 'user-not-found') {
+      message = 'No account found with this email';
+    } else if (e.code == 'wrong-password') {
+      message = 'Incorrect password';
+    } else if (e.code == 'invalid-email') {
+      message = 'Please enter a valid email address';
     }
 
-    if (!mounted) return;
-    setState(() => _isLoading = false);
+    _showError(message);
+  } catch (_) {
+    if (mounted) {
+      _showError('An error occurred. Please try again.');
+    }
   }
+
+  if (!mounted) return;
+  setState(() => _isLoading = false);
+}
 
   void _showError(String message) {
     if (!mounted) return;

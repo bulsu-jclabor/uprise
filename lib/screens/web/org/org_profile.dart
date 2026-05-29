@@ -1,6 +1,7 @@
 // lib/screens/web/org/org_profile.dart
 
 import 'dart:convert';
+import 'dart:html' as html;
 
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -8,24 +9,14 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:file_picker/file_picker.dart';
 import '../../../services/activity_logger.dart' as activity_log;
 
-String _mimeTypeFromPath(String? path) {
-  if (path == null) return 'image/png';
-  final ext = path.split('.').last.toLowerCase();
-  switch (ext) {
-    case 'jpg':
-    case 'jpeg':
-      return 'image/jpeg';
-    case 'png':
-      return 'image/png';
-    case 'gif':
-      return 'image/gif';
-    case 'bmp':
-      return 'image/bmp';
-    case 'webp':
-      return 'image/webp';
-    default:
-      return 'image/png';
-  }
+String _mimeTypeFromBytes(List<int> bytes) {
+  if (bytes.length < 4) return 'image/png';
+  if (bytes[0] == 0xFF && bytes[1] == 0xD8) return 'image/jpeg';
+  if (bytes[0] == 0x89 && bytes[1] == 0x50 && bytes[2] == 0x4E && bytes[3] == 0x47) return 'image/png';
+  if (bytes[0] == 0x47 && bytes[1] == 0x49 && bytes[2] == 0x46) return 'image/gif';
+  if (bytes[0] == 0x42 && bytes[1] == 0x4D) return 'image/bmp';
+  if (bytes[0] == 0x52 && bytes[1] == 0x49 && bytes[2] == 0x46 && bytes[3] == 0x46) return 'image/webp';
+  return 'image/png';
 }
 
 ImageProvider _imageProviderFromUrl(String url) {
@@ -84,8 +75,6 @@ class _OrgProfileScreenState extends State<OrgProfileScreen> {
   String _orgShortName = '';
   String _orgEmail = '';
   String _orgDescription = '';
-  String _schoolYear = '';
-  String _semester = '';
   String _orgLogoUrl = '';
 
   // Social media
@@ -98,6 +87,8 @@ class _OrgProfileScreenState extends State<OrgProfileScreen> {
   String _adviserName = '';
   String _adviserEmail = '';
   String _adviserPhone = '';
+  
+  String _adviserPhotoUrl = '';
 
   bool _loading = true;
 
@@ -122,7 +113,6 @@ class _OrgProfileScreenState extends State<OrgProfileScreen> {
     if (doc.exists) {
       final data = doc.data()!;
       
-      // DON'T await this - let it run in background
       _syncOrganizationOfficersIfNeeded(data);
       
       setState(() {
@@ -130,8 +120,6 @@ class _OrgProfileScreenState extends State<OrgProfileScreen> {
         _orgShortName   = data['shortName'] ?? widget.orgShortName;
         _orgEmail       = data['email'] ?? widget.orgEmail;
         _orgDescription = data['description'] ?? '';
-        _schoolYear     = data['schoolYear'] ?? '';
-        _semester       = data['semester'] ?? '';
         _orgLogoUrl     = data['logoUrl'] ?? '';
         _facebook       = data['facebook'] ?? '';
         _instagram      = data['instagram'] ?? '';
@@ -140,6 +128,7 @@ class _OrgProfileScreenState extends State<OrgProfileScreen> {
         _adviserName    = data['adviserName'] ?? '';
         _adviserEmail   = data['adviserEmail'] ?? '';
         _adviserPhone   = data['adviserPhone'] ?? '';
+        _adviserPhotoUrl = data['adviserPhotoUrl'] ?? '';  // <-- ADD THIS LINE
         _loading = false;
       });
     } else {
@@ -153,51 +142,49 @@ class _OrgProfileScreenState extends State<OrgProfileScreen> {
       _showErrorSnack('Failed to load: $e');
     }
   }
-}
+} 
 
-// Add this helper method after _loadOrgData
-void _showErrorSnack(String message) {
-  ScaffoldMessenger.of(context).showSnackBar(
-    SnackBar(
-      content: Text(message),
-      backgroundColor: OrgColors.error,
-    ),
-  );
-}
+  void _showErrorSnack(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: OrgColors.error,
+      ),
+    );
+  }
 
   Future<void> _syncOrganizationOfficersIfNeeded(Map<String, dynamic> data) async {
-  try {
-    final storedOfficers = data['officers'] as List<dynamic>?;
-    
-    final officerSnap = await FirebaseFirestore.instance
-        .collection('organizations')
-        .doc(widget.orgId)
-        .collection('officers')
-        .orderBy('positionRank', descending: false)
-        .get();
-
-    final officers = officerSnap.docs.map((d) {
-      final ddata = d.data();
-      return {
-        'name': ddata['name'] ?? '',
-        'role': ddata['position'] ?? '',
-        'email': ddata['email'] ?? '',
-        'phone': ddata['phone'] ?? '',
-        'photoUrl': ddata['photoUrl'] ?? '',
-      };
-    }).toList();
-
-    if (!_officersMatch(storedOfficers, officers)) {
-      await FirebaseFirestore.instance
+    try {
+      final storedOfficers = data['officers'] as List<dynamic>?;
+      
+      final officerSnap = await FirebaseFirestore.instance
           .collection('organizations')
           .doc(widget.orgId)
-          .update({'officers': officers});
+          .collection('officers')
+          .orderBy('positionRank', descending: false)
+          .get();
+
+      final officers = officerSnap.docs.map((d) {
+        final ddata = d.data();
+        return {
+          'name': ddata['name'] ?? '',
+          'role': ddata['position'] ?? '',
+          'email': ddata['email'] ?? '',
+          'phone': ddata['phone'] ?? '',
+          'photoUrl': ddata['photoUrl'] ?? '',
+        };
+      }).toList();
+
+      if (!_officersMatch(storedOfficers, officers)) {
+        await FirebaseFirestore.instance
+            .collection('organizations')
+            .doc(widget.orgId)
+            .update({'officers': officers});
+      }
+    } catch (e) {
+      print('Sync officers error: $e');
     }
-  } catch (e) {
-    // Just log error, don't break the whole page
-    print('Sync officers error: $e');
   }
-}
 
   bool _officersMatch(List<dynamic>? stored, List<Map<String, dynamic>> expected) {
     if (stored == null || stored.length != expected.length) return false;
@@ -213,24 +200,24 @@ void _showErrorSnack(String message) {
   }
 
   void _openEditProfileSheet() {
-    showGeneralDialog(
+    showDialog(
       context: context,
       barrierDismissible: false,
-      barrierColor: Colors.black.withOpacity(0.35),
-      pageBuilder: (_, __, ___) => Align(
-        alignment: Alignment.centerRight,
+      barrierColor: Colors.black.withOpacity(0.5),
+      builder: (context) => Dialog(
+        insetPadding: const EdgeInsets.all(40),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         child: _EditOrgProfileSheet(
           orgId: widget.orgId,
           orgName: _orgName,
           shortName: _orgShortName,
           email: _orgEmail,
           description: _orgDescription,
-          schoolYear: _schoolYear,
-          semester: _semester,
           logoUrl: _orgLogoUrl,
           adviserName: _adviserName,
           adviserEmail: _adviserEmail,
           adviserPhone: _adviserPhone,
+          adviserPhotoUrl: _adviserPhotoUrl,
           facebook: _facebook,
           instagram: _instagram,
           twitter: _twitter,
@@ -238,14 +225,6 @@ void _showErrorSnack(String message) {
           onSaved: _loadOrgData,
         ),
       ),
-      transitionBuilder: (_, anim, __, child) {
-        final curved = CurvedAnimation(parent: anim, curve: Curves.easeOutCubic);
-        return SlideTransition(
-          position: Tween<Offset>(begin: const Offset(1, 0), end: Offset.zero).animate(curved),
-          child: child,
-        );
-      },
-      transitionDuration: const Duration(milliseconds: 280),
     );
   }
 
@@ -253,10 +232,12 @@ void _showErrorSnack(String message) {
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (_) => _OfficerModal(
-        orgId: widget.orgId,
-        existingOfficer: officer,
-        onSuccess: () => setState(() {}),
+      builder: (_) => Center(
+        child: _OfficerModal(
+          orgId: widget.orgId,
+          existingOfficer: officer,
+          onSuccess: () => setState(() {}),
+        ),
       ),
     );
   }
@@ -356,7 +337,6 @@ void _showErrorSnack(String message) {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // ── Page Header ─────────────────────────────────────────────
           Row(children: [
             Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Text('Organization Profile',
@@ -380,17 +360,14 @@ void _showErrorSnack(String message) {
           ]),
           const SizedBox(height: 24),
 
-          // ── Two-column layout: main + sidebar ────────────────────────
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // ── Left / Main column ─────────────────────────────────
               Expanded(
                 flex: 3,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Org Info Card
                     _card(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -400,7 +377,6 @@ void _showErrorSnack(String message) {
                           Row(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              // Logo
                               Container(
                                 width: 72,
                                 height: 72,
@@ -434,53 +410,51 @@ void _showErrorSnack(String message) {
                               ),
                             ],
                           ),
-                          const SizedBox(height: 16),
-                          Row(children: [
-                            Expanded(child: _infoChip('School Year', _schoolYear.isNotEmpty ? _schoolYear : '—')),
-                            const SizedBox(width: 12),
-                            Expanded(child: _infoChip('Semester', _semester.isNotEmpty ? _semester : '—')),
-                          ]),
                         ],
                       ),
                     ),
                     const SizedBox(height: 20),
 
                     // Adviser Card
-                    _card(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          _sectionHeader('Adviser'),
-                          const SizedBox(height: 14),
-                          if (_adviserName.isNotEmpty)
-                            Row(children: [
-                              CircleAvatar(
-                                radius: 22,
-                                backgroundColor: OrgColors.accent.withOpacity(0.15),
-                                child: Text(_adviserName[0].toUpperCase(),
-                                    style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.w700, fontSize: 16, color: OrgColors.primaryDark)),
-                              ),
-                              const SizedBox(width: 12),
-                              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                                Text(_adviserName,
-                                    style: GoogleFonts.beVietnamPro(fontSize: 14, fontWeight: FontWeight.w700)),
-                                if (_adviserEmail.isNotEmpty)
-                                  Text(_adviserEmail,
-                                      style: GoogleFonts.beVietnamPro(fontSize: 12, color: OrgColors.darkGray)),
-                                if (_adviserPhone.isNotEmpty)
-                                  Text(_adviserPhone,
-                                      style: GoogleFonts.beVietnamPro(fontSize: 12, color: OrgColors.darkGray)),
-                              ]),
-                            ])
-                          else
-                            Text('No adviser assigned',
-                                style: GoogleFonts.beVietnamPro(fontSize: 13, color: OrgColors.darkGray)),
-                        ],
-                      ),
-                    ),
+_card(
+  child: Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      _sectionHeader('Adviser'),
+      const SizedBox(height: 14),
+      if (_adviserName.isNotEmpty)
+        Row(children: [
+          CircleAvatar(
+            radius: 22,
+            backgroundColor: OrgColors.accent.withOpacity(0.15),
+            backgroundImage: _adviserPhotoUrl.isNotEmpty
+                ? _imageProviderFromUrl(_adviserPhotoUrl)
+                : null,
+            child: _adviserPhotoUrl.isEmpty
+                ? Text(_adviserName[0].toUpperCase(),
+                    style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.w700, fontSize: 16, color: OrgColors.primaryDark))
+                : null,
+          ),
+          const SizedBox(width: 12),
+          Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(_adviserName,
+                style: GoogleFonts.beVietnamPro(fontSize: 14, fontWeight: FontWeight.w700)),
+            if (_adviserEmail.isNotEmpty)
+              Text(_adviserEmail,
+                  style: GoogleFonts.beVietnamPro(fontSize: 12, color: OrgColors.darkGray)),
+            if (_adviserPhone.isNotEmpty)
+              Text(_adviserPhone,
+                  style: GoogleFonts.beVietnamPro(fontSize: 12, color: OrgColors.darkGray)),
+          ]),
+        ])
+      else
+        Text('No adviser assigned',
+            style: GoogleFonts.beVietnamPro(fontSize: 13, color: OrgColors.darkGray)),
+    ],
+  ),
+),
                     const SizedBox(height: 20),
 
-                    // Officers Card
                     _card(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -505,7 +479,6 @@ void _showErrorSnack(String message) {
                               style: GoogleFonts.beVietnamPro(fontSize: 12, color: OrgColors.darkGray)),
                           const SizedBox(height: 16),
 
-                          // Total members badge
                           FutureBuilder<int>(
                             future: _getMemberCount(),
                             builder: (ctx, snap) {
@@ -557,7 +530,6 @@ void _showErrorSnack(String message) {
                     ),
                     const SizedBox(height: 20),
 
-                    // Hierarchy Card
                     _card(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -576,12 +548,10 @@ void _showErrorSnack(String message) {
               ),
               const SizedBox(width: 20),
 
-              // ── Right / Sidebar ────────────────────────────────────
               SizedBox(
                 width: 240,
                 child: Column(
                   children: [
-                    // Social Media Card
                     _card(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -597,7 +567,6 @@ void _showErrorSnack(String message) {
                     ),
                     const SizedBox(height: 16),
 
-                    // Quick Stats Card
                     _card(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -645,20 +614,6 @@ void _showErrorSnack(String message) {
 
   Widget _sectionHeader(String title) => Text(title,
       style: GoogleFonts.beVietnamPro(fontSize: 15, fontWeight: FontWeight.w700, color: OrgColors.charcoal));
-
-  Widget _infoChip(String label, String value) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        decoration: BoxDecoration(
-          color: OrgColors.lightGray,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: OrgColors.primaryLight),
-        ),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(label, style: GoogleFonts.beVietnamPro(fontSize: 11, color: OrgColors.darkGray)),
-          const SizedBox(height: 2),
-          Text(value, style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600)),
-        ]),
-      );
 
   Widget _socialRow(IconData icon, String label, String value) => Padding(
         padding: const EdgeInsets.only(bottom: 10),
@@ -709,7 +664,6 @@ class _OfficerTile extends StatelessWidget {
       ),
       child: Row(
         children: [
-          // Avatar or photo
           Container(
             width: 42,
             height: 42,
@@ -751,7 +705,6 @@ class _OfficerTile extends StatelessWidget {
                     style: GoogleFonts.beVietnamPro(fontSize: 11, color: OrgColors.darkGray)),
             ]),
           ),
-          // Action buttons
           Row(mainAxisSize: MainAxisSize.min, children: [
             _iconBtn(Icons.edit_outlined, OrgColors.info, onEdit),
             const SizedBox(width: 4),
@@ -805,9 +758,6 @@ class _HierarchyTree extends StatelessWidget {
           ));
         }
 
-        // Tier 1: rank 1 (or first item)
-        // Tier 2: rank 2
-        // Tier 3+: the rest
         final tier1 = officers.where((o) => o.positionRank <= 1).toList();
         final tier2 = officers.where((o) => o.positionRank == 2).toList();
         final tier3 = officers.where((o) => o.positionRank >= 3).toList();
@@ -834,7 +784,6 @@ class _HierarchyTree extends StatelessWidget {
                 _buildTierRow(tier3),
                 _connector(),
               ],
-              // Members row
               _MembersRow(members: members),
             ]);
           },
@@ -883,7 +832,6 @@ class _HierarchyBox extends StatelessWidget {
             color: isTop ? Colors.transparent : OrgColors.accent.withOpacity(0.3)),
       ),
       child: Column(children: [
-        // Photo / Avatar
         Container(
           width: 44,
           height: 44,
@@ -978,20 +926,29 @@ class _MembersRow extends StatelessWidget {
 }
 
 // ─── Edit Org Profile Sheet ───────────────────────────────────────────────────
+// ─── Edit Org Profile Sheet ───────────────────────────────────────────────────
 class _EditOrgProfileSheet extends StatefulWidget {
   final String orgId;
-  final String orgName, shortName, email, description, schoolYear, semester, logoUrl;
-  final String adviserName, adviserEmail, adviserPhone;
+  final String orgName, shortName, email, description, logoUrl;
+  final String adviserName, adviserEmail, adviserPhone, adviserPhotoUrl;
   final String facebook, instagram, twitter, gmail;
   final VoidCallback onSaved;
 
   const _EditOrgProfileSheet({
     required this.orgId,
-    required this.orgName, required this.shortName, required this.email,
-    required this.description, required this.schoolYear, required this.semester,
+    required this.orgName, 
+    required this.shortName, 
+    required this.email,
+    required this.description,
     required this.logoUrl,
-    required this.adviserName, required this.adviserEmail, required this.adviserPhone,
-    required this.facebook, required this.instagram, required this.twitter, required this.gmail,
+    required this.adviserName, 
+    required this.adviserEmail, 
+    required this.adviserPhone,
+    required this.adviserPhotoUrl,
+    required this.facebook, 
+    required this.instagram, 
+    required this.twitter, 
+    required this.gmail,
     required this.onSaved,
   });
 
@@ -1000,8 +957,6 @@ class _EditOrgProfileSheet extends StatefulWidget {
 }
 
 class _EditOrgProfileSheetState extends State<_EditOrgProfileSheet> {
-  final _nameCtrl    = TextEditingController();
-  final _yearCtrl    = TextEditingController();
   final _descCtrl    = TextEditingController();
   final _aNameCtrl   = TextEditingController();
   final _aEmailCtrl  = TextEditingController();
@@ -1012,17 +967,14 @@ class _EditOrgProfileSheetState extends State<_EditOrgProfileSheet> {
   final _gmCtrl      = TextEditingController();
 
   String? _logoUrl;
-  String _semester = '';
+  String? _adviserPhotoUrl;
   bool _isUploadingLogo = false;
+  bool _isUploadingAdviserPhoto = false;
   bool _isSaving = false;
-
-  final List<String> _semesterOptions = ['1st Semester', '2nd Semester', 'Summer'];
 
   @override
   void initState() {
     super.initState();
-    _nameCtrl.text  = widget.orgName;
-    _yearCtrl.text  = widget.schoolYear;
     _descCtrl.text  = widget.description;
     _aNameCtrl.text = widget.adviserName;
     _aEmailCtrl.text = widget.adviserEmail;
@@ -1032,28 +984,35 @@ class _EditOrgProfileSheetState extends State<_EditOrgProfileSheet> {
     _twCtrl.text    = widget.twitter;
     _gmCtrl.text    = widget.gmail;
     _logoUrl        = widget.logoUrl.isNotEmpty ? widget.logoUrl : null;
-    _semester       = widget.semester;
+    _adviserPhotoUrl = widget.adviserPhotoUrl.isNotEmpty ? widget.adviserPhotoUrl : null;
   }
 
   @override
   void dispose() {
-    for (final c in [_nameCtrl, _yearCtrl, _descCtrl, _aNameCtrl, _aEmailCtrl, _aPhoneCtrl, _fbCtrl, _igCtrl, _twCtrl, _gmCtrl]) {
+    for (final c in [_descCtrl, _aNameCtrl, _aEmailCtrl, _aPhoneCtrl, _fbCtrl, _igCtrl, _twCtrl, _gmCtrl]) {
       c.dispose();
     }
     super.dispose();
   }
 
   Future<void> _pickLogo() async {
-    final result = await FilePicker.platform.pickFiles(type: FileType.image, allowMultiple: false, withData: true);
-    if (result == null || result.files.isEmpty) return;
+    final html.FileUploadInputElement input = html.FileUploadInputElement()..accept = 'image/*';
+    input.click();
+
+    await input.onChange.first;
+    final files = input.files;
+    if (files == null || files.isEmpty) return;
+
     setState(() => _isUploadingLogo = true);
+
     try {
-      final file = result.files.first;
-      final bytes = file.bytes;
-      if (bytes == null) throw 'Image bytes not available';
-      final mimeType = _mimeTypeFromPath(file.path);
-      final uri = 'data:$mimeType;base64,${base64Encode(bytes)}';
-      setState(() => _logoUrl = uri);
+      final file = files[0];
+      final reader = html.FileReader();
+      reader.readAsDataUrl(file);
+      await reader.onLoad.first;
+      
+      final result = reader.result as String;
+      setState(() => _logoUrl = result);
     } catch (e) {
       _snack('Logo upload failed: $e');
     } finally {
@@ -1061,16 +1020,39 @@ class _EditOrgProfileSheetState extends State<_EditOrgProfileSheet> {
     }
   }
 
+  Future<void> _pickAdviserPhoto() async {
+    final html.FileUploadInputElement input = html.FileUploadInputElement()..accept = 'image/*';
+    input.click();
+
+    await input.onChange.first;
+    final files = input.files;
+    if (files == null || files.isEmpty) return;
+
+    setState(() => _isUploadingAdviserPhoto = true);
+
+    try {
+      final file = files[0];
+      final reader = html.FileReader();
+      reader.readAsDataUrl(file);
+      await reader.onLoad.first;
+      
+      final result = reader.result as String;
+      setState(() => _adviserPhotoUrl = result);
+    } catch (e) {
+      _snack('Adviser photo upload failed: $e');
+    } finally {
+      setState(() => _isUploadingAdviserPhoto = false);
+    }
+  }
+
   Future<void> _save() async {
     setState(() => _isSaving = true);
     final orgPayload = {
-      'name': _nameCtrl.text.trim(),
-      'schoolYear': _yearCtrl.text.trim(),
-      'semester': _semester,
       'description': _descCtrl.text.trim(),
       'adviserName': _aNameCtrl.text.trim(),
       'adviserEmail': _aEmailCtrl.text.trim(),
       'adviserPhone': _aPhoneCtrl.text.trim(),
+      if (_adviserPhotoUrl != null) 'adviserPhotoUrl': _adviserPhotoUrl,
       'facebook': _fbCtrl.text.trim(),
       'instagram': _igCtrl.text.trim(),
       'twitter': _twCtrl.text.trim(),
@@ -1098,19 +1080,23 @@ class _EditOrgProfileSheetState extends State<_EditOrgProfileSheet> {
           .where('orgId', isEqualTo: widget.orgId)
           .get();
       final updates = <String, dynamic>{
-        'orgName': orgPayload['name'],
         'adviserName': orgPayload['adviserName'],
         'adviserEmail': orgPayload['adviserEmail'],
         'adviserPhone': orgPayload['adviserPhone'],
       };
+      if (orgPayload.containsKey('adviserPhotoUrl')) {
+        updates['adviserPhotoUrl'] = orgPayload['adviserPhotoUrl'];
+      }
       if (widget.shortName.isNotEmpty) {
         updates['shortName'] = widget.shortName;
+      }
+      if (orgPayload.containsKey('logoUrl')) {
+        updates['logoUrl'] = orgPayload['logoUrl'];
       }
       for (final doc in roleSnap.docs) {
         await doc.reference.update(updates);
       }
     } catch (e) {
-      // Keep profile update success if role syncing fails, but log the error for debugging.
       debugPrint('Failed to sync adviser_roles for org ${widget.orgId}: $e');
     }
   }
@@ -1122,22 +1108,56 @@ class _EditOrgProfileSheetState extends State<_EditOrgProfileSheet> {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      elevation: 16,
-      borderRadius: const BorderRadius.horizontal(left: Radius.circular(20)),
-      color: OrgColors.white,
-      child: SizedBox(
-        width: 460,
-        height: double.infinity,
-        child: Column(children: [
-          // Header
-          _sheetHeader('Edit Organization Profile', 'Update organization information, adviser details, and social media links'),
-          // Body
-          Expanded(
+    return Container(
+      width: 520,
+      padding: const EdgeInsets.all(0),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            padding: const EdgeInsets.fromLTRB(24, 24, 24, 16),
+            decoration: BoxDecoration(
+              color: OrgColors.primaryDark,
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+            ),
+            child: Row(children: [
+              Container(
+                width: 38, height: 38,
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(Icons.edit_outlined, color: Colors.white, size: 20),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text('Edit Organization Profile',
+                      style: GoogleFonts.beVietnamPro(fontSize: 17, fontWeight: FontWeight.w700, color: Colors.white)),
+                  Text('Update organization information, adviser details, and social media links',
+                      style: GoogleFonts.beVietnamPro(fontSize: 11, color: Colors.white70)),
+                ]),
+              ),
+              InkWell(
+                onTap: () => Navigator.pop(context),
+                borderRadius: BorderRadius.circular(8),
+                child: Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(Icons.close_rounded, size: 18, color: Colors.white),
+                ),
+              ),
+            ]),
+          ),
+          
+          Flexible(
             child: SingleChildScrollView(
               padding: const EdgeInsets.all(24),
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                // Logo
+                // Organization Logo
                 _fieldLabel('Organization Logo'),
                 const SizedBox(height: 8),
                 Row(children: [
@@ -1159,51 +1179,36 @@ class _EditOrgProfileSheetState extends State<_EditOrgProfileSheet> {
                     icon: _isUploadingLogo
                         ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2))
                         : const Icon(Icons.upload_outlined, size: 16),
-                    label: Text('Click to upload logo', style: GoogleFonts.beVietnamPro(fontSize: 12)),
+                    label: Text(_isUploadingLogo ? 'Uploading...' : 'Click to upload logo', 
+                        style: GoogleFonts.beVietnamPro(fontSize: 12)),
                     style: OutlinedButton.styleFrom(
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                     ),
                   ),
                 ]),
-                const SizedBox(height: 18),
+                const SizedBox(height: 20),
 
-                // Org name + school year row
-                Row(children: [
-                  Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    _fieldLabel('Organization Name'),
-                    const SizedBox(height: 6),
-                    _field(_nameCtrl, 'Organization Name'),
-                  ])),
-                  const SizedBox(width: 12),
-                  Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    _fieldLabel('School Year'),
-                    const SizedBox(height: 6),
-                    _field(_yearCtrl, '2025-2026'),
-                  ])),
-                ]),
-                const SizedBox(height: 14),
-
-                // Semester
-                _fieldLabel('Semester'),
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 8,
-                  children: _semesterOptions.map((s) {
-                    final selected = _semester == s;
-                    return ChoiceChip(
-                      label: Text(s, style: GoogleFonts.beVietnamPro(fontSize: 12,
-                          color: selected ? Colors.white : OrgColors.charcoal,
-                          fontWeight: selected ? FontWeight.w600 : FontWeight.normal)),
-                      selected: selected,
-                      onSelected: (_) => setState(() => _semester = s),
-                      selectedColor: OrgColors.accent,
-                      backgroundColor: OrgColors.lightGray,
-                      side: BorderSide(color: selected ? OrgColors.accent : OrgColors.mediumGray),
-                    );
-                  }).toList(),
+                // Organization Name - Disabled
+                _fieldLabel('Organization Name'),
+                const SizedBox(height: 6),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: OrgColors.lightGray,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: OrgColors.mediumGray),
+                  ),
+                  width: double.infinity,
+                  child: Text(
+                    widget.orgName,
+                    style: GoogleFonts.beVietnamPro(
+                      fontSize: 13,
+                      color: OrgColors.darkGray,
+                    ),
+                  ),
                 ),
-                const SizedBox(height: 14),
+                const SizedBox(height: 16),
 
                 // Description
                 _fieldLabel('Description'),
@@ -1211,10 +1216,43 @@ class _EditOrgProfileSheetState extends State<_EditOrgProfileSheet> {
                 _field(_descCtrl, 'Organization description...', maxLines: 3),
                 const SizedBox(height: 20),
 
-                // Adviser section
+                // Adviser section with photo
                 Text('Adviser Information',
                     style: GoogleFonts.beVietnamPro(fontSize: 14, fontWeight: FontWeight.w700, color: OrgColors.charcoal)),
                 const Divider(height: 20),
+                
+                // Adviser Photo
+                _fieldLabel('Adviser Photo'),
+                const SizedBox(height: 8),
+                Row(children: [
+                  Container(
+                    width: 64, height: 64,
+                    decoration: BoxDecoration(
+                      color: OrgColors.lightGray,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: OrgColors.primaryLight, width: 2),
+                    ),
+                    clipBehavior: Clip.antiAlias,
+                    child: _adviserPhotoUrl != null
+                        ? _buildImageWidget(_adviserPhotoUrl!, fit: BoxFit.cover, errorWidget: const Icon(Icons.person, color: OrgColors.darkGray))
+                        : const Icon(Icons.person, color: OrgColors.darkGray, size: 32),
+                  ),
+                  const SizedBox(width: 14),
+                  OutlinedButton.icon(
+                    onPressed: _isUploadingAdviserPhoto ? null : _pickAdviserPhoto,
+                    icon: _isUploadingAdviserPhoto
+                        ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2))
+                        : const Icon(Icons.upload_outlined, size: 16),
+                    label: Text(_isUploadingAdviserPhoto ? 'Uploading...' : 'Click to upload photo', 
+                        style: GoogleFonts.beVietnamPro(fontSize: 12)),
+                    style: OutlinedButton.styleFrom(
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    ),
+                  ),
+                ]),
+                const SizedBox(height: 16),
+                
                 Row(children: [
                   Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                     _fieldLabel('Name'),
@@ -1257,72 +1295,41 @@ class _EditOrgProfileSheetState extends State<_EditOrgProfileSheet> {
               ]),
             ),
           ),
-          // Footer
-          _sheetFooter(
-            onCancel: () => Navigator.pop(context),
-            onSave: _isSaving ? null : _save,
-            isSaving: _isSaving,
-            saveLabel: 'Save Changes',
+          
+          Container(
+            padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
+            decoration: const BoxDecoration(
+              border: Border(top: BorderSide(color: OrgColors.primaryLight)),
+            ),
+            child: Row(children: [
+              Expanded(child: OutlinedButton(
+                onPressed: () => Navigator.pop(context),
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  side: const BorderSide(color: OrgColors.primaryLight),
+                ),
+                child: Text('Cancel', style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.w600, color: OrgColors.charcoal)),
+              )),
+              const SizedBox(width: 12),
+              Expanded(child: ElevatedButton(
+                onPressed: _isSaving ? null : _save,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: OrgColors.accent,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  elevation: 0,
+                ),
+                child: _isSaving
+                    ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                    : Text('Save Changes', style: GoogleFonts.beVietnamPro(color: Colors.white, fontWeight: FontWeight.w700)),
+              )),
+            ]),
           ),
-        ]),
+        ],
       ),
     );
   }
-
-  Widget _sheetHeader(String title, String subtitle) => Container(
-        padding: const EdgeInsets.fromLTRB(24, 20, 16, 20),
-        decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: OrgColors.primaryLight))),
-        child: Row(children: [
-          Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(title, style: GoogleFonts.beVietnamPro(fontSize: 16, fontWeight: FontWeight.w800, color: OrgColors.charcoal)),
-            const SizedBox(height: 2),
-            SizedBox(
-              width: 360,
-              child: Text(subtitle, style: GoogleFonts.beVietnamPro(fontSize: 11, color: OrgColors.darkGray)),
-            ),
-          ]),
-          const Spacer(),
-          InkWell(
-            onTap: () => Navigator.pop(context),
-            borderRadius: BorderRadius.circular(8),
-            child: Container(
-              padding: const EdgeInsets.all(6),
-              decoration: BoxDecoration(color: OrgColors.lightGray, borderRadius: BorderRadius.circular(8)),
-              child: const Icon(Icons.close_rounded, size: 18, color: OrgColors.darkGray),
-            ),
-          ),
-        ]),
-      );
-
-  Widget _sheetFooter({required VoidCallback onCancel, required VoidCallback? onSave, required bool isSaving, required String saveLabel}) =>
-      Container(
-        padding: const EdgeInsets.fromLTRB(24, 14, 24, 20),
-        decoration: const BoxDecoration(border: Border(top: BorderSide(color: OrgColors.primaryLight))),
-        child: Row(children: [
-          Expanded(child: OutlinedButton(
-            onPressed: onCancel,
-            style: OutlinedButton.styleFrom(
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-              side: const BorderSide(color: OrgColors.primaryLight),
-            ),
-            child: Text('Cancel', style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.w600, color: OrgColors.charcoal)),
-          )),
-          const SizedBox(width: 12),
-          Expanded(child: ElevatedButton(
-            onPressed: onSave,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: OrgColors.accent,
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-              elevation: 0,
-            ),
-            child: isSaving
-                ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                : Text(saveLabel, style: GoogleFonts.beVietnamPro(color: Colors.white, fontWeight: FontWeight.w700)),
-          )),
-        ]),
-      );
 
   Widget _fieldLabel(String label) => Text(label,
       style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.w600, color: OrgColors.charcoal));
@@ -1336,7 +1343,7 @@ class _EditOrgProfileSheetState extends State<_EditOrgProfileSheet> {
           hintStyle: GoogleFonts.beVietnamPro(fontSize: 13, color: OrgColors.darkGray),
           filled: true,
           fillColor: OrgColors.lightGray,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
           border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: OrgColors.primaryLight)),
           enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: OrgColors.primaryLight)),
           focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: OrgColors.primaryLight, width: 1.5)),
@@ -1344,6 +1351,7 @@ class _EditOrgProfileSheetState extends State<_EditOrgProfileSheet> {
       );
 }
 
+// ─── Officer Modal ────────────────────────────────────────────────────────────
 // ─── Officer Modal ────────────────────────────────────────────────────────────
 class _OfficerModal extends StatefulWidget {
   final String orgId;
@@ -1361,14 +1369,12 @@ class _OfficerModalState extends State<_OfficerModal> {
   final _emailCtrl      = TextEditingController();
   final _phoneCtrl      = TextEditingController();
   final _customPosCtrl  = TextEditingController();
-  final _rankCtrl       = TextEditingController();
 
   String? _photoUrl;
   bool _isUploadingPhoto = false;
   bool _isSaving = false;
   bool _useCustomPosition = false;
   String? _selectedPosition;
-  bool _isCaptain = false;
 
   static const List<String> _standardPositions = [
     'President', 'Vice President', 'Secretary', 'Treasurer',
@@ -1383,8 +1389,6 @@ class _OfficerModalState extends State<_OfficerModal> {
       _nameCtrl.text = e.name;
       _emailCtrl.text = e.email;
       _phoneCtrl.text = e.phone;
-      _rankCtrl.text = e.positionRank.toString();
-      _isCaptain = e.isCaptain;
       _photoUrl = e.photoUrl.isNotEmpty ? e.photoUrl : null;
       if (_standardPositions.contains(e.position)) {
         _selectedPosition = e.position;
@@ -1398,21 +1402,30 @@ class _OfficerModalState extends State<_OfficerModal> {
 
   @override
   void dispose() {
-    for (final c in [_nameCtrl, _emailCtrl, _phoneCtrl, _customPosCtrl, _rankCtrl]) c.dispose();
+    for (final c in [_nameCtrl, _emailCtrl, _phoneCtrl, _customPosCtrl]) {
+      c.dispose();
+    }
     super.dispose();
   }
 
   Future<void> _pickPhoto() async {
-    final result = await FilePicker.platform.pickFiles(type: FileType.image, allowMultiple: false, withData: true);
-    if (result == null || result.files.isEmpty) return;
+    final html.FileUploadInputElement input = html.FileUploadInputElement()..accept = 'image/*';
+    input.click();
+
+    await input.onChange.first;
+    final files = input.files;
+    if (files == null || files.isEmpty) return;
+
     setState(() => _isUploadingPhoto = true);
+
     try {
-      final file = result.files.first;
-      final bytes = file.bytes;
-      if (bytes == null) throw 'Image bytes not available';
-      final mimeType = _mimeTypeFromPath(file.path);
-      final uri = 'data:$mimeType;base64,${base64Encode(bytes)}';
-      setState(() => _photoUrl = uri);
+      final file = files[0];
+      final reader = html.FileReader();
+      reader.readAsDataUrl(file);
+      await reader.onLoad.first;
+      
+      final result = reader.result as String;
+      setState(() => _photoUrl = result);
     } catch (e) {
       _snack('Photo upload failed: $e');
     } finally {
@@ -1433,8 +1446,8 @@ class _OfficerModalState extends State<_OfficerModal> {
       'position': _resolvedPosition,
       'email': _emailCtrl.text.trim(),
       'phone': _phoneCtrl.text.trim(),
-      'positionRank': int.tryParse(_rankCtrl.text.trim()) ?? 0,
-      'isCaptain': _isCaptain,
+      'positionRank': 0,  // Default rank
+      'isCaptain': false,  // Default captain
       'photoUrl': _photoUrl ?? '',
     };
     try {
@@ -1464,7 +1477,6 @@ class _OfficerModalState extends State<_OfficerModal> {
   Future<void> _syncOrganizationOfficers() async {
     final orgDoc = FirebaseFirestore.instance.collection('organizations').doc(widget.orgId);
     final officerSnap = await orgDoc.collection('officers')
-        .orderBy('positionRank', descending: false)
         .orderBy('name', descending: false)
         .get();
     final officers = officerSnap.docs.map((d) {
@@ -1489,39 +1501,50 @@ class _OfficerModalState extends State<_OfficerModal> {
   Widget build(BuildContext context) {
     final isEdit = widget.existingOfficer != null;
     return Dialog(
-      backgroundColor: Colors.transparent,
+      insetPadding: const EdgeInsets.all(40),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       child: Container(
-        width: 480,
-        constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.88),
-        decoration: BoxDecoration(
-          color: OrgColors.white,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.15), blurRadius: 24, offset: const Offset(0, 8))],
-        ),
+        width: 520,
+        constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.9),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             // Header
             Container(
-              padding: const EdgeInsets.fromLTRB(20, 18, 16, 18),
-              decoration: const BoxDecoration(
-                border: Border(bottom: BorderSide(color: OrgColors.primaryLight)),
+              padding: const EdgeInsets.fromLTRB(24, 24, 24, 16),
+              decoration: BoxDecoration(
+                color: OrgColors.primaryDark,
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
               ),
               child: Row(children: [
-                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text(isEdit ? 'Edit Officer' : 'Add New Officer',
-                      style: GoogleFonts.beVietnamPro(fontSize: 16, fontWeight: FontWeight.w800, color: OrgColors.charcoal)),
-                  Text('Add a new officer to your organization',
-                      style: GoogleFonts.beVietnamPro(fontSize: 11, color: OrgColors.darkGray)),
-                ]),
-                const Spacer(),
+                Container(
+                  width: 38, height: 38,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(isEdit ? Icons.edit_outlined : Icons.person_add_alt_1_rounded, 
+                      color: Colors.white, size: 20),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text(isEdit ? 'Edit Officer' : 'Add New Officer',
+                        style: GoogleFonts.beVietnamPro(fontSize: 17, fontWeight: FontWeight.w700, color: Colors.white)),
+                    Text(isEdit ? 'Update officer information' : 'Add a new officer to your organization',
+                        style: GoogleFonts.beVietnamPro(fontSize: 11, color: Colors.white70)),
+                  ]),
+                ),
                 InkWell(
                   onTap: () => Navigator.pop(context),
                   borderRadius: BorderRadius.circular(8),
                   child: Container(
                     padding: const EdgeInsets.all(6),
-                    decoration: BoxDecoration(color: OrgColors.lightGray, borderRadius: BorderRadius.circular(8)),
-                    child: const Icon(Icons.close_rounded, size: 18, color: OrgColors.darkGray),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(Icons.close_rounded, size: 18, color: Colors.white),
                   ),
                 ),
               ]),
@@ -1530,7 +1553,7 @@ class _OfficerModalState extends State<_OfficerModal> {
             // Body
             Flexible(
               child: SingleChildScrollView(
-                padding: const EdgeInsets.all(20),
+                padding: const EdgeInsets.all(24),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -1592,30 +1615,6 @@ class _OfficerModalState extends State<_OfficerModal> {
                     ],
                     const SizedBox(height: 14),
 
-                    // Guest Rank / isCaptain row
-                    Row(children: [
-                      Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                        _fl('Guest Rank'),
-                        const SizedBox(height: 6),
-                        _tf(_rankCtrl, '0', keyboardType: TextInputType.number),
-                      ])),
-                      const SizedBox(width: 12),
-                      Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                        _fl('Captain'),
-                        const SizedBox(height: 6),
-                        Row(children: [
-                          Switch(
-                            value: _isCaptain,
-                            onChanged: (v) => setState(() => _isCaptain = v),
-                            activeColor: OrgColors.accent,
-                          ),
-                          Text(_isCaptain ? 'Yes' : 'No',
-                              style: GoogleFonts.beVietnamPro(fontSize: 12, color: OrgColors.darkGray)),
-                        ]),
-                      ])),
-                    ]),
-                    const SizedBox(height: 14),
-
                     // Email + Phone
                     _fl('Email'),
                     const SizedBox(height: 6),
@@ -1631,13 +1630,15 @@ class _OfficerModalState extends State<_OfficerModal> {
 
             // Footer
             Container(
-              padding: const EdgeInsets.fromLTRB(20, 14, 20, 18),
-              decoration: const BoxDecoration(border: Border(top: BorderSide(color: OrgColors.primaryLight))),
+              padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
+              decoration: const BoxDecoration(
+                border: Border(top: BorderSide(color: OrgColors.primaryLight)),
+              ),
               child: Row(children: [
                 Expanded(child: OutlinedButton(
                   onPressed: () => Navigator.pop(context),
                   style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 13),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                     side: const BorderSide(color: OrgColors.primaryLight),
                   ),
@@ -1648,7 +1649,7 @@ class _OfficerModalState extends State<_OfficerModal> {
                   onPressed: _isSaving ? null : _save,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: OrgColors.accent,
-                    padding: const EdgeInsets.symmetric(vertical: 13),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                     elevation: 0,
                   ),
@@ -1681,7 +1682,7 @@ class _OfficerModalState extends State<_OfficerModal> {
           hintStyle: GoogleFonts.beVietnamPro(fontSize: 13, color: OrgColors.darkGray),
           filled: true,
           fillColor: OrgColors.lightGray,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
           border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: OrgColors.primaryLight)),
           enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: OrgColors.primaryLight)),
           focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: OrgColors.primaryLight, width: 1.5)),
@@ -1823,6 +1824,3 @@ class OfficerModel {
     );
   }
 }
-
-
-

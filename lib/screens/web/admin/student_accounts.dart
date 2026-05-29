@@ -2567,6 +2567,7 @@ class _StudentAccountsState extends State<StudentAccounts> {
       'email': email,
       'status': 'pending',
       'tempPassword': password,
+      'mustChangePassword': true,
       'createdAt': FieldValue.serverTimestamp(),
       'uid': cred.user!.uid,
     });
