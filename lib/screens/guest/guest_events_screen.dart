@@ -1,23 +1,92 @@
-// lib/screens/guest/guest_events_screen.dart
-//
-// GUEST MODE – public events only + self-service registration via email OTP
-//
+
+
+import 'dart:async';
 import 'package:flutter/material.dart';
-import '../student/student_events_screen.dart' show EventData, allEvents;
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:intl/intl.dart';
 
 // ─────────────────────────────────────────────────────────────
-//  THEME CONSTANTS
+// Theme
 // ─────────────────────────────────────────────────────────────
-const _kPrimary    = Color(0xFFFF6B00);
-const _kPrimaryBg  = Color(0xFFFFF3EB);
-const _kBg         = Color(0xFFF5F5F5);
-
-// ── Sample public-only events ──
-final List<EventData> _publicEvents =
-    allEvents.where((e) => e.isPublic).toList();
+const _kPrimary   = Color(0xFFFF6B00);
+const _kPrimaryBg = Color(0xFFFFF3EB);
+const _kBg        = Color(0xFFF5F5F5);
 
 // ─────────────────────────────────────────────────────────────
-//  MAIN SCREEN
+// Firestore event model
+// ─────────────────────────────────────────────────────────────
+class _FirestoreEvent {
+  final String id;
+  final String title;
+  final String description;
+  final String category;
+  final String audience;   // 'Public' | 'CICT Only' | 'Members Only'
+  final String orgId;
+  final String orgName;
+  final String location;
+  final String startTime;
+  final String endTime;
+  final int    capacity;
+  final DateTime date;
+  // enriched after fetch
+  String orgLogoUrl;
+
+  _FirestoreEvent({
+    required this.id,
+    required this.title,
+    required this.description,
+    required this.category,
+    required this.audience,
+    required this.orgId,
+    required this.orgName,
+    required this.location,
+    required this.startTime,
+    required this.endTime,
+    required this.capacity,
+    required this.date,
+    this.orgLogoUrl = '',
+  });
+
+  factory _FirestoreEvent.fromDoc(DocumentSnapshot doc) {
+    final d = doc.data() as Map<String, dynamic>;
+    final dateField = d['date'];
+    final DateTime parsedDate = dateField is Timestamp
+        ? dateField.toDate()
+        : DateTime.now();
+    return _FirestoreEvent(
+      id          : doc.id,
+      title       : d['title']       as String? ?? 'Untitled',
+      description : d['description'] as String? ?? '',
+      category    : d['category']    as String? ?? 'Other',
+      audience    : d['audience']    as String? ?? 'Public',
+      orgId       : d['orgId']       as String? ?? '',
+      orgName     : d['orgName']     as String? ?? 'Organization',
+      location    : d['location']    as String? ?? 'TBA',
+      startTime   : d['startTime']   as String?
+                  ?? d['time']       as String? ?? '',
+      endTime     : d['endTime']     as String? ?? '',
+      capacity    : (d['capacity']   as num?)?.toInt() ?? 0,
+      date        : parsedDate,
+    );
+  }
+
+  String get dateDisplay =>
+      DateFormat('MMM dd, yyyy').format(date);
+
+  String get timeDisplay {
+    if (endTime.isNotEmpty) return '$startTime – $endTime';
+    return startTime;
+  }
+
+  int get slotsLeft => capacity; // live registration count subtracted below
+
+  bool get isSoon =>
+      date.difference(DateTime.now()).inDays <= 7 &&
+      date.isAfter(DateTime.now());
+}
+
+// ─────────────────────────────────────────────────────────────
+// Main Screen
 // ─────────────────────────────────────────────────────────────
 class GuestEventsScreen extends StatefulWidget {
   const GuestEventsScreen({super.key});
@@ -27,26 +96,158 @@ class GuestEventsScreen extends StatefulWidget {
 }
 
 class _GuestEventsScreenState extends State<GuestEventsScreen> {
-  late List<EventData> _events;
+  // Firestore streams (combined: events + event_proposals both approved & public)
+  StreamSubscription<QuerySnapshot>? _eventsSubscription;
+  StreamSubscription<QuerySnapshot>? _proposalsSubscription;
+
+  final Map<String, _FirestoreEvent> _eventMap = {};
+  bool _loading = true;
+  String? _error;
+  String _search    = '';
+  String _catFilter = 'All';
+
+  // cache org logos to avoid re-fetching
+  final Map<String, String> _orgLogoCache = {};
 
   @override
   void initState() {
     super.initState();
-    _events = List.from(_publicEvents);
+    _subscribe();
   }
 
-  void _onRegistered(String id) {
-    setState(() {
-      _events = _events
-          .map((e) => e.id == id ? e.copyWith(isRegistered: true) : e)
-          .toList();
+  @override
+  void dispose() {
+    _eventsSubscription?.cancel();
+    _proposalsSubscription?.cancel();
+    super.dispose();
+  }
+
+  void _subscribe() {
+    // ── 1. 'events' collection ──────────────────────────────
+    _eventsSubscription = FirebaseFirestore.instance
+        .collection('events')
+        .where('status', isEqualTo: 'approved')
+        .snapshots()
+        .listen((snap) async {
+      for (final doc in snap.docs) {
+        final d = doc.data() as Map<String, dynamic>;
+        final audience = (d['audience'] as String?) ?? 'Public';
+        // Show only public-facing events to guests
+        if (audience == 'Members Only') {
+          _eventMap.remove(doc.id);
+          continue;
+        }
+        final event = _FirestoreEvent.fromDoc(doc);
+        await _enrichLogo(event);
+        _eventMap[doc.id] = event;
+      }
+      // Remove docs that disappeared (deleted/status changed)
+      final ids = snap.docs.map((d) => d.id).toSet();
+      _eventMap.removeWhere((k, _) =>
+          !ids.contains(k) && _eventMap[k] != null);
+      if (mounted) setState(() => _loading = false);
+    }, onError: (e) {
+      if (mounted) setState(() { _error = e.toString(); _loading = false; });
     });
+
+    // ── 2. 'event_proposals' collection (approved) ─────────
+    // Proposals that are approved but haven't been auto-converted to events
+    // yet still deserve to be visible.
+    _proposalsSubscription = FirebaseFirestore.instance
+        .collection('event_proposals')
+        .where('status', isEqualTo: 'approved')
+        .snapshots()
+        .listen((snap) async {
+      for (final doc in snap.docs) {
+        final d = doc.data() as Map<String, dynamic>;
+        final audience = (d['audience'] as String?) ?? 'Public';
+        if (audience == 'Members Only') {
+          _eventMap.remove('proposal_${doc.id}');
+          continue;
+        }
+        // Use 'proposal_' prefix to differentiate from events collection
+        final dateField = d['date'];
+        final DateTime parsedDate = dateField is Timestamp
+            ? dateField.toDate()
+            : DateTime.now();
+        final event = _FirestoreEvent(
+          id          : 'proposal_${doc.id}',
+          title       : d['title']       as String? ?? 'Untitled',
+          description : d['description'] as String? ?? '',
+          category    : d['category']    as String? ?? 'Other',
+          audience    : audience,
+          orgId       : d['orgId']       as String? ?? '',
+          orgName     : d['orgName']     as String? ?? 'Organization',
+          location    : d['location']    as String? ?? 'TBA',
+          startTime   : d['time']        as String? ?? '',
+          endTime     : '',
+          capacity    : (d['capacity']   as num?)?.toInt() ?? 0,
+          date        : parsedDate,
+        );
+        await _enrichLogo(event);
+        _eventMap['proposal_${doc.id}'] = event;
+      }
+      final proposalKeys = snap.docs
+          .map((d) => 'proposal_${d.id}')
+          .toSet();
+      _eventMap.removeWhere(
+          (k, _) => k.startsWith('proposal_') && !proposalKeys.contains(k));
+      if (mounted) setState(() => _loading = false);
+    }, onError: (_) {
+      if (mounted) setState(() => _loading = false);
+    });
+  }
+
+  Future<void> _enrichLogo(_FirestoreEvent event) async {
+    if (event.orgId.isEmpty) return;
+    if (_orgLogoCache.containsKey(event.orgId)) {
+      event.orgLogoUrl = _orgLogoCache[event.orgId]!;
+      return;
+    }
+    try {
+      final orgDoc = await FirebaseFirestore.instance
+          .collection('organizations')
+          .doc(event.orgId)
+          .get();
+      if (orgDoc.exists) {
+        final logo = (orgDoc.data() ?? {})['logoUrl'] as String? ?? '';
+        _orgLogoCache[event.orgId] = logo;
+        event.orgLogoUrl = logo;
+      }
+    } catch (_) {}
+  }
+
+  List<_FirestoreEvent> get _filtered {
+    var list = _eventMap.values.toList()
+      ..sort((a, b) => a.date.compareTo(b.date));
+
+    if (_catFilter != 'All') {
+      list = list
+          .where((e) =>
+              e.category.toLowerCase() == _catFilter.toLowerCase())
+          .toList();
+    }
+    if (_search.isNotEmpty) {
+      final q = _search.toLowerCase();
+      list = list
+          .where((e) =>
+              e.title.toLowerCase().contains(q) ||
+              e.orgName.toLowerCase().contains(q) ||
+              e.location.toLowerCase().contains(q))
+          .toList();
+    }
+    return list;
+  }
+
+  List<String> get _categories {
+    final cats = _eventMap.values.map((e) => e.category).toSet().toList()
+      ..sort();
+    return ['All', ...cats];
   }
 
   @override
   Widget build(BuildContext context) {
-    final featured = _events.isNotEmpty ? _events.first : null;
-    final rest     = _events.length > 1 ? _events.sublist(1) : <EventData>[];
+    final events = _filtered;
 
     return Scaffold(
       backgroundColor: _kBg,
@@ -86,82 +287,206 @@ class _GuestEventsScreenState extends State<GuestEventsScreen> {
           ),
         ],
       ),
-      body: _events.isEmpty
-          ? const _EmptyEvents()
-          : ListView(
-              padding: const EdgeInsets.only(bottom: 24),
-              children: [
-                // ── CICT-only notice ──
-                Container(
-                  margin: const EdgeInsets.fromLTRB(14, 14, 14, 0),
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 14, vertical: 10),
-                  decoration: BoxDecoration(
-                    color: _kPrimaryBg,
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: _kPrimary.withOpacity(0.3)),
-                  ),
-                  child: Row(
-                    children: const [
-                      Icon(Icons.info_outline_rounded,
-                          size: 16, color: _kPrimary),
-                      SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          'Some events are exclusive to CICT students. Sign in to see all events.',
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: Color(0xFF7A3300),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-
-                // Featured card
-                if (featured != null)
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(14, 14, 14, 0),
-                    child: _GuestFeaturedCard(
-                      event: featured,
-                      onTap: () => _openDetail(featured),
+      body: _loading
+          ? const Center(child: CircularProgressIndicator(color: _kPrimary))
+          : _error != null
+              ? _ErrorView(error: _error!, onRetry: () {
+                  setState(() { _loading = true; _error = null; _eventMap.clear(); });
+                  _subscribe();
+                })
+              : Column(
+                  children: [
+                    _SearchAndFilter(
+                      search: _search,
+                      onSearch: (v) => setState(() => _search = v),
+                      categories: _categories,
+                      selected: _catFilter,
+                      onCategory: (c) => setState(() => _catFilter = c),
                     ),
-                  ),
-
-                // Rest
-                ...rest.map(
-                  (e) => Padding(
-                    padding: const EdgeInsets.fromLTRB(14, 12, 14, 0),
-                    child: _GuestCompactCard(
-                        event: e, onTap: () => _openDetail(e)),
-                  ),
+                    Expanded(
+                      child: events.isEmpty
+                          ? _EmptyEvents(isFiltering: _search.isNotEmpty || _catFilter != 'All')
+                          : _EventList(
+                              events: events,
+                              onTap: (e) => _openDetail(e),
+                            ),
+                    ),
+                  ],
                 ),
-              ],
-            ),
     );
   }
 
-  void _openDetail(EventData event) {
+  void _openDetail(_FirestoreEvent event) {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => GuestEventDetailScreen(
-          event: event,
-          onRegistered: () => _onRegistered(event.id),
-        ),
+        builder: (_) => GuestEventDetailScreen(event: event),
       ),
     );
   }
 }
 
 // ─────────────────────────────────────────────────────────────
-//  FEATURED CARD
+// Search + Filter bar
 // ─────────────────────────────────────────────────────────────
-class _GuestFeaturedCard extends StatelessWidget {
-  final EventData    event;
-  final VoidCallback onTap;
-  const _GuestFeaturedCard({required this.event, required this.onTap});
+class _SearchAndFilter extends StatelessWidget {
+  final String search;
+  final ValueChanged<String> onSearch;
+  final List<String> categories;
+  final String selected;
+  final ValueChanged<String> onCategory;
+
+  const _SearchAndFilter({
+    required this.search,
+    required this.onSearch,
+    required this.categories,
+    required this.selected,
+    required this.onCategory,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final ctrl = TextEditingController(text: search)
+      ..selection = TextSelection.collapsed(offset: search.length);
+    return Container(
+      color: Colors.white,
+      padding: const EdgeInsets.fromLTRB(14, 10, 14, 0),
+      child: Column(
+        children: [
+          // Search
+          TextField(
+            controller: ctrl,
+            onChanged: onSearch,
+            decoration: InputDecoration(
+              hintText: 'Search events, org, location…',
+              hintStyle:
+                  const TextStyle(fontSize: 13, color: Colors.black38),
+              prefixIcon: const Icon(Icons.search, size: 18,
+                  color: Colors.black38),
+              suffixIcon: search.isNotEmpty
+                  ? IconButton(
+                      icon: const Icon(Icons.clear, size: 16),
+                      onPressed: () => onSearch(''),
+                    )
+                  : null,
+              filled: true,
+              fillColor: _kBg,
+              contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 12, vertical: 10),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: BorderSide.none,
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          // Category chips
+          SizedBox(
+            height: 32,
+            child: ListView.builder(
+              scrollDirection: Axis.horizontal,
+              itemCount: categories.length,
+              itemBuilder: (_, i) {
+                final cat = categories[i];
+                final sel = cat == selected;
+                return GestureDetector(
+                  onTap: () => onCategory(cat),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 160),
+                    margin: const EdgeInsets.only(right: 8),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 14, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: sel ? _kPrimary : Colors.transparent,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: sel ? _kPrimary : Colors.black12,
+                      ),
+                    ),
+                    child: Text(
+                      cat,
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: sel ? Colors.white : Colors.black54,
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+          const SizedBox(height: 10),
+        ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+// Event list
+// ─────────────────────────────────────────────────────────────
+class _EventList extends StatelessWidget {
+  final List<_FirestoreEvent> events;
+  final void Function(_FirestoreEvent) onTap;
+  const _EventList({required this.events, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final featured = events.first;
+    final rest     = events.sublist(1);
+
+    return ListView(
+      padding: const EdgeInsets.only(bottom: 24),
+      children: [
+        // Info banner
+        Container(
+          margin: const EdgeInsets.fromLTRB(14, 14, 14, 0),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          decoration: BoxDecoration(
+            color: _kPrimaryBg,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: _kPrimary.withOpacity(0.3)),
+          ),
+          child: const Row(
+            children: [
+              Icon(Icons.info_outline_rounded, size: 16, color: _kPrimary),
+              SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Some events are exclusive to CICT students. Sign in to see all events.',
+                  style: TextStyle(fontSize: 11, color: Color(0xFF7A3300)),
+                ),
+              ),
+            ],
+          ),
+        ),
+
+        // Featured
+        Padding(
+          padding: const EdgeInsets.fromLTRB(14, 14, 14, 0),
+          child: _FeaturedCard(event: featured, onTap: () => onTap(featured)),
+        ),
+
+        // Rest
+        ...rest.map(
+          (e) => Padding(
+            padding: const EdgeInsets.fromLTRB(14, 12, 14, 0),
+            child: _CompactCard(event: e, onTap: () => onTap(e)),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+// Featured card
+// ─────────────────────────────────────────────────────────────
+class _FeaturedCard extends StatelessWidget {
+  final _FirestoreEvent event;
+  final VoidCallback    onTap;
+  const _FeaturedCard({required this.event, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -181,16 +506,10 @@ class _GuestFeaturedCard extends StatelessWidget {
         clipBehavior: Clip.antiAlias,
         child: Stack(
           children: [
-            // Banner image
-            Image.network(
-              event.bannerUrl,
-              height: 220,
-              width: double.infinity,
-              fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) =>
-                  Container(height: 220, color: Colors.grey[800]),
-            ),
-            // Dark gradient overlay
+            // Banner or gradient placeholder
+            _EventBanner(orgName: event.orgName, height: 220),
+
+            // Gradient overlay
             Positioned.fill(
               child: Container(
                 decoration: const BoxDecoration(
@@ -203,17 +522,28 @@ class _GuestFeaturedCard extends StatelessWidget {
                 ),
               ),
             ),
+
             // Content
             Positioned(
-              bottom: 0,
-              left: 0,
-              right: 0,
+              bottom: 0, left: 0, right: 0,
               child: Padding(
                 padding: const EdgeInsets.all(16),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _CategoryBadge(category: event.category),
+                    Row(
+                      children: [
+                        _CategoryBadge(category: event.category),
+                        if (event.isSoon) ...[
+                          const SizedBox(width: 6),
+                          _SoonBadge(),
+                        ],
+                        if (event.audience == 'CICT Only') ...[
+                          const SizedBox(width: 6),
+                          _AudienceBadge(audience: event.audience),
+                        ],
+                      ],
+                    ),
                     const SizedBox(height: 6),
                     Text(
                       event.title,
@@ -221,11 +551,10 @@ class _GuestFeaturedCard extends StatelessWidget {
                         fontSize: 22,
                         fontWeight: FontWeight.w900,
                         color: Colors.white,
-                        letterSpacing: 0.3,
                       ),
                     ),
                     Text(
-                      event.subtitle,
+                      event.orgName.toUpperCase(),
                       style: const TextStyle(
                         fontSize: 10,
                         fontWeight: FontWeight.w600,
@@ -239,7 +568,7 @@ class _GuestFeaturedCard extends StatelessWidget {
                         const Icon(Icons.calendar_today_outlined,
                             size: 12, color: Colors.white70),
                         const SizedBox(width: 4),
-                        Text(event.date,
+                        Text(event.dateDisplay,
                             style: const TextStyle(
                                 fontSize: 11, color: Colors.white70)),
                         const SizedBox(width: 14),
@@ -259,12 +588,12 @@ class _GuestFeaturedCard extends StatelessWidget {
                     const SizedBox(height: 10),
                     Row(
                       children: [
-                        Expanded(
-                          child: _SlotsBar(
-                              slots: event.slots,
-                              slotsLeft: event.slotsLeft),
-                        ),
-                        const SizedBox(width: 12),
+                        if (event.capacity > 0)
+                          Expanded(
+                            child: _CapacityBar(capacity: event.capacity),
+                          ),
+                        if (event.capacity > 0)
+                          const SizedBox(width: 12),
                         Container(
                           padding: const EdgeInsets.symmetric(
                               horizontal: 18, vertical: 8),
@@ -302,12 +631,12 @@ class _GuestFeaturedCard extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────
-//  COMPACT CARD
+// Compact card
 // ─────────────────────────────────────────────────────────────
-class _GuestCompactCard extends StatelessWidget {
-  final EventData    event;
-  final VoidCallback onTap;
-  const _GuestCompactCard({required this.event, required this.onTap});
+class _CompactCard extends StatelessWidget {
+  final _FirestoreEvent event;
+  final VoidCallback    onTap;
+  const _CompactCard({required this.event, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -328,14 +657,7 @@ class _GuestCompactCard extends StatelessWidget {
         clipBehavior: Clip.antiAlias,
         child: Stack(
           children: [
-            Image.network(
-              event.bannerUrl,
-              height: 120,
-              width: double.infinity,
-              fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) =>
-                  Container(color: Colors.grey[800]),
-            ),
+            _EventBanner(orgName: event.orgName, height: 120),
             Positioned.fill(
               child: Container(
                 decoration: const BoxDecoration(
@@ -353,7 +675,15 @@ class _GuestCompactCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  _CategoryBadge(category: event.category),
+                  Row(
+                    children: [
+                      _CategoryBadge(category: event.category),
+                      if (event.isSoon) ...[
+                        const SizedBox(width: 6),
+                        _SoonBadge(),
+                      ],
+                    ],
+                  ),
                   const SizedBox(height: 4),
                   Text(
                     event.title,
@@ -362,6 +692,8 @@ class _GuestCompactCard extends StatelessWidget {
                       fontWeight: FontWeight.w900,
                       color: Colors.white,
                     ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                   const SizedBox(height: 2),
                   Row(
@@ -369,9 +701,21 @@ class _GuestCompactCard extends StatelessWidget {
                       const Icon(Icons.calendar_today_outlined,
                           size: 10, color: Colors.white60),
                       const SizedBox(width: 4),
-                      Text(event.date,
+                      Text(event.dateDisplay,
                           style: const TextStyle(
                               fontSize: 10, color: Colors.white60)),
+                      const SizedBox(width: 10),
+                      const Icon(Icons.business_outlined,
+                          size: 10, color: Colors.white60),
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: Text(
+                          event.orgName,
+                          style: const TextStyle(
+                              fontSize: 10, color: Colors.white60),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
                     ],
                   ),
                 ],
@@ -385,20 +729,94 @@ class _GuestCompactCard extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────
-//  EVENT DETAIL SCREEN (guest)
+// Banner widget — uses org logo or fallback gradient
 // ─────────────────────────────────────────────────────────────
-class GuestEventDetailScreen extends StatelessWidget {
-  final EventData    event;
-  final VoidCallback onRegistered;
+class _EventBanner extends StatelessWidget {
+  final String orgName;
+  final double height;
+  const _EventBanner({required this.orgName, required this.height});
 
-  const GuestEventDetailScreen({
-    super.key,
-    required this.event,
-    required this.onRegistered,
-  });
+  Color _bgColor() {
+    final hash = orgName.hashCode.abs();
+    const colors = [
+      Color(0xFF1A237E), Color(0xFF4A148C), Color(0xFF880E4F),
+      Color(0xFF1B5E20), Color(0xFF0D47A1), Color(0xFF37474F),
+      Color(0xFF4E342E), Color(0xFF263238),
+    ];
+    return colors[hash % colors.length];
+  }
 
   @override
   Widget build(BuildContext context) {
+    return Container(
+      height: height,
+      width: double.infinity,
+      color: _bgColor(),
+      child: Center(
+        child: Text(
+          orgName.isNotEmpty ? orgName[0].toUpperCase() : '?',
+          style: TextStyle(
+            fontSize: height * 0.35,
+            fontWeight: FontWeight.w900,
+            color: Colors.white.withOpacity(0.15),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+// Detail Screen
+// ─────────────────────────────────────────────────────────────
+class GuestEventDetailScreen extends StatefulWidget {
+  final _FirestoreEvent event;
+  const GuestEventDetailScreen({super.key, required this.event});
+
+  @override
+  State<GuestEventDetailScreen> createState() => _GuestEventDetailScreenState();
+}
+
+class _GuestEventDetailScreenState extends State<GuestEventDetailScreen> {
+  int _registrantCount = 0;
+  bool _alreadyRegistered = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchRegistrationCount();
+  }
+
+  Future<void> _fetchRegistrationCount() async {
+    try {
+      final snap = await FirebaseFirestore.instance
+          .collection('registrations')
+          .where('eventId', isEqualTo: widget.event.id)
+          .count()
+          .get();
+      if (mounted) {
+        setState(() => _registrantCount = snap.count ?? 0);
+      }
+    } catch (_) {}
+  }
+
+  int get _slotsLeft {
+    if (widget.event.capacity == 0) return 999;
+    return (widget.event.capacity - _registrantCount)
+        .clamp(0, widget.event.capacity);
+  }
+
+  void _onRegistered() {
+    setState(() {
+      _alreadyRegistered = true;
+      _registrantCount++;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final event = widget.event;
+
     return Scaffold(
       backgroundColor: _kBg,
       body: Stack(
@@ -432,7 +850,7 @@ class GuestEventDetailScreen extends StatelessWidget {
                   ),
                 ),
                 title: const Text(
-                  'Public Event',
+                  'Event Details',
                   style: TextStyle(
                       fontSize: 17,
                       fontWeight: FontWeight.w700,
@@ -442,12 +860,7 @@ class GuestEventDetailScreen extends StatelessWidget {
                   background: Stack(
                     fit: StackFit.expand,
                     children: [
-                      Image.network(
-                        event.bannerUrl,
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) =>
-                            Container(color: Colors.grey[800]),
-                      ),
+                      _EventBanner(orgName: event.orgName, height: 250),
                       Container(
                         decoration: const BoxDecoration(
                           gradient: LinearGradient(
@@ -468,7 +881,15 @@ class GuestEventDetailScreen extends StatelessWidget {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            _CategoryBadge(category: event.category),
+                            Row(
+                              children: [
+                                _CategoryBadge(category: event.category),
+                                if (event.audience == 'CICT Only') ...[
+                                  const SizedBox(width: 6),
+                                  _AudienceBadge(audience: event.audience),
+                                ],
+                              ],
+                            ),
                             const SizedBox(height: 6),
                             Text(
                               event.title,
@@ -479,7 +900,7 @@ class GuestEventDetailScreen extends StatelessWidget {
                               ),
                             ),
                             Text(
-                              event.subtitle,
+                              event.orgName.toUpperCase(),
                               style: const TextStyle(
                                 fontSize: 10,
                                 fontWeight: FontWeight.w600,
@@ -498,7 +919,8 @@ class GuestEventDetailScreen extends StatelessWidget {
               SliverToBoxAdapter(
                 child: Container(
                   color: Colors.white,
-                  padding: const EdgeInsets.fromLTRB(16, 20, 16, 100),
+                  padding:
+                      const EdgeInsets.fromLTRB(16, 20, 16, 100),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -507,65 +929,86 @@ class GuestEventDetailScreen extends StatelessWidget {
                         children: [
                           CircleAvatar(
                             radius: 22,
-                            backgroundImage: NetworkImage(event.logoUrl),
                             backgroundColor: Colors.grey[200],
-                            onBackgroundImageError: (_, __) {},
+                            backgroundImage: event.orgLogoUrl.isNotEmpty
+                                ? NetworkImage(event.orgLogoUrl)
+                                : null,
+                            child: event.orgLogoUrl.isEmpty
+                                ? Text(
+                                    event.orgName.isNotEmpty
+                                        ? event.orgName[0].toUpperCase()
+                                        : '?',
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      color: _kPrimary,
+                                    ),
+                                  )
+                                : null,
                           ),
                           const SizedBox(width: 10),
                           Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text(event.organizer,
-                                    style: const TextStyle(
-                                        fontSize: 13,
-                                        fontWeight: FontWeight.w700,
-                                        color: Colors.black87)),
-                                Text(event.organizerSub,
-                                    style: const TextStyle(
-                                        fontSize: 11, color: Colors.grey)),
+                                Text(
+                                  event.orgName,
+                                  style: const TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w700,
+                                      color: Colors.black87),
+                                ),
+                                const Text(
+                                  'ORGANIZATION',
+                                  style: TextStyle(
+                                      fontSize: 11, color: Colors.grey),
+                                ),
                               ],
-                            ),
-                          ),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 8, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: _kPrimaryBg,
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Text(
-                              event.id,
-                              style: const TextStyle(
-                                  fontSize: 11, color: _kPrimary,
-                                  fontWeight: FontWeight.w600),
                             ),
                           ),
                         ],
                       ),
 
                       const SizedBox(height: 16),
-                      const Divider(height: 1, color: Color(0xFFF0F0F0)),
+                      const Divider(
+                          height: 1, color: Color(0xFFF0F0F0)),
                       const SizedBox(height: 16),
 
                       // Info tiles
                       _InfoTile(
                         icon: Icons.calendar_today_outlined,
                         iconColor: _kPrimary,
-                        label: 'Date & Time',
-                        value: '${event.date}  •  ${event.time}',
+                        label: 'Date',
+                        value: event.dateDisplay,
                       ),
+                      if (event.startTime.isNotEmpty) ...[
+                        const SizedBox(height: 10),
+                        _InfoTile(
+                          icon: Icons.access_time_outlined,
+                          iconColor: const Color(0xFF1565C0),
+                          label: 'Time',
+                          value: event.timeDisplay,
+                        ),
+                      ],
                       const SizedBox(height: 10),
                       _InfoTile(
-                        icon: Icons.people_outline,
-                        iconColor: const Color(0xFF1565C0),
-                        label: 'Slots Available',
-                        value:
-                            '${event.slotsLeft} of ${event.slots} remaining',
+                        icon: Icons.location_on_outlined,
+                        iconColor: const Color(0xFF2E7D32),
+                        label: 'Location',
+                        value: event.location,
                       ),
+                      if (event.capacity > 0) ...[
+                        const SizedBox(height: 10),
+                        _InfoTile(
+                          icon: Icons.people_outline,
+                          iconColor: const Color(0xFF6A1B9A),
+                          label: 'Capacity',
+                          value: '$_slotsLeft of ${event.capacity} slots remaining',
+                        ),
+                      ],
 
                       const SizedBox(height: 16),
-                      const Divider(height: 1, color: Color(0xFFF0F0F0)),
+                      const Divider(
+                          height: 1, color: Color(0xFFF0F0F0)),
                       const SizedBox(height: 16),
 
                       const Text(
@@ -578,14 +1021,19 @@ class GuestEventDetailScreen extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(height: 10),
-                      Text(event.description,
-                          style: const TextStyle(
-                              fontSize: 14,
-                              color: Colors.black87,
-                              height: 1.65)),
+                      Text(
+                        event.description.isNotEmpty
+                            ? event.description
+                            : 'No description provided.',
+                        style: const TextStyle(
+                            fontSize: 14,
+                            color: Colors.black87,
+                            height: 1.65),
+                      ),
 
                       const SizedBox(height: 20),
-                      const Divider(height: 1, color: Color(0xFFF0F0F0)),
+                      const Divider(
+                          height: 1, color: Color(0xFFF0F0F0)),
                       const SizedBox(height: 16),
 
                       const Text(
@@ -606,7 +1054,7 @@ class GuestEventDetailScreen extends StatelessWidget {
             ],
           ),
 
-          // ── Sticky register button ──
+          // Sticky bottom register bar
           Positioned(
             bottom: 0,
             left: 0,
@@ -633,55 +1081,70 @@ class GuestEventDetailScreen extends StatelessWidget {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Text(
-                            event.slotsLeft <= 10
+                            _slotsLeft <= 10 && event.capacity > 0
                                 ? 'Almost Full!'
-                                : '${event.slotsLeft} slots left',
+                                : event.capacity > 0
+                                    ? '$_slotsLeft slots left'
+                                    : 'Open Registration',
                             style: TextStyle(
                               fontSize: 13,
                               fontWeight: FontWeight.w700,
-                              color: event.slotsLeft <= 10
+                              color: _slotsLeft <= 10 && event.capacity > 0
                                   ? _kPrimary
                                   : Colors.black87,
                             ),
                           ),
-                          Text(event.date,
+                          Text(event.dateDisplay,
                               style: const TextStyle(
                                   fontSize: 11, color: Colors.grey)),
                         ],
                       ),
                     ),
                     const SizedBox(width: 12),
-                    event.isRegistered
+                    _alreadyRegistered
                         ? _RegisteredChip()
                         : GestureDetector(
-                            onTap: () => Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) =>
-                                    GuestEventRegistrationScreen(
-                                  event: event,
-                                  onRegistered: onRegistered,
-                                ),
-                              ),
-                            ),
+                            onTap: (_slotsLeft == 0 && event.capacity > 0)
+                                ? null
+                                : () => Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (_) =>
+                                            GuestEventRegistrationScreen(
+                                          event: event,
+                                          onRegistered: _onRegistered,
+                                        ),
+                                      ),
+                                    ),
                             child: Container(
                               padding: const EdgeInsets.symmetric(
                                   horizontal: 24, vertical: 14),
                               decoration: BoxDecoration(
-                                color: _kPrimary,
+                                color: (_slotsLeft == 0 && event.capacity > 0)
+                                    ? Colors.grey.shade300
+                                    : _kPrimary,
                                 borderRadius: BorderRadius.circular(12),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: _kPrimary.withOpacity(0.3),
-                                    blurRadius: 10,
-                                    offset: const Offset(0, 4),
-                                  ),
-                                ],
+                                boxShadow: (_slotsLeft == 0 &&
+                                        event.capacity > 0)
+                                    ? []
+                                    : [
+                                        BoxShadow(
+                                          color:
+                                              _kPrimary.withOpacity(0.3),
+                                          blurRadius: 10,
+                                          offset: const Offset(0, 4),
+                                        ),
+                                      ],
                               ),
-                              child: const Text(
-                                'Register Now',
+                              child: Text(
+                                (_slotsLeft == 0 && event.capacity > 0)
+                                    ? 'Full'
+                                    : 'Register Now',
                                 style: TextStyle(
-                                  color: Colors.white,
+                                  color: (_slotsLeft == 0 &&
+                                          event.capacity > 0)
+                                      ? Colors.black38
+                                      : Colors.white,
                                   fontSize: 14,
                                   fontWeight: FontWeight.w700,
                                 ),
@@ -700,11 +1163,11 @@ class GuestEventDetailScreen extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────
-//  GUEST REGISTRATION SCREEN (email + OTP)
+// Guest Registration Screen (writes to Firestore)
 // ─────────────────────────────────────────────────────────────
 class GuestEventRegistrationScreen extends StatefulWidget {
-  final EventData    event;
-  final VoidCallback onRegistered;
+  final _FirestoreEvent event;
+  final VoidCallback    onRegistered;
 
   const GuestEventRegistrationScreen({
     super.key,
@@ -724,10 +1187,8 @@ class _GuestEventRegistrationScreenState
   final _lastNameCtrl  = TextEditingController();
   final _emailCtrl     = TextEditingController();
   final _schoolCtrl    = TextEditingController();
-  final _otpCtrl       = TextEditingController();
 
   bool _isLoading = false;
-  bool _otpSent   = false;
   bool _submitted = false;
 
   @override
@@ -736,45 +1197,63 @@ class _GuestEventRegistrationScreenState
     _lastNameCtrl.dispose();
     _emailCtrl.dispose();
     _schoolCtrl.dispose();
-    _otpCtrl.dispose();
     super.dispose();
-  }
-
-  Future<void> _sendOtp() async {
-    if (_emailCtrl.text.trim().isEmpty ||
-        !_emailCtrl.text.contains('@')) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please enter a valid email address'),
-          backgroundColor: _kPrimary,
-        ),
-      );
-      return;
-    }
-    setState(() => _isLoading = true);
-    await Future.delayed(const Duration(milliseconds: 1200));
-    setState(() {
-      _isLoading = false;
-      _otpSent   = true;
-    });
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('OTP sent to ${_emailCtrl.text.trim()}'),
-        backgroundColor: const Color(0xFF2E7D32),
-      ),
-    );
   }
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _isLoading = true);
-    await Future.delayed(const Duration(milliseconds: 1500));
-    widget.onRegistered();
-    setState(() {
-      _isLoading = false;
-      _submitted = true;
-    });
+
+    try {
+      // Check for duplicate registration by email
+      final dupCheck = await FirebaseFirestore.instance
+          .collection('registrations')
+          .where('eventId', isEqualTo: widget.event.id)
+          .where('email', isEqualTo: _emailCtrl.text.trim().toLowerCase())
+          .limit(1)
+          .get();
+
+      if (dupCheck.docs.isNotEmpty) {
+        if (mounted) {
+          setState(() => _isLoading = false);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('You are already registered for this event.'),
+              backgroundColor: _kPrimary,
+            ),
+          );
+        }
+        return;
+      }
+
+      // Write registration to Firestore
+      await FirebaseFirestore.instance.collection('registrations').add({
+        'eventId'      : widget.event.id,
+        'orgId'        : widget.event.orgId,
+        'firstName'    : _firstNameCtrl.text.trim(),
+        'lastName'     : _lastNameCtrl.text.trim(),
+        'studentName'  : '${_firstNameCtrl.text.trim()} ${_lastNameCtrl.text.trim()}',
+        'email'        : _emailCtrl.text.trim().toLowerCase(),
+        'school'       : _schoolCtrl.text.trim(),
+        'type'         : 'guest',
+        'isGuest'      : true,
+        'registeredAt' : FieldValue.serverTimestamp(),
+        'status'       : 'registered',
+      });
+
+      widget.onRegistered();
+      if (mounted) setState(() { _isLoading = false; _submitted = true; });
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Registration failed: $e'),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
+      }
+    }
   }
 
   @override
@@ -806,70 +1285,11 @@ class _GuestEventRegistrationScreenState
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // ── Event summary card ──
-                    Container(
-                      padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(14),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.06),
-                            blurRadius: 6,
-                            offset: const Offset(0, 2),
-                          ),
-                        ],
-                      ),
-                      child: Row(
-                        children: [
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(10),
-                            child: Image.network(
-                              widget.event.bannerUrl,
-                              width: 70,
-                              height: 70,
-                              fit: BoxFit.cover,
-                              errorBuilder: (_, __, ___) => Container(
-                                  width: 70,
-                                  height: 70,
-                                  color: Colors.grey[300]),
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(widget.event.title,
-                                    style: const TextStyle(
-                                        fontSize: 15,
-                                        fontWeight: FontWeight.w800,
-                                        color: Colors.black87)),
-                                const SizedBox(height: 2),
-                                Text(widget.event.date,
-                                    style: const TextStyle(
-                                        fontSize: 12, color: Colors.grey)),
-                                const SizedBox(height: 4),
-                                Text(
-                                  '${widget.event.slotsLeft} slots remaining',
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w600,
-                                    color: widget.event.slotsLeft <= 10
-                                        ? _kPrimary
-                                        : const Color(0xFF2E7D32),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-
+                    // Event summary
+                    _EventSummaryCard(event: widget.event),
                     const SizedBox(height: 16),
 
-                    // ── Guest notice ──
+                    // Guest notice
                     Container(
                       padding: const EdgeInsets.symmetric(
                           horizontal: 12, vertical: 10),
@@ -879,14 +1299,14 @@ class _GuestEventRegistrationScreenState
                         border: Border.all(
                             color: _kPrimary.withOpacity(0.3)),
                       ),
-                      child: Row(
-                        children: const [
+                      child: const Row(
+                        children: [
                           Icon(Icons.person_outline_rounded,
                               size: 16, color: _kPrimary),
                           SizedBox(width: 8),
                           Expanded(
                             child: Text(
-                              'Guest Registration — verify your identity with a valid email address.',
+                              'Guest Registration — provide your details to reserve your slot.',
                               style: TextStyle(
                                   fontSize: 12,
                                   color: Color(0xFF7A3300)),
@@ -895,7 +1315,6 @@ class _GuestEventRegistrationScreenState
                         ],
                       ),
                     ),
-
                     const SizedBox(height: 20),
 
                     _SectionLabel(label: 'PERSONAL INFORMATION'),
@@ -912,7 +1331,7 @@ class _GuestEventRegistrationScreenState
                           Row(
                             children: [
                               Expanded(
-                                child: _GuestFormField(
+                                child: _FormField(
                                   label: 'First Name',
                                   controller: _firstNameCtrl,
                                   hint: 'Juan',
@@ -924,7 +1343,7 @@ class _GuestEventRegistrationScreenState
                               ),
                               const SizedBox(width: 12),
                               Expanded(
-                                child: _GuestFormField(
+                                child: _FormField(
                                   label: 'Last Name',
                                   controller: _lastNameCtrl,
                                   hint: 'Dela Cruz',
@@ -937,108 +1356,31 @@ class _GuestEventRegistrationScreenState
                             ],
                           ),
                           const SizedBox(height: 14),
-                          _GuestFormField(
+                          _FormField(
+                            label: 'Email Address',
+                            controller: _emailCtrl,
+                            hint: 'your@email.com',
+                            keyboardType: TextInputType.emailAddress,
+                            validator: (v) {
+                              if (v == null || v.trim().isEmpty) {
+                                return 'Required';
+                              }
+                              if (!v.contains('@')) {
+                                return 'Invalid email';
+                              }
+                              return null;
+                            },
+                          ),
+                          const SizedBox(height: 14),
+                          _FormField(
                             label: 'School / Institution',
                             controller: _schoolCtrl,
-                            hint: 'e.g. DLSU, PLM, MAPUA',
+                            hint: 'e.g. BulSU, DLSU, PLM',
                             validator: (v) =>
                                 (v == null || v.trim().isEmpty)
                                     ? 'Required'
                                     : null,
                           ),
-                        ],
-                      ),
-                    ),
-
-                    const SizedBox(height: 16),
-                    _SectionLabel(label: 'EMAIL VERIFICATION'),
-                    const SizedBox(height: 12),
-
-                    Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                      child: Column(
-                        children: [
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.end,
-                            children: [
-                              Expanded(
-                                child: _GuestFormField(
-                                  label: 'Email Address',
-                                  controller: _emailCtrl,
-                                  hint: 'your@email.com',
-                                  keyboardType:
-                                      TextInputType.emailAddress,
-                                  readOnly: _otpSent,
-                                  validator: (v) {
-                                    if (v == null || v.trim().isEmpty) {
-                                      return 'Required';
-                                    }
-                                    if (!v.contains('@')) {
-                                      return 'Invalid email';
-                                    }
-                                    return null;
-                                  },
-                                ),
-                              ),
-                              const SizedBox(width: 10),
-                              SizedBox(
-                                height: 48,
-                                child: ElevatedButton(
-                                  onPressed:
-                                      (_isLoading || _otpSent)
-                                          ? null
-                                          : _sendOtp,
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: _kPrimary,
-                                    foregroundColor: Colors.white,
-                                    elevation: 0,
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius:
-                                          BorderRadius.circular(10),
-                                    ),
-                                  ),
-                                  child: _isLoading && !_otpSent
-                                      ? const SizedBox(
-                                          width: 16,
-                                          height: 16,
-                                          child:
-                                              CircularProgressIndicator(
-                                            strokeWidth: 2,
-                                            color: Colors.white,
-                                          ),
-                                        )
-                                      : Text(
-                                          _otpSent ? 'Sent ✓' : 'Send OTP',
-                                          style: const TextStyle(
-                                              fontSize: 13,
-                                              fontWeight: FontWeight.w700),
-                                        ),
-                                ),
-                              ),
-                            ],
-                          ),
-                          if (_otpSent) ...[
-                            const SizedBox(height: 14),
-                            _GuestFormField(
-                              label: 'Enter OTP',
-                              controller: _otpCtrl,
-                              hint: '6-digit code',
-                              keyboardType: TextInputType.number,
-                              validator: (v) {
-                                if (v == null || v.trim().isEmpty) {
-                                  return 'Required';
-                                }
-                                if (v.trim().length < 4) {
-                                  return 'Enter the full OTP';
-                                }
-                                return null;
-                              },
-                            ),
-                          ],
                         ],
                       ),
                     ),
@@ -1049,17 +1391,18 @@ class _GuestEventRegistrationScreenState
                       width: double.infinity,
                       height: 52,
                       child: ElevatedButton(
-                        onPressed: (!_otpSent || _isLoading) ? null : _submit,
+                        onPressed: _isLoading ? null : _submit,
                         style: ElevatedButton.styleFrom(
                           backgroundColor: _kPrimary,
                           foregroundColor: Colors.white,
                           elevation: 0,
-                          disabledBackgroundColor: Colors.grey.shade300,
+                          disabledBackgroundColor:
+                              Colors.grey.shade300,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(14),
                           ),
                         ),
-                        child: _isLoading && _otpSent
+                        child: _isLoading
                             ? const SizedBox(
                                 width: 22,
                                 height: 22,
@@ -1067,11 +1410,9 @@ class _GuestEventRegistrationScreenState
                                     strokeWidth: 2.5,
                                     color: Colors.white),
                               )
-                            : Text(
-                                _otpSent
-                                    ? 'Complete Registration'
-                                    : 'Send OTP to Continue',
-                                style: const TextStyle(
+                            : const Text(
+                                'Complete Registration',
+                                style: TextStyle(
                                     fontSize: 15,
                                     fontWeight: FontWeight.w700),
                               ),
@@ -1097,10 +1438,10 @@ class _GuestEventRegistrationScreenState
 }
 
 // ─────────────────────────────────────────────────────────────
-//  SUCCESS VIEW
+// Success View
 // ─────────────────────────────────────────────────────────────
 class _GuestSuccessView extends StatelessWidget {
-  final EventData event;
+  final _FirestoreEvent event;
   const _GuestSuccessView({required this.event});
 
   @override
@@ -1132,7 +1473,7 @@ class _GuestSuccessView extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             Text(
-              'You are registered for ${event.title}. A confirmation and your QR attendance code will be sent to your email.',
+              'You are registered for "${event.title}". A confirmation will be sent to your email.',
               style: const TextStyle(
                   fontSize: 14, color: Colors.grey, height: 1.5),
               textAlign: TextAlign.center,
@@ -1166,44 +1507,69 @@ class _GuestSuccessView extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────
-//  EMPTY STATE
+// Shared widgets
 // ─────────────────────────────────────────────────────────────
-class _EmptyEvents extends StatelessWidget {
-  const _EmptyEvents();
+class _EventSummaryCard extends StatelessWidget {
+  final _FirestoreEvent event;
+  const _EventSummaryCard({required this.event});
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.06),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
         children: [
           Container(
-            padding: const EdgeInsets.all(24),
+            width: 70,
+            height: 70,
             decoration: BoxDecoration(
-              color: _kPrimaryBg,
-              shape: BoxShape.circle,
+              borderRadius: BorderRadius.circular(10),
             ),
-            child: const Icon(Icons.event_busy_outlined,
-                size: 48, color: _kPrimary),
+            clipBehavior: Clip.antiAlias,
+            child: _EventBanner(orgName: event.orgName, height: 70),
           ),
-          const SizedBox(height: 20),
-          const Text('No public events right now',
-              style: TextStyle(
-                  fontSize: 15,
-                  color: Colors.black54,
-                  fontWeight: FontWeight.w600)),
-          const SizedBox(height: 6),
-          const Text('Check back soon for upcoming events.',
-              style: TextStyle(fontSize: 12, color: Colors.black38)),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  event.title,
+                  style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w800,
+                      color: Colors.black87),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 2),
+                Text(event.orgName,
+                    style: const TextStyle(
+                        fontSize: 12, color: Colors.grey)),
+                const SizedBox(height: 2),
+                Text(event.dateDisplay,
+                    style: const TextStyle(
+                        fontSize: 12, color: Colors.grey)),
+              ],
+            ),
+          ),
         ],
       ),
     );
   }
 }
 
-// ─────────────────────────────────────────────────────────────
-//  SHARED HELPERS
-// ─────────────────────────────────────────────────────────────
 class _SectionLabel extends StatelessWidget {
   final String label;
   const _SectionLabel({required this.label});
@@ -1235,21 +1601,19 @@ class _SectionLabel extends StatelessWidget {
   }
 }
 
-class _GuestFormField extends StatelessWidget {
-  final String                    label;
-  final TextEditingController     controller;
-  final String                    hint;
-  final TextInputType?            keyboardType;
+class _FormField extends StatelessWidget {
+  final String                     label;
+  final TextEditingController      controller;
+  final String                     hint;
+  final TextInputType?             keyboardType;
   final String? Function(String?)? validator;
-  final bool                      readOnly;
 
-  const _GuestFormField({
+  const _FormField({
     required this.label,
     required this.controller,
     required this.hint,
     this.keyboardType,
     this.validator,
-    this.readOnly = false,
   });
 
   @override
@@ -1267,18 +1631,13 @@ class _GuestFormField extends StatelessWidget {
           controller: controller,
           keyboardType: keyboardType,
           validator: validator,
-          readOnly: readOnly,
-          style: TextStyle(
-              fontSize: 14,
-              color: readOnly ? Colors.grey : Colors.black87),
+          style: const TextStyle(fontSize: 14, color: Colors.black87),
           decoration: InputDecoration(
             hintText: hint,
-            hintStyle:
-                const TextStyle(fontSize: 13, color: Color(0xFFBBBBBB)),
+            hintStyle: const TextStyle(
+                fontSize: 13, color: Color(0xFFBBBBBB)),
             filled: true,
-            fillColor: readOnly
-                ? const Color(0xFFF8F8F8)
-                : const Color(0xFFF7F7F7),
+            fillColor: const Color(0xFFF7F7F7),
             contentPadding: const EdgeInsets.symmetric(
                 horizontal: 14, vertical: 12),
             border: OutlineInputBorder(
@@ -1303,8 +1662,8 @@ class _GuestFormField extends StatelessWidget {
             ),
             focusedErrorBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(10),
-              borderSide:
-                  const BorderSide(color: Color(0xFFE53935), width: 1.5),
+              borderSide: const BorderSide(
+                  color: Color(0xFFE53935), width: 1.5),
             ),
             errorStyle: const TextStyle(fontSize: 10),
           ),
@@ -1319,10 +1678,12 @@ class _CategoryBadge extends StatelessWidget {
   const _CategoryBadge({required this.category});
 
   Color get _color {
-    switch (category) {
+    switch (category.toLowerCase()) {
       case 'competition': return const Color(0xFFFF6B00);
       case 'workshop':    return const Color(0xFF1565C0);
       case 'seminar':     return const Color(0xFF6A1B9A);
+      case 'hackathon':   return const Color(0xFFD32F2F);
+      case 'sports':      return const Color(0xFF1B5E20);
       default:            return const Color(0xFF37474F);
     }
   }
@@ -1345,35 +1706,77 @@ class _CategoryBadge extends StatelessWidget {
   }
 }
 
-class _SlotsBar extends StatelessWidget {
-  final int slots;
-  final int slotsLeft;
-  const _SlotsBar({required this.slots, required this.slotsLeft});
+class _SoonBadge extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFEB3B),
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: const Text(
+        'SOON',
+        style: TextStyle(
+          color: Colors.black87,
+          fontSize: 9,
+          fontWeight: FontWeight.w800,
+          letterSpacing: 0.8,
+        ),
+      ),
+    );
+  }
+}
+
+class _AudienceBadge extends StatelessWidget {
+  final String audience;
+  const _AudienceBadge({required this.audience});
 
   @override
   Widget build(BuildContext context) {
-    final fraction = (slots - slotsLeft) / slots;
-    final isFull   = slotsLeft <= 10;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1565C0),
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Text(
+        audience.toUpperCase(),
+        style: const TextStyle(
+            color: Colors.white,
+            fontSize: 9,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 0.8),
+      ),
+    );
+  }
+}
+
+class _CapacityBar extends StatelessWidget {
+  final int capacity;
+  const _CapacityBar({required this.capacity});
+
+  @override
+  Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          '$slotsLeft slots left',
-          style: TextStyle(
-            fontSize: 10,
-            color: isFull ? const Color(0xFFFF7043) : Colors.white70,
-            fontWeight: FontWeight.w600,
-          ),
+          '$capacity capacity',
+          style: const TextStyle(
+              fontSize: 10,
+              color: Colors.white70,
+              fontWeight: FontWeight.w600),
         ),
         const SizedBox(height: 4),
         ClipRRect(
           borderRadius: BorderRadius.circular(4),
-          child: LinearProgressIndicator(
-            value: fraction,
+          child: const LinearProgressIndicator(
+            value: 0.5,
             minHeight: 5,
             backgroundColor: Colors.white24,
             valueColor: AlwaysStoppedAnimation<Color>(
-              isFull ? const Color(0xFFFF7043) : const Color(0xFF69F0AE),
+              Color(0xFF69F0AE),
             ),
           ),
         ),
@@ -1401,8 +1804,9 @@ class _InfoTile extends StatelessWidget {
         Container(
           padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
-              color: iconColor.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(8)),
+            color: iconColor.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(8),
+          ),
           child: Icon(icon, size: 18, color: iconColor),
         ),
         const SizedBox(width: 12),
@@ -1472,15 +1876,16 @@ class _RegisteredChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+      padding:
+          const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
       decoration: BoxDecoration(
         color: const Color(0xFFE8F5E9),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: const Color(0xFF81C784)),
       ),
-      child: Row(
+      child: const Row(
         mainAxisSize: MainAxisSize.min,
-        children: const [
+        children: [
           Icon(Icons.check_circle, size: 16, color: Color(0xFF2E7D32)),
           SizedBox(width: 6),
           Text('Registered',
@@ -1489,6 +1894,93 @@ class _RegisteredChip extends StatelessWidget {
                   fontSize: 14,
                   fontWeight: FontWeight.w700)),
         ],
+      ),
+    );
+  }
+}
+
+class _EmptyEvents extends StatelessWidget {
+  final bool isFiltering;
+  const _EmptyEvents({this.isFiltering = false});
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(24),
+            decoration: const BoxDecoration(
+              color: _kPrimaryBg,
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(Icons.event_busy_outlined,
+                size: 48, color: _kPrimary),
+          ),
+          const SizedBox(height: 20),
+          Text(
+            isFiltering
+                ? 'No events match your filter'
+                : 'No public events right now',
+            style: const TextStyle(
+                fontSize: 15,
+                color: Colors.black54,
+                fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            isFiltering
+                ? 'Try clearing your search or filter.'
+                : 'Check back soon for upcoming events.',
+            style: const TextStyle(fontSize: 12, color: Colors.black38),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ErrorView extends StatelessWidget {
+  final String error;
+  final VoidCallback onRetry;
+  const _ErrorView({required this.error, required this.onRetry});
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.cloud_off_outlined,
+                size: 48, color: Colors.black26),
+            const SizedBox(height: 12),
+            const Text('Could not load events',
+                style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.black54)),
+            const SizedBox(height: 6),
+            Text(error,
+                style: const TextStyle(
+                    fontSize: 11, color: Colors.black38),
+                textAlign: TextAlign.center),
+            const SizedBox(height: 20),
+            ElevatedButton.icon(
+              onPressed: onRetry,
+              icon: const Icon(Icons.refresh, size: 16),
+              label: const Text('Retry'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _kPrimary,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10)),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

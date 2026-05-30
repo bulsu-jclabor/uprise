@@ -1,8 +1,6 @@
 // lib/screens/web/org/org_profile.dart
 
 import 'dart:convert';
-import 'dart:html' as html;
-
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -152,6 +150,26 @@ class _OrgProfileScreenState extends State<OrgProfileScreen> {
       ),
     );
   }
+
+  Future<void> _pickAdviserPhoto() async {
+  final result = await FilePicker.platform.pickFiles(
+    type: FileType.image,
+    withData: true,
+  );
+
+  if (result == null) return;
+
+  final file = result.files.first;
+
+  if (file.bytes == null) return;
+
+  final mime = _mimeTypeFromBytes(file.bytes!);
+
+  setState(() {
+    _adviserPhotoUrl =
+        'data:$mime;base64,${base64Encode(file.bytes!)}';
+  });
+}
 
   Future<void> _syncOrganizationOfficersIfNeeded(Map<String, dynamic> data) async {
     try {
@@ -996,52 +1014,46 @@ class _EditOrgProfileSheetState extends State<_EditOrgProfileSheet> {
   }
 
   Future<void> _pickLogo() async {
-    final html.FileUploadInputElement input = html.FileUploadInputElement()..accept = 'image/*';
-    input.click();
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.image,
+      withData: true,
+    );
 
-    await input.onChange.first;
-    final files = input.files;
-    if (files == null || files.isEmpty) return;
+    if (result == null) return;
 
-    setState(() => _isUploadingLogo = true);
+    final file = result.files.first;
 
-    try {
-      final file = files[0];
-      final reader = html.FileReader();
-      reader.readAsDataUrl(file);
-      await reader.onLoad.first;
-      
-      final result = reader.result as String;
-      setState(() => _logoUrl = result);
-    } catch (e) {
-      _snack('Logo upload failed: $e');
-    } finally {
-      setState(() => _isUploadingLogo = false);
-    }
+    if (file.bytes == null) return;
+
+    final mime = _mimeTypeFromBytes(file.bytes!);
+
+    setState(() {
+      _logoUrl =
+          'data:$mime;base64,${base64Encode(file.bytes!)}';
+    });
   }
 
   Future<void> _pickAdviserPhoto() async {
-    final html.FileUploadInputElement input = html.FileUploadInputElement()..accept = 'image/*';
-    input.click();
-
-    await input.onChange.first;
-    final files = input.files;
-    if (files == null || files.isEmpty) return;
-
     setState(() => _isUploadingAdviserPhoto = true);
-
     try {
-      final file = files[0];
-      final reader = html.FileReader();
-      reader.readAsDataUrl(file);
-      await reader.onLoad.first;
-      
-      final result = reader.result as String;
-      setState(() => _adviserPhotoUrl = result);
-    } catch (e) {
-      _snack('Adviser photo upload failed: $e');
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.image,
+        withData: true,
+      );
+
+      if (result == null) return;
+
+      final file = result.files.first;
+
+      if (file.bytes == null) return;
+
+      final mime = _mimeTypeFromBytes(file.bytes!);
+
+      setState(() {
+        _adviserPhotoUrl = 'data:$mime;base64,${base64Encode(file.bytes!)}';
+      });
     } finally {
-      setState(() => _isUploadingAdviserPhoto = false);
+      if (mounted) setState(() => _isUploadingAdviserPhoto = false);
     }
   }
 
@@ -1409,29 +1421,24 @@ class _OfficerModalState extends State<_OfficerModal> {
   }
 
   Future<void> _pickPhoto() async {
-    final html.FileUploadInputElement input = html.FileUploadInputElement()..accept = 'image/*';
-    input.click();
+  final result = await FilePicker.platform.pickFiles(
+    type: FileType.image,
+    withData: true,
+  );
 
-    await input.onChange.first;
-    final files = input.files;
-    if (files == null || files.isEmpty) return;
+  if (result == null) return;
 
-    setState(() => _isUploadingPhoto = true);
+  final file = result.files.first;
 
-    try {
-      final file = files[0];
-      final reader = html.FileReader();
-      reader.readAsDataUrl(file);
-      await reader.onLoad.first;
-      
-      final result = reader.result as String;
-      setState(() => _photoUrl = result);
-    } catch (e) {
-      _snack('Photo upload failed: $e');
-    } finally {
-      setState(() => _isUploadingPhoto = false);
-    }
-  }
+  if (file.bytes == null) return;
+
+  final mime = _mimeTypeFromBytes(file.bytes!);
+
+  setState(() {
+    _photoUrl =
+        'data:$mime;base64,${base64Encode(file.bytes!)}';
+  });
+}
 
   String get _resolvedPosition => _useCustomPosition ? _customPosCtrl.text.trim() : (_selectedPosition ?? '');
 
