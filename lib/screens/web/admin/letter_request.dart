@@ -7,6 +7,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import '../../../services/activity_logger.dart' as activity_log;
+import '../../../services/firestore_collections.dart';
 import '../../../utils/platform_file_utils.dart' as platform_file_utils;
 
 // ============ COLOR SCHEME ============
@@ -65,7 +66,7 @@ class _AdminLetterRequestScreenState extends State<AdminLetterRequestScreen> {
 
   Widget _buildStatsRow() {
     return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance.collection('letter_requests').snapshots(),
+      stream: FirestoreCollections.letterRequests.snapshots(),
       builder: (context, snapshot) {
         int total = 0, pending = 0, approved = 0, rejected = 0, revision = 0, resubmitted = 0;
         if (snapshot.hasData) {
@@ -149,10 +150,7 @@ class _AdminLetterRequestScreenState extends State<AdminLetterRequestScreen> {
 
   Widget _buildTable() {
     return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection('letter_requests')
-          .orderBy('timestamp', descending: true)
-          .snapshots(),
+      stream: FirestoreCollections.letterRequests.orderBy('timestamp', descending: true).snapshots(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
@@ -194,7 +192,7 @@ class _AdminLetterRequestScreenState extends State<AdminLetterRequestScreen> {
             color: Colors.white,
             borderRadius: BorderRadius.circular(14),
             border: Border.all(color: const Color(0xFFE8ECF0)),
-            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 12, offset: const Offset(0, 4))],
+            boxShadow: [BoxShadow(color: Colors.black.withAlpha(15), blurRadius: 12, offset: const Offset(0, 4))],
           ),
           child: Column(children: [
             _buildTableHeader(),
@@ -284,7 +282,7 @@ class _AdminLetterRequestScreenState extends State<AdminLetterRequestScreen> {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                   decoration: BoxDecoration(
-                    color: AdminColors.primaryDark.withOpacity(0.08),
+                    color: AdminColors.primaryDark.withAlpha(20),
                     borderRadius: BorderRadius.circular(4),
                   ),
                   child: Text(
@@ -479,7 +477,7 @@ class _AdminLetterRequestScreenState extends State<AdminLetterRequestScreen> {
         updateData['revisionNote'] = revisionNote;
         updateData['revisionRequestedAt'] = FieldValue.serverTimestamp();
       }
-      await FirebaseFirestore.instance.collection('letter_requests').doc(docId).update(updateData);
+      await FirestoreCollections.letterRequests.doc(docId).update(updateData);
       await activity_log.ActivityLogger.log(
         action: '${newStatus.toUpperCase()} letter request from: $orgName',
         module: 'Letter Request',
@@ -513,7 +511,7 @@ class _AdminLetterRequestScreenState extends State<AdminLetterRequestScreen> {
       context: context,
       builder: (ctx) => Dialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-        child: Container(
+        child: SizedBox(
           width: 520,
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -527,7 +525,7 @@ class _AdminLetterRequestScreenState extends State<AdminLetterRequestScreen> {
                 child: Row(children: [
                   Container(
                     width: 38, height: 38,
-                    decoration: BoxDecoration(color: Colors.white.withOpacity(0.15), borderRadius: BorderRadius.circular(10)),
+                    decoration: BoxDecoration(color: Colors.white.withAlpha(38), borderRadius: BorderRadius.circular(10)),
                     child: const Icon(Icons.mail_outline_rounded, color: Colors.white, size: 18),
                   ),
                   const SizedBox(width: 14),
@@ -536,7 +534,7 @@ class _AdminLetterRequestScreenState extends State<AdminLetterRequestScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(data['letterId'] ?? 'Letter Request', style: GoogleFonts.beVietnamPro(fontSize: 16, fontWeight: FontWeight.w700, color: Colors.white)),
-                        Text(data['subject'] ?? '', style: GoogleFonts.beVietnamPro(fontSize: 12, color: Colors.white.withOpacity(0.65))),
+                        Text(data['subject'] ?? '', style: GoogleFonts.beVietnamPro(fontSize: 12, color: Colors.white.withAlpha(166))),
                       ],
                     ),
                   ),
@@ -585,9 +583,9 @@ class _AdminLetterRequestScreenState extends State<AdminLetterRequestScreen> {
                         width: double.infinity,
                         padding: const EdgeInsets.all(14),
                         decoration: BoxDecoration(
-                          color: AdminColors.info.withOpacity(0.05),
+                          color: AdminColors.info.withAlpha(13),
                           borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: AdminColors.info.withOpacity(0.3)),
+                          border: Border.all(color: AdminColors.info.withAlpha(76)),
                         ),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -604,7 +602,7 @@ class _AdminLetterRequestScreenState extends State<AdminLetterRequestScreen> {
                       Container(
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
-                          color: AdminColors.mediumGray.withOpacity(0.2),
+                          color: AdminColors.mediumGray.withAlpha(51),
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: Row(children: [
@@ -620,14 +618,14 @@ class _AdminLetterRequestScreenState extends State<AdminLetterRequestScreen> {
                       Container(
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
-                          color: AdminColors.primaryDark.withOpacity(0.05),
+                          color: AdminColors.primaryDark.withAlpha(13),
                           borderRadius: BorderRadius.circular(10),
-                          border: Border.all(color: AdminColors.primaryDark.withOpacity(0.2)),
+                          border: Border.all(color: AdminColors.primaryDark.withAlpha(51)),
                         ),
                         child: Row(children: [
                           Container(
                             width: 40, height: 40,
-                            decoration: BoxDecoration(color: AdminColors.primaryDark.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
+                            decoration: BoxDecoration(color: AdminColors.primaryDark.withAlpha(26), borderRadius: BorderRadius.circular(8)),
                             child: Icon(_getFileIcon(fileName), color: AdminColors.primaryDark, size: 20),
                           ),
                           const SizedBox(width: 12),
@@ -782,13 +780,17 @@ class _AdminLetterRequestScreenState extends State<AdminLetterRequestScreen> {
               child: Column(mainAxisSize: MainAxisSize.min, children: [
                 Padding(padding: const EdgeInsets.all(12), child: Text(fileName, style: GoogleFonts.beVietnamPro(fontSize: 14, fontWeight: FontWeight.w600))),
                 Flexible(child: InteractiveViewer(minScale: 0.5, maxScale: 4.0, child: Image.memory(bytes))),
-                ButtonBar(children: [
-                  TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Close')),
-                  TextButton(onPressed: () {
-                    Navigator.pop(ctx);
-                    platform_file_utils.saveBytesToTempAndOpen(bytes, fileName);
-                  }, child: const Text('Download')),
-                ]),
+                OverflowBar(
+                  spacing: 8,
+                  alignment: MainAxisAlignment.end,
+                  children: [
+                    TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Close')),
+                    TextButton(onPressed: () {
+                      Navigator.pop(ctx);
+                      platform_file_utils.saveBytesToTempAndOpen(bytes, fileName);
+                    }, child: const Text('Download')),
+                  ],
+                ),
               ]),
             ),
           );
@@ -798,8 +800,9 @@ class _AdminLetterRequestScreenState extends State<AdminLetterRequestScreen> {
       
       await platform_file_utils.saveBytesToTempAndOpen(bytes, fileName);
     } catch (e) {
-      print('Error opening file: $e');
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error opening file: $e'), backgroundColor: AdminColors.error));
+      debugPrint('Error opening file: $e');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error opening file: $e'), backgroundColor: AdminColors.error));
     }
   }
 
@@ -831,7 +834,7 @@ class _AdminLetterRequestScreenState extends State<AdminLetterRequestScreen> {
             onPressed: () async {
               Navigator.pop(ctx);
               try {
-                await FirebaseFirestore.instance.collection('letter_requests').doc(docId).delete();
+                await FirestoreCollections.letterRequests.doc(docId).delete();
                 if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Request deleted successfully')));
               } catch (e) {
                 if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red));
@@ -870,11 +873,11 @@ class _StatCard extends StatelessWidget {
           color: Colors.white,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(color: const Color(0xFFE8ECF0)),
-          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 12, offset: const Offset(0, 4))],
+          boxShadow: [BoxShadow(color: Colors.black.withAlpha(15), blurRadius: 12, offset: const Offset(0, 4))],
         ),
         child: Row(children: [
           Container(width: 44, height: 44,
-            decoration: BoxDecoration(color: color.withOpacity(0.10), borderRadius: BorderRadius.circular(12)),
+            decoration: BoxDecoration(color: color.withAlpha(26), borderRadius: BorderRadius.circular(12)),
             child: Icon(icon, color: color, size: 22)),
           const SizedBox(width: 14),
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -935,33 +938,42 @@ class _ExportButton extends StatelessWidget {
   }
 
   Future<void> _exportCSV(BuildContext context) async {
+    final messenger = ScaffoldMessenger.of(context);
     try {
-      var snap = await FirebaseFirestore.instance.collection('letter_requests').orderBy('timestamp', descending: true).get();
+      var snap = await FirestoreCollections.letterRequests.orderBy('timestamp', descending: true).get();
       var docs = snap.docs;
-      if (statusFilter != 'All') docs = docs.where((d) => d['status'] == statusFilter.toLowerCase()).toList();
-      if (searchTerm.isNotEmpty) docs = docs.where((d) {
-        final data = d.data();
-        final name = (data['name'] ?? data['orgName'] ?? '').toString().toLowerCase();
-        final email = (data['email'] ?? data['orgEmail'] ?? '').toString().toLowerCase();
-        return name.contains(searchTerm) ||
-               email.contains(searchTerm) ||
-               (data['subject'] ?? '').toString().toLowerCase().contains(searchTerm);
-      }).toList();
+      if (statusFilter != 'All') {
+        docs = docs.where((d) {
+          final data = d.data() as Map<String, dynamic>?;
+          return (data?['status'] ?? '').toString().toLowerCase() == statusFilter.toLowerCase();
+        }).toList();
+      }
+      if (searchTerm.isNotEmpty) {
+        docs = docs.where((d) {
+          final data = d.data() as Map<String, dynamic>?;
+          final name = (data?['name'] ?? data?['orgName'] ?? '').toString().toLowerCase();
+          final email = (data?['email'] ?? data?['orgEmail'] ?? '').toString().toLowerCase();
+          final subject = (data?['subject'] ?? '').toString().toLowerCase();
+          return name.contains(searchTerm) ||
+                 email.contains(searchTerm) ||
+                 subject.contains(searchTerm);
+        }).toList();
+      }
       if (docs.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No data to export.')));
+        messenger.showSnackBar(const SnackBar(content: Text('No data to export.')));
         return;
       }
       final buffer = StringBuffer();
       buffer.writeln('Letter ID,Name,Email,Letter Type,Subject,Message,Status,Date Submitted');
       for (final doc in docs) {
-        final d = doc.data();
-        final date = (d['timestamp'] as Timestamp?)?.toDate().toString().substring(0, 10) ?? '';
-        buffer.writeln('"${d['letterId']}","${d['name']}","${d['email']}","${d['letterType']}","${d['subject']}","${d['message']}","${d['status']}","$date"');
+        final d = doc.data() as Map<String, dynamic>?;
+        final date = (d?['timestamp'] as Timestamp?)?.toDate().toString().substring(0, 10) ?? '';
+        buffer.writeln('"${d?['letterId']}","${d?['name']}","${d?['email']}","${d?['letterType']}","${d?['subject']}","${d?['message']}","${d?['status']}","$date"');
       }
       // For web, you'd use html package to download. For now, show success.
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Exported ${docs.length} records to CSV')));
+      messenger.showSnackBar(SnackBar(content: Text('Exported ${docs.length} records to CSV')));
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      messenger.showSnackBar(
         SnackBar(
           content: Text('Export failed: $e'),
           backgroundColor: AdminColors.error,

@@ -7,6 +7,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:file_picker/file_picker.dart';
 import '../../../services/activity_logger.dart' as activity_log;
+import '../../../services/firestore_collections.dart';
 import 'export_util.dart';
 import 'export_pdf.dart';
 
@@ -77,8 +78,7 @@ class _OrgLetterRequestScreenState extends State<OrgLetterRequestScreen> {
     }
   }
 
-  Stream<QuerySnapshot> get _requestsStream => FirebaseFirestore.instance
-      .collection('letter_requests')
+  Stream<QuerySnapshot> get _requestsStream => FirestoreCollections.letterRequests
       .where('orgId', isEqualTo: widget.orgId)
       .where('isArchived', isEqualTo: false)
       .orderBy('timestamp', descending: true)
@@ -133,10 +133,7 @@ class _OrgLetterRequestScreenState extends State<OrgLetterRequestScreen> {
     if (confirm != true) return;
 
     try {
-      await FirebaseFirestore.instance
-          .collection('letter_requests')
-          .doc(request.id)
-          .update({
+      await FirestoreCollections.letterRequests.doc(request.id).update({
             'isArchived': true,
             'archivedAt': FieldValue.serverTimestamp(),
           });
@@ -1381,7 +1378,7 @@ class _LetterRequestModalState extends State<_LetterRequestModal> {
         'isArchived': false,
       };
 
-      final col = FirebaseFirestore.instance.collection('letter_requests');
+      final col = FirestoreCollections.letterRequests;
 
       if (widget.existingRequest != null) {
         final updateData = Map<String, dynamic>.from(data);

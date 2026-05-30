@@ -1,6 +1,5 @@
 // lib/screens/web/org/org_finance.dart
 
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -83,6 +82,20 @@ class _OrgFinanceScreenState extends State<OrgFinanceScreen> {
   final List<String> _categories = [
     'All', 'Workshops', 'Competitions', 'Partnerships', 'Socials', 'Retail', 'General'
   ];
+
+  List<TransactionModel> _applyReportFilters(
+    List<TransactionModel> list, {
+    String eventFilter = 'All Events',
+    DateTime? startDate,
+    DateTime? endDate,
+  }) {
+    return list.where((t) {
+      final eventMatch = eventFilter == 'All Events' || t.eventName == eventFilter;
+      final startMatch = startDate == null || !t.date.toDate().isBefore(startDate);
+      final endMatch = endDate == null || !t.date.toDate().isAfter(endDate);
+      return eventMatch && startMatch && endMatch;
+    }).toList();
+  }
 
   Stream<QuerySnapshot> get _transactionsStream => FirebaseFirestore.instance
       .collection('transactions')
@@ -251,6 +264,311 @@ class _OrgFinanceScreenState extends State<OrgFinanceScreen> {
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         ),
       );
+    }
+  }
+
+  Future<void> _showGenerateFinancialReportDialog(
+      BuildContext context, List<TransactionModel> transactions) async {
+    final events = [
+      'All Events',
+      ...{for (var t in transactions) t.eventName}.toList()..sort(),
+    ];
+    String selectedEvent = 'All Events';
+    DateTime? startDate;
+    DateTime? endDate;
+    String selectedFormat = 'pdf';
+
+    final dialogContext = context;
+    await showDialog<void>(
+      context: dialogContext,
+      barrierDismissible: false,
+      builder: (ctx) {
+        return StatefulBuilder(builder: (dialogContext, setState) {
+          Future<void> pickDate(bool isStart) async {
+            final dialogPickerContext = dialogContext;
+            final initial = isStart
+                ? startDate ?? DateTime.now().subtract(const Duration(days: 30))
+                : endDate ?? DateTime.now();
+            final picked = await showDatePicker(
+              context: dialogPickerContext,
+              initialDate: initial,
+              firstDate: DateTime(2020),
+              lastDate: DateTime.now().add(const Duration(days: 365)),
+            );
+            if (picked == null) return;
+            final pickedDate = picked;
+            final currentEndDate = endDate;
+            final currentStartDate = startDate;
+            setState(() {
+              if (isStart) {
+                startDate = pickedDate;
+                if (currentEndDate != null && currentEndDate.isBefore(pickedDate)) {
+                  endDate = pickedDate;
+                }
+              } else {
+                endDate = pickedDate;
+                if (currentStartDate != null && currentStartDate.isAfter(pickedDate)) {
+                  startDate = pickedDate;
+                }
+              }
+            });
+          }
+
+          final filtered = _applyReportFilters(
+            transactions,
+            eventFilter: selectedEvent,
+            startDate: startDate,
+            endDate: endDate,
+          );
+
+          return Dialog(
+            backgroundColor: Colors.transparent,
+            child: Container(
+              width: 520,
+              decoration: BoxDecoration(
+                color: OrgColors.white,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Column(mainAxisSize: MainAxisSize.min, children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+                  child: Row(children: [
+                    Expanded(
+                      child: Text('Generate Financial Report',
+                          style: GoogleFonts.beVietnamPro(
+                              fontSize: 17, fontWeight: FontWeight.w700)),
+                    ),
+                    IconButton(
+                      onPressed: () => Navigator.pop(context),
+                      icon: const Icon(Icons.close, size: 20),
+                      splashRadius: 18,
+                    ),
+                  ]),
+                ),
+                const Divider(height: 1),
+                Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text('Filter by event',
+                        style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 8),
+                    Container(
+                      width: double.infinity,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: OrgColors.primaryLight),
+                        color: OrgColors.lightGray,
+                      ),
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<String>(
+                          value: selectedEvent,
+                          items: events
+                              .map((e) => DropdownMenuItem(value: e, child: Text(e)))
+                              .toList(),
+                          onChanged: (v) => setState(() => selectedEvent = v ?? 'All Events'),
+                          isExpanded: true,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+                    Text('Filter by date',
+                        style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 8),
+                    Row(children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () => pickDate(true),
+                          style: OutlinedButton.styleFrom(
+                            backgroundColor: OrgColors.lightGray,
+                            side: BorderSide(color: OrgColors.primaryLight),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          ),
+                          child: Text(
+                            startDate == null
+                                ? 'Start date'
+                                : DateFormat('MMM d, yyyy').format(startDate!),
+                            style: GoogleFonts.beVietnamPro(color: OrgColors.charcoal),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () => pickDate(false),
+                          style: OutlinedButton.styleFrom(
+                            backgroundColor: OrgColors.lightGray,
+                            side: BorderSide(color: OrgColors.primaryLight),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          ),
+                          child: Text(
+                            endDate == null
+                                ? 'End date'
+                                : DateFormat('MMM d, yyyy').format(endDate!),
+                            style: GoogleFonts.beVietnamPro(color: OrgColors.charcoal),
+                          ),
+                        ),
+                      ),
+                    ]),
+                    const SizedBox(height: 18),
+                    Text('Format',
+                        style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 8),
+                    Row(children: [
+                      ChoiceChip(
+                        label: Text('PDF'),
+                        selected: selectedFormat == 'pdf',
+                        onSelected: (_) => setState(() => selectedFormat = 'pdf'),
+                      ),
+                      const SizedBox(width: 10),
+                      ChoiceChip(
+                        label: Text('CSV'),
+                        selected: selectedFormat == 'csv',
+                        onSelected: (_) => setState(() => selectedFormat = 'csv'),
+                      ),
+                    ]),
+                    const SizedBox(height: 18),
+                    Text(
+                      '${filtered.length} transaction(s) will be included',
+                      style: GoogleFonts.beVietnamPro(fontSize: 12, color: OrgColors.darkGray),
+                    ),
+                  ]),
+                ),
+                const Divider(height: 1),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+                  child: Row(children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () => Navigator.pop(context),
+                        style: OutlinedButton.styleFrom(
+                          side: BorderSide(color: OrgColors.primaryLight),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        ),
+                        child: Text('Cancel', style: GoogleFonts.beVietnamPro(color: OrgColors.darkGray)),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: filtered.isEmpty
+                            ? null
+                            : () async {
+                                Navigator.pop(context);
+                                await _generateFinancialReport(
+                                  selectedFormat,
+                                  transactions,
+                                  eventFilter: selectedEvent,
+                                  startDate: startDate,
+                                  endDate: endDate,
+                                );
+                              },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: OrgColors.primaryDark,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        ),
+                        child: Text('Generate Report',
+                            style: GoogleFonts.beVietnamPro(color: Colors.white)),
+                      ),
+                    ),
+                  ]),
+                ),
+              ]),
+            ),
+          );
+        });
+      },
+    );
+  }
+
+  Future<void> _generateFinancialReport(
+      String choice,
+      List<TransactionModel> transactions, {
+      String eventFilter = 'All Events',
+      DateTime? startDate,
+      DateTime? endDate,
+    }) async {
+    final filtered = _applyReportFilters(
+      transactions,
+      eventFilter: eventFilter,
+      startDate: startDate,
+      endDate: endDate,
+    );
+
+    if (filtered.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('No transactions match the selected report filters',
+                style: GoogleFonts.beVietnamPro()),
+            backgroundColor: OrgColors.warning,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          ),
+        );
+      }
+      return;
+    }
+
+    final headers = ['Date', 'Event', 'Category', 'Description', 'Type', 'Amount'];
+    final rows = filtered.map((t) {
+      return [
+        DateFormat('MM/dd/yyyy').format(t.date.toDate()),
+        t.eventName,
+        t.category,
+        t.segment,
+        t.type,
+        t.amount.toStringAsFixed(2),
+      ];
+    }).toList();
+
+    final fileName = 'financial_report_${DateFormat('yyyyMMdd_HHmmss').format(DateTime.now())}';
+
+    try {
+      if (choice == 'csv') {
+        final csv = [headers, ...rows]
+            .map((row) => row.map((c) => '"${c.replaceAll('"', '""')}"').join(','))
+            .join('\n');
+        await OrgExportUtil.saveText(csv, '$fileName.csv', mimeType: 'text/csv');
+      } else {
+        final filters = <String>[];
+        if (eventFilter != 'All Events') filters.add('Event: $eventFilter');
+        if (startDate != null) filters.add('From: ${DateFormat('MMM d, yyyy').format(startDate)}');
+        if (endDate != null) filters.add('To: ${DateFormat('MMM d, yyyy').format(endDate)}');
+        final subtitle = filters.isEmpty
+            ? 'Organization financial report'
+            : filters.join(' • ');
+
+        final pdfBytes = await OrgExportPdf.generateTablePdf(
+          title: 'Financial Report',
+          headers: headers,
+          rows: rows,
+          subtitle: subtitle,
+        );
+        await OrgExportUtil.saveBytes(pdfBytes, '$fileName.pdf', mimeType: 'application/pdf');
+      }
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Financial report generated successfully',
+                style: GoogleFonts.beVietnamPro()),
+            backgroundColor: OrgColors.success,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Report generation failed: $e', style: GoogleFonts.beVietnamPro()),
+            backgroundColor: OrgColors.error,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          ),
+        );
+      }
     }
   }
 
@@ -438,6 +756,20 @@ class _OrgFinanceScreenState extends State<OrgFinanceScreen> {
                                         DropdownMenuItem(value: c, child: Text(c))).toList(),
                                     onChanged: (v) =>
                                         setState(() => _filterCategory = v ?? 'All'),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  ElevatedButton.icon(
+                                    onPressed: () => _showGenerateFinancialReportDialog(context, transactions),
+                                    icon: const Icon(Icons.insert_drive_file_outlined, size: 18, color: Colors.white),
+                                    label: Text('Generate Report',
+                                        style: GoogleFonts.beVietnamPro(
+                                            color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600)),
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: OrgColors.primaryDark,
+                                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                      elevation: 0,
+                                    ),
                                   ),
                                   const SizedBox(width: 8),
                                   AdminExportButton(

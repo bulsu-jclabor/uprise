@@ -3,16 +3,20 @@ import 'package:google_fonts/google_fonts.dart';
 
 class AdminExportButton extends StatelessWidget {
   final void Function(String) onSelected;
+  final bool enabled;
   final String label;
 
   const AdminExportButton({
     super.key,
     required this.onSelected,
+    this.enabled = true,
     this.label = 'Export',
   });
 
   @override
   Widget build(BuildContext context) {
+    final iconColor = enabled ? const Color(0xFF374151) : const Color(0xFF9AA5B4);
+    final textColor = enabled ? const Color(0xFF374151) : const Color(0xFF9AA5B4);
     return Container(
       height: 40,
       decoration: BoxDecoration(
@@ -21,6 +25,7 @@ class AdminExportButton extends StatelessWidget {
         border: Border.all(color: const Color(0xFFE2E6EA)),
       ),
       child: PopupMenuButton<String>(
+        enabled: enabled,
         onSelected: onSelected,
         itemBuilder: (_) => [
           _item('csv', Icons.table_chart_rounded, 'Export as CSV'),
@@ -29,13 +34,13 @@ class AdminExportButton extends StatelessWidget {
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 14),
           child: Row(children: [
-            const Icon(Icons.download_rounded, size: 16, color: Color(0xFF374151)),
+            Icon(Icons.download_rounded, size: 16, color: iconColor),
             const SizedBox(width: 6),
             Text(label,
                 style: GoogleFonts.beVietnamPro(
-                    fontSize: 13, fontWeight: FontWeight.w500, color: const Color(0xFF374151))),
+                    fontSize: 13, fontWeight: FontWeight.w500, color: textColor)),
             const SizedBox(width: 4),
-            const Icon(Icons.keyboard_arrow_down_rounded, size: 16, color: Color(0xFF9AA5B4)),
+            Icon(Icons.keyboard_arrow_down_rounded, size: 16, color: iconColor),
           ]),
         ),
       ),

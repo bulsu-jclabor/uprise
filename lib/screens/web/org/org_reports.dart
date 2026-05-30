@@ -66,10 +66,15 @@ class _OrgReportsScreenState extends State<OrgReportsScreen> {
   String    _eventLabel  = '';
   bool      _eventLoaded = false;
 
+  DateTime? _financialDeadline;
+  DateTime? _accomplishmentDeadline;
+  bool      _deadlinesLoaded = false;
+
   @override
   void initState() {
     super.initState();
     _loadEventDate();
+    _loadReportDeadlines();
   }
 
   /// Reads eventDate (Timestamp) and eventLabel (String) from orgs/{orgId}.
@@ -99,7 +104,9 @@ class _OrgReportsScreenState extends State<OrgReportsScreen> {
     } catch (_) {
       // Silently skip — countdown is optional
     } finally {
-      if (mounted) setState(() => _eventLoaded = true);
+      if (mounted) {
+        setState(() => _eventLoaded = true);
+      }
     }
   }
 
@@ -107,6 +114,39 @@ class _OrgReportsScreenState extends State<OrgReportsScreen> {
     if (_eventDate == null) return;
     final diff = _eventDate!.difference(DateTime.now());
     if (mounted) setState(() => _remaining = diff.isNegative ? Duration.zero : diff);
+  }
+
+  Future<void> _loadReportDeadlines() async {
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('report_deadlines')
+          .doc('deadlines')
+          .get();
+      if (!doc.exists) {
+        if (mounted) {
+          setState(() => _deadlinesLoaded = true);
+        }
+        return;
+      }
+      final data = doc.data();
+      if (data == null) {
+        if (mounted) {
+          setState(() => _deadlinesLoaded = true);
+        }
+        return;
+      }
+      if (mounted) {
+        setState(() {
+          _financialDeadline = (data['financial'] as Timestamp?)?.toDate();
+          _accomplishmentDeadline = (data['accomplishment'] as Timestamp?)?.toDate();
+          _deadlinesLoaded = true;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() => _deadlinesLoaded = true);
+      }
+    }
   }
 
   @override
@@ -182,6 +222,7 @@ class _OrgReportsScreenState extends State<OrgReportsScreen> {
           .collection('reports')
           .doc(report.id)
           .delete();
+      await _refreshSubmissionStateAfterDelete(report.type);
       await activity_log.ActivityLogger.log(
         action: 'delete_report',
         module: 'reports',
@@ -191,6 +232,37 @@ class _OrgReportsScreenState extends State<OrgReportsScreen> {
     } catch (e) {
       _snack('Error: $e', error: true);
     }
+  }
+
+  Future<void> _refreshSubmissionStateAfterDelete(String type) async {
+    final reportsSnap = await FirebaseFirestore.instance
+        .collection('reports')
+        .where('orgId', isEqualTo: widget.orgId)
+        .where('type', isEqualTo: type)
+        .get();
+
+    final collection = FirebaseFirestore.instance.collection(
+        type == 'financial' ? 'financial_submissions' : 'accomplishment_submissions');
+    final doc = collection.doc(widget.orgId);
+    if (reportsSnap.docs.isEmpty) {
+      try {
+        await doc.delete();
+      } catch (_) {}
+      return;
+    }
+
+    final latest = reportsSnap.docs.reduce((a, b) {
+      final aTime = (a.data()['submittedAt'] as Timestamp?)?.toDate() ?? DateTime.fromMillisecondsSinceEpoch(0);
+      final bTime = (b.data()['submittedAt'] as Timestamp?)?.toDate() ?? DateTime.fromMillisecondsSinceEpoch(0);
+      return aTime.isAfter(bTime) ? a : b;
+    });
+
+    final latestData = latest.data();
+    await doc.set({
+      'orgId':       widget.orgId,
+      'fileUrl':     latestData['fileUrl'],
+      'submittedAt': latestData['submittedAt'] ?? FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
   }
 
   Future<void> _exportReports(String choice, List<ReportModel> rows) async {
@@ -272,11 +344,6 @@ class _OrgReportsScreenState extends State<OrgReportsScreen> {
             );
           }
 
-          // Spinner only on the very first load
-          if (snap.connectionState == ConnectionState.waiting && !snap.hasData) {
-            return const Center(child: CircularProgressIndicator());
-          }
-
           final all = (snap.data?.docs ?? [])
               .map(ReportModel.fromFirestore)
               .toList();
@@ -299,6 +366,11 @@ class _OrgReportsScreenState extends State<OrgReportsScreen> {
                   eventDate:  _eventDate!,
                   eventLabel: _eventLabel,
                 ),
+                const SizedBox(height: 16),
+              ],
+
+              if (_deadlinesLoaded) ...[
+                _buildDeadlineCards(all),
                 const SizedBox(height: 16),
               ],
 
@@ -353,6 +425,37 @@ class _OrgReportsScreenState extends State<OrgReportsScreen> {
       ]);
 
   // ── Table card ───────────────────────────────────────────────────────────────
+  Widget _buildDeadlineCards(List<ReportModel> all) {
+    final latestFinancial = all
+        .where((r) => r.type == 'financial')
+        .map((r) => r.submittedAt.toDate())
+        .fold<DateTime?>(null, (latest, date) {
+          if (latest == null) return date;
+          return date.isAfter(latest) ? date : latest;
+        });
+    final latestAccomplishment = all
+        .where((r) => r.type == 'accomplishment')
+        .map((r) => r.submittedAt.toDate())
+        .fold<DateTime?>(null, (latest, date) {
+          if (latest == null) return date;
+          return date.isAfter(latest) ? date : latest;
+        });
+
+    return Row(children: [
+      _DeadlineCard(
+        label: 'Financial Report Deadline',
+        deadline: _financialDeadline,
+        submittedOn: latestFinancial,
+      ),
+      const SizedBox(width: 12),
+      _DeadlineCard(
+        label: 'Accomplishment Report Deadline',
+        deadline: _accomplishmentDeadline,
+        submittedOn: latestAccomplishment,
+      ),
+    ]);
+  }
+
   Widget _buildTableCard(List<ReportModel> filtered, AsyncSnapshot<QuerySnapshot> snap) {
     return Container(
       decoration: BoxDecoration(
@@ -643,6 +746,68 @@ class _StatCard extends StatelessWidget {
           ]),
         ),
       );
+}
+
+class _DeadlineCard extends StatelessWidget {
+  final String label;
+  final DateTime? deadline;
+  final DateTime? submittedOn;
+
+  const _DeadlineCard({
+    required this.label,
+    this.deadline,
+    this.submittedOn,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final now = DateTime.now();
+    final deadlineText = deadline != null
+        ? DateFormat('MMM d, yyyy').format(deadline!)
+        : 'Not yet set';
+    final submittedText = submittedOn != null
+        ? DateFormat('MMM d, yyyy').format(submittedOn!)
+        : 'Not submitted yet';
+    final status = submittedOn != null
+        ? (deadline != null && submittedOn!.isAfter(deadline!) ? 'Submitted late' : 'Submitted on time')
+        : (deadline != null && now.isAfter(deadline!) ? 'Overdue' : 'Pending');
+    final statusColor = submittedOn != null
+        ? (deadline != null && submittedOn!.isAfter(deadline!) ? OrgColors.error : OrgColors.success)
+        : (deadline != null && now.isAfter(deadline!) ? OrgColors.error : OrgColors.warning);
+
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: OrgColors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: OrgColors.primaryLight, width: 0.5),
+        ),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(label,
+              style: GoogleFonts.beVietnamPro(
+                  fontSize: 12, fontWeight: FontWeight.w700, color: OrgColors.charcoal)),
+          const SizedBox(height: 8),
+          Text('Deadline: $deadlineText',
+              style: GoogleFonts.beVietnamPro(fontSize: 12, color: OrgColors.darkGray)),
+          const SizedBox(height: 4),
+          Text('Latest upload: $submittedText',
+              style: GoogleFonts.beVietnamPro(fontSize: 12, color: OrgColors.darkGray)),
+          const SizedBox(height: 10),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(
+              color: statusColor.withAlpha(36),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Text(status,
+                style: GoogleFonts.beVietnamPro(
+                    fontSize: 12, fontWeight: FontWeight.w700, color: statusColor)),
+          ),
+        ]),
+      ),
+    );
+  }
 }
 
 class _TypeChip extends StatelessWidget {
@@ -986,6 +1151,51 @@ class _ReportModalState extends State<_ReportModal> {
   bool    _isSubmitting     = false;
   bool    _isUploading      = false;
 
+  String _submissionCollection(String type) {
+    return type == 'financial'
+        ? 'financial_submissions'
+        : 'accomplishment_submissions';
+  }
+
+  Future<void> _syncSubmissionRecord(String type, String? fileUrl) async {
+    final collection = FirebaseFirestore.instance.collection(_submissionCollection(type));
+    await collection.doc(widget.orgId).set({
+      'orgId':       widget.orgId,
+      'fileUrl':     fileUrl,
+      'submittedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+  }
+
+  Future<void> _refreshSubmissionRecordForType(String type) async {
+    final reportsSnap = await FirebaseFirestore.instance
+        .collection('reports')
+        .where('orgId', isEqualTo: widget.orgId)
+        .where('type', isEqualTo: type)
+        .get();
+
+    final collection = FirebaseFirestore.instance.collection(_submissionCollection(type));
+    final doc = collection.doc(widget.orgId);
+    if (reportsSnap.docs.isEmpty) {
+      try {
+        await doc.delete();
+      } catch (_) {}
+      return;
+    }
+
+    final latest = reportsSnap.docs.reduce((a, b) {
+      final aTime = (a.data()['submittedAt'] as Timestamp?)?.toDate() ?? DateTime.fromMillisecondsSinceEpoch(0);
+      final bTime = (b.data()['submittedAt'] as Timestamp?)?.toDate() ?? DateTime.fromMillisecondsSinceEpoch(0);
+      return aTime.isAfter(bTime) ? a : b;
+    });
+
+    final latestData = latest.data();
+    await doc.set({
+      'orgId':       widget.orgId,
+      'fileUrl':     latestData['fileUrl'],
+      'submittedAt': latestData['submittedAt'] ?? FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+  }
+
   @override
   void initState() {
     super.initState();
@@ -1064,24 +1274,30 @@ class _ReportModalState extends State<_ReportModal> {
 
     setState(() => _isSubmitting = true);
     final user = FirebaseAuth.instance.currentUser;
+    final fileUrl = _newFileUrl ?? _fileUrl;
 
     final Map<String, dynamic> data = {
       'orgId':       widget.orgId,
       'title':       _titleCtrl.text.trim(),
       'type':        _type,
       'description': _descCtrl.text.trim(),
-      'fileUrl':     _newFileUrl ?? _fileUrl,
+      'fileUrl':     fileUrl,
       'updatedAt':   FieldValue.serverTimestamp(),
     };
 
     try {
       final col = FirebaseFirestore.instance.collection('reports');
       if (isEdit) {
+        final oldType = widget.existingReport!.type;
         await col.doc(widget.existingReport!.id).update(data);
         await activity_log.ActivityLogger.log(
           action: 'edit_report', module: 'reports',
           details: {'orgId': widget.orgId, 'reportId': widget.existingReport!.id},
         );
+        await _syncSubmissionRecord(_type, fileUrl);
+        if (oldType != _type) {
+          await _refreshSubmissionRecordForType(oldType);
+        }
       } else {
         // Generate sequential reportId based on current count
         final snap = await col.where('orgId', isEqualTo: widget.orgId).get();
@@ -1095,6 +1311,7 @@ class _ReportModalState extends State<_ReportModal> {
           action: 'create_report', module: 'reports',
           details: {'orgId': widget.orgId, 'title': data['title']},
         );
+        await _syncSubmissionRecord(_type, fileUrl);
       }
       if (mounted) Navigator.pop(context);
     } catch (e) {
