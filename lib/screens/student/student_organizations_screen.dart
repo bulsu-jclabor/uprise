@@ -38,7 +38,7 @@ class StudentOrganizationsScreen extends StatelessWidget {
                     context,
                     MaterialPageRoute(
                       builder: (_) =>
-                          StudentOrganizationsDetailsScreen(org: org), // ✅ navigate
+                          StudentOrganizationsDetailsScreen(orgId: docs[index].id), // ✅ pass docId
                     ),
                   );
                 },
@@ -50,78 +50,74 @@ class StudentOrganizationsScreen extends StatelessWidget {
                   elevation: 3,
                   child: Padding(
                     padding: const EdgeInsets.all(16),
-                    child: Row(
+                    child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Logo or placeholder
-                        CircleAvatar(
-                          radius: 28,
-                          backgroundColor: primaryOrange.withOpacity(0.2),
-                          backgroundImage: org['logoUrl'] != null &&
-                                  (org['logoUrl'] as String).isNotEmpty
-                              ? NetworkImage(org['logoUrl'])
-                              : null,
-                          child: (org['logoUrl'] == null ||
-                                  (org['logoUrl'] as String).isEmpty)
-                              ? Text(
-                                  (org['name'] ?? 'O')[0],
-                                  style: const TextStyle(
-                                    fontSize: 20,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.orange,
-                                  ),
-                                )
-                              : null,
-                        ),
-                        const SizedBox(width: 16),
-                        // Org info
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  Icon(Icons.group,
-                                      color: Colors.grey[600], size: 18),
-                                  const SizedBox(width: 6),
-                                  Expanded(
-                                    child: Text(
-                                      org['name'] ?? '',
+                        // Logo + Name
+                        Row(
+                          children: [
+                            CircleAvatar(
+                              radius: 28,
+                              backgroundColor: primaryOrange.withOpacity(0.2),
+                              backgroundImage: (org['logoUrl'] != null &&
+                                      (org['logoUrl'] as String).isNotEmpty)
+                                  ? NetworkImage(org['logoUrl'])
+                                  : null,
+                              child: (org['logoUrl'] == null ||
+                                      (org['logoUrl'] as String).isEmpty)
+                                  ? Text(
+                                      (org['name'] ?? 'O')[0],
                                       style: const TextStyle(
-                                        fontSize: 16,
+                                        fontSize: 20,
                                         fontWeight: FontWeight.bold,
+                                        color: Colors.orange,
                                       ),
-                                    ),
-                                  ),
-                                ],
+                                    )
+                                  : null,
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Text(
+                                org['name'] ?? '',
+                                style: const TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                ),
                               ),
-                              const SizedBox(height: 6),
-                              Text(
-                                org['description'] ?? '',
-                                style: const TextStyle(fontSize: 13),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+
+                        // Description
+                        Text(
+                          org['description'] ?? '',
+                          style: const TextStyle(
+                              fontSize: 13, color: Colors.black87),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 12),
+
+                        // Members row
+                        Row(
+                          children: [
+                            for (int i = 0; i < 4; i++)
+                              Padding(
+                                padding: const EdgeInsets.only(right: 4),
+                                child: CircleAvatar(
+                                  radius: 12,
+                                  backgroundColor: Colors.grey[300],
+                                  child: const Icon(Icons.person,
+                                      size: 14, color: Colors.white),
+                                ),
                               ),
-                              const SizedBox(height: 12),
-                              Row(
-                                children: [
-                                  for (int i = 0; i < 4; i++)
-                                    Padding(
-                                      padding: const EdgeInsets.only(right: 4),
-                                      child: CircleAvatar(
-                                        radius: 12,
-                                        backgroundColor: Colors.grey[300],
-                                        child: const Icon(Icons.person,
-                                            size: 14, color: Colors.white),
-                                      ),
-                                    ),
-                                  Text(
-                                    '+${org['members'] ?? 0} members',
-                                    style: const TextStyle(
-                                        fontSize: 12, color: Colors.grey),
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
+                            Text(
+                              '+${org['members'] ?? 0} members',
+                              style: const TextStyle(
+                                  fontSize: 12, color: Colors.grey),
+                            ),
+                          ],
                         ),
                       ],
                     ),

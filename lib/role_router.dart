@@ -9,6 +9,7 @@ import 'screens/web/admin/admin_dashboard.dart';
 import 'package:uprise/screens/web/org/org_dashboard.dart';
 import 'screens/student/student_login.dart';
 import 'screens/student/student_home_screen.dart';
+import 'screens/student/student_change_password_screen.dart';
 
 class RoleRouter extends StatefulWidget {
   const RoleRouter({super.key});
@@ -72,25 +73,52 @@ class _RoleRouterState extends State<RoleRouter> {
 
             Widget screen;
             if (!kIsWeb) {
-              // Mobile
-              if (role == 'student') {
-                // ✅ Diretso na sa StudentHomeScreen
-                screen = const StudentHomeScreen();
-              } else if (role == 'admin') {
-                screen = const WrongPlatformScreen(
-                  message: 'Admin accounts are only available on Web.',
-                  icon: Icons.computer,
-                );
-              } else if (role == 'org') {
-                screen = const WrongPlatformScreen(
-                  message:
-                      'Organization accounts are only available on Web.',
-                  icon: Icons.business,
-                );
-              } else {
-                screen = const StudentLogin();
-              }
-            } else {
+  // Mobile
+  if (role == 'student') {
+    screen = FutureBuilder<QuerySnapshot>(
+      future: FirebaseFirestore.instance
+          .collection('students')
+          .where('uid', isEqualTo: user.uid)
+          .limit(1)
+          .get(),
+      builder: (context, userDocSnapshot) {
+        if (userDocSnapshot.connectionState == ConnectionState.waiting) {
+          return const Scaffold(
+              body: Center(child: CircularProgressIndicator()));
+        }
+
+        if (userDocSnapshot.hasData &&
+            userDocSnapshot.data!.docs.isNotEmpty) {
+          final data = userDocSnapshot.data!.docs.first.data()
+              as Map<String, dynamic>;
+          final mustChange = data['mustChangePassword'] ?? false;
+          debugPrint(
+              '📋 Student doc: $data, mustChangePassword: $mustChange');
+
+          if (mustChange == true) {
+            return const StudentChangePasswordScreen();
+          } else {
+            return const StudentHomeScreen();
+          }
+        } else {
+          return const StudentHomeScreen();
+        }
+      },
+    );
+  } else if (role == 'admin') {
+    screen = const WrongPlatformScreen(
+      message: 'Admin accounts are only available on Web.',
+      icon: Icons.computer,
+    );
+  } else if (role == 'org') {
+    screen = const WrongPlatformScreen(
+      message: 'Organization accounts are only available on Web.',
+      icon: Icons.business,
+    );
+  } else {
+    screen = const StudentLogin();
+  }
+} else {
               // Web
               if (role == 'admin') {
                 screen = const AdminDashboard();
