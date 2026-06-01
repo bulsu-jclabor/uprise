@@ -1,33 +1,86 @@
 // lib/screens/web/org/org_broadcast.dart
+// Redesigned: Professional + polished broadcast channel UI
+// Matches StudentAccounts / OrgAnnouncements design language exactly
+// All Firestore parameters preserved for student-side compatibility
 
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:flutter/services.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
-import 'dart:convert';
-import '../../../services/activity_logger.dart' as activity_log;
 import 'package:file_picker/file_picker.dart';
-import 'package:firebase_storage/firebase_storage.dart';
-import 'dart:io';
+import '../../../services/activity_logger.dart' as activity_log;
 
-// ─── Color Scheme ─────────────────────────────────────────────────────────────
-class OrgColors {
+// ─────────────────────────────────────────────────────────────────────────────
+// Design Tokens — identical to StudentAccounts / OrgAnnouncements
+// ─────────────────────────────────────────────────────────────────────────────
+class _C {
   static const Color primaryDark  = Color(0xFFB45309);
   static const Color primaryLight = Color(0xFFD97706);
   static const Color accent       = Color(0xFFF59E0B);
+
   static const Color white        = Color(0xFFFFFFFF);
-  static const Color lightGray    = Color(0xFFF9FAFB);
-  static const Color mediumGray   = Color(0xFFE5E7EB);
-  static const Color darkGray     = Color(0xFF6B7280);
-  static const Color charcoal     = Color(0xFF111827);
-  static const Color success      = Color(0xFF10B981);
-  static const Color error        = Color(0xFFEF4444);
-  static const Color info         = Color(0xFF3B82F6);
+  static const Color surface      = Color(0xFFF8F9FB);
+  static const Color pageBg       = Color(0xFFFBFCFE);
+  static const Color feedBg       = Color(0xFFF0F2F5);
+
+  static const Color border       = Color(0xFFE8ECF0);
+  static const Color borderSoft   = Color(0xFFE2E6EA);
+
+  static const Color charcoal     = Color(0xFF1A202C);
+  static const Color textMid      = Color(0xFF374151);
+  static const Color darkGray     = Color(0xFF64748B);
+  static const Color textFaint    = Color(0xFF9AA5B4);
+
+  static const Color success      = Color(0xFF059669);
+  static const Color successBg    = Color(0xFFECFDF5);
+  static const Color warning      = Color(0xFFD97706);
+  static const Color warningBg    = Color(0xFFFFFBEB);
+  static const Color error        = Color(0xFFDC2626);
+  static const Color errorBg      = Color(0xFFFEF2F2);
+  static const Color info         = Color(0xFF2563EB);
+  static const Color infoBg       = Color(0xFFEFF6FF);
 }
 
-// ─── Main Screen ──────────────────────────────────────────────────────────────
+class _DS {
+  static const double radiusSm   = 8;
+  static const double radiusMd   = 12;
+  static const double radiusLg   = 16;
+
+  static final List<BoxShadow> cardShadow = [
+    BoxShadow(
+      color: Color.fromRGBO(0, 0, 0, 0.06),
+      blurRadius: 12,
+      offset: Offset(0, 4),
+    ),
+  ];
+
+  static final List<BoxShadow> bubbleShadow = [
+    BoxShadow(
+      color: Color.fromRGBO(180, 83, 9, 0.14),
+      blurRadius: 8,
+      offset: Offset(0, 3),
+    ),
+  ];
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Image provider helper (supports base64 data URIs + network URLs)
+// ─────────────────────────────────────────────────────────────────────────────
+ImageProvider _imageProviderFromUrl(String url) {
+  if (url.startsWith('data:image')) {
+    final base64Part = url.split(',').last;
+    return MemoryImage(base64Decode(base64Part));
+  }
+  return NetworkImage(url);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Main Screen
+// ─────────────────────────────────────────────────────────────────────────────
 class OrgBroadcastScreen extends StatefulWidget {
   final String orgId;
   final String orgName;
@@ -43,21 +96,29 @@ class OrgBroadcastScreen extends StatefulWidget {
 }
 
 class _OrgBroadcastScreenState extends State<OrgBroadcastScreen> {
-  final TextEditingController _messageCtrl = TextEditingController();
-  final ScrollController _scrollCtrl = ScrollController();
+  final TextEditingController _messageCtrl  = TextEditingController();
+  final ScrollController       _scrollCtrl  = ScrollController();
+  final FocusNode              _inputFocus  = FocusNode();
+
   List<Attachment> _pendingAttachments = [];
   String? _pendingImageUrl;
-  bool _isSending = false;
-  bool _isUploadingFile = false;
-  bool _isUploadingImage = false;
-
-  // Member count — fetch once
-  int _memberCount = 0;
+  bool _isSending         = false;
+  bool _isUploadingFile   = false;
+  bool _isUploadingImage  = false;
+  int  _memberCount       = 0;
 
   @override
   void initState() {
     super.initState();
     _fetchMemberCount();
+  }
+
+  @override
+  void dispose() {
+    _messageCtrl.dispose();
+    _scrollCtrl.dispose();
+    _inputFocus.dispose();
+    super.dispose();
   }
 
   Future<void> _fetchMemberCount() async {
@@ -89,285 +150,187 @@ class _OrgBroadcastScreenState extends State<OrgBroadcastScreen> {
     });
   }
 
+  // ── File upload ──────────────────────────────────────────────────────────
   Future<void> _pickFiles() async {
-  final result = await FilePicker.platform.pickFiles(allowMultiple: true);
-  if (result == null) return;
-  
-  setState(() => _isUploadingFile = true);
-  
-  try {
-    int uploaded = 0;
-    final total = result.files.length;
-    
-    // Show progress dialog
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setDialogState) {
-          return AlertDialog(
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const CircularProgressIndicator(),
-                const SizedBox(height: 16),
-                Text('Uploading files...', style: GoogleFonts.beVietnamPro()),
-                const SizedBox(height: 8),
-                Text('$uploaded of $total', style: GoogleFonts.beVietnamPro(fontSize: 12)),
-              ],
-            ),
-          );
-        },
-      ),
-    );
-    
-    for (final file in result.files) {
-      final bytes = file.bytes;
-      if (bytes == null) continue;
-      
-      // Check file size (max 10MB)
-      const maxSize = 10 * 1024 * 1024; // 10MB
-      if (bytes.length > maxSize) {
-        _showError('${file.name} is too large. Max 10MB');
-        continue;
+    final result = await FilePicker.platform.pickFiles(allowMultiple: true);
+    if (result == null) return;
+    setState(() => _isUploadingFile = true);
+
+    try {
+      int uploaded = 0;
+      for (final file in result.files) {
+        final bytes = file.bytes;
+        if (bytes == null) continue;
+        if (bytes.length > 10 * 1024 * 1024) {
+          _snack('${file.name} exceeds 10 MB', isError: true);
+          continue;
+        }
+        final fileName = '${DateTime.now().millisecondsSinceEpoch}_${file.name}';
+        final ref = FirebaseStorage.instance
+            .ref()
+            .child('broadcasts/${widget.orgId}/files/$fileName');
+        await ref.putData(bytes);
+        final url = await ref.getDownloadURL();
+        setState(() => _pendingAttachments.add(Attachment(name: file.name, url: url)));
+        uploaded++;
       }
-      
+      if (uploaded > 0) _snack('$uploaded file(s) attached');
+    } catch (e) {
+      _snack('Upload failed: $e', isError: true);
+    } finally {
+      if (mounted) setState(() => _isUploadingFile = false);
+    }
+  }
+
+  // ── Image upload ─────────────────────────────────────────────────────────
+  Future<void> _pickImage() async {
+    final result = await FilePicker.platform
+        .pickFiles(type: FileType.image, allowMultiple: false);
+    if (result == null || result.files.isEmpty) return;
+    setState(() => _isUploadingImage = true);
+
+    try {
+      final file  = result.files.first;
+      final bytes = file.bytes;
+      if (bytes == null) throw 'No image data';
+      if (bytes.length > 5 * 1024 * 1024) {
+        _snack('Image too large — max 5 MB', isError: true);
+        return;
+      }
       final fileName = '${DateTime.now().millisecondsSinceEpoch}_${file.name}';
       final ref = FirebaseStorage.instance
           .ref()
-          .child('broadcasts/${widget.orgId}/files/$fileName');
-      
-      await ref.putData(bytes);
+          .child('broadcasts/${widget.orgId}/images/$fileName');
+      await ref.putData(bytes, SettableMetadata(contentType: 'image/jpeg'));
       final url = await ref.getDownloadURL();
-      
-      setState(() {
-        _pendingAttachments.add(Attachment(name: file.name, url: url));
-      });
-      
-      uploaded++;
-      
-      // Update dialog
-      if (mounted) {
-        Navigator.pop(context); // Close old
-        showDialog(
-          context: context,
-          barrierDismissible: false,
-          builder: (context) => AlertDialog(
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const CircularProgressIndicator(),
-                const SizedBox(height: 16),
-                Text('Uploading files...', style: GoogleFonts.beVietnamPro()),
-                const SizedBox(height: 8),
-                Text('$uploaded of $total', style: GoogleFonts.beVietnamPro(fontSize: 12)),
-              ],
-            ),
-          ),
-        );
-      }
+      setState(() => _pendingImageUrl = url);
+      _snack('Image ready');
+    } catch (e) {
+      _snack('Failed to upload image: $e', isError: true);
+    } finally {
+      if (mounted) setState(() => _isUploadingImage = false);
     }
-    
-    // Close dialog
-    if (mounted) Navigator.pop(context);
-    
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('$uploaded files uploaded successfully!'),
-          backgroundColor: OrgColors.success,
-        ),
-      );
-    }
-  } catch (e) {
-    if (mounted) Navigator.pop(context); // Close dialog
-    print('File upload error: $e');
-    _showError('Upload failed: $e');
-  } finally {
-    if (mounted) setState(() => _isUploadingFile = false);
-  }
-}
-
-  Future<void> _pickImage() async {
-  final result = await FilePicker.platform.pickFiles(
-    type: FileType.image,
-    allowMultiple: false,
-  );
-  if (result == null || result.files.isEmpty) return;
-  
-  setState(() => _isUploadingImage = true);
-  
-  try {
-    final file = result.files.first;
-    final bytes = file.bytes;
-    if (bytes == null) throw 'No image data';
-    
-    // Check file size (max 5MB)
-    const maxSize = 5 * 1024 * 1024; // 5MB
-    if (bytes.length > maxSize) {
-      _showError('Image too large. Max 5MB');
-      return;
-    }
-    
-    // Show loading dialog with progress
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const CircularProgressIndicator(),
-            const SizedBox(height: 16),
-            Text('Uploading image...', style: GoogleFonts.beVietnamPro()),
-          ],
-        ),
-      ),
-    );
-    
-    final fileName = '${DateTime.now().millisecondsSinceEpoch}_${file.name}';
-    final ref = FirebaseStorage.instance
-        .ref()
-        .child('broadcasts/${widget.orgId}/images/$fileName');
-    
-    // Upload with metadata
-    final metadata = SettableMetadata(contentType: 'image/jpeg');
-    await ref.putData(bytes, metadata);
-    final downloadUrl = await ref.getDownloadURL();
-    
-    // Close loading dialog
-    Navigator.pop(context);
-    
-    setState(() => _pendingImageUrl = downloadUrl);
-    
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Image ready!'), backgroundColor: OrgColors.success),
-      );
-    }
-  } catch (e) {
-    if (mounted) Navigator.pop(context); // Close dialog if error
-    print('Image upload error: $e');
-    _showError('Failed to upload image: $e');
-  } finally {
-    if (mounted) setState(() => _isUploadingImage = false);
-  }
-}
-
-  void _showError(String msg) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(msg), backgroundColor: OrgColors.error),
-    );
   }
 
+  // ── Send ─────────────────────────────────────────────────────────────────
   Future<void> _sendMessage() async {
-  final text = _messageCtrl.text.trim();
-  if (text.isEmpty && _pendingAttachments.isEmpty && _pendingImageUrl == null) return;
-  
-  setState(() => _isSending = true);
-  
-  try {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) throw 'No user logged in';
-    
-    final userDoc = await FirebaseFirestore.instance
-        .collection('users')
-        .doc(user.uid)
-        .get();
-    
-    final authorName = userDoc.data()?['name'] ?? user.email ?? 'Unknown';
-    
-    // Prepare data (imageUrl is already a Storage URL if exists)
-    final broadcastData = {
-      'orgId': widget.orgId,
-      'content': text,
-      'authorId': user.uid,
-      'authorName': authorName,
-      'attachments': _pendingAttachments.map((a) => {'name': a.name, 'url': a.url}).toList(),
-      'timestamp': FieldValue.serverTimestamp(),
-    };
-    
-    // Only add imageUrl if it exists
-    if (_pendingImageUrl != null && _pendingImageUrl!.isNotEmpty) {
-      broadcastData['imageUrl'] = _pendingImageUrl;
-    }
-    
-    await FirebaseFirestore.instance.collection('broadcasts').add(broadcastData);
-    
-    await activity_log.ActivityLogger.log(
-      action: 'send_broadcast',
-      module: 'broadcast',
-      details: {'orgId': widget.orgId},
-    );
-    
-    // Clear everything
-    _messageCtrl.clear();
-    setState(() {
-      _pendingAttachments = [];
-      _pendingImageUrl = null;
-    });
-    
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Message sent!'), backgroundColor: OrgColors.success),
-      );
-    }
-    
-    _scrollToBottom();
-  } catch (e) {
-    print('Send error: $e');
-    _showError('Failed to send: $e');
-  } finally {
-    if (mounted) setState(() => _isSending = false);
-  }
-}
+    final text = _messageCtrl.text.trim();
+    if (text.isEmpty && _pendingAttachments.isEmpty && _pendingImageUrl == null) return;
+    setState(() => _isSending = true);
 
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) throw 'No user logged in';
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .get();
+      final authorName = userDoc.data()?['name'] ?? user.email ?? 'Unknown';
+
+      final data = <String, dynamic>{
+        'orgId':       widget.orgId,
+        'content':     text,
+        'authorId':    user.uid,
+        'authorName':  authorName,
+        'attachments': _pendingAttachments
+            .map((a) => {'name': a.name, 'url': a.url})
+            .toList(),
+        'likes':       0,
+        'replyCount':  0,
+        'pinned':      false,
+        'timestamp': FieldValue.serverTimestamp(),
+      };
+      if (_pendingImageUrl != null && _pendingImageUrl!.isNotEmpty) {
+        data['imageUrl'] = _pendingImageUrl;
+      }
+
+      await FirebaseFirestore.instance.collection('broadcasts').add(data);
+      await activity_log.ActivityLogger.log(
+        action: 'send_broadcast',
+        module: 'broadcast',
+        details: {'orgId': widget.orgId},
+      );
+
+      _messageCtrl.clear();
+      setState(() {
+        _pendingAttachments = [];
+        _pendingImageUrl    = null;
+      });
+      _inputFocus.requestFocus();
+      _scrollToBottom();
+    } catch (e) {
+      _snack('Failed to send: $e', isError: true);
+    } finally {
+      if (mounted) setState(() => _isSending = false);
+    }
+  }
+
+  // ── Delete ───────────────────────────────────────────────────────────────
   Future<void> _deleteMessage(BroadcastModel broadcast) async {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => Dialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-        child: Padding(
-          padding: const EdgeInsets.all(24),
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(_DS.radiusLg)),
+        child: Container(
+          width: 400,
+          padding: const EdgeInsets.all(28),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(children: [
                 Container(
-                  padding: const EdgeInsets.all(8),
+                  width: 42, height: 42,
                   decoration: BoxDecoration(
-                    color: OrgColors.error.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: const Icon(Icons.delete_outline, color: OrgColors.error, size: 18),
+                      color: _C.errorBg,
+                      borderRadius: BorderRadius.circular(10)),
+                  child: const Icon(Icons.delete_outline_rounded,
+                      color: _C.error, size: 20),
                 ),
-                const SizedBox(width: 10),
+                const SizedBox(width: 14),
                 Text('Delete Message',
-                    style: GoogleFonts.beVietnamPro(fontSize: 15, fontWeight: FontWeight.w700)),
+                    style: GoogleFonts.beVietnamPro(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w700,
+                        color: _C.charcoal)),
               ]),
               const SizedBox(height: 14),
-              Text('This message will be permanently deleted.',
-                  style: GoogleFonts.beVietnamPro(fontSize: 13, color: OrgColors.darkGray)),
-              const SizedBox(height: 20),
+              Text(
+                'This message will be permanently removed from the broadcast channel.',
+                style: GoogleFonts.beVietnamPro(
+                    fontSize: 14, color: _C.darkGray, height: 1.5),
+              ),
+              const SizedBox(height: 24),
               Row(mainAxisAlignment: MainAxisAlignment.end, children: [
                 OutlinedButton(
                   onPressed: () => Navigator.pop(ctx, false),
                   style: OutlinedButton.styleFrom(
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    side: const BorderSide(color: _C.borderSoft),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8)),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 18, vertical: 11),
                   ),
-                  child: Text('Cancel', style: GoogleFonts.beVietnamPro()),
+                  child: Text('Cancel',
+                      style: GoogleFonts.beVietnamPro(
+                          fontSize: 13, color: _C.textMid)),
                 ),
                 const SizedBox(width: 10),
                 ElevatedButton(
                   onPressed: () => Navigator.pop(ctx, true),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: OrgColors.error,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    backgroundColor: _C.error,
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8)),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 18, vertical: 11),
                   ),
                   child: Text('Delete',
-                      style: GoogleFonts.beVietnamPro(color: Colors.white, fontWeight: FontWeight.w600)),
+                      style: GoogleFonts.beVietnamPro(
+                          fontSize: 13, fontWeight: FontWeight.w600)),
                 ),
               ]),
             ],
@@ -376,345 +339,501 @@ class _OrgBroadcastScreenState extends State<OrgBroadcastScreen> {
       ),
     );
     if (confirm != true) return;
+
     try {
+      // Clean up Storage files
       for (final att in broadcast.attachments) {
-        try { await FirebaseStorage.instance.refFromURL(att.url).delete(); } catch (_) {}
+        try {
+          await FirebaseStorage.instance.refFromURL(att.url).delete();
+        } catch (_) {}
       }
-      if (broadcast.imageUrl != null && broadcast.imageUrl!.isNotEmpty && !broadcast.imageUrl!.startsWith('data:')) {
-        try { await FirebaseStorage.instance.refFromURL(broadcast.imageUrl!).delete(); } catch (_) {}
+      if (broadcast.imageUrl != null &&
+          broadcast.imageUrl!.isNotEmpty &&
+          !broadcast.imageUrl!.startsWith('data:')) {
+        try {
+          await FirebaseStorage.instance
+              .refFromURL(broadcast.imageUrl!)
+              .delete();
+        } catch (_) {}
       }
-      await FirebaseFirestore.instance.collection('broadcasts').doc(broadcast.id).delete();
-      await activity_log.ActivityLogger.log(action: 'delete_broadcast', module: 'broadcast',
-          details: {'orgId': widget.orgId, 'broadcastId': broadcast.id});
+      await FirebaseFirestore.instance
+          .collection('broadcasts')
+          .doc(broadcast.id)
+          .delete();
+      await activity_log.ActivityLogger.log(
+        action: 'delete_broadcast',
+        module: 'broadcast',
+        details: {'orgId': widget.orgId, 'broadcastId': broadcast.id},
+      );
     } catch (e) {
-      _showError('Error: $e');
+      _snack('Error: $e', isError: true);
     }
   }
 
-  @override
-  void dispose() {
-    _messageCtrl.dispose();
-    _scrollCtrl.dispose();
-    super.dispose();
+  void _snack(String msg, {bool isError = false}) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Row(children: [
+        Icon(
+            isError ? Icons.error_outline : Icons.check_circle_outline,
+            color: Colors.white,
+            size: 16),
+        const SizedBox(width: 8),
+        Expanded(
+            child: Text(msg,
+                style: GoogleFonts.beVietnamPro(
+                    fontSize: 13, color: Colors.white))),
+      ]),
+      backgroundColor: isError ? _C.error : _C.success,
+      behavior: SnackBarBehavior.floating,
+      shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(_DS.radiusSm)),
+    ));
   }
 
+  bool _sameDay(Timestamp a, Timestamp b) {
+    final da = a.toDate(), db = b.toDate();
+    return da.year == db.year &&
+        da.month == db.month &&
+        da.day == db.day;
+  }
+
+  // ── Member count formatter ────────────────────────────────────────────────
+  String _formatCount(int n) =>
+      n.toString().replaceAllMapped(
+          RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
+          (m) => '${m[1]},');
+
+  // ==========================================================================
+  // BUILD
+  // ==========================================================================
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        // ── Channel Header ────────────────────────────────────────────────
+    return Scaffold(
+      backgroundColor: _C.pageBg,
+      body: Column(children: [
+        _buildChannelHeader(),
+        Expanded(child: _buildFeedShell()),
+        if (_pendingAttachments.isNotEmpty || _pendingImageUrl != null)
+          _buildAttachmentPreviewBar(),
+        _buildComposeBar(),
+      ]),
+    );
+  }
+
+  // ── Channel header (mirrors StudentAccounts stat row style) ──────────────
+  Widget _buildChannelHeader() {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(28, 20, 28, 18),
+      decoration: BoxDecoration(
+        color: _C.white,
+        border: const Border(bottom: BorderSide(color: _C.border)),
+        boxShadow: _DS.cardShadow,
+      ),
+      child: Row(children: [
+        // Icon badge
         Container(
-          padding: const EdgeInsets.fromLTRB(24, 18, 24, 18),
-          decoration: const BoxDecoration(
-            color: OrgColors.white,
-            border: Border(bottom: BorderSide(color: OrgColors.primaryLight)),
+          width: 46, height: 46,
+          decoration: BoxDecoration(
+            color: _C.primaryDark.withOpacity(0.10),
+            borderRadius: BorderRadius.circular(13),
           ),
-          child: Row(
-            children: [
-              Container(
-                width: 42,
-                height: 42,
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [OrgColors.primaryDark, OrgColors.accent],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: const Icon(Icons.campaign_rounded, color: Colors.white, size: 22),
-              ),
-              const SizedBox(width: 12),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Broadcast Channel',
-                      style: GoogleFonts.beVietnamPro(
-                          fontSize: 17, fontWeight: FontWeight.w800, color: OrgColors.charcoal)),
-                  Text(widget.orgName,
-                      style: GoogleFonts.beVietnamPro(fontSize: 12, color: OrgColors.darkGray)),
-                ],
-              ),
-            ],
-          ),
+          child: const Icon(Icons.campaign_rounded,
+              color: _C.primaryDark, size: 24),
         ),
-
-        // ── Message Feed ──────────────────────────────────────────────────
+        const SizedBox(width: 14),
         Expanded(
-  child: Container(
-    color: OrgColors.lightGray,
-    child: StreamBuilder<QuerySnapshot>(
-      stream: _broadcastsStream,
-      builder: (context, snapshot) {
-        // ✅ Add error handling
-        if (snapshot.hasError) {
-          print('❌ Stream error: ${snapshot.error}');
-          return Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Icon(Icons.error_outline, color: OrgColors.error, size: 48),
-                const SizedBox(height: 16),
-                Text(
-                  'Error loading messages: ${snapshot.error}',
-                  style: GoogleFonts.beVietnamPro(fontSize: 13, color: OrgColors.error),
-                  textAlign: TextAlign.center,
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('Broadcast Channel',
+                style: GoogleFonts.beVietnamPro(
+                    fontSize: 17,
+                    fontWeight: FontWeight.w800,
+                    color: _C.charcoal)),
+            const SizedBox(height: 2),
+            Text(widget.orgName,
+                style: GoogleFonts.beVietnamPro(
+                    fontSize: 12, color: _C.darkGray)),
+          ]),
+        ),
+        // Member pill (mirrors stat card style)
+        StreamBuilder<QuerySnapshot>(
+          stream: FirebaseFirestore.instance
+              .collection('broadcasts')
+              .where('orgId', isEqualTo: widget.orgId)
+              .snapshots(),
+          builder: (_, snap) {
+            final count = snap.data?.docs.length ?? 0;
+            return Row(children: [
+              _HeaderPill(
+                icon: Icons.forum_outlined,
+                label: '$count messages',
+                color: _C.info,
+              ),
+              const SizedBox(width: 10),
+              if (_memberCount > 0)
+                _HeaderPill(
+                  icon: Icons.people_outline_rounded,
+                  label: '${_formatCount(_memberCount)} members',
+                  color: _C.success,
                 ),
-                const SizedBox(height: 12),
-                ElevatedButton(
-                  onPressed: () => setState(() {}), // Refresh
-                  child: const Text('Retry'),
-                ),
-              ],
-            ),
-          );
-        }
-        
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
-        }
-        
-        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-          return Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: OrgColors.accent.withOpacity(0.08),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(Icons.campaign_outlined, size: 44, color: OrgColors.accent),
-                ),
-                const SizedBox(height: 16),
-                Text('No messages yet',
-                    style: GoogleFonts.beVietnamPro(
-                        fontSize: 16, fontWeight: FontWeight.w700, color: OrgColors.charcoal)),
-                const SizedBox(height: 6),
-                Text('Send a broadcast to all members below.',
-                    style: GoogleFonts.beVietnamPro(fontSize: 13, color: OrgColors.darkGray)),
-              ],
-            ),
-          );
-        }
+            ]);
+          },
+        ),
+      ]),
+    );
+  }
 
-        final items = snapshot.data!.docs
-            .map((d) => BroadcastModel.fromFirestore(d))
-            .toList();
-            
-        print('✅ Loaded ${items.length} broadcasts'); // Debug log
+  // ── Feed shell (same white card with shadow as StudentAccounts table) ─────
+  Widget _buildFeedShell() {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(28, 20, 28, 0),
+      decoration: BoxDecoration(
+        color: _C.feedBg,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: _C.border),
+        boxShadow: _DS.cardShadow,
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: StreamBuilder<QuerySnapshot>(
+        stream: _broadcastsStream,
+        builder: (context, snap) {
+          if (snap.hasError) {
+            return _buildErrorState(snap.error.toString());
+          }
+          if (snap.connectionState == ConnectionState.waiting) {
+            return const Center(
+                child: CircularProgressIndicator(color: _C.primaryDark));
+          }
+          if (!snap.hasData || snap.data!.docs.isEmpty) {
+            return _buildEmptyState();
+          }
 
-        _scrollToBottom();
+          final items = snap.data!.docs
+              .map((d) => BroadcastModel.fromFirestore(d))
+              .toList();
 
-        return ListView.builder(
-          controller: _scrollCtrl,
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
-          itemCount: items.length,
-          itemBuilder: (ctx, i) {
-            final msg = items[i];
-            final showDateSep = i == 0 ||
-                !_sameDay(items[i - 1].timestamp, msg.timestamp);
-            return Column(
-              children: [
-                if (showDateSep) _DateSeparator(timestamp: msg.timestamp),
+          _scrollToBottom();
+
+          return ListView.builder(
+            controller: _scrollCtrl,
+            padding: const EdgeInsets.fromLTRB(24, 20, 24, 20),
+            itemCount: items.length,
+            itemBuilder: (ctx, i) {
+              final msg      = items[i];
+              final showSep  = i == 0 ||
+                  !_sameDay(items[i - 1].timestamp, msg.timestamp);
+              return Column(children: [
+                if (showSep) _DateSeparator(timestamp: msg.timestamp),
                 _BroadcastBubble(
                   broadcast: msg,
                   onDelete: () => _deleteMessage(msg),
                 ),
-              ],
-            );
-          },
-        );
-      },
-    ),
-  ),
-),
-
-        // ── Pending Attachments Preview ───────────────────────────────────
-        if (_pendingAttachments.isNotEmpty || _pendingImageUrl != null)
-          Container(
-            color: OrgColors.white,
-            padding: const EdgeInsets.fromLTRB(20, 10, 20, 0),
-            child: Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                if (_pendingImageUrl != null)
-                  Stack(
-                    children: [
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(8),
-                        child: Image(
-                          image: _imageProviderFromUrl(_pendingImageUrl!),
-                          width: 60,
-                          height: 60,
-                          fit: BoxFit.cover,
-                        ),
-                      ),
-                      Positioned(
-                        top: 2, right: 2,
-                        child: InkWell(
-                          onTap: () => setState(() => _pendingImageUrl = null),
-                          child: Container(
-                            padding: const EdgeInsets.all(2),
-                            decoration: BoxDecoration(
-                              color: Colors.black.withOpacity(0.6),
-                              shape: BoxShape.circle,
-                            ),
-                            child: const Icon(Icons.close, size: 12, color: Colors.white),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ..._pendingAttachments.asMap().entries.map((e) => Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: OrgColors.lightGray,
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: OrgColors.primaryLight),
-                      ),
-                      child: Row(mainAxisSize: MainAxisSize.min, children: [
-                        const Icon(Icons.insert_drive_file_outlined, size: 14, color: OrgColors.info),
-                        const SizedBox(width: 6),
-                        Text(e.value.name,
-                            style: GoogleFonts.beVietnamPro(fontSize: 12),
-                            maxLines: 120),
-                        const SizedBox(width: 6),
-                        InkWell(
-                          onTap: () => setState(() => _pendingAttachments.removeAt(e.key)),
-                          child: const Icon(Icons.close, size: 12, color: OrgColors.darkGray),
-                        ),
-                      ]),
-                    )),
-              ],
-            ),
-          ),
-
-        // ── Compose Bar ───────────────────────────────────────────────────
-        Container(
-          padding: const EdgeInsets.fromLTRB(20, 10, 20, 16),
-          decoration: const BoxDecoration(
-            color: OrgColors.white,
-            border: Border(top: BorderSide(color: OrgColors.primaryLight)),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Toolbar
-              Row(
-                children: [
-                  _ToolbarBtn(
-                    icon: Icons.attach_file_rounded,
-                    label: 'Attach',
-                    isLoading: _isUploadingFile,
-                    onTap: _pickFiles,
-                  ),
-                  const SizedBox(width: 4),
-                  _ToolbarBtn(
-                    icon: Icons.image_outlined,
-                    label: 'Image',
-                    isLoading: _isUploadingImage,
-                    onTap: _pickImage,
-                  ),
-                  const SizedBox(width: 4),
-                  _ToolbarBtn(
-                    icon: Icons.emoji_emotions_outlined,
-                    label: 'Emoji',
-                    onTap: () {}, // placeholder
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              // Input row
-              Row(
-                children: [
-                  Expanded(
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: OrgColors.lightGray,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: OrgColors.primaryLight),
-                      ),
-                      child: TextField(
-                        controller: _messageCtrl,
-                        style: GoogleFonts.beVietnamPro(fontSize: 13),
-                        maxLines: null,
-                        onSubmitted: (_) => _sendMessage(),
-                        decoration: InputDecoration(
-                          hintText: 'Click here to type your message to all members...',
-                          hintStyle:
-                              GoogleFonts.beVietnamPro(fontSize: 13, color: OrgColors.darkGray),
-                          border: InputBorder.none,
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  // Send button
-                  InkWell(
-                    onTap: _isSending ? null : _sendMessage,
-                    borderRadius: BorderRadius.circular(12),
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 200),
-                      width: 46,
-                      height: 46,
-                      decoration: BoxDecoration(
-                        gradient: const LinearGradient(
-                          colors: [OrgColors.primaryDark, OrgColors.accent],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                        ),
-                        borderRadius: BorderRadius.circular(12),
-                        boxShadow: [
-                          BoxShadow(
-                              color: OrgColors.accent.withOpacity(0.35),
-                              blurRadius: 8,
-                              offset: const Offset(0, 2)),
-                        ],
-                      ),
-                      child: _isSending
-                          ? const Center(
-                              child: SizedBox(
-                                  width: 18, height: 18,
-                                  child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)))
-                          : const Icon(Icons.send_rounded, color: Colors.white, size: 20),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              // Footer note
-              Text(
-                _memberCount > 0
-                    ? 'Your messages will be sent to all ${_memberCount.toString().replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]},')} members. Only you can send messages.'
-                    : 'Your messages will be sent to all members. Only you can send messages.',
-                style: GoogleFonts.beVietnamPro(fontSize: 11, color: OrgColors.darkGray),
-              ),
-            ],
-          ),
-        ),
-      ],
+              ]);
+            },
+          );
+        },
+      ),
     );
   }
 
-  bool _sameDay(Timestamp a, Timestamp b) {
-    final da = a.toDate();
-    final db = b.toDate();
-    return da.year == db.year && da.month == db.month && da.day == db.day;
+  Widget _buildEmptyState() {
+    return Center(
+      child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+        Container(
+          width: 80, height: 80,
+          decoration: BoxDecoration(
+              color: _C.white, borderRadius: BorderRadius.circular(20),
+              boxShadow: _DS.cardShadow),
+          child: const Icon(Icons.campaign_outlined,
+              size: 40, color: _C.textFaint),
+        ),
+        const SizedBox(height: 16),
+        Text('No messages yet',
+            style: GoogleFonts.beVietnamPro(
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+                color: _C.charcoal)),
+        const SizedBox(height: 6),
+        Text('Send a broadcast to all members below.',
+            style: GoogleFonts.beVietnamPro(
+                fontSize: 13, color: _C.darkGray)),
+      ]),
+    );
+  }
+
+  Widget _buildErrorState(String error) {
+    return Center(
+      child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+        Container(
+          width: 56, height: 56,
+          decoration: BoxDecoration(
+              color: _C.errorBg,
+              borderRadius: BorderRadius.circular(16)),
+          child: const Icon(Icons.error_outline_rounded,
+              color: _C.error, size: 28),
+        ),
+        const SizedBox(height: 14),
+        Text('Failed to load messages',
+            style: GoogleFonts.beVietnamPro(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: _C.charcoal)),
+        const SizedBox(height: 6),
+        Text(error,
+            style: GoogleFonts.beVietnamPro(
+                fontSize: 12, color: _C.darkGray),
+            textAlign: TextAlign.center),
+        const SizedBox(height: 16),
+        ElevatedButton.icon(
+          onPressed: () => setState(() {}),
+          icon: const Icon(Icons.refresh_rounded, size: 15),
+          label: Text('Retry',
+              style: GoogleFonts.beVietnamPro(
+                  fontSize: 13, fontWeight: FontWeight.w600)),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: _C.primaryDark,
+            foregroundColor: Colors.white,
+            elevation: 0,
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8)),
+          ),
+        ),
+      ]),
+    );
+  }
+
+  // ── Pending attachments preview bar ──────────────────────────────────────
+  Widget _buildAttachmentPreviewBar() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(28, 10, 28, 0),
+      color: _C.white,
+      child: Wrap(spacing: 8, runSpacing: 8, children: [
+        // Image preview
+        if (_pendingImageUrl != null)
+          Stack(children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: Image(
+                image: _imageProviderFromUrl(_pendingImageUrl!),
+                width: 64, height: 64, fit: BoxFit.cover,
+              ),
+            ),
+            Positioned(
+              top: 3, right: 3,
+              child: InkWell(
+                onTap: () => setState(() => _pendingImageUrl = null),
+                child: Container(
+                  width: 20, height: 20,
+                  decoration: BoxDecoration(
+                      color: Colors.black.withOpacity(0.65),
+                      shape: BoxShape.circle),
+                  child: const Icon(Icons.close_rounded,
+                      size: 12, color: Colors.white),
+                ),
+              ),
+            ),
+          ]),
+        // File chips
+        ..._pendingAttachments.asMap().entries.map((e) => Container(
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: _C.infoBg,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                    color: _C.info.withOpacity(0.25)),
+              ),
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                const Icon(Icons.insert_drive_file_outlined,
+                    size: 14, color: _C.info),
+                const SizedBox(width: 6),
+                Text(e.value.name,
+                    style: GoogleFonts.beVietnamPro(
+                        fontSize: 12,
+                        color: _C.info,
+                        fontWeight: FontWeight.w500)),
+                const SizedBox(width: 6),
+                InkWell(
+                  onTap: () => setState(
+                      () => _pendingAttachments.removeAt(e.key)),
+                  child: const Icon(Icons.close_rounded,
+                      size: 13, color: _C.info),
+                ),
+              ]),
+            )),
+      ]),
+    );
+  }
+
+  // ── Compose bar ──────────────────────────────────────────────────────────
+  Widget _buildComposeBar() {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(28, 12, 28, 18),
+      decoration: BoxDecoration(
+        color: _C.white,
+        border: const Border(top: BorderSide(color: _C.border)),
+        boxShadow: [
+          BoxShadow(
+            color: Color.fromRGBO(0, 0, 0, 0.04),
+            blurRadius: 8,
+            offset: const Offset(0, -2),
+          ),
+        ],
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        // Toolbar row — matches the StudentAccounts outlined toolbar button style
+        Row(children: [
+          _ComposeToolbarBtn(
+            icon: Icons.attach_file_rounded,
+            label: 'Attach',
+            isLoading: _isUploadingFile,
+            onTap: _pickFiles,
+          ),
+          const SizedBox(width: 4),
+          _ComposeToolbarBtn(
+            icon: Icons.image_outlined,
+            label: 'Image',
+            isLoading: _isUploadingImage,
+            onTap: _pickImage,
+          ),
+          const Spacer(),
+          // Recipient note
+          Row(children: [
+            const Icon(Icons.people_outline_rounded,
+                size: 13, color: _C.textFaint),
+            const SizedBox(width: 5),
+            Text(
+              _memberCount > 0
+                  ? 'Sending to ${_formatCount(_memberCount)} members'
+                  : 'Sending to all members',
+              style: GoogleFonts.beVietnamPro(
+                  fontSize: 11, color: _C.textFaint),
+            ),
+          ]),
+        ]),
+        const SizedBox(height: 10),
+        // Input + send row
+        Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
+          Expanded(
+            child: Container(
+              decoration: BoxDecoration(
+                color: _C.surface,
+                borderRadius: BorderRadius.circular(_DS.radiusMd),
+                border: Border.all(color: _C.borderSoft),
+              ),
+              child: TextField(
+                controller: _messageCtrl,
+                focusNode: _inputFocus,
+                style: GoogleFonts.beVietnamPro(
+                    fontSize: 13, color: _C.charcoal),
+                maxLines: null,
+                minLines: 1,
+                keyboardType: TextInputType.multiline,
+                textInputAction: TextInputAction.newline,
+                decoration: InputDecoration(
+                  hintText:
+                      'Write a message to all members…',
+                  hintStyle: GoogleFonts.beVietnamPro(
+                      fontSize: 13, color: _C.textFaint),
+                  border: InputBorder.none,
+                  contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 16, vertical: 13),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          // Send button — gradient to match brand
+          InkWell(
+            onTap: _isSending ? null : _sendMessage,
+            borderRadius: BorderRadius.circular(_DS.radiusMd),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 180),
+              width: 46, height: 46,
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [_C.primaryDark, _C.accent],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius:
+                    BorderRadius.circular(_DS.radiusMd),
+                boxShadow: [
+                  BoxShadow(
+                    color: _C.accent.withOpacity(0.35),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: _isSending
+                  ? const Center(
+                      child: SizedBox(
+                        width: 18, height: 18,
+                        child: CircularProgressIndicator(
+                            color: Colors.white,
+                            strokeWidth: 2),
+                      ),
+                    )
+                  : const Icon(Icons.send_rounded,
+                      color: Colors.white, size: 20),
+            ),
+          ),
+        ]),
+        const SizedBox(height: 6),
+        Text(
+          'Only organization officers can broadcast. Members can react and reply under each message.',
+          style: GoogleFonts.beVietnamPro(
+              fontSize: 10, color: _C.textFaint),
+        ),
+      ]),
+    );
   }
 }
 
-// ─── Toolbar Button ───────────────────────────────────────────────────────────
-class _ToolbarBtn extends StatelessWidget {
+// ─────────────────────────────────────────────────────────────────────────────
+// Header Pill (small stat badge in the header)
+// ─────────────────────────────────────────────────────────────────────────────
+class _HeaderPill extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final Color color;
+  const _HeaderPill(
+      {required this.icon, required this.label, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: color.withOpacity(0.2)),
+      ),
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        Icon(icon, size: 13, color: color),
+        const SizedBox(width: 6),
+        Text(label,
+            style: GoogleFonts.beVietnamPro(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: color)),
+      ]),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Compose toolbar button
+// ─────────────────────────────────────────────────────────────────────────────
+class _ComposeToolbarBtn extends StatelessWidget {
   final IconData icon;
   final String label;
   final VoidCallback onTap;
   final bool isLoading;
 
-  const _ToolbarBtn({
+  const _ComposeToolbarBtn({
     required this.icon,
     required this.label,
     required this.onTap,
@@ -726,202 +845,543 @@ class _ToolbarBtn extends StatelessWidget {
     return InkWell(
       onTap: isLoading ? null : onTap,
       borderRadius: BorderRadius.circular(8),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (isLoading)
-              const SizedBox(
-                  width: 14, height: 14,
-                  child: CircularProgressIndicator(strokeWidth: 2, color: OrgColors.darkGray))
-            else
-              Icon(icon, size: 16, color: OrgColors.darkGray),
-            const SizedBox(width: 5),
-            Text(label,
-                style: GoogleFonts.beVietnamPro(fontSize: 12, color: OrgColors.darkGray, fontWeight: FontWeight.w500)),
-          ],
+      child: Container(
+        padding: const EdgeInsets.symmetric(
+            horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: _C.surface,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: _C.borderSoft),
         ),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          if (isLoading)
+            const SizedBox(
+              width: 14, height: 14,
+              child: CircularProgressIndicator(
+                  strokeWidth: 2, color: _C.darkGray),
+            )
+          else
+            Icon(icon, size: 15, color: _C.darkGray),
+          const SizedBox(width: 6),
+          Text(label,
+              style: GoogleFonts.beVietnamPro(
+                  fontSize: 12,
+                  color: _C.darkGray,
+                  fontWeight: FontWeight.w500)),
+        ]),
       ),
     );
   }
 }
 
-// ─── Date Separator ───────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// Date Separator
+// ─────────────────────────────────────────────────────────────────────────────
 class _DateSeparator extends StatelessWidget {
   final Timestamp timestamp;
   const _DateSeparator({required this.timestamp});
 
   String _label() {
-    final now = DateTime.now();
+    final now  = DateTime.now();
     final date = timestamp.toDate();
-    if (date.year == now.year && date.month == now.month && date.day == now.day) {
-      return 'Today';
-    }
+    if (date.year == now.year &&
+        date.month == now.month &&
+        date.day == now.day) return 'Today';
     final yesterday = now.subtract(const Duration(days: 1));
-    if (date.year == yesterday.year && date.month == yesterday.month && date.day == yesterday.day) {
-      return 'Yesterday';
-    }
-    return DateFormat('MMM d').format(date);
+    if (date.year == yesterday.year &&
+        date.month == yesterday.month &&
+        date.day == yesterday.day) return 'Yesterday';
+    return DateFormat('MMMM d, yyyy').format(date);
   }
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 14),
-      child: Row(
-        children: [
-          const Expanded(child: Divider(color: OrgColors.mediumGray)),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            child: Text(_label(),
-                style: GoogleFonts.beVietnamPro(
-                    fontSize: 11, fontWeight: FontWeight.w600, color: OrgColors.darkGray)),
+      padding: const EdgeInsets.symmetric(vertical: 16),
+      child: Row(children: [
+        const Expanded(child: Divider(color: _C.border, thickness: 1)),
+        Container(
+          margin: const EdgeInsets.symmetric(horizontal: 12),
+          padding: const EdgeInsets.symmetric(
+              horizontal: 12, vertical: 4),
+          decoration: BoxDecoration(
+            color: _C.white,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: _C.border),
           ),
-          const Expanded(child: Divider(color: OrgColors.mediumGray)),
-        ],
-      ),
+          child: Text(_label(),
+              style: GoogleFonts.beVietnamPro(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: _C.darkGray)),
+        ),
+        const Expanded(child: Divider(color: _C.border, thickness: 1)),
+      ]),
     );
   }
 }
 
-// ─── Broadcast Bubble ─────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// Broadcast Bubble — polished card style
+// ─────────────────────────────────────────────────────────────────────────────
 class _BroadcastBubble extends StatefulWidget {
   final BroadcastModel broadcast;
   final VoidCallback onDelete;
 
-  const _BroadcastBubble({required this.broadcast, required this.onDelete});
+  const _BroadcastBubble(
+      {required this.broadcast, required this.onDelete});
 
   @override
   State<_BroadcastBubble> createState() => _BroadcastBubbleState();
 }
 
 class _BroadcastBubbleState extends State<_BroadcastBubble> {
-  bool _hovered = false;
+  bool _hovered    = false;
+  bool _isPinning  = false;
+  bool _isEditing  = false;
 
-  String _timeLabel(Timestamp ts) {
-    return DateFormat('h:mm a').format(ts.toDate());
+  String _timeLabel(Timestamp ts) =>
+      DateFormat('h:mm a').format(ts.toDate());
+
+  Widget _buildReplyMeta() {
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('broadcasts')
+          .doc(widget.broadcast.id)
+          .collection('replies')
+          .orderBy('timestamp', descending: true)
+          .snapshots(),
+      builder: (context, snap) {
+        final replyCount = snap.data?.docs.length ?? widget.broadcast.replyCount;
+        return Row(children: [
+          _MiniActionChip(
+            icon: Icons.favorite_border,
+            label: '${widget.broadcast.likes}',
+          ),
+          const SizedBox(width: 10),
+          _MiniActionChip(
+            icon: Icons.mode_comment_outlined,
+            label: '$replyCount',
+          ),
+          const Spacer(),
+          Text('Replies',
+              style: GoogleFonts.beVietnamPro(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: _C.textFaint)),
+        ]);
+      },
+    );
+  }
+
+  Widget _buildReplyPreview() {
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('broadcasts')
+          .doc(widget.broadcast.id)
+          .collection('replies')
+          .orderBy('timestamp', descending: false)
+          .snapshots(),
+      builder: (context, snap) {
+        if (!snap.hasData || snap.data!.docs.isEmpty) {
+          return Padding(
+            padding: const EdgeInsets.only(top: 10),
+            child: Text('No replies yet. Students can reply under this message.',
+                style: GoogleFonts.beVietnamPro(
+                    fontSize: 12, color: _C.textFaint)),
+          );
+        }
+
+        final replies = snap.data!.docs
+            .map((d) => BroadcastReply.fromFirestore(d))
+            .toList();
+        final preview = replies.length > 2 ? replies.take(2).toList() : replies;
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const SizedBox(height: 10),
+            ...preview.map((reply) => _ReplyRow(reply: reply)),
+            if (replies.length > 2) ...[
+              const SizedBox(height: 6),
+              Text('View all ${replies.length} replies',
+                  style: GoogleFonts.beVietnamPro(
+                      fontSize: 12,
+                      color: _C.primaryDark,
+                      fontWeight: FontWeight.w700)),
+            ],
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _togglePinMessage() async {
+    if (_isPinning) return;
+    setState(() => _isPinning = true);
+    try {
+      await FirebaseFirestore.instance
+          .collection('broadcasts')
+          .doc(widget.broadcast.id)
+          .update({'pinned': !(widget.broadcast.pinned)});
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Could not pin message: $e',
+            style: GoogleFonts.beVietnamPro(fontSize: 13, color: Colors.white)),
+        backgroundColor: _C.error,
+      ));
+    } finally {
+      if (mounted) setState(() => _isPinning = false);
+    }
+  }
+
+  Future<void> _editMessage() async {
+    final controller = TextEditingController(text: widget.broadcast.content);
+    final result = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        child: Container(
+          width: 520,
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Edit Message',
+                  style: GoogleFonts.beVietnamPro(
+                      fontSize: 17,
+                      fontWeight: FontWeight.w700,
+                      color: _C.charcoal)),
+              const SizedBox(height: 12),
+              TextField(
+                controller: controller,
+                maxLines: 5,
+                decoration: InputDecoration(
+                  hintText: 'Update broadcast content',
+                  filled: true,
+                  fillColor: _C.surface,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(color: _C.borderSoft),
+                  ),
+                ),
+                style: GoogleFonts.beVietnamPro(fontSize: 13, color: _C.charcoal),
+              ),
+              const SizedBox(height: 18),
+              Row(mainAxisAlignment: MainAxisAlignment.end, children: [
+                OutlinedButton(
+                  onPressed: () => Navigator.pop(ctx, false),
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: _C.borderSoft),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 11),
+                  ),
+                  child: Text('Cancel',
+                      style: GoogleFonts.beVietnamPro(fontSize: 13, color: _C.textMid)),
+                ),
+                const SizedBox(width: 10),
+                ElevatedButton(
+                  onPressed: controller.text.trim().isEmpty
+                      ? null
+                      : () async {
+                          if (!mounted) return;
+                          setState(() => _isEditing = true);
+                          try {
+                            await FirebaseFirestore.instance
+                                .collection('broadcasts')
+                                .doc(widget.broadcast.id)
+                                .update({
+                              'content': controller.text.trim(),
+                              'editedAt': FieldValue.serverTimestamp(),
+                            });
+                            Navigator.pop(ctx, true);
+                          } catch (e) {
+                            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                              content: Text('Update failed: $e',
+                                  style: GoogleFonts.beVietnamPro(fontSize: 13, color: Colors.white)),
+                              backgroundColor: _C.error,
+                            ));
+                          } finally {
+                            if (mounted) setState(() => _isEditing = false);
+                          }
+                        },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: _C.primaryDark,
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 11),
+                  ),
+                  child: Text('Save',
+                      style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600)),
+                ),
+              ]),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (result == true) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Message updated',
+            style: GoogleFonts.beVietnamPro(fontSize: 13, color: Colors.white)),
+        backgroundColor: _C.success,
+      ));
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final b = widget.broadcast;
+    final isMine = b.authorId == FirebaseAuth.instance.currentUser?.uid;
     return MouseRegion(
       onEnter: (_) => setState(() => _hovered = true),
-      onExit: (_) => setState(() => _hovered = false),
+      onExit:  (_) => setState(() => _hovered = false),
       child: Padding(
-        padding: const EdgeInsets.only(bottom: 10),
+        padding: const EdgeInsets.only(bottom: 14),
         child: Row(
-          crossAxisAlignment: CrossAxisAlignment.end,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment:
+              isMine ? MainAxisAlignment.end : MainAxisAlignment.start,
           children: [
-            Expanded(
-              child: Container(
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFFD97706), Color(0xFFF59E0B)],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  borderRadius: const BorderRadius.only(
-                    topLeft: Radius.circular(16),
-                    topRight: Radius.circular(16),
-                    bottomRight: Radius.circular(16),
-                    bottomLeft: Radius.circular(4),
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: OrgColors.accent.withOpacity(0.2),
-                      blurRadius: 8,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Image if any
-                    if (b.imageUrl != null && b.imageUrl!.isNotEmpty) ...[
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(10),
-                        child: Image(
-                          image: _imageProviderFromUrl(b.imageUrl!),
-                          width: double.infinity,
-                          fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => const SizedBox(),
-                        ),
+            if (!isMine) ...[
+              AnimatedOpacity(
+                opacity: _hovered ? 1.0 : 0.0,
+                duration: const Duration(milliseconds: 150),
+                child: Row(children: [
+                  InkWell(
+                    onTap: _isEditing ? null : _editMessage,
+                    borderRadius: BorderRadius.circular(8),
+                    child: Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        color: _C.surface,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: _C.borderSoft),
                       ),
-                      const SizedBox(height: 10),
-                    ],
-                    // Text content
-                    if (b.content.isNotEmpty)
-                      Text(b.content,
-                          style: GoogleFonts.beVietnamPro(
-                              fontSize: 13, color: Colors.white, height: 1.55)),
-                    // Attachments
-                    if (b.attachments.isNotEmpty) ...[
-                      const SizedBox(height: 10),
-                      ...b.attachments.map((att) => InkWell(
-                            onTap: () {
-                              Clipboard.setData(ClipboardData(text: att.url));
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('Link copied')),
-                              );
-                            },
-                            child: Container(
-                              margin: const EdgeInsets.only(bottom: 4),
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                              decoration: BoxDecoration(
-                                color: Colors.white.withOpacity(0.2),
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: Row(children: [
-                                const Icon(Icons.insert_drive_file_outlined,
-                                    size: 14, color: Colors.white),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                    child: Text(att.name,
-                                        style: GoogleFonts.beVietnamPro(
-                                            fontSize: 12, color: Colors.white,
-                                            decoration: TextDecoration.underline,
-                                            decorationColor: Colors.white),
-                                        overflow: TextOverflow.ellipsis)),
-                                const Icon(Icons.download_outlined, size: 14, color: Colors.white),
-                              ]),
+                      child: const Icon(Icons.edit_outlined,
+                          size: 15, color: _C.charcoal),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  InkWell(
+                    onTap: _isPinning ? null : _togglePinMessage,
+                    borderRadius: BorderRadius.circular(8),
+                    child: Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        color: _C.surface,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: _C.borderSoft),
+                      ),
+                      child: Icon(
+                        widget.broadcast.pinned
+                            ? Icons.push_pin_rounded
+                            : Icons.push_pin_outlined,
+                        size: 15,
+                        color: widget.broadcast.pinned
+                            ? _C.primaryDark
+                            : _C.charcoal,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  InkWell(
+                    onTap: widget.onDelete,
+                    borderRadius: BorderRadius.circular(8),
+                    child: Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        color: _C.errorBg,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                            color: _C.error.withOpacity(0.2)),
+                      ),
+                      child: const Icon(
+                          Icons.delete_outline_rounded,
+                          size: 15,
+                          color: _C.error),
+                    ),
+                  ),
+                ]),
+              ),
+              const SizedBox(width: 8),
+            ],
+
+            Flexible(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(children: [
+                    Text(b.authorName,
+                        style: GoogleFonts.beVietnamPro(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: _C.charcoal)),
+                    const SizedBox(width: 8),
+                    const Icon(Icons.circle,
+                        size: 3, color: _C.textFaint),
+                    const SizedBox(width: 8),
+                    Text(_timeLabel(b.timestamp),
+                        style: GoogleFonts.beVietnamPro(
+                            fontSize: 11, color: _C.textFaint)),
+                  ]),
+                  const SizedBox(height: 6),
+
+                  Container(
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [
+                          Color(0xFFB45309),
+                          Color(0xFFD97706),
+                        ],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      borderRadius: const BorderRadius.only(
+                        topLeft:     Radius.circular(4),
+                        topRight:    Radius.circular(14),
+                        bottomLeft:  Radius.circular(14),
+                        bottomRight: Radius.circular(14),
+                      ),
+                      boxShadow: _DS.bubbleShadow,
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (b.imageUrl != null &&
+                            b.imageUrl!.isNotEmpty) ...[
+                          ClipRRect(
+                            borderRadius: const BorderRadius.only(
+                              topLeft:  Radius.circular(4),
+                              topRight: Radius.circular(14),
                             ),
-                          )),
-                    ],
-                  ],
-                ),
+                            child: Image(
+                              image: _imageProviderFromUrl(b.imageUrl!),
+                              width: double.infinity,
+                              height: 220,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) =>
+                                  const SizedBox(),
+                            ),
+                          ),
+                        ],
+                        Padding(
+                          padding: const EdgeInsets.all(14),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              if (b.content.isNotEmpty)
+                                Text(b.content,
+                                    style: GoogleFonts.beVietnamPro(
+                                        fontSize: 13,
+                                        color: Colors.white,
+                                        height: 1.6)),
+                              if (b.attachments.isNotEmpty) ...[
+                                if (b.content.isNotEmpty)
+                                  const SizedBox(height: 12),
+                                ...b.attachments.map(
+                                  (att) => _AttachmentChip(att: att),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (b.pinned)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Row(mainAxisSize: MainAxisSize.min, children: [
+                          const Icon(Icons.push_pin_rounded, size: 14, color: Colors.white),
+                          const SizedBox(width: 6),
+                          Text('Pinned message',
+                              style: GoogleFonts.beVietnamPro(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.white)),
+                        ]),
+                      ),
+                    ),
+                  const SizedBox(height: 10),
+                  _buildReplyMeta(),
+                  _buildReplyPreview(),
+                ],
               ),
             ),
-            const SizedBox(width: 8),
-            // Time + delete
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                AnimatedOpacity(
-                  opacity: _hovered ? 1.0 : 0.0,
-                  duration: const Duration(milliseconds: 150),
-                  child: InkWell(
-                    onTap: widget.onDelete,
-                    borderRadius: BorderRadius.circular(6),
+
+            if (isMine) ...[
+              const SizedBox(width: 8),
+              AnimatedOpacity(
+                opacity: _hovered ? 1.0 : 0.0,
+                duration: const Duration(milliseconds: 150),
+                child: Row(children: [
+                  InkWell(
+                    onTap: _isEditing ? null : _editMessage,
+                    borderRadius: BorderRadius.circular(8),
                     child: Container(
-                      padding: const EdgeInsets.all(5),
+                      padding: const EdgeInsets.all(6),
                       decoration: BoxDecoration(
-                        color: OrgColors.error.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(6),
+                        color: _C.surface,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: _C.borderSoft),
                       ),
-                      child: const Icon(Icons.delete_outline, size: 14, color: OrgColors.error),
+                      child: const Icon(Icons.edit_outlined,
+                          size: 15, color: _C.charcoal),
                     ),
                   ),
-                ),
-                const SizedBox(height: 4),
-                Text(_timeLabel(b.timestamp),
-                    style: GoogleFonts.beVietnamPro(fontSize: 10, color: OrgColors.darkGray)),
-              ],
-            ),
+                  const SizedBox(width: 6),
+                  InkWell(
+                    onTap: _isPinning ? null : _togglePinMessage,
+                    borderRadius: BorderRadius.circular(8),
+                    child: Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        color: _C.surface,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: _C.borderSoft),
+                      ),
+                      child: Icon(
+                        widget.broadcast.pinned
+                            ? Icons.push_pin_rounded
+                            : Icons.push_pin_outlined,
+                        size: 15,
+                        color: widget.broadcast.pinned
+                            ? _C.primaryDark
+                            : _C.charcoal,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  InkWell(
+                    onTap: widget.onDelete,
+                    borderRadius: BorderRadius.circular(8),
+                    child: Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        color: _C.errorBg,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                            color: _C.error.withOpacity(0.2)),
+                      ),
+                      child: const Icon(
+                          Icons.delete_outline_rounded,
+                          size: 15,
+                          color: _C.error),
+                    ),
+                  ),
+                ]),
+              ),
+            ],
           ],
         ),
       ),
@@ -929,35 +1389,145 @@ class _BroadcastBubbleState extends State<_BroadcastBubble> {
   }
 }
 
-String _mimeTypeFromPath(String? path) {
-  if (path == null) return 'image/png';
-  final ext = path.split('.').last.toLowerCase();
-  switch (ext) {
-    case 'jpg':
-    case 'jpeg':
-      return 'image/jpeg';
-    case 'png':
-      return 'image/png';
-    case 'gif':
-      return 'image/gif';
-    case 'bmp':
-      return 'image/bmp';
-    case 'webp':
-      return 'image/webp';
-    default:
-      return 'image/png';
+class _MiniActionChip extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  const _MiniActionChip({required this.icon, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.16),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: Colors.white.withOpacity(0.25)),
+      ),
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        Icon(icon, size: 14, color: Colors.white),
+        const SizedBox(width: 6),
+        Text(label,
+            style: GoogleFonts.beVietnamPro(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: Colors.white)),
+      ]),
+    );
   }
 }
 
-ImageProvider _imageProviderFromUrl(String url) {
-  if (url.startsWith('data:image')) {
-    final base64Part = url.split(',').last;
-    return MemoryImage(base64Decode(base64Part));
+class _ReplyRow extends StatelessWidget {
+  final BroadcastReply reply;
+  const _ReplyRow({required this.reply});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.16),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Text(reply.authorName,
+              style: GoogleFonts.beVietnamPro(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.white)),
+          const SizedBox(width: 8),
+          Text(DateFormat('h:mm a').format(reply.timestamp.toDate()),
+              style: GoogleFonts.beVietnamPro(
+                  fontSize: 11, color: Colors.white70)),
+        ]),
+        const SizedBox(height: 6),
+        Text(reply.content,
+            style: GoogleFonts.beVietnamPro(
+                fontSize: 12, color: Colors.white, height: 1.5)),
+      ]),
+    );
   }
-  return NetworkImage(url);
 }
 
-// ─── Model Classes ────────────────────────────────────────────────────────────
+class BroadcastReply {
+  final String id;
+  final String content;
+  final String authorName;
+  final Timestamp timestamp;
+
+  BroadcastReply({
+    required this.id,
+    required this.content,
+    required this.authorName,
+    required this.timestamp,
+  });
+
+  factory BroadcastReply.fromFirestore(DocumentSnapshot doc) {
+    final d = doc.data() as Map<String, dynamic>;
+    return BroadcastReply(
+      id: doc.id,
+      content: d['content'] ?? '',
+      authorName: d['authorName'] ?? 'Unknown',
+      timestamp: d['timestamp'] as Timestamp,
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Attachment chip inside a bubble
+// ─────────────────────────────────────────────────────────────────────────────
+class _AttachmentChip extends StatelessWidget {
+  final Attachment att;
+  const _AttachmentChip({required this.att});
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: () {
+        Clipboard.setData(ClipboardData(text: att.url));
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Link copied to clipboard'),
+          duration: Duration(seconds: 2),
+        ));
+      },
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 6),
+        padding: const EdgeInsets.symmetric(
+            horizontal: 12, vertical: 9),
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.18),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+              color: Colors.white.withOpacity(0.25)),
+        ),
+        child: Row(children: [
+          const Icon(Icons.insert_drive_file_outlined,
+              size: 15, color: Colors.white),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(att.name,
+                style: GoogleFonts.beVietnamPro(
+                    fontSize: 12,
+                    color: Colors.white,
+                    fontWeight: FontWeight.w500,
+                    decoration: TextDecoration.underline,
+                    decorationColor: Colors.white),
+                overflow: TextOverflow.ellipsis),
+          ),
+          const SizedBox(width: 8),
+          const Icon(Icons.copy_outlined,
+              size: 13, color: Colors.white),
+        ]),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Models — identical to original (full Firestore compatibility)
+// ─────────────────────────────────────────────────────────────────────────────
 class Attachment {
   final String name;
   final String url;
@@ -965,51 +1535,48 @@ class Attachment {
 }
 
 class BroadcastModel {
-  final String id;
-  final String content;
-  final String authorId;
-  final String authorName;
-  final Timestamp timestamp;
+  final String     id;
+  final String     content;
+  final String     authorId;
+  final String     authorName;
+  final int        likes;
+  final int        replyCount;
+  final bool       pinned;
+  final Timestamp  timestamp;
   final List<Attachment> attachments;
-  final String? imageUrl;
+  final String?    imageUrl;
 
   const BroadcastModel({
     required this.id,
     required this.content,
     required this.authorId,
     required this.authorName,
+    required this.likes,
+    required this.replyCount,
+    required this.pinned,
     required this.timestamp,
     required this.attachments,
     this.imageUrl,
   });
 
   factory BroadcastModel.fromFirestore(DocumentSnapshot doc) {
-  final data = doc.data() as Map<String, dynamic>;
-  
-  // ✅ Handle both null and empty string for imageUrl
-  String? imageUrl = data['imageUrl'];
-  if (imageUrl == '') imageUrl = null;
-  
-  return BroadcastModel(
-    id: doc.id,
-    content: data['content'] ?? '',
-    authorId: data['authorId'] ?? '',
-    authorName: data['authorName'] ?? 'Unknown',
-    timestamp: data['timestamp'] as Timestamp,
-    attachments: ((data['attachments'] as List?) ?? [])
-        .map((a) => Attachment(name: a['name'], url: a['url']))
-        .toList(),
-    imageUrl: imageUrl,
-  );
-}
-}
+    final d = doc.data() as Map<String, dynamic>;
+    String? imageUrl = d['imageUrl'] as String?;
+    if (imageUrl == '') imageUrl = null;
 
-// Extension helper for Text max width
-extension _TextExt on Text {
-  Widget maxWidth(double w) => ConstrainedBox(
-        constraints: BoxConstraints(maxWidth: w),
-        child: this,
-      );
+    return BroadcastModel(
+      id:          doc.id,
+      content:     d['content']    ?? '',
+      authorId:    d['authorId']   ?? '',
+      authorName:  d['authorName'] ?? 'Unknown',
+      likes:       (d['likes'] as int?) ?? 0,
+      replyCount:  (d['replyCount'] as int?) ?? 0,
+      pinned:      (d['pinned'] as bool?) ?? false,
+      timestamp:   d['timestamp']  as Timestamp,
+      attachments: ((d['attachments'] as List?) ?? [])
+          .map((a) => Attachment(name: a['name'], url: a['url']))
+          .toList(),
+      imageUrl: imageUrl,
+    );
+  }
 }
-
-

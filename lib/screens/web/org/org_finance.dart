@@ -2018,6 +2018,3 @@ class _TypeToggle extends StatelessWidget {
     );
   }
 }
-
-
-

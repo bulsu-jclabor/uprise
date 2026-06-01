@@ -1,4 +1,5 @@
 // lib/screens/web/org/org_letter_request.dart
+// ignore_for_file: deprecated_member_use, use_build_context_synchronously
 
 import 'dart:convert';
 import 'package:flutter/material.dart';
@@ -11,44 +12,156 @@ import '../../../services/firestore_collections.dart';
 import 'export_util.dart';
 import 'export_pdf.dart';
 
-// ============ COLOR SCHEME ============
-class OrgColors {
-  static const Color primaryDark = Color(0xFFB45309);
-  static const Color primaryLight = Color(0xFFD97706);
-  static const Color accent = Color(0xFFF59E0B);
-  static const Color accentBg = Color(0xFFFEF3C7);
-  static const Color accentText = Color(0xFF92400E);
-  static const Color white = Color(0xFFFFFFFF);
-  static const Color lightGray = Color(0xFFF9FAFB);
-  static const Color mediumGray = Color(0xFFE5E7EB);
-  static const Color darkGray = Color(0xFF6B7280);
-  static const Color charcoal = Color(0xFF111827);
-  static const Color success = Color(0xFF16A34A);
-  static const Color successBg = Color(0xFFDCFCE7);
-  static const Color warning = Color(0xFFB45309);
-  static const Color warningBg = Color(0xFFFEF3C7);
-  static const Color error = Color(0xFFDC2626);
-  static const Color errorBg = Color(0xFFFEE2E2);
-  static const Color info = Color(0xFF2563EB);
-  static const Color infoBg = Color(0xFFEFF6FF);
-  static const Color purple = Color(0xFF7C3AED);
-  static const Color purpleBg = Color(0xFFF3E8FF);
-  static const Color reviewColor = Color(0xFF5B21B6);
-  static const Color reviewBg = Color(0xFFEDE9FE);
+// ─────────────────────────────────────────────────────────────────────────────
+// Design tokens (mirrors student_accounts.dart / org_management.dart)
+// ─────────────────────────────────────────────────────────────────────────────
+class _DS {
+  static const double radiusSm   = 8;
+  static const double radiusMd   = 12;
+  static const double radiusLg   = 16;
+  static const double radiusPill = 100;
+
+  // Brand amber palette
+  static const Color primary     = Color(0xFFB45309);
+  static const Color primaryDark = Color(0xFF92400E);
+  static const Color primaryBg   = Color(0xFFFEF3C7);
+
+  static final cardShadow = [
+    BoxShadow(
+      color: Colors.black.withOpacity(0.06),
+      blurRadius: 12,
+      offset: const Offset(0, 4),
+    ),
+  ];
+
+  static InputDecoration inputDecoration(
+    String label, {
+    String? hint,
+    IconData? icon,
+  }) {
+    return InputDecoration(
+      labelText: label,
+      hintText: hint,
+      prefixIcon: icon != null
+          ? Icon(icon, size: 18, color: const Color(0xFF9AA5B4))
+          : null,
+      labelStyle: GoogleFonts.beVietnamPro(
+          fontSize: 13, color: const Color(0xFF64748B)),
+      hintStyle: GoogleFonts.beVietnamPro(
+          fontSize: 13, color: const Color(0xFF9AA5B4)),
+      filled: true,
+      fillColor: const Color(0xFFF8F9FB),
+      contentPadding:
+          const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(radiusSm),
+        borderSide: const BorderSide(color: Color(0xFFE2E6EA)),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(radiusSm),
+        borderSide: const BorderSide(color: Color(0xFFE2E6EA)),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(radiusSm),
+        borderSide: const BorderSide(color: _DS.primary, width: 1.5),
+      ),
+      errorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(radiusSm),
+        borderSide: const BorderSide(color: Color(0xFFDC2626)),
+      ),
+      focusedErrorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(radiusSm),
+        borderSide: const BorderSide(color: Color(0xFFDC2626), width: 1.5),
+      ),
+    );
+  }
 }
 
-// ============ MAIN SCREEN ============
+// ─────────────────────────────────────────────────────────────────────────────
+// Shared small widgets
+// ─────────────────────────────────────────────────────────────────────────────
+Widget _sectionLabel(String text, {IconData? icon}) {
+  return Padding(
+    padding: const EdgeInsets.only(bottom: 12),
+    child: Row(
+      children: [
+        if (icon != null) ...[
+          Icon(icon, size: 16, color: _DS.primary),
+          const SizedBox(width: 8),
+        ],
+        Text(
+          text,
+          style: GoogleFonts.beVietnamPro(
+            fontSize: 13,
+            fontWeight: FontWeight.w700,
+            color: _DS.primary,
+            letterSpacing: 0.3,
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(child: Divider(color: const Color(0xFFE2E6EA), thickness: 1)),
+      ],
+    ),
+  );
+}
+
+Widget _statusBadge(String status) {
+  final Map<String, _BadgeStyle> styles = {
+    'pending': _BadgeStyle(
+        const Color(0xFFFFFBEB), const Color(0xFFD97706), 'PENDING'),
+    'approved': _BadgeStyle(
+        const Color(0xFFECFDF5), const Color(0xFF059669), 'APPROVED'),
+    'rejected': _BadgeStyle(
+        const Color(0xFFFEF2F2), const Color(0xFFDC2626), 'REJECTED'),
+    'revision': _BadgeStyle(
+        const Color(0xFFEFF6FF), const Color(0xFF2563EB), 'NEEDS REVISION'),
+    'resubmitted': _BadgeStyle(
+        const Color(0xFFF3E8FF), const Color(0xFF7C3AED), 'RESUBMITTED'),
+  };
+  final s = styles[status.toLowerCase()] ??
+      _BadgeStyle(const Color(0xFFF3F4F6), const Color(0xFF6B7280),
+          status.toUpperCase());
+  return Container(
+    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+    decoration: BoxDecoration(
+      color: s.bg,
+      borderRadius: BorderRadius.circular(_DS.radiusPill),
+    ),
+    child: Text(
+      s.label,
+      style: GoogleFonts.beVietnamPro(
+        fontSize: 10,
+        fontWeight: FontWeight.w700,
+        color: s.fg,
+        letterSpacing: 0.8,
+      ),
+    ),
+  );
+}
+
+class _BadgeStyle {
+  final Color bg, fg;
+  final String label;
+  const _BadgeStyle(this.bg, this.fg, this.label);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Main Widget
+// ─────────────────────────────────────────────────────────────────────────────
 class OrgLetterRequestScreen extends StatefulWidget {
   final String orgId;
   const OrgLetterRequestScreen({super.key, required this.orgId});
 
   @override
-  State<OrgLetterRequestScreen> createState() => _OrgLetterRequestScreenState();
+  State<OrgLetterRequestScreen> createState() =>
+      _OrgLetterRequestScreenState();
 }
 
 class _OrgLetterRequestScreenState extends State<OrgLetterRequestScreen> {
   final TextEditingController _searchController = TextEditingController();
   String _statusFilter = 'All';
+  int _currentPage = 1;
+  static const int _pageSize = 10;
 
   Map<String, dynamic>? _orgProfile;
   String _orgName = '';
@@ -58,6 +171,12 @@ class _OrgLetterRequestScreenState extends State<OrgLetterRequestScreen> {
   void initState() {
     super.initState();
     _loadOrgProfile();
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadOrgProfile() async {
@@ -78,22 +197,555 @@ class _OrgLetterRequestScreenState extends State<OrgLetterRequestScreen> {
     }
   }
 
-  Stream<QuerySnapshot> get _requestsStream => FirestoreCollections.letterRequests
-      .where('orgId', isEqualTo: widget.orgId)
-      .where('isArchived', isEqualTo: false)
-      .orderBy('timestamp', descending: true)
-      .snapshots();
+  Stream<QuerySnapshot> get _requestsStream =>
+      FirestoreCollections.letterRequests
+          .where('orgId', isEqualTo: widget.orgId)
+          .where('isArchived', isEqualTo: false)
+          .orderBy('timestamp', descending: true)
+          .snapshots();
 
+  // ── Build ─────────────────────────────────────────────────────────
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFFBFCFE),
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildStatsRow(),
+          _buildToolbar(),
+          const SizedBox(height: 16),
+          Expanded(child: _buildTable()),
+          const SizedBox(height: 24),
+        ],
+      ),
+    );
+  }
+
+  // ── Stats Row ─────────────────────────────────────────────────────
+  Widget _buildStatsRow() {
+    return StreamBuilder<QuerySnapshot>(
+      stream: _requestsStream,
+      builder: (context, snapshot) {
+        int total = 0, pending = 0, approved = 0,
+            rejected = 0, revision = 0, resubmitted = 0;
+        if (snapshot.hasData) {
+          for (final doc in snapshot.data!.docs) {
+            total++;
+            final status = (doc.data() as Map)['status'] ?? 'pending';
+            if (status == 'pending')     pending++;
+            if (status == 'approved')    approved++;
+            if (status == 'rejected')    rejected++;
+            if (status == 'revision')    revision++;
+            if (status == 'resubmitted') resubmitted++;
+          }
+        }
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(28, 24, 28, 0),
+          child: Row(children: [
+            _StatCard(
+              label: 'Total Requests',
+              value: '$total',
+              icon: Icons.description_outlined,
+              color: _DS.primary,
+            ),
+            const SizedBox(width: 14),
+            _StatCard(
+              label: 'Pending',
+              value: '$pending',
+              icon: Icons.pending_outlined,
+              color: const Color(0xFFD97706),
+            ),
+            const SizedBox(width: 14),
+            _StatCard(
+              label: 'Approved',
+              value: '$approved',
+              icon: Icons.check_circle_outline,
+              color: const Color(0xFF059669),
+            ),
+            const SizedBox(width: 14),
+            _StatCard(
+              label: 'Rejected',
+              value: '$rejected',
+              icon: Icons.cancel_outlined,
+              color: const Color(0xFFDC2626),
+            ),
+            const SizedBox(width: 14),
+            _StatCard(
+              label: 'Needs Revision',
+              value: '$revision',
+              icon: Icons.edit_note_rounded,
+              color: const Color(0xFF2563EB),
+            ),
+            const SizedBox(width: 14),
+            _StatCard(
+              label: 'Resubmitted',
+              value: '$resubmitted',
+              icon: Icons.refresh_rounded,
+              color: const Color(0xFF7C3AED),
+            ),
+          ]),
+        );
+      },
+    );
+  }
+
+  // ── Toolbar ───────────────────────────────────────────────────────
+  Widget _buildToolbar() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(28, 20, 28, 0),
+      child: Row(
+        children: [
+          // Search
+          Expanded(
+            child: SizedBox(
+              height: 40,
+              child: TextField(
+                controller: _searchController,
+                style: GoogleFonts.beVietnamPro(fontSize: 13),
+                decoration: InputDecoration(
+                  hintText: 'Search by ID or subject…',
+                  hintStyle: GoogleFonts.beVietnamPro(
+                      fontSize: 13, color: const Color(0xFF9AA5B4)),
+                  prefixIcon: const Icon(Icons.search_rounded,
+                      size: 18, color: Color(0xFF9AA5B4)),
+                  suffixIcon: _searchController.text.isNotEmpty
+                      ? IconButton(
+                          icon:
+                              const Icon(Icons.close, size: 16),
+                          onPressed: () {
+                            _searchController.clear();
+                            setState(() => _currentPage = 1);
+                          },
+                        )
+                      : null,
+                  filled: true,
+                  fillColor: Colors.white,
+                  contentPadding:
+                      const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide:
+                        const BorderSide(color: Color(0xFFE2E6EA)),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide:
+                        const BorderSide(color: Color(0xFFE2E6EA)),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide:
+                        const BorderSide(color: _DS.primary, width: 1.5),
+                  ),
+                ),
+                onChanged: (_) => setState(() => _currentPage = 1),
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          _FilterDropdown(
+            value: _statusFilter,
+            items: const [
+              'All',
+              'Pending',
+              'Approved',
+              'Rejected',
+              'Needs Revision',
+              'Resubmitted',
+            ],
+            hint: 'Status',
+            icon: Icons.tune_rounded,
+            onChanged: (v) => setState(() {
+              _statusFilter = v!;
+              _currentPage = 1;
+            }),
+          ),
+          const SizedBox(width: 10),
+          // Export
+          _ExportButton(
+            orgId: widget.orgId,
+            statusFilter: _statusFilter,
+            searchTerm: _searchController.text.trim(),
+          ),
+          const SizedBox(width: 10),
+          // New Request
+          _ToolbarButton(
+            label: 'New Request',
+            icon: Icons.add_rounded,
+            onPressed: _openNewRequestModal,
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── Table ─────────────────────────────────────────────────────────
+  Widget _buildTable() {
+    return StreamBuilder<QuerySnapshot>(
+      stream: _requestsStream,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (snapshot.hasError) {
+          return Center(child: Text('Error: ${snapshot.error}'));
+        }
+
+        var docs = snapshot.data!.docs;
+
+        // Status filter
+        if (_statusFilter != 'All') {
+          final filterValue =
+              _statusFilter == 'Needs Revision' ? 'revision' : _statusFilter.toLowerCase();
+          docs = docs
+              .where((d) => (d.data() as Map)['status'] == filterValue)
+              .toList();
+        }
+
+        // Search
+        final term = _searchController.text.trim().toLowerCase();
+        if (term.isNotEmpty) {
+          docs = docs.where((d) {
+            final data = d.data() as Map;
+            return (data['letterId'] ?? '')
+                    .toString()
+                    .toLowerCase()
+                    .contains(term) ||
+                (data['subject'] ?? '')
+                    .toString()
+                    .toLowerCase()
+                    .contains(term);
+          }).toList();
+        }
+
+        final requests =
+            docs.map((d) => LetterRequestModel.fromFirestore(d)).toList();
+
+        final totalPages =
+            requests.isEmpty ? 1 : (requests.length / _pageSize).ceil();
+        final safePage = _currentPage.clamp(1, totalPages);
+        final start = (safePage - 1) * _pageSize;
+        final end = (start + _pageSize).clamp(0, requests.length);
+        final pageItems = requests.isEmpty
+            ? <LetterRequestModel>[]
+            : requests.sublist(start, end);
+
+        return Container(
+          margin: const EdgeInsets.symmetric(horizontal: 28),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: const Color(0xFFE8ECF0)),
+            boxShadow: _DS.cardShadow,
+          ),
+          child: Column(
+            children: [
+              _buildTableHeader(),
+              Expanded(
+                child: requests.isEmpty
+                    ? _buildEmptyState()
+                    : ListView.builder(
+                        itemCount: pageItems.length,
+                        itemBuilder: (_, i) => _buildRequestRow(
+                          pageItems[i],
+                          isLast: i == pageItems.length - 1,
+                        ),
+                      ),
+              ),
+              _buildFooter(requests.length, totalPages, start, end),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildTableHeader() {
+    return Container(
+      padding:
+          const EdgeInsets.symmetric(horizontal: 20, vertical: 13),
+      decoration: const BoxDecoration(
+        color: Color(0xFFF8F9FB),
+        borderRadius:
+            BorderRadius.vertical(top: Radius.circular(14)),
+        border:
+            Border(bottom: BorderSide(color: Color(0xFFE8ECF0))),
+      ),
+      child: Row(children: [
+        Expanded(flex: 2, child: _headerCell('LETTER ID')),
+        Expanded(flex: 4, child: _headerCell('TYPE / SUBJECT')),
+        Expanded(flex: 2, child: _headerCell('DATE SUBMITTED')),
+        Expanded(flex: 2, child: _headerCell('STATUS')),
+        Expanded(
+          flex: 2,
+          child: Align(
+              alignment: Alignment.centerRight,
+              child: _headerCell('ACTIONS')),
+        ),
+      ]),
+    );
+  }
+
+  Widget _headerCell(String text) => Text(
+        text,
+        style: GoogleFonts.beVietnamPro(
+          fontSize: 11,
+          fontWeight: FontWeight.w700,
+          color: const Color(0xFF64748B),
+          letterSpacing: 0.7,
+        ),
+      );
+
+  Widget _buildRequestRow(LetterRequestModel request,
+      {required bool isLast}) {
+    final submittedAt = request.timestamp.toDate();
+    return InkWell(
+      hoverColor: const Color(0xFFF8F9FB),
+      onTap: () => _viewRequestDetails(request),
+      child: Container(
+        padding:
+            const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+        decoration: BoxDecoration(
+          border: isLast
+              ? null
+              : const Border(
+                  bottom: BorderSide(color: Color(0xFFF1F5F9))),
+        ),
+        child: Row(
+          children: [
+            // Letter ID
+            Expanded(
+              flex: 2,
+              child: Text(
+                request.letterId,
+                style: GoogleFonts.beVietnamPro(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: _DS.primary,
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            // Type + Subject
+            Expanded(
+              flex: 4,
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: _DS.primary.withOpacity(0.08),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(
+                      request.letterType,
+                      style: GoogleFonts.beVietnamPro(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: _DS.primary,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      request.subject,
+                      style: GoogleFonts.beVietnamPro(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                        color: const Color(0xFF1A202C),
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                      maxLines: 1,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            // Date
+            Expanded(
+              flex: 2,
+              child: Text(
+                DateFormat('MMM dd, yyyy').format(submittedAt),
+                style: GoogleFonts.beVietnamPro(
+                    fontSize: 12, color: const Color(0xFF64748B)),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            // Status
+            Expanded(
+              flex: 2,
+              child: Row(
+                children: [
+                  _statusBadge(request.status),
+                  if (request.revisionNote != null &&
+                      request.status == 'revision') ...[
+                    const SizedBox(width: 6),
+                    const Tooltip(
+                      message: 'Has revision note',
+                      child: Icon(Icons.info_outline,
+                          size: 14, color: Color(0xFF2563EB)),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            // Actions
+            Expanded(
+              flex: 2,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  _ActionIconButton(
+                    icon: Icons.visibility_outlined,
+                    tooltip: 'View Details',
+                    onTap: () => _viewRequestDetails(request),
+                  ),
+                  const SizedBox(width: 4),
+                  if (request.status == 'pending' ||
+                      request.status == 'revision' ||
+                      request.status == 'resubmitted')
+                    _ActionIconButton(
+                      icon: Icons.edit_outlined,
+                      tooltip: 'Edit Request',
+                      color: const Color(0xFF2563EB),
+                      onTap: () => _openEditRequestModal(request),
+                    ),
+                  if (request.status == 'pending' ||
+                      request.status == 'revision' ||
+                      request.status == 'resubmitted')
+                    const SizedBox(width: 4),
+                  _ActionIconButton(
+                    icon: Icons.archive_outlined,
+                    tooltip: 'Archive',
+                    color: const Color(0xFFD97706),
+                    onTap: () => _archiveRequest(request),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            width: 80,
+            height: 80,
+            decoration: BoxDecoration(
+              color: const Color(0xFFF1F5F9),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: const Icon(Icons.mail_outline_rounded,
+                size: 40, color: Color(0xFF9AA5B4)),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'No letter requests found',
+            style: GoogleFonts.beVietnamPro(
+              fontSize: 15,
+              fontWeight: FontWeight.w600,
+              color: const Color(0xFF374151),
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Try adjusting your filters or create a new request.',
+            style: GoogleFonts.beVietnamPro(
+              fontSize: 13,
+              color: const Color(0xFF64748B),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFooter(int total, int totalPages, int start, int end) {
+    const int maxVisible = 5;
+    int firstPage =
+        (_currentPage - maxVisible ~/ 2).clamp(1, totalPages);
+    int lastPage =
+        (firstPage + maxVisible - 1).clamp(1, totalPages);
+    if (lastPage - firstPage + 1 < maxVisible && firstPage > 1) {
+      firstPage = (lastPage - maxVisible + 1).clamp(1, totalPages);
+    }
+    final pages =
+        List.generate(lastPage - firstPage + 1, (i) => firstPage + i);
+
+    return Container(
+      padding:
+          const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+      decoration: const BoxDecoration(
+        border: Border(top: BorderSide(color: Color(0xFFE8ECF0))),
+        color: Color(0xFFF8F9FB),
+        borderRadius:
+            BorderRadius.vertical(bottom: Radius.circular(14)),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            'Showing ${total == 0 ? 0 : start + 1}–$end of $total requests',
+            style: GoogleFonts.beVietnamPro(
+                fontSize: 12, color: const Color(0xFF64748B)),
+          ),
+          Row(children: [
+            _PageButton(
+              icon: Icons.chevron_left_rounded,
+              enabled: _currentPage > 1,
+              onTap: () => setState(() => _currentPage--),
+            ),
+            const SizedBox(width: 4),
+            ...pages.map((p) => _PageNumButton(
+                  page: p,
+                  isActive: p == _currentPage,
+                  onTap: () => setState(() => _currentPage = p),
+                )),
+            if (lastPage < totalPages) ...[
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                child: Text('…',
+                    style: GoogleFonts.beVietnamPro(
+                        color: const Color(0xFF64748B), fontSize: 12)),
+              ),
+              _PageNumButton(
+                page: totalPages,
+                isActive: _currentPage == totalPages,
+                onTap: () =>
+                    setState(() => _currentPage = totalPages),
+              ),
+            ],
+            const SizedBox(width: 4),
+            _PageButton(
+              icon: Icons.chevron_right_rounded,
+              enabled: _currentPage < totalPages,
+              onTap: () => setState(() => _currentPage++),
+            ),
+          ]),
+        ],
+      ),
+    );
+  }
+
+  // ── Dialogs ───────────────────────────────────────────────────────
   Future<void> _openNewRequestModal() async {
     if (_orgProfile == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Loading organization info...')),
-      );
+      _showSnack('Loading organization info…');
       return;
     }
     await showDialog(
       context: context,
       barrierDismissible: false,
+      barrierColor: Colors.black54,
       builder: (_) => _LetterRequestModal(
         orgId: widget.orgId,
         orgName: _orgName,
@@ -102,10 +754,12 @@ class _OrgLetterRequestScreenState extends State<OrgLetterRequestScreen> {
     );
   }
 
-  Future<void> _openEditRequestModal(LetterRequestModel request) async {
+  Future<void> _openEditRequestModal(
+      LetterRequestModel request) async {
     await showDialog(
       context: context,
       barrierDismissible: false,
+      barrierColor: Colors.black54,
       builder: (_) => _LetterRequestModal(
         orgId: widget.orgId,
         orgName: _orgName,
@@ -115,9 +769,11 @@ class _OrgLetterRequestScreenState extends State<OrgLetterRequestScreen> {
     );
   }
 
-  Future<void> _viewRequestDetails(LetterRequestModel request) async {
+  Future<void> _viewRequestDetails(
+      LetterRequestModel request) async {
     await showDialog(
       context: context,
+      barrierColor: Colors.black54,
       builder: (_) => _RequestDetailsDialog(request: request),
     );
   }
@@ -126,17 +782,19 @@ class _OrgLetterRequestScreenState extends State<OrgLetterRequestScreen> {
     final confirm = await _showConfirmDialog(
       title: 'Archive Request',
       message:
-          'Archive request "${request.subject}"? You can still view it in archived section.',
+          'Archive "${request.subject}"? You can still view it in the archived section.',
       confirmLabel: 'Archive',
       isDestructive: false,
     );
     if (confirm != true) return;
 
     try {
-      await FirestoreCollections.letterRequests.doc(request.id).update({
-            'isArchived': true,
-            'archivedAt': FieldValue.serverTimestamp(),
-          });
+      await FirestoreCollections.letterRequests
+          .doc(request.id)
+          .update({
+        'isArchived': true,
+        'archivedAt': FieldValue.serverTimestamp(),
+      });
       await activity_log.ActivityLogger.log(
         action: 'archive_letter_request',
         module: 'letter_request',
@@ -152,12 +810,14 @@ class _OrgLetterRequestScreenState extends State<OrgLetterRequestScreen> {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(
-          msg,
-          style: GoogleFonts.beVietnamPro(color: Colors.white),
-        ),
-        backgroundColor: isError ? OrgColors.error : OrgColors.success,
+        content: Text(msg,
+            style: GoogleFonts.beVietnamPro(color: Colors.white)),
+        backgroundColor: isError
+            ? const Color(0xFFDC2626)
+            : const Color(0xFF059669),
         behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(8)),
       ),
     );
   }
@@ -170,91 +830,90 @@ class _OrgLetterRequestScreenState extends State<OrgLetterRequestScreen> {
   }) {
     return showDialog<bool>(
       context: context,
+      barrierColor: Colors.black54,
       builder: (ctx) => Dialog(
-        backgroundColor: Colors.transparent,
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16)),
         child: Container(
-          width: 360,
-          decoration: BoxDecoration(
-            color: OrgColors.white,
-            borderRadius: BorderRadius.circular(12),
-            boxShadow: [
-              BoxShadow(color: Colors.black.withAlpha(38), blurRadius: 24),
-            ],
-          ),
+          width: 420,
           padding: const EdgeInsets.all(28),
           child: Column(
             mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Container(
-                width: 56,
-                height: 56,
-                decoration: BoxDecoration(
-                  color: isDestructive ? OrgColors.errorBg : OrgColors.accentBg,
-                  shape: BoxShape.circle,
+              Row(children: [
+                Container(
+                  width: 42,
+                  height: 42,
+                  decoration: BoxDecoration(
+                    color: isDestructive
+                        ? const Color(0xFFFEF2F2)
+                        : const Color(0xFFFEF3C7),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(
+                    isDestructive
+                        ? Icons.delete_outline_rounded
+                        : Icons.archive_outlined,
+                    color: isDestructive
+                        ? const Color(0xFFDC2626)
+                        : _DS.primary,
+                    size: 20,
+                  ),
                 ),
-                child: Icon(
-                  isDestructive ? Icons.delete_outline : Icons.archive_outlined,
-                  color: isDestructive
-                      ? OrgColors.error
-                      : OrgColors.primaryDark,
-                  size: 28,
-                ),
-              ),
+                const SizedBox(width: 14),
+                Text(title,
+                    style: GoogleFonts.beVietnamPro(
+                      fontSize: 17,
+                      fontWeight: FontWeight.w700,
+                      color: const Color(0xFF1A202C),
+                    )),
+              ]),
               const SizedBox(height: 16),
               Text(
-                title,
-                style: GoogleFonts.beVietnamPro(
-                  fontSize: 17,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
                 message,
-                textAlign: TextAlign.center,
                 style: GoogleFonts.beVietnamPro(
-                  fontSize: 13,
-                  color: OrgColors.darkGray,
-                ),
+                    fontSize: 14,
+                    color: const Color(0xFF64748B),
+                    height: 1.5),
               ),
               const SizedBox(height: 24),
               Row(
+                mainAxisAlignment: MainAxisAlignment.end,
                 children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: () => Navigator.pop(ctx, false),
-                      style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 11),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                      ),
-                      child: Text(
-                        'Cancel',
-                        style: GoogleFonts.beVietnamPro(
-                          color: OrgColors.darkGray,
-                        ),
-                      ),
+                  OutlinedButton(
+                    onPressed: () => Navigator.pop(ctx, false),
+                    style: OutlinedButton.styleFrom(
+                      side:
+                          const BorderSide(color: Color(0xFFE2E6EA)),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8)),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 18, vertical: 11),
                     ),
+                    child: Text('Cancel',
+                        style: GoogleFonts.beVietnamPro(
+                            fontSize: 13,
+                            color: const Color(0xFF374151))),
                   ),
                   const SizedBox(width: 10),
-                  Expanded(
-                    child: ElevatedButton(
-                      onPressed: () => Navigator.pop(ctx, true),
-                      style: ElevatedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 11),
-                        backgroundColor: isDestructive
-                            ? OrgColors.error
-                            : OrgColors.primaryDark,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                      ),
-                      child: Text(
-                        confirmLabel,
-                        style: GoogleFonts.beVietnamPro(color: Colors.white),
-                      ),
+                  ElevatedButton(
+                    onPressed: () => Navigator.pop(ctx, true),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: isDestructive
+                          ? const Color(0xFFDC2626)
+                          : _DS.primary,
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8)),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 18, vertical: 11),
                     ),
+                    child: Text(confirmLabel,
+                        style: GoogleFonts.beVietnamPro(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600)),
                   ),
                 ],
               ),
@@ -264,470 +923,223 @@ class _OrgLetterRequestScreenState extends State<OrgLetterRequestScreen> {
       ),
     );
   }
+}
 
-  // FIX 1: Removed the duplicate orphaned `child: Column(...)` block that appeared
-  // after the closing brace of the return statement, causing a parse error.
+// ─────────────────────────────────────────────────────────────────────────────
+// Request Details Dialog
+// ─────────────────────────────────────────────────────────────────────────────
+class _RequestDetailsDialog extends StatelessWidget {
+  final LetterRequestModel request;
+  const _RequestDetailsDialog({required this.request});
+
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _buildHeader(),
-          const SizedBox(height: 24),
-          _buildStatsRow(),
-          const SizedBox(height: 24),
-          Expanded(child: _buildTable()),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildHeader() {
-    return Row(
-      children: [
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+    return Dialog(
+      shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(18)),
+      child: SizedBox(
+        width: 500,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Text(
-              'Letter Request',
-              style: GoogleFonts.beVietnamPro(
-                fontSize: 22,
-                fontWeight: FontWeight.w700,
-                color: OrgColors.charcoal,
+            // Header
+            Container(
+              padding:
+                  const EdgeInsets.fromLTRB(24, 20, 20, 20),
+              decoration: BoxDecoration(
+                color: _DS.primary,
+                borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(18)),
               ),
-            ),
-            const SizedBox(height: 2),
-            Text(
-              'Create and manage letter requests',
-              style: GoogleFonts.beVietnamPro(
-                fontSize: 13,
-                color: OrgColors.darkGray,
-              ),
-            ),
-          ],
-        ),
-        const Spacer(),
-        ElevatedButton.icon(
-          onPressed: _openNewRequestModal,
-          icon: const Icon(Icons.add, size: 18, color: Colors.white),
-          label: Text(
-            'New Request',
-            style: GoogleFonts.beVietnamPro(
-              color: Colors.white,
-              fontWeight: FontWeight.w600,
-              fontSize: 13,
-            ),
-          ),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: OrgColors.primaryDark,
-            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(8),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildStatsRow() {
-    return StreamBuilder<QuerySnapshot>(
-      stream: _requestsStream,
-      builder: (context, snapshot) {
-        int total = 0,
-            pending = 0,
-            approved = 0,
-            rejected = 0,
-            revision = 0,
-            resubmitted = 0;
-        if (snapshot.hasData) {
-          for (final doc in snapshot.data!.docs) {
-            total++;
-            final status = (doc.data() as Map)['status'] ?? 'pending';
-            if (status == 'pending') pending++;
-            if (status == 'approved') approved++;
-            if (status == 'rejected') rejected++;
-            if (status == 'revision') revision++;
-            if (status == 'resubmitted') resubmitted++;
-          }
-        }
-        return Row(
-          children: [
-            _StatCard(
-              label: 'Total Requests',
-              value: total,
-              icon: Icons.description_outlined,
-              color: OrgColors.info,
-            ),
-            const SizedBox(width: 14),
-            _StatCard(
-              label: 'Pending',
-              value: pending,
-              icon: Icons.pending_outlined,
-              color: OrgColors.warning,
-            ),
-            const SizedBox(width: 14),
-            _StatCard(
-              label: 'Approved',
-              value: approved,
-              icon: Icons.check_circle_outline,
-              color: OrgColors.success,
-            ),
-            const SizedBox(width: 14),
-            _StatCard(
-              label: 'Rejected',
-              value: rejected,
-              icon: Icons.cancel_outlined,
-              color: OrgColors.error,
-            ),
-            const SizedBox(width: 14),
-            _StatCard(
-              label: 'Resubmitted',
-              value: resubmitted,
-              icon: Icons.refresh_rounded,
-              color: OrgColors.purple,
-            ),
-            const SizedBox(width: 14),
-            _StatCard(
-              label: 'Needs Revision',
-              value: revision,
-              icon: Icons.edit_note_rounded,
-              color: OrgColors.info,
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  Widget _buildTable() {
-    return StreamBuilder<QuerySnapshot>(
-      stream: _requestsStream,
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
-        }
-        if (snapshot.hasError) {
-          return Center(child: Text('Error: ${snapshot.error}'));
-        }
-
-        var docs = snapshot.data!.docs;
-
-        // FIX 2: "Needs Revision" filter was comparing against 'needs revision' (lowercased)
-        // but the Firestore status value is 'revision'. Map filter labels to their actual values.
-        if (_statusFilter != 'All') {
-          final filterValue = _statusFilter == 'Needs Revision'
-              ? 'revision'
-              : _statusFilter.toLowerCase();
-          docs = docs
-              .where((d) => (d.data() as Map)['status'] == filterValue)
-              .toList();
-        }
-
-        final term = _searchController.text.trim().toLowerCase();
-        if (term.isNotEmpty) {
-          docs = docs.where((d) {
-            final data = d.data() as Map;
-            return (data['letterId'] ?? '').toString().toLowerCase().contains(
-                  term,
-                ) ||
-                (data['subject'] ?? '').toString().toLowerCase().contains(term);
-          }).toList();
-        }
-
-        final requests = docs
-            .map((d) => LetterRequestModel.fromFirestore(d))
-            .toList();
-
-        return Container(
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: OrgColors.primaryLight, width: 0.5),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              _buildToolbar(requests),
-              const Divider(height: 0),
-              _buildTableHeader(),
-              Expanded(
-                child: requests.isEmpty
-                    ? _buildEmptyState()
-                    : ListView.builder(
-                        itemCount: requests.length,
-                        itemBuilder: (context, index) => _buildRequestRow(
-                          requests[index],
-                          index == requests.length - 1,
+              child: Row(children: [
+                Container(
+                  width: 38,
+                  height: 38,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(Icons.description_outlined,
+                      color: Colors.white, size: 18),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment:
+                        CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Request Details',
+                        style: GoogleFonts.beVietnamPro(
+                          fontSize: 17,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white,
                         ),
                       ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildToolbar(List<LetterRequestModel> filtered) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 14, 20, 14),
-      child: Row(
-        children: [
-          SizedBox(
-            width: 320,
-            height: 44,
-            child: TextField(
-              controller: _searchController,
-              onChanged: (_) => setState(() {}),
-              style: GoogleFonts.beVietnamPro(fontSize: 13),
-              decoration: InputDecoration(
-                hintText: 'Search by ID or subject...',
-                hintStyle: GoogleFonts.beVietnamPro(
-                  fontSize: 13,
-                  color: OrgColors.darkGray,
-                ),
-                prefixIcon: const Icon(
-                  Icons.search_rounded,
-                  size: 20,
-                  color: OrgColors.darkGray,
-                ),
-                filled: true,
-                fillColor: OrgColors.lightGray,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide.none,
-                ),
-                contentPadding: EdgeInsets.zero,
-                suffixIcon: _searchController.text.isNotEmpty
-                    ? IconButton(
-                        icon: const Icon(Icons.close, size: 18),
-                        onPressed: () {
-                          _searchController.clear();
-                          setState(() {});
-                        },
-                      )
-                    : null,
-              ),
-            ),
-          ),
-          const SizedBox(width: 14),
-          _FilterDropdown(
-            value: _statusFilter,
-            items: const [
-              'All',
-              'Pending',
-              'Approved',
-              'Rejected',
-              'Resubmitted',
-              'Needs Revision',
-            ],
-            hint: 'Status',
-            icon: Icons.filter_list_rounded,
-            onChanged: (value) {
-              if (value == null) return;
-              setState(() => _statusFilter = value);
-            },
-          ),
-          const SizedBox(width: 14),
-          PopupMenuButton<String>(
-            tooltip: 'Export',
-            offset: const Offset(0, 48),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(10),
-            ),
-            itemBuilder: (_) => [
-              const PopupMenuItem(value: 'csv', child: Text('Export CSV')),
-              const PopupMenuItem(value: 'pdf', child: Text('Export PDF')),
-            ],
-            onSelected: (choice) => _exportRequests(choice, filtered),
-            child: Container(
-              height: 42,
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              decoration: BoxDecoration(
-                color: OrgColors.white,
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: OrgColors.mediumGray),
-              ),
-              child: Row(
-                children: [
-                  const Icon(
-                    Icons.download_outlined,
-                    size: 18,
-                    color: OrgColors.charcoal,
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    'Export',
-                    style: GoogleFonts.beVietnamPro(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: OrgColors.charcoal,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const Spacer(),
-          ElevatedButton.icon(
-            onPressed: _openNewRequestModal,
-            icon: const Icon(Icons.add, size: 18, color: Colors.white),
-            label: Text(
-              'New Request',
-              style: GoogleFonts.beVietnamPro(
-                color: Colors.white,
-                fontWeight: FontWeight.w600,
-                fontSize: 13,
-              ),
-            ),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: OrgColors.primaryDark,
-              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildTableHeader() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-      decoration: BoxDecoration(
-        color: OrgColors.lightGray,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
-      ),
-      child: Row(
-        children: [
-          Expanded(flex: 2, child: _headerLabel('LETTER ID')),
-          Expanded(flex: 3, child: _headerLabel('TYPE / SUBJECT')),
-          Expanded(flex: 2, child: _headerLabel('DATE SUBMITTED')),
-          Expanded(flex: 1, child: _headerLabel('STATUS')),
-          Expanded(flex: 2, child: _headerLabel('ACTIONS')),
-        ],
-      ),
-    );
-  }
-
-  Widget _headerLabel(String text) => Text(
-    text,
-    style: GoogleFonts.beVietnamPro(
-      fontSize: 11,
-      fontWeight: FontWeight.w700,
-      color: OrgColors.darkGray,
-      letterSpacing: 0.8,
-    ),
-  );
-
-  Widget _buildRequestRow(LetterRequestModel request, bool isLast) {
-    final submittedAt = request.timestamp.toDate();
-    return InkWell(
-      onTap: () => _viewRequestDetails(request),
-      hoverColor: OrgColors.lightGray,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 18),
-        decoration: BoxDecoration(
-          border: isLast
-              ? null
-              : Border(
-                  bottom: BorderSide(
-                    color: OrgColors.mediumGray.withAlpha(30),
-                    width: 1,
+                      Text(
+                        request.letterId,
+                        style: GoogleFonts.beVietnamPro(
+                          fontSize: 12,
+                          color: Colors.white.withOpacity(0.7),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-        ),
-        child: Row(
-          children: [
-            Expanded(
-              flex: 2,
-              child: Text(
-                request.letterId,
-                style: GoogleFonts.beVietnamPro(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  color: OrgColors.primaryDark,
+                IconButton(
+                  icon: const Icon(Icons.close_rounded,
+                      color: Colors.white, size: 20),
+                  onPressed: () => Navigator.pop(context),
                 ),
-              ),
+              ]),
             ),
-            Expanded(
-              flex: 3,
+            // Body
+            Padding(
+              padding: const EdgeInsets.all(24),
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+                crossAxisAlignment:
+                    CrossAxisAlignment.start,
                 children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 4,
+                  Row(children: [
+                    Expanded(
+                      child: _detailItem('Letter ID',
+                          request.letterId, Icons.badge_outlined),
                     ),
-                    decoration: BoxDecoration(
-                      color: OrgColors.primaryDark.withAlpha(25),
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: Text(
-                      request.letterType,
-                      style: GoogleFonts.beVietnamPro(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w700,
-                        color: OrgColors.primaryDark,
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: _detailItem(
+                        'Status',
+                        request.status.toUpperCase(),
+                        Icons.circle_outlined,
+                        valueColor: _statusColor(request.status),
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    request.subject,
-                    style: GoogleFonts.beVietnamPro(fontSize: 13),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
-              ),
-            ),
-            Expanded(
-              flex: 2,
-              child: Text(
-                DateFormat('MMM dd, yyyy').format(submittedAt),
-                style: GoogleFonts.beVietnamPro(
-                  fontSize: 12,
-                  color: OrgColors.darkGray,
-                ),
-              ),
-            ),
-            Expanded(
-              flex: 1,
-              child: _buildStatusBadge(request.status, request.revisionNote),
-            ),
-            Expanded(
-              flex: 2,
-              child: Row(
-                children: [
-                  _ActionIconButton(
-                    icon: Icons.visibility_outlined,
-                    tooltip: 'View Details',
-                    color: OrgColors.primaryDark,
-                    onTap: () => _viewRequestDetails(request),
-                  ),
-                  const SizedBox(width: 6),
-                  if (request.status == 'pending' ||
-                      request.status == 'revision' ||
-                      request.status == 'resubmitted')
-                    _ActionIconButton(
-                      icon: Icons.edit_outlined,
-                      tooltip: 'Edit',
-                      color: OrgColors.info,
-                      onTap: () => _openEditRequestModal(request),
+                  ]),
+                  const SizedBox(height: 14),
+                  Row(children: [
+                    Expanded(
+                      child: _detailItem('Type',
+                          request.letterType, Icons.label_outlined),
                     ),
-                  const SizedBox(width: 6),
-                  _ActionIconButton(
-                    icon: Icons.archive_outlined,
-                    tooltip: 'Archive',
-                    color: OrgColors.warning,
-                    onTap: () => _archiveRequest(request),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: _detailItem(
+                        'Date Submitted',
+                        DateFormat('MMM dd, yyyy')
+                            .format(request.timestamp.toDate()),
+                        Icons.calendar_today_outlined,
+                      ),
+                    ),
+                  ]),
+                  const SizedBox(height: 14),
+                  _detailItem('Subject', request.subject,
+                      Icons.subject_rounded),
+                  if (request.attachmentName != null) ...[
+                    const SizedBox(height: 14),
+                    _detailItem(
+                      'Attachment',
+                      '${request.attachmentName}${request.attachmentSize != null ? ' (${request.attachmentSize})' : ''}',
+                      Icons.attach_file_rounded,
+                    ),
+                  ],
+                  if (request.revisionNote != null) ...[
+                    const SizedBox(height: 14),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFEFF6FF),
+                        borderRadius:
+                            BorderRadius.circular(8),
+                        border: Border.all(
+                            color: const Color(0xFFBFDBFE)),
+                      ),
+                      child: Column(
+                        crossAxisAlignment:
+                            CrossAxisAlignment.start,
+                        children: [
+                          Row(children: [
+                            const Icon(
+                                Icons.info_outline_rounded,
+                                size: 14,
+                                color: Color(0xFF2563EB)),
+                            const SizedBox(width: 6),
+                            Text(
+                              'REVISION NOTE',
+                              style: GoogleFonts.beVietnamPro(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                                color:
+                                    const Color(0xFF2563EB),
+                                letterSpacing: 0.5,
+                              ),
+                            ),
+                          ]),
+                          const SizedBox(height: 6),
+                          Text(
+                            request.revisionNote!,
+                            style: GoogleFonts.beVietnamPro(
+                              fontSize: 13,
+                              color: const Color(0xFF1A202C),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                  if (request.revisionCount != null &&
+                      request.revisionCount! > 0) ...[
+                    const SizedBox(height: 10),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF8F9FB),
+                        borderRadius:
+                            BorderRadius.circular(8),
+                        border: Border.all(
+                            color: const Color(0xFFE2E6EA)),
+                      ),
+                      child: Row(children: [
+                        const Icon(Icons.history,
+                            size: 14,
+                            color: Color(0xFF64748B)),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Revision #${request.revisionCount}',
+                          style: GoogleFonts.beVietnamPro(
+                              fontSize: 12,
+                              color: const Color(0xFF64748B)),
+                        ),
+                      ]),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            // Footer
+            Container(
+              padding:
+                  const EdgeInsets.fromLTRB(24, 0, 24, 20),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  ElevatedButton(
+                    onPressed: () => Navigator.pop(context),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: _DS.primary,
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                          borderRadius:
+                              BorderRadius.circular(8)),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 20, vertical: 11),
+                    ),
+                    child: Text('Close',
+                        style: GoogleFonts.beVietnamPro(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600)),
                   ),
                 ],
               ),
@@ -738,163 +1150,886 @@ class _OrgLetterRequestScreenState extends State<OrgLetterRequestScreen> {
     );
   }
 
-  Future<void> _exportRequests(
-    String choice,
-    List<LetterRequestModel> rows,
-  ) async {
-    if (rows.isEmpty) {
-      _showSnack('No requests to export', isError: true);
-      return;
-    }
-
-    final headers = [
-      'Letter ID',
-      'Type',
-      'Subject',
-      'Date Submitted',
-      'Status',
-      'Revision Notes',
-    ];
-    final dataRows = rows
-        .map(
-          (r) => [
-            r.letterId,
-            r.letterType,
-            r.subject,
-            DateFormat('yyyy-MM-dd').format(r.timestamp.toDate()),
-            r.status,
-            r.revisionNote ?? '',
-          ],
-        )
-        .toList();
-
-    try {
-      if (choice == 'csv') {
-        final csv = [headers, ...dataRows]
-            .map(
-              (row) => row.map((c) => '"${c.replaceAll('"', '""')}"').join(','),
-            )
-            .join('\n');
-        await OrgExportUtil.saveText(
-          csv,
-          'letter_requests_${DateTime.now().millisecondsSinceEpoch}.csv',
-          mimeType: 'text/csv',
-        );
-      } else if (choice == 'pdf') {
-        final pdfBytes = await OrgExportPdf.generateTablePdf(
-          title: 'Letter Requests',
-          headers: headers,
-          rows: dataRows,
-        );
-        await OrgExportUtil.saveBytes(
-          pdfBytes,
-          'letter_requests_${DateTime.now().millisecondsSinceEpoch}.pdf',
-          mimeType: 'application/pdf',
-        );
-      }
-      _showSnack('Exported ${rows.length} requests');
-    } catch (e) {
-      _showSnack('Export failed: $e', isError: true);
-    }
-  }
-
-  Widget _buildEmptyState() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.mail_outline, size: 48, color: OrgColors.mediumGray),
-          const SizedBox(height: 12),
-          Text(
-            'No letter requests',
-            style: GoogleFonts.beVietnamPro(
-              fontSize: 14,
-              color: OrgColors.darkGray,
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            'Click "New Request" to create one',
-            style: GoogleFonts.beVietnamPro(
-              fontSize: 12,
-              color: OrgColors.darkGray,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildStatusBadge(String status, String? revisionNote) {
-    Map<String, dynamic> style;
+  Color _statusColor(String status) {
     switch (status.toLowerCase()) {
-      case 'approved':
-        style = {
-          'bg': OrgColors.successBg,
-          'fg': OrgColors.success,
-          'label': 'Approved',
-        };
-        break;
-      case 'rejected':
-        style = {
-          'bg': OrgColors.errorBg,
-          'fg': OrgColors.error,
-          'label': 'Rejected',
-        };
-        break;
-      case 'revision':
-        style = {
-          'bg': OrgColors.infoBg,
-          'fg': OrgColors.info,
-          'label': 'Needs Revision',
-        };
-        break;
-      case 'resubmitted':
-        style = {
-          'bg': OrgColors.purpleBg,
-          'fg': OrgColors.purple,
-          'label': 'Resubmitted',
-        };
-        break;
-      default:
-        style = {
-          'bg': OrgColors.warningBg,
-          'fg': OrgColors.warning,
-          'label': 'Pending',
-        };
+      case 'approved':    return const Color(0xFF059669);
+      case 'rejected':    return const Color(0xFFDC2626);
+      case 'revision':    return const Color(0xFF2563EB);
+      case 'resubmitted': return const Color(0xFF7C3AED);
+      default:            return const Color(0xFFD97706);
     }
-    return Row(
-      mainAxisSize: MainAxisSize.min,
+  }
+
+  Widget _detailItem(String label, String value, IconData icon,
+      {Color? valueColor}) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-          decoration: BoxDecoration(
-            color: style['bg'],
-            borderRadius: BorderRadius.circular(20),
-          ),
-          child: Text(
-            style['label'],
-            style: GoogleFonts.beVietnamPro(
-              fontSize: 11,
-              fontWeight: FontWeight.w700,
-              color: style['fg'],
-            ),
+        Row(children: [
+          Icon(icon, size: 13, color: const Color(0xFF9AA5B4)),
+          const SizedBox(width: 5),
+          Text(label,
+              style: GoogleFonts.beVietnamPro(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: const Color(0xFF64748B),
+                  letterSpacing: 0.4)),
+        ]),
+        const SizedBox(height: 4),
+        Text(
+          value,
+          style: GoogleFonts.beVietnamPro(
+            fontSize: 13,
+            fontWeight: FontWeight.w500,
+            color: valueColor ?? const Color(0xFF1A202C),
           ),
         ),
-        if (revisionNote != null && status == 'revision')
-          Padding(
-            padding: const EdgeInsets.only(left: 6),
-            child: Icon(Icons.info_outline, size: 14, color: OrgColors.info),
-          ),
       ],
     );
   }
 }
 
-// ============ STAT CARD ============
+// ─────────────────────────────────────────────────────────────────────────────
+// Letter Request Modal (New / Edit)
+// ─────────────────────────────────────────────────────────────────────────────
+class _LetterRequestModal extends StatefulWidget {
+  final String orgId;
+  final String orgName;
+  final String orgEmail;
+  final LetterRequestModel? existingRequest;
+
+  const _LetterRequestModal({
+    required this.orgId,
+    required this.orgName,
+    required this.orgEmail,
+    this.existingRequest,
+  });
+
+  @override
+  State<_LetterRequestModal> createState() =>
+      _LetterRequestModalState();
+}
+
+class _LetterRequestModalState
+    extends State<_LetterRequestModal> {
+  final _formKey = GlobalKey<FormState>();
+  final _subjectCtrl = TextEditingController();
+
+  String? _attachmentBase64;
+  String? _attachmentName;
+  String? _attachmentSize;
+  bool _isSubmitting = false;
+  bool _isUploading = false;
+  double _uploadProgress = 0.0;
+  String? _errorMsg;
+
+  @override
+  void initState() {
+    super.initState();
+    final r = widget.existingRequest;
+    if (r != null) {
+      _subjectCtrl.text = r.subject;
+      _attachmentBase64 = r.attachmentBase64;
+      _attachmentName  = r.attachmentName;
+      _attachmentSize  = r.attachmentSize;
+    }
+  }
+
+  @override
+  void dispose() {
+    _subjectCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _pickFile() async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['pdf', 'doc', 'docx', 'txt', 'jpg', 'png'],
+      withData: true,
+    );
+    if (result == null) return;
+
+    final file = result.files.first;
+    if (file.bytes == null || file.bytes!.isEmpty) {
+      _showMsg('Cannot read file!', isError: true);
+      return;
+    }
+
+    final sizeBytes = file.bytes!.length;
+    if (sizeBytes > 700 * 1024) {
+      _showMsg(
+          'File is ${(sizeBytes / 1024).toStringAsFixed(1)} KB. Maximum is 700 KB.',
+          isError: true);
+      return;
+    }
+
+    final sizeKB = (sizeBytes / 1024).toStringAsFixed(1);
+    setState(() {
+      _isUploading   = true;
+      _uploadProgress = 0;
+      _attachmentName = file.name;
+      _attachmentSize = '$sizeKB KB';
+      _errorMsg       = null;
+    });
+
+    for (int i = 0; i <= 100; i += 20) {
+      await Future.delayed(const Duration(milliseconds: 50));
+      if (mounted) setState(() => _uploadProgress = i / 100);
+    }
+
+    try {
+      setState(() {
+        _attachmentBase64 = base64Encode(file.bytes!);
+        _uploadProgress   = 1.0;
+        _isUploading      = false;
+      });
+    } catch (e) {
+      setState(() => _isUploading = false);
+      _showMsg('Error converting file: $e', isError: true);
+    }
+  }
+
+  void _removeFile() => setState(() {
+        _attachmentBase64 = null;
+        _attachmentName   = null;
+        _attachmentSize   = null;
+        _uploadProgress   = 0;
+      });
+
+  void _showMsg(String msg, {bool isError = false}) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(msg,
+          style: GoogleFonts.beVietnamPro(color: Colors.white)),
+      backgroundColor:
+          isError ? const Color(0xFFDC2626) : const Color(0xFF059669),
+      behavior: SnackBarBehavior.floating,
+      shape:
+          RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+    ));
+  }
+
+  Future<void> _submit() async {
+    setState(() => _errorMsg = null);
+    if (!_formKey.currentState!.validate()) return;
+
+    if (widget.existingRequest == null && _attachmentBase64 == null) {
+      setState(
+          () => _errorMsg = 'Please attach a file before submitting.');
+      return;
+    }
+
+    setState(() => _isSubmitting = true);
+
+    try {
+      final data = <String, dynamic>{
+        'orgId':            widget.orgId,
+        'orgName':          widget.orgName,
+        'orgEmail':         widget.orgEmail,
+        'name':             widget.orgName,
+        'email':            widget.orgEmail,
+        'letterType':       'General',
+        'subject':          _subjectCtrl.text.trim(),
+        'attachmentBase64': _attachmentBase64,
+        'attachmentName':   _attachmentName,
+        'attachmentSize':   _attachmentSize,
+        'updatedAt':        FieldValue.serverTimestamp(),
+        'isArchived':       false,
+      };
+
+      final col = FirestoreCollections.letterRequests;
+
+      if (widget.existingRequest != null) {
+        if (widget.existingRequest!.status == 'revision') {
+          data['status']         = 'resubmitted';
+          data['resubmittedAt']  = FieldValue.serverTimestamp();
+          data['revisionNote']   = null;
+          data['revisionCount']  = FieldValue.increment(1);
+        }
+        await col.doc(widget.existingRequest!.id).update(data);
+        await activity_log.ActivityLogger.log(
+          action:  'edit_letter_request',
+          module:  'letter_request',
+          details: {'orgId': widget.orgId, 'requestId': widget.existingRequest!.id},
+        );
+        _showMsg('Letter request updated successfully!');
+      } else {
+        final letterId =
+            'RLR-${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}';
+        data['status']       = 'pending';
+        data['letterId']     = letterId;
+        data['timestamp']    = FieldValue.serverTimestamp();
+        data['revisionCount'] = 0;
+        await col.add(data);
+        await activity_log.ActivityLogger.log(
+          action:  'create_letter_request',
+          module:  'letter_request',
+          details: {'orgId': widget.orgId, 'subject': data['subject']},
+        );
+        _showMsg('Letter request submitted successfully!');
+      }
+
+      if (mounted) Navigator.pop(context);
+    } catch (e) {
+      setState(() {
+        _errorMsg    = e.toString();
+        _isSubmitting = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isEdit = widget.existingRequest != null;
+
+    return Dialog(
+      shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(18)),
+      child: Container(
+        width: 520,
+        constraints: BoxConstraints(
+            maxHeight:
+                MediaQuery.of(context).size.height * 0.85),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Header
+            Container(
+              padding:
+                  const EdgeInsets.fromLTRB(24, 20, 20, 20),
+              decoration: BoxDecoration(
+                color: _DS.primary,
+                borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(18)),
+              ),
+              child: Row(children: [
+                Container(
+                  width: 38,
+                  height: 38,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(
+                    isEdit
+                        ? Icons.edit_outlined
+                        : Icons.mail_outline_rounded,
+                    color: Colors.white,
+                    size: 18,
+                  ),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Text(
+                    isEdit ? 'Edit Letter Request' : 'New Letter Request',
+                    style: GoogleFonts.beVietnamPro(
+                      fontSize: 17,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.close_rounded,
+                      color: Colors.white, size: 20),
+                  onPressed: _isSubmitting
+                      ? null
+                      : () => Navigator.pop(context),
+                ),
+              ]),
+            ),
+            // Body
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(24),
+                child: Form(
+                  key: _formKey,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Org info chip
+                      _sectionLabel('Organization',
+                          icon: Icons.business_outlined),
+                      Container(
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF8F9FB),
+                          borderRadius:
+                              BorderRadius.circular(8),
+                          border: Border.all(
+                              color: const Color(0xFFE2E6EA)),
+                        ),
+                        child: Row(children: [
+                          Container(
+                            width: 36,
+                            height: 36,
+                            decoration: BoxDecoration(
+                              color: _DS.primary
+                                  .withOpacity(0.1),
+                              borderRadius:
+                                  BorderRadius.circular(8),
+                            ),
+                            child: Icon(
+                                Icons.business_outlined,
+                                color: _DS.primary,
+                                size: 18),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment:
+                                  CrossAxisAlignment.start,
+                              children: [
+                                Text(widget.orgName,
+                                    style:
+                                        GoogleFonts.beVietnamPro(
+                                      fontSize: 13,
+                                      fontWeight:
+                                          FontWeight.w600,
+                                      color: const Color(
+                                          0xFF1A202C),
+                                    )),
+                                Text(widget.orgEmail,
+                                    style:
+                                        GoogleFonts.beVietnamPro(
+                                      fontSize: 12,
+                                      color: const Color(
+                                          0xFF64748B),
+                                    )),
+                              ],
+                            ),
+                          ),
+                        ]),
+                      ),
+                      const SizedBox(height: 20),
+
+                      // Subject
+                      _sectionLabel('Request Details',
+                          icon: Icons.description_outlined),
+                      TextFormField(
+                        controller: _subjectCtrl,
+                        style: GoogleFonts.beVietnamPro(
+                            fontSize: 13),
+                        decoration: _DS.inputDecoration(
+                          'Subject',
+                          hint:
+                              'What is this letter regarding?',
+                          icon: Icons.subject_rounded,
+                        ),
+                        validator: (v) =>
+                            v?.trim().isEmpty == true
+                                ? 'Subject is required'
+                                : null,
+                      ),
+                      const SizedBox(height: 20),
+
+                      // Attachment
+                      _sectionLabel('File Attachment',
+                          icon: Icons.attach_file_rounded),
+                      _buildFileZone(),
+
+                      // Revision note (edit mode)
+                      if (widget.existingRequest
+                              ?.revisionNote !=
+                          null) ...[
+                        const SizedBox(height: 20),
+                        Container(
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFEFF6FF),
+                            borderRadius:
+                                BorderRadius.circular(8),
+                            border: Border.all(
+                                color: const Color(
+                                    0xFFBFDBFE)),
+                          ),
+                          child: Column(
+                            crossAxisAlignment:
+                                CrossAxisAlignment.start,
+                            children: [
+                              Row(children: [
+                                const Icon(
+                                    Icons
+                                        .info_outline_rounded,
+                                    size: 14,
+                                    color:
+                                        Color(0xFF2563EB)),
+                                const SizedBox(width: 6),
+                                Text(
+                                  'REVISION NOTE FROM ADMIN',
+                                  style: GoogleFonts
+                                      .beVietnamPro(
+                                    fontSize: 11,
+                                    fontWeight:
+                                        FontWeight.w700,
+                                    color: const Color(
+                                        0xFF2563EB),
+                                    letterSpacing: 0.5,
+                                  ),
+                                ),
+                              ]),
+                              const SizedBox(height: 8),
+                              Text(
+                                widget.existingRequest!
+                                    .revisionNote!,
+                                style:
+                                    GoogleFonts.beVietnamPro(
+                                  fontSize: 13,
+                                  color: const Color(
+                                      0xFF1A202C),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+
+                      // Error
+                      if (_errorMsg != null) ...[
+                        const SizedBox(height: 14),
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFEF2F2),
+                            borderRadius:
+                                BorderRadius.circular(8),
+                            border: Border.all(
+                                color: const Color(
+                                    0xFFFCA5A5)),
+                          ),
+                          child: Row(children: [
+                            const Icon(
+                                Icons
+                                    .error_outline_rounded,
+                                size: 15,
+                                color:
+                                    Color(0xFFDC2626)),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(_errorMsg!,
+                                  style: GoogleFonts
+                                      .beVietnamPro(
+                                    fontSize: 12,
+                                    color: const Color(
+                                        0xFF991B1B),
+                                  )),
+                            ),
+                          ]),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            // Footer
+            Container(
+              padding:
+                  const EdgeInsets.fromLTRB(24, 16, 24, 20),
+              decoration: const BoxDecoration(
+                border: Border(
+                    top: BorderSide(color: Color(0xFFE8ECF0))),
+                color: Color(0xFFF8F9FB),
+                borderRadius: BorderRadius.vertical(
+                    bottom: Radius.circular(18)),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  OutlinedButton(
+                    onPressed: _isSubmitting
+                        ? null
+                        : () => Navigator.pop(context),
+                    style: OutlinedButton.styleFrom(
+                      side: const BorderSide(
+                          color: Color(0xFFE2E6EA)),
+                      shape: RoundedRectangleBorder(
+                          borderRadius:
+                              BorderRadius.circular(8)),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 18, vertical: 11),
+                    ),
+                    child: Text('Cancel',
+                        style: GoogleFonts.beVietnamPro(
+                          fontSize: 13,
+                          color: const Color(0xFF374151),
+                        )),
+                  ),
+                  const SizedBox(width: 12),
+                  ElevatedButton.icon(
+                    onPressed:
+                        _isSubmitting || _isUploading
+                            ? null
+                            : _submit,
+                    icon: _isSubmitting
+                        ? const SizedBox(
+                            width: 14,
+                            height: 14,
+                            child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white))
+                        : Icon(
+                            isEdit
+                                ? Icons.save_rounded
+                                : Icons.send_rounded,
+                            size: 16),
+                    label: Text(
+                      isEdit ? 'Save Changes' : 'Submit Request',
+                      style: GoogleFonts.beVietnamPro(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: _DS.primary,
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                          borderRadius:
+                              BorderRadius.circular(8)),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 20, vertical: 11),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFileZone() {
+    final hasFile = _attachmentBase64 != null;
+
+    if (_isUploading) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF8F9FB),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+              color: _DS.primary.withOpacity(0.4), width: 1.5),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(children: [
+              const Icon(Icons.insert_drive_file_outlined,
+                  size: 16, color: _DS.primary),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(_attachmentName ?? 'Uploading…',
+                    style: GoogleFonts.beVietnamPro(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500),
+                    overflow: TextOverflow.ellipsis),
+              ),
+              Text(_attachmentSize ?? '',
+                  style: GoogleFonts.beVietnamPro(
+                      fontSize: 11,
+                      color: const Color(0xFF64748B))),
+            ]),
+            const SizedBox(height: 10),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: LinearProgressIndicator(
+                value: _uploadProgress,
+                minHeight: 6,
+                backgroundColor: const Color(0xFFE2E6EA),
+                valueColor:
+                    const AlwaysStoppedAnimation(_DS.primary),
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Uploading ${(_uploadProgress * 100).toInt()}%',
+              style: GoogleFonts.beVietnamPro(
+                  fontSize: 11,
+                  color: const Color(0xFF64748B)),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (hasFile) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(
+            horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: const Color(0xFFECFDF5),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+              color: const Color(0xFF059669), width: 1.5),
+        ),
+        child: Row(children: [
+          Container(
+            padding: const EdgeInsets.all(7),
+            decoration: BoxDecoration(
+              color:
+                  const Color(0xFF059669).withOpacity(0.1),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: const Icon(Icons.check_circle_rounded,
+                size: 18, color: Color(0xFF059669)),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(_attachmentName ?? 'File attached',
+                    style: GoogleFonts.beVietnamPro(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: const Color(0xFF065F46),
+                    ),
+                    overflow: TextOverflow.ellipsis),
+                if (_attachmentSize != null)
+                  Text(_attachmentSize!,
+                      style: GoogleFonts.beVietnamPro(
+                          fontSize: 11,
+                          color: const Color(0xFF059669))),
+              ],
+            ),
+          ),
+          TextButton(
+            onPressed: _removeFile,
+            child: Text('Remove',
+                style: GoogleFonts.beVietnamPro(
+                    fontSize: 12,
+                    color: const Color(0xFFDC2626))),
+          ),
+          TextButton(
+            onPressed: _pickFile,
+            child: Text('Change',
+                style: GoogleFonts.beVietnamPro(
+                    fontSize: 12, color: _DS.primary)),
+          ),
+        ]),
+      );
+    }
+
+    // Idle / pick state
+    return GestureDetector(
+      onTap: _pickFile,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF8F9FB),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: const Color(0xFFE2E6EA)),
+        ),
+        child: Column(
+          children: [
+            Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                color: _DS.primary.withOpacity(0.08),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(Icons.cloud_upload_rounded,
+                  size: 24, color: _DS.primary),
+            ),
+            const SizedBox(height: 10),
+            Text.rich(
+              TextSpan(
+                style: GoogleFonts.beVietnamPro(
+                    fontSize: 13,
+                    color: const Color(0xFF64748B)),
+                children: [
+                  TextSpan(
+                      text: 'Click to browse ',
+                      style: GoogleFonts.beVietnamPro(
+                          fontWeight: FontWeight.w600,
+                          color: _DS.primary)),
+                  const TextSpan(
+                      text: 'or drop your file here'),
+                ],
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Supported: PDF, DOC, DOCX, TXT, JPG, PNG — max 700 KB',
+              style: GoogleFonts.beVietnamPro(
+                  fontSize: 11,
+                  color: const Color(0xFF9AA5B4)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Export Button
+// ─────────────────────────────────────────────────────────────────────────────
+class _ExportButton extends StatelessWidget {
+  final String orgId, statusFilter, searchTerm;
+  const _ExportButton({
+    required this.orgId,
+    required this.statusFilter,
+    required this.searchTerm,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return PopupMenuButton<String>(
+      tooltip: 'Export',
+      offset: const Offset(0, 44),
+      shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(10)),
+      itemBuilder: (_) => [
+        PopupMenuItem(
+          value: 'csv',
+          child: Row(children: [
+            const Icon(Icons.table_chart_outlined,
+                size: 16, color: Color(0xFF374151)),
+            const SizedBox(width: 10),
+            Text('Export CSV',
+                style: GoogleFonts.beVietnamPro(fontSize: 13)),
+          ]),
+        ),
+        PopupMenuItem(
+          value: 'pdf',
+          child: Row(children: [
+            const Icon(Icons.picture_as_pdf_outlined,
+                size: 16, color: Color(0xFF374151)),
+            const SizedBox(width: 10),
+            Text('Export PDF',
+                style: GoogleFonts.beVietnamPro(fontSize: 13)),
+          ]),
+        ),
+      ],
+      onSelected: (choice) => _doExport(context, choice),
+      child: Container(
+        height: 40,
+        padding: const EdgeInsets.symmetric(horizontal: 14),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: _DS.primary),
+        ),
+        child: Row(children: [
+          Icon(Icons.download_outlined,
+              size: 16, color: _DS.primary),
+          const SizedBox(width: 6),
+          Text('Export',
+              style: GoogleFonts.beVietnamPro(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: _DS.primary)),
+          const SizedBox(width: 4),
+          Icon(Icons.keyboard_arrow_down_rounded,
+              size: 16, color: _DS.primary),
+        ]),
+      ),
+    );
+  }
+
+  Future<void> _doExport(
+      BuildContext context, String format) async {
+    try {
+      var snap = await FirestoreCollections.letterRequests
+          .where('orgId', isEqualTo: orgId)
+          .where('isArchived', isEqualTo: false)
+          .orderBy('timestamp', descending: true)
+          .get();
+      var docs = snap.docs;
+
+      if (statusFilter != 'All') {
+        final fv = statusFilter == 'Needs Revision'
+            ? 'revision'
+            : statusFilter.toLowerCase();
+        docs = docs
+            .where((d) => (d.data() as Map)['status'] == fv)
+            .toList();
+      }
+      if (searchTerm.isNotEmpty) {
+        docs = docs.where((d) {
+          final data = d.data() as Map;
+          return (data['letterId'] ?? '')
+                  .toString()
+                  .toLowerCase()
+                  .contains(searchTerm) ||
+              (data['subject'] ?? '')
+                  .toString()
+                  .toLowerCase()
+                  .contains(searchTerm);
+        }).toList();
+      }
+
+      if (docs.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('No data to export.',
+              style: GoogleFonts.beVietnamPro()),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8)),
+        ));
+        return;
+      }
+
+      final requests =
+          docs.map((d) => LetterRequestModel.fromFirestore(d)).toList();
+      final headers = [
+        'Letter ID', 'Type', 'Subject',
+        'Date Submitted', 'Status', 'Revision Notes',
+      ];
+      final rows = requests.map((r) => [
+        r.letterId,
+        r.letterType,
+        r.subject,
+        DateFormat('yyyy-MM-dd').format(r.timestamp.toDate()),
+        r.status,
+        r.revisionNote ?? '',
+      ]).toList();
+
+      final now = DateTime.now().toString().substring(0, 10);
+
+      if (format == 'csv') {
+        final csv = [headers, ...rows]
+            .map((row) =>
+                row.map((c) => '"${c.replaceAll('"', '""')}"').join(','))
+            .join('\n');
+        await OrgExportUtil.saveText(csv,
+            'letter_requests_$now.csv',
+            mimeType: 'text/csv');
+      } else if (format == 'pdf') {
+        final pdfBytes = await OrgExportPdf.generateTablePdf(
+          title: 'Letter Requests',
+          headers: headers,
+          rows: rows,
+        );
+        await OrgExportUtil.saveBytes(pdfBytes,
+            'letter_requests_$now.pdf',
+            mimeType: 'application/pdf');
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Export failed: $e',
+            style: GoogleFonts.beVietnamPro(color: Colors.white)),
+        backgroundColor: const Color(0xFFDC2626),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(8)),
+      ));
+    }
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Reusable widgets
+// ─────────────────────────────────────────────────────────────────────────────
 class _StatCard extends StatelessWidget {
-  final String label;
-  final int value;
+  final String label, value;
   final IconData icon;
   final Color color;
   const _StatCard({
@@ -908,46 +2043,43 @@ class _StatCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Expanded(
       child: Container(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(18),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: OrgColors.primaryLight, width: 0.5),
+          border: Border.all(color: const Color(0xFFE8ECF0)),
+          boxShadow: _DS.cardShadow,
         ),
-        child: Row(
-          children: [
-            Container(
-              width: 42,
-              height: 42,
-              decoration: BoxDecoration(
-                color: color.withAlpha(25),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Icon(icon, color: color, size: 20),
+        child: Row(children: [
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.10),
+              borderRadius: BorderRadius.circular(12),
             ),
-            const SizedBox(width: 14),
-            Column(
+            child: Icon(icon, color: color, size: 22),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  '$value',
-                  style: GoogleFonts.beVietnamPro(
-                    fontSize: 26,
-                    fontWeight: FontWeight.w700,
-                    color: OrgColors.charcoal,
-                  ),
-                ),
-                Text(
-                  label,
-                  style: GoogleFonts.beVietnamPro(
-                    fontSize: 12,
-                    color: OrgColors.darkGray,
-                  ),
-                ),
+                Text(label,
+                    style: GoogleFonts.beVietnamPro(
+                        fontSize: 11,
+                        color: const Color(0xFF64748B),
+                        fontWeight: FontWeight.w500)),
+                const SizedBox(height: 2),
+                Text(value,
+                    style: GoogleFonts.beVietnamPro(
+                        fontSize: 28,
+                        fontWeight: FontWeight.w700,
+                        color: const Color(0xFF1A202C))),
               ],
             ),
-          ],
-        ),
+          ),
+        ]),
       ),
     );
   }
@@ -971,45 +2103,66 @@ class _FilterDropdown extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+      height: 40,
+      padding: const EdgeInsets.symmetric(horizontal: 12),
       decoration: BoxDecoration(
-        color: OrgColors.lightGray,
+        color: Colors.white,
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: OrgColors.mediumGray),
+        border: Border.all(color: const Color(0xFFE2E6EA)),
       ),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<String>(
           value: items.contains(value) ? value : null,
-          icon: Icon(icon, size: 18, color: OrgColors.darkGray),
+          icon: const Icon(Icons.keyboard_arrow_down_rounded,
+              size: 18, color: Color(0xFF9AA5B4)),
+          style: GoogleFonts.beVietnamPro(
+              fontSize: 13, color: const Color(0xFF374151)),
+          hint: Text(hint,
+              style: GoogleFonts.beVietnamPro(
+                  fontSize: 13, color: const Color(0xFF9AA5B4))),
           items: items
-              .map(
-                (item) => DropdownMenuItem(
-                  value: item,
-                  child: Text(
-                    item,
-                    style: GoogleFonts.beVietnamPro(
-                      fontSize: 13,
-                      color: OrgColors.charcoal,
-                    ),
-                  ),
-                ),
-              )
+              .map((s) => DropdownMenuItem(
+                    value: s,
+                    child: Text(s,
+                        style: GoogleFonts.beVietnamPro(fontSize: 13)),
+                  ))
               .toList(),
           onChanged: onChanged,
           borderRadius: BorderRadius.circular(10),
-          dropdownColor: OrgColors.white,
-          style: GoogleFonts.beVietnamPro(
-            fontSize: 13,
-            color: OrgColors.charcoal,
-          ),
-          hint: Text(
-            hint,
-            style: GoogleFonts.beVietnamPro(
-              fontSize: 13,
-              color: OrgColors.darkGray,
-            ),
-          ),
+          dropdownColor: Colors.white,
         ),
+      ),
+    );
+  }
+}
+
+class _ToolbarButton extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final VoidCallback onPressed;
+
+  const _ToolbarButton({
+    required this.label,
+    required this.icon,
+    required this.onPressed,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return ElevatedButton.icon(
+      onPressed: onPressed,
+      icon: Icon(icon, size: 15),
+      label: Text(label,
+          style: GoogleFonts.beVietnamPro(
+              fontSize: 13, fontWeight: FontWeight.w600)),
+      style: ElevatedButton.styleFrom(
+        backgroundColor: _DS.primary,
+        foregroundColor: Colors.white,
+        padding:
+            const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10)),
+        elevation: 0,
       ),
     );
   }
@@ -1018,13 +2171,13 @@ class _FilterDropdown extends StatelessWidget {
 class _ActionIconButton extends StatelessWidget {
   final IconData icon;
   final String tooltip;
-  final Color color;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
+  final Color? color;
   const _ActionIconButton({
     required this.icon,
     required this.tooltip,
-    required this.color,
     required this.onTap,
+    this.color,
   });
 
   @override
@@ -1035,882 +2188,80 @@ class _ActionIconButton extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(6),
         child: Padding(
-          padding: const EdgeInsets.all(6),
-          child: Icon(icon, size: 18, color: color),
+          padding: const EdgeInsets.all(5),
+          child: Icon(icon,
+              size: 16,
+              color: onTap == null
+                  ? const Color(0xFFD1D5DB)
+                  : (color ?? const Color(0xFF64748B))),
         ),
       ),
     );
   }
 }
 
-// ============ REQUEST DETAILS DIALOG ============
-class _RequestDetailsDialog extends StatelessWidget {
-  final LetterRequestModel request;
-
-  const _RequestDetailsDialog({required this.request});
+class _PageButton extends StatelessWidget {
+  final IconData icon;
+  final bool enabled;
+  final VoidCallback onTap;
+  const _PageButton(
+      {required this.icon, required this.enabled, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    return Dialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: Container(
-        width: 500,
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(
-                    color: OrgColors.accentBg,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: const Icon(
-                    Icons.description_outlined,
-                    color: OrgColors.primaryDark,
-                    size: 20,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Request Details',
-                        style: GoogleFonts.beVietnamPro(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      Text(
-                        request.letterId,
-                        style: GoogleFonts.beVietnamPro(
-                          fontSize: 12,
-                          color: OrgColors.darkGray,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                IconButton(
-                  onPressed: () => Navigator.pop(context),
-                  icon: const Icon(Icons.close, size: 18),
-                ),
-              ],
-            ),
-            const SizedBox(height: 20),
-            _infoRow('Subject', request.subject),
-            const SizedBox(height: 12),
-            _infoRow('Status', _getStatusDisplay(request.status)),
-            if (request.revisionNote != null) ...[
-              const SizedBox(height: 12),
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: OrgColors.infoBg,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: OrgColors.info.withAlpha(77)),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'REVISION NOTE',
-                      style: GoogleFonts.beVietnamPro(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                        color: OrgColors.info,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      request.revisionNote!,
-                      style: GoogleFonts.beVietnamPro(
-                        fontSize: 13,
-                        color: OrgColors.charcoal,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-            if (request.revisionCount != null &&
-                request.revisionCount! > 0) ...[
-              const SizedBox(height: 12),
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: OrgColors.mediumGray.withAlpha(51),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Row(
-                  children: [
-                    Icon(Icons.history, size: 16, color: OrgColors.darkGray),
-                    const SizedBox(width: 8),
-                    Text(
-                      'Revision #${request.revisionCount}',
-                      style: GoogleFonts.beVietnamPro(
-                        fontSize: 12,
-                        color: OrgColors.darkGray,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-            const SizedBox(height: 12),
-            _infoRow(
-              'Date Submitted',
-              DateFormat(
-                'MMM dd, yyyy hh:mm a',
-              ).format(request.timestamp.toDate()),
-            ),
-            const SizedBox(height: 20),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: Text(
-                    'Close',
-                    style: GoogleFonts.beVietnamPro(color: OrgColors.darkGray),
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
+    return InkWell(
+      onTap: enabled ? onTap : null,
+      borderRadius: BorderRadius.circular(6),
+      child: Padding(
+        padding: const EdgeInsets.all(4),
+        child: Icon(icon,
+            size: 20,
+            color: enabled
+                ? const Color(0xFF374151)
+                : const Color(0xFFD1D5DB)),
       ),
-    );
-  }
-
-  String _getStatusDisplay(String status) {
-    switch (status.toLowerCase()) {
-      case 'approved':
-        return 'APPROVED';
-      case 'rejected':
-        return 'REJECTED';
-      case 'revision':
-        return 'NEEDS REVISION';
-      case 'resubmitted':
-        return 'RESUBMITTED';
-      default:
-        return 'PENDING';
-    }
-  }
-
-  Widget _infoRow(String label, String value) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        SizedBox(
-          width: 100,
-          child: Text(
-            '$label:',
-            style: GoogleFonts.beVietnamPro(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: OrgColors.darkGray,
-            ),
-          ),
-        ),
-        Expanded(
-          child: Text(
-            value,
-            style: GoogleFonts.beVietnamPro(
-              fontSize: 13,
-              color: OrgColors.charcoal,
-            ),
-          ),
-        ),
-      ],
     );
   }
 }
 
-// ============ LETTER REQUEST MODAL ============
-class _LetterRequestModal extends StatefulWidget {
-  final String orgId;
-  final String orgName;
-  final String orgEmail;
-  final LetterRequestModel? existingRequest;
-
-  const _LetterRequestModal({
-    required this.orgId,
-    required this.orgName,
-    required this.orgEmail,
-    this.existingRequest,
-  });
-
-  @override
-  State<_LetterRequestModal> createState() => _LetterRequestModalState();
-}
-
-class _LetterRequestModalState extends State<_LetterRequestModal> {
-  final _formKey = GlobalKey<FormState>();
-  final _subjectCtrl = TextEditingController();
-
-  String? _attachmentBase64;
-  String? _attachmentName;
-  String? _attachmentSize;
-  bool _isSubmitting = false;
-  bool _isUploading = false;
-  double _uploadProgress = 0.0;
-
-  @override
-  void initState() {
-    super.initState();
-    final r = widget.existingRequest;
-    if (r != null) {
-      _subjectCtrl.text = r.subject;
-      _attachmentBase64 = r.attachmentBase64;
-      _attachmentName = r.attachmentName;
-      _attachmentSize = r.attachmentSize;
-    }
-  }
-
-  @override
-  void dispose() {
-    _subjectCtrl.dispose();
-    super.dispose();
-  }
-
-  Future<void> _pickAndUploadFile() async {
-    FilePickerResult? result = await FilePicker.platform.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: ['pdf', 'doc', 'docx', 'txt', 'jpg', 'png'],
-      withData: true,
-    );
-
-    if (result == null) return;
-    final file = result.files.first;
-
-    if (file.bytes == null || file.bytes!.isEmpty) {
-      _showMessage('Cannot read file!', isError: true);
-      return;
-    }
-
-    final fileSizeBytes = file.bytes!.length;
-    final maxSize = 700 * 1024;
-
-    if (fileSizeBytes > maxSize) {
-      final sizeInKB = (fileSizeBytes / 1024).toStringAsFixed(1);
-      _showMessage('File is $sizeInKB KB. Maximum is 700 KB!', isError: true);
-      return;
-    }
-
-    final fileSizeKB = (fileSizeBytes / 1024).toStringAsFixed(1);
-
-    setState(() {
-      _isUploading = true;
-      _uploadProgress = 0.0;
-      _attachmentName = file.name;
-      _attachmentSize = '$fileSizeKB KB';
-    });
-
-    for (int i = 0; i <= 100; i += 20) {
-      await Future.delayed(const Duration(milliseconds: 50));
-      if (mounted) setState(() => _uploadProgress = i / 100);
-    }
-
-    try {
-      String base64String = base64Encode(file.bytes!);
-      setState(() {
-        _attachmentBase64 = base64String;
-        _uploadProgress = 1.0;
-        _isUploading = false;
-      });
-      _showMessage('File ready! Size: $fileSizeKB KB');
-    } catch (e) {
-      setState(() => _isUploading = false);
-      _showMessage('Error converting file: $e', isError: true);
-    }
-  }
-
-  void _removeFile() {
-    setState(() {
-      _attachmentBase64 = null;
-      _attachmentName = null;
-      _attachmentSize = null;
-      _uploadProgress = 0.0;
-    });
-  }
-
-  void _showMessage(String msg, {bool isError = false}) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(msg),
-        backgroundColor: isError ? Colors.red : Colors.green,
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
-  }
-
-  Future<void> _submit() async {
-    if (!_formKey.currentState!.validate()) return;
-
-    if (widget.existingRequest == null && _attachmentBase64 == null) {
-      _showMessage('Please attach a file before submitting!', isError: true);
-      return;
-    }
-
-    setState(() => _isSubmitting = true);
-
-    try {
-      final Map<String, dynamic> data = {
-        'orgId': widget.orgId,
-        'orgName': widget.orgName,
-        'orgEmail': widget.orgEmail,
-        'name': widget.orgName,
-        'email': widget.orgEmail,
-        'letterType': 'General',
-        'subject': _subjectCtrl.text.trim(),
-        'attachmentBase64': _attachmentBase64,
-        'attachmentName': _attachmentName,
-        'attachmentSize': _attachmentSize,
-        'updatedAt': FieldValue.serverTimestamp(),
-        'isArchived': false,
-      };
-
-      final col = FirestoreCollections.letterRequests;
-
-      if (widget.existingRequest != null) {
-        final updateData = Map<String, dynamic>.from(data);
-
-        if (widget.existingRequest!.status == 'revision') {
-          updateData['status'] = 'resubmitted';
-          updateData['resubmittedAt'] = FieldValue.serverTimestamp();
-          updateData['revisionNote'] = null;
-          updateData['revisionCount'] = FieldValue.increment(1);
-        }
-
-        await col.doc(widget.existingRequest!.id).update(updateData);
-        await activity_log.ActivityLogger.log(
-          action: 'edit_letter_request',
-          module: 'letter_request',
-          details: {
-            'orgId': widget.orgId,
-            'requestId': widget.existingRequest!.id,
-          },
-        );
-        _showMessage('Letter request updated successfully!');
-      } else {
-        final letterId =
-            'RLR-${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}';
-        data['status'] = 'pending';
-        data['letterId'] = letterId;
-        data['timestamp'] = FieldValue.serverTimestamp();
-        data['revisionCount'] = 0;
-        await col.add(data);
-        await activity_log.ActivityLogger.log(
-          action: 'create_letter_request',
-          module: 'letter_request',
-          details: {'orgId': widget.orgId, 'subject': data['subject']},
-        );
-        _showMessage('Letter request submitted successfully!');
-      }
-
-      if (mounted) Navigator.pop(context);
-    } catch (e) {
-      _showMessage('Error: $e', isError: true);
-    } finally {
-      if (mounted) setState(() => _isSubmitting = false);
-    }
-  }
+class _PageNumButton extends StatelessWidget {
+  final int page;
+  final bool isActive;
+  final VoidCallback onTap;
+  const _PageNumButton(
+      {required this.page, required this.isActive, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    final isEdit = widget.existingRequest != null;
-
-    return Dialog(
-      backgroundColor: Colors.transparent,
+    return GestureDetector(
+      onTap: onTap,
       child: Container(
-        width: 500,
-        constraints: BoxConstraints(
-          maxHeight: MediaQuery.of(context).size.height * 0.8,
-        ),
+        margin: const EdgeInsets.symmetric(horizontal: 2),
+        width: 28,
+        height: 28,
+        alignment: Alignment.center,
         decoration: BoxDecoration(
-          color: OrgColors.white,
-          borderRadius: BorderRadius.circular(12),
-          boxShadow: [
-            BoxShadow(color: Colors.black.withAlpha(38), blurRadius: 32),
-          ],
+          color: isActive ? _DS.primary : Colors.transparent,
+          borderRadius: BorderRadius.circular(6),
         ),
-        child: Form(
-          key: _formKey,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                padding: const EdgeInsets.fromLTRB(20, 16, 16, 16),
-                decoration: const BoxDecoration(
-                  color: OrgColors.lightGray,
-                  borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
-                  border: Border(
-                    bottom: BorderSide(
-                      color: OrgColors.primaryLight,
-                      width: 0.5,
-                    ),
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 36,
-                      height: 36,
-                      decoration: const BoxDecoration(
-                        color: OrgColors.accentBg,
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(
-                        Icons.mail_outline,
-                        color: OrgColors.primaryDark,
-                        size: 18,
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            isEdit ? 'Edit Letter Request' : 'New Request',
-                            style: GoogleFonts.beVietnamPro(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                          Text(
-                            'Fill in all required fields',
-                            style: GoogleFonts.beVietnamPro(
-                              fontSize: 11,
-                              color: OrgColors.darkGray,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    IconButton(
-                      onPressed: () => Navigator.pop(context),
-                      icon: const Icon(Icons.close, size: 18),
-                      splashRadius: 18,
-                    ),
-                  ],
-                ),
-              ),
-              Flexible(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.all(20),
-                  child: Column(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: OrgColors.lightGray,
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: OrgColors.mediumGray),
-                        ),
-                        child: Row(
-                          children: [
-                            const Icon(
-                              Icons.business_outlined,
-                              size: 18,
-                              color: OrgColors.primaryDark,
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    widget.orgName,
-                                    style: GoogleFonts.beVietnamPro(
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                  Text(
-                                    widget.orgEmail,
-                                    style: GoogleFonts.beVietnamPro(
-                                      fontSize: 11,
-                                      color: OrgColors.darkGray,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      TextFormField(
-                        controller: _subjectCtrl,
-                        style: GoogleFonts.beVietnamPro(fontSize: 13),
-                        decoration: InputDecoration(
-                          labelText: 'SUBJECT *',
-                          hintText: "What's this regarding?",
-                          labelStyle: GoogleFonts.beVietnamPro(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600,
-                            color: OrgColors.darkGray,
-                          ),
-                          filled: true,
-                          fillColor: OrgColors.lightGray,
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(8),
-                            borderSide: BorderSide.none,
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(8),
-                            borderSide: const BorderSide(
-                              color: OrgColors.primaryDark,
-                              width: 1.5,
-                            ),
-                          ),
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 14,
-                            vertical: 12,
-                          ),
-                        ),
-                        validator: (v) => v?.trim().isEmpty == true
-                            ? 'Subject is required'
-                            : null,
-                      ),
-                      const SizedBox(height: 16),
-                      _buildFileAttachment(),
-                      if (widget.existingRequest?.revisionNote != null) ...[
-                        const SizedBox(height: 12),
-                        Container(
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: OrgColors.infoBg,
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(
-                              color: OrgColors.info.withAlpha(77),
-                            ),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'REVISION NOTE FROM ADMIN',
-                                style: GoogleFonts.beVietnamPro(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w700,
-                                  color: OrgColors.info,
-                                ),
-                              ),
-                              const SizedBox(height: 6),
-                              Text(
-                                widget.existingRequest!.revisionNote!,
-                                style: GoogleFonts.beVietnamPro(
-                                  fontSize: 12,
-                                  color: OrgColors.charcoal,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-              ),
-              Container(
-                padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
-                decoration: const BoxDecoration(
-                  border: Border(
-                    top: BorderSide(color: OrgColors.primaryLight, width: 0.5),
-                  ),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    OutlinedButton(
-                      onPressed: () => Navigator.pop(context),
-                      style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 20,
-                          vertical: 11,
-                        ),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                      ),
-                      child: Text(
-                        'Cancel',
-                        style: GoogleFonts.beVietnamPro(
-                          color: OrgColors.darkGray,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    ElevatedButton.icon(
-                      onPressed: _isSubmitting || _isUploading ? null : _submit,
-                      icon: _isSubmitting
-                          ? const SizedBox(
-                              width: 14,
-                              height: 14,
-                              child: CircularProgressIndicator(
-                                color: Colors.white,
-                                strokeWidth: 2,
-                              ),
-                            )
-                          : const Icon(
-                              Icons.send_outlined,
-                              size: 16,
-                              color: Colors.white,
-                            ),
-                      label: Text(
-                        isEdit ? 'Save Changes' : 'Submit Request',
-                        style: GoogleFonts.beVietnamPro(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: OrgColors.primaryDark,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 20,
-                          vertical: 11,
-                        ),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildFileAttachment() {
-    final hasFile = _attachmentBase64 != null;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'File Attachment ${widget.existingRequest == null ? '*' : ''}',
+        child: Text(
+          '$page',
           style: GoogleFonts.beVietnamPro(
             fontSize: 12,
-            fontWeight: FontWeight.w600,
-            color: OrgColors.charcoal,
+            fontWeight:
+                isActive ? FontWeight.w700 : FontWeight.normal,
+            color:
+                isActive ? Colors.white : const Color(0xFF374151),
           ),
         ),
-        const SizedBox(height: 6),
-        AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-          decoration: BoxDecoration(
-            color: OrgColors.lightGray,
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(
-              color: _isUploading
-                  ? OrgColors.primaryDark.withAlpha(102)
-                  : hasFile
-                  ? OrgColors.success
-                  : OrgColors.mediumGray,
-              width: _isUploading || hasFile ? 1.5 : 1,
-            ),
-          ),
-          child: _isUploading
-              ? _buildUploadingState()
-              : hasFile
-              ? _buildUploadedState()
-              : _buildIdleState(),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildIdleState() {
-    return GestureDetector(
-      onTap: _pickAndUploadFile,
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: OrgColors.primaryDark.withAlpha(20),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Icon(
-              Icons.cloud_upload_outlined,
-              size: 22,
-              color: OrgColors.primaryDark,
-            ),
-          ),
-          const SizedBox(width: 12),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              RichText(
-                text: TextSpan(
-                  style: GoogleFonts.beVietnamPro(
-                    fontSize: 12,
-                    color: OrgColors.darkGray,
-                  ),
-                  children: [
-                    TextSpan(
-                      text: 'Click to upload ',
-                      style: GoogleFonts.beVietnamPro(
-                        color: OrgColors.primaryDark,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const TextSpan(text: 'letter documents'),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                'PDF, DOC, DOCX, TXT, JPG, PNG — max 700 KB',
-                style: GoogleFonts.beVietnamPro(
-                  fontSize: 10,
-                  color: OrgColors.darkGray,
-                ),
-              ),
-            ],
-          ),
-        ],
       ),
-    );
-  }
-
-  Widget _buildUploadingState() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(6),
-              decoration: BoxDecoration(
-                color: OrgColors.primaryDark.withAlpha(20),
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: Icon(
-                Icons.insert_drive_file_outlined,
-                size: 16,
-                color: OrgColors.primaryDark,
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                _attachmentName ?? 'Uploading...',
-                style: GoogleFonts.beVietnamPro(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500,
-                ),
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-            Text(
-              _attachmentSize ?? '',
-              style: GoogleFonts.beVietnamPro(
-                fontSize: 11,
-                color: OrgColors.darkGray,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 10),
-        ClipRRect(
-          borderRadius: BorderRadius.circular(6),
-          child: LinearProgressIndicator(
-            value: _uploadProgress,
-            minHeight: 6,
-            backgroundColor: OrgColors.mediumGray,
-            valueColor: const AlwaysStoppedAnimation(OrgColors.primaryDark),
-          ),
-        ),
-        const SizedBox(height: 6),
-        Text(
-          'Uploading ${(_uploadProgress * 100).toInt()}%',
-          style: GoogleFonts.beVietnamPro(
-            fontSize: 10,
-            color: OrgColors.darkGray,
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildUploadedState() {
-    return Row(
-      children: [
-        Container(
-          padding: const EdgeInsets.all(8),
-          decoration: BoxDecoration(
-            color: OrgColors.success.withAlpha(25),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Icon(Icons.check_circle, size: 18, color: OrgColors.success),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                _attachmentName ?? 'File attached',
-                style: GoogleFonts.beVietnamPro(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500,
-                ),
-                overflow: TextOverflow.ellipsis,
-              ),
-              if (_attachmentSize != null)
-                Text(
-                  _attachmentSize!,
-                  style: GoogleFonts.beVietnamPro(
-                    fontSize: 11,
-                    color: OrgColors.success,
-                  ),
-                ),
-            ],
-          ),
-        ),
-        TextButton(
-          onPressed: _removeFile,
-          child: Text(
-            'Remove',
-            style: GoogleFonts.beVietnamPro(
-              fontSize: 12,
-              color: OrgColors.error,
-            ),
-          ),
-        ),
-        TextButton(
-          onPressed: _pickAndUploadFile,
-          child: Text(
-            'Change',
-            style: GoogleFonts.beVietnamPro(
-              fontSize: 12,
-              color: OrgColors.primaryDark,
-            ),
-          ),
-        ),
-      ],
     );
   }
 }
 
-// ============ LETTER REQUEST MODEL ============
+// ─────────────────────────────────────────────────────────────────────────────
+// Letter Request Model
+// ─────────────────────────────────────────────────────────────────────────────
 class LetterRequestModel {
   final String id;
   final String letterId;
@@ -1951,22 +2302,22 @@ class LetterRequestModel {
   factory LetterRequestModel.fromFirestore(DocumentSnapshot doc) {
     final d = doc.data() as Map<String, dynamic>;
     return LetterRequestModel(
-      id: doc.id,
-      letterId: d['letterId'] ?? 'RLR-${doc.id.substring(0, 6)}',
-      orgId: d['orgId'] ?? '',
-      orgName: d['orgName'] ?? 'Unknown Organization',
-      orgEmail: d['orgEmail'] ?? '',
-      letterType: d['letterType'] ?? 'General',
-      subject: d['subject'] ?? '',
+      id:               doc.id,
+      letterId:         d['letterId'] ?? 'RLR-${doc.id.substring(0, 6)}',
+      orgId:            d['orgId'] ?? '',
+      orgName:          d['orgName'] ?? 'Unknown Organization',
+      orgEmail:         d['orgEmail'] ?? '',
+      letterType:       d['letterType'] ?? 'General',
+      subject:          d['subject'] ?? '',
       attachmentBase64: d['attachmentBase64'],
-      attachmentName: d['attachmentName'],
-      attachmentSize: d['attachmentSize'],
-      status: d['status'] ?? 'pending',
-      revisionNote: d['revisionNote'],
-      revisionCount: d['revisionCount'] ?? 0,
-      resubmittedAt: d['resubmittedAt'] as Timestamp?,
-      isArchived: d['isArchived'] ?? false,
-      timestamp: d['timestamp'] as Timestamp? ?? Timestamp.now(),
+      attachmentName:   d['attachmentName'],
+      attachmentSize:   d['attachmentSize'],
+      status:           d['status'] ?? 'pending',
+      revisionNote:     d['revisionNote'],
+      revisionCount:    d['revisionCount'] ?? 0,
+      resubmittedAt:    d['resubmittedAt'] as Timestamp?,
+      isArchived:       d['isArchived'] ?? false,
+      timestamp:        d['timestamp'] as Timestamp? ?? Timestamp.now(),
     );
   }
 }
