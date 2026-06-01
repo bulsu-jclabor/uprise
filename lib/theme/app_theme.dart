@@ -7,6 +7,7 @@ class UpriseColors {
   static const Color primaryDark = Color(0xFFBE4700);   // deep orange/brown – stability, technology
   static const Color primaryLight = Color(0xFFD47A00);  // warm orange – passion, enthusiasm
   static const Color accent = Color(0xFFDA6937);       // secondary accent – growth, approachable
+  static const Color info = Color(0xFF0EA5E9);         // informative status color
   static const Color white = Color(0xFFFFFFFF);         // clean background
   
   // Supporting neutrals (from your design system)

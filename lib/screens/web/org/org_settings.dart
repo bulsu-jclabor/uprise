@@ -1,9 +1,7 @@
 // lib/screens/web/org/org_settings.dart
 //
-// CHANGE: This screen is now embedded inside OrgDashboard's IndexedStack.
-// It must NOT wrap itself in a Scaffold or add its own outer padding —
-// the dashboard shell (sidebar + topbar + lightGray background) is already
-// provided by the parent. Just return the scrollable content directly.
+// NOTE: Embedded inside OrgDashboard's IndexedStack.
+// No extra Scaffold or outer padding — dashboard provides background + topbar.
 
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -11,27 +9,74 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import '../../../services/activity_logger.dart' as activity_log;
+import '../../../theme/app_theme.dart';
 
-// OrgColors is defined in org_dashboard.dart and shared via the same library.
-// If you keep settings in a separate file, re-declare or import it.
-// For zero-friction drop-in, we redeclare it here (identical values).
-class OrgColors {
-  static const Color primaryDark  = Color(0xFFB45309);
-  static const Color primaryLight = Color(0xFFD97706);
-  static const Color accent       = Color(0xFFF59E0B);
-  static const Color white        = Color(0xFFFFFFFF);
-  static const Color lightGray    = Color(0xFFF9FAFB);
-  static const Color mediumGray   = Color(0xFFE5E7EB);
-  static const Color darkGray     = Color(0xFF6B7280);
-  static const Color charcoal     = Color(0xFF111827);
-  static const Color success      = Color(0xFF10B981);
-  static const Color warning      = Color(0xFFF59E0B);
-  static const Color error        = Color(0xFFEF4444);
-  static const Color info         = Color(0xFF3B82F6);
+// ─────────────────────────────────────────────────────────────────────────────
+// Design tokens (mirrors merchandise & student accounts)
+// ─────────────────────────────────────────────────────────────────────────────
+class _DS {
+  static const double radiusSm = 8;
+  static const double radiusMd = 12;
+  static const double radiusLg = 16;
+  static const double radiusPill = 100;
+
+  static final cardShadow = [
+    BoxShadow(
+      color: Colors.black.withOpacity(0.06),
+      blurRadius: 12,
+      offset: const Offset(0, 4),
+    ),
+  ];
+
+  static InputDecoration inputDecoration(
+    String label, {
+    String? hint,
+    IconData? icon,
+    Widget? suffix,
+  }) {
+    return InputDecoration(
+      labelText: label,
+      hintText: hint,
+      prefixIcon: icon != null
+          ? Icon(icon, size: 18, color: const Color(0xFF9AA5B4))
+          : null,
+      suffixIcon: suffix,
+      labelStyle: GoogleFonts.beVietnamPro(
+          fontSize: 13, color: const Color(0xFF64748B)),
+      hintStyle: GoogleFonts.beVietnamPro(
+          fontSize: 13, color: const Color(0xFF9AA5B4)),
+      filled: true,
+      fillColor: const Color(0xFFF8F9FB),
+      contentPadding:
+          const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(_DS.radiusSm),
+        borderSide: const BorderSide(color: Color(0xFFE2E6EA), width: 1),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(_DS.radiusSm),
+        borderSide: const BorderSide(color: Color(0xFFE2E6EA), width: 1),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(_DS.radiusSm),
+        borderSide:
+            BorderSide(color: UpriseColors.primaryDark, width: 1.5),
+      ),
+      errorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(_DS.radiusSm),
+        borderSide: BorderSide(color: UpriseColors.error, width: 1),
+      ),
+      focusedErrorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(_DS.radiusSm),
+        borderSide: BorderSide(color: UpriseColors.error, width: 1.5),
+      ),
+    );
+  }
 }
 
-// ── Main embedded screen ─────────────────────────────────────────────────────
-// NOTE: No Scaffold, no outer Padding — the dashboard provides those.
+// ─────────────────────────────────────────────────────────────────────────────
+// Main embedded screen
+// ─────────────────────────────────────────────────────────────────────────────
 class OrgSettingsScreen extends StatefulWidget {
   final String orgId;
   final String orgName;
@@ -68,64 +113,73 @@ class _OrgSettingsScreenState extends State<OrgSettingsScreen>
 
   @override
   Widget build(BuildContext context) {
-    // Outer padding matches every other screen in the dashboard (24 all-around).
-    return Padding(
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // ── Page header ──────────────────────────────────────
-          Text(
-            'Settings',
-            style: GoogleFonts.beVietnamPro(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-                color: OrgColors.charcoal),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // ── Page header ──────────────────────────────────────
+        Padding(
+          padding: const EdgeInsets.fromLTRB(28, 24, 28, 0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Settings',
+                style: GoogleFonts.beVietnamPro(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                    color: const Color(0xFF1A202C)),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                'Manage your account and notification preferences',
+                style: GoogleFonts.beVietnamPro(
+                    fontSize: 13, color: const Color(0xFF64748B)),
+              ),
+            ],
           ),
-          const SizedBox(height: 2),
-          Text(
-            'Manage your account and notification preferences',
-            style: GoogleFonts.beVietnamPro(
-                fontSize: 13, color: OrgColors.darkGray),
-          ),
-          const SizedBox(height: 24),
+        ),
+        const SizedBox(height: 24),
 
-          // ── Tab bar ──────────────────────────────────────────
-          Container(
+        // ── Tab bar (standard bottom border, consistent colors) ──
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 28),
+          child: Container(
             decoration: const BoxDecoration(
               border: Border(
-                  bottom: BorderSide(color: OrgColors.primaryLight)),
+                  bottom: BorderSide(color: UpriseColors.primaryLight)),
             ),
             child: TabBar(
               controller: _tabController,
-              labelColor: OrgColors.primaryDark,
-              unselectedLabelColor: OrgColors.darkGray,
-              indicatorColor: OrgColors.primaryDark,
+              labelColor: UpriseColors.primaryDark,
+              unselectedLabelColor: const Color(0xFF64748B),
+              indicatorColor: UpriseColors.primaryDark,
               tabs: const [
                 Tab(text: 'Notifications'),
                 Tab(text: 'Security'),
               ],
             ),
           ),
-          const SizedBox(height: 16),
+        ),
+        const SizedBox(height: 16),
 
-          // ── Tab views ────────────────────────────────────────
-          Expanded(
-            child: TabBarView(
-              controller: _tabController,
-              children: [
-                _NotificationsTab(orgId: widget.orgId),
-                _SecurityTab(orgId: widget.orgId),
-              ],
-            ),
+        // ── Tab views ────────────────────────────────────────
+        Expanded(
+          child: TabBarView(
+            controller: _tabController,
+            children: [
+              _NotificationsTab(orgId: widget.orgId),
+              _SecurityTab(orgId: widget.orgId),
+            ],
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }
 
-// ── Notifications Tab ────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// Notifications Tab
+// ─────────────────────────────────────────────────────────────────────────────
 class _NotificationsTab extends StatefulWidget {
   final String orgId;
   const _NotificationsTab({required this.orgId});
@@ -139,12 +193,12 @@ class _NotificationsTabState extends State<_NotificationsTab> {
   bool _isLoading = true;
 
   final List<Map<String, String>> _prefKeys = [
-    {'label': 'Email Notifications',   'key': 'email_notifications',   'desc': 'Receive updates via email'},
-    {'label': 'Push Notifications',    'key': 'push_notifications',    'desc': 'Receive push notifications on your device'},
-    {'label': 'Event Reminders',       'key': 'event_reminders',       'desc': 'Get reminded about upcoming events'},
-    {'label': 'Proposal Updates',      'key': 'proposal_updates',      'desc': 'Notify when proposal status changes'},
-    {'label': 'Announcement Alerts',   'key': 'announcement_alerts',   'desc': 'Get alerted for new announcements'},
-    {'label': 'Broadcast Messages',    'key': 'broadcast_messages',    'desc': 'Receive broadcast channel messages'},
+    {'label': 'Email Notifications', 'key': 'email_notifications', 'desc': 'Receive updates via email'},
+    {'label': 'Push Notifications', 'key': 'push_notifications', 'desc': 'Receive push notifications on your device'},
+    {'label': 'Event Reminders', 'key': 'event_reminders', 'desc': 'Get reminded about upcoming events'},
+    {'label': 'Proposal Updates', 'key': 'proposal_updates', 'desc': 'Notify when proposal status changes'},
+    {'label': 'Announcement Alerts', 'key': 'announcement_alerts', 'desc': 'Get alerted for new announcements'},
+    {'label': 'Broadcast Messages', 'key': 'broadcast_messages', 'desc': 'Receive broadcast channel messages'},
   ];
 
   @override
@@ -157,8 +211,10 @@ class _NotificationsTabState extends State<_NotificationsTab> {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
     final doc = await FirebaseFirestore.instance
-        .collection('users').doc(user.uid)
-        .collection('settings').doc('notifications')
+        .collection('users')
+        .doc(user.uid)
+        .collection('settings')
+        .doc('notifications')
         .get();
     final data = doc.exists ? doc.data() as Map<String, dynamic> : {};
     setState(() {
@@ -173,8 +229,10 @@ class _NotificationsTabState extends State<_NotificationsTab> {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
     await FirebaseFirestore.instance
-        .collection('users').doc(user.uid)
-        .collection('settings').doc('notifications')
+        .collection('users')
+        .doc(user.uid)
+        .collection('settings')
+        .doc('notifications')
         .set(Map<String, dynamic>.from(_prefs));
     await activity_log.ActivityLogger.log(
       action: 'save_notification_settings',
@@ -185,7 +243,7 @@ class _NotificationsTabState extends State<_NotificationsTab> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
             content: Text('Settings saved'),
-            backgroundColor: OrgColors.success),
+            backgroundColor: UpriseColors.success),
       );
     }
   }
@@ -197,7 +255,7 @@ class _NotificationsTabState extends State<_NotificationsTab> {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
           content: Text('Defaults restored (not saved yet)'),
-          backgroundColor: OrgColors.info),
+          backgroundColor: UpriseColors.info),
     );
   }
 
@@ -205,30 +263,34 @@ class _NotificationsTabState extends State<_NotificationsTab> {
   Widget build(BuildContext context) {
     if (_isLoading) return const Center(child: CircularProgressIndicator());
     return SingleChildScrollView(
+      padding: const EdgeInsets.symmetric(horizontal: 28),
       child: Container(
+        margin: const EdgeInsets.only(bottom: 24),
         padding: const EdgeInsets.all(24),
         decoration: BoxDecoration(
-          color: OrgColors.white,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: OrgColors.primaryLight),
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: const Color(0xFFE8ECF0)),
+          boxShadow: _DS.cardShadow,
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text('Notification Preferences',
                 style: GoogleFonts.beVietnamPro(
-                    fontSize: 18, fontWeight: FontWeight.w600,
-                    color: OrgColors.charcoal)),
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600,
+                    color: const Color(0xFF1A202C))),
             const SizedBox(height: 4),
             Text('Choose which events trigger notifications for your account.',
                 style: GoogleFonts.beVietnamPro(
-                    fontSize: 12, color: OrgColors.darkGray)),
+                    fontSize: 12, color: const Color(0xFF64748B))),
             const SizedBox(height: 20),
             ..._prefKeys.map((item) => _NotificationTile(
-                  label:       item['label']!,
+                  label: item['label']!,
                   description: item['desc']!,
-                  value:       _prefs[item['key']!] ?? true,
-                  onChanged:   (v) => setState(() => _prefs[item['key']!] = v),
+                  value: _prefs[item['key']!] ?? true,
+                  onChanged: (v) => setState(() => _prefs[item['key']!] = v),
                 )),
             const SizedBox(height: 24),
             Row(
@@ -237,7 +299,7 @@ class _NotificationsTabState extends State<_NotificationsTab> {
                 OutlinedButton(
                   onPressed: _restoreDefaults,
                   style: OutlinedButton.styleFrom(
-                    side: const BorderSide(color: OrgColors.primaryLight),
+                    side: const BorderSide(color: UpriseColors.primaryLight),
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(8)),
                   ),
@@ -247,7 +309,7 @@ class _NotificationsTabState extends State<_NotificationsTab> {
                 ElevatedButton(
                   onPressed: _save,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: OrgColors.primaryDark,
+                    backgroundColor: UpriseColors.primaryDark,
                     foregroundColor: Colors.white,
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(8)),
@@ -287,18 +349,19 @@ class _NotificationTile extends StatelessWidget {
               children: [
                 Text(label,
                     style: GoogleFonts.beVietnamPro(
-                        fontWeight: FontWeight.w500)),
+                        fontWeight: FontWeight.w500,
+                        color: const Color(0xFF1A202C))),
                 const SizedBox(height: 2),
                 Text(description,
                     style: GoogleFonts.beVietnamPro(
-                        fontSize: 11, color: OrgColors.darkGray)),
+                        fontSize: 11, color: const Color(0xFF64748B))),
               ],
             ),
           ),
           Switch(
             value: value,
             onChanged: onChanged,
-            activeColor: OrgColors.primaryDark,
+            activeColor: UpriseColors.primaryDark,
           ),
         ],
       ),
@@ -306,7 +369,9 @@ class _NotificationTile extends StatelessWidget {
   }
 }
 
-// ── Security Tab ─────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// Security Tab
+// ─────────────────────────────────────────────────────────────────────────────
 class _SecurityTab extends StatefulWidget {
   final String orgId;
   const _SecurityTab({required this.orgId});
@@ -316,16 +381,16 @@ class _SecurityTab extends StatefulWidget {
 }
 
 class _SecurityTabState extends State<_SecurityTab> {
-  final _formKey             = GlobalKey<FormState>();
+  final _formKey = GlobalKey<FormState>();
   final _currentPasswordCtrl = TextEditingController();
-  final _newPasswordCtrl     = TextEditingController();
+  final _newPasswordCtrl = TextEditingController();
   final _confirmPasswordCtrl = TextEditingController();
-  bool _isUpdating       = false;
+  bool _isUpdating = false;
   bool _twoFactorEnabled = false;
-  bool _loading2FA       = true;
-  bool _obscureCurrent   = true;
-  bool _obscureNew       = true;
-  bool _obscureConfirm   = true;
+  bool _loading2FA = true;
+  bool _obscureCurrent = true;
+  bool _obscureNew = true;
+  bool _obscureConfirm = true;
 
   @override
   void initState() {
@@ -345,12 +410,14 @@ class _SecurityTabState extends State<_SecurityTab> {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
     final doc = await FirebaseFirestore.instance
-        .collection('users').doc(user.uid)
-        .collection('settings').doc('security')
+        .collection('users')
+        .doc(user.uid)
+        .collection('settings')
+        .doc('security')
         .get();
     setState(() {
       _twoFactorEnabled = doc.data()?['twoFactorEnabled'] ?? false;
-      _loading2FA       = false;
+      _loading2FA = false;
     });
   }
 
@@ -361,7 +428,7 @@ class _SecurityTabState extends State<_SecurityTab> {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) throw Exception('Not logged in');
       final credential = EmailAuthProvider.credential(
-        email:    user.email!,
+        email: user.email!,
         password: _currentPasswordCtrl.text.trim(),
       );
       await user.reauthenticateWithCredential(credential);
@@ -375,7 +442,7 @@ class _SecurityTabState extends State<_SecurityTab> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
               content: Text('Password updated successfully'),
-              backgroundColor: OrgColors.success),
+              backgroundColor: UpriseColors.success),
         );
         _currentPasswordCtrl.clear();
         _newPasswordCtrl.clear();
@@ -386,7 +453,7 @@ class _SecurityTabState extends State<_SecurityTab> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
               content: Text('Error: ${e.toString()}'),
-              backgroundColor: OrgColors.error),
+              backgroundColor: UpriseColors.error),
         );
       }
     } finally {
@@ -398,81 +465,64 @@ class _SecurityTabState extends State<_SecurityTab> {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
     await FirebaseFirestore.instance
-        .collection('users').doc(user.uid)
-        .collection('settings').doc('security')
+        .collection('users')
+        .doc(user.uid)
+        .collection('settings')
+        .doc('security')
         .set({'twoFactorEnabled': value}, SetOptions(merge: true));
     setState(() => _twoFactorEnabled = value);
     await activity_log.ActivityLogger.log(
-      action:  value ? 'enable_2fa' : 'disable_2fa',
-      module:  'settings',
+      action: value ? 'enable_2fa' : 'disable_2fa',
+      module: 'settings',
       details: {'orgId': widget.orgId},
     );
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
             content: Text(value ? '2FA enabled' : '2FA disabled'),
-            backgroundColor: OrgColors.success),
+            backgroundColor: UpriseColors.success),
       );
     }
   }
 
-  InputDecoration _inputDec(String label, {Widget? suffix}) => InputDecoration(
-        labelText: label,
-        labelStyle:
-            GoogleFonts.beVietnamPro(color: OrgColors.darkGray, fontSize: 13),
-        filled: true,
-        fillColor: OrgColors.lightGray,
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-          borderSide: const BorderSide(color: OrgColors.primaryLight),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-          borderSide: const BorderSide(color: OrgColors.primaryLight),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-          borderSide: const BorderSide(color: OrgColors.primaryDark, width: 1.5),
-        ),
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-        suffixIcon: suffix,
-      );
-
   @override
   Widget build(BuildContext context) {
     return SingleChildScrollView(
+      padding: const EdgeInsets.symmetric(horizontal: 28),
       child: Column(
         children: [
-          // ── Password card ───────────────────────────────────
+          // Password change card
           Container(
+            margin: const EdgeInsets.only(bottom: 20),
             padding: const EdgeInsets.all(24),
             decoration: BoxDecoration(
-              color: OrgColors.white,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: OrgColors.primaryLight),
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: const Color(0xFFE8ECF0)),
+              boxShadow: _DS.cardShadow,
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text('Password & Security',
                     style: GoogleFonts.beVietnamPro(
-                        fontSize: 18, fontWeight: FontWeight.w600,
-                        color: OrgColors.charcoal)),
+                        fontSize: 18,
+                        fontWeight: FontWeight.w600,
+                        color: const Color(0xFF1A202C))),
                 const SizedBox(height: 4),
-                Text('Update your password regularly to keep your account secure.',
+                Text(
+                    'Update your password regularly to keep your account secure.',
                     style: GoogleFonts.beVietnamPro(
-                        fontSize: 12, color: OrgColors.darkGray)),
+                        fontSize: 12, color: const Color(0xFF64748B))),
                 const SizedBox(height: 20),
                 Form(
                   key: _formKey,
                   child: Column(
                     children: [
-                      // Current password
                       TextFormField(
                         controller: _currentPasswordCtrl,
                         obscureText: _obscureCurrent,
-                        decoration: _inputDec(
+                        decoration: _DS.inputDecoration(
                           'Current Password',
                           suffix: IconButton(
                             icon: Icon(
@@ -480,7 +530,7 @@ class _SecurityTabState extends State<_SecurityTab> {
                                   ? Icons.visibility_off_outlined
                                   : Icons.visibility_outlined,
                               size: 18,
-                              color: OrgColors.darkGray,
+                              color: const Color(0xFF64748B),
                             ),
                             onPressed: () => setState(
                                 () => _obscureCurrent = !_obscureCurrent),
@@ -490,11 +540,10 @@ class _SecurityTabState extends State<_SecurityTab> {
                             v == null || v.isEmpty ? 'Required' : null,
                       ),
                       const SizedBox(height: 14),
-                      // New password
                       TextFormField(
                         controller: _newPasswordCtrl,
                         obscureText: _obscureNew,
-                        decoration: _inputDec(
+                        decoration: _DS.inputDecoration(
                           'New Password',
                           suffix: IconButton(
                             icon: Icon(
@@ -502,7 +551,7 @@ class _SecurityTabState extends State<_SecurityTab> {
                                   ? Icons.visibility_off_outlined
                                   : Icons.visibility_outlined,
                               size: 18,
-                              color: OrgColors.darkGray,
+                              color: const Color(0xFF64748B),
                             ),
                             onPressed: () =>
                                 setState(() => _obscureNew = !_obscureNew),
@@ -517,11 +566,10 @@ class _SecurityTabState extends State<_SecurityTab> {
                         },
                       ),
                       const SizedBox(height: 14),
-                      // Confirm password
                       TextFormField(
                         controller: _confirmPasswordCtrl,
                         obscureText: _obscureConfirm,
-                        decoration: _inputDec(
+                        decoration: _DS.inputDecoration(
                           'Confirm New Password',
                           suffix: IconButton(
                             icon: Icon(
@@ -529,7 +577,7 @@ class _SecurityTabState extends State<_SecurityTab> {
                                   ? Icons.visibility_off_outlined
                                   : Icons.visibility_outlined,
                               size: 18,
-                              color: OrgColors.darkGray,
+                              color: const Color(0xFF64748B),
                             ),
                             onPressed: () => setState(
                                 () => _obscureConfirm = !_obscureConfirm),
@@ -553,7 +601,7 @@ class _SecurityTabState extends State<_SecurityTab> {
                               : const Icon(Icons.lock_outline, size: 16),
                           label: const Text('Update Password'),
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: OrgColors.primaryDark,
+                            backgroundColor: UpriseColors.primaryDark,
                             foregroundColor: Colors.white,
                             shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(8)),
@@ -566,15 +614,16 @@ class _SecurityTabState extends State<_SecurityTab> {
               ],
             ),
           ),
-          const SizedBox(height: 20),
 
-          // ── 2FA card ────────────────────────────────────────
+          // 2FA card
           Container(
+            margin: const EdgeInsets.only(bottom: 20),
             padding: const EdgeInsets.all(24),
             decoration: BoxDecoration(
-              color: OrgColors.white,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: OrgColors.primaryLight),
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: const Color(0xFFE8ECF0)),
+              boxShadow: _DS.cardShadow,
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -588,7 +637,7 @@ class _SecurityTabState extends State<_SecurityTab> {
                             style: GoogleFonts.beVietnamPro(
                                 fontSize: 18,
                                 fontWeight: FontWeight.w600,
-                                color: OrgColors.charcoal)),
+                                color: const Color(0xFF1A202C))),
                         const SizedBox(height: 2),
                         Text(
                           _twoFactorEnabled
@@ -597,8 +646,8 @@ class _SecurityTabState extends State<_SecurityTab> {
                           style: GoogleFonts.beVietnamPro(
                               fontSize: 12,
                               color: _twoFactorEnabled
-                                  ? OrgColors.success
-                                  : OrgColors.darkGray),
+                                  ? UpriseColors.success
+                                  : const Color(0xFF64748B)),
                         ),
                       ],
                     ),
@@ -607,7 +656,7 @@ class _SecurityTabState extends State<_SecurityTab> {
                     Switch(
                       value: _twoFactorEnabled,
                       onChanged: _toggle2FA,
-                      activeColor: OrgColors.primaryDark,
+                      activeColor: UpriseColors.primaryDark,
                     )
                   else
                     const SizedBox(
@@ -619,22 +668,22 @@ class _SecurityTabState extends State<_SecurityTab> {
                 Container(
                   padding: const EdgeInsets.all(14),
                   decoration: BoxDecoration(
-                    color: OrgColors.info.withOpacity(0.08),
+                    color: UpriseColors.info.withOpacity(0.08),
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(
-                        color: OrgColors.info.withOpacity(0.2)),
+                        color: UpriseColors.info.withOpacity(0.2)),
                   ),
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const Icon(Icons.shield_outlined,
-                          color: OrgColors.info, size: 18),
+                          color: UpriseColors.info, size: 18),
                       const SizedBox(width: 10),
                       Expanded(
                         child: Text(
                           'Highly recommended: enabling 2FA ensures that even if someone learns your password, they cannot access your account without your trusted device.',
                           style: GoogleFonts.beVietnamPro(
-                              fontSize: 12, color: OrgColors.info),
+                              fontSize: 12, color: UpriseColors.info),
                         ),
                       ),
                     ],
@@ -643,15 +692,16 @@ class _SecurityTabState extends State<_SecurityTab> {
               ],
             ),
           ),
-          const SizedBox(height: 20),
 
-          // ── Recent security activity card ───────────────────
+          // Recent security activity card
           Container(
+            margin: const EdgeInsets.only(bottom: 24),
             padding: const EdgeInsets.all(24),
             decoration: BoxDecoration(
-              color: OrgColors.white,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: OrgColors.primaryLight),
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: const Color(0xFFE8ECF0)),
+              boxShadow: _DS.cardShadow,
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -660,7 +710,7 @@ class _SecurityTabState extends State<_SecurityTab> {
                     style: GoogleFonts.beVietnamPro(
                         fontSize: 18,
                         fontWeight: FontWeight.w600,
-                        color: OrgColors.charcoal)),
+                        color: const Color(0xFF1A202C))),
                 const SizedBox(height: 16),
                 StreamBuilder<QuerySnapshot>(
                   stream: FirebaseFirestore.instance
@@ -684,7 +734,7 @@ class _SecurityTabState extends State<_SecurityTab> {
                         child: Center(
                           child: Text('No security activity recorded',
                               style: GoogleFonts.beVietnamPro(
-                                  color: OrgColors.darkGray,
+                                  color: const Color(0xFF64748B),
                                   fontSize: 13)),
                         ),
                       );
@@ -697,27 +747,25 @@ class _SecurityTabState extends State<_SecurityTab> {
                           const Divider(height: 1),
                       itemBuilder: (context, i) {
                         final data = docs[i].data() as Map<String, dynamic>;
-                        final action    = data['action'] ?? 'Unknown action';
-                        final timestamp =
-                            (data['timestamp'] as Timestamp?)?.toDate() ??
-                                DateTime.now();
-                        final details   =
-                            data['details'] as Map<String, dynamic>?;
-                        final location  =
+                        final action = data['action'] ?? 'Unknown action';
+                        final timestamp = (data['timestamp'] as Timestamp?)
+                                ?.toDate() ??
+                            DateTime.now();
+                        final details = data['details'] as Map<String, dynamic>?;
+                        final location =
                             details?['location'] ?? 'Unknown location';
                         return ListTile(
                           leading: const Icon(Icons.security,
-                              color: OrgColors.info, size: 20),
+                              color: UpriseColors.info, size: 20),
                           title: Text(action,
                               style: GoogleFonts.beVietnamPro(
-                                  fontWeight: FontWeight.w500,
-                                  fontSize: 13)),
+                                  fontWeight: FontWeight.w500, fontSize: 13)),
                           subtitle: Text(
                             '$location • ${DateFormat('MMM dd, yyyy h:mm a').format(timestamp)}',
                             style: GoogleFonts.beVietnamPro(fontSize: 11),
                           ),
                           trailing: const Icon(Icons.devices,
-                              size: 16, color: OrgColors.darkGray),
+                              size: 16, color: Color(0xFF64748B)),
                         );
                       },
                     );
@@ -726,13 +774,8 @@ class _SecurityTabState extends State<_SecurityTab> {
               ],
             ),
           ),
-
-          const SizedBox(height: 24),
         ],
       ),
     );
   }
 }
-
-
-
