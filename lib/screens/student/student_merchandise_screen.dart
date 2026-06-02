@@ -59,8 +59,8 @@ class _Product {
 
 class _CartItem {
   final _Product product;
-  int quantity;
-  _CartItem({required this.product, this.quantity = 1});
+  int quantity = 1; // ✅ initialized to 1 — fixes the error
+  _CartItem({required this.product});
 
   double get subtotal => product.price * quantity;
 }

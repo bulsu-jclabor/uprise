@@ -1,5 +1,3 @@
-
-
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -28,8 +26,8 @@ class _FirestoreEvent {
   final String endTime;
   final int    capacity;
   final DateTime date;
-  // enriched after fetch
-  String orgLogoUrl;
+  // enriched after fetch — initialized to empty string to avoid null errors
+  String orgLogoUrl = '';
 
   _FirestoreEvent({
     required this.id,
@@ -44,7 +42,6 @@ class _FirestoreEvent {
     required this.endTime,
     required this.capacity,
     required this.date,
-    this.orgLogoUrl = '',
   });
 
   factory _FirestoreEvent.fromDoc(DocumentSnapshot doc) {

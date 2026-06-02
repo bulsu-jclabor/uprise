@@ -984,7 +984,7 @@ class _ToolbarButton extends StatelessWidget {
   final IconData icon;
   final VoidCallback onPressed;
   final bool outlined;
-  const _ToolbarButton({required this.label, required this.icon, required this.onPressed, this.outlined = false});
+  const _ToolbarButton({required this.label, required this.icon, required this.onPressed});
 
   @override
   Widget build(BuildContext context) {

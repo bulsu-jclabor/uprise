@@ -1563,7 +1563,7 @@ class _StatCardData {
 
 class _StatCard extends StatelessWidget {
   final _StatCardData c;
-  const _StatCard(this.c, {super.key});
+  const _StatCard(this.c);
 
   @override
   Widget build(BuildContext context) => Container(
@@ -1664,7 +1664,7 @@ class _KpiCard extends StatelessWidget {
 // Satisfaction scores card
 class _SatisfactionCard extends StatelessWidget {
   final _AnalyticsData data;
-  const _SatisfactionCard({required this.data, super.key});
+  const _SatisfactionCard({required this.data});
 
   @override
   Widget build(BuildContext context) {
@@ -1743,7 +1743,7 @@ class _SatisfactionCard extends StatelessWidget {
 // Rating distribution (donut)
 class _DistributionCard extends StatelessWidget {
   final _AnalyticsData data;
-  const _DistributionCard({required this.data, super.key});
+  const _DistributionCard({required this.data});
 
   @override
   Widget build(BuildContext context) {
@@ -1889,7 +1889,7 @@ class _DonutPainter extends CustomPainter {
 // Completion card
 class _CompletionCard extends StatelessWidget {
   final _AnalyticsData data;
-  const _CompletionCard({required this.data, super.key});
+  const _CompletionCard({required this.data});
 
   @override
   Widget build(BuildContext context) {
@@ -2149,7 +2149,6 @@ class _EvalFormCard extends StatelessWidget {
     required this.form,
     required this.onEdit,
     required this.onDelete,
-    super.key,
   });
 
   @override
@@ -2266,7 +2265,6 @@ class _QuestionCard extends StatefulWidget {
     required this.question,
     required this.onChanged,
     required this.onRemove,
-    super.key,
   });
 
   @override

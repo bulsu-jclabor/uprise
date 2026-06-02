@@ -1146,7 +1146,7 @@ class _EventListTile extends StatelessWidget {
 class _EventModal extends StatefulWidget {
   final String orgId;
   final EventModel? existingEvent;
-  const _EventModal({required this.orgId, this.existingEvent});
+  const _EventModal({required this.orgId});
 
   @override
   State<_EventModal> createState() => _EventModalState();

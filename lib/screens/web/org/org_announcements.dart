@@ -1136,7 +1136,7 @@ class _OrgAnnouncementsScreenState extends State<OrgAnnouncementsScreen> {
                                   if (isEdit) {
                                     await FirebaseFirestore.instance
                                         .collection('announcements')
-                                        .doc(existing!.id)
+                                        .doc(existing.id)
                                         .update(data);
                                   } else {
                                     data['timestamp'] = FieldValue.serverTimestamp();
