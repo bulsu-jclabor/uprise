@@ -1168,32 +1168,34 @@ Expanded(
                 'secretary':    secCtrl.text.trim(),
                 'archived':     false,
               };
-              if (isEdit && docId != null) {
-                await FirebaseFirestore.instance.collection('adviser_roles').doc(docId).update(payload);
-                await activity_log.ActivityLogger.log(
-                  action: 'Updated adviser role for ${selectedOrg!.name}',
-                  module: 'Adviser Roles', severity: 'info',
-                  details: {'orgId': selectedOrg!.id, 'adviser': advNameCtrl.text.trim()},
-                );
-              } else {
-                final dup = await FirebaseFirestore.instance
-                    .collection('adviser_roles')
-                    .where('orgId', isEqualTo: selectedOrg!.id)
-                    .where('archived', isEqualTo: false)
-                    .get();
-                if (dup.docs.isNotEmpty) {
-                  setDlg(() { isSaving = false; errorMsg = '${selectedOrg!.name} already has an active adviser role.'; });
-                  return;
-                }
-                payload['createdAt'] = FieldValue.serverTimestamp();
-                await FirebaseFirestore.instance.collection('adviser_roles').add(payload);
-                await activity_log.ActivityLogger.log(
-                  action: 'Assigned new adviser role for ${selectedOrg!.name}',
-                  module: 'Adviser Roles', severity: 'info',
-                  details: {'orgId': selectedOrg!.id, 'adviser': advNameCtrl.text.trim()},
-                );
-              }
-              _loadMeta();
+             if (isEdit && docId != null) {
+  await FirebaseFirestore.instance.collection('adviser_roles').doc(docId).update(payload);
+  await activity_log.ActivityLogger.log(
+    action: 'Updated adviser role for ${selectedOrg!.name}',
+    module: 'Adviser Roles', severity: 'info',
+    details: {'orgId': selectedOrg!.id, 'adviser': advNameCtrl.text.trim()},
+  );
+  // WALA NG _loadMeta() DITO - ALISIN MO
+} else {
+  final dup = await FirebaseFirestore.instance
+      .collection('adviser_roles')
+      .where('orgId', isEqualTo: selectedOrg!.id)
+      .where('archived', isEqualTo: false)
+      .get();
+  if (dup.docs.isNotEmpty) {
+    setDlg(() { isSaving = false; errorMsg = '${selectedOrg!.name} already has an active adviser role.'; });
+    return;
+  }
+  payload['createdAt'] = FieldValue.serverTimestamp();
+  await FirebaseFirestore.instance.collection('adviser_roles').add(payload);
+  await activity_log.ActivityLogger.log(
+    action: 'Assigned new adviser role for ${selectedOrg!.name}',
+    module: 'Adviser Roles', severity: 'info',
+    details: {'orgId': selectedOrg!.id, 'adviser': advNameCtrl.text.trim()},
+  );
+  _loadMeta(); // ITO LANG ANG MAY _loadMeta()
+}
+        
               if (!mounted) return;
               Navigator.pop(context);
               ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -1250,62 +1252,88 @@ Expanded(
                       key: formKey,
                       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                         _sectionDivider('Organization', icon: Icons.business_outlined),
-                        DropdownButtonFormField<OrgModel>(
-                          initialValue: selectedOrg,
-                          isExpanded: true,
-                          decoration: _DS.inputDecoration('Select Organization', icon: Icons.business_outlined),
-                          style: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF1A202C)),
-                          items: _orgs.map((o) => DropdownMenuItem(
-                            value: o,
-                            child: Row(children: [
-                              _OrgAvatar(o.abbrev.isNotEmpty ? o.abbrev : o.name.substring(0, o.name.length.clamp(0, 2)), logoUrl: o.logoUrl),
-                              const SizedBox(width: 10),
-                              Expanded(child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Text(o.name, style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600)),
-                                  if (o.tag.isNotEmpty)
-                                    Text(o.tag, style: GoogleFonts.beVietnamPro(fontSize: 11, color: const Color(0xFF64748B))),
-                                ],
-                              )),
-                            ]),
-                          )).toList(),
-                          onChanged: (v) { setDlg(() => selectedOrg = v); onOrgChanged(v); },
-                          validator: (_) => selectedOrg == null ? 'Select an organization' : null,
-                        ),
-                        const SizedBox(height: 20),
-                        _sectionDivider('Adviser Information', icon: Icons.person_outline_rounded),
-                        TextFormField(
-                          controller: advNameCtrl,
-                          decoration: _DS.inputDecoration('Full Name', hint: 'e.g., Dr. Juan dela Cruz', icon: Icons.badge_outlined),
-                          style: GoogleFonts.beVietnamPro(fontSize: 13),
-                          validator: (v) => v!.trim().isEmpty ? 'Required' : null,
-                        ),
-                        const SizedBox(height: 10),
-                        Row(children: [
-                          Expanded(
-                            child: TextFormField(
-                              controller: advEmailCtrl,
-                              decoration: _DS.inputDecoration('Email', icon: Icons.email_outlined),
-                              style: GoogleFonts.beVietnamPro(fontSize: 13),
-                              keyboardType: TextInputType.emailAddress,
-                              validator: (v) => v!.trim().isEmpty ? 'Required' : null,
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: TextFormField(
-                              controller: advPhoneCtrl,
-                              decoration: _DS.inputDecoration('Phone', icon: Icons.phone_outlined),
-                              style: GoogleFonts.beVietnamPro(fontSize: 13),
-                              keyboardType: TextInputType.phone,
-                              validator: (v) => v!.trim().isEmpty ? 'Required' : null,
-                            ),
-                          ),
-                        ]),
-                        const SizedBox(height: 10),
-                      DropdownButtonFormField<String>(
+if (isEdit && selectedOrg != null)
+  Container(
+    padding: const EdgeInsets.all(14),
+    decoration: BoxDecoration(
+      color: const Color(0xFFF8F9FB),
+      borderRadius: BorderRadius.circular(8),
+      border: Border.all(color: const Color(0xFFE2E6EA)),
+    ),
+    child: Row(children: [
+      _OrgAvatar(selectedOrg!.abbrev.isNotEmpty ? selectedOrg!.abbrev : selectedOrg!.name.substring(0, selectedOrg!.name.length.clamp(0, 2)), logoUrl: selectedOrg!.logoUrl),
+      const SizedBox(width: 12),
+      Expanded(
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(selectedOrg!.name,
+              style: GoogleFonts.beVietnamPro(fontSize: 14, fontWeight: FontWeight.w600, color: const Color(0xFF1A202C))),
+          if (selectedOrg!.tag.isNotEmpty)
+            Text(selectedOrg!.tag,
+                style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF64748B))),
+        ]),
+      ),
+    ]),
+  )
+else
+  DropdownButtonFormField<OrgModel>(
+    initialValue: selectedOrg,
+    isExpanded: true,
+    decoration: _DS.inputDecoration('Select Organization', icon: Icons.business_outlined),
+    style: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF1A202C)),
+    items: _orgs.map((o) => DropdownMenuItem(
+      value: o,
+      child: Row(children: [
+        _OrgAvatar(o.abbrev.isNotEmpty ? o.abbrev : o.name.substring(0, o.name.length.clamp(0, 2)), logoUrl: o.logoUrl),
+        const SizedBox(width: 10),
+        Expanded(child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(o.name, style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600)),
+            if (o.tag.isNotEmpty)
+              Text(o.tag, style: GoogleFonts.beVietnamPro(fontSize: 11, color: const Color(0xFF64748B))),
+          ],
+        )),
+      ]),
+    )).toList(),
+    onChanged: (v) { setDlg(() => selectedOrg = v); onOrgChanged(v); },
+    validator: (_) => selectedOrg == null ? 'Select an organization' : null,
+  ),   
+              const SizedBox(height: 20),
+
+
+              const SizedBox(height: 20),
+_sectionDivider('Adviser Information', icon: Icons.person_outline_rounded),
+TextFormField(
+  controller: advNameCtrl,
+  decoration: _DS.inputDecoration('Full Name', hint: 'e.g., Dr. Juan dela Cruz', icon: Icons.badge_outlined),
+  style: GoogleFonts.beVietnamPro(fontSize: 13),
+  validator: (v) => v!.trim().isEmpty ? 'Required' : null,
+),
+const SizedBox(height: 10),
+Row(children: [
+  Expanded(
+    child: TextFormField(
+      controller: advEmailCtrl,
+      decoration: _DS.inputDecoration('Email', icon: Icons.email_outlined),
+      style: GoogleFonts.beVietnamPro(fontSize: 13),
+      keyboardType: TextInputType.emailAddress,
+      validator: (v) => v!.trim().isEmpty ? 'Required' : null,
+    ),
+  ),
+  const SizedBox(width: 10),
+  Expanded(
+    child: TextFormField(
+      controller: advPhoneCtrl,
+      decoration: _DS.inputDecoration('Phone', icon: Icons.phone_outlined),
+      style: GoogleFonts.beVietnamPro(fontSize: 13),
+      keyboardType: TextInputType.phone,
+      validator: (v) => v!.trim().isEmpty ? 'Required' : null,
+    ),
+  ),
+]),
+const SizedBox(height: 10),
+DropdownButtonFormField<String>(
   initialValue: ['Dean', 'Program Chair', 'Department Head', 'Coordinator', 'Faculty'].contains(advRankCtrl.text)
       ? advRankCtrl.text
       : 'Faculty',
@@ -1316,28 +1344,30 @@ Expanded(
       .toList(),
   onChanged: (v) { if (v != null) advRankCtrl.text = v; },
   validator: (v) => v == null || v.isEmpty ? 'Required' : null,
-),                     const SizedBox(height: 20),
+),
+const SizedBox(height: 20),
+
                         _sectionDivider('Officers', icon: Icons.groups_outlined),
                         TextFormField(
-                          controller: presCtrl,
-                          decoration: _DS.inputDecoration('President', icon: Icons.star_outline_rounded),
-                          style: GoogleFonts.beVietnamPro(fontSize: 13),
-                          validator: (v) => v!.trim().isEmpty ? 'Required' : null,
-                        ),
+  controller: presCtrl,
+  decoration: _DS.inputDecoration('President', icon: Icons.star_outline_rounded),
+  style: GoogleFonts.beVietnamPro(fontSize: 13),
+  // No validator - optional field
+),
                         const SizedBox(height: 10),
                         TextFormField(
-                          controller: vpCtrl,
-                          decoration: _DS.inputDecoration('Vice President', icon: Icons.person_outline_rounded),
-                          style: GoogleFonts.beVietnamPro(fontSize: 13),
-                          validator: (v) => v!.trim().isEmpty ? 'Required' : null,
-                        ),
+  controller: vpCtrl,
+  decoration: _DS.inputDecoration('Vice President', icon: Icons.person_outline_rounded),
+  style: GoogleFonts.beVietnamPro(fontSize: 13),
+  // No validator - optional field
+),
                         const SizedBox(height: 10),
-                        TextFormField(
-                          controller: secCtrl,
-                          decoration: _DS.inputDecoration('Secretary', icon: Icons.person_outline_rounded),
-                          style: GoogleFonts.beVietnamPro(fontSize: 13),
-                          validator: (v) => v!.trim().isEmpty ? 'Required' : null,
-                        ),
+                       TextFormField(
+  controller: secCtrl,
+  decoration: _DS.inputDecoration('Secretary', icon: Icons.person_outline_rounded),
+  style: GoogleFonts.beVietnamPro(fontSize: 13),
+  // No validator - optional field
+),
                         if (errorMsg != null) ...[
                           const SizedBox(height: 14),
                           Container(
