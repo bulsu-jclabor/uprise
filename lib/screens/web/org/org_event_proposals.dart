@@ -219,13 +219,27 @@ class _OrgEventProposalsScreenState extends State<OrgEventProposalsScreen> {
   }
 
   void _openEditModal(String docId, Map<String, dynamic> data) {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      barrierColor: Colors.black54,
-      builder: (_) => _SubmitProposalModal(orgId: widget.orgId, editDocId: docId, existing: data),
-    ).then((_) => setState(() {}));
+  final status = data['status'] ?? 'pending';
+  
+  // Only pending proposals can be edited
+  if (status != 'pending') {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Only pending proposals can be edited'),
+        backgroundColor: Colors.orange,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+    return;
   }
+  
+  showDialog(
+    context: context,
+    barrierDismissible: false,
+    barrierColor: Colors.black54,
+    builder: (_) => _SubmitProposalModal(orgId: widget.orgId, editDocId: docId, existing: data),
+  ).then((_) => setState(() {}));
+}
 
   void _openViewModal(String docId, Map<String, dynamic> data) {
     showDialog(
@@ -235,101 +249,130 @@ class _OrgEventProposalsScreenState extends State<OrgEventProposalsScreen> {
     );
   }
 
-  // ── FIX: Delete now surfaces errors instead of swallowing them,
-  //         and deletes ALL linked events (by createdFromProposalId OR
-  //         matching orgId+title as a fallback for manually-created events).
-  void _confirmDelete(String docId, String title) {
-    showDialog(
-      context: context,
-      barrierColor: Colors.black54,
-      builder: (ctx) => Dialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        child: Container(
-          width: 420,
-          padding: const EdgeInsets.all(28),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(children: [
-                Container(
-                  width: 42, height: 42,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFFEF2F2),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: const Icon(Icons.delete_outline_rounded, color: Color(0xFFDC2626), size: 20),
+  // ── Archive logic (replaces delete for approved/rejected) ────────────────
+void _confirmArchive(String docId, String title) {
+  showDialog(
+    context: context,
+    barrierColor: Colors.black54,
+    builder: (ctx) => Dialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: Container(
+        width: 420,
+        padding: const EdgeInsets.all(28),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(children: [
+              Container(
+                width: 42, height: 42,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF3F4F6),
+                  borderRadius: BorderRadius.circular(10),
                 ),
-                const SizedBox(width: 14),
-                Text('Delete Proposal',
-                    style: GoogleFonts.beVietnamPro(fontSize: 17, fontWeight: FontWeight.w700, color: const Color(0xFF1A202C))),
-              ]),
-              const SizedBox(height: 16),
-              Text(
-                'Are you sure you want to delete "$title"? This will also remove any linked events from the schedule. This action cannot be undone.',
-                style: GoogleFonts.beVietnamPro(fontSize: 14, color: const Color(0xFF64748B), height: 1.5),
+                child: const Icon(Icons.archive_outlined, color: Color(0xFF6B7280), size: 20),
               ),
-              const SizedBox(height: 24),
-              Row(mainAxisAlignment: MainAxisAlignment.end, children: [
-                OutlinedButton(
-                  onPressed: () => Navigator.pop(ctx),
-                  style: OutlinedButton.styleFrom(
-                    side: const BorderSide(color: Color(0xFFE2E6EA)),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 11),
-                  ),
-                  child: Text('Cancel', style: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF374151))),
+              const SizedBox(width: 14),
+              Text('Archive Proposal',
+                  style: GoogleFonts.beVietnamPro(fontSize: 17, fontWeight: FontWeight.w700, color: const Color(0xFF1A202C))),
+            ]),
+            const SizedBox(height: 16),
+            Text(
+              'Are you sure you want to archive "$title"? You can still view it in the archived filter. This action can be reversed.',
+              style: GoogleFonts.beVietnamPro(fontSize: 14, color: const Color(0xFF64748B), height: 1.5),
+            ),
+            const SizedBox(height: 24),
+            Row(mainAxisAlignment: MainAxisAlignment.end, children: [
+              OutlinedButton(
+                onPressed: () => Navigator.pop(ctx),
+                style: OutlinedButton.styleFrom(
+                  side: const BorderSide(color: Color(0xFFE2E6EA)),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 11),
                 ),
-                const SizedBox(width: 10),
-                ElevatedButton(
-                  onPressed: () async {
-                    Navigator.pop(ctx);
-                    await _deleteProposalAndLinkedEvents(docId, title);
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFDC2626),
-                    foregroundColor: Colors.white,
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 11),
-                  ),
-                  child: Text('Delete', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600)),
+                child: Text('Cancel', style: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF374151))),
+              ),
+              const SizedBox(width: 10),
+              ElevatedButton(
+                onPressed: () async {
+                  Navigator.pop(ctx);
+                  await _archiveProposal(docId, title);
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF6B7280),
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 11),
                 ),
-              ]),
-            ],
-          ),
+                child: Text('Archive', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600)),
+              ),
+            ]),
+          ],
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 
-  // ── FIX: Centralised delete logic – no silent failures ────────────
+Future<void> _archiveProposal(String docId, String title) async {
+  try {
+    // Update proposal status to 'archived'
+    await FirebaseFirestore.instance
+        .collection('event_proposals')
+        .doc(docId)
+        .update({
+      'status': 'archived',
+      'archivedAt': FieldValue.serverTimestamp(),
+      'archivedBy': FirebaseAuth.instance.currentUser?.uid ?? '',
+    });
+    
+    await activity_log.ActivityLogger.log(
+      action: 'archive_proposal',
+      module: 'event_proposals',
+      details: {'orgId': widget.orgId, 'proposalId': docId, 'title': title},
+    );
+    
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Proposal "$title" has been archived'),
+        backgroundColor: const Color(0xFF6B7280),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      ));
+    }
+  } catch (e) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Archive failed: $e'),
+        backgroundColor: UpriseColors.error,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      ));
+    }
+  }
+}
+
   Future<void> _deleteProposalAndLinkedEvents(String docId, String title) async {
     try {
       final db = FirebaseFirestore.instance;
 
-      // 1. Find events linked by createdFromProposalId (primary relationship)
       final byProposalId = await db
           .collection('events')
           .where('createdFromProposalId', isEqualTo: docId)
           .get();
 
-      // 2. Also find events that match orgId + title but lack createdFromProposalId
-      //    (covers events auto-generated from approved proposals that may not have
-      //    the field set, or manually created events with the same title).
       final byOrgAndTitle = await db
           .collection('events')
           .where('orgId', isEqualTo: widget.orgId)
           .where('title', isEqualTo: title)
           .get();
 
-      // Merge doc IDs – deduplicate so we don't double-delete.
       final eventIds = <String>{
         ...byProposalId.docs.map((d) => d.id),
         ...byOrgAndTitle.docs.map((d) => d.id),
       };
 
-      // 3. Delete every linked event (errors are surfaced, not swallowed).
       for (final eventId in eventIds) {
         await db.collection('events').doc(eventId).delete();
         await activity_log.ActivityLogger.log(
@@ -343,7 +386,6 @@ class _OrgEventProposalsScreenState extends State<OrgEventProposalsScreen> {
         );
       }
 
-      // 4. Delete the proposal itself.
       await db.collection('event_proposals').doc(docId).delete();
       await activity_log.ActivityLogger.log(
         action: 'delete_proposal',
@@ -364,7 +406,6 @@ class _OrgEventProposalsScreenState extends State<OrgEventProposalsScreen> {
         ));
       }
     } catch (e) {
-      // Surface the error so the user knows something went wrong.
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text('Delete failed: $e'),
@@ -404,7 +445,7 @@ class _OrgEventProposalsScreenState extends State<OrgEventProposalsScreen> {
 
     if (format == 'csv') {
       final buf = StringBuffer();
-      buf.writeln('Proposal ID,Title,Category,Audience,Description,Date,Time,Location,Status,Submitted By,Submitted At');
+      buf.writeln('Proposal ID,Title,Category,Audience,Description,Date,Start Time,End Time,Location,Status,Submitted By,Submitted At');
       for (final doc in docs) {
         final d = doc.data();
         buf.writeln([
@@ -414,7 +455,8 @@ class _OrgEventProposalsScreenState extends State<OrgEventProposalsScreen> {
           _esc(d['audience'] ?? ''),
           _esc(d['description'] ?? ''),
           d['date'] != null ? DateFormat('yyyy-MM-dd').format((d['date'] as Timestamp).toDate()) : '',
-          d['time'] ?? '',
+          d['startTime'] ?? '',
+          d['endTime'] ?? '',
           _esc(d['location'] ?? ''),
           d['status'] ?? 'pending',
           d['submittedByEmail'] ?? '',
@@ -432,7 +474,8 @@ class _OrgEventProposalsScreenState extends State<OrgEventProposalsScreen> {
           d['audience'] ?? '',
           d['description'] ?? '',
           d['date'] != null ? DateFormat('yyyy-MM-dd').format((d['date'] as Timestamp).toDate()) : '',
-          d['time'] ?? '',
+          d['startTime'] ?? '',
+          d['endTime'] ?? '',
           d['location'] ?? '',
           d['status'] ?? 'pending',
           d['submittedByEmail'] ?? '',
@@ -441,7 +484,7 @@ class _OrgEventProposalsScreenState extends State<OrgEventProposalsScreen> {
       }).toList();
       final pdfBytes = await OrgExportPdf.generateTablePdf(
         title: 'Event Proposals Report',
-        headers: const ['Proposal ID', 'Title', 'Category', 'Audience', 'Description', 'Date', 'Time', 'Location', 'Status', 'Submitted By', 'Submitted At'],
+        headers: const ['Proposal ID', 'Title', 'Category', 'Audience', 'Description', 'Date', 'Start Time', 'End Time', 'Location', 'Status', 'Submitted By', 'Submitted At'],
         rows: rows,
       );
       await OrgExportUtil.saveBytes(pdfBytes, '$fileName.pdf', mimeType: 'application/pdf');
@@ -549,7 +592,7 @@ class _OrgEventProposalsScreenState extends State<OrgEventProposalsScreen> {
         const SizedBox(width: 10),
         _FilterDropdown(
           value: _filterStatus,
-          items: const ['All', 'Pending', 'Approved', 'For Review', 'Rejected'],
+          items: const ['All', 'Pending', 'Approved', 'For Review', 'Rejected', 'Archived'],
           hint: 'Status',
           icon: Icons.tune_rounded,
           onChanged: (v) => setState(() { _filterStatus = v!; _currentPage = 1; }),
@@ -638,6 +681,7 @@ class _OrgEventProposalsScreenState extends State<OrgEventProposalsScreen> {
         Expanded(flex: 2, child: _headerCell('CATEGORY')),
         Expanded(flex: 2, child: _headerCell('AUDIENCE')),
         Expanded(flex: 2, child: _headerCell('DATE')),
+        Expanded(flex: 2, child: _headerCell('TIME')),
         Expanded(flex: 2, child: _headerCell('LOCATION')),
         Expanded(flex: 2, child: _headerCell('STATUS')),
         Expanded(flex: 2, child: _headerCell('SUBMITTED')),
@@ -670,6 +714,11 @@ class _OrgEventProposalsScreenState extends State<OrgEventProposalsScreen> {
     final dateStr = date is Timestamp
         ? DateFormat('MMM dd, yyyy').format(date.toDate())
         : '—';
+    final startTime = data['startTime'] ?? '';
+    final endTime = data['endTime'] ?? '';
+    final timeStr = (startTime.isNotEmpty && endTime.isNotEmpty) 
+        ? '$startTime - $endTime' 
+        : (startTime.isNotEmpty ? startTime : '—');
     final submittedAt = data['submittedAt'];
     final submittedStr = submittedAt is Timestamp
         ? DateFormat('MMM dd, yyyy').format(submittedAt.toDate())
@@ -738,6 +787,14 @@ class _OrgEventProposalsScreenState extends State<OrgEventProposalsScreen> {
           Expanded(
             flex: 2,
             child: Text(
+              timeStr,
+              style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF374151)),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          Expanded(
+            flex: 2,
+            child: Text(
               data['location'] ?? '—',
               style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF374151)),
               overflow: TextOverflow.ellipsis,
@@ -750,32 +807,41 @@ class _OrgEventProposalsScreenState extends State<OrgEventProposalsScreen> {
                 style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF64748B))),
           ),
           Expanded(
-            flex: 2,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                _ActionIconButton(
-                  icon: Icons.visibility_outlined,
-                  tooltip: 'View Details',
-                  onTap: () => _openViewModal(docId, data),
-                ),
-                const SizedBox(width: 4),
-                _ActionIconButton(
-                  icon: Icons.edit_outlined,
-                  tooltip: 'Edit Proposal',
-                  color: UpriseColors.primaryDark,
-                  onTap: () => _openEditModal(docId, data),
-                ),
-                const SizedBox(width: 4),
-                _ActionIconButton(
-                  icon: Icons.delete_outline_rounded,
-                  tooltip: 'Delete',
-                  color: const Color(0xFFDC2626),
-                  onTap: () => _confirmDelete(docId, data['title'] ?? 'Proposal'),
-                ),
-              ],
-            ),
-          ),
+  flex: 2,
+  child: Row(
+    mainAxisAlignment: MainAxisAlignment.end,
+    children: [
+      // View button - always visible
+      _ActionIconButton(
+        icon: Icons.visibility_outlined,
+        tooltip: 'View Details',
+        onTap: () => _openViewModal(docId, data),
+      ),
+      
+      // Edit button - ONLY for pending status
+      if (status == 'pending') ...[
+        const SizedBox(width: 4),
+        _ActionIconButton(
+          icon: Icons.edit_outlined,
+          tooltip: 'Edit Proposal',
+          color: UpriseColors.primaryDark,
+          onTap: () => _openEditModal(docId, data),
+        ),
+      ],
+      
+      // Archive button - ONLY for approved or rejected (NOT for pending)
+      if (status == 'approved' || status == 'rejected') ...[
+        const SizedBox(width: 4),
+        _ActionIconButton(
+          icon: Icons.archive_outlined,
+          tooltip: 'Archive Proposal',
+          color: const Color(0xFF6B7280),
+          onTap: () => _confirmArchive(docId, data['title'] ?? 'Proposal'),
+        ),
+      ],
+    ],
+  ),
+),
         ]),
       ),
     );
@@ -984,7 +1050,13 @@ class _ToolbarButton extends StatelessWidget {
   final IconData icon;
   final VoidCallback onPressed;
   final bool outlined;
-  const _ToolbarButton({required this.label, required this.icon, required this.onPressed});
+  
+  const _ToolbarButton({
+    required this.label, 
+    required this.icon, 
+    required this.onPressed,
+    this.outlined = false,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1107,7 +1179,8 @@ class _SubmitProposalModalState extends State<_SubmitProposalModal> {
   final _descCtrl    = TextEditingController();
   final _locCtrl     = TextEditingController();
   final _dateCtrl    = TextEditingController();
-  final _timeCtrl    = TextEditingController();
+  final _startTimeCtrl = TextEditingController();
+  final _endTimeCtrl   = TextEditingController();
 
   String _category = 'Workshop';
   String _audience = 'Public';
@@ -1135,7 +1208,8 @@ class _SubmitProposalModalState extends State<_SubmitProposalModal> {
       _titleCtrl.text = e['title'] ?? '';
       _descCtrl.text  = e['description'] ?? '';
       _locCtrl.text   = e['location'] ?? '';
-      _timeCtrl.text  = e['time'] ?? '';
+      _startTimeCtrl.text = e['startTime'] ?? '';
+      _endTimeCtrl.text   = e['endTime'] ?? '';
       _attachmentBase64 = e['attachmentBase64'];
       _attachmentName   = e['attachmentName'];
       _attachmentSize   = e['attachmentSize'];
@@ -1155,7 +1229,8 @@ class _SubmitProposalModalState extends State<_SubmitProposalModal> {
     _descCtrl.dispose();
     _locCtrl.dispose();
     _dateCtrl.dispose();
-    _timeCtrl.dispose();
+    _startTimeCtrl.dispose();
+    _endTimeCtrl.dispose();
     super.dispose();
   }
 
@@ -1231,7 +1306,8 @@ class _SubmitProposalModalState extends State<_SubmitProposalModal> {
         'audience': _audience,
         'description': _descCtrl.text.trim(),
         'location': _locCtrl.text.trim(),
-        'time': _timeCtrl.text.trim(),
+        'startTime': _startTimeCtrl.text.trim(),
+        'endTime': _endTimeCtrl.text.trim(),
         'submittedBy': user?.uid ?? '',
         'submittedByEmail': user?.email ?? '',
         'issuesCertificate': _issuesCertificate,
@@ -1378,13 +1454,27 @@ class _SubmitProposalModalState extends State<_SubmitProposalModal> {
                     const SizedBox(width: 12),
                     Expanded(
                       child: TextFormField(
-                        controller: _timeCtrl,
+                        controller: _startTimeCtrl,
                         readOnly: true,
                         onTap: () async {
                           final picked = await showTimePicker(context: context, initialTime: TimeOfDay.now());
-                          if (picked != null && mounted) _timeCtrl.text = picked.format(context);
+                          if (picked != null && mounted) _startTimeCtrl.text = picked.format(context);
                         },
-                        decoration: _orgEventProposalsInputDecoration('Time *', hint: '-- : --', icon: Icons.access_time_rounded),
+                        decoration: _orgEventProposalsInputDecoration('Start Time *', hint: '-- : --', icon: Icons.access_time_rounded),
+                        style: GoogleFonts.beVietnamPro(fontSize: 13),
+                        validator: (v) => v?.trim().isEmpty == true ? 'Required' : null,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: TextFormField(
+                        controller: _endTimeCtrl,
+                        readOnly: true,
+                        onTap: () async {
+                          final picked = await showTimePicker(context: context, initialTime: TimeOfDay.now());
+                          if (picked != null && mounted) _endTimeCtrl.text = picked.format(context);
+                        },
+                        decoration: _orgEventProposalsInputDecoration('End Time *', hint: '-- : --', icon: Icons.access_time_rounded),
                         style: GoogleFonts.beVietnamPro(fontSize: 13),
                         validator: (v) => v?.trim().isEmpty == true ? 'Required' : null,
                       ),
@@ -1602,6 +1692,12 @@ class _ViewProposalModal extends StatelessWidget {
     final status   = (data['status'] ?? 'pending').toString().toLowerCase();
     final propNum  = 'EP-${docId.substring(0, 4).toUpperCase()}';
     final hasFile  = data['attachmentBase64'] != null && data['attachmentBase64'].toString().isNotEmpty;
+    
+    final startTime = data['startTime'] ?? '';
+    final endTime = data['endTime'] ?? '';
+    final timeStr = (startTime.isNotEmpty && endTime.isNotEmpty) 
+        ? '$startTime - $endTime' 
+        : (startTime.isNotEmpty ? startTime : '—');
 
     return Dialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
@@ -1649,12 +1745,19 @@ class _ViewProposalModal extends StatelessWidget {
                 Row(children: [
                   Expanded(child: _detailItem('Date', _fmt(data['date']), Icons.calendar_today_outlined)),
                   const SizedBox(width: 16),
-                  Expanded(child: _detailItem('Time', data['time'] ?? '—', Icons.access_time_rounded)),
+                  Expanded(child: _detailItem('Time', timeStr, Icons.access_time_rounded)),
                 ]),
                 const SizedBox(height: 14),
                 _detailItem('Location', data['location'] ?? '—', Icons.location_on_outlined),
                 const SizedBox(height: 14),
                 _detailItem('Submitted', _fmt(data['submittedAt']), Icons.send_outlined),
+                
+                // Wet Sign Schedule - DAGDAG ITO
+                if (data['wetSignSchedule'] != null) ...[
+                  const SizedBox(height: 20),
+                  _buildWetSignInfo(),
+                ],
+                
                 if (hasFile) ...[
                   const SizedBox(height: 20),
                   Container(
@@ -1724,6 +1827,115 @@ class _ViewProposalModal extends StatelessWidget {
       const SizedBox(height: 4),
       Text(value, style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w500, color: const Color(0xFF1A202C))),
     ]);
+  }
+
+  Widget _buildWetSignInfo() {
+    final wetSign = data['wetSignSchedule'];
+    if (wetSign == null) return const SizedBox.shrink();
+    
+    final startDateTime = wetSign['startDateTime'] as Timestamp?;
+    final endDateTime = wetSign['endDateTime'] as Timestamp?;
+    final location = wetSign['location'] ?? 'Dean\'s Office';
+    
+    if (startDateTime == null) return const SizedBox.shrink();
+    
+    final startDate = startDateTime.toDate();
+    final endDate = endDateTime?.toDate();
+    
+    final dateStr = DateFormat('MMMM dd, yyyy').format(startDate);
+    final startTimeStr = DateFormat('h:mm a').format(startDate);
+    final endTimeStr = endDate != null ? DateFormat('h:mm a').format(endDate) : 'TBD';
+    
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [const Color(0xFF059669).withOpacity(0.08), const Color(0xFF059669).withOpacity(0.02)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFF059669).withOpacity(0.3)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF059669).withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(Icons.edit_calendar_rounded, color: Color(0xFF059669), size: 18),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  '📄 Wet Sign Schedule',
+                  style: GoogleFonts.beVietnamPro(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: const Color(0xFF059669),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          _buildWetSignDetailRow(Icons.calendar_today_outlined, 'Date', dateStr),
+          const SizedBox(height: 8),
+          _buildWetSignDetailRow(Icons.access_time_rounded, 'Time', '$startTimeStr - $endTimeStr'),
+          const SizedBox(height: 8),
+          _buildWetSignDetailRow(Icons.location_on_outlined, 'Location', location),
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: const Color(0xFF059669).withOpacity(0.05),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.info_outline_rounded, size: 14, color: Color(0xFF059669)),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Please bring printed copies of your proposal documents for signing.',
+                    style: GoogleFonts.beVietnamPro(fontSize: 11, color: const Color(0xFF065F46)),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildWetSignDetailRow(IconData icon, String label, String value) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, size: 14, color: const Color(0xFF059669)),
+        const SizedBox(width: 8),
+        SizedBox(
+          width: 50,
+          child: Text(
+            label,
+            style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF64748B)),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            value,
+            style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.w500, color: const Color(0xFF1F2937)),
+          ),
+        ),
+      ],
+    );
   }
 
   Future<void> _openAttachment(BuildContext context) async {

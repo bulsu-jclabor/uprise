@@ -12,6 +12,7 @@ import 'export_util.dart';
 import 'export_pdf.dart';
 import '../../../services/activity_logger.dart' as activity_log;
 import '../../theme/app_theme.dart';
+import 'package:intl/intl.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Design tokens
@@ -648,12 +649,13 @@ class _EventProposalsState extends State<EventProposals> {
               ElevatedButton(
                 onPressed: () async {
                   Navigator.pop(ctx);
+                  
                   if (newStatus == 'approved') {
-                    // ✅ Auto-create event from proposal FIRST
                     await _createEventFromProposal(docId);
+                    _showWetSignSchedulingPopup(docId, title);
+                  } else {
+                    await _setStatus(docId, title, newStatus);
                   }
-                  // Then update proposal status
-                  await _setStatus(docId, title, newStatus);
                 },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: s.btnColor,
@@ -673,6 +675,256 @@ class _EventProposalsState extends State<EventProposals> {
   );
 }
 
+
+void _showWetSignSchedulingPopup(String proposalId, String title) {
+  final _dateCtrl = TextEditingController();
+  final _startTimeCtrl = TextEditingController();
+  final _endTimeCtrl = TextEditingController();
+  final _locationCtrl = TextEditingController(text: "Dean's Office");
+  DateTime? selectedDate;
+  TimeOfDay? startTime;
+  TimeOfDay? endTime;
+  
+  showDialog(
+    context: context,
+    barrierDismissible: false,
+    builder: (ctx) => StatefulBuilder(
+      builder: (ctx, setDialogState) {
+        return Dialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+          child: Container(
+            width: 500,
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(children: [
+                  Container(
+                    width: 42, height: 42,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFECFDF5),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(Icons.edit_calendar_rounded, color: Color(0xFF059669), size: 20),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Text(
+                      'Schedule Wet Sign',
+                      style: GoogleFonts.beVietnamPro(fontSize: 17, fontWeight: FontWeight.w700, color: const Color(0xFF1A202C)),
+                    ),
+                  ),
+                ]),
+                const SizedBox(height: 20),
+                Text(
+                  'Set your office availability for the organization to sign documents.',
+                  style: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF64748B)),
+                ),
+                const SizedBox(height: 20),
+                
+                TextFormField(
+                  controller: _dateCtrl,
+                  readOnly: true,
+                  decoration: InputDecoration(
+                    labelText: 'Select Date *',
+                    hintText: 'MM/DD/YYYY',
+                    prefixIcon: const Icon(Icons.calendar_today_outlined, size: 18),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                  onTap: () async {
+                    final picked = await showDatePicker(
+                      context: ctx,
+                      initialDate: DateTime.now(),
+                      firstDate: DateTime.now(),
+                      lastDate: DateTime.now().add(const Duration(days: 30)),
+                    );
+                    if (picked != null) {
+                      selectedDate = picked;
+                      _dateCtrl.text = DateFormat('MM/dd/yyyy').format(picked);
+                      setDialogState(() {});
+                    }
+                  },
+                ),
+                const SizedBox(height: 14),
+                
+                TextFormField(
+                  controller: _startTimeCtrl,
+                  readOnly: true,
+                  decoration: InputDecoration(
+                    labelText: 'Start Time *',
+                    hintText: '-- : --',
+                    prefixIcon: const Icon(Icons.access_time_rounded, size: 18),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                  onTap: () async {
+                    final picked = await showTimePicker(context: ctx, initialTime: TimeOfDay.now());
+                    if (picked != null) {
+                      startTime = picked;
+                      _startTimeCtrl.text = picked.format(ctx);
+                      setDialogState(() {});
+                    }
+                  },
+                ),
+                const SizedBox(height: 14),
+                
+                TextFormField(
+                  controller: _endTimeCtrl,
+                  readOnly: true,
+                  decoration: InputDecoration(
+                    labelText: 'End Time *',
+                    hintText: '-- : --',
+                    prefixIcon: const Icon(Icons.access_time_rounded, size: 18),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                  onTap: () async {
+                    final picked = await showTimePicker(
+                      context: ctx, 
+                      initialTime: startTime ?? TimeOfDay.now(),
+                    );
+                    if (picked != null) {
+                      endTime = picked;
+                      _endTimeCtrl.text = picked.format(ctx);
+                      setDialogState(() {});
+                    }
+                  },
+                ),
+                const SizedBox(height: 14),
+                
+                TextFormField(
+                  controller: _locationCtrl,
+                  decoration: InputDecoration(
+                    labelText: 'Office Location *',
+                    hintText: 'e.g., Dean\'s Office Room 101',
+                    prefixIcon: const Icon(Icons.location_on_outlined, size: 18),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                ),
+                const SizedBox(height: 24),
+                
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    OutlinedButton(
+                      onPressed: () {
+                        Navigator.pop(ctx);
+                        _setStatus(proposalId, title, 'approved');
+                      },
+                      style: OutlinedButton.styleFrom(
+                        side: const BorderSide(color: Color(0xFFE2E6EA)),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 11),
+                      ),
+                      child: Text('Skip', style: GoogleFonts.beVietnamPro(fontSize: 13)),
+                    ),
+                    const SizedBox(width: 10),
+                    ElevatedButton(
+                      onPressed: () async {
+                        if (selectedDate == null || startTime == null || endTime == null) {
+                          ScaffoldMessenger.of(ctx).showSnackBar(
+                            const SnackBar(content: Text('Please fill all required fields'), backgroundColor: Colors.orange),
+                          );
+                          return;
+                        }
+                        
+                        final startDateTime = DateTime(
+                          selectedDate!.year, selectedDate!.month, selectedDate!.day,
+                          startTime!.hour, startTime!.minute,
+                        );
+                        final endDateTime = DateTime(
+                          selectedDate!.year, selectedDate!.month, selectedDate!.day,
+                          endTime!.hour, endTime!.minute,
+                        );
+                        
+                        await _saveWetSignSchedule(
+                          proposalId: proposalId,
+                          title: title,
+                          startDateTime: startDateTime,
+                          endDateTime: endDateTime,
+                          location: _locationCtrl.text.trim(),
+                        );
+                        
+                        Navigator.pop(ctx);
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF059669),
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 11),
+                      ),
+                      child: Text('Save Schedule', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600)),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    ),
+  );
+}
+
+Future<void> _saveWetSignSchedule({
+  required String proposalId,
+  required String title,
+  required DateTime startDateTime,
+  required DateTime endDateTime,
+  required String location,
+}) async {
+  try {
+    final wetSignData = {
+      'startDateTime': Timestamp.fromDate(startDateTime),
+      'endDateTime': Timestamp.fromDate(endDateTime),
+      'location': location,
+      'status': 'scheduled',
+      'scheduledBy': FirebaseAuth.instance.currentUser?.uid ?? '',
+      'scheduledAt': FieldValue.serverTimestamp(),
+    };
+    
+    await FirebaseFirestore.instance
+        .collection('event_proposals')
+        .doc(proposalId)
+        .update({
+      'status': 'approved',
+      'wetSignSchedule': wetSignData,
+      'reviewedAt': FieldValue.serverTimestamp(),
+      'reviewedBy': FirebaseAuth.instance.currentUser?.uid ?? '',
+    });
+    
+    await activity_log.ActivityLogger.log(
+      action: 'schedule_wet_sign',
+      module: 'Event Management',
+      details: {
+        'proposalId': proposalId,
+        'title': title,
+        'startDateTime': startDateTime.toIso8601String(),
+        'location': location,
+      },
+    );
+    
+    if (_isMounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('✅ Proposal approved and wet sign scheduled!'),
+          backgroundColor: Color(0xFF059669),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  } catch (e) {
+    print('Error saving wet sign schedule: $e');
+    if (_isMounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('⚠️ Proposal approved but wet sign scheduling failed: $e'),
+          backgroundColor: Colors.orange,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+}
 // ✅ NEW METHOD: Auto-create event from approved proposal
 Future<void> _createEventFromProposal(String proposalId) async {
   try {
