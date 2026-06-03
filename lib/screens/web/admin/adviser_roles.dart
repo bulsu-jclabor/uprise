@@ -139,6 +139,36 @@ class _RankBadge extends StatelessWidget {
   }
 }
 
+class _PositionBadge extends StatelessWidget {
+  final String position;
+  const _PositionBadge(this.position);
+
+  static Color colorOf(String position) {
+    switch (position.toLowerCase()) {
+      case 'dean':          return const Color(0xFF7C3AED);
+      case 'program chair': return const Color(0xFF2563EB);
+      case 'department head': return const Color(0xFFD97706);
+      case 'coordinator':   return const Color(0xFF059669);
+      default:              return const Color(0xFF6B7280);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = colorOf(position);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: c.withAlpha(26),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Text(position,
+          style: GoogleFonts.beVietnamPro(
+              fontSize: 9, fontWeight: FontWeight.w600, color: c, letterSpacing: 0.3)),
+    );
+  }
+}
+
 class _OrgAvatar extends StatelessWidget {
   final String abbrev;
   final String? logoUrl;
@@ -641,129 +671,141 @@ class _AdviserRolesState extends State<AdviserRoles> {
     );
   }
 
-  Widget _buildTableHeader() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 13),
-      decoration: const BoxDecoration(
-        color: Color(0xFFF8F9FB),
-        borderRadius: BorderRadius.vertical(top: Radius.circular(14)),
-        border: Border(bottom: BorderSide(color: Color(0xFFE8ECF0))),
-      ),
-      child: Row(children: [
-        Expanded(flex: 3, child: _headerCell('ORGANIZATION')),
-        Expanded(flex: 2, child: _headerCell('ADVISER')),
-        Expanded(flex: 2, child: _headerCell('PRESIDENT')),
-        Expanded(flex: 2, child: _headerCell('VICE PRESIDENT')),
-        Expanded(flex: 2, child: _headerCell('SECRETARY')),
-        Expanded(flex: 2, child: Align(alignment: Alignment.centerRight, child: _headerCell('ACTIONS'))),
-      ]),
-    );
-  }
+ Widget _buildTableHeader() {
+  return Container(
+    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 13),
+    decoration: const BoxDecoration(
+      color: Color(0xFFF8F9FB),
+      borderRadius: BorderRadius.vertical(top: Radius.circular(14)),
+      border: Border(bottom: BorderSide(color: Color(0xFFE8ECF0))),
+    ),
+    child: Row(children: [
+      Expanded(flex: 2, child: _headerCell('ORGANIZATION')),
+      Expanded(flex: 2, child: _headerCell('ADVISER NAME')),
+      Expanded(flex: 2, child: _headerCell('EMAIL')),
+      Expanded(flex: 1, child: _headerCell('PHONE')),
+      Expanded(flex: 1, child: _headerCell('POSITION')),
+      Expanded(flex: 1, child: Align(alignment: Alignment.centerRight, child: _headerCell('ACTIONS'))),
+    ]),
+  );
+}
 
   Widget _headerCell(String text) => Text(text,
       style: GoogleFonts.beVietnamPro(
           fontSize: 11, fontWeight: FontWeight.w700, color: const Color(0xFF64748B), letterSpacing: 0.7));
 
   Widget _buildRow({required String docId, required Map<String, dynamic> data, required bool isLast}) {
-    final rank     = data['adviserRank'] ?? 'Instructor';
-    final archived = data['archived'] == true;
-    final orgId = data['orgId'] ?? '';
-    
-    final org = _orgs.firstWhere((o) => o.id == orgId, orElse: () => const OrgModel(id: '', name: '', abbrev: '', tag: '', logoUrl: ''));
-    final orgLogoUrl = org.logoUrl;
+  final position = data['adviserPosition'] ?? data['adviserRank'] ?? 'Faculty';
+  final archived = data['archived'] == true;
+  final orgId = data['orgId'] ?? '';
+  
+  final org = _orgs.firstWhere((o) => o.id == orgId, orElse: () => const OrgModel(id: '', name: '', abbrev: '', tag: '', logoUrl: ''));
+  final orgLogoUrl = org.logoUrl;
+  
+  final adviserName = data['adviserName'] ?? '—';
+  final adviserEmail = data['adviserEmail'] ?? '—';
+  final adviserPhone = data['adviserPhone'] ?? '—';
 
-    return InkWell(
-      hoverColor: const Color(0xFFF8F9FB),
-      onTap: () => _showViewDialog(data, docId),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-        decoration: BoxDecoration(
-          border: isLast ? null : const Border(bottom: BorderSide(color: Color(0xFFF1F5F9))),
-        ),
-        child: Row(children: [
-          Expanded(
-            flex: 3,
-            child: Row(children: [
-              _OrgAvatar(data['orgAbbrev'] ?? '??', logoUrl: orgLogoUrl),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text(data['orgName'] ?? '—',
-                      style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600, color: const Color(0xFF1A202C)),
-                      overflow: TextOverflow.ellipsis),
-                  if ((data['orgTag'] ?? '').toString().isNotEmpty)
-                    Text(data['orgTag'] ?? '',
-                        style: GoogleFonts.beVietnamPro(fontSize: 11, color: const Color(0xFF64748B)),
-                        overflow: TextOverflow.ellipsis),
-                ]),
-              ),
-            ]),
-          ),
-          Expanded(
-            flex: 2,
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(data['adviserName'] ?? '—',
-                  style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w500, color: const Color(0xFF1A202C)),
-                  overflow: TextOverflow.ellipsis),
-              const SizedBox(height: 3),
-              _RankBadge(rank),
-            ]),
-          ),
-          Expanded(
-            flex: 2,
-            child: Text(data['president'] ?? '—',
-                style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF374151)),
-                overflow: TextOverflow.ellipsis),
-          ),
-          Expanded(
-            flex: 2,
-            child: Text(data['vicePresident'] ?? '—',
-                style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF374151)),
-                overflow: TextOverflow.ellipsis),
-          ),
-          Expanded(
-            flex: 2,
-            child: Text(data['secretary'] ?? '—',
-                style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF374151)),
-                overflow: TextOverflow.ellipsis),
-          ),
-          Expanded(
-            flex: 2,
-            child: Row(mainAxisAlignment: MainAxisAlignment.end, children: [
-              _ActionIcon(
-                icon: Icons.visibility_outlined,
-                tooltip: 'View Details',
-                onTap: () => _showViewDialog(data, docId),
-              ),
-              const SizedBox(width: 2),
-              _ActionIcon(
-                icon: Icons.edit_outlined,
-                tooltip: 'Edit',
-                color: UpriseColors.primaryDark,
-                onTap: () => _showEditDialog(data, docId),
-              ),
-              const SizedBox(width: 2),
-              _ActionIcon(
-                icon: archived ? Icons.unarchive_outlined : Icons.archive_outlined,
-                tooltip: archived ? 'Restore' : 'Archive',
-                color: const Color(0xFF64748B),
-                onTap: archived
-                    ? () => _restoreRecord(docId, data['orgName'] ?? '')
-                    : () => _confirmArchive(docId, data['orgName'] ?? ''),
-              ),
-              const SizedBox(width: 2),
-              _ActionIcon(
-                icon: Icons.delete_outline_rounded,
-                tooltip: 'Delete',
-                color: UpriseColors.error,
-                onTap: () => _confirmDelete(docId, data['orgName'] ?? ''),
-              ),
-            ]),
-          ),
-        ]),
+  return InkWell(
+    hoverColor: const Color(0xFFF8F9FB),
+    onTap: () => _showViewDialog(data, docId),
+    child: Container(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+      decoration: BoxDecoration(
+        border: isLast ? null : const Border(bottom: BorderSide(color: Color(0xFFF1F5F9))),
       ),
-    );
-  }
+      child: Row(children: [
+        // ORGANIZATION column
+        Expanded(
+          flex: 2,
+          child: Row(children: [
+            _OrgAvatar(data['orgAbbrev'] ?? '??', logoUrl: orgLogoUrl),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(data['orgName'] ?? '—',
+                    style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600, color: const Color(0xFF1A202C)),
+                    overflow: TextOverflow.ellipsis),
+                if ((data['orgTag'] ?? '').toString().isNotEmpty)
+                  Text(data['orgTag'] ?? '',
+                      style: GoogleFonts.beVietnamPro(fontSize: 11, color: const Color(0xFF64748B)),
+                      overflow: TextOverflow.ellipsis),
+              ]),
+            ),
+          ]),
+        ),
+        
+        // ADVISER NAME column
+        Expanded(
+          flex: 2,
+          child: Text(adviserName,
+              style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w500, color: const Color(0xFF1A202C)),
+              overflow: TextOverflow.ellipsis),
+        ),
+        
+        // EMAIL column
+        Expanded(
+          flex: 2,
+          child: Text(adviserEmail,
+              style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF64748B)),
+              overflow: TextOverflow.ellipsis),
+        ),
+        
+        // PHONE column
+        Expanded(
+          flex: 1,
+          child: Text(adviserPhone,
+              style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF64748B)),
+              overflow: TextOverflow.ellipsis),
+        ),
+        
+        // POSITION column
+        // POSITION column
+Expanded(
+  flex: 1,
+  child: Text(position,
+      style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.w500, color: const Color(0xFF374151)),
+      overflow: TextOverflow.ellipsis),
+),
+        
+        // ACTIONS column
+        Expanded(
+          flex: 1,
+          child: Row(mainAxisAlignment: MainAxisAlignment.end, children: [
+            _ActionIcon(
+              icon: Icons.visibility_outlined,
+              tooltip: 'View Details',
+              onTap: () => _showViewDialog(data, docId),
+            ),
+            const SizedBox(width: 2),
+            _ActionIcon(
+              icon: Icons.edit_outlined,
+              tooltip: 'Edit',
+              color: UpriseColors.primaryDark,
+              onTap: () => _showEditDialog(data, docId),
+            ),
+            const SizedBox(width: 2),
+            _ActionIcon(
+              icon: archived ? Icons.unarchive_outlined : Icons.archive_outlined,
+              tooltip: archived ? 'Restore' : 'Archive',
+              color: const Color(0xFF64748B),
+              onTap: archived
+                  ? () => _restoreRecord(docId, data['orgName'] ?? '')
+                  : () => _confirmArchive(docId, data['orgName'] ?? ''),
+            ),
+            const SizedBox(width: 2),
+            _ActionIcon(
+              icon: Icons.delete_outline_rounded,
+              tooltip: 'Delete',
+              color: UpriseColors.error,
+              onTap: () => _confirmDelete(docId, data['orgName'] ?? ''),
+            ),
+          ]),
+        ),
+      ]),
+    ),
+  );
+}
 
   Widget _buildEmptyState() {
     return Center(
@@ -898,13 +940,13 @@ class _AdviserRolesState extends State<AdviserRoles> {
                   _buildInfoRow('Phone', data['adviserPhone'] ?? '—', Icons.phone_outlined),
                   const SizedBox(height: 10),
                   Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                    Row(children: [
-                      const Icon(Icons.workspace_premium_outlined, size: 13, color: Color(0xFF9AA5B4)),
-                      const SizedBox(width: 6),
-                      Text('Rank', style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF64748B))),
-                    ]),
-                    _RankBadge(rank),
-                  ]),
+  Row(children: [
+    const Icon(Icons.work_outline, size: 13, color: Color(0xFF9AA5B4)),
+    const SizedBox(width: 6),
+    Text('Position', style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF64748B))),
+  ]),
+  _PositionBadge(rank),
+]),
                 ]),
                 const SizedBox(height: 12),
                 _viewCard('Officers', [
@@ -1294,19 +1336,18 @@ class _AdviserRolesState extends State<AdviserRoles> {
                           ),
                         ]),
                         const SizedBox(height: 10),
-                        DropdownButtonFormField<String>(
-                          initialValue: ['Instructor', 'Junior', 'Senior', 'Professor'].contains(advRankCtrl.text)
-                              ? advRankCtrl.text
-                              : 'Instructor',
-                          decoration: _DS.inputDecoration('Rank / Title'),
-                          style: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF1A202C)),
-                          items: ['Instructor', 'Junior', 'Senior', 'Professor']
-                              .map((r) => DropdownMenuItem(value: r, child: Text(r)))
-                              .toList(),
-                          onChanged: (v) { if (v != null) advRankCtrl.text = v; },
-                          validator: (v) => v == null || v.isEmpty ? 'Required' : null,
-                        ),
-                        const SizedBox(height: 20),
+                      DropdownButtonFormField<String>(
+  initialValue: ['Dean', 'Program Chair', 'Department Head', 'Coordinator', 'Faculty'].contains(advRankCtrl.text)
+      ? advRankCtrl.text
+      : 'Faculty',
+  decoration: _DS.inputDecoration('Position'),
+  style: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF1A202C)),
+  items: ['Dean', 'Program Chair', 'Department Head', 'Coordinator', 'Faculty']
+      .map((r) => DropdownMenuItem(value: r, child: Text(r)))
+      .toList(),
+  onChanged: (v) { if (v != null) advRankCtrl.text = v; },
+  validator: (v) => v == null || v.isEmpty ? 'Required' : null,
+),                     const SizedBox(height: 20),
                         _sectionDivider('Officers', icon: Icons.groups_outlined),
                         TextFormField(
                           controller: presCtrl,
