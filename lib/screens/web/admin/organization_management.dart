@@ -1343,11 +1343,35 @@ class _AdviserForm extends StatelessWidget {
           ),
           const SizedBox(width: 12),
           Expanded(
-            child: TextFormField(
-              initialValue: adviser.title,
-              decoration: _DS.inputDecoration('Title / Designation', hint: 'e.g., Associate Professor'),
-              style: GoogleFonts.beVietnamPro(fontSize: 13),
-              onChanged: (v) => onChanged(adviser.copyWith(title: v)),
+            child: DropdownButtonFormField<String>(
+              value: adviser.title.isNotEmpty ? adviser.title : null,
+              decoration: InputDecoration(
+                labelText: 'Position',
+                hintText: 'Select position',
+                prefixIcon: Icon(Icons.work_outline, size: 18, color: UpriseColors.darkGray),
+                labelStyle: GoogleFonts.beVietnamPro(fontSize: 13, color: UpriseColors.darkGray),
+                hintStyle: GoogleFonts.beVietnamPro(fontSize: 13, color: UpriseColors.mediumGray),
+                filled: true,
+                fillColor: const Color(0xFFF8F9FB),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(_DS.radiusSm),
+                  borderSide: BorderSide(color: UpriseColors.mediumGray, width: 1),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(_DS.radiusSm),
+                  borderSide: const BorderSide(color: Color(0xFFE2E6EA), width: 1),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(_DS.radiusSm),
+                  borderSide: BorderSide(color: UpriseColors.primaryDark, width: 1.5),
+                ),
+              ),
+              style: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF1A202C)),
+              items: ['Dean', 'Program Chair', 'Department Head', 'Coordinator', 'Faculty']
+                  .map((pos) => DropdownMenuItem(value: pos, child: Text(pos)))
+                  .toList(),
+              onChanged: (v) => onChanged(adviser.copyWith(title: v ?? '')),
             ),
           ),
         ]),
@@ -1612,49 +1636,31 @@ class _CreateOrganizationDialogState extends State<_CreateOrganizationDialog> {
   }
 
   Widget _buildStep2() {
-    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      _sectionLabel('Faculty Advisers', icon: Icons.people_rounded),
-      Container(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: const Color(0xFFF0F6FF),
-          borderRadius: BorderRadius.circular(_DS.radiusSm),
-          border: Border.all(color: const Color(0xFFBFD7FF)),
-        ),
-        child: Row(children: [
-          const Icon(Icons.info_outline_rounded, size: 16, color: Color(0xFF2563EB)),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              'Each adviser will receive login credentials via email. The first adviser is required.',
-              style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF1D4ED8)),
-            ),
-          ),
-        ]),
+  return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+    _sectionLabel('Faculty Advisers', icon: Icons.people_rounded),
+    const SizedBox(height: 16),
+
+    ..._advisers.asMap().entries.map((entry) {
+      final idx = entry.key;
+      final adviser = entry.value;
+      return _AdviserForm(
+        adviser: adviser,
+        index: idx,
+        canRemove: _advisers.length > 1,
+        onChanged: (updated) => setState(() => _advisers[idx] = updated),
+        onRemove: () => setState(() => _advisers.removeAt(idx)),
+      );
+    }),
+
+    if (_advisers.length < 2)
+      TextButton.icon(
+        onPressed: () => setState(() => _advisers.add(Adviser(name: '', title: '', email: '', phone: ''))),
+        icon: const Icon(Icons.add_circle_outline_rounded, size: 16),
+        label: Text('Add Another Adviser', style: GoogleFonts.beVietnamPro(fontSize: 13)),
+        style: TextButton.styleFrom(foregroundColor: UpriseColors.primaryDark),
       ),
-      const SizedBox(height: 16),
-
-      ..._advisers.asMap().entries.map((entry) {
-        final idx = entry.key;
-        final adviser = entry.value;
-        return _AdviserForm(
-          adviser: adviser,
-          index: idx,
-          canRemove: _advisers.length > 1,
-          onChanged: (updated) => setState(() => _advisers[idx] = updated),
-          onRemove: () => setState(() => _advisers.removeAt(idx)),
-        );
-      }),
-
-      if (_advisers.length < 2)
-        TextButton.icon(
-          onPressed: () => setState(() => _advisers.add(Adviser(name: '', title: '', email: '', phone: ''))),
-          icon: const Icon(Icons.add_circle_outline_rounded, size: 16),
-          label: Text('Add Another Adviser', style: GoogleFonts.beVietnamPro(fontSize: 13)),
-          style: TextButton.styleFrom(foregroundColor: UpriseColors.primaryDark),
-        ),
-    ]);
-  }
+  ]);
+}
 
   Widget _buildModalFooter() {
     return Container(
