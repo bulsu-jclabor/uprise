@@ -115,61 +115,24 @@ Widget _sectionLabel(String text, {IconData? icon}) {
   );
 }
 
-// Status badge
-Widget _statusBadge(String status, {bool isArchived = false}) {
-  if (isArchived) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF3F4F6),
-        borderRadius: BorderRadius.circular(_DS.radiusPill),
-      ),
-      child: Text(
-        'ARCHIVED',
-        style: GoogleFonts.beVietnamPro(
-          fontSize: 10,
-          fontWeight: FontWeight.w700,
-          color: const Color(0xFF6B7280),
-          letterSpacing: 0.8,
-        ),
-      ),
-    );
-  }
-  
-  final Map<String, _BadgeStyle> styles = {
-    'verified': _BadgeStyle(
-        const Color(0xFFECFDF5), const Color(0xFF059669), 'VERIFIED'),
-    'pending': _BadgeStyle(
-        const Color(0xFFFFFBEB), const Color(0xFFD97706), 'PENDING'),
-    'suspended': _BadgeStyle(
-        const Color(0xFFFEF2F2), const Color(0xFFDC2626), 'SUSPENDED'),
-  };
-  final s = styles[status.toLowerCase()] ??
-      _BadgeStyle(const Color(0xFFF3F4F6), const Color(0xFF6B7280),
-          status.toUpperCase());
+// Archived badge only (no status badge needed)
+Widget _archivedBadge() {
   return Container(
-    padding:
-        const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
     decoration: BoxDecoration(
-      color: s.bg,
+      color: const Color(0xFFF3F4F6),
       borderRadius: BorderRadius.circular(_DS.radiusPill),
     ),
     child: Text(
-      s.label,
+      'ARCHIVED',
       style: GoogleFonts.beVietnamPro(
         fontSize: 10,
         fontWeight: FontWeight.w700,
-        color: s.fg,
+        color: const Color(0xFF6B7280),
         letterSpacing: 0.8,
       ),
     ),
   );
-}
-
-class _BadgeStyle {
-  final Color bg, fg;
-  final String label;
-  const _BadgeStyle(this.bg, this.fg, this.label);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -184,7 +147,6 @@ class StudentAccounts extends StatefulWidget {
 
 class _StudentAccountsState extends State<StudentAccounts> {
   final TextEditingController _searchController = TextEditingController();
-  String _statusFilter = 'All Status';
   String _courseFilter = 'All Courses';
   String _archiveFilter = 'Active Only'; // 'Active Only', 'Archived Only', 'All'
   int _currentPage = 1;
@@ -213,27 +175,20 @@ class _StudentAccountsState extends State<StudentAccounts> {
     );
   }
 
-  // ── Stats row ─────────────────────────────────────────────────────
+  // ── Stats row (simplified - only total and archived) ─────────────
   Widget _buildStatsRow() {
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance
           .collection('students')
           .snapshots(),
       builder: (context, snapshot) {
-        int total = 0, verified = 0, pending = 0, archived = 0;
+        int total = 0, archived = 0;
         if (snapshot.hasData) {
           for (final doc in snapshot.data!.docs) {
             final data = doc.data() as Map;
-            final isArchived = data['archived'] == true;
-            final status = data['status'] ?? 'pending';
-            
             total++;
-            
-            if (isArchived) {
+            if (data['archived'] == true) {
               archived++;
-            } else {
-              if (status == 'verified') verified++;
-              if (status == 'pending') pending++;
             }
           }
         }
@@ -248,17 +203,10 @@ class _StudentAccountsState extends State<StudentAccounts> {
             ),
             const SizedBox(width: 14),
             _StatCard(
-              label: 'Verified',
-              value: '$verified',
-              icon: Icons.verified_rounded,
+              label: 'Active',
+              value: '${total - archived}',
+              icon: Icons.person_rounded,
               color: const Color(0xFF059669),
-            ),
-            const SizedBox(width: 14),
-            _StatCard(
-              label: 'Pending',
-              value: '$pending',
-              icon: Icons.pending_rounded,
-              color: const Color(0xFFD97706),
             ),
             const SizedBox(width: 14),
             _StatCard(
@@ -273,7 +221,7 @@ class _StudentAccountsState extends State<StudentAccounts> {
     );
   }
 
-  // ── Toolbar ───────────────────────────────────────────────────────
+  // ── Toolbar (removed status filter) ──────────────────────────────
   Widget _buildToolbar() {
     return Padding(
       padding: const EdgeInsets.fromLTRB(28, 20, 28, 0),
@@ -322,24 +270,7 @@ class _StudentAccountsState extends State<StudentAccounts> {
             ),
           ),
           const SizedBox(width: 10),
-          // Status filter dropdown - mas malinaw na title
-          _FilterDropdown(
-            value: _statusFilter,
-            items: const [
-              'All Status',
-              'Verified',
-              'Pending',
-              'Suspended'
-            ],
-            hint: 'Filter by Status',
-            icon: Icons.tune_rounded,
-            onChanged: (v) => setState(() {
-              _statusFilter = v!;
-              _currentPage = 1;
-            }),
-          ),
-          const SizedBox(width: 10),
-          // Course filter dropdown - mas malinaw na title
+          // Course filter dropdown
           _FilterDropdown(
             value: _courseFilter,
             items: const [
@@ -373,7 +304,6 @@ class _StudentAccountsState extends State<StudentAccounts> {
           ),
           const SizedBox(width: 10),
           _ExportStudentsButton(
-            statusFilter: _statusFilter,
             courseFilter: _courseFilter,
             searchTerm: _searchController.text.trim(),
             archiveFilter: _archiveFilter,
@@ -398,7 +328,7 @@ class _StudentAccountsState extends State<StudentAccounts> {
     );
   }
 
-  // ── Table ─────────────────────────────────────────────────────────
+  // ── Table (removed status column) ────────────────────────────────
   Widget _buildTable() {
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance
@@ -416,13 +346,12 @@ class _StudentAccountsState extends State<StudentAccounts> {
 
         var docs = snapshot.data!.docs;
 
-        // Apply archive filter first
+        // Apply archive filter
         if (_archiveFilter == 'Active Only') {
           docs = docs.where((d) => (d.data() as Map)['archived'] != true).toList();
         } else if (_archiveFilter == 'Archived Only') {
           docs = docs.where((d) => (d.data() as Map)['archived'] == true).toList();
         }
-        // 'All Students' includes both
 
         // Search filter
         final term = _searchController.text.trim().toLowerCase();
@@ -442,19 +371,6 @@ class _StudentAccountsState extends State<StudentAccounts> {
                     .toLowerCase()
                     .contains(term);
           }).toList();
-        }
-        
-        // Status filter (only for non-archived)
-        if (_statusFilter != 'All Status') {
-          docs = docs
-              .where((d) {
-                final data = d.data() as Map;
-                final isArchived = data['archived'] == true;
-                // Don't filter archived students by status
-                if (isArchived) return true;
-                return data['status'] == _statusFilter.toLowerCase();
-              })
-              .toList();
         }
         
         // Course filter
@@ -520,7 +436,6 @@ class _StudentAccountsState extends State<StudentAccounts> {
         Expanded(flex: 2, child: _headerCell('COURSE')),
         Expanded(flex: 1, child: _headerCell('YEAR')),
         Expanded(flex: 3, child: _headerCell('EMAIL')),
-        Expanded(flex: 1, child: _headerCell('STATUS')),
         Expanded(
             flex: 2,
             child: Align(
@@ -545,7 +460,6 @@ class _StudentAccountsState extends State<StudentAccounts> {
     required Map<String, dynamic> data,
     required bool isLast,
   }) {
-    final status = (data['status'] ?? 'pending') as String;
     final isArchived = data['archived'] == true;
     
     return InkWell(
@@ -634,7 +548,6 @@ class _StudentAccountsState extends State<StudentAccounts> {
                 overflow: TextOverflow.ellipsis,
               ),
             ),
-            Expanded(flex: 1, child: _statusBadge(status, isArchived: isArchived)),
             Expanded(
               flex: 2,
               child: Row(
@@ -658,19 +571,6 @@ class _StudentAccountsState extends State<StudentAccounts> {
                         data['studentId'] ?? '',
                         data['tempPassword'],
                       ),
-                    ),
-                    const SizedBox(width: 4),
-                    _ActionIconButton(
-                      icon: Icons.verified_outlined,
-                      tooltip: status == 'verified'
-                          ? 'Already Verified'
-                          : 'Verify Student',
-                      color: status == 'verified'
-                          ? const Color(0xFF9AA5B4)
-                          : const Color(0xFF059669),
-                      onTap: status != 'verified'
-                          ? () => _verifyStudent(docId)
-                          : null,
                     ),
                     const SizedBox(width: 4),
                   ],
@@ -1012,11 +912,11 @@ class _StudentAccountsState extends State<StudentAccounts> {
                       Expanded(
                         child: _detailItem(
                             'Status',
-                            isArchived ? 'ARCHIVED' : (data['status'] ?? 'pending').toString().toUpperCase(),
+                            isArchived ? 'ARCHIVED' : 'ACTIVE',
                             Icons.circle_outlined,
                             valueColor: isArchived 
                                 ? const Color(0xFF6B7280)
-                                : (data['status'] == 'verified' ? const Color(0xFF059669) : const Color(0xFFD97706))),
+                                : const Color(0xFF059669)),
                       ),
                     ]),
                     const SizedBox(height: 14),
@@ -1053,26 +953,7 @@ class _StudentAccountsState extends State<StudentAccounts> {
                         ),
                       ),
                     ),
-                    const SizedBox(width: 10),
                   ],
-                  if (data['status'] != 'verified' && !isArchived)
-                    Expanded(
-                      child: ElevatedButton.icon(
-                        onPressed: () {
-                          Navigator.pop(ctx);
-                          _verifyStudent(docId);
-                        },
-                        icon: const Icon(Icons.verified_rounded, size: 15),
-                        label: Text('Verify', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600)),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF059669),
-                          foregroundColor: Colors.white,
-                          elevation: 0,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                          padding: const EdgeInsets.symmetric(vertical: 11),
-                        ),
-                      ),
-                    ),
                 ]),
               ),
             ],
@@ -1137,46 +1018,7 @@ class _StudentAccountsState extends State<StudentAccounts> {
     }
   }
 
-  Future<void> _verifyStudent(String docId) async {
-    try {
-      await FirebaseFirestore.instance
-          .collection('students')
-          .doc(docId)
-          .update({'status': 'verified'});
-      final doc = await FirebaseFirestore.instance
-          .collection('students')
-          .doc(docId)
-          .get();
-      final studentId = doc.data()?['studentId'] ?? 'Unknown';
-      await activity_log.ActivityLogger.log(
-        action: 'Verified student account: $studentId',
-        module: 'User Directory',
-        severity: 'info',
-      );
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text('Student account verified'),
-            backgroundColor: const Color(0xFF059669),
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error: $e'),
-            backgroundColor: UpriseColors.error,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
-    }
-  }
-
-  // New: Archive/Restore Student
+  // Archive/Restore Student
   void _confirmArchiveStudent(String docId, String name, bool isArchived) {
     showDialog(
       context: context,
@@ -1268,44 +1110,17 @@ class _StudentAccountsState extends State<StudentAccounts> {
     try {
       final newArchivedStatus = !isArchived;
       
-      // Update Firestore
       await FirebaseFirestore.instance
           .collection('students')
           .doc(docId)
           .update({'archived': newArchivedStatus});
       
-      // Also disable/enable Firebase Auth account
       final doc = await FirebaseFirestore.instance
           .collection('students')
           .doc(docId)
           .get();
       final email = doc.data()?['email'] ?? '';
       final studentId = doc.data()?['studentId'] ?? 'Unknown';
-      
-      // Get the user and disable/enable
-      try {
-        FirebaseApp secondaryApp;
-        try {
-          secondaryApp = Firebase.app('secondaryApp');
-        } catch (_) {
-          secondaryApp = await Firebase.initializeApp(
-            name: 'secondaryApp',
-            options: Firebase.app().options,
-          );
-        }
-        final secondaryAuth = FirebaseAuth.instanceFor(app: secondaryApp);
-        
-        // Find user by email
-        final user = await secondaryAuth.fetchSignInMethodsForEmail(email);
-        if (user.isNotEmpty) {
-          // Note: Firebase Admin SDK would be better, but for client-side
-          // we'll just update the status in Firestore and handle login checks
-          debugPrint('User found for email: $email');
-        }
-        await secondaryAuth.signOut();
-      } catch (e) {
-        debugPrint('Could not update auth status: $e');
-      }
       
       await activity_log.ActivityLogger.log(
         action: '${isArchived ? 'Restored' : 'Archived'} student: $studentId ($email)',
@@ -1625,7 +1440,7 @@ class _StudentAccountsState extends State<StudentAccounts> {
     );
   }
 
-  // ── Manual Add Dialog ─────────────────────────────────────────────
+  // ── Manual Add Dialog (removed status field) ─────────────────────
   void _showManualAddDialog() {
     final formKey = GlobalKey<FormState>();
     final idCtrl = TextEditingController();
@@ -1633,7 +1448,6 @@ class _StudentAccountsState extends State<StudentAccounts> {
     final emailCtrl = TextEditingController();
     String course = 'BSIT';
     String yearLevel = '1st Year';
-    String status = 'pending';
     bool isCreating = false;
     String? errorMsg;
 
@@ -1750,19 +1564,6 @@ class _StudentAccountsState extends State<StudentAccounts> {
                               return null;
                             },
                           ),
-                          const SizedBox(height: 12),
-                          DropdownButtonFormField<String>(
-                            value: status,
-                            decoration: _DS.inputDecoration('Initial Status'),
-                            style: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF1A202C)),
-                            items: const ['pending', 'verified']
-                                .map((s) => DropdownMenuItem(
-                                      value: s,
-                                      child: Text(s[0].toUpperCase() + s.substring(1)),
-                                    ))
-                                .toList(),
-                            onChanged: (v) => setDialogState(() => status = v!),
-                          ),
                           if (errorMsg != null) ...[
                             const SizedBox(height: 14),
                             Container(
@@ -1814,43 +1615,17 @@ class _StudentAccountsState extends State<StudentAccounts> {
                                   errorMsg = null;
                                 });
                                 try {
-                                  final cred = await _createStudentAccount({
+                                  await _createStudentAccount({
                                     'studentId': idCtrl.text.trim(),
                                     'fullName': nameCtrl.text.trim(),
                                     'course': course,
                                     'yearLevel': yearLevel,
                                     'email': emailCtrl.text.trim().toLowerCase(),
                                   });
-                                  try {
-                                    final sent = await _sendCredentialsEmail(
-                                        cred['email']!, cred['studentId']!, cred['password']!);
-                                    if (!sent) {
-                                      await _queueCredentialEmail(cred['email']!, cred['studentId']!, cred['password']!);
-                                      if (mounted) {
-                                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                                          content: Text("Account created but sending credentials failed for ${cred['email']}."),
-                                          backgroundColor: const Color(0xFFF59E0B),
-                                          duration: const Duration(seconds: 4),
-                                        ));
-                                      }
-                                    }
-                                  } catch (e) {
-                                    await _queueCredentialEmail(cred['email']!, cred['studentId']!, cred['password']!);
-                                    debugPrint("⚠️ Failed to send credentials to ${cred['email']}: $e");
-                                  }
-                                  if (status == 'verified') {
-                                    final q = await FirebaseFirestore.instance
-                                        .collection('students')
-                                        .where('email', isEqualTo: emailCtrl.text.trim().toLowerCase())
-                                        .get();
-                                    if (q.docs.isNotEmpty) {
-                                      await q.docs.first.reference.update({'status': 'verified'});
-                                    }
-                                  }
                                   if (mounted) {
                                     Navigator.pop(ctx);
                                     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                                      content: Text('Student account created for ${nameCtrl.text.trim()}.'),
+                                      content: Text('Student account created for ${nameCtrl.text.trim()}. Credentials sent.'),
                                       backgroundColor: const Color(0xFF059669),
                                       behavior: SnackBarBehavior.floating,
                                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
@@ -1930,7 +1705,6 @@ class _StudentAccountsState extends State<StudentAccounts> {
       'course': student['course'],
       'yearLevel': student['yearLevel'],
       'email': email,
-      'status': 'pending',
       'tempPassword': password,
       'mustChangePassword': true,
       'archived': false,
@@ -1938,6 +1712,13 @@ class _StudentAccountsState extends State<StudentAccounts> {
       'uid': cred.user!.uid,
     });
     await secondaryAuth.signOut();
+    
+    // Send credentials email
+    final sent = await _sendCredentialsEmail(email, studentId, password);
+    if (!sent) {
+      await _queueCredentialEmail(email, studentId, password);
+    }
+    
     await activity_log.ActivityLogger.log(
       action: 'Created student account: $studentId ($email)',
       module: 'User Directory',
@@ -2229,9 +2010,8 @@ class _ToolbarButton extends StatelessWidget {
 }
 
 class _ExportStudentsButton extends StatelessWidget {
-  final String statusFilter, courseFilter, searchTerm, archiveFilter;
+  final String courseFilter, searchTerm, archiveFilter;
   const _ExportStudentsButton({
-    required this.statusFilter,
     required this.courseFilter,
     required this.searchTerm,
     required this.archiveFilter,
@@ -2257,14 +2037,6 @@ class _ExportStudentsButton extends StatelessWidget {
         docs = docs.where((d) => (d.data())['archived'] == true).toList();
       }
       
-      if (statusFilter != 'All Status') {
-        docs = docs.where((d) {
-          final data = d.data();
-          final isArchived = data['archived'] == true;
-          if (isArchived) return true;
-          return data['status'] == statusFilter.toLowerCase();
-        }).toList();
-      }
       if (courseFilter != 'All Courses') {
         docs = docs.where((d) => (d.data())['course'] == courseFilter).toList();
       }
@@ -2292,7 +2064,7 @@ class _ExportStudentsButton extends StatelessWidget {
 
       if (format == 'csv') {
         final buf = StringBuffer();
-        buf.writeln('Student ID,Full Name,Course,Year Level,Email,Status,Archived');
+        buf.writeln('Student ID,Full Name,Course,Year Level,Email,Archived');
         for (final doc in docs) {
           final d = doc.data();
           String esc(String s) => '"${s.replaceAll('"', '""')}"';
@@ -2302,7 +2074,6 @@ class _ExportStudentsButton extends StatelessWidget {
             esc(d['course'] ?? ''),
             esc(d['yearLevel'] ?? ''),
             esc(d['email'] ?? ''),
-            esc(d['status'] ?? ''),
             esc(d['archived'] == true ? 'Yes' : 'No'),
           ].join(','));
         }
@@ -2316,13 +2087,12 @@ class _ExportStudentsButton extends StatelessWidget {
             d['course'] ?? '',
             d['yearLevel'] ?? '',
             d['email'] ?? '',
-            d['status'] ?? '',
           ].map((value) => value.toString()).toList();
         }).toList();
 
         final pdfBytes = await AdminExportPdf.generateTablePdf(
           title: 'Student Accounts Report',
-          headers: const ['Student ID', 'Full Name', 'Course', 'Year Level', 'Email', 'Status'],
+          headers: const ['Student ID', 'Full Name', 'Course', 'Year Level', 'Email'],
           rows: rows,
         );
         await AdminExportUtil.saveBytes(pdfBytes, 'students_$now.pdf', mimeType: 'application/pdf');

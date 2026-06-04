@@ -1,6 +1,6 @@
 import 'dart:typed_data';
 import 'dart:convert';
-import 'package:http/http.dart' as http; // 👈 ADD THIS for NetworkAssetBundle replacement
+import 'package:http/http.dart' as http;
 import '../../../utils/platform_file_utils.dart' as platform_file_utils;
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -13,6 +13,25 @@ import 'export_pdf.dart';
 import '../../../services/activity_logger.dart' as activity_log;
 import '../../theme/app_theme.dart';
 import 'package:intl/intl.dart';
+
+// Helper for image handling (copied from adviser_roles.dart)
+ImageProvider _imageProviderFromUrl(String url) {
+  if (url.startsWith('data:image')) {
+    final base64Part = url.split(',').last;
+    return MemoryImage(base64Decode(base64Part));
+  }
+  return NetworkImage(url);
+}
+
+Widget _buildImageWidget(String url, {BoxFit fit = BoxFit.cover, double? width, double? height}) {
+  return Image(
+    image: _imageProviderFromUrl(url),
+    fit: fit,
+    width: width,
+    height: height,
+    errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+  );
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Design tokens
@@ -92,6 +111,48 @@ class _BadgeStyle {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Org Avatar with Logo (same as adviser_roles.dart)
+// ─────────────────────────────────────────────────────────────────────────────
+class _OrgAvatar extends StatelessWidget {
+  final String name;
+  final String? logoUrl;
+  const _OrgAvatar({required this.name, this.logoUrl});
+
+  @override
+  Widget build(BuildContext context) {
+    if (logoUrl != null && logoUrl!.isNotEmpty) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(_DS.radiusSm),
+        child: _buildImageWidget(logoUrl!, width: 34, height: 34, fit: BoxFit.cover),
+      );
+    }
+    // Fallback to initials
+    final parts = name.trim().split(' ');
+    final initials = parts.length >= 2
+        ? '${parts[0][0]}${parts[1][0]}'.toUpperCase()
+        : (name.isNotEmpty ? name[0].toUpperCase() : '?');
+    return Container(
+      width: 34,
+      height: 34,
+      decoration: BoxDecoration(
+        color: UpriseColors.primaryDark.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(_DS.radiusSm),
+      ),
+      child: Center(
+        child: Text(
+          initials,
+          style: GoogleFonts.beVietnamPro(
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
+            color: UpriseColors.primaryDark,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Main Widget
 // ─────────────────────────────────────────────────────────────────────────────
 class EventProposals extends StatefulWidget {
@@ -107,14 +168,41 @@ class _EventProposalsState extends State<EventProposals> {
   int _currentPage = 1;
   static const int _pageSize = 10;
 
+  // Cache for organization logos
+  final Map<String, String> _orgLogoCache = {};
+
   @override
   void dispose() {
     _searchController.dispose();
     super.dispose();
   }
 
-  // Helper to check if widget is still mounted (for async gaps)
+  // Helper to check if widget is still mounted
   bool get _isMounted => mounted;
+
+  // Fetch org logo by orgId
+  Future<String?> _fetchOrgLogo(String orgId) async {
+    if (_orgLogoCache.containsKey(orgId)) {
+      return _orgLogoCache[orgId];
+    }
+    
+    try {
+      final orgDoc = await FirebaseFirestore.instance
+          .collection('organizations')
+          .doc(orgId)
+          .get();
+      
+      if (orgDoc.exists) {
+        final data = orgDoc.data() as Map<String, dynamic>;
+        final logoUrl = data['logoUrl'] as String? ?? '';
+        _orgLogoCache[orgId] = logoUrl;
+        return logoUrl;
+      }
+    } catch (e) {
+      debugPrint('Error fetching org logo for $orgId: $e');
+    }
+    return null;
+  }
 
   // ── Build ─────────────────────────────────────────────────────────
   @override
@@ -317,6 +405,7 @@ class _EventProposalsState extends State<EventProposals> {
     );
   }
 
+  // NEW HEADER: Organization first, then Event Title
   Widget _buildTableHeader() {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 13),
@@ -326,8 +415,8 @@ class _EventProposalsState extends State<EventProposals> {
         border: Border(bottom: BorderSide(color: Color(0xFFE8ECF0))),
       ),
       child: Row(children: [
-        Expanded(flex: 3, child: _headerCell('EVENT TITLE')),
         Expanded(flex: 2, child: _headerCell('ORGANIZATION')),
+        Expanded(flex: 3, child: _headerCell('EVENT TITLE')),
         Expanded(flex: 2, child: _headerCell('CATEGORY')),
         Expanded(flex: 2, child: _headerCell('DATE')),
         Expanded(flex: 1, child: _headerCell('STATUS')),
@@ -359,126 +448,134 @@ class _EventProposalsState extends State<EventProposals> {
   }) {
     final status  = (data['status'] ?? 'pending') as String;
     final dateStr = _formatDate(data['date']);
+    final orgId = data['orgId'] ?? '';
+    final orgName = data['orgName'] ?? '—';
+    final orgLogoUrl = data['orgLogoUrl'] as String?;
 
-    return InkWell(
-      hoverColor: const Color(0xFFF8F9FB),
-      onTap: () => _showProposalDetailDialog(docId, data),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-        decoration: BoxDecoration(
-          border: isLast
-              ? null
-              : const Border(bottom: BorderSide(color: Color(0xFFF1F5F9))),
-        ),
-        child: Row(children: [
-          Expanded(
-            flex: 3,
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(
-                data['title'] ?? '—',
-                style: GoogleFonts.beVietnamPro(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  color: const Color(0xFF1A202C),
-                ),
-                overflow: TextOverflow.ellipsis,
-              ),
-              const SizedBox(height: 2),
-              Text(
-                data['category'] ?? '—',
-                style: GoogleFonts.beVietnamPro(fontSize: 11, color: const Color(0xFF9AA5B4)),
-                overflow: TextOverflow.ellipsis,
-              ),
-            ]),
-          ),
-          Expanded(
-            flex: 2,
+    return FutureBuilder<String?>(
+      future: _fetchOrgLogo(orgId),
+      builder: (context, logoSnapshot) {
+        final logoUrl = orgLogoUrl ?? (logoSnapshot.data ?? '');
+        
+        return InkWell(
+          hoverColor: const Color(0xFFF8F9FB),
+          onTap: () => _showProposalDetailDialog(docId, data),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+            decoration: BoxDecoration(
+              border: isLast
+                  ? null
+                  : const Border(bottom: BorderSide(color: Color(0xFFF1F5F9))),
+            ),
             child: Row(children: [
-              _OrgAvatar(name: data['orgName'] ?? ''),
-              const SizedBox(width: 10),
+              // ORGANIZATION column (with logo) - NOW FIRST
               Expanded(
+                flex: 2,
+                child: Row(children: [
+                  _OrgAvatar(name: orgName, logoUrl: logoUrl),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      orgName,
+                      style: GoogleFonts.beVietnamPro(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: const Color(0xFF1A202C),
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ]),
+              ),
+              // EVENT TITLE column - title only, no category subtitle
+              Expanded(
+                flex: 3,
                 child: Text(
-                  data['orgName'] ?? '—',
+                  data['title'] ?? '—',
                   style: GoogleFonts.beVietnamPro(
                     fontSize: 13,
-                    fontWeight: FontWeight.w500,
+                    fontWeight: FontWeight.w600,
                     color: const Color(0xFF1A202C),
                   ),
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
+              // CATEGORY column
+              Expanded(
+                flex: 2,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: UpriseColors.primaryDark.withOpacity(0.07),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(
+                    data['category'] ?? '—',
+                    style: GoogleFonts.beVietnamPro(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: UpriseColors.primaryDark,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ),
+              // DATE column
+              Expanded(
+                flex: 2,
+                child: Text(
+                  dateStr,
+                  style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF64748B)),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              // STATUS column
+              Expanded(flex: 1, child: _statusBadge(status)),
+              // ACTIONS column
+              Expanded(
+                flex: 2,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    _ActionIconButton(
+                      icon: Icons.visibility_outlined,
+                      tooltip: 'View Details',
+                      onTap: () => _showProposalDetailDialog(docId, data),
+                    ),
+                    const SizedBox(width: 4),
+                    _ActionIconButton(
+                      icon: Icons.check_circle_outline_rounded,
+                      tooltip: status == 'approved' ? 'Already Approved' : 'Approve',
+                      color: const Color(0xFF059669),
+                      onTap: status != 'approved' && status != 'rejected' && status != 'archived'
+                          ? () => _confirmSetStatus(docId, data['title'] ?? 'this event', 'approved')
+                          : null,
+                    ),
+                    const SizedBox(width: 4),
+                    _ActionIconButton(
+                      icon: Icons.cancel_outlined,
+                      tooltip: status == 'rejected' ? 'Already Rejected' : 'Reject',
+                      color: const Color(0xFFDC2626),
+                      onTap: status != 'approved' && status != 'rejected' && status != 'archived'
+                          ? () => _confirmSetStatus(docId, data['title'] ?? 'this event', 'rejected')
+                          : null,
+                    ),
+                    const SizedBox(width: 4),
+                    _ActionIconButton(
+                      icon: Icons.archive_outlined,
+                      tooltip: status == 'archived' ? 'Already Archived' : 'Archive',
+                      color: const Color(0xFF6B7280),
+                      onTap: status != 'archived'
+                          ? () => _confirmSetStatus(docId, data['title'] ?? 'this event', 'archived')
+                          : null,
+                    ),
+                  ],
+                ),
+              ),
             ]),
           ),
-          Expanded(
-            flex: 2,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-              decoration: BoxDecoration(
-                color: UpriseColors.primaryDark.withOpacity(0.07),
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: Text(
-                data['category'] ?? '—',
-                style: GoogleFonts.beVietnamPro(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: UpriseColors.primaryDark,
-                ),
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-          ),
-          Expanded(
-            flex: 2,
-            child: Text(
-              dateStr,
-              style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF64748B)),
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-          Expanded(flex: 1, child: _statusBadge(status)),
-          Expanded(
-            flex: 2,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                _ActionIconButton(
-                  icon: Icons.visibility_outlined,
-                  tooltip: 'View Details',
-                  onTap: () => _showProposalDetailDialog(docId, data),
-                ),
-                const SizedBox(width: 4),
-                _ActionIconButton(
-                  icon: Icons.check_circle_outline_rounded,
-                  tooltip: status == 'approved' ? 'Already Approved' : 'Approve',
-                  color: const Color(0xFF059669),
-                  onTap: status != 'approved' && status != 'rejected' && status != 'archived'
-                      ? () => _confirmSetStatus(docId, data['title'] ?? 'this event', 'approved')
-                      : null,
-                ),
-                const SizedBox(width: 4),
-                _ActionIconButton(
-                  icon: Icons.cancel_outlined,
-                  tooltip: status == 'rejected' ? 'Already Rejected' : 'Reject',
-                  color: const Color(0xFFDC2626),
-                  onTap: status != 'approved' && status != 'rejected' && status != 'archived'
-                      ? () => _confirmSetStatus(docId, data['title'] ?? 'this event', 'rejected')
-                      : null,
-                ),
-                const SizedBox(width: 4),
-                _ActionIconButton(
-                  icon: Icons.archive_outlined,
-                  tooltip: status == 'archived' ? 'Already Archived' : 'Archive',
-                  color: const Color(0xFF6B7280),
-                  onTap: status != 'archived'
-                      ? () => _confirmSetStatus(docId, data['title'] ?? 'this event', 'archived')
-                      : null,
-                ),
-              ],
-            ),
-          ),
-        ]),
-      ),
+        );
+      },
     );
   }
 
@@ -574,479 +671,467 @@ class _EventProposalsState extends State<EventProposals> {
   // ── Actions ───────────────────────────────────────────────────────
 
   void _confirmSetStatus(String docId, String title, String newStatus) {
-  final Map<String, _ConfirmStyle> styles = {
-    'approved': _ConfirmStyle(
-      icon: Icons.check_circle_outline_rounded,
-      iconBg: const Color(0xFFECFDF5),
-      iconColor: const Color(0xFF059669),
-      btnColor: const Color(0xFF059669),
-      heading: 'Approve Proposal',
-      body: 'Are you sure you want to approve "$title"? This will automatically add it to the calendar.',
-      btnLabel: 'Approve',
-    ),
-    'rejected': _ConfirmStyle(
-      icon: Icons.cancel_outlined,
-      iconBg: const Color(0xFFFEF2F2),
-      iconColor: const Color(0xFFDC2626),
-      btnColor: const Color(0xFFDC2626),
-      heading: 'Reject Proposal',
-      body: 'Are you sure you want to reject "$title"? This action can be reversed.',
-      btnLabel: 'Reject',
-    ),
-    'archived': _ConfirmStyle(
-      icon: Icons.archive_outlined,
-      iconBg: const Color(0xFFF3F4F6),
-      iconColor: const Color(0xFF6B7280),
-      btnColor: const Color(0xFF6B7280),
-      heading: 'Archive Proposal',
-      body: 'Are you sure you want to archive "$title"?',
-      btnLabel: 'Archive',
-    ),
-  };
-  final s = styles[newStatus]!;
+    final Map<String, _ConfirmStyle> styles = {
+      'approved': _ConfirmStyle(
+        icon: Icons.check_circle_outline_rounded,
+        iconBg: const Color(0xFFECFDF5),
+        iconColor: const Color(0xFF059669),
+        btnColor: const Color(0xFF059669),
+        heading: 'Approve Proposal',
+        body: 'Are you sure you want to approve "$title"? This will automatically add it to the calendar.',
+        btnLabel: 'Approve',
+      ),
+      'rejected': _ConfirmStyle(
+        icon: Icons.cancel_outlined,
+        iconBg: const Color(0xFFFEF2F2),
+        iconColor: const Color(0xFFDC2626),
+        btnColor: const Color(0xFFDC2626),
+        heading: 'Reject Proposal',
+        body: 'Are you sure you want to reject "$title"? This action can be reversed.',
+        btnLabel: 'Reject',
+      ),
+      'archived': _ConfirmStyle(
+        icon: Icons.archive_outlined,
+        iconBg: const Color(0xFFF3F4F6),
+        iconColor: const Color(0xFF6B7280),
+        btnColor: const Color(0xFF6B7280),
+        heading: 'Archive Proposal',
+        body: 'Are you sure you want to archive "$title"?',
+        btnLabel: 'Archive',
+      ),
+    };
+    final s = styles[newStatus]!;
 
-  showDialog(
-    context: context,
-    barrierColor: Colors.black54,
-    builder: (ctx) => Dialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: Container(
-        width: 420,
-        padding: const EdgeInsets.all(28),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(children: [
-              Container(
-                width: 42,
-                height: 42,
-                decoration: BoxDecoration(color: s.iconBg, borderRadius: BorderRadius.circular(10)),
-                child: Icon(s.icon, color: s.iconColor, size: 20),
-              ),
-              const SizedBox(width: 14),
-              Text(s.heading,
+    showDialog(
+      context: context,
+      barrierColor: Colors.black54,
+      builder: (ctx) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        child: Container(
+          width: 420,
+          padding: const EdgeInsets.all(28),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(children: [
+                Container(
+                  width: 42,
+                  height: 42,
+                  decoration: BoxDecoration(color: s.iconBg, borderRadius: BorderRadius.circular(10)),
+                  child: Icon(s.icon, color: s.iconColor, size: 20),
+                ),
+                const SizedBox(width: 14),
+                Text(s.heading,
+                    style: GoogleFonts.beVietnamPro(
+                        fontSize: 17, fontWeight: FontWeight.w700, color: const Color(0xFF1A202C))),
+              ]),
+              const SizedBox(height: 16),
+              Text(s.body,
                   style: GoogleFonts.beVietnamPro(
-                      fontSize: 17, fontWeight: FontWeight.w700, color: const Color(0xFF1A202C))),
-            ]),
-            const SizedBox(height: 16),
-            Text(s.body,
-                style: GoogleFonts.beVietnamPro(
-                    fontSize: 14, color: const Color(0xFF64748B), height: 1.5)),
-            const SizedBox(height: 24),
-            Row(mainAxisAlignment: MainAxisAlignment.end, children: [
-              OutlinedButton(
-                onPressed: () => Navigator.pop(ctx),
-                style: OutlinedButton.styleFrom(
-                  side: const BorderSide(color: Color(0xFFE2E6EA)),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 11),
+                      fontSize: 14, color: const Color(0xFF64748B), height: 1.5)),
+              const SizedBox(height: 24),
+              Row(mainAxisAlignment: MainAxisAlignment.end, children: [
+                OutlinedButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: Color(0xFFE2E6EA)),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 11),
+                  ),
+                  child: Text('Cancel',
+                      style: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF374151))),
                 ),
-                child: Text('Cancel',
-                    style: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF374151))),
-              ),
-              const SizedBox(width: 10),
-              ElevatedButton(
-                onPressed: () async {
-                  Navigator.pop(ctx);
-                  
-                  if (newStatus == 'approved') {
-                    await _createEventFromProposal(docId);
-                    _showWetSignSchedulingPopup(docId, title);
-                  } else {
-                    await _setStatus(docId, title, newStatus);
-                  }
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: s.btnColor,
-                  foregroundColor: Colors.white,
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 11),
+                const SizedBox(width: 10),
+                ElevatedButton(
+                  onPressed: () async {
+                    Navigator.pop(ctx);
+                    
+                    if (newStatus == 'approved') {
+                      await _createEventFromProposal(docId);
+                      _showWetSignSchedulingPopup(docId, title);
+                    } else {
+                      await _setStatus(docId, title, newStatus);
+                    }
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: s.btnColor,
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 11),
+                  ),
+                  child: Text(s.btnLabel,
+                      style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600)),
                 ),
-                child: Text(s.btnLabel,
-                    style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600)),
-              ),
-            ]),
-          ],
+              ]),
+            ],
+          ),
         ),
       ),
-    ),
-  );
-}
+    );
+  }
 
-
-void _showWetSignSchedulingPopup(String proposalId, String title) {
-  final _dateCtrl = TextEditingController();
-  final _startTimeCtrl = TextEditingController();
-  final _endTimeCtrl = TextEditingController();
-  final _locationCtrl = TextEditingController(text: "Dean's Office");
-  DateTime? selectedDate;
-  TimeOfDay? startTime;
-  TimeOfDay? endTime;
-  
-  showDialog(
-    context: context,
-    barrierDismissible: false,
-    builder: (ctx) => StatefulBuilder(
-      builder: (ctx, setDialogState) {
-        return Dialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-          child: Container(
-            width: 500,
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(children: [
-                  Container(
-                    width: 42, height: 42,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFECFDF5),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: const Icon(Icons.edit_calendar_rounded, color: Color(0xFF059669), size: 20),
-                  ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Text(
-                      'Schedule Wet Sign',
-                      style: GoogleFonts.beVietnamPro(fontSize: 17, fontWeight: FontWeight.w700, color: const Color(0xFF1A202C)),
-                    ),
-                  ),
-                ]),
-                const SizedBox(height: 20),
-                Text(
-                  'Set your office availability for the organization to sign documents.',
-                  style: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF64748B)),
-                ),
-                const SizedBox(height: 20),
-                
-                TextFormField(
-                  controller: _dateCtrl,
-                  readOnly: true,
-                  decoration: InputDecoration(
-                    labelText: 'Select Date *',
-                    hintText: 'MM/DD/YYYY',
-                    prefixIcon: const Icon(Icons.calendar_today_outlined, size: 18),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                  ),
-                  onTap: () async {
-                    final picked = await showDatePicker(
-                      context: ctx,
-                      initialDate: DateTime.now(),
-                      firstDate: DateTime.now(),
-                      lastDate: DateTime.now().add(const Duration(days: 30)),
-                    );
-                    if (picked != null) {
-                      selectedDate = picked;
-                      _dateCtrl.text = DateFormat('MM/dd/yyyy').format(picked);
-                      setDialogState(() {});
-                    }
-                  },
-                ),
-                const SizedBox(height: 14),
-                
-                TextFormField(
-                  controller: _startTimeCtrl,
-                  readOnly: true,
-                  decoration: InputDecoration(
-                    labelText: 'Start Time *',
-                    hintText: '-- : --',
-                    prefixIcon: const Icon(Icons.access_time_rounded, size: 18),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                  ),
-                  onTap: () async {
-                    final picked = await showTimePicker(context: ctx, initialTime: TimeOfDay.now());
-                    if (picked != null) {
-                      startTime = picked;
-                      _startTimeCtrl.text = picked.format(ctx);
-                      setDialogState(() {});
-                    }
-                  },
-                ),
-                const SizedBox(height: 14),
-                
-                TextFormField(
-                  controller: _endTimeCtrl,
-                  readOnly: true,
-                  decoration: InputDecoration(
-                    labelText: 'End Time *',
-                    hintText: '-- : --',
-                    prefixIcon: const Icon(Icons.access_time_rounded, size: 18),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                  ),
-                  onTap: () async {
-                    final picked = await showTimePicker(
-                      context: ctx, 
-                      initialTime: startTime ?? TimeOfDay.now(),
-                    );
-                    if (picked != null) {
-                      endTime = picked;
-                      _endTimeCtrl.text = picked.format(ctx);
-                      setDialogState(() {});
-                    }
-                  },
-                ),
-                const SizedBox(height: 14),
-                
-                TextFormField(
-                  controller: _locationCtrl,
-                  decoration: InputDecoration(
-                    labelText: 'Office Location *',
-                    hintText: 'e.g., Dean\'s Office Room 101',
-                    prefixIcon: const Icon(Icons.location_on_outlined, size: 18),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                  ),
-                ),
-                const SizedBox(height: 24),
-                
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    OutlinedButton(
-                      onPressed: () {
-                        Navigator.pop(ctx);
-                        _setStatus(proposalId, title, 'approved');
-                      },
-                      style: OutlinedButton.styleFrom(
-                        side: const BorderSide(color: Color(0xFFE2E6EA)),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 11),
+  void _showWetSignSchedulingPopup(String proposalId, String title) {
+    final _dateCtrl = TextEditingController();
+    final _startTimeCtrl = TextEditingController();
+    final _endTimeCtrl = TextEditingController();
+    final _locationCtrl = TextEditingController(text: "Dean's Office");
+    DateTime? selectedDate;
+    TimeOfDay? startTime;
+    TimeOfDay? endTime;
+    
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) {
+          return Dialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+            child: Container(
+              width: 500,
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(children: [
+                    Container(
+                      width: 42, height: 42,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFECFDF5),
+                        borderRadius: BorderRadius.circular(10),
                       ),
-                      child: Text('Skip', style: GoogleFonts.beVietnamPro(fontSize: 13)),
+                      child: const Icon(Icons.edit_calendar_rounded, color: Color(0xFF059669), size: 20),
                     ),
-                    const SizedBox(width: 10),
-                    ElevatedButton(
-                      onPressed: () async {
-                        if (selectedDate == null || startTime == null || endTime == null) {
-                          ScaffoldMessenger.of(ctx).showSnackBar(
-                            const SnackBar(content: Text('Please fill all required fields'), backgroundColor: Colors.orange),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Text(
+                        'Schedule Wet Sign',
+                        style: GoogleFonts.beVietnamPro(fontSize: 17, fontWeight: FontWeight.w700, color: const Color(0xFF1A202C)),
+                      ),
+                    ),
+                  ]),
+                  const SizedBox(height: 20),
+                  Text(
+                    'Set your office availability for the organization to sign documents.',
+                    style: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF64748B)),
+                  ),
+                  const SizedBox(height: 20),
+                  
+                  TextFormField(
+                    controller: _dateCtrl,
+                    readOnly: true,
+                    decoration: InputDecoration(
+                      labelText: 'Select Date *',
+                      hintText: 'MM/DD/YYYY',
+                      prefixIcon: const Icon(Icons.calendar_today_outlined, size: 18),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                    onTap: () async {
+                      final picked = await showDatePicker(
+                        context: ctx,
+                        initialDate: DateTime.now(),
+                        firstDate: DateTime.now(),
+                        lastDate: DateTime.now().add(const Duration(days: 30)),
+                      );
+                      if (picked != null) {
+                        selectedDate = picked;
+                        _dateCtrl.text = DateFormat('MM/dd/yyyy').format(picked);
+                        setDialogState(() {});
+                      }
+                    },
+                  ),
+                  const SizedBox(height: 14),
+                  
+                  TextFormField(
+                    controller: _startTimeCtrl,
+                    readOnly: true,
+                    decoration: InputDecoration(
+                      labelText: 'Start Time *',
+                      hintText: '-- : --',
+                      prefixIcon: const Icon(Icons.access_time_rounded, size: 18),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                    onTap: () async {
+                      final picked = await showTimePicker(context: ctx, initialTime: TimeOfDay.now());
+                      if (picked != null) {
+                        startTime = picked;
+                        _startTimeCtrl.text = picked.format(ctx);
+                        setDialogState(() {});
+                      }
+                    },
+                  ),
+                  const SizedBox(height: 14),
+                  
+                  TextFormField(
+                    controller: _endTimeCtrl,
+                    readOnly: true,
+                    decoration: InputDecoration(
+                      labelText: 'End Time *',
+                      hintText: '-- : --',
+                      prefixIcon: const Icon(Icons.access_time_rounded, size: 18),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                    onTap: () async {
+                      final picked = await showTimePicker(
+                        context: ctx, 
+                        initialTime: startTime ?? TimeOfDay.now(),
+                      );
+                      if (picked != null) {
+                        endTime = picked;
+                        _endTimeCtrl.text = picked.format(ctx);
+                        setDialogState(() {});
+                      }
+                    },
+                  ),
+                  const SizedBox(height: 14),
+                  
+                  TextFormField(
+                    controller: _locationCtrl,
+                    decoration: InputDecoration(
+                      labelText: 'Office Location *',
+                      hintText: 'e.g., Dean\'s Office Room 101',
+                      prefixIcon: const Icon(Icons.location_on_outlined, size: 18),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      OutlinedButton(
+                        onPressed: () {
+                          Navigator.pop(ctx);
+                          _setStatus(proposalId, title, 'approved');
+                        },
+                        style: OutlinedButton.styleFrom(
+                          side: const BorderSide(color: Color(0xFFE2E6EA)),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 11),
+                        ),
+                        child: Text('Skip', style: GoogleFonts.beVietnamPro(fontSize: 13)),
+                      ),
+                      const SizedBox(width: 10),
+                      ElevatedButton(
+                        onPressed: () async {
+                          if (selectedDate == null || startTime == null || endTime == null) {
+                            ScaffoldMessenger.of(ctx).showSnackBar(
+                              const SnackBar(content: Text('Please fill all required fields'), backgroundColor: Colors.orange),
+                            );
+                            return;
+                          }
+                          
+                          final startDateTime = DateTime(
+                            selectedDate!.year, selectedDate!.month, selectedDate!.day,
+                            startTime!.hour, startTime!.minute,
                           );
-                          return;
-                        }
-                        
-                        final startDateTime = DateTime(
-                          selectedDate!.year, selectedDate!.month, selectedDate!.day,
-                          startTime!.hour, startTime!.minute,
-                        );
-                        final endDateTime = DateTime(
-                          selectedDate!.year, selectedDate!.month, selectedDate!.day,
-                          endTime!.hour, endTime!.minute,
-                        );
-                        
-                        await _saveWetSignSchedule(
-                          proposalId: proposalId,
-                          title: title,
-                          startDateTime: startDateTime,
-                          endDateTime: endDateTime,
-                          location: _locationCtrl.text.trim(),
-                        );
-                        
-                        Navigator.pop(ctx);
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF059669),
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 11),
+                          final endDateTime = DateTime(
+                            selectedDate!.year, selectedDate!.month, selectedDate!.day,
+                            endTime!.hour, endTime!.minute,
+                          );
+                          
+                          await _saveWetSignSchedule(
+                            proposalId: proposalId,
+                            title: title,
+                            startDateTime: startDateTime,
+                            endDateTime: endDateTime,
+                            location: _locationCtrl.text.trim(),
+                          );
+                          
+                          Navigator.pop(ctx);
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF059669),
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 11),
+                        ),
+                        child: Text('Save Schedule', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600)),
                       ),
-                      child: Text('Save Schedule', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600)),
-                    ),
-                  ],
-                ),
-              ],
+                    ],
+                  ),
+                ],
+              ),
             ),
+          );
+        },
+      ),
+    );
+  }
+
+  Future<void> _saveWetSignSchedule({
+    required String proposalId,
+    required String title,
+    required DateTime startDateTime,
+    required DateTime endDateTime,
+    required String location,
+  }) async {
+    try {
+      final wetSignData = {
+        'startDateTime': Timestamp.fromDate(startDateTime),
+        'endDateTime': Timestamp.fromDate(endDateTime),
+        'location': location,
+        'status': 'scheduled',
+        'scheduledBy': FirebaseAuth.instance.currentUser?.uid ?? '',
+        'scheduledAt': FieldValue.serverTimestamp(),
+      };
+      
+      await FirebaseFirestore.instance
+          .collection('event_proposals')
+          .doc(proposalId)
+          .update({
+        'status': 'approved',
+        'wetSignSchedule': wetSignData,
+        'reviewedAt': FieldValue.serverTimestamp(),
+        'reviewedBy': FirebaseAuth.instance.currentUser?.uid ?? '',
+      });
+      
+      await activity_log.ActivityLogger.log(
+        action: 'schedule_wet_sign',
+        module: 'Event Management',
+        details: {
+          'proposalId': proposalId,
+          'title': title,
+          'startDateTime': startDateTime.toIso8601String(),
+          'location': location,
+        },
+      );
+      
+      if (_isMounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('✅ Proposal approved and wet sign scheduled!'),
+            backgroundColor: Color(0xFF059669),
+            behavior: SnackBarBehavior.floating,
           ),
         );
-      },
-    ),
-  );
-}
-
-Future<void> _saveWetSignSchedule({
-  required String proposalId,
-  required String title,
-  required DateTime startDateTime,
-  required DateTime endDateTime,
-  required String location,
-}) async {
-  try {
-    final wetSignData = {
-      'startDateTime': Timestamp.fromDate(startDateTime),
-      'endDateTime': Timestamp.fromDate(endDateTime),
-      'location': location,
-      'status': 'scheduled',
-      'scheduledBy': FirebaseAuth.instance.currentUser?.uid ?? '',
-      'scheduledAt': FieldValue.serverTimestamp(),
-    };
-    
-    await FirebaseFirestore.instance
-        .collection('event_proposals')
-        .doc(proposalId)
-        .update({
-      'status': 'approved',
-      'wetSignSchedule': wetSignData,
-      'reviewedAt': FieldValue.serverTimestamp(),
-      'reviewedBy': FirebaseAuth.instance.currentUser?.uid ?? '',
-    });
-    
-    await activity_log.ActivityLogger.log(
-      action: 'schedule_wet_sign',
-      module: 'Event Management',
-      details: {
-        'proposalId': proposalId,
-        'title': title,
-        'startDateTime': startDateTime.toIso8601String(),
-        'location': location,
-      },
-    );
-    
-    if (_isMounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('✅ Proposal approved and wet sign scheduled!'),
-          backgroundColor: Color(0xFF059669),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-    }
-  } catch (e) {
-    print('Error saving wet sign schedule: $e');
-    if (_isMounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('⚠️ Proposal approved but wet sign scheduling failed: $e'),
-          backgroundColor: Colors.orange,
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+      }
+    } catch (e) {
+      print('Error saving wet sign schedule: $e');
+      if (_isMounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('⚠️ Proposal approved but wet sign scheduling failed: $e'),
+            backgroundColor: Colors.orange,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
     }
   }
-}
-// ✅ NEW METHOD: Auto-create event from approved proposal
-Future<void> _createEventFromProposal(String proposalId) async {
-  try {
-    // Get proposal data
-    final doc = await FirebaseFirestore.instance
-        .collection('event_proposals')
-        .doc(proposalId)
-        .get();
-    
-    if (!doc.exists) return;
-    
-    final data = doc.data() as Map<String, dynamic>;
-    
-    // Extract data from proposal
-    final title = data['title'] ?? 'Untitled Event';
-    final description = data['description'] ?? '';
-    final location = data['location'] ?? 'TBA';
-    final category = data['category'] ?? 'Other';
-    final orgId = data['orgId'] ?? '';
-    final orgName = data['orgName'] ?? 'Unknown Organization';
-    final proposalDate = data['date'] as Timestamp?;
-    final date = proposalDate?.toDate() ?? DateTime.now();
-    final timeStr = data['time'] ?? '09:00 AM';
-    
-    // Parse time from proposal (e.g., "7:00 AM" -> startTime)
-    String startTime = timeStr;
-    String endTime = _addOneHourToTimeString(timeStr);
-    
-    // Default values for missing fields
-    final int capacity = 100;
-    final String guestSpeaker = 'TBA';
-    final List<String> resources = [];
-    final List<String> labPreparation = [];
-    final List<String> tags = [];
-    
-    // Prepare event data
-    final eventData = {
-      'orgId': orgId,
-      'orgName': orgName,
-      'title': title,
-      'description': description,
-      'location': location,
-      'category': category,
-      'date': Timestamp.fromDate(date),
-      'startTime': startTime,
-      'endTime': endTime,
-      'capacity': capacity,
-      'guestSpeaker': guestSpeaker,
-      'resources': resources,
-      'labPreparation': labPreparation,
-      'tags': tags,
-      'status': 'approved',
-      'createdAt': FieldValue.serverTimestamp(),
-      'createdFromProposalId': proposalId,
-    };
-    
-    // Create event in 'events' collection
-    await FirebaseFirestore.instance.collection('events').add(eventData);
-    
-    // Log activity
-    await activity_log.ActivityLogger.log(
-      action: 'auto_create_event_from_approved_proposal',
-      module: 'Event Management',
-      details: {
-        'proposalId': proposalId,
-        'eventTitle': title,
+
+  Future<void> _createEventFromProposal(String proposalId) async {
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('event_proposals')
+          .doc(proposalId)
+          .get();
+      
+      if (!doc.exists) return;
+      
+      final data = doc.data() as Map<String, dynamic>;
+      
+      final title = data['title'] ?? 'Untitled Event';
+      final description = data['description'] ?? '';
+      final location = data['location'] ?? 'TBA';
+      final category = data['category'] ?? 'Other';
+      final orgId = data['orgId'] ?? '';
+      final orgName = data['orgName'] ?? 'Unknown Organization';
+      final proposalDate = data['date'] as Timestamp?;
+      final date = proposalDate?.toDate() ?? DateTime.now();
+      final timeStr = data['time'] ?? '09:00 AM';
+      
+      String startTime = timeStr;
+      String endTime = _addOneHourToTimeString(timeStr);
+      
+      final int capacity = 100;
+      final String guestSpeaker = 'TBA';
+      final List<String> resources = [];
+      final List<String> labPreparation = [];
+      final List<String> tags = [];
+      
+      final eventData = {
         'orgId': orgId,
-      },
-    );
-    
-    if (_isMounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('✅ Event automatically added to calendar!'),
-          backgroundColor: Color(0xFF059669),
-          behavior: SnackBarBehavior.floating,
-        ),
+        'orgName': orgName,
+        'title': title,
+        'description': description,
+        'location': location,
+        'category': category,
+        'date': Timestamp.fromDate(date),
+        'startTime': startTime,
+        'endTime': endTime,
+        'capacity': capacity,
+        'guestSpeaker': guestSpeaker,
+        'resources': resources,
+        'labPreparation': labPreparation,
+        'tags': tags,
+        'status': 'approved',
+        'createdAt': FieldValue.serverTimestamp(),
+        'createdFromProposalId': proposalId,
+      };
+      
+      await FirebaseFirestore.instance.collection('events').add(eventData);
+      
+      await activity_log.ActivityLogger.log(
+        action: 'auto_create_event_from_approved_proposal',
+        module: 'Event Management',
+        details: {
+          'proposalId': proposalId,
+          'eventTitle': title,
+          'orgId': orgId,
+        },
       );
-    }
-  } catch (e) {
-    print('Error creating event from proposal: $e');
-    if (_isMounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('⚠️ Proposal approved but event creation failed: $e'),
-          backgroundColor: Colors.orange,
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+      
+      if (_isMounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('✅ Event automatically added to calendar!'),
+            backgroundColor: Color(0xFF059669),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } catch (e) {
+      print('Error creating event from proposal: $e');
+      if (_isMounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('⚠️ Proposal approved but event creation failed: $e'),
+            backgroundColor: Colors.orange,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
     }
   }
-}
 
-// Helper: Add 1 hour to time string (e.g., "7:00 AM" -> "8:00 AM")
-String _addOneHourToTimeString(String timeStr) {
-  try {
-    // Parse time like "7:00 AM" or "07:00 AM"
-    final match = RegExp(r'(\d+):(\d+)\s*(AM|PM)', caseSensitive: false).firstMatch(timeStr);
-    if (match != null) {
-      int hour = int.parse(match.group(1)!);
-      final minute = int.parse(match.group(2)!);
-      final isPM = match.group(3)!.toUpperCase() == 'PM';
-      
-      if (isPM && hour != 12) hour += 12;
-      if (!isPM && hour == 12) hour = 0;
-      
-      final dateTime = DateTime(2024, 1, 1, hour, minute);
-      final newDateTime = dateTime.add(const Duration(hours: 1));
-      
-      int newHour = newDateTime.hour;
-      final newMinute = newDateTime.minute;
-      final newIsPM = newHour >= 12;
-      if (newHour > 12) newHour -= 12;
-      if (newHour == 0) newHour = 12;
-      
-      return '$newHour:${newMinute.toString().padLeft(2, '0')} ${newIsPM ? 'PM' : 'AM'}';
-    }
-  } catch (e) {
-    // If parsing fails, return default
+  String _addOneHourToTimeString(String timeStr) {
+    try {
+      final match = RegExp(r'(\d+):(\d+)\s*(AM|PM)', caseSensitive: false).firstMatch(timeStr);
+      if (match != null) {
+        int hour = int.parse(match.group(1)!);
+        final minute = int.parse(match.group(2)!);
+        final isPM = match.group(3)!.toUpperCase() == 'PM';
+        
+        if (isPM && hour != 12) hour += 12;
+        if (!isPM && hour == 12) hour = 0;
+        
+        final dateTime = DateTime(2024, 1, 1, hour, minute);
+        final newDateTime = dateTime.add(const Duration(hours: 1));
+        
+        int newHour = newDateTime.hour;
+        final newMinute = newDateTime.minute;
+        final newIsPM = newHour >= 12;
+        if (newHour > 12) newHour -= 12;
+        if (newHour == 0) newHour = 12;
+        
+        return '$newHour:${newMinute.toString().padLeft(2, '0')} ${newIsPM ? 'PM' : 'AM'}';
+      }
+    } catch (e) {}
+    return '10:00 AM';
   }
-  return '10:00 AM';
-}
 
   Future<void> _setStatus(String docId, String title, String newStatus) async {
     try {
@@ -1061,7 +1146,6 @@ String _addOneHourToTimeString(String timeStr) {
         severity: newStatus == 'rejected' ? 'warning' : 'info',
         details: {'proposalId': docId},
       );
-      // ✅ FIXED: Use _isMounted instead of direct mounted check
       if (_isMounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text('Proposal ${newStatus[0].toUpperCase()}${newStatus.substring(1)}'),
@@ -1365,197 +1449,187 @@ String _addOneHourToTimeString(String timeStr) {
     ]);
   }
 
-  // ── Fixed Attachment Viewer (same as org side) ─────────────────────────────
-Future<void> _saveAndOpenFile(Map<String, dynamic> data) async {
-  try {
-    Uint8List bytes = Uint8List(0);
-    final String fileName = data['attachmentName'] ?? 'document';
-    
-    // Check kung may Base64 (this is the primary source!)
-    final hasBase64 = data['attachmentBase64'] != null && 
-                      data['attachmentBase64'].toString().isNotEmpty;
-    final hasUrl = data['attachmentUrl'] != null && 
-                   data['attachmentUrl'].toString().isNotEmpty;
-    
-    if (!hasBase64 && !hasUrl) {
-      if (_isMounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('No attachment found'), backgroundColor: UpriseColors.error),
-        );
-      }
-      return;
-    }
-    
-    // Get the file bytes
-    if (hasBase64) {
-      // ✅ DIRECT FROM BASE64 - same as org side!
-      final String base64String = data['attachmentBase64'];
-      bytes = base64Decode(base64String);
-      print('✅ Loaded from Base64, size: ${bytes.length} bytes');
-    } else if (hasUrl) {
-      // Fallback to URL if no Base64
-      final String url = data['attachmentUrl'];
-      try {
-        final ref = FirebaseStorage.instance.refFromURL(url);
-        bytes = await ref.getData(50 * 1024 * 1024) ?? Uint8List(0);
-      } catch (_) {
-        try {
-          final uri = Uri.parse(url);
-          final response = await http.get(uri);
-          if (response.statusCode == 200) {
-            bytes = response.bodyBytes;
-          }
-        } catch (e) {
-          if (_isMounted) {
-            showDialog(
-              context: context,
-              builder: (_) => AlertDialog(
-                title: const Text('Open Attachment'),
-                content: Text('Cannot download attachment. Open in browser instead?'),
-                actions: [
-                  TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-                  TextButton(
-                    onPressed: () {
-                      Navigator.pop(context);
-                      platform_file_utils.openUrl(url);
-                    },
-                    child: const Text('Open'),
-                  ),
-                ],
-              ),
-            );
-          }
-          return;
+  Future<void> _saveAndOpenFile(Map<String, dynamic> data) async {
+    try {
+      Uint8List bytes = Uint8List(0);
+      final String fileName = data['attachmentName'] ?? 'document';
+      
+      final hasBase64 = data['attachmentBase64'] != null && 
+                        data['attachmentBase64'].toString().isNotEmpty;
+      final hasUrl = data['attachmentUrl'] != null && 
+                     data['attachmentUrl'].toString().isNotEmpty;
+      
+      if (!hasBase64 && !hasUrl) {
+        if (_isMounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('No attachment found'), backgroundColor: UpriseColors.error),
+          );
         }
+        return;
       }
-    }
-    
-    if (bytes.isEmpty) {
-      if (_isMounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Empty attachment'), backgroundColor: UpriseColors.error),
-        );
-      }
-      return;
-    }
-    
-    // Get file extension and MIME type
-    final ext = fileName.contains('.') ? fileName.split('.').last.toLowerCase() : '';
-    final mime = _getMimeTypeFromExtension(ext);
-    
-    // For text files - show inline with preview
-    if (mime.startsWith('text/')) {
-      final content = utf8.decode(bytes);
-      if (_isMounted) {
-        showDialog(
-          context: context,
-          builder: (ctx) => AlertDialog(
-            title: Text(fileName),
-            content: SingleChildScrollView(
-              child: SelectableText(
-                content,
-                style: GoogleFonts.beVietnamPro(fontSize: 12),
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(ctx),
-                child: const Text('Close'),
-              ),
-              TextButton(
-                onPressed: () {
-                  Navigator.pop(ctx);
-                  platform_file_utils.saveBytesToTempAndOpen(bytes, fileName);
-                },
-                child: const Text('Download'),
-              ),
-            ],
-          ),
-        );
-      }
-      return;
-    }
-    
-    // For images - show inline preview
-    if (mime.startsWith('image/')) {
-      if (_isMounted) {
-        showDialog(
-          context: context,
-          builder: (ctx) => Dialog(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: Text(
-                    fileName,
-                    style: GoogleFonts.beVietnamPro(fontSize: 14, fontWeight: FontWeight.w600),
-                  ),
-                ),
-                Flexible(
-                  child: InteractiveViewer(
-                    minScale: 0.5,
-                    maxScale: 4.0,
-                    child: Image.memory(bytes),
-                  ),
-                ),
-                ButtonBar(
-                  children: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(ctx),
-                      child: const Text('Close'),
-                    ),
+      
+      if (hasBase64) {
+        final String base64String = data['attachmentBase64'];
+        bytes = base64Decode(base64String);
+        print('✅ Loaded from Base64, size: ${bytes.length} bytes');
+      } else if (hasUrl) {
+        final String url = data['attachmentUrl'];
+        try {
+          final ref = FirebaseStorage.instance.refFromURL(url);
+          bytes = await ref.getData(50 * 1024 * 1024) ?? Uint8List(0);
+        } catch (_) {
+          try {
+            final uri = Uri.parse(url);
+            final response = await http.get(uri);
+            if (response.statusCode == 200) {
+              bytes = response.bodyBytes;
+            }
+          } catch (e) {
+            if (_isMounted) {
+              showDialog(
+                context: context,
+                builder: (_) => AlertDialog(
+                  title: const Text('Open Attachment'),
+                  content: Text('Cannot download attachment. Open in browser instead?'),
+                  actions: [
+                    TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
                     TextButton(
                       onPressed: () {
-                        Navigator.pop(ctx);
-                        platform_file_utils.saveBytesToTempAndOpen(bytes, fileName);
+                        Navigator.pop(context);
+                        platform_file_utils.openUrl(url);
                       },
-                      child: const Text('Download'),
+                      child: const Text('Open'),
                     ),
                   ],
                 ),
+              );
+            }
+            return;
+          }
+        }
+      }
+      
+      if (bytes.isEmpty) {
+        if (_isMounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Empty attachment'), backgroundColor: UpriseColors.error),
+          );
+        }
+        return;
+      }
+      
+      final ext = fileName.contains('.') ? fileName.split('.').last.toLowerCase() : '';
+      final mime = _getMimeTypeFromExtension(ext);
+      
+      if (mime.startsWith('text/')) {
+        final content = utf8.decode(bytes);
+        if (_isMounted) {
+          showDialog(
+            context: context,
+            builder: (ctx) => AlertDialog(
+              title: Text(fileName),
+              content: SingleChildScrollView(
+                child: SelectableText(
+                  content,
+                  style: GoogleFonts.beVietnamPro(fontSize: 12),
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('Close'),
+                ),
+                TextButton(
+                  onPressed: () {
+                    Navigator.pop(ctx);
+                    platform_file_utils.saveBytesToTempAndOpen(bytes, fileName);
+                  },
+                  child: const Text('Download'),
+                ),
               ],
             ),
-          ),
-        );
+          );
+        }
+        return;
       }
-      return;
-    }
-    
-    // For PDFs and other files - save and open with native app
-    await platform_file_utils.saveBytesToTempAndOpen(bytes, fileName);
-    
-  } catch (e) {
-    print('❌ Error opening attachment: $e');
-    if (_isMounted) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('Error opening file: $e'),
-        backgroundColor: UpriseColors.error,
-        behavior: SnackBarBehavior.floating,
-      ));
+      
+      if (mime.startsWith('image/')) {
+        if (_isMounted) {
+          showDialog(
+            context: context,
+            builder: (ctx) => Dialog(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Text(
+                      fileName,
+                      style: GoogleFonts.beVietnamPro(fontSize: 14, fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                  Flexible(
+                    child: InteractiveViewer(
+                      minScale: 0.5,
+                      maxScale: 4.0,
+                      child: Image.memory(bytes),
+                    ),
+                  ),
+                  ButtonBar(
+                    children: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(ctx),
+                        child: const Text('Close'),
+                      ),
+                      TextButton(
+                        onPressed: () {
+                          Navigator.pop(ctx);
+                          platform_file_utils.saveBytesToTempAndOpen(bytes, fileName);
+                        },
+                        child: const Text('Download'),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+        return;
+      }
+      
+      await platform_file_utils.saveBytesToTempAndOpen(bytes, fileName);
+      
+    } catch (e) {
+      print('❌ Error opening attachment: $e');
+      if (_isMounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Error opening file: $e'),
+          backgroundColor: UpriseColors.error,
+          behavior: SnackBarBehavior.floating,
+        ));
+      }
     }
   }
-}
 
-// Helper method to get MIME type from extension
-String _getMimeTypeFromExtension(String ext) {
-  switch (ext.toLowerCase()) {
-    case 'txt': return 'text/plain';
-    case 'md': return 'text/markdown';
-    case 'html': case 'htm': return 'text/html';
-    case 'json': return 'application/json';
-    case 'png': return 'image/png';
-    case 'jpg': case 'jpeg': return 'image/jpeg';
-    case 'gif': return 'image/gif';
-    case 'pdf': return 'application/pdf';
-    case 'doc': return 'application/msword';
-    case 'docx': return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
-    case 'xls': return 'application/vnd.ms-excel';
-    case 'xlsx': return 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
-    case 'csv': return 'text/csv';
-    default: return 'application/octet-stream';
+  String _getMimeTypeFromExtension(String ext) {
+    switch (ext.toLowerCase()) {
+      case 'txt': return 'text/plain';
+      case 'md': return 'text/markdown';
+      case 'html': case 'htm': return 'text/html';
+      case 'json': return 'application/json';
+      case 'png': return 'image/png';
+      case 'jpg': case 'jpeg': return 'image/jpeg';
+      case 'gif': return 'image/gif';
+      case 'pdf': return 'application/pdf';
+      case 'doc': return 'application/msword';
+      case 'docx': return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+      case 'xls': return 'application/vnd.ms-excel';
+      case 'xlsx': return 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+      case 'csv': return 'text/csv';
+      default: return 'application/octet-stream';
+    }
   }
-}
 
   String _formatDate(dynamic dateField) {
     if (dateField == null) return 'TBD';
@@ -1735,13 +1809,13 @@ class _ExportProposalsButton extends StatelessWidget {
 
       if (format == 'csv') {
         final buf = StringBuffer();
-        buf.writeln('Title,Organization,Category,Date,Status,Description');
+        buf.writeln('Organization,Event Title,Category,Date,Status,Description');
         for (final doc in docs) {
           final d = doc.data();
           String esc(String s) => '"${s.replaceAll('"', '""')}"';
           buf.writeln([
-            esc(d['title']       ?? ''),
             esc(d['orgName']     ?? ''),
+            esc(d['title']       ?? ''),
             esc(d['category']    ?? ''),
             esc(_fmtDate(d['date'])),
             esc(d['status']      ?? ''),
@@ -1759,8 +1833,8 @@ class _ExportProposalsButton extends StatelessWidget {
         final rows = docs.map((doc) {
           final d = doc.data();
           return [
-            d['title']       ?? '',
             d['orgName']     ?? '',
+            d['title']       ?? '',
             d['category']    ?? '',
             _fmtDate(d['date']),
             d['status']      ?? '',
@@ -1770,7 +1844,7 @@ class _ExportProposalsButton extends StatelessWidget {
 
         final pdfBytes = await AdminExportPdf.generateTablePdf(
           title: 'Event Proposals Report',
-          headers: const ['Title', 'Organization', 'Category', 'Date', 'Status', 'Description'],
+          headers: const ['Organization', 'Event Title', 'Category', 'Date', 'Status', 'Description'],
           rows: rows,
         );
         await AdminExportUtil.saveBytes(
@@ -1797,37 +1871,6 @@ class _ExportProposalsButton extends StatelessWidget {
       return '${dt.month}/${dt.day}/${dt.year}';
     }
     return d.toString();
-  }
-}
-
-class _OrgAvatar extends StatelessWidget {
-  final String name;
-  const _OrgAvatar({required this.name});
-
-  @override
-  Widget build(BuildContext context) {
-    final parts    = name.trim().split(' ');
-    final initials = parts.length >= 2
-        ? '${parts[0][0]}${parts[1][0]}'.toUpperCase()
-        : (name.isNotEmpty ? name[0].toUpperCase() : '?');
-    return Container(
-      width: 32,
-      height: 32,
-      decoration: BoxDecoration(
-        color: UpriseColors.primaryDark.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Center(
-        child: Text(
-          initials,
-          style: GoogleFonts.beVietnamPro(
-            fontSize: 12,
-            fontWeight: FontWeight.w700,
-            color: UpriseColors.primaryDark,
-          ),
-        ),
-      ),
-    );
   }
 }
 
