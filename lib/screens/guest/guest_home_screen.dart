@@ -11,6 +11,7 @@ import '../student/student_login.dart';
 import 'guest_announcements_screen.dart';
 import 'guest_events_screen.dart';
 import 'guest_qr_attendance_screen.dart';
+import 'guest_profile_screen.dart';
 
 // ─────────────────────────────────────────────────────────────
 //  THEME CONSTANTS
@@ -34,11 +35,12 @@ class _GuestHomeScreenState extends State<GuestHomeScreen> {
   int _currentIndex = 0;
 
   final List<Widget> _screens = const [
-    _GuestHomeContent(),
-    GuestAnnouncementsScreen(),
-    GuestEventsScreen(),
-    GuestQrAttendanceScreen(),
-  ];
+  _GuestHomeContent(),
+  GuestAnnouncementsScreen(),
+  GuestEventsScreen(),
+  GuestQrAttendanceScreen(),
+  GuestProfileScreen(),
+];
 
   @override
   Widget build(BuildContext context) {
@@ -68,11 +70,12 @@ class _GuestBottomNav extends StatelessWidget {
   });
 
   static const _items = [
-    _NavItem(Icons.home_outlined,           Icons.home_rounded,           'Home'),
-    _NavItem(Icons.campaign_outlined,       Icons.campaign_rounded,       'Announcements'),
-    _NavItem(Icons.calendar_today_outlined, Icons.calendar_today_rounded, 'Events'),
-    _NavItem(Icons.qr_code_scanner_outlined,Icons.qr_code_scanner_rounded,'Attendance'),
-  ];
+  _NavItem(Icons.home_outlined, Icons.home_rounded, 'Home'),
+  _NavItem(Icons.campaign_outlined, Icons.campaign_rounded, 'Announcements'),
+  _NavItem(Icons.calendar_today_outlined, Icons.calendar_today_rounded, 'Events'),
+  _NavItem(Icons.qr_code_scanner_outlined, Icons.qr_code_scanner_rounded, 'Attendance'),
+  _NavItem(Icons.person_outline, Icons.person, 'Profile'),
+];
 
   @override
   Widget build(BuildContext context) {
