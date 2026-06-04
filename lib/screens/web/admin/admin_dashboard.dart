@@ -593,6 +593,10 @@ class _AdminDashboardState extends State<AdminDashboard> {
 // ─────────────────────────────────────────────────────────────────────────────
 // Dashboard Home
 // ─────────────────────────────────────────────────────────────────────────────
+// Replace the entire DashboardHome class with this fixed version:
+
+// Replace the entire DashboardHome class with this fixed version:
+
 class DashboardHome extends StatefulWidget {
   const DashboardHome({super.key});
   @override
@@ -609,7 +613,7 @@ class _DashboardHomeState extends State<DashboardHome> {
   late final Stream<QuerySnapshot> _eventsStream;
   late final Stream<QuerySnapshot> _proposalsStream;
   late final Stream<QuerySnapshot> _reportsStream;
-  late final Stream<QuerySnapshot> _upcomingEventsStream;
+  late final Stream<QuerySnapshot> _allEventsStream; // For upcoming events - no date filter in query
 
   // ── Semester helpers ──────────────────────────────────────────────
   int get _semesterStartMonth => _selectedSemester.startsWith('1st') ? 8 : 1;
@@ -643,21 +647,20 @@ class _DashboardHomeState extends State<DashboardHome> {
     _selectedSemester = _getCurrentSemester();
     _selectedMonth = _monthLabel(0);
 
-    final now = DateTime.now();
-
     _organizationsStream = FirebaseFirestore.instance
         .collection('organizations').where('status', isEqualTo: 'active').snapshots();
     _eventsStream = FirebaseFirestore.instance
-      .collection('event_proposals').where('status', isEqualTo: 'approved').snapshots();
+        .collection('event_proposals').where('status', isEqualTo: 'approved').snapshots();
     _proposalsStream = FirebaseFirestore.instance
         .collection('event_proposals').where('status', isEqualTo: 'pending').snapshots();
     _reportsStream = FirebaseFirestore.instance
         .collection('reports').where('status', isEqualTo: 'overdue').snapshots();
-    _upcomingEventsStream = FirebaseFirestore.instance
-      .collection('event_proposals')
-      .where('status', isEqualTo: 'approved')
-      .where('date', isGreaterThanOrEqualTo: Timestamp.fromDate(now))
-      .orderBy('date').snapshots();
+    
+    // SIMPLE QUERY - no date filter to avoid index issues
+    _allEventsStream = FirebaseFirestore.instance
+        .collection('event_proposals')
+        .where('status', isEqualTo: 'approved')
+        .snapshots();
 
     _fetchChartData();
   }
@@ -689,8 +692,42 @@ class _DashboardHomeState extends State<DashboardHome> {
         }
         if (idx >= 0 && idx < 6) counts[idx]++;
       }
-      setState(() { _chartData = counts; _chartLoading = false; });
-    }).catchError((_) => setState(() => _chartLoading = false));
+      if (mounted) {
+        setState(() { _chartData = counts; _chartLoading = false; });
+      }
+    }).catchError((_) {
+      if (mounted) setState(() => _chartLoading = false);
+    });
+  }
+
+  // Helper to filter upcoming events (filter in memory)
+  List<QueryDocumentSnapshot> _getUpcomingEvents(QuerySnapshot snap) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    
+    return snap.docs.where((doc) {
+      final data = doc.data() as Map<String, dynamic>;
+      final dateField = data['date'];
+      if (dateField == null) return false;
+      
+      Timestamp ts;
+      if (dateField is Timestamp) {
+        ts = dateField;
+      } else {
+        return false;
+      }
+      
+      final eventDate = ts.toDate();
+      final eventDay = DateTime(eventDate.year, eventDate.month, eventDate.day);
+      
+      return eventDay.isAfter(today) || eventDay.isAtSameMomentAs(today);
+    }).toList()
+      ..sort((a, b) {
+        final dateA = (a.data() as Map)['date'] as Timestamp?;
+        final dateB = (b.data() as Map)['date'] as Timestamp?;
+        if (dateA == null || dateB == null) return 0;
+        return dateA.toDate().compareTo(dateB.toDate());
+      });
   }
 
   // ── Build ─────────────────────────────────────────────────────────
@@ -701,19 +738,12 @@ class _DashboardHomeState extends State<DashboardHome> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Welcome header
           _buildWelcomeHeader(),
           const SizedBox(height: 24),
-
-          // Stat cards
           _buildStatCards(),
           const SizedBox(height: 24),
-
-          // Chart card
           _buildChartCard(),
           const SizedBox(height: 24),
-
-          // Bottom row
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -727,7 +757,6 @@ class _DashboardHomeState extends State<DashboardHome> {
     );
   }
 
-  // ── Welcome header ────────────────────────────────────────────────
   Widget _buildWelcomeHeader() {
     return Container(
       padding: const EdgeInsets.all(24),
@@ -771,72 +800,111 @@ class _DashboardHomeState extends State<DashboardHome> {
     );
   }
 
-  // ── Stat cards ────────────────────────────────────────────────────
   Widget _buildStatCards() {
-    final cards = [
-      _StatConfig('Active Orgs',       _organizationsStream, UpriseColors.primaryDark, Icons.business_rounded),
-      _StatConfig('Active Events',     _eventsStream,        UpriseColors.success,     Icons.event_rounded),
-      _StatConfig('Pending Proposals', _proposalsStream,     UpriseColors.warning,     Icons.pending_actions_rounded),
-      _StatConfig('Overdue Reports',   _reportsStream,       UpriseColors.error,       Icons.warning_amber_rounded),
-      _StatConfig('Upcoming Events',   _upcomingEventsStream, UpriseColors.info,       Icons.upcoming_rounded),
-    ];
-
     return Row(
-      children: cards.asMap().entries.map((e) {
-        final cfg = e.value;
-        return Expanded(
-          child: Padding(
-            padding: EdgeInsets.only(left: e.key == 0 ? 0 : 10),
-            child: StreamBuilder<QuerySnapshot>(
-              stream: cfg.stream,
-              builder: (ctx, snap) {
-                final count = snap.hasData ? snap.data!.docs.length : 0;
-                return _buildStatCard(cfg, count, snap.connectionState == ConnectionState.waiting);
-              },
-            ),
+      children: [
+        _buildStatCard('Active Orgs', _organizationsStream, UpriseColors.primaryDark, Icons.business_rounded),
+        const SizedBox(width: 10),
+        _buildStatCard('Active Events', _eventsStream, UpriseColors.success, Icons.event_rounded),
+        const SizedBox(width: 10),
+        _buildStatCard('Pending Proposals', _proposalsStream, UpriseColors.warning, Icons.pending_actions_rounded),
+        const SizedBox(width: 10),
+        _buildStatCard('Overdue Reports', _reportsStream, UpriseColors.error, Icons.warning_amber_rounded),
+        const SizedBox(width: 10),
+        // Upcoming Events stat card - filters in memory
+        Expanded(
+          child: StreamBuilder<QuerySnapshot>(
+            stream: _allEventsStream,
+            builder: (ctx, snap) {
+              final upcomingCount = snap.hasData ? _getUpcomingEvents(snap.data!).length : 0;
+              final loading = snap.connectionState == ConnectionState.waiting;
+              
+              return Container(
+                padding: const EdgeInsets.all(18),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(_DS.radiusMd),
+                  border: Border.all(color: const Color(0xFFE8ECF0)),
+                  boxShadow: _DS.cardShadow,
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                      Container(
+                        width: 40, height: 40,
+                        decoration: BoxDecoration(
+                          color: UpriseColors.info.withOpacity(0.10),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Icon(Icons.upcoming_rounded, color: UpriseColors.info, size: 20),
+                      ),
+                      if (loading)
+                        SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: UpriseColors.info))
+                      else
+                        Text('$upcomingCount',
+                            style: GoogleFonts.beVietnamPro(
+                                fontSize: 28, fontWeight: FontWeight.w800, color: const Color(0xFF1A202C))),
+                    ]),
+                    const SizedBox(height: 12),
+                    Text('Upcoming Events',
+                        style: GoogleFonts.beVietnamPro(fontSize: 11, color: const Color(0xFF64748B), fontWeight: FontWeight.w600)),
+                  ],
+                ),
+              );
+            },
           ),
-        );
-      }).toList(),
+        ),
+      ],
     );
   }
 
-  Widget _buildStatCard(_StatConfig cfg, int count, bool loading) {
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(_DS.radiusMd),
-        border: Border.all(color: const Color(0xFFE8ECF0)),
-        boxShadow: _DS.cardShadow,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-            Container(
-              width: 40, height: 40,
-              decoration: BoxDecoration(
-                color: cfg.color.withOpacity(0.10),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Icon(cfg.icon, color: cfg.color, size: 20),
+  Widget _buildStatCard(String label, Stream<QuerySnapshot> stream, Color color, IconData icon) {
+    return Expanded(
+      child: StreamBuilder<QuerySnapshot>(
+        stream: stream,
+        builder: (ctx, snap) {
+          final count = snap.hasData ? snap.data!.docs.length : 0;
+          final loading = snap.connectionState == ConnectionState.waiting;
+          
+          return Container(
+            padding: const EdgeInsets.all(18),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(_DS.radiusMd),
+              border: Border.all(color: const Color(0xFFE8ECF0)),
+              boxShadow: _DS.cardShadow,
             ),
-            if (loading)
-              SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: cfg.color))
-            else
-              Text('$count',
-                  style: GoogleFonts.beVietnamPro(
-                      fontSize: 28, fontWeight: FontWeight.w800, color: const Color(0xFF1A202C))),
-          ]),
-          const SizedBox(height: 12),
-          Text(cfg.label,
-              style: GoogleFonts.beVietnamPro(fontSize: 11, color: const Color(0xFF64748B), fontWeight: FontWeight.w600)),
-        ],
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                  Container(
+                    width: 40, height: 40,
+                    decoration: BoxDecoration(
+                      color: color.withOpacity(0.10),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Icon(icon, color: color, size: 20),
+                  ),
+                  if (loading)
+                    SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: color))
+                  else
+                    Text('$count',
+                        style: GoogleFonts.beVietnamPro(
+                            fontSize: 28, fontWeight: FontWeight.w800, color: const Color(0xFF1A202C))),
+                ]),
+                const SizedBox(height: 12),
+                Text(label,
+                    style: GoogleFonts.beVietnamPro(fontSize: 11, color: const Color(0xFF64748B), fontWeight: FontWeight.w600)),
+              ],
+            ),
+          );
+        },
       ),
     );
   }
 
-  // ── Chart card ────────────────────────────────────────────────────
   Widget _buildChartCard() {
     return Container(
       padding: const EdgeInsets.all(24),
@@ -849,7 +917,6 @@ class _DashboardHomeState extends State<DashboardHome> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header row
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -861,7 +928,6 @@ class _DashboardHomeState extends State<DashboardHome> {
                 Text('Completed events per month this semester',
                     style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF9AA5B4))),
               ]),
-              // Semester dropdown
               Container(
                 height: 36,
                 padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -879,7 +945,9 @@ class _DashboardHomeState extends State<DashboardHome> {
                         .map((s) => DropdownMenuItem(value: s, child: Text(s)))
                         .toList(),
                     onChanged: (v) {
-                      if (v != null) setState(() { _selectedSemester = v; _fetchChartData(); });
+                      if (v != null && mounted) {
+                        setState(() { _selectedSemester = v; _fetchChartData(); });
+                      }
                     },
                   ),
                 ),
@@ -888,14 +956,15 @@ class _DashboardHomeState extends State<DashboardHome> {
           ),
           const SizedBox(height: 20),
 
-          // Month selector pills
           Row(
             children: List.generate(6, (i) {
               final m = _monthLabel(i);
               final isActive = _selectedMonth == m;
               return Expanded(
                 child: GestureDetector(
-                  onTap: () => setState(() => _selectedMonth = m),
+                  onTap: () {
+                    if (mounted) setState(() => _selectedMonth = m);
+                  },
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 150),
                     margin: EdgeInsets.only(left: i == 0 ? 0 : 6),
@@ -919,7 +988,6 @@ class _DashboardHomeState extends State<DashboardHome> {
           ),
           const SizedBox(height: 20),
 
-          // Chart
           SizedBox(
             height: 200,
             child: _chartLoading
@@ -938,7 +1006,7 @@ class _DashboardHomeState extends State<DashboardHome> {
     );
   }
 
-  // ── Upcoming events ───────────────────────────────────────────────
+  // ── Upcoming events list (filters in memory) ──────────────────────
   Widget _buildUpcomingEvents() {
     return Container(
       decoration: BoxDecoration(
@@ -969,23 +1037,28 @@ class _DashboardHomeState extends State<DashboardHome> {
             ]),
             const SizedBox(height: 16),
             StreamBuilder<QuerySnapshot>(
-              stream: FirebaseFirestore.instance
-                  .collection('event_proposals')
-                  .where('status', isEqualTo: 'approved')
-                  .where('date', isGreaterThanOrEqualTo: Timestamp.fromDate(DateTime.now()))
-                  .orderBy('date').limit(4).snapshots(),
+              stream: _allEventsStream,
               builder: (ctx, snap) {
                 if (snap.connectionState == ConnectionState.waiting) {
                   return const Center(child: Padding(padding: EdgeInsets.all(24), child: CircularProgressIndicator()));
                 }
-                if (!snap.hasData || snap.data!.docs.isEmpty) {
+                if (snap.hasError) {
+                  return _emptyPlaceholder(Icons.error_outline_rounded, 'Error loading events');
+                }
+                
+                final upcomingEvents = _getUpcomingEvents(snap.data!);
+                final displayEvents = upcomingEvents.take(4).toList();
+                
+                if (displayEvents.isEmpty) {
                   return _emptyPlaceholder(Icons.calendar_today_outlined, 'No upcoming events');
                 }
+                
                 return Column(
-                  children: snap.data!.docs.map((doc) {
+                  children: displayEvents.map((doc) {
                     final d = doc.data() as Map<String, dynamic>;
+                    final eventDate = d['date'] is Timestamp ? (d['date'] as Timestamp).toDate() : DateTime.now();
                     return _EventRow(
-                      date: d['date'] is Timestamp ? (d['date'] as Timestamp).toDate().toIso8601String() : d['date'],
+                      date: eventDate.toIso8601String(),
                       title: d['title'] ?? 'Untitled',
                       location: d['location'] ?? 'TBA',
                       time: d['time'] ?? 'TBA',
@@ -1000,7 +1073,6 @@ class _DashboardHomeState extends State<DashboardHome> {
     );
   }
 
-  // ── Recent activity ───────────────────────────────────────────────
   Widget _buildRecentActivity() {
     return Container(
       decoration: BoxDecoration(
@@ -1022,10 +1094,14 @@ class _DashboardHomeState extends State<DashboardHome> {
               stream: FirebaseFirestore.instance
                   .collection('activity_logs')
                   .orderBy('timestamp', descending: true)
-                  .limit(6).snapshots(),
+                  .limit(6)
+                  .snapshots(),
               builder: (ctx, snap) {
                 if (snap.connectionState == ConnectionState.waiting) {
                   return const Center(child: Padding(padding: EdgeInsets.all(24), child: CircularProgressIndicator()));
+                }
+                if (snap.hasError) {
+                  return _emptyPlaceholder(Icons.error_outline_rounded, 'Error loading activity');
                 }
                 if (!snap.hasData || snap.data!.docs.isEmpty) {
                   return _emptyPlaceholder(Icons.history_rounded, 'No recent activity');
