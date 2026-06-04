@@ -9,7 +9,28 @@ import 'export_pdf.dart';
 import '../../theme/app_theme.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Design tokens — mirrors student_accounts / event_proposals
+// Category Colors - matching the submission form categories
+// ─────────────────────────────────────────────────────────────────────────────
+Map<String, Color> _categoryColors = {
+  'Workshop':         const Color(0xFF8B5CF6),
+  'Seminar':          const Color(0xFF3B82F6),
+  'Competition':      const Color(0xFFEF4444),
+  'General Assembly': const Color(0xFFF59E0B),
+  'Social':           const Color(0xFFEC4899),
+  'Outreach':         const Color(0xFF10B981),
+  'Sports':           const Color(0xFF14B8A6),
+  'Academic':         const Color(0xFF6366F1),
+  'Technical':        const Color(0xFF06B6D4),
+  'Cultural':         const Color(0xFFD946EF),
+  'Other':            const Color(0xFF6B7280),
+};
+
+Color _getCategoryColor(String category) {
+  return _categoryColors[category] ?? const Color(0xFF6B7280);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Design tokens
 // ─────────────────────────────────────────────────────────────────────────────
 class _DS {
   static const double radiusSm   = 8;
@@ -24,45 +45,6 @@ class _DS {
       offset: const Offset(0, 4),
     ),
   ];
-
-  static InputDecoration inputDecoration(
-    String label, {
-    String? hint,
-    IconData? icon,
-  }) {
-    return InputDecoration(
-      labelText: label,
-      hintText: hint,
-      prefixIcon: icon != null
-          ? Icon(icon, size: 18, color: const Color(0xFF9AA5B4))
-          : null,
-      labelStyle: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF64748B)),
-      hintStyle: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF9AA5B4)),
-      filled: true,
-      fillColor: const Color(0xFFF8F9FB),
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(radiusSm),
-        borderSide: const BorderSide(color: Color(0xFFE2E6EA), width: 1),
-      ),
-      enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(radiusSm),
-        borderSide: const BorderSide(color: Color(0xFFE2E6EA), width: 1),
-      ),
-      focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(radiusSm),
-        borderSide: BorderSide(color: UpriseColors.primaryDark, width: 1.5),
-      ),
-      errorBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(radiusSm),
-        borderSide: BorderSide(color: UpriseColors.error, width: 1),
-      ),
-      focusedErrorBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(radiusSm),
-        borderSide: BorderSide(color: UpriseColors.error, width: 1.5),
-      ),
-    );
-  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -91,63 +73,20 @@ Widget _sectionLabel(String text, {IconData? icon}) {
   );
 }
 
-Widget _statusBadge(String status) {
-  const Map<String, _BadgeStyle> styles = {
-    'approved': _BadgeStyle(Color(0xFFECFDF5), Color(0xFF059669), 'APPROVED'),
-    'pending':  _BadgeStyle(Color(0xFFFFFBEB), Color(0xFFD97706), 'PENDING'),
-    'rejected': _BadgeStyle(Color(0xFFFEF2F2), Color(0xFFDC2626), 'REJECTED'),
-    'archived': _BadgeStyle(Color(0xFFF3F4F6), Color(0xFF6B7280), 'ARCHIVED'),
-  };
-  final s = styles[status.toLowerCase()] ??
-      const _BadgeStyle(Color(0xFFF3F4F6), Color(0xFF6B7280), '—');
-  return Container(
-    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-    decoration: BoxDecoration(
-      color: s.bg,
-      borderRadius: BorderRadius.circular(_DS.radiusPill),
-    ),
-    child: Text(
-      s.label,
-      style: GoogleFonts.beVietnamPro(
-        fontSize: 10,
-        fontWeight: FontWeight.w700,
-        color: s.fg,
-        letterSpacing: 0.8,
-      ),
-    ),
-  );
-}
-
-Color _statusColor(String status) {
-  switch (status.toLowerCase()) {
-    case 'approved': return const Color(0xFF059669);
-    case 'pending':  return const Color(0xFFD97706);
-    case 'rejected': return const Color(0xFFDC2626);
-    case 'archived': return const Color(0xFF6B7280);
-    default:         return UpriseColors.primaryDark;
-  }
-}
-
-class _BadgeStyle {
-  final Color bg, fg;
-  final String label;
-  const _BadgeStyle(this.bg, this.fg, this.label);
-}
-
 // ─────────────────────────────────────────────────────────────────────────────
 // Event model
 // ─────────────────────────────────────────────────────────────────────────────
 class _Event {
-  final String id, title, time, type, organization, status;
+  final String id, title, time, category, organization;
   final DateTime date;
-  const _Event({
+  
+  _Event({
     required this.id,
     required this.title,
     required this.date,
     required this.time,
-    required this.type,
+    required this.category,
     required this.organization,
-    required this.status,
   });
 }
 
@@ -163,69 +102,36 @@ class EventCalendar extends StatefulWidget {
 
 class _EventCalendarState extends State<EventCalendar> {
   DateTime _currentMonth = DateTime.now();
-  String _statusFilter = 'All';
 
-  // ── Build ─────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFFBFCFE),
-      body: SingleChildScrollView(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildStatsRow(),
-            _buildToolbar(),
-            const SizedBox(height: 16),
-            _buildCalendarStream(),
-            _buildLegend(),
-            const SizedBox(height: 28),
-          ],
-        ),
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildToolbar(),
+          const SizedBox(height: 16),
+          Expanded(
+            child: SingleChildScrollView(
+              child: Column(
+                children: [
+                  _buildCalendarStream(),
+                  const SizedBox(height: 24),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
 
-  // ── Stats row ─────────────────────────────────────────────────────
-  Widget _buildStatsRow() {
-    return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance.collection('events').snapshots(),
-      builder: (context, snapshot) {
-        int total = 0, pending = 0, approved = 0, rejected = 0, archived = 0;
-        if (snapshot.hasData) {
-          total = snapshot.data!.docs.length;
-          for (final doc in snapshot.data!.docs) {
-            final status = (doc.data() as Map)['status'] ?? 'pending';
-            if (status == 'pending')  pending++;
-            if (status == 'approved') approved++;
-            if (status == 'rejected') rejected++;
-            if (status == 'archived') archived++;
-          }
-        }
-        return Padding(
-          padding: const EdgeInsets.fromLTRB(28, 24, 28, 0),
-          child: Row(children: [
-            _StatCard(label: 'Total Events', value: '$total',    icon: Icons.event_rounded,           color: UpriseColors.primaryDark),
-            const SizedBox(width: 14),
-            _StatCard(label: 'Approved',     value: '$approved', icon: Icons.check_circle_rounded,    color: const Color(0xFF059669)),
-            const SizedBox(width: 14),
-            _StatCard(label: 'Pending',      value: '$pending',  icon: Icons.pending_rounded,         color: const Color(0xFFD97706)),
-            const SizedBox(width: 14),
-            _StatCard(label: 'Rejected',     value: '$rejected', icon: Icons.cancel_rounded,          color: const Color(0xFFDC2626)),
-            const SizedBox(width: 14),
-            _StatCard(label: 'Archived',     value: '$archived', icon: Icons.archive_rounded,         color: const Color(0xFF6B7280)),
-          ]),
-        );
-      },
-    );
-  }
-
-  // ── Toolbar ───────────────────────────────────────────────────────
+  // ── Toolbar (no status filter) ───────────────────────────────────
   Widget _buildToolbar() {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(28, 20, 28, 0),
+      padding: const EdgeInsets.fromLTRB(28, 24, 28, 0),
       child: Row(children: [
-        // Month navigator
         Container(
           height: 40,
           decoration: BoxDecoration(
@@ -261,7 +167,6 @@ class _EventCalendarState extends State<EventCalendar> {
           ]),
         ),
         const SizedBox(width: 10),
-        // Today
         OutlinedButton.icon(
           onPressed: () => setState(() => _currentMonth = DateTime.now()),
           icon: const Icon(Icons.today_rounded, size: 15),
@@ -274,24 +179,17 @@ class _EventCalendarState extends State<EventCalendar> {
           ),
         ),
         const Spacer(),
-        // Status filter
-        _FilterDropdown(
-          value: _statusFilter,
-          items: const ['All', 'Pending', 'Approved', 'Rejected', 'Archived'],
-          onChanged: (v) => setState(() => _statusFilter = v!),
-        ),
-        const SizedBox(width: 10),
-        // Export
-        _ExportEventsButton(statusFilter: _statusFilter),
+        _ExportEventsButton(),
       ]),
     );
   }
 
-  // ── Calendar stream ───────────────────────────────────────────────
+  // ── Calendar stream (only approved events) ───────────────────────
   Widget _buildCalendarStream() {
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance
           .collection('events')
+          .where('status', isEqualTo: 'approved')
           .orderBy('date')
           .snapshots(),
       builder: (context, snapshot) {
@@ -305,24 +203,19 @@ class _EventCalendarState extends State<EventCalendar> {
           return Center(child: Text('Error: ${snapshot.error}'));
         }
 
-        final allEvents = snapshot.data!.docs.map((doc) {
+        final events = snapshot.data!.docs.map((doc) {
           final d = doc.data() as Map<String, dynamic>;
           return _Event(
             id:           doc.id,
             title:        d['title']   ?? 'Untitled',
             date:         (d['date']   as Timestamp).toDate(),
             time:         d['time']    ?? 'TBD',
-            type:         d['type']    ?? 'In Person',
+            category:     d['category'] ?? 'Other',
             organization: d['orgName'] ?? 'Unknown',
-            status:       d['status']  ?? 'pending',
           );
         }).toList();
 
-        final filtered = _statusFilter == 'All'
-            ? allEvents
-            : allEvents.where((e) => e.status.toLowerCase() == _statusFilter.toLowerCase()).toList();
-
-        return _buildCalendarGrid(filtered);
+        return _buildCalendarGrid(events);
       },
     );
   }
@@ -330,7 +223,7 @@ class _EventCalendarState extends State<EventCalendar> {
   // ── Calendar grid ─────────────────────────────────────────────────
   Widget _buildCalendarGrid(List<_Event> events) {
     final firstDay       = DateTime(_currentMonth.year, _currentMonth.month, 1);
-    final startWeekday   = firstDay.weekday % 7; // 0 = Sun
+    final startWeekday   = firstDay.weekday % 7;
     final daysInMonth    = DateTime(_currentMonth.year, _currentMonth.month + 1, 0).day;
 
     final Map<int, List<_Event>> byDay = {};
@@ -351,7 +244,6 @@ class _EventCalendarState extends State<EventCalendar> {
         boxShadow: _DS.cardShadow,
       ),
       child: Column(children: [
-        // Weekday header row
         Container(
           decoration: const BoxDecoration(
             color: Color(0xFFF8F9FB),
@@ -376,36 +268,35 @@ class _EventCalendarState extends State<EventCalendar> {
             )).toList(),
           ),
         ),
-        // Day cells
-        GridView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 7,
-            childAspectRatio: 0.85,
+        SizedBox(
+          height: 520,
+          child: GridView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 7,
+              childAspectRatio: 1.2,
+            ),
+            itemCount: 42,
+            itemBuilder: (_, index) {
+              final dayNum = index - startWeekday + 1;
+              if (dayNum < 1 || dayNum > daysInMonth) {
+                return _buildEmptyCell(
+                  isLastRow: index >= 35,
+                  colIndex: index % 7,
+                  isBottomRight: index == 41,
+                  isBottomLeft: index == 35,
+                );
+              }
+              return _buildDayCell(dayNum, byDay[dayNum] ?? []);
+            },
           ),
-          itemCount: 42,
-          itemBuilder: (_, index) {
-            final dayNum = index - startWeekday + 1;
-            if (dayNum < 1 || dayNum > daysInMonth) {
-              return _buildEmptyCell(
-                isFirstRow: index < 7,
-                isLastRow: index >= 35,
-                colIndex: index % 7,
-                // bottom-right radius on last cell
-                isBottomRight: index == 41,
-                isBottomLeft: index == 35,
-              );
-            }
-            return _buildDayCell(dayNum, byDay[dayNum] ?? []);
-          },
         ),
       ]),
     );
   }
 
   Widget _buildEmptyCell({
-    bool isFirstRow = false,
     bool isLastRow = false,
     int colIndex = 0,
     bool isBottomRight = false,
@@ -437,10 +328,9 @@ class _EventCalendarState extends State<EventCalendar> {
         _currentMonth.month == DateTime.now().month;
 
     final sorted  = List<_Event>.from(events)..sort((a, b) => a.time.compareTo(b.time));
-    final display = sorted.take(3).toList();
+    final display = sorted.take(2).toList();
     final extra   = sorted.length - display.length;
 
-    // Is it a last-row cell?
     final firstDay     = DateTime(_currentMonth.year, _currentMonth.month, 1);
     final startWeekday = firstDay.weekday % 7;
     final cellIndex    = startWeekday + day - 1;
@@ -471,71 +361,48 @@ class _EventCalendarState extends State<EventCalendar> {
                   ? const BorderRadius.only(bottomRight: Radius.circular(14))
                   : null,
         ),
-        padding: const EdgeInsets.all(7),
+        padding: const EdgeInsets.all(6),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Day number
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Container(
-                  width: 24,
-                  height: 24,
-                  decoration: isToday
-                      ? BoxDecoration(
-                          color: UpriseColors.primaryDark,
-                          borderRadius: BorderRadius.circular(6),
-                        )
-                      : null,
-                  alignment: Alignment.center,
-                  child: Text(
-                    '$day',
-                    style: GoogleFonts.beVietnamPro(
-                      fontSize: 13,
-                      fontWeight: isToday ? FontWeight.w700 : FontWeight.w500,
-                      color: isToday ? Colors.white : const Color(0xFF1A202C),
-                    ),
-                  ),
+            Container(
+              width: 26,
+              height: 26,
+              decoration: isToday
+                  ? BoxDecoration(
+                      color: UpriseColors.primaryDark,
+                      borderRadius: BorderRadius.circular(6),
+                    )
+                  : null,
+              alignment: Alignment.center,
+              child: Text(
+                '$day',
+                style: GoogleFonts.beVietnamPro(
+                  fontSize: 13,
+                  fontWeight: isToday ? FontWeight.w700 : FontWeight.w500,
+                  color: isToday ? Colors.white : const Color(0xFF1A202C),
                 ),
-                if (events.isNotEmpty)
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-                    decoration: BoxDecoration(
-                      color: _statusColor(sorted.first.status).withOpacity(0.12),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Text(
-                      '${events.length}',
-                      style: GoogleFonts.beVietnamPro(
-                        fontSize: 9,
-                        fontWeight: FontWeight.w700,
-                        color: _statusColor(sorted.first.status),
-                      ),
-                    ),
-                  ),
-              ],
+              ),
             ),
-            const SizedBox(height: 5),
-            // Event pills
+            const SizedBox(height: 4),
             ...display.map((e) => Padding(
                   padding: const EdgeInsets.only(bottom: 3),
                   child: Container(
                     width: double.infinity,
-                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 3),
                     decoration: BoxDecoration(
-                      color: _statusColor(e.status).withOpacity(0.10),
+                      color: _getCategoryColor(e.category).withOpacity(0.12),
                       borderRadius: BorderRadius.circular(4),
                       border: Border(
-                        left: BorderSide(color: _statusColor(e.status), width: 2),
+                        left: BorderSide(color: _getCategoryColor(e.category), width: 2),
                       ),
                     ),
                     child: Text(
-                      e.title.length > 13 ? '${e.title.substring(0, 13)}…' : e.title,
+                      e.title.length > 10 ? '${e.title.substring(0, 10)}…' : e.title,
                       style: GoogleFonts.beVietnamPro(
-                        fontSize: 9.5,
+                        fontSize: 9,
                         fontWeight: FontWeight.w600,
-                        color: _statusColor(e.status),
+                        color: _getCategoryColor(e.category),
                       ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
@@ -544,9 +411,9 @@ class _EventCalendarState extends State<EventCalendar> {
                 )),
             if (extra > 0)
               Text(
-                '+$extra more',
+                '+$extra',
                 style: GoogleFonts.beVietnamPro(
-                  fontSize: 9,
+                  fontSize: 8,
                   color: const Color(0xFF9AA5B4),
                   fontWeight: FontWeight.w500,
                 ),
@@ -555,51 +422,6 @@ class _EventCalendarState extends State<EventCalendar> {
         ),
       ),
     );
-  }
-
-  // ── Legend ────────────────────────────────────────────────────────
-  Widget _buildLegend() {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(28, 16, 28, 0),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: const Color(0xFFE8ECF0)),
-          boxShadow: _DS.cardShadow,
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            _legendDot('Approved', const Color(0xFF059669)),
-            const SizedBox(width: 20),
-            _legendDot('Pending',  const Color(0xFFD97706)),
-            const SizedBox(width: 20),
-            _legendDot('Rejected', const Color(0xFFDC2626)),
-            const SizedBox(width: 20),
-            _legendDot('Archived', const Color(0xFF6B7280)),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _legendDot(String label, Color color) {
-    return Row(children: [
-      Container(
-        width: 10,
-        height: 10,
-        decoration: BoxDecoration(
-          color: color,
-          borderRadius: BorderRadius.circular(3),
-        ),
-      ),
-      const SizedBox(width: 6),
-      Text(label,
-          style: GoogleFonts.beVietnamPro(
-              fontSize: 12, color: const Color(0xFF64748B), fontWeight: FontWeight.w500)),
-    ]);
   }
 
   // ── Day events bottom sheet ────────────────────────────────────────
@@ -621,7 +443,6 @@ class _EventCalendarState extends State<EventCalendar> {
             borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
           ),
           child: Column(children: [
-            // Handle
             Container(
               margin: const EdgeInsets.only(top: 12),
               width: 40,
@@ -631,7 +452,6 @@ class _EventCalendarState extends State<EventCalendar> {
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
-            // Header
             Padding(
               padding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
               child: Row(children: [
@@ -662,7 +482,6 @@ class _EventCalendarState extends State<EventCalendar> {
               ]),
             ),
             const Divider(height: 24, color: Color(0xFFE8ECF0)),
-            // Event list
             Expanded(
               child: ListView.separated(
                 controller: controller,
@@ -697,11 +516,10 @@ class _EventCalendarState extends State<EventCalendar> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // Header
               Container(
                 padding: const EdgeInsets.fromLTRB(24, 20, 20, 20),
                 decoration: BoxDecoration(
-                  color: UpriseColors.primaryDark,
+                  color: _getCategoryColor(event.category),
                   borderRadius: const BorderRadius.vertical(top: Radius.circular(18)),
                 ),
                 child: Row(children: [
@@ -721,7 +539,7 @@ class _EventCalendarState extends State<EventCalendar> {
                               fontSize: 17, fontWeight: FontWeight.w700, color: Colors.white)),
                       Text(event.organization,
                           style: GoogleFonts.beVietnamPro(
-                              fontSize: 12, color: Colors.white.withOpacity(0.7))),
+                              fontSize: 12, color: Colors.white.withOpacity(0.8))),
                     ]),
                   ),
                   IconButton(
@@ -730,7 +548,6 @@ class _EventCalendarState extends State<EventCalendar> {
                   ),
                 ]),
               ),
-              // Body
               Expanded(
                 child: SingleChildScrollView(
                   padding: const EdgeInsets.all(24),
@@ -739,23 +556,20 @@ class _EventCalendarState extends State<EventCalendar> {
                     children: [
                       _sectionLabel('Event Details', icon: Icons.info_outline_rounded),
                       Row(children: [
-                        Expanded(child: _detailItem('Status',   event.status[0].toUpperCase() + event.status.substring(1), Icons.circle_outlined, valueColor: _statusColor(event.status))),
+                        Expanded(child: _detailItem('Category', event.category, Icons.category_outlined, valueColor: _getCategoryColor(event.category))),
                         const SizedBox(width: 16),
-                        Expanded(child: _detailItem('Type',     event.type, Icons.category_outlined)),
+                        Expanded(child: _detailItem('Date',     DateFormat('MMMM d, yyyy').format(event.date), Icons.calendar_today_outlined)),
                       ]),
                       const SizedBox(height: 14),
                       Row(children: [
-                        Expanded(child: _detailItem('Date',     DateFormat('MMMM d, yyyy').format(event.date), Icons.calendar_today_outlined)),
-                        const SizedBox(width: 16),
                         Expanded(child: _detailItem('Time',     _formatTime(event.time), Icons.access_time_rounded)),
+                        const SizedBox(width: 16),
+                        Expanded(child: _detailItem('Organization', event.organization, Icons.group_outlined)),
                       ]),
-                      const SizedBox(height: 14),
-                      _detailItem('Organization', event.organization, Icons.group_outlined),
                     ],
                   ),
                 ),
               ),
-              // Footer
               Container(
                 padding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
                 decoration: const BoxDecoration(
@@ -809,7 +623,6 @@ class _EventCalendarState extends State<EventCalendar> {
     ]);
   }
 
-  // ── Helpers ───────────────────────────────────────────────────────
   String _formatTime(String time) {
     try {
       final parts  = time.split(':');
@@ -828,87 +641,6 @@ class _EventCalendarState extends State<EventCalendar> {
 // ─────────────────────────────────────────────────────────────────────────────
 // Reusable widgets
 // ─────────────────────────────────────────────────────────────────────────────
-
-class _StatCard extends StatelessWidget {
-  final String label, value;
-  final IconData icon;
-  final Color color;
-  const _StatCard({
-    required this.label,
-    required this.value,
-    required this.icon,
-    required this.color,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.all(18),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: const Color(0xFFE8ECF0)),
-          boxShadow: _DS.cardShadow,
-        ),
-        child: Row(children: [
-          Container(
-            width: 44, height: 44,
-            decoration: BoxDecoration(
-              color: color.withOpacity(0.10),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Icon(icon, color: color, size: 22),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(label,
-                  style: GoogleFonts.beVietnamPro(
-                      fontSize: 11, color: const Color(0xFF64748B), fontWeight: FontWeight.w500)),
-              const SizedBox(height: 2),
-              Text(value,
-                  style: GoogleFonts.beVietnamPro(
-                      fontSize: 28, fontWeight: FontWeight.w700, color: const Color(0xFF1A202C))),
-            ]),
-          ),
-        ]),
-      ),
-    );
-  }
-}
-
-class _FilterDropdown extends StatelessWidget {
-  final String value;
-  final List<String> items;
-  final ValueChanged<String?> onChanged;
-  const _FilterDropdown({required this.value, required this.items, required this.onChanged});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: 40,
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: const Color(0xFFE2E6EA)),
-      ),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<String>(
-          value: value,
-          icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 18, color: Color(0xFF9AA5B4)),
-          style: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF374151)),
-          items: items.map((s) => DropdownMenuItem(
-            value: s,
-            child: Text(s, style: GoogleFonts.beVietnamPro(fontSize: 13)),
-          )).toList(),
-          onChanged: onChanged,
-        ),
-      ),
-    );
-  }
-}
 
 class _NavButton extends StatelessWidget {
   final IconData icon;
@@ -935,22 +667,24 @@ class _EventListTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final categoryColor = _getCategoryColor(event.category);
+    
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(10),
       child: Container(
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
-          color: _statusColor(event.status).withOpacity(0.05),
+          color: categoryColor.withOpacity(0.05),
           borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: _statusColor(event.status).withOpacity(0.2)),
+          border: Border.all(color: categoryColor.withOpacity(0.2)),
         ),
         child: Row(children: [
           Container(
             width: 4,
             height: 48,
             decoration: BoxDecoration(
-              color: _statusColor(event.status),
+              color: categoryColor,
               borderRadius: BorderRadius.circular(2),
             ),
           ),
@@ -961,13 +695,25 @@ class _EventListTile extends StatelessWidget {
                   style: GoogleFonts.beVietnamPro(
                       fontSize: 14, fontWeight: FontWeight.w600, color: const Color(0xFF1A202C))),
               const SizedBox(height: 3),
-              Text(event.organization,
-                  style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF64748B))),
+              Row(children: [
+                Container(
+                  width: 8,
+                  height: 8,
+                  decoration: BoxDecoration(
+                    color: categoryColor,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                const SizedBox(width: 4),
+                Text(event.category,
+                    style: GoogleFonts.beVietnamPro(fontSize: 11, color: categoryColor)),
+                const SizedBox(width: 8),
+                Text(event.organization,
+                    style: GoogleFonts.beVietnamPro(fontSize: 11, color: const Color(0xFF64748B))),
+              ]),
             ]),
           ),
           Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-            _statusBadge(event.status),
-            const SizedBox(height: 4),
             Row(children: [
               const Icon(Icons.access_time_rounded, size: 11, color: Color(0xFF9AA5B4)),
               const SizedBox(width: 3),
@@ -998,8 +744,7 @@ class _EventListTile extends StatelessWidget {
 }
 
 class _ExportEventsButton extends StatelessWidget {
-  final String statusFilter;
-  const _ExportEventsButton({required this.statusFilter});
+  const _ExportEventsButton();
 
   @override
   Widget build(BuildContext context) {
@@ -1010,14 +755,10 @@ class _ExportEventsButton extends StatelessWidget {
     try {
       var snap = await FirebaseFirestore.instance
           .collection('events')
+          .where('status', isEqualTo: 'approved')
           .orderBy('date')
           .get();
       var docs = snap.docs;
-
-      if (statusFilter != 'All') {
-        docs = docs.where((d) =>
-            (d.data())['status'] == statusFilter.toLowerCase()).toList();
-      }
 
       if (docs.isEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
@@ -1032,7 +773,7 @@ class _ExportEventsButton extends StatelessWidget {
 
       if (format == 'csv') {
         final buf = StringBuffer();
-        buf.writeln('Title,Organization,Date,Time,Type,Status');
+        buf.writeln('Title,Organization,Category,Date,Time');
         for (final doc in docs) {
           final d    = doc.data();
           final date = (d['date'] as Timestamp).toDate();
@@ -1040,10 +781,9 @@ class _ExportEventsButton extends StatelessWidget {
           buf.writeln([
             esc(d['title']   ?? ''),
             esc(d['orgName'] ?? ''),
+            esc(d['category'] ?? 'Other'),
             esc(DateFormat('yyyy-MM-dd').format(date)),
             esc(d['time']    ?? ''),
-            esc(d['type']    ?? ''),
-            esc(d['status']  ?? ''),
           ].join(','));
         }
         content  = buf.toString();
@@ -1060,16 +800,15 @@ class _ExportEventsButton extends StatelessWidget {
           return [
             d['title']   ?? '',
             d['orgName'] ?? '',
+            d['category'] ?? 'Other',
             DateFormat('yyyy-MM-dd').format(date),
             d['time']    ?? '',
-            d['type']    ?? '',
-            d['status']  ?? '',
           ].map((value) => value.toString()).toList();
         }).toList();
 
         final pdfBytes = await AdminExportPdf.generateTablePdf(
           title: 'Event Calendar Report',
-          headers: const ['Title', 'Organization', 'Date', 'Time', 'Type', 'Status'],
+          headers: const ['Title', 'Organization', 'Category', 'Date', 'Time'],
           rows: rows,
         );
 
