@@ -5,8 +5,15 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 ImageProvider _studentImageProvider(String url) {
+  if (url.isEmpty) return const AssetImage('assets/placeholder.png');
   if (url.startsWith('data:image')) {
     return MemoryImage(base64Decode(url.split(',').last));
+  }
+  // Raw base64 string (org side stores it without the data: prefix)
+  if (!url.startsWith('http')) {
+    try {
+      return MemoryImage(base64Decode(url));
+    } catch (_) {}
   }
   return NetworkImage(url);
 }
@@ -54,38 +61,52 @@ class AnnouncementData {
   });
 
   factory AnnouncementData.fromFirestore(DocumentSnapshot doc) {
-    final d = doc.data() as Map<String, dynamic>? ?? {};
-    final timestamp = d['timestamp'];
-    final dateTime = timestamp is Timestamp
-        ? timestamp.toDate()
-        : timestamp is DateTime
-            ? timestamp
-            : DateTime.now();
+  final d = doc.data() as Map<String, dynamic>? ?? {};
+  final timestamp = d['timestamp'];
+  final dateTime = timestamp is Timestamp
+      ? timestamp.toDate()
+      : timestamp is DateTime
+          ? timestamp
+          : DateTime.now();
 
-    return AnnouncementData(
-      title: d['title'] as String? ?? '',
-      id: doc.id,
-      org: d['authorName'] as String? ?? 'Organization',
-      orgSub: (d['category'] as String?)?.toUpperCase() ?? 'ANNOUNCEMENT',
-      date: DateFormat('MMM dd, yyyy').format(dateTime),
-      time: DateFormat('h:mm a').format(dateTime),
-      isPinned: false,
-      tag: (d['category'] as String?)?.toUpperCase() ?? 'ANNOUNCEMENT',
-      imageUrl: d['imageUrl'] as String? ?? '',
-      logoUrl: d['logoUrl'] as String? ?? '',
-      likes: 0,
-      reactions: 0,
-      comments: 0,
-      shares: 0,
-      body: d['content'] as String? ?? '',
-      hashtags: [],
-      attachments: ((d['attachments'] as List?) ?? [])
-          .whereType<Map<String, dynamic>>()
-          .map((att) => att['name'] as String? ?? '')
-          .map((name) => {'name': name, 'type': 'pdf'})
-          .toList(),
-    );
-  }
+  // ── FIX: read imageBase64 (org field), fall back to imageUrl ──
+  final rawImage = d['imageBase64'] as String? ?? d['imageUrl'] as String? ?? '';
+
+  return AnnouncementData(
+    title: d['title'] as String? ?? '',
+    id: doc.id,
+    org: d['authorName'] as String? ?? 'Organization',
+    orgSub: (d['category'] as String?)?.toUpperCase() ?? 'ANNOUNCEMENT',
+    date: DateFormat('MMM dd, yyyy').format(dateTime),
+    time: DateFormat('h:mm a').format(dateTime),
+    isPinned: d['pinned'] as bool? ?? false,   // also fix: was always false
+    tag: (d['targetAudience'] as String?)?.toUpperCase() ??
+         (d['category'] as String?)?.toUpperCase() ?? 'ANNOUNCEMENT',
+    imageUrl: rawImage,                         // pass base64 string here
+    logoUrl: d['logoUrl'] as String? ?? '',
+    likes: 0,
+    reactions: 0,
+    comments: 0,
+    shares: 0,
+    body: d['content'] as String? ?? '',
+    hashtags: [],
+    attachments: ((d['attachmentsBase64'] as List?) ?? [])
+        .whereType<Map<String, dynamic>>()
+        .map((att) => {
+              'name': att['name'] as String? ?? '',
+              'type': _guessType(att['name'] as String? ?? ''),
+            })
+        .toList(),
+  );
+}
+
+// helper to guess attachment type from filename
+static String _guessType(String name) {
+  final ext = name.split('.').last.toLowerCase();
+  if (ext == 'pdf') return 'pdf';
+  if (['jpg', 'jpeg', 'png', 'gif', 'webp'].contains(ext)) return 'image';
+  return 'file';
+}
 }
 
 // ─────────────────────────────────────────────────────────────
