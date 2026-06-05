@@ -1277,12 +1277,19 @@ class _EventProposalsState extends State<EventProposals> {
                           Icons.description_outlined),
                       const SizedBox(height: 14),
                       _detailItem('Submitted By', data['submittedByEmail'] ?? '—',
-                          Icons.person_outline_rounded),
-                      if (data['reviewedAt'] != null) ...[
-                        const SizedBox(height: 14),
-                        _detailItem('Reviewed', _formatTimestamp(data['reviewedAt']),
-                            Icons.rate_review_outlined),
-                      ],
+    Icons.person_outline_rounded),
+const SizedBox(height: 14),
+_detailItem('Issues Certificate', 
+    (data['issuesCertificate'] == true) ? 'Yes ✅' : 'No ❌', 
+    Icons.verified_outlined,
+    valueColor: (data['issuesCertificate'] == true) 
+        ? const Color(0xFF059669) 
+        : const Color(0xFF6B7280)),
+if (data['reviewedAt'] != null) ...[
+  const SizedBox(height: 14),
+  _detailItem('Reviewed', _formatTimestamp(data['reviewedAt']),
+      Icons.rate_review_outlined),
+],
                       if (hasAttachment) ...[
                         const SizedBox(height: 20),
                         _sectionLabel('Attachment', icon: Icons.attach_file_rounded),

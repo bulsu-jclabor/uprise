@@ -1758,32 +1758,52 @@ class _CertGenerateModalState extends State<_CertGenerateModal> {
                   // Left: form
                   Expanded(flex: 3, child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                     _sectionLabel('Event & Template', icon: Icons.event_outlined),
-                    StreamBuilder<QuerySnapshot>(
-                      stream: FirebaseFirestore.instance.collection('event_proposals')
-                          .where('orgId', isEqualTo: widget.orgId).where('status', isEqualTo: 'approved')
-                          .where('issuesCertificate', isEqualTo: true).orderBy('date').snapshots(),
-                      builder: (ctx, snap) {
-                        final events = snap.data?.docs ?? [];
-                        return DropdownButtonFormField<String>(
-                          value: _selEventId,
-                          decoration: _DS.inputDeco('Select Event *', icon: Icons.event_rounded),
-                          style: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF1A202C)),
-                          hint: Text(events.isEmpty ? 'No eligible events' : 'Choose an approved event',
-                              style: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFFB0BAC8))),
-                          items: events.map((d) {
-                            final m = d.data() as Map<String, dynamic>;
-                            return DropdownMenuItem(value: d.id, child: Text(m['title'] ?? 'Untitled'));
-                          }).toList(),
-                          onChanged: (v) async {
-                            if (v == null) return;
-                            final doc = events.firstWhere((d) => d.id == v);
-                            final m = doc.data() as Map<String, dynamic>;
-                            setState(() { _selEventId = v; _titleCtrl.text = m['title'] ?? ''; _evaluated = m['evaluated'] == true; _selEventDocId = null; _recipients = 0; });
-                            _loadEventInfo(v);
-                          },
-                        );
-                      },
-                    ),
+                        StreamBuilder<QuerySnapshot>(
+  stream: FirebaseFirestore.instance.collection('event_proposals')
+      .where('orgId', isEqualTo: widget.orgId)
+      .where('status', isEqualTo: 'approved')
+      .orderBy('date')
+      .snapshots(),
+  builder: (ctx, snap) {
+    // I-filter manually dito
+    var allEvents = snap.data?.docs ?? [];
+    var events = allEvents.where((doc) {
+  final data = doc.data() as Map<String, dynamic>;
+  final issuesCert = data['issuesCertificate'];
+  
+  if (issuesCert == null) return false;
+  if (issuesCert is bool) return issuesCert == true;
+  if (issuesCert is String) return issuesCert.toLowerCase() == 'true';
+  if (issuesCert is num) return issuesCert == 1;
+  
+  return false;
+}).toList();
+    
+    return DropdownButtonFormField<String>(
+      value: _selEventId,
+      decoration: _DS.inputDeco('Select Event *', icon: Icons.event_rounded),
+      style: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF1A202C)),
+      hint: Text(events.isEmpty ? 'No eligible events' : 'Choose an approved event',
+          style: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFFB0BAC8))),
+      items: events.map((doc) {
+        final m = doc.data() as Map<String, dynamic>;
+        return DropdownMenuItem(value: doc.id, child: Text(m['title'] ?? 'Untitled'));
+      }).toList(),
+      onChanged: (v) async {
+        if (v == null) return;
+        final doc = events.firstWhere((d) => d.id == v);
+        final m = doc.data() as Map<String, dynamic>;
+        setState(() { 
+          _selEventId = v; 
+          _titleCtrl.text = m['title'] ?? ''; 
+          _evaluated = m['evaluated'] == true; 
+          _selEventDocId = null; 
+          _recipients = 0; 
+        });
+        _loadEventInfo(v);
+      },
+    );
+  }),
                     const SizedBox(height: 14),
                     // Template selector
                     Row(children: [
