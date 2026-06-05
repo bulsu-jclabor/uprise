@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'student_events_screen.dart';
 
 // ─────────────────────────────────────────────────────────────
 //  EVENT DETAIL SCREEN
 // ─────────────────────────────────────────────────────────────
-class EventDetailScreen extends StatelessWidget {
+class EventDetailScreen extends StatefulWidget {
   final EventData event;
   final VoidCallback onRegistered;
 
@@ -13,6 +15,29 @@ class EventDetailScreen extends StatelessWidget {
     required this.event,
     required this.onRegistered,
   });
+
+  @override
+  State<EventDetailScreen> createState() => _EventDetailScreenState();
+}
+
+class _EventDetailScreenState extends State<EventDetailScreen> {
+  late bool _isRegistered;
+  late int _slotsLeft;
+
+  @override
+  void initState() {
+    super.initState();
+    _isRegistered = widget.event.isRegistered;
+    _slotsLeft = widget.event.slotsLeft;
+  }
+
+  void _onRegistered() {
+    setState(() {
+      _isRegistered = true;
+      _slotsLeft = (_slotsLeft - 1).clamp(0, widget.event.slots);
+    });
+    widget.onRegistered();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -62,7 +87,7 @@ class EventDetailScreen extends StatelessWidget {
                     fit: StackFit.expand,
                     children: [
                       Image.network(
-                        event.bannerUrl,
+                        widget.event.bannerUrl,
                         fit: BoxFit.cover,
                         errorBuilder: (_, __, ___) => Container(
                           color: Colors.grey[800],
@@ -76,7 +101,6 @@ class EventDetailScreen extends StatelessWidget {
                             begin: Alignment.topCenter,
                             end: Alignment.bottomCenter,
                             colors: [Color(0x44000000), Color(0xBB000000)],
-                            stops: [0.0, 1.0],
                           ),
                         ),
                       ),
@@ -88,10 +112,10 @@ class EventDetailScreen extends StatelessWidget {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            _CategoryBadge(category: event.category),
+                            _CategoryBadge(category: widget.event.category),
                             const SizedBox(height: 6),
                             Text(
-                              event.title,
+                              widget.event.title,
                               style: const TextStyle(
                                 fontSize: 26,
                                 fontWeight: FontWeight.w900,
@@ -100,7 +124,7 @@ class EventDetailScreen extends StatelessWidget {
                               ),
                             ),
                             Text(
-                              event.subtitle,
+                              widget.event.subtitle,
                               style: const TextStyle(
                                 fontSize: 10,
                                 fontWeight: FontWeight.w600,
@@ -130,7 +154,8 @@ class EventDetailScreen extends StatelessWidget {
                           children: [
                             CircleAvatar(
                               radius: 20,
-                              backgroundImage: NetworkImage(event.logoUrl),
+                              backgroundImage:
+                                  NetworkImage(widget.event.logoUrl),
                               backgroundColor: Colors.grey[200],
                               onBackgroundImageError: (_, __) {},
                             ),
@@ -139,7 +164,7 @@ class EventDetailScreen extends StatelessWidget {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  event.organizer,
+                                  widget.event.organizer,
                                   style: const TextStyle(
                                     fontSize: 13,
                                     fontWeight: FontWeight.w700,
@@ -147,7 +172,7 @@ class EventDetailScreen extends StatelessWidget {
                                   ),
                                 ),
                                 Text(
-                                  event.organizerSub,
+                                  widget.event.organizerSub,
                                   style: const TextStyle(
                                     fontSize: 11,
                                     color: Colors.grey,
@@ -157,7 +182,7 @@ class EventDetailScreen extends StatelessWidget {
                             ),
                             const Spacer(),
                             Text(
-                              event.id,
+                              widget.event.id,
                               style: const TextStyle(
                                 fontSize: 11,
                                 color: Color(0xFFAAAAAA),
@@ -175,14 +200,16 @@ class EventDetailScreen extends StatelessWidget {
                           icon: Icons.calendar_today_outlined,
                           iconColor: const Color(0xFFE53935),
                           label: 'Date & Time',
-                          value: '${event.date}  •  ${event.time}',
+                          value:
+                              '${widget.event.date}  •  ${widget.event.time}',
                         ),
                         const SizedBox(height: 10),
                         _InfoTile(
                           icon: Icons.people_outline,
                           iconColor: const Color(0xFF1565C0),
                           label: 'Slots Available',
-                          value: '${event.slotsLeft} of ${event.slots} remaining',
+                          value:
+                              '$_slotsLeft of ${widget.event.slots} remaining',
                         ),
 
                         const SizedBox(height: 16),
@@ -201,7 +228,7 @@ class EventDetailScreen extends StatelessWidget {
                         ),
                         const SizedBox(height: 10),
                         Text(
-                          event.description,
+                          widget.event.description,
                           style: const TextStyle(
                             fontSize: 14,
                             color: Colors.black87,
@@ -224,9 +251,8 @@ class EventDetailScreen extends StatelessWidget {
                           ),
                         ),
                         const SizedBox(height: 10),
-                        _LocationCard(location: event.location),
+                        _LocationCard(location: widget.event.location),
 
-                        // Bottom padding for sticky button
                         const SizedBox(height: 100),
                       ],
                     ),
@@ -258,26 +284,25 @@ class EventDetailScreen extends StatelessWidget {
                 top: false,
                 child: Row(
                   children: [
-                    // Slots summary
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Text(
-                            event.slotsLeft <= 10
+                            _slotsLeft <= 10
                                 ? 'Almost Full!'
-                                : '${event.slotsLeft} slots left',
+                                : '$_slotsLeft slots left',
                             style: TextStyle(
                               fontSize: 13,
                               fontWeight: FontWeight.w700,
-                              color: event.slotsLeft <= 10
+                              color: _slotsLeft <= 10
                                   ? const Color(0xFFE53935)
                                   : Colors.black87,
                             ),
                           ),
                           Text(
-                            event.date,
+                            widget.event.date,
                             style: const TextStyle(
                                 fontSize: 11, color: Colors.grey),
                           ),
@@ -285,21 +310,24 @@ class EventDetailScreen extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(width: 12),
-                    event.isRegistered
+                    _isRegistered
                         ? _RegisteredChip()
-                        : _RegisterButton(
-                            onTap: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => EventRegistrationScreen(
-                                    event: event,
-                                    onRegistered: onRegistered,
-                                  ),
-                                ),
-                              );
-                            },
-                          ),
+                        : _slotsLeft <= 0
+                            ? _FullChip()
+                            : _RegisterButton(
+                                onTap: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) =>
+                                          EventRegistrationScreen(
+                                        event: widget.event,
+                                        onRegistered: _onRegistered,
+                                      ),
+                                    ),
+                                  );
+                                },
+                              ),
                   ],
                 ),
               ),
@@ -329,7 +357,8 @@ class EventRegistrationScreen extends StatefulWidget {
       _EventRegistrationScreenState();
 }
 
-class _EventRegistrationScreenState extends State<EventRegistrationScreen> {
+class _EventRegistrationScreenState
+    extends State<EventRegistrationScreen> {
   final _formKey = GlobalKey<FormState>();
   final _firstNameCtrl = TextEditingController();
   final _lastNameCtrl = TextEditingController();
@@ -338,6 +367,7 @@ class _EventRegistrationScreenState extends State<EventRegistrationScreen> {
   final _emailCtrl = TextEditingController();
   bool _isLoading = false;
   bool _submitted = false;
+  String? _errorMessage;
 
   @override
   void dispose() {
@@ -350,15 +380,88 @@ class _EventRegistrationScreenState extends State<EventRegistrationScreen> {
   }
 
   Future<void> _submit() async {
-    if (!_formKey.currentState!.validate()) return;
-    setState(() => _isLoading = true);
-    await Future.delayed(const Duration(milliseconds: 1500));
+  if (!_formKey.currentState!.validate()) return;
+  setState(() {
+    _isLoading = true;
+    _errorMessage = null;
+  });
+
+  try {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) throw Exception('Not logged in');
+
+    final db = FirebaseFirestore.instance;
+    final eventRef = db.collection('events').doc(widget.event.id);
+
+    // ── 1. Check if already registered (prevent duplicates) ──
+    final existingReg = await db
+        .collection('registrations')
+        .where('eventId', isEqualTo: widget.event.id)
+        .where('userId', isEqualTo: user.uid)
+        .get();
+
+    if (existingReg.docs.isNotEmpty) {
+      setState(() {
+        _isLoading = false;
+        _errorMessage = 'You are already registered for this event.';
+      });
+      return;
+    }
+
+    // ── 2. Check slots inside a transaction ──
+    await db.runTransaction((transaction) async {
+      final eventSnap = await transaction.get(eventRef);
+      final data = eventSnap.data() as Map<String, dynamic>? ?? {};
+
+      // Gamitin slotsLeft kung meron, otherwise fallback sa capacity
+      final capacity = (data['capacity'] ?? 0) as int;
+      final currentSlots = data.containsKey('slotsLeft')
+          ? (data['slotsLeft'] as int)
+          : capacity;
+
+      if (currentSlots <= 0) {
+        throw Exception('No slots available');
+      }
+
+      // ── 3. Save registration document ──
+      final regRef = db.collection('registrations').doc();
+      transaction.set(regRef, {
+        'eventId': widget.event.id,
+        'eventTitle': widget.event.title,
+        'userId': user.uid,
+        'firstName': _firstNameCtrl.text.trim(),
+        'lastName': _lastNameCtrl.text.trim(),
+        'studentId': _studentIdCtrl.text.trim(),
+        'course': _courseCtrl.text.trim(),
+        'email': _emailCtrl.text.trim(),
+        'registeredAt': FieldValue.serverTimestamp(),
+        'status': 'registered',
+      });
+
+      // ── 4. Minus slots ──
+      transaction.update(eventRef, {
+        'slotsLeft': currentSlots - 1,
+      });
+    });
+
+    // ── 5. Success ──
     widget.onRegistered();
     setState(() {
       _isLoading = false;
       _submitted = true;
     });
+  } on FirebaseException catch (e) {
+    setState(() {
+      _isLoading = false;
+      _errorMessage = e.message ?? 'Something went wrong. Try again.';
+    });
+  } catch (e) {
+    setState(() {
+      _isLoading = false;
+      _errorMessage = e.toString().replaceAll('Exception: ', '');
+    });
   }
+}
 
   @override
   Widget build(BuildContext context) {
@@ -378,17 +481,20 @@ class _EventRegistrationScreenState extends State<EventRegistrationScreen> {
           ),
         ),
       ),
-      body: _submitted ? _SuccessView(event: widget.event) : _FormView(
-        event: widget.event,
-        formKey: _formKey,
-        firstNameCtrl: _firstNameCtrl,
-        lastNameCtrl: _lastNameCtrl,
-        studentIdCtrl: _studentIdCtrl,
-        courseCtrl: _courseCtrl,
-        emailCtrl: _emailCtrl,
-        isLoading: _isLoading,
-        onSubmit: _submit,
-      ),
+      body: _submitted
+          ? _SuccessView(event: widget.event)
+          : _FormView(
+              event: widget.event,
+              formKey: _formKey,
+              firstNameCtrl: _firstNameCtrl,
+              lastNameCtrl: _lastNameCtrl,
+              studentIdCtrl: _studentIdCtrl,
+              courseCtrl: _courseCtrl,
+              emailCtrl: _emailCtrl,
+              isLoading: _isLoading,
+              errorMessage: _errorMessage,
+              onSubmit: _submit,
+            ),
     );
   }
 }
@@ -405,6 +511,7 @@ class _FormView extends StatelessWidget {
   final TextEditingController courseCtrl;
   final TextEditingController emailCtrl;
   final bool isLoading;
+  final String? errorMessage;
   final VoidCallback onSubmit;
 
   const _FormView({
@@ -416,6 +523,7 @@ class _FormView extends StatelessWidget {
     required this.courseCtrl,
     required this.emailCtrl,
     required this.isLoading,
+    required this.errorMessage,
     required this.onSubmit,
   });
 
@@ -475,9 +583,7 @@ class _FormView extends StatelessWidget {
                         Text(
                           event.date,
                           style: const TextStyle(
-                            fontSize: 12,
-                            color: Colors.grey,
-                          ),
+                              fontSize: 12, color: Colors.grey),
                         ),
                         const SizedBox(height: 4),
                         Text(
@@ -499,7 +605,6 @@ class _FormView extends StatelessWidget {
 
             const SizedBox(height: 20),
 
-            // ── Registration form header ──
             const Text(
               'EVENT REGISTRATION',
               style: TextStyle(
@@ -517,6 +622,34 @@ class _FormView extends StatelessWidget {
 
             const SizedBox(height: 16),
 
+            // ── Error message ──
+            if (errorMessage != null)
+              Container(
+                margin: const EdgeInsets.only(bottom: 12),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFEBEE),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: const Color(0xFFE53935)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.error_outline,
+                        color: Color(0xFFE53935), size: 18),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        errorMessage!,
+                        style: const TextStyle(
+                          color: Color(0xFFE53935),
+                          fontSize: 12,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
@@ -532,7 +665,6 @@ class _FormView extends StatelessWidget {
               ),
               child: Column(
                 children: [
-                  // First + Last name row
                   Row(
                     children: [
                       Expanded(
@@ -561,17 +693,14 @@ class _FormView extends StatelessWidget {
                     ],
                   ),
                   const SizedBox(height: 14),
-
                   _FormField(
                     label: 'Student Number',
                     controller: studentIdCtrl,
                     hint: 'e.g. 2021-00123',
-                    keyboardType: TextInputType.text,
                     validator: (v) =>
                         v == null || v.trim().isEmpty ? 'Required' : null,
                   ),
                   const SizedBox(height: 14),
-
                   _FormField(
                     label: 'Course / Program',
                     controller: courseCtrl,
@@ -580,7 +709,6 @@ class _FormView extends StatelessWidget {
                         v == null || v.trim().isEmpty ? 'Required' : null,
                   ),
                   const SizedBox(height: 14),
-
                   _FormField(
                     label: 'School Email',
                     controller: emailCtrl,
@@ -598,7 +726,6 @@ class _FormView extends StatelessWidget {
 
             const SizedBox(height: 24),
 
-            // ── Submit button ──
             SizedBox(
               width: double.infinity,
               height: 52,
@@ -699,7 +826,6 @@ class _SuccessView extends StatelessWidget {
               height: 50,
               child: ElevatedButton(
                 onPressed: () {
-                  // Pop back to events list (2 screens back)
                   Navigator.pop(context);
                   Navigator.pop(context);
                 },
@@ -782,8 +908,8 @@ class _FormField extends StatelessWidget {
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(10),
-              borderSide: const BorderSide(
-                  color: Color(0xFFE53935), width: 1.5),
+              borderSide:
+                  const BorderSide(color: Color(0xFFE53935), width: 1.5),
             ),
             errorBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(10),
@@ -836,22 +962,16 @@ class _InfoTile extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                label,
-                style: const TextStyle(
-                  fontSize: 11,
-                  color: Colors.grey,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-              Text(
-                value,
-                style: const TextStyle(
-                  fontSize: 13,
-                  color: Colors.black87,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
+              Text(label,
+                  style: const TextStyle(
+                      fontSize: 11,
+                      color: Colors.grey,
+                      fontWeight: FontWeight.w500)),
+              Text(value,
+                  style: const TextStyle(
+                      fontSize: 13,
+                      color: Colors.black87,
+                      fontWeight: FontWeight.w600)),
             ],
           ),
         ),
@@ -877,7 +997,6 @@ class _LocationCard extends StatelessWidget {
       ),
       child: Column(
         children: [
-          // Map placeholder
           ClipRRect(
             borderRadius:
                 const BorderRadius.vertical(top: Radius.circular(12)),
@@ -887,12 +1006,10 @@ class _LocationCard extends StatelessWidget {
               child: Stack(
                 alignment: Alignment.center,
                 children: [
-                  // Grid lines
                   CustomPaint(
                     size: const Size(double.infinity, 120),
                     painter: _MapGridPainter(),
                   ),
-                  // Pin
                   Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
@@ -906,16 +1023,14 @@ class _LocationCard extends StatelessWidget {
                         child: const Icon(Icons.location_on,
                             size: 20, color: Colors.white),
                       ),
-                      Container(
-                        width: 2,
-                        height: 10,
-                        color: const Color(0xFFE53935),
-                      ),
+                      Container(width: 2, height: 10,
+                          color: const Color(0xFFE53935)),
                       Container(
                         width: 8,
                         height: 4,
                         decoration: BoxDecoration(
-                          color: const Color(0xFFE53935).withOpacity(0.3),
+                          color:
+                              const Color(0xFFE53935).withOpacity(0.3),
                           borderRadius: BorderRadius.circular(2),
                         ),
                       ),
@@ -925,7 +1040,6 @@ class _LocationCard extends StatelessWidget {
               ),
             ),
           ),
-          // Address row
           Padding(
             padding: const EdgeInsets.all(12),
             child: Row(
@@ -934,14 +1048,11 @@ class _LocationCard extends StatelessWidget {
                     size: 18, color: Color(0xFFE53935)),
                 const SizedBox(width: 8),
                 Expanded(
-                  child: Text(
-                    location,
-                    style: const TextStyle(
-                      fontSize: 13,
-                      color: Colors.black87,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
+                  child: Text(location,
+                      style: const TextStyle(
+                          fontSize: 13,
+                          color: Colors.black87,
+                          fontWeight: FontWeight.w500)),
                 ),
               ],
             ),
@@ -953,7 +1064,7 @@ class _LocationCard extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────
-//  MAP GRID PAINTER (decorative)
+//  MAP GRID PAINTER
 // ─────────────────────────────────────────────────────────────
 class _MapGridPainter extends CustomPainter {
   @override
@@ -961,7 +1072,6 @@ class _MapGridPainter extends CustomPainter {
     final paint = Paint()
       ..color = const Color(0xFFBBBEE8)
       ..strokeWidth = 0.8;
-
     const spacing = 24.0;
     for (double x = 0; x < size.width; x += spacing) {
       canvas.drawLine(Offset(x, 0), Offset(x, size.height), paint);
@@ -969,20 +1079,14 @@ class _MapGridPainter extends CustomPainter {
     for (double y = 0; y < size.height; y += spacing) {
       canvas.drawLine(Offset(0, y), Offset(size.width, y), paint);
     }
-
-    // Roads
     final roadPaint = Paint()
       ..color = Colors.white
       ..strokeWidth = 8
       ..strokeCap = StrokeCap.round;
-    canvas.drawLine(
-        Offset(0, size.height * 0.5),
-        Offset(size.width, size.height * 0.5),
-        roadPaint);
-    canvas.drawLine(
-        Offset(size.width * 0.4, 0),
-        Offset(size.width * 0.4, size.height),
-        roadPaint);
+    canvas.drawLine(Offset(0, size.height * 0.5),
+        Offset(size.width, size.height * 0.5), roadPaint);
+    canvas.drawLine(Offset(size.width * 0.4, 0),
+        Offset(size.width * 0.4, size.height), roadPaint);
   }
 
   @override
@@ -1017,10 +1121,9 @@ class _RegisterButton extends StatelessWidget {
         child: const Text(
           'Register Now',
           style: TextStyle(
-            color: Colors.white,
-            fontSize: 14,
-            fontWeight: FontWeight.w700,
-          ),
+              color: Colors.white,
+              fontSize: 14,
+              fontWeight: FontWeight.w700),
         ),
       ),
     );
@@ -1043,17 +1146,13 @@ class _RegisteredChip extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: const [
-          Icon(Icons.check_circle,
-              size: 16, color: Color(0xFF2E7D32)),
+          Icon(Icons.check_circle, size: 16, color: Color(0xFF2E7D32)),
           SizedBox(width: 6),
-          Text(
-            'Registered',
-            style: TextStyle(
-              color: Color(0xFF2E7D32),
-              fontSize: 14,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
+          Text('Registered',
+              style: TextStyle(
+                  color: Color(0xFF2E7D32),
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700)),
         ],
       ),
     );
@@ -1061,14 +1160,43 @@ class _RegisteredChip extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────
-//  CATEGORY BADGE (shared)
+//  FULL CHIP (when no slots left)
+// ─────────────────────────────────────────────────────────────
+class _FullChip extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF3E0),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFFFB74D)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: const [
+          Icon(Icons.block, size: 16, color: Color(0xFFE65100)),
+          SizedBox(width: 6),
+          Text('Event Full',
+              style: TextStyle(
+                  color: Color(0xFFE65100),
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700)),
+        ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+//  CATEGORY BADGE
 // ─────────────────────────────────────────────────────────────
 class _CategoryBadge extends StatelessWidget {
   final String category;
   const _CategoryBadge({required this.category});
 
   Color get _color {
-    switch (category) {
+    switch (category.toLowerCase()) {
       case 'competition':
         return const Color(0xFFFF6F00);
       case 'workshop':
