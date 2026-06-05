@@ -9,11 +9,13 @@ import 'student_events_screen.dart';
 class EventDetailScreen extends StatefulWidget {
   final EventData event;
   final VoidCallback onRegistered;
+  final bool isPastEvent;
 
   const EventDetailScreen({
     super.key,
     required this.event,
     required this.onRegistered,
+    this.isPastEvent = false,
   });
 
   @override
@@ -37,6 +39,14 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
       _slotsLeft = (_slotsLeft - 1).clamp(0, widget.event.slots);
     });
     widget.onRegistered();
+    
+    // Bumalik sa events screen para makita ang updated My Events tab
+    Future.delayed(const Duration(milliseconds: 500), () {
+      if (mounted) {
+        Navigator.pop(context); // Isara ang registration screen
+        Navigator.pop(context); // Isara ang details screen
+      }
+    });
   }
 
   @override
@@ -74,7 +84,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                   ),
                 ),
                 title: const Text(
-                  'Upcoming Event',
+                  'Event Details',
                   style: TextStyle(
                     fontSize: 17,
                     fontWeight: FontWeight.w700,
@@ -290,15 +300,19 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Text(
-                            _slotsLeft <= 10
-                                ? 'Almost Full!'
-                                : '$_slotsLeft slots left',
+                            widget.isPastEvent
+                                ? 'Event Already Passed'
+                                : (_slotsLeft <= 10
+                                    ? 'Almost Full!'
+                                    : '$_slotsLeft slots left'),
                             style: TextStyle(
                               fontSize: 13,
                               fontWeight: FontWeight.w700,
-                              color: _slotsLeft <= 10
-                                  ? const Color(0xFFE53935)
-                                  : Colors.black87,
+                              color: widget.isPastEvent
+                                  ? Colors.grey
+                                  : (_slotsLeft <= 10
+                                      ? const Color(0xFFE53935)
+                                      : Colors.black87),
                             ),
                           ),
                           Text(
@@ -310,24 +324,27 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                       ),
                     ),
                     const SizedBox(width: 12),
-                    _isRegistered
-                        ? _RegisteredChip()
-                        : _slotsLeft <= 0
-                            ? _FullChip()
-                            : _RegisterButton(
-                                onTap: () {
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (_) =>
-                                          EventRegistrationScreen(
-                                        event: widget.event,
-                                        onRegistered: _onRegistered,
-                                      ),
-                                    ),
-                                  );
-                                },
+                    if (widget.isPastEvent)
+                      _PastEventChip()
+                    else if (_isRegistered)
+                      _RegisteredChip()
+                    else if (_slotsLeft <= 0)
+                      _FullChip()
+                    else
+                      _RegisterButton(
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) =>
+                                  EventRegistrationScreen(
+                                event: widget.event,
+                                onRegistered: _onRegistered,
                               ),
+                            ),
+                          );
+                        },
+                      ),
                   ],
                 ),
               ),
@@ -380,88 +397,87 @@ class _EventRegistrationScreenState
   }
 
   Future<void> _submit() async {
-  if (!_formKey.currentState!.validate()) return;
-  setState(() {
-    _isLoading = true;
-    _errorMessage = null;
-  });
+    if (!_formKey.currentState!.validate()) return;
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
 
-  try {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) throw Exception('Not logged in');
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) throw Exception('Not logged in');
 
-    final db = FirebaseFirestore.instance;
-    final eventRef = db.collection('events').doc(widget.event.id);
+      final db = FirebaseFirestore.instance;
+      final eventRef = db.collection('events').doc(widget.event.id);
 
-    // ── 1. Check if already registered (prevent duplicates) ──
-    final existingReg = await db
-        .collection('registrations')
-        .where('eventId', isEqualTo: widget.event.id)
-        .where('userId', isEqualTo: user.uid)
-        .get();
+      // ── 1. Check if already registered (prevent duplicates) ──
+      final existingReg = await db
+          .collection('registrations')
+          .where('eventId', isEqualTo: widget.event.id)
+          .where('userId', isEqualTo: user.uid)
+          .get();
 
-    if (existingReg.docs.isNotEmpty) {
-      setState(() {
-        _isLoading = false;
-        _errorMessage = 'You are already registered for this event.';
-      });
-      return;
-    }
-
-    // ── 2. Check slots inside a transaction ──
-    await db.runTransaction((transaction) async {
-      final eventSnap = await transaction.get(eventRef);
-      final data = eventSnap.data() as Map<String, dynamic>? ?? {};
-
-      // Gamitin slotsLeft kung meron, otherwise fallback sa capacity
-      final capacity = (data['capacity'] ?? 0) as int;
-      final currentSlots = data.containsKey('slotsLeft')
-          ? (data['slotsLeft'] as int)
-          : capacity;
-
-      if (currentSlots <= 0) {
-        throw Exception('No slots available');
+      if (existingReg.docs.isNotEmpty) {
+        setState(() {
+          _isLoading = false;
+          _errorMessage = 'You are already registered for this event.';
+        });
+        return;
       }
 
-      // ── 3. Save registration document ──
-      final regRef = db.collection('registrations').doc();
-      transaction.set(regRef, {
-        'eventId': widget.event.id,
-        'eventTitle': widget.event.title,
-        'userId': user.uid,
-        'firstName': _firstNameCtrl.text.trim(),
-        'lastName': _lastNameCtrl.text.trim(),
-        'studentId': _studentIdCtrl.text.trim(),
-        'course': _courseCtrl.text.trim(),
-        'email': _emailCtrl.text.trim(),
-        'registeredAt': FieldValue.serverTimestamp(),
-        'status': 'registered',
+      // ── 2. Check slots inside a transaction ──
+      await db.runTransaction((transaction) async {
+        final eventSnap = await transaction.get(eventRef);
+        final data = eventSnap.data() as Map<String, dynamic>? ?? {};
+
+        final capacity = (data['capacity'] ?? 0) as int;
+        final currentSlots = data.containsKey('slotsLeft')
+            ? (data['slotsLeft'] as int)
+            : capacity;
+
+        if (currentSlots <= 0) {
+          throw Exception('No slots available');
+        }
+
+        // ── 3. Save registration document ──
+        final regRef = db.collection('registrations').doc();
+        transaction.set(regRef, {
+          'eventId': widget.event.id,
+          'eventTitle': widget.event.title,
+          'userId': user.uid,
+          'firstName': _firstNameCtrl.text.trim(),
+          'lastName': _lastNameCtrl.text.trim(),
+          'studentId': _studentIdCtrl.text.trim(),
+          'course': _courseCtrl.text.trim(),
+          'email': _emailCtrl.text.trim(),
+          'registeredAt': FieldValue.serverTimestamp(),
+          'status': 'registered',
+        });
+
+        // ── 4. Minus slots ──
+        transaction.update(eventRef, {
+          'slotsLeft': currentSlots - 1,
+        });
       });
 
-      // ── 4. Minus slots ──
-      transaction.update(eventRef, {
-        'slotsLeft': currentSlots - 1,
+      // ── 5. Success ──
+      widget.onRegistered();
+      setState(() {
+        _isLoading = false;
+        _submitted = true;
       });
-    });
-
-    // ── 5. Success ──
-    widget.onRegistered();
-    setState(() {
-      _isLoading = false;
-      _submitted = true;
-    });
-  } on FirebaseException catch (e) {
-    setState(() {
-      _isLoading = false;
-      _errorMessage = e.message ?? 'Something went wrong. Try again.';
-    });
-  } catch (e) {
-    setState(() {
-      _isLoading = false;
-      _errorMessage = e.toString().replaceAll('Exception: ', '');
-    });
+    } on FirebaseException catch (e) {
+      setState(() {
+        _isLoading = false;
+        _errorMessage = e.message ?? 'Something went wrong. Try again.';
+      });
+    } catch (e) {
+      setState(() {
+        _isLoading = false;
+        _errorMessage = e.toString().replaceAll('Exception: ', '');
+      });
+    }
   }
-}
 
   @override
   Widget build(BuildContext context) {
@@ -827,7 +843,6 @@ class _SuccessView extends StatelessWidget {
               child: ElevatedButton(
                 onPressed: () {
                   Navigator.pop(context);
-                  Navigator.pop(context);
                 },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFFE53935),
@@ -838,7 +853,7 @@ class _SuccessView extends StatelessWidget {
                   ),
                 ),
                 child: const Text(
-                  'Back to Events',
+                  'Back to Event',
                   style: TextStyle(
                     fontSize: 15,
                     fontWeight: FontWeight.w700,
@@ -1182,6 +1197,38 @@ class _FullChip extends StatelessWidget {
                   color: Color(0xFFE65100),
                   fontSize: 14,
                   fontWeight: FontWeight.w700)),
+        ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+//  PAST EVENT CHIP (cannot register)
+// ─────────────────────────────────────────────────────────────
+class _PastEventChip extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+      decoration: BoxDecoration(
+        color: Colors.grey[200],
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey[400]!),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.event_busy, size: 16, color: Colors.grey[600]),
+          const SizedBox(width: 6),
+          Text(
+            'Event Ended',
+            style: TextStyle(
+              color: Colors.grey[600],
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
         ],
       ),
     );

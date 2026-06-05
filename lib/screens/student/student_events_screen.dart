@@ -24,6 +24,8 @@ class EventData {
   final int slots;
   final int slotsLeft;
   final bool isPublic;
+  final bool isPast;
+  final DateTime rawDate;
 
   const EventData({
     required this.id,
@@ -42,6 +44,8 @@ class EventData {
     required this.slots,
     required this.slotsLeft,
     this.isPublic = true,
+    required this.isPast,
+    required this.rawDate,
   });
 
   factory EventData.fromFirestore(DocumentSnapshot doc,
@@ -51,6 +55,9 @@ class EventData {
     final dateTime = timestamp is Timestamp
         ? timestamp.toDate()
         : DateTime.tryParse(d['date']?.toString() ?? '') ?? DateTime.now();
+    
+    final now = DateTime.now();
+    final isPast = dateTime.isBefore(now);
 
     return EventData(
       id: doc.id,
@@ -69,6 +76,8 @@ class EventData {
       slots: d['capacity'] ?? 0,
       slotsLeft: d['slotsLeft'] ?? d['capacity'] ?? 0,
       isPublic: d['isPublic'] ?? true,
+      isPast: isPast,
+      rawDate: dateTime,
     );
   }
 }
@@ -102,6 +111,7 @@ class _StudentEventsScreenState extends State<StudentEventsScreen>
         builder: (_) => EventDetailScreen(
           event: event,
           onRegistered: () => setState(() {}),
+          isPastEvent: event.isPast,
         ),
       ),
     );
@@ -183,7 +193,7 @@ class _StudentEventsScreenState extends State<StudentEventsScreen>
             },
           ),
 
-          // ── MY EVENTS TAB ──
+          // ── MY EVENTS TAB (FIXED - auto refresh) ──
           _MyEventsTabFetcher(onEventTap: _openDetail),
         ],
       ),
@@ -192,7 +202,7 @@ class _StudentEventsScreenState extends State<StudentEventsScreen>
 }
 
 // ─────────────────────────────────────────────
-//  MY EVENTS FETCHER (queries registrations → fetches events)
+//  MY EVENTS TAB (FIXED - real-time auto refresh)
 // ─────────────────────────────────────────────
 class _MyEventsTabFetcher extends StatelessWidget {
   final ValueChanged<EventData> onEventTap;
@@ -205,19 +215,21 @@ class _MyEventsTabFetcher extends StatelessWidget {
       return const Center(child: Text('Not logged in'));
     }
 
+    // Listen to registrations changes in REAL-TIME
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance
           .collection('registrations')
           .where('userId', isEqualTo: user.uid)
-          .orderBy('registeredAt', descending: true)
-          .snapshots(),
+          .snapshots(), // <-- REAL-TIME!
       builder: (context, regSnap) {
         if (regSnap.connectionState == ConnectionState.waiting) {
           return const Center(
               child: CircularProgressIndicator(color: Color(0xFFE53935)));
         }
 
-        if (!regSnap.hasData || regSnap.data!.docs.isEmpty) {
+        final registeredDocs = regSnap.data?.docs ?? [];
+        
+        if (registeredDocs.isEmpty) {
           return Center(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -243,39 +255,63 @@ class _MyEventsTabFetcher extends StatelessWidget {
         }
 
         // Get all eventIds from registrations
-        final eventIds = regSnap.data!.docs
-            .map((d) => d['eventId'] as String)
-            .toList();
+        final eventIds = registeredDocs.map((d) => d['eventId'] as String).toList();
+        
+        // If more than 10 events, we need to fetch in chunks
+        if (eventIds.length > 10) {
+          return _buildMultiChunkEvents(eventIds);
+        }
 
-        return FutureBuilder<List<EventData>>(
-          future: _fetchEventsByIds(eventIds),
+        // Listen to events changes in REAL-TIME
+        return StreamBuilder<QuerySnapshot>(
+          stream: FirebaseFirestore.instance
+              .collection('events')
+              .where(FieldPath.documentId, whereIn: eventIds)
+              .snapshots(), // <-- REAL-TIME!
           builder: (context, eventSnap) {
             if (eventSnap.connectionState == ConnectionState.waiting) {
               return const Center(
-                  child: CircularProgressIndicator(
-                      color: Color(0xFFE53935)));
+                  child: CircularProgressIndicator(color: Color(0xFFE53935)));
             }
 
-            final myEvents = eventSnap.data ?? [];
-
-            if (myEvents.isEmpty) {
-              return const Center(
-                  child: Text('No registered events yet'));
+            if (!eventSnap.hasData || eventSnap.data!.docs.isEmpty) {
+              return const Center(child: Text('No registered events yet'));
             }
 
-            return _MyEventsTab(
-                events: myEvents, onEventTap: onEventTap);
+            final myEvents = eventSnap.data!.docs
+                .map((doc) => EventData.fromFirestore(doc, isRegistered: true))
+                .toList();
+
+            return _MyEventsTab(events: myEvents, onEventTap: onEventTap);
           },
         );
       },
     );
   }
 
-  Future<List<EventData>> _fetchEventsByIds(
-      List<String> eventIds) async {
+  // For more than 10 registered events (though rare)
+  Widget _buildMultiChunkEvents(List<String> eventIds) {
+    return FutureBuilder<List<EventData>>(
+      future: _fetchEventsByIds(eventIds),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(
+              child: CircularProgressIndicator(color: Color(0xFFE53935)));
+        }
+        
+        final myEvents = snapshot.data ?? [];
+        if (myEvents.isEmpty) {
+          return const Center(child: Text('No registered events yet'));
+        }
+        
+        return _MyEventsTab(events: myEvents, onEventTap: onEventTap);
+      },
+    );
+  }
+
+  Future<List<EventData>> _fetchEventsByIds(List<String> eventIds) async {
     if (eventIds.isEmpty) return [];
 
-    // Firestore whereIn supports max 10 items — chunk if needed
     final chunks = <List<String>>[];
     for (var i = 0; i < eventIds.length; i += 10) {
       chunks.add(eventIds.sublist(
