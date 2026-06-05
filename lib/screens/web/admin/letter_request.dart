@@ -1,4 +1,4 @@
-// lib/screens/web/admin/letter_request.dart - COMPLETE WORKING VERSION
+// lib/screens/web/admin/letter_request.dart - CORRECTED VERSION
 
 import 'dart:convert';
 import 'dart:typed_data';
@@ -41,7 +41,6 @@ class _AdminLetterRequestScreenState extends State<AdminLetterRequestScreen> {
   int _currentPage = 1;
   static const int _pageSize = 10;
 
-  // Cache for org logos
   final Map<String, String> _orgLogoCache = {};
 
   @override
@@ -289,12 +288,10 @@ class _AdminLetterRequestScreenState extends State<AdminLetterRequestScreen> {
               border: isLast ? null : const Border(bottom: BorderSide(color: Color(0xFFF1F5F9))),
             ),
             child: Row(children: [
-              // REQUESTOR with Logo
               Expanded(
                 flex: 3,
                 child: Row(
                   children: [
-                    // Logo
                     Container(
                       width: 36,
                       height: 36,
@@ -315,7 +312,6 @@ class _AdminLetterRequestScreenState extends State<AdminLetterRequestScreen> {
                           : _defaultAvatar(),
                     ),
                     const SizedBox(width: 12),
-                    // Org Name only (no email)
                     Expanded(
                       child: Text(
                         data['orgName'] ?? 'Unknown',
@@ -330,7 +326,6 @@ class _AdminLetterRequestScreenState extends State<AdminLetterRequestScreen> {
                   ],
                 ),
               ),
-              // LETTER ID
               Expanded(
                 flex: 2,
                 child: Text(
@@ -343,7 +338,6 @@ class _AdminLetterRequestScreenState extends State<AdminLetterRequestScreen> {
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
-              // SUBJECT
               Expanded(
                 flex: 3,
                 child: Column(
@@ -375,7 +369,6 @@ class _AdminLetterRequestScreenState extends State<AdminLetterRequestScreen> {
                   ],
                 ),
               ),
-              // DATE
               Expanded(
                 flex: 2,
                 child: Text(
@@ -386,20 +379,22 @@ class _AdminLetterRequestScreenState extends State<AdminLetterRequestScreen> {
                   ),
                 ),
               ),
-              // STATUS
               Expanded(flex: 1, child: _buildStatusBadge(status)),
-              // ACTIONS
+              // ============ ACTIONS - CORRECTED LOGIC ============
               Expanded(
                 flex: 2,
                 child: Row(
                   children: [
+                    // View button - always visible
                     _ActionIconButton(
                       icon: Icons.visibility_outlined,
                       tooltip: 'View Details',
                       onTap: () => _showViewDialog(data, docId),
                     ),
                     const SizedBox(width: 4),
-                    if (status == 'pending' || status == 'revision' || status == 'resubmitted') ...[
+                    
+                    // For PENDING or RESUBMITTED: Show Approve, Reject, Revise
+                    if (status == 'pending' || status == 'resubmitted') ...[
                       _ActionIconButton(
                         icon: Icons.check_circle_outline,
                         tooltip: 'Approve',
@@ -420,13 +415,26 @@ class _AdminLetterRequestScreenState extends State<AdminLetterRequestScreen> {
                         color: AdminColors.info,
                         onTap: () => _requestRevision(data, docId),
                       ),
+                      const SizedBox(width: 4),
                     ],
-                    const SizedBox(width: 4),
+                    
+                    // For REVISION only: Show Revise button ONLY (walang Approve/Reject)
+                    if (status == 'revision') ...[
+                      _ActionIconButton(
+                        icon: Icons.edit_note_rounded,
+                        tooltip: 'Request Revision',
+                        color: AdminColors.info,
+                        onTap: () => _requestRevision(data, docId),
+                      ),
+                      const SizedBox(width: 4),
+                    ],
+                    
+                    // Archive button - always visible for all statuses
                     _ActionIconButton(
-                      icon: Icons.delete_outline_rounded,
-                      tooltip: 'Delete',
-                      color: AdminColors.error,
-                      onTap: () => _confirmDelete(docId, data['orgName'] ?? 'Request'),
+                      icon: Icons.archive_outlined,
+                      tooltip: 'Archive',
+                      color: AdminColors.warning,
+                      onTap: () => _archiveRequest(docId, data['orgName'] ?? 'Request', subject),
                     ),
                   ],
                 ),
@@ -594,6 +602,49 @@ class _AdminLetterRequestScreenState extends State<AdminLetterRequestScreen> {
     );
   }
 
+  Future<void> _archiveRequest(String docId, String orgName, String subject) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Archive Request'),
+        content: Text('Archive request from "$orgName" about "$subject"? You can still view it in the archived section.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(backgroundColor: AdminColors.warning),
+            child: const Text('Archive'),
+          ),
+        ],
+      ),
+    );
+    
+    if (confirm != true) return;
+    
+    try {
+      await FirestoreCollections.letterRequests.doc(docId).update({
+        'isArchived': true,
+        'archivedAt': FieldValue.serverTimestamp(),
+      });
+      await activity_log.ActivityLogger.log(
+        action: 'archive_letter_request',
+        module: 'Letter Request',
+        details: {'docId': docId, 'orgName': orgName},
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Request archived successfully'), backgroundColor: AdminColors.success),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e'), backgroundColor: AdminColors.error),
+        );
+      }
+    }
+  }
+
   Future<void> _updateStatus(String docId, String newStatus, String orgName, {String? revisionNote}) async {
     try {
       final Map<String, dynamic> updateData = {
@@ -694,7 +745,6 @@ class _AdminLetterRequestScreenState extends State<AdminLetterRequestScreen> {
                           Text(date, style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF64748B))),
                         ]),
                         const SizedBox(height: 20),
-                        // Organization with Logo
                         Container(
                           width: double.infinity,
                           padding: const EdgeInsets.all(14),
@@ -848,6 +898,7 @@ class _AdminLetterRequestScreenState extends State<AdminLetterRequestScreen> {
                       ],
                     ),
                   ),
+                  // Footer buttons sa dialog (View mode) - keep as is
                   if (status == 'pending' || status == 'revision' || status == 'resubmitted')
                     Container(
                       padding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
@@ -1017,32 +1068,6 @@ class _AdminLetterRequestScreenState extends State<AdminLetterRequestScreen> {
       case 'docx': return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
       default: return 'application/octet-stream';
     }
-  }
-
-  void _confirmDelete(String docId, String orgName) {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Delete Request'),
-        content: Text('Delete request from $orgName? This cannot be undone.'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-          ElevatedButton(
-            onPressed: () async {
-              Navigator.pop(ctx);
-              try {
-                await FirestoreCollections.letterRequests.doc(docId).delete();
-                if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Request deleted successfully')));
-              } catch (e) {
-                if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red));
-              }
-            },
-            style: ElevatedButton.styleFrom(backgroundColor: AdminColors.error),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
-    );
   }
 }
 

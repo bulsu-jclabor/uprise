@@ -2,6 +2,7 @@
 // ignore_for_file: deprecated_member_use, use_build_context_synchronously
 
 import 'dart:convert';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -9,6 +10,7 @@ import 'package:intl/intl.dart';
 import 'package:file_picker/file_picker.dart';
 import '../../../services/activity_logger.dart' as activity_log;
 import '../../../services/firestore_collections.dart';
+import '../../../utils/platform_file_utils.dart' as platform_file_utils;
 import 'export_util.dart';
 import 'export_pdf.dart';
 
@@ -372,7 +374,6 @@ class _OrgLetterRequestScreenState extends State<OrgLetterRequestScreen> {
 
         var docs = snapshot.data!.docs;
 
-        // Status filter
         if (_statusFilter != 'All') {
           final filterValue =
               _statusFilter == 'Needs Revision' ? 'revision' : _statusFilter.toLowerCase();
@@ -381,7 +382,6 @@ class _OrgLetterRequestScreenState extends State<OrgLetterRequestScreen> {
               .toList();
         }
 
-        // Search
         final term = _searchController.text.trim().toLowerCase();
         if (term.isNotEmpty) {
           docs = docs.where((d) {
@@ -498,7 +498,6 @@ class _OrgLetterRequestScreenState extends State<OrgLetterRequestScreen> {
         ),
         child: Row(
           children: [
-            // Letter ID
             Expanded(
               flex: 2,
               child: Text(
@@ -511,7 +510,6 @@ class _OrgLetterRequestScreenState extends State<OrgLetterRequestScreen> {
                 overflow: TextOverflow.ellipsis,
               ),
             ),
-            // Subject
             Expanded(
               flex: 3,
               child: Text(
@@ -525,7 +523,6 @@ class _OrgLetterRequestScreenState extends State<OrgLetterRequestScreen> {
                 maxLines: 1,
               ),
             ),
-            // Message preview
             Expanded(
               flex: 2,
               child: Text(
@@ -541,7 +538,6 @@ class _OrgLetterRequestScreenState extends State<OrgLetterRequestScreen> {
                 maxLines: 1,
               ),
             ),
-            // Date
             Expanded(
               flex: 2,
               child: Text(
@@ -551,12 +547,10 @@ class _OrgLetterRequestScreenState extends State<OrgLetterRequestScreen> {
                 overflow: TextOverflow.ellipsis,
               ),
             ),
-            // Status
             Expanded(
               flex: 1,
               child: _statusBadge(request.status),
             ),
-            // Actions
             Expanded(
               flex: 2,
               child: Row(
@@ -890,11 +884,110 @@ class _OrgLetterRequestScreenState extends State<OrgLetterRequestScreen> {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Request Details Dialog
+// Request Details Dialog (with attachment viewer)
 // ─────────────────────────────────────────────────────────────────────────────
 class _RequestDetailsDialog extends StatelessWidget {
   final LetterRequestModel request;
   const _RequestDetailsDialog({required this.request});
+
+  void _openAttachment(BuildContext context) async {
+    final base64 = request.attachmentBase64;
+    if (base64 == null || base64.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No attachment found'), backgroundColor: Colors.red),
+      );
+      return;
+    }
+    
+    try {
+      final bytes = base64Decode(base64);
+      final fileName = request.attachmentName ?? 'attachment';
+      final ext = fileName.contains('.') ? fileName.split('.').last.toLowerCase() : '';
+      final mime = _getMimeTypeFromExtension(ext);
+      
+      if (mime.startsWith('text/')) {
+        final content = utf8.decode(bytes);
+        showDialog(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: Text(fileName),
+            content: Container(
+              width: 500,
+              constraints: const BoxConstraints(maxHeight: 400),
+              child: SingleChildScrollView(
+                child: SelectableText(content, style: GoogleFonts.beVietnamPro(fontSize: 12)),
+              ),
+            ),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Close')),
+              TextButton(onPressed: () {
+                Navigator.pop(ctx);
+                platform_file_utils.saveBytesToTempAndOpen(bytes, fileName);
+              }, child: const Text('Download')),
+            ],
+          ),
+        );
+        return;
+      }
+      
+      if (mime.startsWith('image/')) {
+        showDialog(
+          context: context,
+          builder: (ctx) => Dialog(
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              Padding(padding: const EdgeInsets.all(12), child: Text(fileName, style: GoogleFonts.beVietnamPro(fontSize: 14, fontWeight: FontWeight.w600))),
+              Flexible(child: InteractiveViewer(minScale: 0.5, maxScale: 4.0, child: Image.memory(bytes))),
+              OverflowBar(
+                spacing: 8,
+                alignment: MainAxisAlignment.end,
+                children: [
+                  TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Close')),
+                  TextButton(onPressed: () {
+                    Navigator.pop(ctx);
+                    platform_file_utils.saveBytesToTempAndOpen(bytes, fileName);
+                  }, child: const Text('Download')),
+                ],
+              ),
+            ]),
+          ),
+        );
+        return;
+      }
+      
+      await platform_file_utils.saveBytesToTempAndOpen(bytes, fileName);
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error opening file: $e'), backgroundColor: Colors.red),
+      );
+    }
+  }
+
+  String _getMimeTypeFromExtension(String ext) {
+    switch (ext.toLowerCase()) {
+      case 'txt': return 'text/plain';
+      case 'md': return 'text/markdown';
+      case 'html': case 'htm': return 'text/html';
+      case 'json': return 'application/json';
+      case 'png': return 'image/png';
+      case 'jpg': case 'jpeg': return 'image/jpeg';
+      case 'gif': return 'image/gif';
+      case 'pdf': return 'application/pdf';
+      case 'doc': return 'application/msword';
+      case 'docx': return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+      default: return 'application/octet-stream';
+    }
+  }
+
+  IconData _getFileIcon(String fileName) {
+    final extension = fileName.toLowerCase().split('.').last;
+    switch (extension) {
+      case 'pdf': return Icons.picture_as_pdf;
+      case 'doc': case 'docx': return Icons.description;
+      case 'txt': return Icons.text_snippet;
+      case 'jpg': case 'jpeg': case 'png': case 'gif': return Icons.image;
+      default: return Icons.insert_drive_file;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -902,14 +995,12 @@ class _RequestDetailsDialog extends StatelessWidget {
       shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(18)),
       child: SizedBox(
-        width: 520,
+        width: 540,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // Header
             Container(
-              padding:
-                  const EdgeInsets.fromLTRB(24, 20, 20, 20),
+              padding: const EdgeInsets.fromLTRB(24, 20, 20, 20),
               decoration: BoxDecoration(
                 color: _DS.primary,
                 borderRadius: const BorderRadius.vertical(
@@ -957,7 +1048,6 @@ class _RequestDetailsDialog extends StatelessWidget {
                 ),
               ]),
             ),
-            // Body
             Padding(
               padding: const EdgeInsets.all(24),
               child: Column(
@@ -1003,13 +1093,14 @@ class _RequestDetailsDialog extends StatelessWidget {
                     _detailItem('Message', request.message!,
                         Icons.message_outlined),
                   ],
-                  if (request.attachmentName != null) ...[
+                  if (request.attachmentName != null && request.attachmentBase64 != null) ...[
                     const SizedBox(height: 14),
-                    _detailItem(
-                      'Attachment',
-                      '${request.attachmentName}${request.attachmentSize != null ? ' (${request.attachmentSize})' : ''}',
-                      Icons.attach_file_rounded,
-                    ),
+                    _buildAttachmentViewer(context),
+                  ] else if (request.attachmentName != null) ...[
+                    const SizedBox(height: 14),
+                    _detailItem('Attachment',
+                        '${request.attachmentName}${request.attachmentSize != null ? ' (${request.attachmentSize})' : ''}',
+                        Icons.attach_file_rounded),
                   ],
                   if (request.revisionNote != null) ...[
                     const SizedBox(height: 14),
@@ -1058,10 +1149,8 @@ class _RequestDetailsDialog extends StatelessWidget {
                 ],
               ),
             ),
-            // Footer
             Container(
-              padding:
-                  const EdgeInsets.fromLTRB(24, 0, 24, 20),
+              padding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
@@ -1088,6 +1177,69 @@ class _RequestDetailsDialog extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildAttachmentViewer(BuildContext context) {
+    final fileName = request.attachmentName ?? 'attachment';
+    
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(children: [
+          Icon(Icons.attach_file_rounded, size: 13, color: const Color(0xFF9AA5B4)),
+          const SizedBox(width: 5),
+          Text('Attachment',
+              style: GoogleFonts.beVietnamPro(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: const Color(0xFF64748B),
+                  letterSpacing: 0.4)),
+        ]),
+        const SizedBox(height: 8),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: _DS.primary.withOpacity(0.05),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: _DS.primary.withOpacity(0.2)),
+          ),
+          child: Row(children: [
+            Container(
+              width: 40, height: 40,
+              decoration: BoxDecoration(
+                color: _DS.primary.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(_getFileIcon(fileName), color: _DS.primary, size: 20),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(fileName, 
+                    style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600, color: const Color(0xFF1A202C)), 
+                    overflow: TextOverflow.ellipsis),
+                if (request.attachmentSize != null) 
+                  Text(request.attachmentSize!, 
+                      style: GoogleFonts.beVietnamPro(fontSize: 11, color: const Color(0xFF64748B))),
+              ]),
+            ),
+            ElevatedButton.icon(
+              onPressed: () => _openAttachment(context),
+              icon: const Icon(Icons.visibility, size: 16),
+              label: const Text('View'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _DS.primary,
+                foregroundColor: Colors.white,
+                elevation: 0,
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+              ),
+            ),
+          ]),
+        ),
+      ],
     );
   }
 
@@ -1341,7 +1493,6 @@ class _LetterRequestModalState
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // Header
             Container(
               padding:
                   const EdgeInsets.fromLTRB(24, 20, 20, 20),
@@ -1386,7 +1537,6 @@ class _LetterRequestModalState
                 ),
               ]),
             ),
-            // Body
             Expanded(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.all(24),
@@ -1395,7 +1545,6 @@ class _LetterRequestModalState
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Subject
                       _sectionLabel('Request Details',
                           icon: Icons.description_outlined),
                       TextFormField(
@@ -1415,7 +1564,6 @@ class _LetterRequestModalState
                       ),
                       const SizedBox(height: 14),
                       
-                      // Message (optional) - 3 LINES
                       TextFormField(
                         controller: _messageCtrl,
                         maxLines: 3,
@@ -1430,12 +1578,10 @@ class _LetterRequestModalState
                       ),
                       const SizedBox(height: 20),
 
-                      // Attachment
                       _sectionLabel('File Attachment',
                           icon: Icons.attach_file_rounded),
                       _buildFileZone(),
 
-                      // Revision note (edit mode)
                       if (widget.existingRequest
                               ?.revisionNote !=
                           null) ...[
@@ -1491,7 +1637,6 @@ class _LetterRequestModalState
                         ),
                       ],
 
-                      // Error
                       if (_errorMsg != null) ...[
                         const SizedBox(height: 14),
                         Container(
@@ -1529,7 +1674,6 @@ class _LetterRequestModalState
                 ),
               ),
             ),
-            // Footer
             Container(
               padding:
                   const EdgeInsets.fromLTRB(24, 16, 24, 20),
@@ -1721,7 +1865,6 @@ class _LetterRequestModalState
       );
     }
 
-    // Idle / pick state
     return GestureDetector(
       onTap: _pickFile,
       child: Container(
