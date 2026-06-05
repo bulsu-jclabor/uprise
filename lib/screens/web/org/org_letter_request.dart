@@ -13,7 +13,7 @@ import 'export_util.dart';
 import 'export_pdf.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Design tokens (mirrors student_accounts.dart / org_management.dart)
+// Design tokens
 // ─────────────────────────────────────────────────────────────────────────────
 class _DS {
   static const double radiusSm   = 8;
@@ -21,7 +21,6 @@ class _DS {
   static const double radiusLg   = 16;
   static const double radiusPill = 100;
 
-  // Brand amber palette
   static const Color primary     = Color(0xFFB45309);
   static const Color primaryDark = Color(0xFF92400E);
   static const Color primaryBg   = Color(0xFFFEF3C7);
@@ -166,6 +165,7 @@ class _OrgLetterRequestScreenState extends State<OrgLetterRequestScreen> {
   Map<String, dynamic>? _orgProfile;
   String _orgName = '';
   String _orgEmail = '';
+  String _orgLogoUrl = '';
 
   @override
   void initState() {
@@ -190,6 +190,7 @@ class _OrgLetterRequestScreenState extends State<OrgLetterRequestScreen> {
           _orgProfile = doc.data();
           _orgName = doc.data()?['name'] ?? 'Organization';
           _orgEmail = doc.data()?['email'] ?? '';
+          _orgLogoUrl = doc.data()?['logoUrl'] ?? '';
         });
       }
     } catch (e) {
@@ -265,13 +266,6 @@ class _OrgLetterRequestScreenState extends State<OrgLetterRequestScreen> {
             ),
             const SizedBox(width: 14),
             _StatCard(
-              label: 'Rejected',
-              value: '$rejected',
-              icon: Icons.cancel_outlined,
-              color: const Color(0xFFDC2626),
-            ),
-            const SizedBox(width: 14),
-            _StatCard(
               label: 'Needs Revision',
               value: '$revision',
               icon: Icons.edit_note_rounded,
@@ -296,7 +290,6 @@ class _OrgLetterRequestScreenState extends State<OrgLetterRequestScreen> {
       padding: const EdgeInsets.fromLTRB(28, 20, 28, 0),
       child: Row(
         children: [
-          // Search
           Expanded(
             child: SizedBox(
               height: 40,
@@ -304,39 +297,26 @@ class _OrgLetterRequestScreenState extends State<OrgLetterRequestScreen> {
                 controller: _searchController,
                 style: GoogleFonts.beVietnamPro(fontSize: 13),
                 decoration: InputDecoration(
-                  hintText: 'Search by ID or subject…',
+                  hintText: 'Search by ID, subject, or message…',
                   hintStyle: GoogleFonts.beVietnamPro(
                       fontSize: 13, color: const Color(0xFF9AA5B4)),
                   prefixIcon: const Icon(Icons.search_rounded,
                       size: 18, color: Color(0xFF9AA5B4)),
-                  suffixIcon: _searchController.text.isNotEmpty
-                      ? IconButton(
-                          icon:
-                              const Icon(Icons.close, size: 16),
-                          onPressed: () {
-                            _searchController.clear();
-                            setState(() => _currentPage = 1);
-                          },
-                        )
-                      : null,
                   filled: true,
                   fillColor: Colors.white,
                   contentPadding:
                       const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(10),
-                    borderSide:
-                        const BorderSide(color: Color(0xFFE2E6EA)),
+                    borderSide: const BorderSide(color: Color(0xFFE2E6EA)),
                   ),
                   enabledBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(10),
-                    borderSide:
-                        const BorderSide(color: Color(0xFFE2E6EA)),
+                    borderSide: const BorderSide(color: Color(0xFFE2E6EA)),
                   ),
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(10),
-                    borderSide:
-                        const BorderSide(color: _DS.primary, width: 1.5),
+                    borderSide: const BorderSide(color: _DS.primary, width: 1.5),
                   ),
                 ),
                 onChanged: (_) => setState(() => _currentPage = 1),
@@ -362,14 +342,12 @@ class _OrgLetterRequestScreenState extends State<OrgLetterRequestScreen> {
             }),
           ),
           const SizedBox(width: 10),
-          // Export
           _ExportButton(
             orgId: widget.orgId,
             statusFilter: _statusFilter,
             searchTerm: _searchController.text.trim(),
           ),
           const SizedBox(width: 10),
-          // New Request
           _ToolbarButton(
             label: 'New Request',
             icon: Icons.add_rounded,
@@ -413,6 +391,10 @@ class _OrgLetterRequestScreenState extends State<OrgLetterRequestScreen> {
                     .toLowerCase()
                     .contains(term) ||
                 (data['subject'] ?? '')
+                    .toString()
+                    .toLowerCase()
+                    .contains(term) ||
+                (data['message'] ?? '')
                     .toString()
                     .toLowerCase()
                     .contains(term);
@@ -463,20 +445,18 @@ class _OrgLetterRequestScreenState extends State<OrgLetterRequestScreen> {
 
   Widget _buildTableHeader() {
     return Container(
-      padding:
-          const EdgeInsets.symmetric(horizontal: 20, vertical: 13),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 13),
       decoration: const BoxDecoration(
         color: Color(0xFFF8F9FB),
-        borderRadius:
-            BorderRadius.vertical(top: Radius.circular(14)),
-        border:
-            Border(bottom: BorderSide(color: Color(0xFFE8ECF0))),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(14)),
+        border: Border(bottom: BorderSide(color: Color(0xFFE8ECF0))),
       ),
       child: Row(children: [
         Expanded(flex: 2, child: _headerCell('LETTER ID')),
-        Expanded(flex: 4, child: _headerCell('TYPE / SUBJECT')),
+        Expanded(flex: 3, child: _headerCell('SUBJECT')),
+        Expanded(flex: 2, child: _headerCell('MESSAGE')),
         Expanded(flex: 2, child: _headerCell('DATE SUBMITTED')),
-        Expanded(flex: 2, child: _headerCell('STATUS')),
+        Expanded(flex: 1, child: _headerCell('STATUS')),
         Expanded(
           flex: 2,
           child: Align(
@@ -500,17 +480,21 @@ class _OrgLetterRequestScreenState extends State<OrgLetterRequestScreen> {
   Widget _buildRequestRow(LetterRequestModel request,
       {required bool isLast}) {
     final submittedAt = request.timestamp.toDate();
+    final messagePreview = request.message != null && request.message!.isNotEmpty
+        ? (request.message!.length > 50 
+            ? '${request.message!.substring(0, 50)}...' 
+            : request.message!)
+        : '—';
+    
     return InkWell(
       hoverColor: const Color(0xFFF8F9FB),
       onTap: () => _viewRequestDetails(request),
       child: Container(
-        padding:
-            const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
         decoration: BoxDecoration(
           border: isLast
               ? null
-              : const Border(
-                  bottom: BorderSide(color: Color(0xFFF1F5F9))),
+              : const Border(bottom: BorderSide(color: Color(0xFFF1F5F9))),
         ),
         child: Row(
           children: [
@@ -527,41 +511,34 @@ class _OrgLetterRequestScreenState extends State<OrgLetterRequestScreen> {
                 overflow: TextOverflow.ellipsis,
               ),
             ),
-            // Type + Subject
+            // Subject
             Expanded(
-              flex: 4,
-              child: Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 8, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: _DS.primary.withOpacity(0.08),
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: Text(
-                      request.letterType,
-                      style: GoogleFonts.beVietnamPro(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                        color: _DS.primary,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      request.subject,
-                      style: GoogleFonts.beVietnamPro(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w500,
-                        color: const Color(0xFF1A202C),
-                      ),
-                      overflow: TextOverflow.ellipsis,
-                      maxLines: 1,
-                    ),
-                  ),
-                ],
+              flex: 3,
+              child: Text(
+                request.subject,
+                style: GoogleFonts.beVietnamPro(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                  color: const Color(0xFF1A202C),
+                ),
+                overflow: TextOverflow.ellipsis,
+                maxLines: 1,
+              ),
+            ),
+            // Message preview
+            Expanded(
+              flex: 2,
+              child: Text(
+                messagePreview,
+                style: GoogleFonts.beVietnamPro(
+                  fontSize: 12,
+                  color: messagePreview == '—' 
+                      ? const Color(0xFF9AA5B4) 
+                      : const Color(0xFF64748B),
+                  fontStyle: messagePreview == '—' ? FontStyle.italic : null,
+                ),
+                overflow: TextOverflow.ellipsis,
+                maxLines: 1,
               ),
             ),
             // Date
@@ -576,21 +553,8 @@ class _OrgLetterRequestScreenState extends State<OrgLetterRequestScreen> {
             ),
             // Status
             Expanded(
-              flex: 2,
-              child: Row(
-                children: [
-                  _statusBadge(request.status),
-                  if (request.revisionNote != null &&
-                      request.status == 'revision') ...[
-                    const SizedBox(width: 6),
-                    const Tooltip(
-                      message: 'Has revision note',
-                      child: Icon(Icons.info_outline,
-                          size: 14, color: Color(0xFF2563EB)),
-                    ),
-                  ],
-                ],
-              ),
+              flex: 1,
+              child: _statusBadge(request.status),
             ),
             // Actions
             Expanded(
@@ -682,13 +646,11 @@ class _OrgLetterRequestScreenState extends State<OrgLetterRequestScreen> {
         List.generate(lastPage - firstPage + 1, (i) => firstPage + i);
 
     return Container(
-      padding:
-          const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
       decoration: const BoxDecoration(
         border: Border(top: BorderSide(color: Color(0xFFE8ECF0))),
         color: Color(0xFFF8F9FB),
-        borderRadius:
-            BorderRadius.vertical(bottom: Radius.circular(14)),
+        borderRadius: BorderRadius.vertical(bottom: Radius.circular(14)),
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -750,6 +712,7 @@ class _OrgLetterRequestScreenState extends State<OrgLetterRequestScreen> {
         orgId: widget.orgId,
         orgName: _orgName,
         orgEmail: _orgEmail,
+        orgLogoUrl: _orgLogoUrl,
       ),
     );
   }
@@ -764,6 +727,7 @@ class _OrgLetterRequestScreenState extends State<OrgLetterRequestScreen> {
         orgId: widget.orgId,
         orgName: _orgName,
         orgEmail: _orgEmail,
+        orgLogoUrl: _orgLogoUrl,
         existingRequest: request,
       ),
     );
@@ -938,7 +902,7 @@ class _RequestDetailsDialog extends StatelessWidget {
       shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(18)),
       child: SizedBox(
-        width: 500,
+        width: 520,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -1034,6 +998,11 @@ class _RequestDetailsDialog extends StatelessWidget {
                   const SizedBox(height: 14),
                   _detailItem('Subject', request.subject,
                       Icons.subject_rounded),
+                  if (request.message != null && request.message!.isNotEmpty) ...[
+                    const SizedBox(height: 14),
+                    _detailItem('Message', request.message!,
+                        Icons.message_outlined),
+                  ],
                   if (request.attachmentName != null) ...[
                     const SizedBox(height: 14),
                     _detailItem(
@@ -1065,12 +1034,11 @@ class _RequestDetailsDialog extends StatelessWidget {
                                 color: Color(0xFF2563EB)),
                             const SizedBox(width: 6),
                             Text(
-                              'REVISION NOTE',
+                              'REVISION NOTE FROM ADMIN',
                               style: GoogleFonts.beVietnamPro(
                                 fontSize: 11,
                                 fontWeight: FontWeight.w700,
-                                color:
-                                    const Color(0xFF2563EB),
+                                color: const Color(0xFF2563EB),
                                 letterSpacing: 0.5,
                               ),
                             ),
@@ -1085,33 +1053,6 @@ class _RequestDetailsDialog extends StatelessWidget {
                           ),
                         ],
                       ),
-                    ),
-                  ],
-                  if (request.revisionCount != null &&
-                      request.revisionCount! > 0) ...[
-                    const SizedBox(height: 10),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFF8F9FB),
-                        borderRadius:
-                            BorderRadius.circular(8),
-                        border: Border.all(
-                            color: const Color(0xFFE2E6EA)),
-                      ),
-                      child: Row(children: [
-                        const Icon(Icons.history,
-                            size: 14,
-                            color: Color(0xFF64748B)),
-                        const SizedBox(width: 8),
-                        Text(
-                          'Revision #${request.revisionCount}',
-                          style: GoogleFonts.beVietnamPro(
-                              fontSize: 12,
-                              color: const Color(0xFF64748B)),
-                        ),
-                      ]),
                     ),
                   ],
                 ],
@@ -1196,12 +1137,14 @@ class _LetterRequestModal extends StatefulWidget {
   final String orgId;
   final String orgName;
   final String orgEmail;
+  final String orgLogoUrl;
   final LetterRequestModel? existingRequest;
 
   const _LetterRequestModal({
     required this.orgId,
     required this.orgName,
     required this.orgEmail,
+    this.orgLogoUrl = '',
     this.existingRequest,
   });
 
@@ -1214,6 +1157,7 @@ class _LetterRequestModalState
     extends State<_LetterRequestModal> {
   final _formKey = GlobalKey<FormState>();
   final _subjectCtrl = TextEditingController();
+  final _messageCtrl = TextEditingController();
 
   String? _attachmentBase64;
   String? _attachmentName;
@@ -1229,6 +1173,7 @@ class _LetterRequestModalState
     final r = widget.existingRequest;
     if (r != null) {
       _subjectCtrl.text = r.subject;
+      _messageCtrl.text = r.message ?? '';
       _attachmentBase64 = r.attachmentBase64;
       _attachmentName  = r.attachmentName;
       _attachmentSize  = r.attachmentSize;
@@ -1238,6 +1183,7 @@ class _LetterRequestModalState
   @override
   void dispose() {
     _subjectCtrl.dispose();
+    _messageCtrl.dispose();
     super.dispose();
   }
 
@@ -1326,10 +1272,12 @@ class _LetterRequestModalState
         'orgId':            widget.orgId,
         'orgName':          widget.orgName,
         'orgEmail':         widget.orgEmail,
+        'orgLogoUrl':       widget.orgLogoUrl,
         'name':             widget.orgName,
         'email':            widget.orgEmail,
         'letterType':       'General',
         'subject':          _subjectCtrl.text.trim(),
+        'message':          _messageCtrl.text.trim().isEmpty ? null : _messageCtrl.text.trim(),
         'attachmentBase64': _attachmentBase64,
         'attachmentName':   _attachmentName,
         'attachmentSize':   _attachmentSize,
@@ -1386,7 +1334,7 @@ class _LetterRequestModalState
       shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(18)),
       child: Container(
-        width: 520,
+        width: 540,
         constraints: BoxConstraints(
             maxHeight:
                 MediaQuery.of(context).size.height * 0.85),
@@ -1447,62 +1395,6 @@ class _LetterRequestModalState
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Org info chip
-                      _sectionLabel('Organization',
-                          icon: Icons.business_outlined),
-                      Container(
-                        padding: const EdgeInsets.all(14),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFF8F9FB),
-                          borderRadius:
-                              BorderRadius.circular(8),
-                          border: Border.all(
-                              color: const Color(0xFFE2E6EA)),
-                        ),
-                        child: Row(children: [
-                          Container(
-                            width: 36,
-                            height: 36,
-                            decoration: BoxDecoration(
-                              color: _DS.primary
-                                  .withOpacity(0.1),
-                              borderRadius:
-                                  BorderRadius.circular(8),
-                            ),
-                            child: Icon(
-                                Icons.business_outlined,
-                                color: _DS.primary,
-                                size: 18),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment:
-                                  CrossAxisAlignment.start,
-                              children: [
-                                Text(widget.orgName,
-                                    style:
-                                        GoogleFonts.beVietnamPro(
-                                      fontSize: 13,
-                                      fontWeight:
-                                          FontWeight.w600,
-                                      color: const Color(
-                                          0xFF1A202C),
-                                    )),
-                                Text(widget.orgEmail,
-                                    style:
-                                        GoogleFonts.beVietnamPro(
-                                      fontSize: 12,
-                                      color: const Color(
-                                          0xFF64748B),
-                                    )),
-                              ],
-                            ),
-                          ),
-                        ]),
-                      ),
-                      const SizedBox(height: 20),
-
                       // Subject
                       _sectionLabel('Request Details',
                           icon: Icons.description_outlined),
@@ -1511,7 +1403,7 @@ class _LetterRequestModalState
                         style: GoogleFonts.beVietnamPro(
                             fontSize: 13),
                         decoration: _DS.inputDecoration(
-                          'Subject',
+                          'Subject *',
                           hint:
                               'What is this letter regarding?',
                           icon: Icons.subject_rounded,
@@ -1520,6 +1412,21 @@ class _LetterRequestModalState
                             v?.trim().isEmpty == true
                                 ? 'Subject is required'
                                 : null,
+                      ),
+                      const SizedBox(height: 14),
+                      
+                      // Message (optional) - 3 LINES
+                      TextFormField(
+                        controller: _messageCtrl,
+                        maxLines: 3,
+                        style: GoogleFonts.beVietnamPro(
+                            fontSize: 13),
+                        decoration: _DS.inputDecoration(
+                          'Message (optional)',
+                          hint:
+                              'Additional instructions or notes for the admin...',
+                          icon: Icons.message_outlined,
+                        ),
                       ),
                       const SizedBox(height: 20),
 
@@ -1962,6 +1869,10 @@ class _ExportButton extends StatelessWidget {
               (data['subject'] ?? '')
                   .toString()
                   .toLowerCase()
+                  .contains(searchTerm) ||
+              (data['message'] ?? '')
+                  .toString()
+                  .toLowerCase()
                   .contains(searchTerm);
         }).toList();
       }
@@ -1980,13 +1891,14 @@ class _ExportButton extends StatelessWidget {
       final requests =
           docs.map((d) => LetterRequestModel.fromFirestore(d)).toList();
       final headers = [
-        'Letter ID', 'Type', 'Subject',
+        'Letter ID', 'Type', 'Subject', 'Message',
         'Date Submitted', 'Status', 'Revision Notes',
       ];
       final rows = requests.map((r) => [
         r.letterId,
         r.letterType,
         r.subject,
+        r.message ?? '',
         DateFormat('yyyy-MM-dd').format(r.timestamp.toDate()),
         r.status,
         r.revisionNote ?? '',
@@ -2268,8 +2180,10 @@ class LetterRequestModel {
   final String orgId;
   final String orgName;
   final String orgEmail;
+  final String orgLogoUrl;
   final String letterType;
   final String subject;
+  final String? message;
   final String? attachmentBase64;
   final String? attachmentName;
   final String? attachmentSize;
@@ -2286,8 +2200,10 @@ class LetterRequestModel {
     required this.orgId,
     required this.orgName,
     required this.orgEmail,
+    this.orgLogoUrl = '',
     required this.letterType,
     required this.subject,
+    this.message,
     this.attachmentBase64,
     this.attachmentName,
     this.attachmentSize,
@@ -2307,8 +2223,10 @@ class LetterRequestModel {
       orgId:            d['orgId'] ?? '',
       orgName:          d['orgName'] ?? 'Unknown Organization',
       orgEmail:         d['orgEmail'] ?? '',
+      orgLogoUrl:       d['orgLogoUrl'] ?? '',
       letterType:       d['letterType'] ?? 'General',
       subject:          d['subject'] ?? '',
+      message:          d['message'],
       attachmentBase64: d['attachmentBase64'],
       attachmentName:   d['attachmentName'],
       attachmentSize:   d['attachmentSize'],

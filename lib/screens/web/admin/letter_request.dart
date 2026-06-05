@@ -1,4 +1,4 @@
-// lib/screens/admin/letter_request.dart - FULL WORKING VERSION
+// lib/screens/web/admin/letter_request.dart - COMPLETE WORKING VERSION
 
 import 'dart:convert';
 import 'dart:typed_data';
@@ -41,10 +41,30 @@ class _AdminLetterRequestScreenState extends State<AdminLetterRequestScreen> {
   int _currentPage = 1;
   static const int _pageSize = 10;
 
+  // Cache for org logos
+  final Map<String, String> _orgLogoCache = {};
+
   @override
   void dispose() {
     _searchController.dispose();
     super.dispose();
+  }
+
+  Future<String> _fetchOrgLogo(String orgId) async {
+    if (_orgLogoCache.containsKey(orgId)) {
+      return _orgLogoCache[orgId]!;
+    }
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('organizations')
+          .doc(orgId)
+          .get();
+      final logoUrl = doc.data()?['logoUrl'] ?? '';
+      _orgLogoCache[orgId] = logoUrl;
+      return logoUrl;
+    } catch (e) {
+      return '';
+    }
   }
 
   @override
@@ -111,7 +131,7 @@ class _AdminLetterRequestScreenState extends State<AdminLetterRequestScreen> {
               controller: _searchController,
               style: GoogleFonts.beVietnamPro(fontSize: 13),
               decoration: InputDecoration(
-                hintText: 'Search by org name or subject...',
+                hintText: 'Search by org name, subject, or message...',
                 hintStyle: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF9AA5B4)),
                 prefixIcon: const Icon(Icons.search_rounded, size: 18, color: Color(0xFF9AA5B4)),
                 filled: true,
@@ -166,7 +186,8 @@ class _AdminLetterRequestScreenState extends State<AdminLetterRequestScreen> {
           docs = docs.where((d) {
             final data = d.data() as Map;
             return (data['orgName'] ?? '').toString().toLowerCase().contains(term) ||
-                   (data['subject'] ?? '').toString().toLowerCase().contains(term);
+                   (data['subject'] ?? '').toString().toLowerCase().contains(term) ||
+                   (data['message'] ?? '').toString().toLowerCase().contains(term);
           }).toList();
         }
         
@@ -226,7 +247,8 @@ class _AdminLetterRequestScreenState extends State<AdminLetterRequestScreen> {
       ),
       child: Row(children: [
         Expanded(flex: 3, child: _headerCell('REQUESTOR')),
-        Expanded(flex: 3, child: _headerCell('SUBJECT / TYPE')),
+        Expanded(flex: 2, child: _headerCell('LETTER ID')),
+        Expanded(flex: 3, child: _headerCell('SUBJECT')),
         Expanded(flex: 2, child: _headerCell('DATE SUBMITTED')),
         Expanded(flex: 1, child: _headerCell('STATUS')),
         Expanded(flex: 2, child: _headerCell('ACTIONS')),
@@ -248,109 +270,186 @@ class _AdminLetterRequestScreenState extends State<AdminLetterRequestScreen> {
     final status = (data['status'] ?? 'pending').toString();
     final timestamp = data['timestamp'] as Timestamp?;
     final date = timestamp != null ? DateFormat('MMM dd, yyyy').format(timestamp.toDate()) : 'Unknown';
-
-    return InkWell(
-      hoverColor: const Color(0xFFF8F9FB),
-      onTap: () => _showViewDialog(data, docId),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 18),
-        decoration: BoxDecoration(
-          border: isLast ? null : const Border(bottom: BorderSide(color: Color(0xFFF1F5F9))),
-        ),
-        child: Row(children: [
-          Expanded(
-            flex: 3,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  data['name'] ?? 'Unknown',
-                  style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600, color: const Color(0xFF1A202C)),
-                ),
-                Text(
-                  data['email'] ?? '',
-                  style: GoogleFonts.beVietnamPro(fontSize: 11, color: const Color(0xFF9AA5B4)),
-                ),
-              ],
+    final orgId = data['orgId'] ?? '';
+    final subject = data['subject'] ?? 'No subject';
+    final letterId = data['letterId'] ?? 'N/A';
+    final message = data['message'];
+    
+    return FutureBuilder<String>(
+      future: _fetchOrgLogo(orgId),
+      builder: (context, logoSnapshot) {
+        final logoUrl = logoSnapshot.data ?? '';
+        
+        return InkWell(
+          hoverColor: const Color(0xFFF8F9FB),
+          onTap: () => _showViewDialog(data, docId),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 18),
+            decoration: BoxDecoration(
+              border: isLast ? null : const Border(bottom: BorderSide(color: Color(0xFFF1F5F9))),
             ),
-          ),
-          Expanded(
-            flex: 3,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: AdminColors.primaryDark.withAlpha(20),
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: Text(
-                    data['letterType'] ?? 'General',
-                    style: GoogleFonts.beVietnamPro(fontSize: 10, fontWeight: FontWeight.w600, color: AdminColors.primaryDark),
-                  ),
+            child: Row(children: [
+              // REQUESTOR with Logo
+              Expanded(
+                flex: 3,
+                child: Row(
+                  children: [
+                    // Logo
+                    Container(
+                      width: 36,
+                      height: 36,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.all(color: const Color(0xFFE2E6EA)),
+                      ),
+                      child: logoUrl.isNotEmpty
+                          ? ClipOval(
+                              child: Image.network(
+                                logoUrl,
+                                width: 36,
+                                height: 36,
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, __, ___) => _defaultAvatar(),
+                              ),
+                            )
+                          : _defaultAvatar(),
+                    ),
+                    const SizedBox(width: 12),
+                    // Org Name only (no email)
+                    Expanded(
+                      child: Text(
+                        data['orgName'] ?? 'Unknown',
+                        style: GoogleFonts.beVietnamPro(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: const Color(0xFF1A202C),
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  data['subject'] ?? 'No subject',
-                  style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF374151)),
-                  maxLines: 1,
+              ),
+              // LETTER ID
+              Expanded(
+                flex: 2,
+                child: Text(
+                  letterId,
+                  style: GoogleFonts.beVietnamPro(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: AdminColors.primaryDark,
+                  ),
                   overflow: TextOverflow.ellipsis,
                 ),
-              ],
-            ),
-          ),
-          Expanded(
-            flex: 2,
-            child: Text(
-              date,
-              style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF64748B)),
-            ),
-          ),
-          Expanded(flex: 1, child: _buildStatusBadge(status)),
-          Expanded(
-            flex: 2,
-            child: Row(
-              children: [
-                _ActionIconButton(
-                  icon: Icons.visibility_outlined,
-                  tooltip: 'View Details',
-                  onTap: () => _showViewDialog(data, docId),
+              ),
+              // SUBJECT
+              Expanded(
+                flex: 3,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      subject,
+                      style: GoogleFonts.beVietnamPro(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                        color: const Color(0xFF1A202C),
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    if (message != null && message.toString().isNotEmpty) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        message.length > 40 ? '${message.substring(0, 40)}...' : message,
+                        style: GoogleFonts.beVietnamPro(
+                          fontSize: 11,
+                          color: const Color(0xFF9AA5B4),
+                          fontStyle: FontStyle.italic,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ],
                 ),
-                const SizedBox(width: 4),
-                if (status == 'pending' || status == 'revision' || status == 'resubmitted') ...[
-                  _ActionIconButton(
-                    icon: Icons.check_circle_outline,
-                    tooltip: 'Approve',
-                    color: AdminColors.success,
-                    onTap: () => _updateStatus(docId, 'approved', data['name'] ?? data['orgName'] ?? 'Request'),
+              ),
+              // DATE
+              Expanded(
+                flex: 2,
+                child: Text(
+                  date,
+                  style: GoogleFonts.beVietnamPro(
+                    fontSize: 12,
+                    color: const Color(0xFF64748B),
                   ),
-                  const SizedBox(width: 4),
-                  _ActionIconButton(
-                    icon: Icons.cancel_outlined,
-                    tooltip: 'Reject',
-                    color: AdminColors.error,
-                    onTap: () => _updateStatus(docId, 'rejected', data['name'] ?? data['orgName'] ?? 'Request'),
-                  ),
-                  const SizedBox(width: 4),
-                  _ActionIconButton(
-                    icon: Icons.edit_note_rounded,
-                    tooltip: 'Request Revision',
-                    color: AdminColors.info,
-                    onTap: () => _requestRevision(data, docId),
-                  ),
-                ],
-                const SizedBox(width: 4),
-                _ActionIconButton(
-                  icon: Icons.delete_outline_rounded,
-                  tooltip: 'Delete',
-                  color: AdminColors.error,
-                  onTap: () => _confirmDelete(docId, data['name'] ?? 'Request'),
                 ),
-              ],
-            ),
+              ),
+              // STATUS
+              Expanded(flex: 1, child: _buildStatusBadge(status)),
+              // ACTIONS
+              Expanded(
+                flex: 2,
+                child: Row(
+                  children: [
+                    _ActionIconButton(
+                      icon: Icons.visibility_outlined,
+                      tooltip: 'View Details',
+                      onTap: () => _showViewDialog(data, docId),
+                    ),
+                    const SizedBox(width: 4),
+                    if (status == 'pending' || status == 'revision' || status == 'resubmitted') ...[
+                      _ActionIconButton(
+                        icon: Icons.check_circle_outline,
+                        tooltip: 'Approve',
+                        color: AdminColors.success,
+                        onTap: () => _updateStatus(docId, 'approved', data['orgName'] ?? 'Request'),
+                      ),
+                      const SizedBox(width: 4),
+                      _ActionIconButton(
+                        icon: Icons.cancel_outlined,
+                        tooltip: 'Reject',
+                        color: AdminColors.error,
+                        onTap: () => _updateStatus(docId, 'rejected', data['orgName'] ?? 'Request'),
+                      ),
+                      const SizedBox(width: 4),
+                      _ActionIconButton(
+                        icon: Icons.edit_note_rounded,
+                        tooltip: 'Request Revision',
+                        color: AdminColors.info,
+                        onTap: () => _requestRevision(data, docId),
+                      ),
+                    ],
+                    const SizedBox(width: 4),
+                    _ActionIconButton(
+                      icon: Icons.delete_outline_rounded,
+                      tooltip: 'Delete',
+                      color: AdminColors.error,
+                      onTap: () => _confirmDelete(docId, data['orgName'] ?? 'Request'),
+                    ),
+                  ],
+                ),
+              ),
+            ]),
           ),
-        ]),
+        );
+      },
+    );
+  }
+
+  Widget _defaultAvatar() {
+    return Container(
+      width: 36,
+      height: 36,
+      decoration: BoxDecoration(
+        color: AdminColors.primaryDark.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: Icon(
+        Icons.business_outlined,
+        size: 18,
+        color: AdminColors.primaryDark,
       ),
     );
   }
@@ -444,6 +543,14 @@ class _AdminLetterRequestScreenState extends State<AdminLetterRequestScreen> {
   }
 
   Widget _buildFooter(int total, int totalPages, int start, int end) {
+    const int maxVisible = 5;
+    int firstPage = (_currentPage - maxVisible ~/ 2).clamp(1, totalPages);
+    int lastPage = (firstPage + maxVisible - 1).clamp(1, totalPages);
+    if (lastPage - firstPage + 1 < maxVisible && firstPage > 1) {
+      firstPage = (lastPage - maxVisible + 1).clamp(1, totalPages);
+    }
+    final pages = List.generate(lastPage - firstPage + 1, (i) => firstPage + i);
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
       decoration: const BoxDecoration(
@@ -454,11 +561,31 @@ class _AdminLetterRequestScreenState extends State<AdminLetterRequestScreen> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text('Showing ${total == 0 ? 0 : start + 1}–$end of $total requests', style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF64748B))),
+          Text(
+            'Showing ${total == 0 ? 0 : start + 1}–$end of $total requests',
+            style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF64748B)),
+          ),
           Row(children: [
             _PageButton(icon: Icons.chevron_left_rounded, enabled: _currentPage > 1, onTap: () => setState(() => _currentPage--)),
             const SizedBox(width: 4),
-            Text('Page $_currentPage of $totalPages', style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF64748B))),
+            ...pages.map((p) => _PageNumButton(
+              page: p,
+              isActive: p == _currentPage,
+              onTap: () => setState(() => _currentPage = p),
+            )),
+            if (lastPage < totalPages) ...[
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                child: Text('…',
+                    style: GoogleFonts.beVietnamPro(
+                        color: const Color(0xFF64748B), fontSize: 12)),
+              ),
+              _PageNumButton(
+                page: totalPages,
+                isActive: _currentPage == totalPages,
+                onTap: () => setState(() => _currentPage = totalPages),
+              ),
+            ],
             const SizedBox(width: 4),
             _PageButton(icon: Icons.chevron_right_rounded, enabled: _currentPage < totalPages, onTap: () => setState(() => _currentPage++)),
           ]),
@@ -506,213 +633,283 @@ class _AdminLetterRequestScreenState extends State<AdminLetterRequestScreen> {
     final hasAttachment = data['attachmentBase64'] != null && data['attachmentBase64'].toString().isNotEmpty;
     final fileName = data['attachmentName'] ?? 'attachment';
     final revisionNote = data['revisionNote'];
+    final message = data['message'];
+    final orgId = data['orgId'] ?? '';
+    final orgName = data['orgName'] ?? 'Unknown';
+    final letterId = data['letterId'] ?? 'N/A';
+    final subject = data['subject'] ?? 'No subject';
 
     showDialog(
       context: context,
-      builder: (ctx) => Dialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-        child: SizedBox(
-          width: 520,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                padding: const EdgeInsets.fromLTRB(24, 20, 20, 20),
-                decoration: BoxDecoration(
-                  color: AdminColors.primaryDark,
-                  borderRadius: const BorderRadius.vertical(top: Radius.circular(18)),
-                ),
-                child: Row(children: [
+      builder: (ctx) => FutureBuilder<String>(
+        future: _fetchOrgLogo(orgId),
+        builder: (context, logoSnapshot) {
+          final logoUrl = logoSnapshot.data ?? '';
+          
+          return Dialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+            child: SizedBox(
+              width: 540,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
                   Container(
-                    width: 38, height: 38,
-                    decoration: BoxDecoration(color: Colors.white.withAlpha(38), borderRadius: BorderRadius.circular(10)),
-                    child: const Icon(Icons.mail_outline_rounded, color: Colors.white, size: 18),
-                  ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(data['letterId'] ?? 'Letter Request', style: GoogleFonts.beVietnamPro(fontSize: 16, fontWeight: FontWeight.w700, color: Colors.white)),
-                        Text(data['subject'] ?? '', style: GoogleFonts.beVietnamPro(fontSize: 12, color: Colors.white.withAlpha(166))),
-                      ],
+                    padding: const EdgeInsets.fromLTRB(24, 20, 20, 20),
+                    decoration: BoxDecoration(
+                      color: AdminColors.primaryDark,
+                      borderRadius: const BorderRadius.vertical(top: Radius.circular(18)),
                     ),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.close_rounded, color: Colors.white, size: 20),
-                    onPressed: () => Navigator.pop(ctx),
-                  ),
-                ]),
-              ),
-              SingleChildScrollView(
-                padding: const EdgeInsets.all(24),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(children: [
-                      _buildStatusBadge(status),
-                      const SizedBox(width: 12),
-                      Icon(Icons.calendar_today_outlined, size: 13, color: const Color(0xFF9AA5B4)),
-                      const SizedBox(width: 4),
-                      Text(date, style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF64748B))),
-                    ]),
-                    const SizedBox(height: 20),
-                    _infoRow('Organization', data['orgName'] ?? 'Unknown'),
-                    _infoRow('Email', data['orgEmail'] ?? 'Unknown'),
-                    const SizedBox(height: 12),
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFF8F9FB),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: const Color(0xFFE2E6EA)),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('Subject', style: GoogleFonts.beVietnamPro(fontSize: 11, fontWeight: FontWeight.w600, color: const Color(0xFF64748B))),
-                          const SizedBox(height: 6),
-                          Text(data['subject'] ?? 'No subject', style: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF374151))),
-                        ],
-                      ),
-                    ),
-                    if (revisionNote != null) ...[
-                      const SizedBox(height: 12),
+                    child: Row(children: [
                       Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.all(14),
-                        decoration: BoxDecoration(
-                          color: AdminColors.info.withAlpha(13),
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: AdminColors.info.withAlpha(76)),
-                        ),
+                        width: 38, height: 38,
+                        decoration: BoxDecoration(color: Colors.white.withAlpha(38), borderRadius: BorderRadius.circular(10)),
+                        child: const Icon(Icons.mail_outline_rounded, color: Colors.white, size: 18),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text('REVISION NOTES', style: GoogleFonts.beVietnamPro(fontSize: 11, fontWeight: FontWeight.w700, color: AdminColors.info)),
-                            const SizedBox(height: 6),
-                            Text(revisionNote, style: GoogleFonts.beVietnamPro(fontSize: 13, color: AdminColors.charcoal)),
+                            Text(letterId, style: GoogleFonts.beVietnamPro(fontSize: 16, fontWeight: FontWeight.w700, color: Colors.white)),
+                            Text(subject, style: GoogleFonts.beVietnamPro(fontSize: 12, color: Colors.white.withAlpha(166))),
                           ],
                         ),
                       ),
-                    ],
-                    if (data['revisionCount'] != null && data['revisionCount'] > 0) ...[
-                      const SizedBox(height: 12),
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: AdminColors.mediumGray.withAlpha(51),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Row(children: [
-                          Icon(Icons.history, size: 16, color: AdminColors.darkGray),
-                          const SizedBox(width: 8),
-                          Text('Revision #${data['revisionCount']}',
-                              style: GoogleFonts.beVietnamPro(fontSize: 12, color: AdminColors.darkGray)),
-                        ]),
+                      IconButton(
+                        icon: const Icon(Icons.close_rounded, color: Colors.white, size: 20),
+                        onPressed: () => Navigator.pop(ctx),
                       ),
-                    ],
-                    if (hasAttachment) ...[
-                      const SizedBox(height: 16),
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: AdminColors.primaryDark.withAlpha(13),
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(color: AdminColors.primaryDark.withAlpha(51)),
-                        ),
-                        child: Row(children: [
-                          Container(
-                            width: 40, height: 40,
-                            decoration: BoxDecoration(color: AdminColors.primaryDark.withAlpha(26), borderRadius: BorderRadius.circular(8)),
-                            child: Icon(_getFileIcon(fileName), color: AdminColors.primaryDark, size: 20),
-                          ),
+                    ]),
+                  ),
+                  SingleChildScrollView(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(children: [
+                          _buildStatusBadge(status),
                           const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                              Text(fileName, style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600, color: AdminColors.charcoal), overflow: TextOverflow.ellipsis),
-                              if (data['attachmentSize'] != null) Text(data['attachmentSize'], style: GoogleFonts.beVietnamPro(fontSize: 11, color: AdminColors.darkGray)),
-                            ]),
+                          Icon(Icons.calendar_today_outlined, size: 13, color: const Color(0xFF9AA5B4)),
+                          const SizedBox(width: 4),
+                          Text(date, style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF64748B))),
+                        ]),
+                        const SizedBox(height: 20),
+                        // Organization with Logo
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF8F9FB),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: const Color(0xFFE2E6EA)),
                           ),
-                          ElevatedButton.icon(
-                            onPressed: () => _viewAttachment(data),
-                            icon: const Icon(Icons.visibility, size: 16),
-                            label: const Text('View'),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: AdminColors.primaryDark,
-                              foregroundColor: Colors.white,
-                              elevation: 0,
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                          child: Row(
+                            children: [
+                              Container(
+                                width: 40,
+                                height: 40,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  border: Border.all(color: const Color(0xFFE2E6EA)),
+                                ),
+                                child: logoUrl.isNotEmpty
+                                    ? ClipOval(
+                                        child: Image.network(
+                                          logoUrl,
+                                          width: 40,
+                                          height: 40,
+                                          fit: BoxFit.cover,
+                                          errorBuilder: (_, __, ___) => _defaultAvatar(),
+                                        ),
+                                      )
+                                    : _defaultAvatar(),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      orgName,
+                                      style: GoogleFonts.beVietnamPro(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w700,
+                                        color: const Color(0xFF1A202C),
+                                      ),
+                                    ),
+                                    Text(
+                                      data['orgEmail'] ?? '',
+                                      style: GoogleFonts.beVietnamPro(
+                                        fontSize: 12,
+                                        color: const Color(0xFF64748B),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF8F9FB),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: const Color(0xFFE2E6EA)),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('Subject', style: GoogleFonts.beVietnamPro(fontSize: 11, fontWeight: FontWeight.w600, color: const Color(0xFF64748B))),
+                              const SizedBox(height: 6),
+                              Text(subject, style: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF374151))),
+                            ],
+                          ),
+                        ),
+                        if (message != null && message.toString().isNotEmpty) ...[
+                          const SizedBox(height: 12),
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(14),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF8F9FB),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: const Color(0xFFE2E6EA)),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('Message', style: GoogleFonts.beVietnamPro(fontSize: 11, fontWeight: FontWeight.w600, color: const Color(0xFF64748B))),
+                                const SizedBox(height: 6),
+                                Text(message.toString(), style: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF374151))),
+                              ],
                             ),
                           ),
-                        ]),
-                      ),
-                    ],
-                  ],
-                ),
+                        ],
+                        if (revisionNote != null) ...[
+                          const SizedBox(height: 12),
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(14),
+                            decoration: BoxDecoration(
+                              color: AdminColors.info.withAlpha(13),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: AdminColors.info.withAlpha(76)),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('REVISION NOTES', style: GoogleFonts.beVietnamPro(fontSize: 11, fontWeight: FontWeight.w700, color: AdminColors.info)),
+                                const SizedBox(height: 6),
+                                Text(revisionNote, style: GoogleFonts.beVietnamPro(fontSize: 13, color: AdminColors.charcoal)),
+                              ],
+                            ),
+                          ),
+                        ],
+                        if (hasAttachment) ...[
+                          const SizedBox(height: 16),
+                          Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: AdminColors.primaryDark.withAlpha(13),
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(color: AdminColors.primaryDark.withAlpha(51)),
+                            ),
+                            child: Row(children: [
+                              Container(
+                                width: 40, height: 40,
+                                decoration: BoxDecoration(color: AdminColors.primaryDark.withAlpha(26), borderRadius: BorderRadius.circular(8)),
+                                child: Icon(_getFileIcon(fileName), color: AdminColors.primaryDark, size: 20),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                                  Text(fileName, style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600, color: AdminColors.charcoal), overflow: TextOverflow.ellipsis),
+                                  if (data['attachmentSize'] != null) Text(data['attachmentSize'], style: GoogleFonts.beVietnamPro(fontSize: 11, color: AdminColors.darkGray)),
+                                ]),
+                              ),
+                              ElevatedButton.icon(
+                                onPressed: () => _viewAttachment(data),
+                                icon: const Icon(Icons.visibility, size: 16),
+                                label: const Text('View'),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: AdminColors.primaryDark,
+                                  foregroundColor: Colors.white,
+                                  elevation: 0,
+                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                                ),
+                              ),
+                            ]),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  if (status == 'pending' || status == 'revision' || status == 'resubmitted')
+                    Container(
+                      padding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
+                      child: Row(children: [
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: () {
+                              Navigator.pop(ctx);
+                              _updateStatus(docId, 'rejected', orgName);
+                            },
+                            icon: const Icon(Icons.cancel_rounded, size: 15),
+                            label: Text('Reject', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600)),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: AdminColors.error,
+                              side: BorderSide(color: AdminColors.error),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                              padding: const EdgeInsets.symmetric(vertical: 11),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: () {
+                              Navigator.pop(ctx);
+                              _requestRevision(data, docId);
+                            },
+                            icon: const Icon(Icons.edit_note_rounded, size: 15),
+                            label: Text('Revise', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600)),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: AdminColors.info,
+                              side: BorderSide(color: AdminColors.info),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                              padding: const EdgeInsets.symmetric(vertical: 11),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: ElevatedButton.icon(
+                            onPressed: () {
+                              Navigator.pop(ctx);
+                              _updateStatus(docId, 'approved', orgName);
+                            },
+                            icon: const Icon(Icons.check_circle_rounded, size: 15),
+                            label: Text('Approve', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600)),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AdminColors.success,
+                              foregroundColor: Colors.white,
+                              elevation: 0,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                              padding: const EdgeInsets.symmetric(vertical: 11),
+                            ),
+                          ),
+                        ),
+                      ]),
+                    ),
+                ],
               ),
-              if (status == 'pending' || status == 'revision' || status == 'resubmitted')
-                Container(
-                  padding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
-                  child: Row(children: [
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: () {
-                          Navigator.pop(ctx);
-                          _updateStatus(docId, 'rejected', data['orgName'] ?? 'Request');
-                        },
-                        icon: const Icon(Icons.cancel_rounded, size: 15),
-                        label: Text('Reject', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600)),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: AdminColors.error,
-                          side: BorderSide(color: AdminColors.error),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                          padding: const EdgeInsets.symmetric(vertical: 11),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: () {
-                          Navigator.pop(ctx);
-                          _requestRevision(data, docId);
-                        },
-                        icon: const Icon(Icons.edit_note_rounded, size: 15),
-                        label: Text('Revise', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600)),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: AdminColors.info,
-                          side: BorderSide(color: AdminColors.info),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                          padding: const EdgeInsets.symmetric(vertical: 11),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: ElevatedButton.icon(
-                        onPressed: () {
-                          Navigator.pop(ctx);
-                          _updateStatus(docId, 'approved', data['orgName'] ?? 'Request');
-                        },
-                        icon: const Icon(Icons.check_circle_rounded, size: 15),
-                        label: Text('Approve', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600)),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AdminColors.success,
-                          foregroundColor: Colors.white,
-                          elevation: 0,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                          padding: const EdgeInsets.symmetric(vertical: 11),
-                        ),
-                      ),
-                    ),
-                  ]),
-                ),
-            ],
-          ),
-        ),
+            ),
+          );
+        },
       ),
     );
   }
@@ -847,14 +1044,6 @@ class _AdminLetterRequestScreenState extends State<AdminLetterRequestScreen> {
       ),
     );
   }
-
-  Widget _infoRow(String label, String value) => Padding(
-    padding: const EdgeInsets.only(bottom: 12),
-    child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      SizedBox(width: 90, child: Text('$label:', style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.w600, color: const Color(0xFF64748B)))),
-      Expanded(child: Text(value, style: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF1A202C)))),
-    ]),
-  );
 }
 
 // ============ STAT CARD ============
@@ -943,20 +1132,19 @@ class _ExportButton extends StatelessWidget {
       var snap = await FirestoreCollections.letterRequests.orderBy('timestamp', descending: true).get();
       var docs = snap.docs;
       if (statusFilter != 'All') {
+        final fv = statusFilter == 'Needs Revision' ? 'revision' : statusFilter.toLowerCase();
         docs = docs.where((d) {
           final data = d.data() as Map<String, dynamic>?;
-          return (data?['status'] ?? '').toString().toLowerCase() == statusFilter.toLowerCase();
+          return (data?['status'] ?? '').toString().toLowerCase() == fv;
         }).toList();
       }
       if (searchTerm.isNotEmpty) {
         docs = docs.where((d) {
           final data = d.data() as Map<String, dynamic>?;
-          final name = (data?['name'] ?? data?['orgName'] ?? '').toString().toLowerCase();
-          final email = (data?['email'] ?? data?['orgEmail'] ?? '').toString().toLowerCase();
+          final name = (data?['orgName'] ?? '').toString().toLowerCase();
           final subject = (data?['subject'] ?? '').toString().toLowerCase();
-          return name.contains(searchTerm) ||
-                 email.contains(searchTerm) ||
-                 subject.contains(searchTerm);
+          final message = (data?['message'] ?? '').toString().toLowerCase();
+          return name.contains(searchTerm) || subject.contains(searchTerm) || message.contains(searchTerm);
         }).toList();
       }
       if (docs.isEmpty) {
@@ -964,13 +1152,13 @@ class _ExportButton extends StatelessWidget {
         return;
       }
       final buffer = StringBuffer();
-      buffer.writeln('Letter ID,Name,Email,Letter Type,Subject,Message,Status,Date Submitted');
+      buffer.writeln('Letter ID,Organization,Subject,Message,Status,Date Submitted');
       for (final doc in docs) {
         final d = doc.data() as Map<String, dynamic>?;
         final date = (d?['timestamp'] as Timestamp?)?.toDate().toString().substring(0, 10) ?? '';
-        buffer.writeln('"${d?['letterId']}","${d?['name']}","${d?['email']}","${d?['letterType']}","${d?['subject']}","${d?['message']}","${d?['status']}","$date"');
+        final message = (d?['message'] ?? '').toString().replaceAll(',', ';');
+        buffer.writeln('"${d?['letterId']}","${d?['orgName']}","${d?['subject']}","$message","${d?['status']}","$date"');
       }
-      // For web, you'd use html package to download. For now, show success.
       messenger.showSnackBar(SnackBar(content: Text('Exported ${docs.length} records to CSV')));
     } catch (e) {
       messenger.showSnackBar(
@@ -1017,6 +1205,37 @@ class _PageButton extends StatelessWidget {
       onTap: enabled ? onTap : null,
       borderRadius: BorderRadius.circular(6),
       child: Padding(padding: const EdgeInsets.all(4), child: Icon(icon, size: 20, color: enabled ? const Color(0xFF374151) : const Color(0xFFD1D5DB))),
+    );
+  }
+}
+
+class _PageNumButton extends StatelessWidget {
+  final int page;
+  final bool isActive;
+  final VoidCallback onTap;
+  const _PageNumButton({required this.page, required this.isActive, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 120),
+        margin: const EdgeInsets.symmetric(horizontal: 2),
+        width: 30, height: 30,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: isActive ? AdminColors.primaryDark : Colors.transparent,
+          borderRadius: BorderRadius.circular(6),
+          border: isActive ? null : Border.all(color: const Color(0xFFE4E8EF)),
+          boxShadow: isActive ? [BoxShadow(color: AdminColors.primaryDark.withOpacity(0.25), blurRadius: 6, offset: const Offset(0, 2))] : [],
+        ),
+        child: Text('$page',
+            style: GoogleFonts.beVietnamPro(
+                fontSize: 12.5,
+                fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
+                color: isActive ? Colors.white : const Color(0xFF374151))),
+      ),
     );
   }
 }
