@@ -531,44 +531,46 @@ class _EventProposalsState extends State<EventProposals> {
               ),
               // STATUS column
               Expanded(flex: 1, child: _statusBadge(status)),
-              // ACTIONS column
+              // ============ ACTIONS COLUMN - CORRECTED LOGIC ============
               Expanded(
                 flex: 2,
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.end,
                   children: [
+                    // View button - always visible
                     _ActionIconButton(
                       icon: Icons.visibility_outlined,
                       tooltip: 'View Details',
                       onTap: () => _showProposalDetailDialog(docId, data),
                     ),
                     const SizedBox(width: 4),
-                    _ActionIconButton(
-                      icon: Icons.check_circle_outline_rounded,
-                      tooltip: status == 'approved' ? 'Already Approved' : 'Approve',
-                      color: const Color(0xFF059669),
-                      onTap: status != 'approved' && status != 'rejected' && status != 'archived'
-                          ? () => _confirmSetStatus(docId, data['title'] ?? 'this event', 'approved')
-                          : null,
-                    ),
-                    const SizedBox(width: 4),
-                    _ActionIconButton(
-                      icon: Icons.cancel_outlined,
-                      tooltip: status == 'rejected' ? 'Already Rejected' : 'Reject',
-                      color: const Color(0xFFDC2626),
-                      onTap: status != 'approved' && status != 'rejected' && status != 'archived'
-                          ? () => _confirmSetStatus(docId, data['title'] ?? 'this event', 'rejected')
-                          : null,
-                    ),
-                    const SizedBox(width: 4),
-                    _ActionIconButton(
-                      icon: Icons.archive_outlined,
-                      tooltip: status == 'archived' ? 'Already Archived' : 'Archive',
-                      color: const Color(0xFF6B7280),
-                      onTap: status != 'archived'
-                          ? () => _confirmSetStatus(docId, data['title'] ?? 'this event', 'archived')
-                          : null,
-                    ),
+                    
+                    // For PENDING only: Show Approve and Reject buttons
+                    if (status == 'pending') ...[
+                      _ActionIconButton(
+                        icon: Icons.check_circle_outline_rounded,
+                        tooltip: 'Approve',
+                        color: const Color(0xFF059669),
+                        onTap: () => _confirmSetStatus(docId, data['title'] ?? 'this event', 'approved'),
+                      ),
+                      const SizedBox(width: 4),
+                      _ActionIconButton(
+                        icon: Icons.cancel_outlined,
+                        tooltip: 'Reject',
+                        color: const Color(0xFFDC2626),
+                        onTap: () => _confirmSetStatus(docId, data['title'] ?? 'this event', 'rejected'),
+                      ),
+                      const SizedBox(width: 4),
+                    ],
+                    
+                    // Archive button - visible for all except archived
+                    if (status != 'archived')
+                      _ActionIconButton(
+                        icon: Icons.archive_outlined,
+                        tooltip: 'Archive',
+                        color: const Color(0xFF6B7280),
+                        onTap: () => _confirmSetStatus(docId, data['title'] ?? 'this event', 'archived'),
+                      ),
                   ],
                 ),
               ),
@@ -1277,19 +1279,19 @@ class _EventProposalsState extends State<EventProposals> {
                           Icons.description_outlined),
                       const SizedBox(height: 14),
                       _detailItem('Submitted By', data['submittedByEmail'] ?? '—',
-    Icons.person_outline_rounded),
-const SizedBox(height: 14),
-_detailItem('Issues Certificate', 
-    (data['issuesCertificate'] == true) ? 'Yes ✅' : 'No ❌', 
-    Icons.verified_outlined,
-    valueColor: (data['issuesCertificate'] == true) 
-        ? const Color(0xFF059669) 
-        : const Color(0xFF6B7280)),
-if (data['reviewedAt'] != null) ...[
-  const SizedBox(height: 14),
-  _detailItem('Reviewed', _formatTimestamp(data['reviewedAt']),
-      Icons.rate_review_outlined),
-],
+                          Icons.person_outline_rounded),
+                      const SizedBox(height: 14),
+                      _detailItem('Issues Certificate', 
+                          (data['issuesCertificate'] == true) ? 'Yes ✅' : 'No ❌', 
+                          Icons.verified_outlined,
+                          valueColor: (data['issuesCertificate'] == true) 
+                              ? const Color(0xFF059669) 
+                              : const Color(0xFF6B7280)),
+                      if (data['reviewedAt'] != null) ...[
+                        const SizedBox(height: 14),
+                        _detailItem('Reviewed', _formatTimestamp(data['reviewedAt']),
+                            Icons.rate_review_outlined),
+                      ],
                       if (hasAttachment) ...[
                         const SizedBox(height: 20),
                         _sectionLabel('Attachment', icon: Icons.attach_file_rounded),
@@ -1347,6 +1349,7 @@ if (data['reviewedAt'] != null) ...[
                   ),
                 ),
               ),
+              // ============ DIALOG FOOTER BUTTONS - CORRECTED LOGIC ============
               Container(
                 padding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
                 decoration: const BoxDecoration(
@@ -1355,7 +1358,8 @@ if (data['reviewedAt'] != null) ...[
                   borderRadius: BorderRadius.vertical(bottom: Radius.circular(18)),
                 ),
                 child: Row(children: [
-                  if (status != 'approved' && status != 'rejected' && status != 'archived') ...[
+                  // For PENDING only: Show Approve and Reject buttons
+                  if (status == 'pending') ...[
                     Expanded(
                       child: ElevatedButton.icon(
                         onPressed: () {
@@ -1395,6 +1399,7 @@ if (data['reviewedAt'] != null) ...[
                     ),
                     const SizedBox(width: 10),
                   ],
+                  // Archive button - visible if not archived
                   if (status != 'archived')
                     OutlinedButton.icon(
                       onPressed: () {

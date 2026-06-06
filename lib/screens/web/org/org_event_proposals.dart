@@ -667,31 +667,31 @@ Future<void> _archiveProposal(String docId, String title) async {
     );
   }
 
+  // ============ UPDATED TABLE HEADER - REMOVED PROPOSAL # COLUMN ============
   Widget _buildTableHeader() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 13),
-      decoration: const BoxDecoration(
-        color: Color(0xFFF8F9FB),
-        borderRadius: BorderRadius.vertical(top: Radius.circular(14)),
-        border: Border(bottom: BorderSide(color: Color(0xFFE8ECF0))),
-      ),
-      child: Row(children: [
-        Expanded(flex: 2, child: _headerCell('PROPOSAL #')),
-        Expanded(flex: 4, child: _headerCell('EVENT TITLE')),
-        Expanded(flex: 2, child: _headerCell('CATEGORY')),
-        Expanded(flex: 2, child: _headerCell('AUDIENCE')),
-        Expanded(flex: 2, child: _headerCell('DATE')),
-        Expanded(flex: 2, child: _headerCell('TIME')),
-        Expanded(flex: 2, child: _headerCell('LOCATION')),
-        Expanded(flex: 2, child: _headerCell('STATUS')),
-        Expanded(flex: 2, child: _headerCell('SUBMITTED')),
-        Expanded(flex: 2, child: Align(
-          alignment: Alignment.centerRight,
-          child: _headerCell('ACTIONS'),
-        )),
-      ]),
-    );
-  }
+  return Container(
+    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 13),
+    decoration: const BoxDecoration(
+      color: Color(0xFFF8F9FB),
+      borderRadius: BorderRadius.vertical(top: Radius.circular(14)),
+      border: Border(bottom: BorderSide(color: Color(0xFFE8ECF0))),
+    ),
+    child: Row(children: [
+      Expanded(flex: 4, child: _headerCell('EVENT TITLE')),  // <-- EVENT TITLE na agad
+      Expanded(flex: 2, child: _headerCell('CATEGORY')),
+      Expanded(flex: 2, child: _headerCell('AUDIENCE')),
+      Expanded(flex: 2, child: _headerCell('DATE')),
+      Expanded(flex: 2, child: _headerCell('TIME')),
+      Expanded(flex: 2, child: _headerCell('LOCATION')),
+      Expanded(flex: 2, child: _headerCell('STATUS')),
+      Expanded(flex: 2, child: _headerCell('SUBMITTED')),
+      Expanded(flex: 2, child: Align(
+        alignment: Alignment.centerRight,
+        child: _headerCell('ACTIONS'),
+      )),
+    ]),
+  );
+}
 
   Widget _headerCell(String text) => Text(
     text,
@@ -704,148 +704,141 @@ Future<void> _archiveProposal(String docId, String title) async {
   );
 
   Widget _buildProposalRow({
-    required String docId,
-    required Map<String, dynamic> data,
-    required bool isLast,
-  }) {
-    final status = (data['status'] ?? 'pending').toString().toLowerCase();
-    final proposalNum = 'EP-${docId.substring(0, 4).toUpperCase()}';
-    final date = data['date'];
-    final dateStr = date is Timestamp
-        ? DateFormat('MMM dd, yyyy').format(date.toDate())
-        : '—';
-    final startTime = data['startTime'] ?? '';
-    final endTime = data['endTime'] ?? '';
-    final timeStr = (startTime.isNotEmpty && endTime.isNotEmpty) 
-        ? '$startTime - $endTime' 
-        : (startTime.isNotEmpty ? startTime : '—');
-    final submittedAt = data['submittedAt'];
-    final submittedStr = submittedAt is Timestamp
-        ? DateFormat('MMM dd, yyyy').format(submittedAt.toDate())
-        : '—';
+  required String docId,
+  required Map<String, dynamic> data,
+  required bool isLast,
+}) {
+  final status = (data['status'] ?? 'pending').toString().toLowerCase();
+  // TANGGALIN mo na si proposalNum variable - hindi na kailangan
+  final date = data['date'];
+  final dateStr = date is Timestamp
+      ? DateFormat('MMM dd, yyyy').format(date.toDate())
+      : '—';
+  final startTime = data['startTime'] ?? '';
+  final endTime = data['endTime'] ?? '';
+  final timeStr = (startTime.isNotEmpty && endTime.isNotEmpty) 
+      ? '$startTime - $endTime' 
+      : (startTime.isNotEmpty ? startTime : '—');
+  final submittedAt = data['submittedAt'];
+  final submittedStr = submittedAt is Timestamp
+      ? DateFormat('MMM dd, yyyy').format(submittedAt.toDate())
+      : '—';
 
-    return InkWell(
-      hoverColor: const Color(0xFFF8F9FB),
-      onTap: () => _openViewModal(docId, data),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-        decoration: BoxDecoration(
-          border: isLast ? null : const Border(bottom: BorderSide(color: Color(0xFFF1F5F9))),
+  return InkWell(
+    hoverColor: const Color(0xFFF8F9FB),
+    onTap: () => _openViewModal(docId, data),
+    child: Container(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+      decoration: BoxDecoration(
+        border: isLast ? null : const Border(bottom: BorderSide(color: Color(0xFFF1F5F9))),
+      ),
+      child: Row(children: [
+        // ITO NA ANG UNA - EVENT TITLE (walang proposal #)
+        Expanded(
+          flex: 4,  // GINAWA KONG 4 (dating 2 + 2)
+          child: Text(
+            data['title'] ?? '—',
+            style: GoogleFonts.beVietnamPro(
+              fontSize: 13,
+              fontWeight: FontWeight.w500,
+              color: const Color(0xFF1A202C),
+            ),
+            overflow: TextOverflow.ellipsis,
+          ),
         ),
-        child: Row(children: [
-          Expanded(
-            flex: 2,
+        // CATEGORY
+        Expanded(
+          flex: 2,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            decoration: BoxDecoration(
+              color: UpriseColors.primaryDark.withOpacity(0.07),
+              borderRadius: BorderRadius.circular(6),
+            ),
             child: Text(
-              proposalNum,
+              data['category'] ?? '—',
               style: GoogleFonts.beVietnamPro(
-                fontSize: 13,
+                fontSize: 12,
                 fontWeight: FontWeight.w600,
                 color: UpriseColors.primaryDark,
               ),
-            ),
-          ),
-          Expanded(
-            flex: 4,
-            child: Text(
-              data['title'] ?? '—',
-              style: GoogleFonts.beVietnamPro(
-                fontSize: 13,
-                fontWeight: FontWeight.w500,
-                color: const Color(0xFF1A202C),
-              ),
               overflow: TextOverflow.ellipsis,
             ),
           ),
-          Expanded(
-            flex: 2,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-              decoration: BoxDecoration(
-                color: UpriseColors.primaryDark.withOpacity(0.07),
-                borderRadius: BorderRadius.circular(6),
+        ),
+        // AUDIENCE
+        Expanded(
+          flex: 2,
+          child: _audienceChip(data['audience'] ?? 'Public'),
+        ),
+        // DATE
+        Expanded(
+          flex: 2,
+          child: Text(dateStr,
+              style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF64748B))),
+        ),
+        // TIME
+        Expanded(
+          flex: 2,
+          child: Text(
+            timeStr,
+            style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF374151)),
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+        // LOCATION
+        Expanded(
+          flex: 2,
+          child: Text(
+            data['location'] ?? '—',
+            style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF374151)),
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+        // STATUS
+        Expanded(flex: 2, child: _statusBadge(status)),
+        // SUBMITTED
+        Expanded(
+          flex: 2,
+          child: Text(submittedStr,
+              style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF64748B))),
+        ),
+        // ACTIONS (same pa rin)
+        Expanded(
+          flex: 2,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              _ActionIconButton(
+                icon: Icons.visibility_outlined,
+                tooltip: 'View Details',
+                onTap: () => _openViewModal(docId, data),
               ),
-              child: Text(
-                data['category'] ?? '—',
-                style: GoogleFonts.beVietnamPro(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
+              if (status == 'pending') ...[
+                const SizedBox(width: 4),
+                _ActionIconButton(
+                  icon: Icons.edit_outlined,
+                  tooltip: 'Edit Proposal',
                   color: UpriseColors.primaryDark,
+                  onTap: () => _openEditModal(docId, data),
                 ),
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
+              ],
+              if (status == 'approved' || status == 'rejected') ...[
+                const SizedBox(width: 4),
+                _ActionIconButton(
+                  icon: Icons.archive_outlined,
+                  tooltip: 'Archive Proposal',
+                  color: const Color(0xFF6B7280),
+                  onTap: () => _confirmArchive(docId, data['title'] ?? 'Proposal'),
+                ),
+              ],
+            ],
           ),
-          Expanded(
-            flex: 2,
-            child: _audienceChip(data['audience'] ?? 'Public'),
-          ),
-          Expanded(
-            flex: 2,
-            child: Text(dateStr,
-                style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF64748B))),
-          ),
-          Expanded(
-            flex: 2,
-            child: Text(
-              timeStr,
-              style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF374151)),
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-          Expanded(
-            flex: 2,
-            child: Text(
-              data['location'] ?? '—',
-              style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF374151)),
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-          Expanded(flex: 2, child: _statusBadge(status)),
-          Expanded(
-            flex: 2,
-            child: Text(submittedStr,
-                style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF64748B))),
-          ),
-          Expanded(
-  flex: 2,
-  child: Row(
-    mainAxisAlignment: MainAxisAlignment.end,
-    children: [
-      // View button - always visible
-      _ActionIconButton(
-        icon: Icons.visibility_outlined,
-        tooltip: 'View Details',
-        onTap: () => _openViewModal(docId, data),
-      ),
-      
-      // Edit button - ONLY for pending status
-      if (status == 'pending') ...[
-        const SizedBox(width: 4),
-        _ActionIconButton(
-          icon: Icons.edit_outlined,
-          tooltip: 'Edit Proposal',
-          color: UpriseColors.primaryDark,
-          onTap: () => _openEditModal(docId, data),
         ),
-      ],
-      
-      // Archive button - ONLY for approved or rejected (NOT for pending)
-      if (status == 'approved' || status == 'rejected') ...[
-        const SizedBox(width: 4),
-        _ActionIconButton(
-          icon: Icons.archive_outlined,
-          tooltip: 'Archive Proposal',
-          color: const Color(0xFF6B7280),
-          onTap: () => _confirmArchive(docId, data['title'] ?? 'Proposal'),
-        ),
-      ],
-    ],
-  ),
-),
-        ]),
-      ),
-    );
-  }
+      ]),
+    ),
+  );
+}
 
   Widget _audienceChip(String audience) {
     Color bg;
@@ -1664,7 +1657,7 @@ class _SubmitProposalModalState extends State<_SubmitProposalModal> {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// View Proposal Modal
+// View Proposal Modal - UPDATED with Proposal ID in header
 // ─────────────────────────────────────────────────────────────────────────────
 class _ViewProposalModal extends StatelessWidget {
   final String docId;
@@ -1717,10 +1710,13 @@ class _ViewProposalModal extends StatelessWidget {
                 child: const Icon(Icons.description_outlined, color: Colors.white, size: 18),
               ),
               const SizedBox(width: 14),
+              // ============ ADDED PROPOSAL ID HERE ============
               Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Text(data['title'] ?? 'Proposal Details',
                     style: GoogleFonts.beVietnamPro(fontSize: 17, fontWeight: FontWeight.w700, color: Colors.white)),
-                Text(propNum, style: GoogleFonts.beVietnamPro(fontSize: 12, color: Colors.white.withOpacity(0.7))),
+                const SizedBox(height: 2),
+                Text(propNum,  // <-- Proposal ID now visible here
+                    style: GoogleFonts.beVietnamPro(fontSize: 12, color: Colors.white.withOpacity(0.7))),
               ])),
               _statusBadge(status),
               const SizedBox(width: 8),
@@ -1752,7 +1748,7 @@ class _ViewProposalModal extends StatelessWidget {
                 const SizedBox(height: 14),
                 _detailItem('Submitted', _fmt(data['submittedAt']), Icons.send_outlined),
                 
-                // Wet Sign Schedule - DAGDAG ITO
+                // Wet Sign Schedule
                 if (data['wetSignSchedule'] != null) ...[
                   const SizedBox(height: 20),
                   _buildWetSignInfo(),
