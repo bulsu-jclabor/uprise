@@ -1,4 +1,4 @@
-// ignore_for_file: unused_field, deprecated_member_use
+// ignore_for_file: unnecessary_cast, unused_field, deprecated_member_use
 
 import 'dart:ui' show ImageByteFormat;
 
@@ -308,16 +308,19 @@ class _OrgCertificatesScreenState extends State<OrgCertificatesScreen> {
           onChanged: (v) => setState(() { _filterStatus = v!; _currentPage = 1; }),
         ),
         const SizedBox(width: 10),
-        ElevatedButton.icon(
-          onPressed: _openGenerateFlow,
-          icon: const Icon(Icons.add_rounded, size: 15),
-          label: Text('Generate Certificate', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600)),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: UpriseColors.primaryDark,
-            foregroundColor: Colors.white,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-            elevation: 0,
+        Tooltip(
+          message: 'Only approved event proposals that issue certificates can be selected.',
+          child: ElevatedButton.icon(
+            onPressed: _openGenerateFlow,
+            icon: const Icon(Icons.add_rounded, size: 15),
+            label: Text('Generate Certificate', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600)),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: UpriseColors.primaryDark,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              elevation: 0,
+            ),
           ),
         ),
       ]),
@@ -1389,14 +1392,12 @@ class _CanvaTemplateEditorState extends State<_CanvaTemplateEditor> {
   @override
   Widget build(BuildContext context) {
     final sel = _selected;
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-    final dialogSurface = colorScheme.surface;
-    final panelSurface = colorScheme.surfaceVariant;
-    final headerSurface = colorScheme.primaryContainer;
-    final headerText = colorScheme.onPrimaryContainer;
-    final borderColor = colorScheme.outline;
-    final buttonText = colorScheme.onSurface;
+    final dialogSurface = UpriseColors.white;
+    final panelSurface = const Color(0xFFFFF4E8);
+    final headerSurface = UpriseColors.primaryDark;
+    final headerText = UpriseColors.white;
+    final borderColor = UpriseColors.primaryDark.withOpacity(0.18);
+    final buttonText = UpriseColors.charcoal;
 
     return Dialog(
       insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
@@ -1434,23 +1435,23 @@ class _CanvaTemplateEditorState extends State<_CanvaTemplateEditor> {
               OutlinedButton(
                 onPressed: () => Navigator.pop(context),
                 style: OutlinedButton.styleFrom(
-                  foregroundColor: buttonText.withOpacity(0.75),
-                  side: BorderSide(color: borderColor),
+                  foregroundColor: UpriseColors.primaryDark.withOpacity(0.85),
+                  side: BorderSide(color: UpriseColors.primaryDark.withOpacity(0.2)),
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                 ),
-                child: Text('Cancel', style: GoogleFonts.beVietnamPro(fontSize: 13, color: buttonText.withOpacity(0.85))),
+                child: Text('Cancel', style: GoogleFonts.beVietnamPro(fontSize: 13, color: UpriseColors.primaryDark.withOpacity(0.85))),
               ),
               const SizedBox(width: 8),
               ElevatedButton.icon(
                 onPressed: _isSaving ? null : _save,
                 icon: _isSaving
-                    ? SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: colorScheme.onPrimary))
-                    : Icon(Icons.check_rounded, size: 16, color: colorScheme.onPrimary),
-                label: Text('Save Template', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600, color: colorScheme.onPrimary)),
+                    ? SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: UpriseColors.white))
+                    : const Icon(Icons.check_rounded, size: 16, color: UpriseColors.white),
+                label: Text('Save Template', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600, color: UpriseColors.white)),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: colorScheme.primary,
-                  foregroundColor: colorScheme.onPrimary,
+                  backgroundColor: UpriseColors.primaryDark,
+                  foregroundColor: UpriseColors.white,
                   elevation: 0,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -1776,11 +1777,11 @@ class _LayersPanel extends StatelessWidget {
     final colorScheme = theme.colorScheme;
     return Container(
       width: 180,
-      color: colorScheme.surfaceVariant,
+      color: const Color(0xFFFFF4E8),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(12, 14, 12, 8),
-          child: Text('LAYERS', style: GoogleFonts.beVietnamPro(fontSize: 10, fontWeight: FontWeight.w700, color: colorScheme.onSurfaceVariant, letterSpacing: 1)),
+          child: Text('LAYERS', style: GoogleFonts.beVietnamPro(fontSize: 10, fontWeight: FontWeight.w700, color: UpriseColors.primaryDark, letterSpacing: 1)),
         ),
         Expanded(
           child: ReorderableListView(
@@ -1791,7 +1792,7 @@ class _LayersPanel extends StatelessWidget {
                 key: ValueKey(el.id),
                 dense: true,
                 selected: isSel,
-                selectedTileColor: colorScheme.primary,
+                selectedTileColor: UpriseColors.primaryDark,
                 tileColor: Colors.transparent,
                 leading: Icon(
                   el.type == 'text' ? Icons.text_fields_rounded
@@ -1799,11 +1800,11 @@ class _LayersPanel extends StatelessWidget {
                       : el.type == 'divider' ? Icons.horizontal_rule_rounded
                       : Icons.crop_square_rounded,
                   size: 14,
-                  color: isSel ? colorScheme.onPrimary : colorScheme.onSurfaceVariant,
+                  color: isSel ? UpriseColors.white : UpriseColors.primaryDark,
                 ),
                 title: Text(
                   el.type == 'text' ? el.text.length > 16 ? '${el.text.substring(0, 16)}…' : el.text : el.type,
-                  style: GoogleFonts.beVietnamPro(fontSize: 11, color: isSel ? colorScheme.onPrimary : colorScheme.onSurfaceVariant),
+                  style: GoogleFonts.beVietnamPro(fontSize: 11, color: isSel ? UpriseColors.white : UpriseColors.primaryDark),
                   overflow: TextOverflow.ellipsis,
                 ),
                 onTap: () => onSelect(el.id),
@@ -1831,7 +1832,7 @@ class _PropertiesPanel extends StatelessWidget {
     final sel = selected;
     return Container(
       width: 220,
-      color: colorScheme.surfaceVariant,
+      color: const Color(0xFFFFF4E8),
       padding: const EdgeInsets.all(14),
       child: SingleChildScrollView(
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -2066,12 +2067,11 @@ class _Toggle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
     return Switch(
       value: value,
       onChanged: onChanged,
       materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-      activeColor: colorScheme.primary,
+      activeColor: UpriseColors.primaryDark,
     );
   }
 }
@@ -2084,17 +2084,16 @@ class _EditorTopBtn extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(6),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         decoration: BoxDecoration(
-          color: danger ? colorScheme.errorContainer : colorScheme.primaryContainer,
+          color: danger ? const Color(0xFFEF4444) : UpriseColors.primaryLight,
           borderRadius: BorderRadius.circular(6),
         ),
-        child: Text(label, style: GoogleFonts.beVietnamPro(fontSize: 11, fontWeight: FontWeight.w600, color: danger ? colorScheme.onErrorContainer : colorScheme.onPrimaryContainer)),
+        child: Text(label, style: GoogleFonts.beVietnamPro(fontSize: 11, fontWeight: FontWeight.w600, color: danger ? UpriseColors.white : UpriseColors.primaryDark)),
       ),
     );
   }
@@ -2142,12 +2141,12 @@ class _GenerateCertificateModalState extends State<_GenerateCertificateModal> {
   String  _certType    = 'Formal Academic';
   bool    _isSubmitting = false;
 
-  // CHANGED: stream now pre-filters to only proposals with issuesCertificate == true
+  // CHANGED: stream now pre-filters to only approved proposals that issue certificates
   Stream<QuerySnapshot> get _eventsStream => FirebaseFirestore.instance
       .collection('event_proposals')
       .where('orgId', isEqualTo: widget.orgId)
       .where('status', isEqualTo: 'approved')
-      .where('issuesCertificate', isEqualTo: true) // <-- NEW GATE
+      .where('issuesCertificate', isEqualTo: true)
       .orderBy('date', descending: false)
       .snapshots();
 
@@ -2187,8 +2186,18 @@ class _GenerateCertificateModalState extends State<_GenerateCertificateModal> {
 
   Future<void> _submit({required bool distribute}) async {
     if (_formKey.currentState?.validate() != true) return;
+    if (distribute && !_eventIsEvaluated) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('You can only distribute certificates after attendees complete evaluation.', style: GoogleFonts.beVietnamPro(color: Colors.white)),
+          backgroundColor: UpriseColors.error,
+        ));
+      }
+      return;
+    }
     setState(() => _isSubmitting = true);
 
+    final recipients = _attendanceSynced ? _attendeeCount : 0;
     final payload = <String, dynamic>{
       'orgId':        widget.orgId,
       'eventName':    _titleCtrl.text.trim().isNotEmpty ? _titleCtrl.text.trim() : (_selectedEventName ?? 'Untitled'),
@@ -2197,7 +2206,7 @@ class _GenerateCertificateModalState extends State<_GenerateCertificateModal> {
       'type':         'Participation',
       'issuedAt':     FieldValue.serverTimestamp(),
       'status':       distribute ? 'distributed' : 'draft',
-      'recipients':   _attendanceSynced ? _attendeeCount : 0,
+      'recipients':   recipients,
       'signatories':  _sigCtrl.text.trim(),
       if (_selectedTemplateUrl != null) 'templateFileUrl': _selectedTemplateUrl,
       if (_selectedEventDocId != null) 'eventId': _selectedEventDocId,
@@ -2244,6 +2253,25 @@ class _GenerateCertificateModalState extends State<_GenerateCertificateModal> {
     return snap.docs.length;
   }
 
+  Future<int> _fetchEvaluatedRecipientCount(String eventDocId) async {
+    final snap = await FirebaseFirestore.instance
+        .collection('event_feedbacks')
+        .where('eventId', isEqualTo: eventDocId)
+        .get();
+
+    final ids = <String>{};
+    for (final doc in snap.docs) {
+      final data = doc.data() as Map<String, dynamic>;
+      final userId = data['userId'] as String?
+          ?? data['participantId'] as String?
+          ?? data['submittedBy'] as String?;
+      if (userId != null && userId.isNotEmpty) {
+        ids.add(userId);
+      }
+    }
+    return ids.isNotEmpty ? ids.length : snap.docs.length;
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme  = _previewTheme;
@@ -2279,8 +2307,10 @@ class _GenerateCertificateModalState extends State<_GenerateCertificateModal> {
                 Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   Text(isEdit ? 'Edit Certificate' : 'Generate New Certificate',
                       style: GoogleFonts.beVietnamPro(fontSize: 17, fontWeight: FontWeight.w700, color: Colors.white)),
-                  Text('Create and customize certificates for event participants',
-                      style: GoogleFonts.beVietnamPro(fontSize: 11, color: Colors.white.withOpacity(0.7))),
+                  Text(
+                    'Create certificates only for approved events that issue certificates',
+                    style: GoogleFonts.beVietnamPro(fontSize: 11, color: Colors.white.withOpacity(0.7)),
+                  ),
                 ])),
                 IconButton(
                   icon: const Icon(Icons.close_rounded, color: Colors.white, size: 20),
@@ -2301,7 +2331,7 @@ class _GenerateCertificateModalState extends State<_GenerateCertificateModal> {
                       Row(children: [
                         Expanded(
                           child: _FieldWrapper(
-                            label: 'Select Event *',
+                            label: 'Select Event (approved cert event) *',
                             child: StreamBuilder<QuerySnapshot>(
                               stream: _eventsStream,
                               builder: (context, snapshot) {
@@ -2310,12 +2340,13 @@ class _GenerateCertificateModalState extends State<_GenerateCertificateModal> {
                                   value: _selectedEventId,
                                   hint: Text(
                                     events.isEmpty
-                                        ? 'No eligible events found'
-                                        : 'Choose an approved event',
+                                        ? 'No approved certificate events found'
+                                        : 'Choose an approved event that issues certificates',
                                     style: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF9AA5B4)),
                                   ),
                                   decoration: _fieldDecoration(),
                                   style: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF1A202C)),
+                                  validator: (_) => _selectedEventId == null ? 'Required' : null,
                                   items: events.map((doc) {
                                     final data = doc.data() as Map<String, dynamic>;
                                     return DropdownMenuItem(
@@ -2350,7 +2381,13 @@ class _GenerateCertificateModalState extends State<_GenerateCertificateModal> {
 
                                       if (mounted && evQ.docs.isNotEmpty) {
                                         final eventDoc = evQ.docs.first;
-                                        final count = await _fetchAttendanceCount(eventDoc.id);
+                                        var count = 0;
+                                        if (_eventIsEvaluated) {
+                                          count = await _fetchEvaluatedRecipientCount(eventDoc.id);
+                                        }
+                                        if (count == 0) {
+                                          count = await _fetchAttendanceCount(eventDoc.id);
+                                        }
                                         setState(() {
                                           _selectedEventDocId = eventDoc.id;
                                           _attendeeCount = count;
@@ -2514,7 +2551,7 @@ class _GenerateCertificateModalState extends State<_GenerateCertificateModal> {
                                 style: GoogleFonts.beVietnamPro(fontSize: 12, color: UpriseColors.charcoal),
                                 children: [
                                   TextSpan(text: 'Automatic Recipient Detection  ', style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.w600)),
-                                  TextSpan(text: 'Certificates are generated for all event attendees automatically.',
+                                  TextSpan(text: 'Certificates are generated only for attendees who have completed event evaluation before distribution.',
                                       style: GoogleFonts.beVietnamPro(fontSize: 12, color: UpriseColors.greyText)),
                                 ],
                               ),

@@ -1,4 +1,5 @@
-// ignore_for_file: unused_field, duplicate_ignore, use_build_context_synchronously, deprecated_member_use
+// ignore_for_file: unused_element_parameter
+
 import 'dart:typed_data';
 import 'dart:convert';
 import 'package:flutter/material.dart';
@@ -7,2415 +8,1272 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:csv/csv.dart';
 import 'package:file_saver/file_saver.dart';
-import 'package:fl_chart/fl_chart.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
-import 'package:uprise/widgets/admin_export_button.dart';
-import '../admin/export_pdf.dart';
-import '../../../services/activity_logger.dart' as activity_log;
 import '../../theme/app_theme.dart';
+import '../../../widgets/admin_export_button.dart';
+import 'export_pdf.dart';
+import '../../../services/activity_logger.dart' as activity_log;
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Design tokens
+// DESIGN TOKENS
 // ─────────────────────────────────────────────────────────────────────────────
 class _DS {
   static const double radiusSm   = 8;
   static const double radiusMd   = 12;
   static const double radiusLg   = 16;
+  static const double radiusXl   = 20;
   static const double radiusPill = 100;
 
-  static const Color surface     = Color(0xFFFBFCFE);
-  static const Color surfaceAlt  = Color(0xFFF4F6FA);
-  static const Color border      = Color(0xFFE8ECF2);
-  static const Color borderLight = Color(0xFFF1F5F9);
-  static const Color textPrimary = Color(0xFF0F172A);
-  static const Color textSecondary = Color(0xFF475569);
-  static const Color textMuted   = Color(0xFF94A3B8);
-
-  static const Color green       = Color(0xFF10B981);
-  static const Color greenBg     = Color(0xFFECFDF5);
-  static const Color amber       = Color(0xFFF59E0B);
-  static const Color amberBg     = Color(0xFFFFFBEB);
-  static const Color red         = Color(0xFFEF4444);
-  static const Color redBg       = Color(0xFFFEF2F2);
-  static const Color blue        = Color(0xFF3B82F6);
-  static const Color blueBg      = Color(0xFFEFF6FF);
-
+  // Refined card shadow — softer, more layered
   static final cardShadow = [
-    BoxShadow(
-      color: Colors.black.withOpacity(0.04),
-      blurRadius: 8,
-      offset: const Offset(0, 2),
-    ),
-    BoxShadow(
-      color: Colors.black.withOpacity(0.04),
-      blurRadius: 24,
-      offset: const Offset(0, 8),
-    ),
+    BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 6, offset: const Offset(0, 1)),
+    BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 16, offset: const Offset(0, 6)),
   ];
 
-  static final elevatedShadow = [
-    BoxShadow(
-      color: Colors.black.withOpacity(0.08),
-      blurRadius: 16,
-      offset: const Offset(0, 4),
-    ),
-    BoxShadow(
-      color: Colors.black.withOpacity(0.04),
-      blurRadius: 40,
-      offset: const Offset(0, 16),
-    ),
-  ];
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Attendance status badge
-// ─────────────────────────────────────────────────────────────────────────────
-Widget _attendanceBadge(String status) {
-  final Map<String, (Color, Color, String, IconData)> styles = {
-    'present': (_DS.greenBg, _DS.green, 'PRESENT', Icons.check_circle_rounded),
-    'late':    (_DS.amberBg, _DS.amber, 'LATE',    Icons.schedule_rounded),
-    'absent':  (_DS.redBg,   _DS.red,   'ABSENT',  Icons.cancel_rounded),
-  };
-  final s = styles[status.toLowerCase()] ??
-      (const Color(0xFFF3F4F6), const Color(0xFF6B7280), status.toUpperCase(), Icons.circle_outlined);
-  return Container(
-    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-    decoration: BoxDecoration(
-      color: s.$1,
-      borderRadius: BorderRadius.circular(_DS.radiusPill),
-    ),
-    child: Row(mainAxisSize: MainAxisSize.min, children: [
-      Icon(s.$4, size: 10, color: s.$2),
-      const SizedBox(width: 4),
-      Text(
-        s.$3,
-        style: GoogleFonts.spaceGrotesk(
-          fontSize: 10,
-          fontWeight: FontWeight.w700,
-          color: s.$2,
-          letterSpacing: 0.6,
-        ),
+  static InputDecoration inputDeco(String label, {String? hint, IconData? icon}) {
+    return InputDecoration(
+      labelText: label,
+      hintText: hint,
+      prefixIcon: icon != null
+          ? Padding(
+              padding: const EdgeInsets.only(left: 14, right: 10),
+              child: Icon(icon, size: 17, color: const Color(0xFFB0BAC8)),
+            )
+          : null,
+      prefixIconConstraints: const BoxConstraints(minWidth: 0, minHeight: 0),
+      labelStyle: GoogleFonts.beVietnamPro(fontSize: 12.5, color: const Color(0xFF8492A6), fontWeight: FontWeight.w500),
+      hintStyle: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFFB0BAC8)),
+      filled: true,
+      fillColor: const Color(0xFFF7F8FA),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(radiusSm),
+        borderSide: const BorderSide(color: Color(0xFFE4E8EF)),
       ),
-    ]),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(radiusSm),
+        borderSide: const BorderSide(color: Color(0xFFE4E8EF)),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(radiusSm),
+        borderSide: BorderSide(color: UpriseColors.primaryDark, width: 1.5),
+      ),
+      errorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(radiusSm),
+        borderSide: const BorderSide(color: Color(0xFFE5484D)),
+      ),
+      focusedErrorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(radiusSm),
+        borderSide: const BorderSide(color: Color(0xFFE5484D), width: 1.5),
+      ),
+    );
+  }
+
+  static InputDecoration searchDeco(String hint) => InputDecoration(
+    hintText: hint,
+    hintStyle: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFFB0BAC8)),
+    prefixIcon: const Padding(
+      padding: EdgeInsets.only(left: 14, right: 10),
+      child: Icon(Icons.search_rounded, size: 17, color: Color(0xFFB0BAC8)),
+    ),
+    prefixIconConstraints: const BoxConstraints(minWidth: 0, minHeight: 0),
+    filled: true,
+    fillColor: Colors.white,
+    contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
+    border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(radiusSm),
+        borderSide: const BorderSide(color: Color(0xFFE4E8EF))),
+    enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(radiusSm),
+        borderSide: const BorderSide(color: Color(0xFFE4E8EF))),
+    focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(radiusSm),
+        borderSide: BorderSide(color: UpriseColors.primaryDark, width: 1.5)),
   );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Event status / day info helpers
+// SHARED HELPERS
 // ─────────────────────────────────────────────────────────────────────────────
-enum _EventDayState { future, todayInactive, todayActive, ended, otherDay }
-
-_EventDayState _computeEventDayState(EventModel event, {bool? isActiveOverride}) {
-  final now = DateTime.now();
-  final date = event.date;
-  final today = DateTime(now.year, now.month, now.day);
-  final eventDay = DateTime(date.year, date.month, date.day);
-
-  if (isActiveOverride == true) return _EventDayState.todayActive;
-
-  DateTime? startDt, endDt;
-  try {
-    final start = DateFormat.jm().parse(event.startTime);
-    final end   = DateFormat.jm().parse(event.endTime);
-    startDt = DateTime(date.year, date.month, date.day, start.hour, start.minute);
-    endDt   = DateTime(date.year, date.month, date.day, end.hour, end.minute);
-    if (endDt.isBefore(startDt)) endDt = endDt.add(const Duration(days: 1));
-  } catch (_) {}
-
-  if (eventDay.isAfter(today)) return _EventDayState.future;
-  if (eventDay.isBefore(today)) {
-    if (startDt != null && endDt != null && now.isBefore(endDt.add(const Duration(minutes: 15)))) {
-      return _EventDayState.todayActive;
-    }
-    return _EventDayState.ended;
-  }
-
-
-  // eventDay == today
-  if (endDt != null && now.isAfter(endDt.add(const Duration(minutes: 15)))) return _EventDayState.ended;
-  if (startDt != null && endDt != null &&
-      now.isAfter(startDt.subtract(const Duration(minutes: 15))) &&
-      now.isBefore(endDt.add(const Duration(minutes: 15)))) {
-    return _EventDayState.todayActive;
-  }
-  return _EventDayState.todayInactive;
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Main Screen
-// ─────────────────────────────────────────────────────────────────────────────
-class OrgAttendanceQRScreen extends StatefulWidget {
-  final String orgId;
-  const OrgAttendanceQRScreen({super.key, required this.orgId});
-
-  @override
-  State<OrgAttendanceQRScreen> createState() => _OrgAttendanceQRScreenState();
-}
-
-class _OrgAttendanceQRScreenState extends State<OrgAttendanceQRScreen>
-    with TickerProviderStateMixin {
-  String? _selectedEventId;        // proposal doc id (also used as event doc id fallback)
-  EventModel? _selectedEvent;
-  String? _selectedEventDocId;     // actual doc id in `events` collection
-  Stream<QuerySnapshot>? _attendanceStream;
-  Stream<QuerySnapshot>? _registrationStream;
-  Stream<DocumentSnapshot>? _eventDocStream;
-  int _attendanceTabIndex = 0;
-
-  final MobileScannerController _scannerController = MobileScannerController();
-  final TextEditingController _searchController    = TextEditingController();
-
-  bool   _isScanning      = true;
-  String _lastScannedCode = '';
-  String _searchQuery     = '';
-  String _statusFilter    = 'All';
-
-  late AnimationController _pulseController;
-  late Animation<double>   _pulseAnimation;
-
-  @override
-  void initState() {
-    super.initState();
-    _pulseController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1400),
-    )..repeat(reverse: true);
-    _pulseAnimation = Tween<double>(begin: 0.6, end: 1.0).animate(
-      CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
-    );
-  }
-
-  void _showHistoryDialog() {
-    DateTimeRange selectedRange = DateTimeRange(
-      start: DateTime.now().subtract(const Duration(days: 30)),
-      end: DateTime.now(),
-    );
-
-    showDialog(
-      context: context,
-      barrierColor: Colors.black54,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setDialogState) => Dialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          child: Container(
-            width: 640,
-            constraints: const BoxConstraints(maxHeight: 640),
-            padding: const EdgeInsets.all(16),
-            child: Column(children: [
-              Row(children: [
-                const Icon(Icons.history_rounded, size: 18, color: _DS.textMuted),
-                const SizedBox(width: 10),
-                Text('Attendance History', style: GoogleFonts.spaceGrotesk(fontSize: 14, fontWeight: FontWeight.w700)),
-                const Spacer(),
-                TextButton(onPressed: () async {
-                  final picked = await showDateRangePicker(context: context, firstDate: DateTime(2000), lastDate: DateTime.now(), initialDateRange: selectedRange);
-                  if (picked != null) setDialogState(() => selectedRange = picked);
-                }, child: Text('Change range', style: GoogleFonts.spaceGrotesk()))
-              ]),
-              const SizedBox(height: 12),
-              Expanded(child: Builder(builder: (_) {
-                if (_selectedEventDocId == null) {
-                  return Center(child: Text('Event not yet synced. No attendance available.', style: GoogleFonts.spaceGrotesk(color: _DS.textMuted)));
-                }
-                return FutureBuilder<QuerySnapshot>(
-                  future: _fetchAttendanceInRange(selectedRange),
-                  builder: (ctx, snap) {
-                    if (snap.connectionState != ConnectionState.done) return const Center(child: CircularProgressIndicator());
-                    if (!snap.hasData || snap.data!.docs.isEmpty) return Center(child: Text('No records in this range', style: GoogleFonts.spaceGrotesk(color: _DS.textMuted)));
-                    final docs = snap.data!.docs;
-                    return ListView.separated(
-                      itemCount: docs.length,
-                      separatorBuilder: (_, __) => const Divider(height: 1, color: _DS.borderLight),
-                      itemBuilder: (_, i) {
-                        final d = docs[i].data() as Map<String, dynamic>;
-                        final ts = d['timestamp'] as Timestamp?;
-                        final when = ts != null ? DateFormat('yyyy-MM-dd HH:mm').format(ts.toDate()) : '—';
-                        return ListTile(
-                          leading: _StudentAvatar(name: d['studentName'] ?? '', size: 36),
-                          title: Text(d['studentName'] ?? '—', style: GoogleFonts.spaceGrotesk(fontSize: 13, fontWeight: FontWeight.w600)),
-                          subtitle: Text('${d['studentId'] ?? ''} • ${d['program'] ?? ''} • $when', style: GoogleFonts.spaceGrotesk(fontSize: 12, color: _DS.textMuted)),
-                          trailing: Text(d['status'] ?? 'present', style: GoogleFonts.spaceGrotesk(fontSize: 12)),
-                        );
-                      },
-                    );
-                  },
-                );
-              })),
-              const SizedBox(height: 8),
-              Row(children: [
-                const Spacer(),
-                OutlinedButton.icon(
-                  onPressed: () async {
-                    Navigator.of(context).pop();
-                    final defaultFields = {'Student Name', 'Student ID', 'Program/Team', 'Time In', 'Status'};
-                    await _doExportCsv(selectedRange, defaultFields);
-                  },
-                  icon: const Icon(Icons.download_rounded, size: 14),
-                  label: Text('Export CSV', style: GoogleFonts.spaceGrotesk()),
-                  style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10)),
-                ),
-                const SizedBox(width: 8),
-                ElevatedButton.icon(
-                  onPressed: () async {
-                    Navigator.of(context).pop();
-                    final headers = ['Student Name', 'Student ID', 'Program/Team', 'Year Level', 'Time In', 'Status'];
-                    await _doExportPdf(selectedRange, headers);
-                  },
-                  icon: const Icon(Icons.picture_as_pdf_outlined, size: 14),
-                  label: Text('Export PDF', style: GoogleFonts.spaceGrotesk()),
-                  style: ElevatedButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10), backgroundColor: UpriseColors.primaryDark),
-                ),
-                const SizedBox(width: 8),
-                TextButton(onPressed: () => Navigator.of(context).pop(), child: Text('Close', style: GoogleFonts.spaceGrotesk())),
-              ])
-            ]),
-          ),
+Widget _sectionLabel(String text, {IconData? icon}) => Padding(
+  padding: const EdgeInsets.only(bottom: 14),
+  child: Row(children: [
+    if (icon != null) ...[
+      Container(
+        width: 22, height: 22,
+        decoration: BoxDecoration(
+          color: UpriseColors.primaryDark.withOpacity(0.09),
+          borderRadius: BorderRadius.circular(6),
         ),
+        child: Icon(icon, size: 13, color: UpriseColors.primaryDark),
       ),
+      const SizedBox(width: 9),
+    ],
+    Text(text,
+        style: GoogleFonts.beVietnamPro(
+            fontSize: 11.5,
+            fontWeight: FontWeight.w700,
+            color: const Color(0xFF64748B),
+            letterSpacing: 0.6)),
+    const SizedBox(width: 12),
+    const Expanded(child: Divider(color: Color(0xFFEEF0F4), thickness: 1)),
+  ]),
+);
+
+Widget _headerCell(String text) => Text(text,
+    style: GoogleFonts.beVietnamPro(
+        fontSize: 10.5,
+        fontWeight: FontWeight.w700,
+        color: const Color(0xFF94A3B8),
+        letterSpacing: 0.8));
+
+Widget _attBadge(String status) {
+  final Map<String, (Color, Color, Color, String)> s = {
+    'present': (const Color(0xFFECFDF5), const Color(0xFF059669), const Color(0xFFBBF7D0), 'PRESENT'),
+    'late':    (const Color(0xFFFFFBEB), const Color(0xFFD97706), const Color(0xFFFDE68A), 'LATE'),
+    'absent':  (const Color(0xFFFEF2F2), const Color(0xFFDC2626), const Color(0xFFFECACA), 'ABSENT'),
+  };
+  final style = s[status.toLowerCase()] ??
+      (const Color(0xFFF3F4F6), const Color(0xFF6B7280), const Color(0xFFE5E7EB), status.toUpperCase());
+  return Container(
+    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3.5),
+    decoration: BoxDecoration(
+        color: style.$1,
+        border: Border.all(color: style.$3, width: 1),
+        borderRadius: BorderRadius.circular(_DS.radiusPill)),
+    child: Text(style.$4,
+        style: GoogleFonts.beVietnamPro(
+            fontSize: 10,
+            fontWeight: FontWeight.w700,
+            color: style.$2,
+            letterSpacing: 0.6)),
+  );
+}
+
+void _toast(BuildContext ctx, String msg, {bool error = false}) {
+  ScaffoldMessenger.of(ctx)
+    ..clearSnackBars()
+    ..showSnackBar(SnackBar(
+      content: Row(children: [
+        Icon(error ? Icons.error_outline_rounded : Icons.check_circle_outline_rounded,
+            color: Colors.white, size: 16),
+        const SizedBox(width: 10),
+        Expanded(child: Text(msg,
+            style: GoogleFonts.beVietnamPro(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w500))),
+      ]),
+      backgroundColor: error ? const Color(0xFFDC2626) : const Color(0xFF059669),
+      behavior: SnackBarBehavior.floating,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(_DS.radiusSm)),
+      margin: const EdgeInsets.all(16),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+    ));
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MODELS (unchanged)
+// ─────────────────────────────────────────────────────────────────────────────
+class EventModel {
+  final String id, title, location, startTime, endTime;
+  final int capacity;
+  final DateTime date;
+  const EventModel({
+    required this.id, required this.title, required this.location,
+    required this.startTime, required this.endTime,
+    required this.capacity, required this.date,
+  });
+  factory EventModel.fromDoc(DocumentSnapshot d) {
+    final m = d.data() as Map<String, dynamic>;
+    return EventModel(
+      id: d.id, title: m['title'] ?? 'Untitled', location: m['location'] ?? 'TBA',
+      startTime: m['startTime'] ?? '—', endTime: m['endTime'] ?? '—',
+      capacity: (m['capacity'] as num?)?.toInt() ?? 0,
+      date: (m['date'] as Timestamp).toDate(),
     );
   }
+}
+
+enum _EState { future, todayInactive, active, ended }
+
+_EState _eventState(EventModel e, {bool? activeOverride}) {
+  if (activeOverride == true) return _EState.active;
+  final now = DateTime.now();
+  final today = DateTime(now.year, now.month, now.day);
+  final eDay = DateTime(e.date.year, e.date.month, e.date.day);
+  if (eDay.isAfter(today)) return _EState.future;
+  if (eDay.isBefore(today)) return _EState.ended;
+  try {
+    final s = DateFormat.jm().parse(e.startTime);
+    final en = DateFormat.jm().parse(e.endTime);
+    final startDt = DateTime(e.date.year, e.date.month, e.date.day, s.hour, s.minute);
+    var endDt = DateTime(e.date.year, e.date.month, e.date.day, en.hour, en.minute);
+    if (endDt.isBefore(startDt)) endDt = endDt.add(const Duration(days: 1));
+    if (now.isAfter(endDt.add(const Duration(minutes: 15)))) return _EState.ended;
+    if (now.isAfter(startDt.subtract(const Duration(minutes: 15)))) return _EState.active;
+  } catch (_) {}
+  return _EState.todayInactive;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ROOT SCREEN
+// ─────────────────────────────────────────────────────────────────────────────
+class EventManagementScreen extends StatefulWidget {
+  final String orgId;
+  final int initialTabIndex;
+  const EventManagementScreen({super.key, required this.orgId, this.initialTabIndex = 0});
 
   @override
-  void dispose() {
-    _scannerController.dispose();
-    _searchController.dispose();
-    _pulseController.dispose();
-    super.dispose();
-  }
+  State<EventManagementScreen> createState() => _EventManagementScreenState();
+}
 
-  // ── Streams ──────────────────────────────────────────────────────────────
-  /// Only approved proposals, ordered by date ascending so upcoming/today appear first
+class _EventManagementScreenState extends State<EventManagementScreen> {
+  EventModel? _event;
+  String? _eventDocId;
+
   Stream<QuerySnapshot> get _eventsStream => FirebaseFirestore.instance
       .collection('event_proposals')
       .where('orgId', isEqualTo: widget.orgId)
       .where('status', isEqualTo: 'approved')
-      .orderBy('date', descending: false)
+      .orderBy('date')
       .snapshots();
 
-  void _refreshLiveStreams() {
-    if (_selectedEventDocId != null) {
-      _attendanceStream = FirebaseFirestore.instance
-          .collection('events')
-          .doc(_selectedEventDocId)
-          .collection('attendances')
-          .orderBy('timestamp', descending: false)
-          .snapshots();
-      _registrationStream = FirebaseFirestore.instance
-          .collection('registrations')
-          .where('eventId', isEqualTo: _selectedEventDocId)
-          .snapshots();
-      _eventDocStream = FirebaseFirestore.instance
-          .collection('events')
-          .doc(_selectedEventDocId)
-          .snapshots();
-    } else {
-      _attendanceStream = null;
-      _registrationStream = null;
-      _eventDocStream = null;
-    }
-  }
+  @override
+  void dispose() { super.dispose(); }
 
-  // ── Active state helpers ──────────────────────────────────────────────────
-  bool _computeEventActiveFromDoc(DocumentSnapshot? doc) {
-    if (doc == null || !doc.exists) return false;
-    final data = doc.data() as Map<String, dynamic>?;
-    if (data == null) return false;
-    if (data['isActive'] == true) return true;
-    if (_selectedEvent == null) return false;
-    final state = _computeEventDayState(_selectedEvent!);
-    return state == _EventDayState.todayActive;
-  }
-
-  /// Returns true only when today is the event day AND the time window is correct
-  /// (or isActive flag is set). Used to gate scanning.
-  bool _canScan(DocumentSnapshot? eventDoc) {
-    if (_selectedEvent == null || _selectedEventDocId == null) return false;
-    if (eventDoc != null && (eventDoc.data() as Map?)?['isActive'] == true) return true;
-    final state = _computeEventDayState(_selectedEvent!);
-    return state == _EventDayState.todayActive || state == _EventDayState.todayInactive;
-  }
-
-  // ── QR scan handler ───────────────────────────────────────────────────────
-  Future<void> _onScanComplete(BarcodeCapture capture) async {
-    if (!_isScanning || _selectedEventId == null) return;
-    final code = capture.barcodes.firstOrNull?.rawValue;
-    if (code == null || code == _lastScannedCode) return;
-    _lastScannedCode = code;
-    setState(() => _isScanning = false);
-
-    try {
-      if (_selectedEventDocId == null) throw Exception('Event record not found');
-      final eventDoc = await FirebaseFirestore.instance
-          .collection('events')
-          .doc(_selectedEventDocId)
-          .get();
-      if (!eventDoc.exists) throw Exception('Event record not found');
-
-      if (!_computeEventActiveFromDoc(eventDoc)) {
-        var msg = 'Attendance scanning is not active for this event.';
-        try {
-          if (_selectedEvent != null) {
-            final state = _computeEventDayState(_selectedEvent!);
-            if (state == _EventDayState.future) {
-              msg = 'This event hasn\'t started yet. Scanning opens on event day.';
-            } else if (state == _EventDayState.ended) {
-              msg = 'This event has already ended. Attendance is read-only.';
-            }
-          }
-        } catch (_) {}
-        throw Exception(msg);
-      }
-
-      final userDoc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(code)
-          .get();
-      if (!userDoc.exists) throw Exception('Student not found in the system');
-
-      final studentData = userDoc.data()!;
-      if (studentData['orgId'] != widget.orgId) {
-        throw Exception('This student is not part of your organization');
-      }
-
-      final existing = await FirebaseFirestore.instance
-          .collection('events')
-          .doc(_selectedEventDocId)
-          .collection('attendances')
-          .where('studentId', isEqualTo: code)
-          .get();
-      if (existing.docs.isNotEmpty) {
-        throw Exception('${studentData['name'] ?? 'Student'} is already marked present');
-      }
-
-      // Determine status: present if within start time, late if after +15 min grace
-      String attendanceStatus = 'present';
-      try {
-        if (_selectedEvent != null) {
-          final date = _selectedEvent!.date;
-          final start = DateFormat.jm().parse(_selectedEvent!.startTime);
-          final startDt = DateTime(date.year, date.month, date.day, start.hour, start.minute);
-          if (DateTime.now().isAfter(startDt.add(const Duration(minutes: 15)))) {
-            attendanceStatus = 'late';
-          }
-        }
-      } catch (_) {}
-
-      await FirebaseFirestore.instance
-          .collection('events')
-          .doc(_selectedEventDocId)
-          .collection('attendances')
-          .add({
-        'studentId':    code,
-        'studentName':  studentData['name'] ?? studentData['email'] ?? 'Unknown',
-        'studentEmail': studentData['email'] ?? '',
-        'program':      studentData['program'] ?? 'N/A',
-        'yearLevel':    studentData['yearLevel'] ?? '',
-        'timestamp':    FieldValue.serverTimestamp(),
-        'status':       attendanceStatus,
-      });
-
-      await activity_log.ActivityLogger.log(
-        action: 'scan_attendance',
-        module: 'attendance_qr',
-        details: {
-          'orgId': widget.orgId,
-          'eventId': _selectedEventDocId,
-          'studentId': code,
-          'status': attendanceStatus,
-        },
-      );
-
-      final emoji = attendanceStatus == 'late' ? '⏰' : '✓';
-      final label = attendanceStatus == 'late' ? 'marked LATE' : 'marked PRESENT';
-      if (mounted) {
-        _showToast('${studentData['name'] ?? 'Student'} $label $emoji', isError: false);
-      }
-    } catch (e) {
-      if (mounted) _showToast(e.toString().replaceFirst('Exception: ', ''), isError: true);
-    } finally {
-      setState(() => _isScanning = true);
-      await Future.delayed(const Duration(seconds: 2));
-      _lastScannedCode = '';
-    }
-  }
-
-  void _showToast(String msg, {required bool isError}) {
-    ScaffoldMessenger.of(context).clearSnackBars();
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Row(children: [
-        Icon(
-          isError ? Icons.error_outline_rounded : Icons.check_circle_outline_rounded,
-          color: Colors.white,
-          size: 18,
-        ),
-        const SizedBox(width: 10),
-        Expanded(child: Text(msg,
-            style: GoogleFonts.spaceGrotesk(color: Colors.white, fontSize: 13))),
-      ]),
-      backgroundColor: isError ? _DS.red : _DS.green,
-      behavior: SnackBarBehavior.floating,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-      margin: const EdgeInsets.all(16),
-      duration: const Duration(seconds: 4),
-    ));
-  }
-
-  // ── Export handlers ───────────────────────────────────────────────────────
-  void _handleExportChoice(String choice) {
-    _showExportDialog(asPdf: choice == 'pdf');
-  }
-
-  void _showExportDialog({bool asPdf = false}) {
-    DateTimeRange selectedRange = DateTimeRange(
-      start: DateTime.now().subtract(const Duration(days: 30)),
-      end: DateTime.now(),
-    );
-    final Set<String> selectedFields = {
-      'Student Name', 'Student ID', 'Program/Team', 'Time In', 'Status',
-    };
-    const allFields = [
-      'Student Name', 'Student ID', 'Program/Team', 'Year Level', 'Time In', 'Status',
-    ];
-
-    showDialog(
-      context: context,
-      barrierColor: Colors.black54,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setDialogState) => Dialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          elevation: 0,
-          child: Container(
-            width: 480,
-            constraints: const BoxConstraints(maxHeight: 540),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(20),
-              boxShadow: _DS.elevatedShadow,
-            ),
-            child: Column(mainAxisSize: MainAxisSize.min, children: [
-              // Header
-              Container(
-                padding: const EdgeInsets.fromLTRB(24, 22, 20, 22),
-                decoration: BoxDecoration(
-                  color: UpriseColors.primaryDark,
-                  borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-                ),
-                child: Row(children: [
-                  Container(
-                    width: 40, height: 40,
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.15),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Icon(
-                      asPdf ? Icons.picture_as_pdf_outlined : Icons.download_rounded,
-                      color: Colors.white, size: 18,
-                    ),
-                  ),
-                  const SizedBox(width: 14),
-                  Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text(
-                      asPdf ? 'Export as PDF' : 'Export as CSV',
-                      style: GoogleFonts.spaceGrotesk(
-                        fontSize: 16, fontWeight: FontWeight.w700, color: Colors.white,
-                      ),
-                    ),
-                    Text(
-                      _selectedEvent?.title ?? 'Attendance Report',
-                      style: GoogleFonts.spaceGrotesk(
-                        fontSize: 12, color: Colors.white.withOpacity(0.7),
-                      ),
-                    ),
-                  ])),
-                  IconButton(
-                    icon: const Icon(Icons.close_rounded, color: Colors.white, size: 20),
-                    onPressed: () => Navigator.pop(ctx),
-                  ),
-                ]),
-              ),
-              // Body
-              Expanded(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.all(24),
-                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    _exportSectionLabel('DATE RANGE', Icons.calendar_today_outlined),
-                    InkWell(
-                      borderRadius: BorderRadius.circular(10),
-                      onTap: () async {
-                        final picked = await showDateRangePicker(
-                          context: ctx,
-                          firstDate: DateTime(2020),
-                          lastDate: DateTime.now(),
-                          initialDateRange: selectedRange,
-                          builder: (context, child) => Theme(
-                            data: Theme.of(context).copyWith(
-                              colorScheme: ColorScheme.light(primary: UpriseColors.primaryDark),
-                            ),
-                            child: child!,
-                          ),
-                        );
-                        if (picked != null) setDialogState(() => selectedRange = picked);
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
-                        decoration: BoxDecoration(
-                          color: _DS.surfaceAlt,
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(color: _DS.border),
-                        ),
-                        child: Row(children: [
-                          Icon(Icons.date_range_rounded, size: 16, color: UpriseColors.primaryDark),
-                          const SizedBox(width: 10),
-                          Text(
-                            '${DateFormat('MMM dd, yyyy').format(selectedRange.start)}  →  ${DateFormat('MMM dd, yyyy').format(selectedRange.end)}',
-                            style: GoogleFonts.spaceGrotesk(fontSize: 13, color: _DS.textPrimary),
-                          ),
-                          const Spacer(),
-                          const Icon(Icons.edit_outlined, size: 14, color: _DS.textMuted),
-                        ]),
-                      ),
-                    ),
-                    const SizedBox(height: 22),
-                    _exportSectionLabel('FIELDS TO INCLUDE', Icons.checklist_rounded),
-                    Wrap(
-                      spacing: 8, runSpacing: 8,
-                      children: allFields.map((field) {
-                        final selected = selectedFields.contains(field);
-                        return GestureDetector(
-                          onTap: () => setDialogState(() {
-                            selected ? selectedFields.remove(field) : selectedFields.add(field);
-                          }),
-                          child: AnimatedContainer(
-                            duration: const Duration(milliseconds: 150),
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                            decoration: BoxDecoration(
-                              color: selected
-                                  ? UpriseColors.primaryDark.withOpacity(0.08)
-                                  : _DS.surfaceAlt,
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(
-                                color: selected ? UpriseColors.primaryDark : _DS.border,
-                                width: selected ? 1.5 : 1,
-                              ),
-                            ),
-                            child: Row(mainAxisSize: MainAxisSize.min, children: [
-                              if (selected) ...[
-                                Icon(Icons.check_rounded, size: 12, color: UpriseColors.primaryDark),
-                                const SizedBox(width: 5),
-                              ],
-                              Text(field, style: GoogleFonts.spaceGrotesk(
-                                fontSize: 12,
-                                fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
-                                color: selected ? UpriseColors.primaryDark : _DS.textSecondary,
-                              )),
-                            ]),
-                          ),
-                        );
-                      }).toList(),
-                    ),
-                  ]),
-                ),
-              ),
-              // Footer
-              Container(
-                padding: const EdgeInsets.fromLTRB(24, 16, 24, 20),
-                decoration: const BoxDecoration(
-                  border: Border(top: BorderSide(color: _DS.border)),
-                  color: _DS.surfaceAlt,
-                  borderRadius: BorderRadius.vertical(bottom: Radius.circular(20)),
-                ),
-                child: Row(mainAxisAlignment: MainAxisAlignment.end, children: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(ctx),
-                    style: TextButton.styleFrom(
-                      foregroundColor: _DS.textSecondary,
-                      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 11),
-                    ),
-                    child: Text('Cancel', style: GoogleFonts.spaceGrotesk(fontSize: 13)),
-                  ),
-                  const SizedBox(width: 8),
-                  ElevatedButton.icon(
-                    onPressed: selectedFields.isEmpty ? null : () async {
-                      Navigator.pop(ctx);
-                      asPdf
-                          ? await _doExportPdf(selectedRange, selectedFields.toList())
-                          : await _doExportCsv(selectedRange, selectedFields);
-                    },
-                    icon: Icon(asPdf ? Icons.picture_as_pdf_outlined : Icons.download_rounded, size: 15),
-                    label: Text(
-                      asPdf ? 'Export PDF' : 'Export CSV',
-                      style: GoogleFonts.spaceGrotesk(fontSize: 13, fontWeight: FontWeight.w600),
-                    ),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: UpriseColors.primaryDark,
-                      foregroundColor: Colors.white,
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 11),
-                    ),
-                  ),
-                ]),
-              ),
-            ]),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _exportSectionLabel(String text, IconData icon) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: Row(children: [
-        Icon(icon, size: 13, color: _DS.textMuted),
-        const SizedBox(width: 6),
-        Text(text, style: GoogleFonts.spaceGrotesk(
-          fontSize: 10, fontWeight: FontWeight.w700,
-          color: _DS.textMuted, letterSpacing: 0.8,
-        )),
-        const SizedBox(width: 10),
-        const Expanded(child: Divider(color: _DS.border, thickness: 1)),
-      ]),
-    );
-  }
-
-  Future<void> _doExportCsv(DateTimeRange range, Set<String> fields) async {
-    if (_selectedEventDocId == null) {
-      if (mounted) _showToast('Event not yet synced. Export unavailable.', isError: true);
-      return;
-    }
-    try {
-      final snapshot = await _fetchAttendanceInRange(range);
-      final List<List<dynamic>> rows = [fields.toList()];
-      for (final doc in snapshot.docs) {
-        rows.add(_buildRow(doc.data() as Map<String, dynamic>, fields.toList()));
-      }
-      final csvString = const ListToCsvConverter().convert(rows);
-      final bytes = Uint8List.fromList(utf8.encode(csvString));
-      final fileName = 'attendance_${(_selectedEvent?.title ?? 'export').replaceAll(' ', '_')}';
-      await FileSaver.instance.saveAs(
-          name: fileName, bytes: bytes, file: 'csv', mimeType: MimeType.csv);
-      if (mounted) {
-        _showToast('CSV exported — ${snapshot.docs.length} records', isError: false);
-      }
-      await activity_log.ActivityLogger.log(
-        action: 'export_attendance', module: 'attendance_qr',
-        details: {'orgId': widget.orgId, 'eventId': _selectedEventDocId, 'format': 'CSV'},
-      );
-    } catch (e) {
-      if (mounted) _showToast('Export failed: $e', isError: true);
-    }
-  }
-
-  Future<void> _doExportPdf(DateTimeRange range, List<String> headers) async {
-    if (_selectedEventDocId == null) {
-      if (mounted) _showToast('Event not yet synced. Export unavailable.', isError: true);
-      return;
-    }
-    try {
-      final snapshot = await _fetchAttendanceInRange(range);
-      final rows = snapshot.docs
-          .map((doc) => _buildRow(doc.data() as Map<String, dynamic>, headers)
-              .map((e) => e.toString())
-              .toList())
-          .toList();
-      final pdfBytes = await AdminExportPdf.generateTablePdf(
-        title: _selectedEvent?.title ?? 'Attendance Report',
-        headers: headers,
-        rows: rows,
-      );
-      final fileName = 'attendance_${(_selectedEvent?.title ?? 'export').replaceAll(' ', '_')}';
-      await FileSaver.instance.saveAs(
-          name: fileName, bytes: pdfBytes, file: 'pdf', mimeType: MimeType.pdf);
-      if (mounted) _showToast('PDF exported successfully!', isError: false);
-    } catch (e) {
-      if (mounted) _showToast('PDF export failed: $e', isError: true);
-    }
-  }
-
-  Future<QuerySnapshot> _fetchAttendanceInRange(DateTimeRange range) {
-    return FirebaseFirestore.instance
+  Future<void> _selectEvent(EventModel e) async {
+    setState(() { _event = e; _eventDocId = null; });
+    final q = await FirebaseFirestore.instance
         .collection('events')
-        .doc(_selectedEventDocId)
-        .collection('attendances')
-        .where('timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(range.start))
-        .where('timestamp',
-            isLessThanOrEqualTo: Timestamp.fromDate(range.end.add(const Duration(days: 1))))
-        .orderBy('timestamp', descending: false)
-        .get();
+        .where('createdFromProposalId', isEqualTo: e.id)
+        .limit(1).get();
+    if (mounted && q.docs.isNotEmpty) setState(() => _eventDocId = q.docs.first.id);
   }
 
-  List<dynamic> _buildRow(Map<String, dynamic> data, List<String> fields) {
-    return fields.map((f) {
-      switch (f) {
-        case 'Student Name':  return data['studentName'] ?? '';
-        case 'Student ID':    return data['studentId'] ?? '';
-        case 'Program/Team':  return data['program'] ?? '';
-        case 'Year Level':    return data['yearLevel'] ?? '';
-        case 'Time In':
-          final ts = data['timestamp'] as Timestamp?;
-          return ts != null ? DateFormat('yyyy-MM-dd HH:mm').format(ts.toDate()) : '';
-        case 'Status':        return data['status'] ?? 'present';
-        default:              return '';
-      }
-    }).toList();
-  }
-
-  // ── Build ─────────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: _DS.surface,
-      body: Padding(
-        padding: const EdgeInsets.fromLTRB(28, 24, 28, 24),
-        child: LayoutBuilder(
-          builder: (context, constraints) => Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: _selectedEvent != null
-                    ? StreamBuilder<QuerySnapshot>(
-                        stream: _attendanceStream,
-                        builder: (context, attendanceSnap) {
-                          return StreamBuilder<DocumentSnapshot>(
-                            stream: _eventDocStream,
-                            builder: (context, eventSnap) {
-                              final isSynced = _selectedEventDocId != null;
-                              return Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  if (!isSynced)
-                                    Container(
-                                      margin: const EdgeInsets.only(bottom: 16),
-                                      padding: const EdgeInsets.all(12),
-                                      decoration: BoxDecoration(
-                                        color: const Color(0xFFFEF3C7),
-                                        borderRadius: BorderRadius.circular(_DS.radiusMd),
-                                        border: Border.all(color: const Color(0xFFD97706)),
-                                      ),
-                                      child: Row(children: [
-                                        const Icon(Icons.info_outline, size: 16, color: Color(0xFFD97706)),
-                                        const SizedBox(width: 10),
-                                        Expanded(
-                                          child: Text(
-                                            'Event approved but not yet synced to attendance. Please wait or check back shortly.',
-                                            style: GoogleFonts.spaceGrotesk(fontSize: 12, color: const Color(0xFF78350F)),
-                                          ),
-                                        ),
-                                      ]),
-                                    ),
-                                  _buildSummaryAndEventRow(attendanceSnap.data, eventSnap.data),
-                                  const SizedBox(height: 16),
-                                  // Always show toolbar so admins can search, filter, export
-                                  // and view history even while the linked `events` doc
-                                  // is still being created/synced.
-                                  _buildToolbar(eventSnap.data),
-                                  const SizedBox(height: 16),
-                                  Expanded(
-                                    child: isSynced
-                                        ? _buildMainContent(attendanceSnap.data, eventSnap.data)
-                                        : _buildPlaceholderContent(attendanceSnap.data, eventSnap.data),
-                                  ),
-                                ],
-                              );
-                            },
-                          );
-                        },
-                      )
-                    : _buildPlaceholderContent(null, null),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  // ── Summary + Event Selector Row ──────────────────────────────────────────
-  Widget _buildSummaryAndEventRow(QuerySnapshot? attendanceSnapshot, DocumentSnapshot? eventDocSnapshot) {
-    final docs    = attendanceSnapshot?.docs ?? [];
-    final total   = docs.length;
-    final present = docs.where((d) => (d.data() as Map)['status'] == 'present').length;
-    final late    = docs.where((d) => (d.data() as Map)['status'] == 'late').length;
-    final absent  = docs.where((d) => (d.data() as Map)['status'] == 'absent').length;
-
-    return Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      _summaryCard('Total', total.toString(), Icons.people_alt_rounded, UpriseColors.primaryDark, isFirst: true),
-      _summaryCard('Present', present.toString(), Icons.check_circle_rounded, _DS.green),
-      _summaryCard('Late', late.toString(), Icons.schedule_rounded, _DS.amber),
-      _summaryCard('Absent', absent.toString(), Icons.cancel_rounded, _DS.red),
-      const SizedBox(width: 14),
-      _buildEventSelector(eventDocSnapshot),
-    ]);
-  }
-
-  Widget _summaryCard(String label, String value, IconData icon, Color color,
-      {bool isFirst = false}) {
-    return Expanded(
-      child: Container(
-        margin: EdgeInsets.only(right: isFirst ? 0 : 0, left: 0),
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(_DS.radiusMd),
-          border: Border.all(color: _DS.border),
-          boxShadow: _DS.cardShadow,
-        ),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Row(children: [
-            Container(
-              width: 34, height: 34,
+      backgroundColor: const Color(0xFFF6F7F9),
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // ── Header control panel ──
+          Padding(
+            padding: const EdgeInsets.fromLTRB(28, 24, 28, 0),
+            child: Container(
               decoration: BoxDecoration(
-                color: color.withOpacity(0.10),
-                borderRadius: BorderRadius.circular(9),
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(_DS.radiusXl),
+                border: Border.all(color: const Color(0xFFEBEEF3)),
+                boxShadow: _DS.cardShadow,
               ),
-              child: Icon(icon, color: color, size: 17),
-            ),
-            const Spacer(),
-          ]),
-          const SizedBox(height: 10),
-          Text(value, style: GoogleFonts.spaceGrotesk(
-            fontSize: 26, fontWeight: FontWeight.w700, color: _DS.textPrimary,
-          )),
-          const SizedBox(height: 2),
-          Text(label, style: GoogleFonts.spaceGrotesk(
-            fontSize: 11, fontWeight: FontWeight.w500, color: _DS.textMuted,
-          )),
-        ]),
-      ),
-    );
-  }
-
-  // ── Event Selector (card style) ───────────────────────────────────────────
-  Widget _buildEventSelector(DocumentSnapshot? eventDocSnapshot) {
-    return Container(
-      width: 340,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(_DS.radiusMd),
-        border: Border.all(color: _DS.border),
-        boxShadow: _DS.cardShadow,
-      ),
-      child: StreamBuilder<QuerySnapshot>(
-        stream: _eventsStream,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: SizedBox(
-              height: 20, width: 20,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            ));
-          }
-          if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-            return Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(children: [
-                  const Icon(Icons.event_busy_outlined, size: 16, color: _DS.textMuted),
-                  const SizedBox(width: 8),
-                  Text('No Approved Events', style: GoogleFonts.spaceGrotesk(
-                    fontSize: 13, fontWeight: FontWeight.w600, color: _DS.textSecondary,
-                  )),
-                ]),
-                const SizedBox(height: 4),
-                Text('Proposals must be approved first',
-                    style: GoogleFonts.spaceGrotesk(fontSize: 11, color: _DS.textMuted)),
-              ],
-            );
-          }
-
-          final events = snapshot.data!.docs.map((d) => EventModel.fromFirestore(d)).toList();
-          if (_selectedEventId == null && events.isNotEmpty) {
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              if (mounted) _selectEvent(events.first, events);
-            });
-          }
-
-          final selected = _selectedEvent;
-
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Row(children: [
-                const Icon(Icons.event_outlined, size: 14, color: _DS.textMuted),
-                const SizedBox(width: 6),
-                Text('SELECT EVENT', style: GoogleFonts.spaceGrotesk(
-                  fontSize: 10, fontWeight: FontWeight.w700,
-                  color: _DS.textMuted, letterSpacing: 0.8,
-                )),
-              ]),
-              const SizedBox(height: 8),
-              DropdownButtonHideUnderline(
-                child: DropdownButton<String>(
-                  isExpanded: true,
-                  value: _selectedEventId,
-                  hint: Text('Choose an event',
-                      style: GoogleFonts.spaceGrotesk(fontSize: 13, color: _DS.textMuted)),
-                  icon: const Icon(Icons.unfold_more_rounded, size: 18, color: _DS.textMuted),
-                  style: GoogleFonts.spaceGrotesk(fontSize: 13, color: _DS.textPrimary),
-                  items: events.map((e) => DropdownMenuItem(
-                    value: e.id,
-                    child: _EventDropdownItem(event: e),
-                  )).toList(),
-                  onChanged: (v) async {
-                    if (v == null) return;
-                    final evt = events.firstWhere((e) => e.id == v);
-                    _selectEvent(evt, events);
-                  },
+              child: Column(children: [
+                // Event selector row
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+                  child: StreamBuilder<QuerySnapshot>(
+                    stream: _eventsStream,
+                    builder: (ctx, snap) {
+                      final events = (snap.data?.docs ?? []).map((d) => EventModel.fromDoc(d)).toList();
+                      final activeEvents = events.where((e) => _eventState(e) != _EState.ended).toList();
+                      if (activeEvents.isNotEmpty && _event == null) {
+                        WidgetsBinding.instance.addPostFrameCallback(
+                            (_) { if (mounted) _selectEvent(activeEvents.first); });
+                      }
+                      return Row(children: [
+                        // Label pill
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                          decoration: BoxDecoration(
+                            color: UpriseColors.primaryDark.withOpacity(0.07),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Row(children: [
+                            Icon(Icons.event_rounded, size: 13, color: UpriseColors.primaryDark),
+                            const SizedBox(width: 5),
+                            Text('EVENT',
+                                style: GoogleFonts.beVietnamPro(
+                                    fontSize: 10.5,
+                                    fontWeight: FontWeight.w800,
+                                    color: UpriseColors.primaryDark,
+                                    letterSpacing: 0.7)),
+                          ]),
+                        ),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: activeEvents.isEmpty
+                              ? Text('No upcoming or active events available',
+                                  style: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFFB0BAC8)))
+                              : DropdownButtonHideUnderline(
+                                  child: DropdownButton<String>(
+                                    value: _event?.id,
+                                    isExpanded: true,
+                                    icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 18, color: Color(0xFFB0BAC8)),
+                                    style: GoogleFonts.beVietnamPro(fontSize: 14, fontWeight: FontWeight.w600, color: const Color(0xFF1A202C)),
+                                    items: activeEvents.map((e) => DropdownMenuItem(value: e.id, child: Text(e.title))).toList(),
+                                    onChanged: (v) { if (v != null) _selectEvent(activeEvents.firstWhere((e) => e.id == v)); },
+                                  ),
+                                ),
+                        ),
+                        if (_event != null) ...[
+                          const SizedBox(width: 12),
+                          _StatePill(_event!),
+                        ],
+                      ]);
+                    },
+                  ),
                 ),
-              ),
-              if (selected != null) ...[
-                const SizedBox(height: 10),
-                _EventDayStatePill(event: selected, eventDocSnapshot: eventDocSnapshot),
-              ],
-            ],
-          );
-        },
+                const SizedBox(height: 12),
+              ]),
+            ),
+          ),
+          const SizedBox(height: 20),
+          Expanded(
+            child: AttendanceTab(key: const PageStorageKey('att'), orgId: widget.orgId, event: _event, eventDocId: _eventDocId),
+          ),
+        ],
       ),
     );
   }
+}
 
-  void _selectEvent(EventModel event, List<EventModel> allEvents) async {
-    setState(() {
-      _selectedEventId    = event.id;
-      _selectedEvent      = event;
-      _selectedEventDocId = null;
-      _attendanceStream = null;
-      _eventDocStream = null;
-    });
+// ─────────────────────────────────────────────────────────────────────────────
+// STATE PILL — improved with dot indicator
+// ─────────────────────────────────────────────────────────────────────────────
+class _StatePill extends StatelessWidget {
+  final EventModel event;
+  const _StatePill(this.event);
 
-    try {
-      final evQ = await FirebaseFirestore.instance
-          .collection('events')
-          .where('createdFromProposalId', isEqualTo: event.id)
-          .limit(1)
-          .get();
-
-      if (mounted && evQ.docs.isNotEmpty) {
-        final eventDoc = evQ.docs.first;
-        setState(() {
-          _selectedEventDocId = eventDoc.id;
-          _selectedEvent = EventModel.fromFirestore(eventDoc);
-        });
-      }
-    } catch (_) {
-      // Keep the selected proposal while preserving the existing event state.
-    } finally {
-      if (mounted) {
-        _refreshLiveStreams();
-      }
-    }
-  }
-
-  // ── Toolbar ───────────────────────────────────────────────────────────────
-  Widget _buildToolbar(DocumentSnapshot? eventDocSnapshot) {
-    return Row(children: [
-      // Search
-      Expanded(
-        child: SizedBox(
-          height: 40,
-          child: TextField(
-            controller: _searchController,
-            style: GoogleFonts.spaceGrotesk(fontSize: 13),
-            decoration: InputDecoration(
-              hintText: 'Search by name or student ID…',
-              hintStyle: GoogleFonts.spaceGrotesk(fontSize: 13, color: _DS.textMuted),
-              prefixIcon: const Icon(Icons.search_rounded, size: 17, color: _DS.textMuted),
-              filled: true,
-              fillColor: Colors.white,
-              contentPadding: EdgeInsets.zero,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
-                borderSide: const BorderSide(color: _DS.border),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
-                borderSide: const BorderSide(color: _DS.border),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
-                borderSide: BorderSide(color: UpriseColors.primaryDark, width: 1.5),
-              ),
-            ),
-            onChanged: (v) => setState(() => _searchQuery = v.toLowerCase()),
-          ),
-        ),
-      ),
-      const SizedBox(width: 10),
-      _statusFilterDropdown(),
-      const SizedBox(width: 10),
-      AdminExportButton(onSelected: _handleExportChoice),
-      const SizedBox(width: 8),
-      SizedBox(
-        height: 40,
-        child: OutlinedButton.icon(
-          style: OutlinedButton.styleFrom(
-            foregroundColor: _DS.textPrimary,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-            side: const BorderSide(color: _DS.border),
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-          ),
-          onPressed: () => _showHistoryDialog(),
-          icon: const Icon(Icons.history_rounded, size: 14, color: _DS.textMuted),
-          label: Text('History', style: GoogleFonts.spaceGrotesk(fontSize: 13)),
-        ),
-      ),
-      const SizedBox(width: 10),
-      _buildStartEndButton(eventDocSnapshot),
-    ]);
-  }
-
-  Widget _statusFilterDropdown() {
+  @override
+  Widget build(BuildContext context) {
+    final state = _eventState(event);
+    final (Color bg, Color fg, Color border, String txt, IconData icon) = switch (state) {
+      _EState.active        => (const Color(0xFFECFDF5), const Color(0xFF059669), const Color(0xFFBBF7D0), 'LIVE', Icons.fiber_manual_record),
+      _EState.todayInactive => (const Color(0xFFFFFBEB), const Color(0xFFD97706), const Color(0xFFFDE68A), 'TODAY', Icons.today_rounded),
+      _EState.future        => (const Color(0xFFEFF6FF), const Color(0xFF2563EB), const Color(0xFFBFD7FF), 'UPCOMING', Icons.event_rounded),
+      _EState.ended         => (const Color(0xFFF3F4F6), const Color(0xFF6B7280), const Color(0xFFE5E7EB), 'ENDED', Icons.lock_outline_rounded),
+    };
     return Container(
-      height: 40,
-      padding: const EdgeInsets.symmetric(horizontal: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 5),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: _DS.border),
-      ),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<String>(
-          value: _statusFilter,
-          icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 17, color: _DS.textMuted),
-          style: GoogleFonts.spaceGrotesk(fontSize: 13, color: _DS.textPrimary),
-          items: ['All', 'present', 'late', 'absent'].map((s) => DropdownMenuItem(
-            value: s,
-            child: Text(
-              s == 'All' ? 'All Status' : s[0].toUpperCase() + s.substring(1),
-              style: GoogleFonts.spaceGrotesk(fontSize: 13),
-            ),
-          )).toList(),
-          onChanged: (v) => setState(() => _statusFilter = v ?? 'All'),
-        ),
-      ),
+          color: bg,
+          border: Border.all(color: border),
+          borderRadius: BorderRadius.circular(100)),
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        Icon(icon, size: state == _EState.active ? 8 : 11, color: fg),
+        const SizedBox(width: 5),
+        Text(txt,
+            style: GoogleFonts.beVietnamPro(
+                fontSize: 10.5, fontWeight: FontWeight.w700, color: fg, letterSpacing: 0.7)),
+      ]),
     );
   }
+}
 
-  Widget _buildStartEndButton(DocumentSnapshot? eventDocSnapshot) {
-    final active = _computeEventActiveFromDoc(eventDocSnapshot);
+// =============================================================================
+// ATTENDANCE TAB
+// =============================================================================
+class AttendanceTab extends StatefulWidget {
+  final String orgId;
+  final EventModel? event;
+  final String? eventDocId;
+  const AttendanceTab({super.key, required this.orgId, this.event, this.eventDocId});
 
-    // Determine if event day gating allows manual control
-    bool canControl = false;
-    if (_selectedEvent != null) {
-      final state = _computeEventDayState(_selectedEvent!);
-      canControl = state == _EventDayState.todayActive ||
-          state == _EventDayState.todayInactive ||
-          state == _EventDayState.ended;
-    }
+  @override
+  State<AttendanceTab> createState() => _AttendanceTabState();
+}
 
-    return SizedBox(
-      height: 40,
-      child: ElevatedButton.icon(
-        style: ElevatedButton.styleFrom(
-          backgroundColor: active ? _DS.red : UpriseColors.primaryDark,
-          foregroundColor: Colors.white,
-          elevation: 0,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-        ),
-        onPressed: (_selectedEventDocId == null || !canControl)
-            ? null
-            : () async {
-                try {
-                  await FirebaseFirestore.instance
-                      .collection('events')
-                      .doc(_selectedEventDocId)
-                      .update({
-                    'isActive': !active,
-                    if (!active) 'startedAt': FieldValue.serverTimestamp(),
-                    if (active) 'endedAt': FieldValue.serverTimestamp(),
-                  });
-                  _showToast(
-                      active ? 'Attendance closed' : 'Attendance opened — scanning enabled',
-                      isError: false);
-                } catch (_) {
-                  _showToast('Failed to update event state', isError: true);
-                }
-              },
-        icon: AnimatedBuilder(
-          animation: _pulseAnimation,
-          builder: (_, __) => Icon(
-            active ? Icons.stop_circle_outlined : Icons.play_circle_outline_rounded,
-            size: 16,
-            color: active
-                ? Colors.white
-                : Colors.white.withOpacity(active ? 1.0 : _pulseAnimation.value),
-          ),
-        ),
-        label: Text(
-          active ? 'Close Attendance' : 'Open Attendance',
-          style: GoogleFonts.spaceGrotesk(fontSize: 13, fontWeight: FontWeight.w600),
-        ),
-      ),
-    );
+class _AttendanceTabState extends State<AttendanceTab> with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
+
+  final _scanner    = MobileScannerController();
+  final _search     = TextEditingController();
+  final _manualCtrl = TextEditingController();
+
+  bool   _scanning     = true;
+  String _lastCode     = '';
+  String _query        = '';
+  String _statusFilter = 'All';
+  int    _inputMode    = 0;
+  int    _subTab       = 0;
+
+  @override
+  void dispose() { _scanner.dispose(); _search.dispose(); _manualCtrl.dispose(); super.dispose(); }
+
+  Stream<QuerySnapshot>? get _attStream => widget.eventDocId == null ? null
+      : FirebaseFirestore.instance.collection('events').doc(widget.eventDocId)
+          .collection('attendances').orderBy('timestamp').snapshots();
+
+  Stream<QuerySnapshot>? get _regStream => widget.eventDocId == null ? null
+      : FirebaseFirestore.instance.collection('registrations')
+          .where('eventId', isEqualTo: widget.eventDocId).snapshots();
+
+  Stream<DocumentSnapshot>? get _eventStream => widget.eventDocId == null ? null
+      : FirebaseFirestore.instance.collection('events').doc(widget.eventDocId).snapshots();
+
+  bool _isActive(DocumentSnapshot? doc) {
+    if (doc == null) return false;
+    if ((doc.data() as Map?)?['isActive'] == true) return true;
+    if (widget.event == null) return false;
+    return _eventState(widget.event!) == _EState.active;
   }
 
-  // ── Main Content ──────────────────────────────────────────────────────────
-  Widget _buildMainContent(QuerySnapshot? attendanceSnapshot, DocumentSnapshot? eventDocSnapshot) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _buildContentTabSelector(),
-        const SizedBox(height: 16),
-        Expanded(
-          child: _attendanceTabIndex == 0
-              ? _buildAttendancePanel(attendanceSnapshot, eventDocSnapshot)
-              : _buildRegistrantsPanel(attendanceSnapshot, eventDocSnapshot),
-        ),
-      ],
-    );
+  bool get _isEventDay {
+    if (widget.event == null) return false;
+    final now = DateTime.now();
+    final eventDate = widget.event!.date;
+    return now.year == eventDate.year && now.month == eventDate.month && now.day == eventDate.day;
   }
 
-  // ── Event Info Banner ─────────────────────────────────────────────────────
-  Widget _buildContentTabSelector() {
-    return Row(children: [
-      Expanded(child: _buildTabButton(0, 'Attendance')),
-      const SizedBox(width: 10),
-      Expanded(child: _buildTabButton(1, 'Registered Participants')),
-    ]);
-  }
+  Future<void> _markAttendance(String uid, {bool isManual = false}) async {
+    if (widget.eventDocId == null || widget.event == null) return;
+    try {
+      final evDoc = await FirebaseFirestore.instance.collection('events').doc(widget.eventDocId).get();
+      if (!_isActive(evDoc)) throw Exception('Attendance is not open for this event');
 
-  Widget _buildTabButton(int index, String label) {
-    final selected = _attendanceTabIndex == index;
-    return OutlinedButton(
-      style: OutlinedButton.styleFrom(
-        backgroundColor: selected ? UpriseColors.primaryDark : Colors.white,
-        foregroundColor: selected ? Colors.white : _DS.textPrimary,
-        side: BorderSide(color: selected ? UpriseColors.primaryDark : _DS.border),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        padding: const EdgeInsets.symmetric(vertical: 14),
-      ),
-      onPressed: () => setState(() => _attendanceTabIndex = index),
-      child: Text(label, style: GoogleFonts.spaceGrotesk(fontSize: 13, fontWeight: FontWeight.w700)),
-    );
-  }
+      DocumentSnapshot? userDoc;
+      final direct = await FirebaseFirestore.instance.collection('users').doc(uid).get();
+      if (direct.exists && (direct.data() as Map?)?['orgId'] == widget.orgId) {
+        userDoc = direct;
+      } else {
+        final q = await FirebaseFirestore.instance.collection('users')
+            .where('studentId', isEqualTo: uid).where('orgId', isEqualTo: widget.orgId).limit(1).get();
+        if (q.docs.isNotEmpty) userDoc = q.docs.first;
+      }
+      if (userDoc == null) throw Exception('Student not found or not in your organization');
 
-  Widget _buildAttendancePanel(QuerySnapshot? attendanceSnapshot, DocumentSnapshot? eventDocSnapshot) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Expanded(
-          flex: 11,
-          child: Column(children: [
-            _buildEventInfoBanner(eventDocSnapshot),
-            const SizedBox(height: 14),
-            SizedBox(height: 220, child: Row(children: [
-              _buildQRScannerCard(eventDocSnapshot),
-              const SizedBox(width: 14),
-              _buildRecentScansCard(attendanceSnapshot),
-            ])),
-            const SizedBox(height: 14),
-            Expanded(child: _buildAttendanceTable(attendanceSnapshot)),
-          ]),
-        ),
-        const SizedBox(width: 16),
-        SizedBox(
-          width: 280,
-          child: SingleChildScrollView(child: Column(children: [
-            _buildStatsCard(attendanceSnapshot, eventDocSnapshot),
-            const SizedBox(height: 14),
-            _buildStatusBreakdownCard(attendanceSnapshot),
-            const SizedBox(height: 14),
-            _buildChartCard(attendanceSnapshot?.docs ?? []),
-          ])),
-        ),
-      ],
-    );
-  }
+      final existing = await FirebaseFirestore.instance.collection('events')
+          .doc(widget.eventDocId).collection('attendances')
+          .where('studentId', isEqualTo: userDoc.id).get();
+      if (existing.docs.isNotEmpty) {
+        throw Exception('${(userDoc.data() as Map)['name'] ?? 'Student'} already marked');
+      }
 
-  Widget _buildRegistrantsPanel(QuerySnapshot? attendanceSnapshot, DocumentSnapshot? eventDocSnapshot) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Expanded(
-          flex: 11,
-          child: Column(children: [
-            _buildEventInfoBanner(eventDocSnapshot),
-            const SizedBox(height: 14),
-            Expanded(
-              child: StreamBuilder<QuerySnapshot>(
-                stream: _registrationStream,
-                builder: (context, registrationSnapshot) {
-                  if (_registrationStream == null) {
-                    return _buildEmptyTableState(
-                      message: 'Registration tracking is not available until the approved event is synced.',
-                    );
-                  }
-                  if (registrationSnapshot.connectionState == ConnectionState.waiting) {
-                    return const Center(child: CircularProgressIndicator(strokeWidth: 2));
-                  }
-                  return _buildRegistrationTable(attendanceSnapshot, registrationSnapshot.data);
-                },
-              ),
-            ),
-          ]),
-        ),
-        const SizedBox(width: 16),
-        SizedBox(
-          width: 280,
-          child: SingleChildScrollView(child: Column(children: [
-            _buildRegistrationStatsCard(attendanceSnapshot, registrationSnapshot: null),
-            const SizedBox(height: 14),
-            _buildStatsCard(attendanceSnapshot, eventDocSnapshot),
-          ])),
-        ),
-      ],
-    );
-  }
+      String status = 'present';
+      try {
+        final s = DateFormat.jm().parse(widget.event!.startTime);
+        final startDt = DateTime(widget.event!.date.year, widget.event!.date.month,
+            widget.event!.date.day, s.hour, s.minute);
+        if (DateTime.now().isAfter(startDt.add(const Duration(minutes: 15)))) status = 'late';
+      } catch (_) {}
 
-  Widget _buildRegistrationTable(QuerySnapshot? attendanceSnapshot, QuerySnapshot? registrationSnapshot) {
-    if (registrationSnapshot == null) {
-      return _buildEmptyTableState(message: 'No registered participants yet for this event.');
-    }
+      final data = userDoc.data() as Map<String, dynamic>;
+      await FirebaseFirestore.instance.collection('events').doc(widget.eventDocId)
+          .collection('attendances').add({
+        'studentId': userDoc.id, 'studentName': data['name'] ?? data['email'] ?? 'Unknown',
+        'studentEmail': data['email'] ?? '', 'program': data['program'] ?? 'N/A',
+        'yearLevel': data['yearLevel'] ?? '', 'timestamp': FieldValue.serverTimestamp(),
+        'status': status, 'method': isManual ? 'manual' : 'qr',
+      });
 
-    final attendanceRecords = attendanceSnapshot?.docs
-            .map((doc) => doc.data() as Map<String, dynamic>)
-            .toList() ?? [];
-
-    final allRows = registrationSnapshot.docs.map((doc) {
-      final data = doc.data() as Map<String, dynamic>;
-      final studentId = (data['studentId'] ?? '').toString();
-      final studentEmail = (data['studentEmail'] ?? '').toString();
-      final matchedAttendance = attendanceRecords.firstWhere(
-        (record) {
-          final recordedId = (record['studentId'] ?? '').toString();
-          final recordedEmail = (record['studentEmail'] ?? '').toString();
-          return (recordedId.isNotEmpty && recordedId == studentId) ||
-              (recordedEmail.isNotEmpty && recordedEmail == studentEmail);
-        },
-        orElse: () => <String, dynamic>{},
+      await activity_log.ActivityLogger.log(
+        action: 'mark_attendance', module: 'attendance',
+        details: { 'orgId': widget.orgId, 'eventId': widget.eventDocId,
+            'studentId': userDoc.id, 'status': status, 'method': isManual ? 'manual' : 'qr' },
       );
-      final status = matchedAttendance.isNotEmpty
-          ? (matchedAttendance['status'] ?? 'present')
-          : ((data['attended'] == true) ? 'present' : 'absent');
-      return {...data, 'status': status};
-    }).toList();
+      if (mounted) {
+        _toast(context,
+            '${data['name'] ?? 'Student'} marked ${status.toUpperCase()} ${status == 'late' ? '⏰' : '✓'}');
+      }
+    } catch (e) {
+      if (mounted) {
+        _toast(context, e.toString().replaceFirst('Exception: ', ''), error: true);
+      }
+    }
+  }
 
-    final filteredRows = allRows.where((row) {
-      final name = (row['studentName'] ?? '').toString().toLowerCase();
-      final id = (row['studentId'] ?? '').toString().toLowerCase();
-      if (_searchQuery.isNotEmpty && !name.contains(_searchQuery) && !id.contains(_searchQuery)) {
-        return false;
+  Future<void> _onScan(BarcodeCapture cap) async {
+    if (!_scanning) return;
+    final code = cap.barcodes.firstOrNull?.rawValue;
+    if (code == null || code == _lastCode) return;
+    _lastCode = code;
+    setState(() => _scanning = false);
+    await _markAttendance(code);
+    await Future.delayed(const Duration(seconds: 2));
+    if (mounted) setState(() { _scanning = true; _lastCode = ''; });
+  }
+
+  Future<void> _toggleActive(bool currentlyActive) async {
+    if (widget.eventDocId == null) return;
+    if (!currentlyActive && !_isEventDay) {
+      throw Exception('Attendance can only be opened on the day of the event.');
+    }
+    await FirebaseFirestore.instance.collection('events').doc(widget.eventDocId).update({
+      'isActive': !currentlyActive,
+      if (!currentlyActive) 'startedAt': FieldValue.serverTimestamp(),
+      if (currentlyActive) 'endedAt': FieldValue.serverTimestamp(),
+    });
+    if (mounted) _toast(context, currentlyActive ? 'Attendance closed' : 'Attendance opened — scanning enabled');
+  }
+
+  List<QueryDocumentSnapshot> _filterAttendanceDocs(List<QueryDocumentSnapshot> docs) {
+    return docs.where((d) {
+      final m = d.data() as Map<String, dynamic>;
+      if (_query.isNotEmpty) {
+        final name = (m['studentName'] ?? '').toString().toLowerCase();
+        final id = (m['studentId'] ?? '').toString().toLowerCase();
+        if (!name.contains(_query) && !id.contains(_query)) return false;
       }
-      if (_statusFilter != 'All' && row['status']?.toString().toLowerCase() != _statusFilter) {
-        return false;
-      }
+      if (_statusFilter != 'All' && m['status'] != _statusFilter) return false;
       return true;
     }).toList();
-
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(_DS.radiusMd),
-        border: Border.all(color: _DS.border),
-        boxShadow: _DS.cardShadow,
-      ),
-      child: Column(children: [
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 13),
-          decoration: const BoxDecoration(
-            color: _DS.surfaceAlt,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(_DS.radiusMd)),
-            border: Border(bottom: BorderSide(color: _DS.border)),
-          ),
-          child: Row(children: [
-            Expanded(flex: 4, child: _headerCell('STUDENT')),
-            Expanded(flex: 2, child: _headerCell('ID')),
-            Expanded(flex: 3, child: _headerCell('PROGRAM / TEAM')),
-            Expanded(flex: 2, child: _headerCell('YEAR')),
-            Expanded(flex: 2, child: _headerCell('STATUS')),
-            Expanded(flex: 2, child: _headerCell('REGISTERED')),
-          ]),
-        ),
-        Expanded(
-          child: filteredRows.isEmpty
-              ? _buildEmptyTableState(
-                  message: registrationSnapshot.docs.isEmpty
-                      ? 'No registrations yet for this event.'
-                      : 'No records match your filter.')
-              : ListView.builder(
-                  itemCount: filteredRows.length,
-                  itemBuilder: (_, i) {
-                    final row = filteredRows[i];
-                    final registeredAt = (row['createdAt'] as Timestamp?)?.toDate();
-                    final registeredAtText = registeredAt != null
-                        ? DateFormat('MMM dd, hh:mm a').format(registeredAt)
-                        : '—';
-                    final status = row['status']?.toString() ?? 'absent';
-                    final isLast = i == filteredRows.length - 1;
-                    return Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                      decoration: BoxDecoration(
-                        border: isLast
-                            ? null
-                            : const Border(bottom: BorderSide(color: _DS.borderLight)),
-                      ),
-                      child: Row(children: [
-                        Expanded(flex: 4, child: Row(children: [
-                          _StudentAvatar(name: row['studentName'] ?? ''),
-                          const SizedBox(width: 10),
-                          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                            Text(row['studentName'] ?? '—', style: GoogleFonts.spaceGrotesk(
-                              fontSize: 13, fontWeight: FontWeight.w600, color: _DS.textPrimary,
-                            ), overflow: TextOverflow.ellipsis),
-                            Text(row['studentEmail'] ?? '', style: GoogleFonts.spaceGrotesk(
-                              fontSize: 11, color: _DS.textMuted,
-                            ), overflow: TextOverflow.ellipsis),
-                          ])),
-                        ])),
-                        Expanded(flex: 2, child: Text(row['studentId'] ?? '—', style: GoogleFonts.spaceGrotesk(fontSize: 12, fontWeight: FontWeight.w600, color: UpriseColors.primaryDark))),
-                        Expanded(flex: 3, child: Text(row['program'] ?? 'N/A', style: GoogleFonts.spaceGrotesk(fontSize: 12, color: _DS.textSecondary), overflow: TextOverflow.ellipsis)),
-                        Expanded(flex: 2, child: Text(row['yearLevel'] ?? '—', style: GoogleFonts.spaceGrotesk(fontSize: 12, color: _DS.textSecondary))),
-                        Expanded(flex: 2, child: _attendanceBadge(status)),
-                        Expanded(flex: 2, child: Text(registeredAtText, style: GoogleFonts.spaceGrotesk(fontSize: 12, color: _DS.textSecondary))),
-                      ]),
-                    );
-                  },
-                ),
-        ),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 11),
-          decoration: const BoxDecoration(
-            border: Border(top: BorderSide(color: _DS.border)),
-            color: _DS.surfaceAlt,
-            borderRadius: BorderRadius.vertical(bottom: Radius.circular(_DS.radiusMd)),
-          ),
-          child: Row(children: [
-            const Icon(Icons.event_available_rounded, size: 14, color: _DS.textMuted),
-            const SizedBox(width: 6),
-            Text('${registrationSnapshot.docs.length} registered participant${registrationSnapshot.docs.length == 1 ? '' : 's'}',
-                style: GoogleFonts.spaceGrotesk(fontSize: 12, color: _DS.textSecondary)),
-          ]),
-        ),
-      ]),
-    );
   }
 
-  Widget _buildRegistrationStatsCard(QuerySnapshot? attendanceSnapshot, {QuerySnapshot? registrationSnapshot}) {
-    final registrations = registrationSnapshot?.docs.length ?? 0;
-    final records = attendanceSnapshot?.docs
-            .map((doc) => doc.data() as Map<String, dynamic>)
-            .toList() ?? [];
-    int present = 0, late = 0, absent = 0;
-
-    if (registrationSnapshot != null) {
-      for (final reg in registrationSnapshot.docs) {
-        final registration = reg.data() as Map<String, dynamic>;
-        final studentId = (registration['studentId'] ?? '').toString();
-        final studentEmail = (registration['studentEmail'] ?? '').toString();
-        final matchedAttendance = records.firstWhere(
-          (record) {
-            final recordedId = (record['studentId'] ?? '').toString();
-            final recordedEmail = (record['studentEmail'] ?? '').toString();
-            return (recordedId.isNotEmpty && recordedId == studentId) ||
-                (recordedEmail.isNotEmpty && recordedEmail == studentEmail);
-          },
-          orElse: () => <String, dynamic>{},
-        );
-        final status = matchedAttendance.isNotEmpty
-            ? (matchedAttendance['status'] ?? 'present')
-            : ((registration['attended'] == true) ? 'present' : 'absent');
-        if (status == 'late') {
-          late += 1;
-        } else if (status == 'absent') {
-          absent += 1;
-        } else {
-          present += 1;
-        }
+  List<QueryDocumentSnapshot> _filterRegistrantDocs(List<QueryDocumentSnapshot> regs, List<QueryDocumentSnapshot> attDocs) {
+    final attMap = {
+      for (final d in attDocs)
+        (d.data() as Map)['studentId']?.toString() ?? '': (d.data() as Map)['status']?.toString() ?? 'absent'
+    };
+    return regs.where((d) {
+      final m = d.data() as Map<String, dynamic>;
+      if (_query.isNotEmpty) {
+        final name = (m['studentName'] ?? '').toString().toLowerCase();
+        final id = (m['studentId'] ?? '').toString().toLowerCase();
+        if (!name.contains(_query) && !id.contains(_query)) return false;
       }
-    }
+      final status = attMap[(m['studentId'] ?? '').toString()] ?? 'absent';
+      if (_statusFilter != 'All' && status != _statusFilter) return false;
+      return true;
+    }).toList();
+  }
 
-    return _RightCard(
-      title: 'Registration Summary',
-      icon: Icons.how_to_reg_rounded,
-      child: Column(children: [
-        Row(children: [
-          _statMini('Registered', registrations.toString(), UpriseColors.primaryDark),
-          const SizedBox(width: 8),
-          _statMini('Attended', present.toString(), _DS.green),
-        ]),
-        const SizedBox(height: 8),
-        Row(children: [
-          _statMini('Late', late.toString(), _DS.amber),
-          const SizedBox(width: 8),
-          _statMini('Absent', absent.toString(), _DS.red),
-        ]),
-      ]),
+  Future<void> _exportAttendanceCsv(List<QueryDocumentSnapshot> docs) async {
+    final rows = [
+      ['Student Name', 'Student ID', 'Program', 'Year Level', 'Time In', 'Status', 'Method'],
+      ...docs.map((d) {
+        final m = d.data() as Map<String, dynamic>;
+        final ts = (m['timestamp'] as Timestamp?)?.toDate();
+        return [
+          m['studentName'] ?? '',
+          m['studentId'] ?? '',
+          m['program'] ?? '',
+          m['yearLevel'] ?? '',
+          ts != null ? DateFormat('yyyy-MM-dd HH:mm').format(ts) : '',
+          m['status'] ?? '',
+          m['method'] ?? 'qr',
+        ];
+      }),
+    ];
+    final csv = const ListToCsvConverter().convert(rows);
+    await FileSaver.instance.saveAs(
+      name: 'attendance_${(widget.event?.title ?? 'export').replaceAll(' ', '_')}',
+      bytes: Uint8List.fromList(utf8.encode(csv)), file: 'csv', mimeType: MimeType.csv,
+    );
+    if (mounted) _toast(context, 'Exported ${docs.length} records');
+  }
+
+  Future<void> _exportRegistrantCsv(List<QueryDocumentSnapshot> regs, List<QueryDocumentSnapshot> attDocs) async {
+    final attMap = {
+      for (final d in attDocs)
+        (d.data() as Map)['studentId']?.toString() ?? '': (d.data() as Map)['status']?.toString() ?? 'absent'
+    };
+    final rows = [
+      ['Student Name', 'Student ID', 'Program', 'Year Level', 'Registered At', 'Status'],
+      ...regs.map((d) {
+        final m = d.data() as Map<String, dynamic>;
+        final ts = (m['createdAt'] as Timestamp?)?.toDate();
+        final status = attMap[(m['studentId'] ?? '').toString()] ?? 'absent';
+        return [
+          m['studentName'] ?? '',
+          m['studentId'] ?? '',
+          m['program'] ?? '',
+          m['yearLevel'] ?? '',
+          ts != null ? DateFormat('yyyy-MM-dd HH:mm').format(ts) : '',
+          status,
+        ];
+      }),
+    ];
+    final csv = const ListToCsvConverter().convert(rows);
+    await FileSaver.instance.saveAs(
+      name: 'registrants_${(widget.event?.title ?? 'export').replaceAll(' ', '_')}',
+      bytes: Uint8List.fromList(utf8.encode(csv)), file: 'csv', mimeType: MimeType.csv,
+    );
+    if (mounted) _toast(context, 'Exported ${regs.length} records');
+  }
+
+  Future<void> _exportPdf({required String title, required List<String> headers, required List<List<String>> rows, required String filePrefix}) async {
+    final pdfBytes = await OrgExportPdf.generateTablePdf(
+      title: title,
+      headers: headers,
+      rows: rows,
+    );
+    await FileSaver.instance.saveAs(
+      name: filePrefix,
+      bytes: pdfBytes,
+      file: 'pdf',
+      mimeType: MimeType.pdf,
+    );
+    if (mounted) _toast(context, 'PDF exported successfully');
+  }
+
+  Future<void> _exportAttendancePdf(List<QueryDocumentSnapshot> docs) async {
+    final rows = docs.map<List<String>>((d) {
+      final m = d.data() as Map<String, dynamic>;
+      final ts = (m['timestamp'] as Timestamp?)?.toDate();
+      return <String>[
+        m['studentName'] ?? '',
+        m['studentId'] ?? '',
+        m['program'] ?? '',
+        m['yearLevel'] ?? '',
+        ts != null ? DateFormat('yyyy-MM-dd HH:mm').format(ts) : '',
+        m['status'] ?? '',
+        m['method'] ?? 'qr',
+      ];
+    }).toList();
+    await _exportPdf(
+      title: 'Attendance Report',
+      headers: ['Student Name', 'Student ID', 'Program', 'Year Level', 'Time In', 'Status', 'Method'],
+      rows: rows,
+      filePrefix: 'attendance_${(widget.event?.title ?? 'export').replaceAll(' ', '_')}',
     );
   }
 
-  Widget _buildEventInfoBanner(DocumentSnapshot? eventDocSnapshot) {
-    final event = _selectedEvent!;
-    final isActive = _computeEventActiveFromDoc(eventDocSnapshot);
-    final state = _computeEventDayState(event,
-        isActiveOverride: isActive ? true : null);
+  Future<void> _exportRegistrantPdf(List<QueryDocumentSnapshot> regs, List<QueryDocumentSnapshot> attDocs) async {
+    final attMap = {
+      for (final d in attDocs)
+        (d.data() as Map)['studentId']?.toString() ?? '': (d.data() as Map)['status']?.toString() ?? 'absent'
+    };
+    final rows = regs.map<List<String>>((d) {
+      final m = d.data() as Map<String, dynamic>;
+      final ts = (m['createdAt'] as Timestamp?)?.toDate();
+      final status = attMap[(m['studentId'] ?? '').toString()] ?? 'absent';
+      return <String>[
+        m['studentName'] ?? '',
+        m['studentId'] ?? '',
+        m['program'] ?? '',
+        m['yearLevel'] ?? '',
+        ts != null ? DateFormat('yyyy-MM-dd HH:mm').format(ts) : '',
+        status,
+      ];
+    }).toList();
+    await _exportPdf(
+      title: 'Registrant Report',
+      headers: ['Student Name', 'Student ID', 'Program', 'Year Level', 'Registered At', 'Status'],
+      rows: rows,
+      filePrefix: 'registrants_${(widget.event?.title ?? 'export').replaceAll(' ', '_')}',
+    );
+  }
 
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+    return StreamBuilder<DocumentSnapshot>(
+      stream: _eventStream,
+      builder: (ctx, evSnap) {
+        final active = _isActive(evSnap.data);
+        return StreamBuilder<QuerySnapshot>(
+          stream: _attStream,
+          builder: (ctx, attSnap) {
+            final attDocs = attSnap.data?.docs ?? [];
+            final present = attDocs.where((d) => (d.data() as Map)['status'] == 'present').length;
+            final late    = attDocs.where((d) => (d.data() as Map)['status'] == 'late').length;
+
+            return SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(28, 0, 28, 32),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                _buildStatsRow(attDocs.length, present, late),
+                const SizedBox(height: 20),
+                if (widget.event != null) ...[
+                  _buildEventBanner(active, evSnap.data),
+                  const SizedBox(height: 16),
+                ],
+                _buildInputModeRow(active, attSnap.data),
+                const SizedBox(height: 14),
+                if (_inputMode == 0) _buildQRPanel(active, attSnap.data)
+                else if (_inputMode == 1) _buildManualPanel(active)
+                else _buildRollCallPanel(attSnap.data),
+                const SizedBox(height: 24),
+                _buildSubTabToolbar(attDocs.cast()),
+                const SizedBox(height: 12),
+                _subTab == 0
+                    ? _AttendanceTable(docs: attDocs.cast(), query: _query, statusFilter: _statusFilter)
+                    : _RegistrantsTable(stream: _regStream, attendanceDocs: attDocs.cast(), query: _query, statusFilter: _statusFilter),
+              ]),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildStatsRow(int total, int present, int late) {
+    return Row(children: [
+      _StatCard(label: 'Total Check-ins', value: '$total', icon: Icons.people_alt_rounded, color: UpriseColors.primaryDark),
+      const SizedBox(width: 14),
+      _StatCard(label: 'Present', value: '$present', icon: Icons.check_circle_rounded, color: const Color(0xFF059669)),
+      const SizedBox(width: 14),
+      _StatCard(label: 'Late', value: '$late', icon: Icons.schedule_rounded, color: const Color(0xFFD97706)),
+      const SizedBox(width: 14),
+      _StatCard(label: 'Absent', value: '${total - present - late}', icon: Icons.cancel_rounded, color: const Color(0xFFDC2626)),
+    ]);
+  }
+
+  Widget _buildEventBanner(bool active, DocumentSnapshot? evDoc) {
+    final e = widget.event!;
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(_DS.radiusMd),
-        border: Border.all(
-          color: isActive ? _DS.green.withOpacity(0.4) : _DS.border,
-          width: isActive ? 1.5 : 1,
-        ),
+        borderRadius: BorderRadius.circular(_DS.radiusLg),
+        border: Border.all(color: active ? const Color(0xFF059669).withOpacity(0.35) : const Color(0xFFEBEEF3)),
         boxShadow: _DS.cardShadow,
       ),
       child: Row(children: [
-        // Event icon + title
-        Expanded(flex: 4, child: Row(children: [
-          Container(
-            width: 44, height: 44,
-            decoration: BoxDecoration(
-              color: UpriseColors.primaryDark.withOpacity(0.08),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Icon(Icons.event_rounded, size: 20, color: UpriseColors.primaryDark),
-          ),
-          const SizedBox(width: 12),
-          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(event.title, style: GoogleFonts.spaceGrotesk(
-              fontSize: 14, fontWeight: FontWeight.w700, color: _DS.textPrimary,
-            ), overflow: TextOverflow.ellipsis),
-            Text(event.location, style: GoogleFonts.spaceGrotesk(
-              fontSize: 12, color: _DS.textMuted,
-            )),
-          ])),
-        ])),
-        _infoDivider(),
-        _infoBannerCell(Icons.calendar_today_rounded, 'DATE',
-            DateFormat('MMM dd, yyyy').format(event.date)),
-        _infoDivider(),
-        _infoBannerCell(Icons.schedule_rounded, 'TIME',
-            '${event.startTime} – ${event.endTime}'),
-        _infoDivider(),
-        _infoBannerCell(Icons.people_outline_rounded, 'CAPACITY',
-            event.capacity > 0 ? '${event.capacity} seats' : 'Open'),
-        _infoDivider(),
-        _EventStatusChip(state: state, isActive: isActive),
-      ]),
-    );
-  }
-
-  Widget _infoBannerCell(IconData icon, String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(children: [
-          Icon(icon, size: 11, color: _DS.textMuted),
-          const SizedBox(width: 4),
-          Text(label, style: GoogleFonts.spaceGrotesk(
-            fontSize: 9, fontWeight: FontWeight.w700,
-            color: _DS.textMuted, letterSpacing: 0.6,
-          )),
-        ]),
-        const SizedBox(height: 3),
-        Text(value, style: GoogleFonts.spaceGrotesk(
-          fontSize: 13, fontWeight: FontWeight.w600, color: _DS.textPrimary,
-        )),
-      ]),
-    );
-  }
-
-  Widget _infoDivider() => Container(
-    width: 1, height: 36,
-    margin: const EdgeInsets.symmetric(horizontal: 4),
-    color: _DS.border,
-  );
-
-  // ── QR Scanner Card ───────────────────────────────────────────────────────
-  Widget _buildQRScannerCard(DocumentSnapshot? eventDocSnapshot) {
-    final scanAllowed = _canScan(eventDocSnapshot);
-    final isActive    = _computeEventActiveFromDoc(eventDocSnapshot);
-
-    return Expanded(
-      child: Container(
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(_DS.radiusMd),
-          border: Border.all(
-            color: isActive && _isScanning ? _DS.green.withOpacity(0.5) : _DS.border,
-            width: isActive && _isScanning ? 1.5 : 1,
-          ),
-          boxShadow: _DS.cardShadow,
+        Container(
+          width: 44, height: 44,
+          decoration: BoxDecoration(
+              color: UpriseColors.primaryDark.withOpacity(0.09),
+              borderRadius: BorderRadius.circular(12)),
+          child: Icon(Icons.event_rounded, size: 22, color: UpriseColors.primaryDark),
         ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(_DS.radiusMd),
+        const SizedBox(width: 14),
+        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(e.title,
+              style: GoogleFonts.beVietnamPro(fontSize: 14.5, fontWeight: FontWeight.w700, color: const Color(0xFF1A202C))),
+          const SizedBox(height: 3),
+          Row(children: [
+            Icon(Icons.location_on_outlined, size: 12, color: const Color(0xFFB0BAC8)),
+            const SizedBox(width: 3),
+            Text(e.location, style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF94A3B8))),
+            const SizedBox(width: 12),
+            Icon(Icons.schedule_outlined, size: 12, color: const Color(0xFFB0BAC8)),
+            const SizedBox(width: 3),
+            Text('${e.startTime} – ${e.endTime}', style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF94A3B8))),
+            const SizedBox(width: 12),
+            Icon(Icons.calendar_today_outlined, size: 12, color: const Color(0xFFB0BAC8)),
+            const SizedBox(width: 3),
+            Text(DateFormat('MMM dd, yyyy').format(e.date), style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF94A3B8))),
+          ]),
+        ])),
+        const SizedBox(width: 14),
+        _PrimaryButton(
+          label: active ? 'Close Attendance' : widget.eventDocId == null ? 'Sync Pending' : _isEventDay ? 'Open Attendance' : 'Open on Event Day',
+          icon: active ? Icons.stop_circle_outlined : Icons.play_circle_outline_rounded,
+          color: active ? const Color(0xFFDC2626) : UpriseColors.primaryDark,
+          onPressed: active ? () => _toggleActive(active) : widget.eventDocId == null || !_isEventDay ? null : () => _toggleActive(active),
+        ),
+      ]),
+    );
+  }
+
+  Widget _buildInputModeRow(bool active, QuerySnapshot? attSnap) {
+    return Row(children: [
+      for (final (i, lbl, ico) in [
+        (0, 'QR Scan', Icons.qr_code_scanner_rounded),
+        (1, 'Manual Entry', Icons.badge_outlined),
+        (2, 'Roll Call', Icons.list_alt_rounded),
+      ])
+        Padding(
+          padding: const EdgeInsets.only(right: 8),
+          child: _ModeChip(label: lbl, icon: ico, selected: _inputMode == i,
+              onTap: () => setState(() => _inputMode = i)),
+        ),
+    ]);
+  }
+
+  Widget _buildQRPanel(bool active, QuerySnapshot? attSnap) {
+    final recent = (attSnap?.docs ?? []).reversed.take(3).toList();
+    return SizedBox(
+      height: 216,
+      child: Row(children: [
+        Expanded(child: Container(
+          clipBehavior: Clip.antiAlias,
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(_DS.radiusLg),
+            border: Border.all(color: active ? const Color(0xFF059669).withOpacity(0.4) : const Color(0xFFEBEEF3)),
+            boxShadow: _DS.cardShadow,
+          ),
           child: Stack(children: [
-            // Camera
-            Positioned.fill(
-              child: scanAllowed
-                  ? MobileScanner(
-                      controller: _scannerController,
-                      onDetect: _onScanComplete,
-                    )
-                  : _scanBlockedOverlay(eventDocSnapshot),
-            ),
-            // Scan corners
-            if (isActive) ..._buildScanCorners(),
-            // Bottom label
-            Positioned(
-              bottom: 0, left: 0, right: 0,
+            Positioned.fill(child: active
+                ? MobileScanner(controller: _scanner, onDetect: _onScan)
+                : Container(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft, end: Alignment.bottomRight,
+                        colors: [const Color(0xFF0F172A), const Color(0xFF1E293B)],
+                      ),
+                    ),
+                    child: Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
+                      Container(
+                        width: 64, height: 64,
+                        decoration: BoxDecoration(
+                            color: UpriseColors.primaryDark.withOpacity(0.15),
+                            borderRadius: BorderRadius.circular(16)),
+                        child: Icon(Icons.qr_code_scanner_rounded, size: 32,
+                            color: UpriseColors.primaryDark.withOpacity(0.6)),
+                      ),
+                      const SizedBox(height: 12),
+                      Text('Open attendance to enable scanning',
+                          style: GoogleFonts.beVietnamPro(fontSize: 12.5, color: const Color(0xFF64748B)),
+                          textAlign: TextAlign.center),
+                    ])))),
+            Positioned(bottom: 0, left: 0, right: 0,
               child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
-                    begin: Alignment.bottomCenter,
-                    end: Alignment.topCenter,
-                    colors: [Colors.black.withOpacity(0.7), Colors.transparent],
+                    begin: Alignment.topCenter, end: Alignment.bottomCenter,
+                    colors: [Colors.transparent, Colors.black.withOpacity(0.65)],
                   ),
                 ),
                 child: Row(children: [
-                  AnimatedBuilder(
-                    animation: _pulseAnimation,
-                    builder: (_, __) => Container(
-                      width: 7, height: 7,
+                  Container(width: 7, height: 7,
                       decoration: BoxDecoration(
-                        color: isActive && _isScanning
-                            ? _DS.green.withOpacity(_pulseAnimation.value)
-                            : Colors.white38,
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-                  ),
+                          color: active ? const Color(0xFF059669) : const Color(0xFF6B7280),
+                          shape: BoxShape.circle,
+                          boxShadow: active ? [BoxShadow(color: const Color(0xFF059669).withOpacity(0.5), blurRadius: 4)] : [])),
                   const SizedBox(width: 7),
-                  Text(
-                    isActive && _isScanning
-                        ? 'Scanning…'
-                        : !isActive ? 'Attendance closed' : 'Paused',
-                    style: GoogleFonts.spaceGrotesk(
-                      color: Colors.white70, fontSize: 11, fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const Spacer(),
-                  if (scanAllowed)
+                  Text(active ? (_scanning ? 'Scanning…' : 'Processing…') : 'Scanner offline',
+                      style: GoogleFonts.beVietnamPro(fontSize: 11.5, color: Colors.white70, fontWeight: FontWeight.w500)),
+                  if (active) ...[
+                    const Spacer(),
                     GestureDetector(
-                      onTap: () => setState(() => _isScanning = !_isScanning),
+                      onTap: () => setState(() => _scanning = !_scanning),
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                         decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.15),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Text(
-                          _isScanning ? 'Pause' : 'Resume',
-                          style: GoogleFonts.spaceGrotesk(
-                            color: Colors.white, fontSize: 10, fontWeight: FontWeight.w600,
-                          ),
-                        ),
+                            color: Colors.white.withOpacity(0.15),
+                            borderRadius: BorderRadius.circular(6)),
+                        child: Text(_scanning ? 'Pause' : 'Resume',
+                            style: GoogleFonts.beVietnamPro(
+                                fontSize: 11, color: Colors.white, fontWeight: FontWeight.w600)),
                       ),
                     ),
+                  ],
                 ]),
-              ),
-            ),
+              )),
           ]),
-        ),
-      ),
-    );
-  }
-
-  Widget _scanBlockedOverlay(DocumentSnapshot? doc) {
-    String msg = 'Select an event to begin';
-    IconData icon = Icons.event_outlined;
-    Color color = _DS.textMuted;
-
-    if (_selectedEvent != null) {
-      final state = _computeEventDayState(_selectedEvent!);
-      switch (state) {
-        case _EventDayState.future:
-          msg = 'Event opens on\n${DateFormat('MMM dd').format(_selectedEvent!.date)}';
-          icon = Icons.lock_clock_outlined;
-          color = _DS.blue;
-          break;
-        case _EventDayState.ended:
-          msg = 'Event has ended\nAttendance is read-only';
-          icon = Icons.lock_outline_rounded;
-          color = _DS.textMuted;
-          break;
-        case _EventDayState.todayInactive:
-          msg = 'Open attendance\nto enable scanning';
-          icon = Icons.qr_code_scanner_rounded;
-          color = UpriseColors.primaryDark;
-          break;
-        default:
-          msg = 'Camera unavailable';
-          icon = Icons.videocam_off_outlined;
-      }
-    }
-
-    return Container(
-      color: const Color(0xFF0F172A),
-      child: Center(
-        child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-          Icon(icon, size: 32, color: color.withOpacity(0.6)),
-          const SizedBox(height: 10),
-          Text(
-            msg,
-            textAlign: TextAlign.center,
-            style: GoogleFonts.spaceGrotesk(
-              color: Colors.white54, fontSize: 12, height: 1.5,
-            ),
-          ),
-        ]),
-      ),
-    );
-  }
-
-  List<Widget> _buildScanCorners() {
-    const double sz = 20, thickness = 2.5, inset = 24;
-    const Color clr = _DS.green;
-
-    Widget corner({required bool top, required bool left}) => Positioned(
-      top: top ? inset : null, bottom: top ? null : inset,
-      left: left ? inset : null, right: left ? null : inset,
-      child: Container(
-        width: sz, height: sz,
-        decoration: BoxDecoration(
-          border: Border(
-            top:    top  ? const BorderSide(color: clr, width: thickness) : BorderSide.none,
-            bottom: !top ? const BorderSide(color: clr, width: thickness) : BorderSide.none,
-            left:   left ? const BorderSide(color: clr, width: thickness) : BorderSide.none,
-            right: !left ? const BorderSide(color: clr, width: thickness) : BorderSide.none,
-          ),
-        ),
-      ),
-    );
-
-    return [
-      corner(top: true,  left: true),
-      corner(top: true,  left: false),
-      corner(top: false, left: true),
-      corner(top: false, left: false),
-    ];
-  }
-
-  // ── Recent Scans Card ─────────────────────────────────────────────────────
-  Widget _buildRecentScansCard(QuerySnapshot? attendanceSnapshot) {
-    final docs = attendanceSnapshot?.docs ?? [];
-    if (docs.isEmpty) {
-      return Expanded(
-        child: Container(
-          padding: const EdgeInsets.all(14),
+        )),
+        const SizedBox(width: 14),
+        SizedBox(width: 248, child: Container(
+          padding: const EdgeInsets.all(18),
           decoration: BoxDecoration(
             color: Colors.white,
-            borderRadius: BorderRadius.circular(_DS.radiusMd),
-            border: Border.all(color: _DS.border),
+            borderRadius: BorderRadius.circular(_DS.radiusLg),
+            border: Border.all(color: const Color(0xFFEBEEF3)),
             boxShadow: _DS.cardShadow,
           ),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Row(children: [
-              const Icon(Icons.history_rounded, size: 14, color: _DS.textMuted),
-              const SizedBox(width: 6),
-              Text('RECENT CHECK-INS', style: GoogleFonts.spaceGrotesk(
-                fontSize: 10, fontWeight: FontWeight.w700,
-                color: _DS.textMuted, letterSpacing: 0.7,
-              )),
+              Container(width: 6, height: 6, decoration: const BoxDecoration(color: Color(0xFF9AA5B4), shape: BoxShape.circle)),
+              const SizedBox(width: 7),
+              Text('RECENT CHECK-INS',
+                  style: GoogleFonts.beVietnamPro(fontSize: 10, fontWeight: FontWeight.w700,
+                      color: const Color(0xFF94A3B8), letterSpacing: 0.8)),
             ]),
-            const SizedBox(height: 10),
-            Expanded(
-              child: Center(child: Text('No check-ins yet',
-                  style: GoogleFonts.spaceGrotesk(fontSize: 12, color: _DS.textMuted))),
-            ),
+            const SizedBox(height: 12),
+            if (recent.isEmpty)
+              Expanded(child: Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
+                Icon(Icons.inbox_outlined, size: 28, color: const Color(0xFFD1D5DB)),
+                const SizedBox(height: 6),
+                Text('No check-ins yet', style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFFB0BAC8))),
+              ])))
+            else
+              Expanded(child: ListView.separated(
+                itemCount: recent.length,
+                separatorBuilder: (_, __) => const Divider(height: 1, color: Color(0xFFF3F4F8)),
+                itemBuilder: (_, i) {
+                  final d = recent[i].data() as Map<String, dynamic>;
+                  final ts = (d['timestamp'] as Timestamp?)?.toDate();
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 9),
+                    child: Row(children: [
+                      _StudentAvatar(name: d['studentName'] ?? '', size: 30),
+                      const SizedBox(width: 9),
+                      Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        Text(d['studentName'] ?? '—',
+                            style: GoogleFonts.beVietnamPro(fontSize: 12.5, fontWeight: FontWeight.w600, color: const Color(0xFF1A202C)),
+                            overflow: TextOverflow.ellipsis),
+                        Text(ts != null ? DateFormat('hh:mm a').format(ts) : '—',
+                            style: GoogleFonts.beVietnamPro(fontSize: 11, color: const Color(0xFFB0BAC8))),
+                      ])),
+                      _attBadge(d['status'] ?? 'present'),
+                    ]),
+                  );
+                },
+              )),
           ]),
-        ),
-      );
-    }
-
-    final recent = docs.reversed.take(4).toList();
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(_DS.radiusMd),
-          border: Border.all(color: _DS.border),
-          boxShadow: _DS.cardShadow,
-        ),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Row(children: [
-            const Icon(Icons.history_rounded, size: 14, color: _DS.textMuted),
-            const SizedBox(width: 6),
-            Text('RECENT CHECK-INS', style: GoogleFonts.spaceGrotesk(
-              fontSize: 10, fontWeight: FontWeight.w700,
-              color: _DS.textMuted, letterSpacing: 0.7,
-            )),
-          ]),
-          const SizedBox(height: 10),
-          Expanded(
-            child: ListView.separated(
-              itemCount: recent.length,
-              separatorBuilder: (_, __) => const Divider(height: 1, color: _DS.borderLight),
-              itemBuilder: (_, i) {
-                final data = recent[i].data() as Map<String, dynamic>;
-                final ts   = data['timestamp'] as Timestamp?;
-                final time = ts != null ? DateFormat('hh:mm a').format(ts.toDate()) : '—';
-                final status = data['status'] ?? 'present';
-                return Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 6),
-                  child: Row(children: [
-                    _StudentAvatar(name: data['studentName'] ?? '', size: 26),
-                    const SizedBox(width: 8),
-                    Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      Text(data['studentName'] ?? '—', style: GoogleFonts.spaceGrotesk(
-                        fontSize: 12, fontWeight: FontWeight.w600, color: _DS.textPrimary,
-                      ), overflow: TextOverflow.ellipsis),
-                      Text(time, style: GoogleFonts.spaceGrotesk(fontSize: 10, color: _DS.textMuted)),
-                    ])),
-                    _attendanceBadge(status),
-                  ]),
-                );
-              },
-            ),
-          ),
-        ]),
-      ),
-    );
-  }
-
-  // ── Attendance Table ──────────────────────────────────────────────────────
-  Widget _buildAttendanceTable(QuerySnapshot? attendanceSnapshot) {
-    final docsSnapshot = attendanceSnapshot?.docs ?? [];
-    if (attendanceSnapshot == null) {
-      return Container(
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(_DS.radiusMd),
-          border: Border.all(color: _DS.border),
-          boxShadow: _DS.cardShadow,
-        ),
-        child: const Center(child: CircularProgressIndicator(strokeWidth: 2)),
-      );
-    }
-
-    final filteredDocs = docsSnapshot.where((doc) {
-      final data = doc.data() as Map<String, dynamic>;
-      if (_searchQuery.isNotEmpty) {
-        final name = (data['studentName'] ?? '').toString().toLowerCase();
-        final id   = (data['studentId'] ?? '').toString().toLowerCase();
-        if (!name.contains(_searchQuery) && !id.contains(_searchQuery)) return false;
-      }
-      if (_statusFilter != 'All') {
-        if ((data['status'] ?? '').toString().toLowerCase() != _statusFilter) return false;
-      }
-      return true;
-    }).toList();
-
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(_DS.radiusMd),
-        border: Border.all(color: _DS.border),
-        boxShadow: _DS.cardShadow,
-      ),
-      child: Column(children: [
-        // Header bar
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 13),
-          decoration: const BoxDecoration(
-            color: _DS.surfaceAlt,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(_DS.radiusMd)),
-            border: Border(bottom: BorderSide(color: _DS.border)),
-          ),
-          child: Row(children: [
-            Expanded(flex: 4, child: _headerCell('STUDENT')),
-            Expanded(flex: 2, child: _headerCell('ID')),
-            Expanded(flex: 3, child: _headerCell('PROGRAM / TEAM')),
-            Expanded(flex: 2, child: _headerCell('YEAR')),
-            Expanded(flex: 2, child: _headerCell('TIME IN')),
-            Expanded(flex: 2, child: _headerCell('STATUS')),
-          ]),
-        ),
-        // Rows
-        Expanded(
-          child: filteredDocs.isEmpty
-              ? _buildEmptyTableState(
-                  message: docsSnapshot.isEmpty
-                      ? 'No check-ins yet. Open attendance to begin scanning.'
-                      : 'No records match your filter.')
-              : ListView.builder(
-                  itemCount: filteredDocs.length,
-                  itemBuilder: (_, i) {
-                    final data = filteredDocs[i].data() as Map<String, dynamic>;
-                    final ts   = data['timestamp'] as Timestamp?;
-                    final timeIn = ts != null ? DateFormat('hh:mm a').format(ts.toDate()) : '—';
-                    final isLast = i == filteredDocs.length - 1;
-                    return Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                      decoration: BoxDecoration(
-                        border: isLast
-                            ? null
-                            : const Border(bottom: BorderSide(color: _DS.borderLight)),
-                      ),
-                      child: Row(children: [
-                        Expanded(flex: 4, child: Row(children: [
-                          _StudentAvatar(name: data['studentName'] ?? ''),
-                          const SizedBox(width: 10),
-                          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                            Text(data['studentName'] ?? '—', style: GoogleFonts.spaceGrotesk(
-                              fontSize: 13, fontWeight: FontWeight.w600, color: _DS.textPrimary,
-                            ), overflow: TextOverflow.ellipsis),
-                            Text(data['studentEmail'] ?? '', style: GoogleFonts.spaceGrotesk(
-                              fontSize: 11, color: _DS.textMuted,
-                            ), overflow: TextOverflow.ellipsis),
-                          ])),
-                        ])),
-                        Expanded(flex: 2, child: Text(data['studentId'] ?? '—',
-                            style: GoogleFonts.spaceGrotesk(
-                              fontSize: 12, fontWeight: FontWeight.w600, color: UpriseColors.primaryDark,
-                            ))),
-                        Expanded(flex: 3, child: Text(data['program'] ?? 'N/A',
-                            style: GoogleFonts.spaceGrotesk(fontSize: 12, color: _DS.textSecondary),
-                            overflow: TextOverflow.ellipsis)),
-                        Expanded(flex: 2, child: Text(data['yearLevel'] ?? '—',
-                            style: GoogleFonts.spaceGrotesk(fontSize: 12, color: _DS.textSecondary))),
-                        Expanded(flex: 2, child: Row(children: [
-                          const Icon(Icons.access_time_rounded, size: 12, color: _DS.textMuted),
-                          const SizedBox(width: 4),
-                          Text(timeIn, style: GoogleFonts.spaceGrotesk(
-                            fontSize: 12, color: _DS.textPrimary,
-                          )),
-                        ])),
-                        Expanded(flex: 2, child: _attendanceBadge(data['status'] ?? 'present')),
-                      ]),
-                    );
-                  },
-                ),
-        ),
-        // Footer
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 11),
-          decoration: const BoxDecoration(
-            border: Border(top: BorderSide(color: _DS.border)),
-            color: _DS.surfaceAlt,
-            borderRadius: BorderRadius.vertical(bottom: Radius.circular(_DS.radiusMd)),
-          ),
-          child: Row(children: [
-            const Icon(Icons.people_outline_rounded, size: 14, color: _DS.textMuted),
-            const SizedBox(width: 6),
-            Text('${docsSnapshot.length} attendee${docsSnapshot.length == 1 ? '' : 's'} recorded',
-                style: GoogleFonts.spaceGrotesk(fontSize: 12, color: _DS.textSecondary)),
-            const Spacer(),
-            _FooterButton(
-              icon: Icons.download_outlined,
-              label: 'CSV',
-              onTap: () => _showExportDialog(asPdf: false),
-            ),
-            const SizedBox(width: 8),
-            _FooterButton(
-              icon: Icons.picture_as_pdf_outlined,
-              label: 'PDF',
-              onTap: () => _showExportDialog(asPdf: true),
-            ),
-          ]),
-        ),
-      ]),
-    );
-  }
-
-  Widget _headerCell(String text) => Text(text, style: GoogleFonts.spaceGrotesk(
-    fontSize: 10, fontWeight: FontWeight.w700, color: _DS.textMuted, letterSpacing: 0.7,
-  ));
-
-  Widget _buildEmptyTableState({String message = 'No check-ins yet. Open attendance to begin scanning.'}) {
-    return Center(
-      child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-        Container(
-          width: 56, height: 56,
-          decoration: BoxDecoration(
-            color: _DS.surfaceAlt,
-            borderRadius: BorderRadius.circular(14),
-          ),
-          child: const Icon(Icons.qr_code_2_rounded, size: 28, color: _DS.textMuted),
-        ),
-        const SizedBox(height: 12),
-        Text(message, style: GoogleFonts.spaceGrotesk(
-          fontSize: 13, fontWeight: FontWeight.w600, color: _DS.textSecondary,
         )),
       ]),
     );
   }
 
-  // ── Right panel — Stats ───────────────────────────────────────────────────
-  Widget _buildStatsCard(QuerySnapshot? attendanceSnapshot, DocumentSnapshot? eventDocSnapshot) {
-    final docs    = attendanceSnapshot?.docs ?? [];
-    final present = docs.where((d) => (d.data() as Map)['status'] == 'present').length;
-    final late    = docs.where((d) => (d.data() as Map)['status'] == 'late').length;
-    final total   = docs.length;
-    final capacity = ((eventDocSnapshot?.data() as Map?)?['capacity'] as num?)?.toInt() ?? 0;
-    final rate = capacity > 0 ? (total / capacity * 100).clamp(0.0, 100.0) : 0.0;
-
-    return _RightCard(
-      title: 'Statistics',
-      icon: Icons.analytics_outlined,
-      child: Column(children: [
-        Row(children: [
-          _statMini('Present',  present.toString(), _DS.green),
-          const SizedBox(width: 8),
-          _statMini('Late',     late.toString(),    _DS.amber),
-        ]),
-        const SizedBox(height: 8),
-        Row(children: [
-          _statMini('Total',    total.toString(),   UpriseColors.primaryDark),
-          const SizedBox(width: 8),
-          _statMini('Capacity', capacity > 0 ? capacity.toString() : '—', _DS.blue),
-        ]),
-        if (capacity > 0) ...[
-          const SizedBox(height: 16),
-          Row(children: [
-            Text('Attendance Rate', style: GoogleFonts.spaceGrotesk(
-              fontSize: 11, color: _DS.textMuted,
-            )),
-            const Spacer(),
-            Text('${rate.toStringAsFixed(1)}%', style: GoogleFonts.spaceGrotesk(
-              fontSize: 12, fontWeight: FontWeight.w700, color: UpriseColors.primaryDark,
-            )),
-          ]),
-          const SizedBox(height: 6),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(4),
-            child: LinearProgressIndicator(
-              value: rate / 100,
-              minHeight: 6,
-              backgroundColor: _DS.border,
-              valueColor: AlwaysStoppedAnimation<Color>(UpriseColors.primaryDark),
-            ),
-          ),
-        ],
-      ]),
-    );
-  }
-
-  Widget _statMini(String label, String value, Color color) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.all(10),
-        decoration: BoxDecoration(
-          color: _DS.surfaceAlt,
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(label, style: GoogleFonts.spaceGrotesk(fontSize: 10, color: _DS.textMuted)),
-          const SizedBox(height: 2),
-          Text(value, style: GoogleFonts.spaceGrotesk(
-            fontSize: 20, fontWeight: FontWeight.w700, color: color,
-          )),
-        ]),
-      ),
-    );
-  }
-
-  // ── Right panel — Status Breakdown ───────────────────────────────────────
-  Widget _buildStatusBreakdownCard(QuerySnapshot? attendanceSnapshot) {
-    final docs    = attendanceSnapshot?.docs ?? [];
-    final present = docs.where((d) => (d.data() as Map)['status'] == 'present').length;
-    final late    = docs.where((d) => (d.data() as Map)['status'] == 'late').length;
-    final absent  = docs.where((d) => (d.data() as Map)['status'] == 'absent').length;
-    final total   = docs.isNotEmpty ? docs.length : 1;
-
-    return _RightCard(
-      title: 'Breakdown',
-      icon: Icons.donut_small_rounded,
-      child: Column(children: [
-        _breakdownRow('Present', present, total, _DS.green, _DS.greenBg),
-        const SizedBox(height: 10),
-        _breakdownRow('Late',    late,    total, _DS.amber, _DS.amberBg),
-        const SizedBox(height: 10),
-        _breakdownRow('Absent',  absent,  total, _DS.red,   _DS.redBg),
-      ]),
-    );
-  }
-
-  Widget _breakdownRow(String label, int count, int total, Color color, Color bg) {
-    final pct = count / total;
-    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Row(children: [
-        Container(width: 7, height: 7,
-            decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
-        const SizedBox(width: 8),
-        Text(label, style: GoogleFonts.spaceGrotesk(fontSize: 12, color: _DS.textSecondary)),
-        const Spacer(),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-          decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(100)),
-          child: Text('$count', style: GoogleFonts.spaceGrotesk(
-            fontSize: 11, fontWeight: FontWeight.w700, color: color,
-          )),
-        ),
-      ]),
-      const SizedBox(height: 5),
-      ClipRRect(
-        borderRadius: BorderRadius.circular(3),
-        child: LinearProgressIndicator(
-          value: pct.clamp(0.0, 1.0),
-          minHeight: 4,
-          backgroundColor: _DS.border,
-          valueColor: AlwaysStoppedAnimation<Color>(color),
-        ),
-      ),
-    ]);
-  }
-
-  // ── Right panel — Chart ───────────────────────────────────────────────────
-  Widget _buildChartCard(List<DocumentSnapshot> attendanceDocs) {
-    return _RightCard(
-      title: 'Trend',
-      icon: Icons.show_chart_rounded,
-      child: _AttendanceChart(attendanceDocs: attendanceDocs),
-    );
-  }
-
-  
-
-  // ── Placeholder content shown while the event doc is being created/synced
-  Widget _buildPlaceholderContent(QuerySnapshot? attendanceSnapshot, DocumentSnapshot? eventDocSnapshot) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Expanded(
-          flex: 11,
-          child: Column(children: [
-            if (_selectedEvent != null)
-              _buildEventInfoBanner(eventDocSnapshot)
-            else
-              _buildNoEventSelectedBanner(),
-            const SizedBox(height: 14),
-            SizedBox(height: 220, child: Row(children: [
-              _buildPlaceholderScannerCard(),
-              const SizedBox(width: 14),
-              _buildRecentScansCard(null),
-            ])),
-            const SizedBox(height: 14),
-            Expanded(child: _buildPlaceholderTable()),
-          ]),
-        ),
-        const SizedBox(width: 16),
-        SizedBox(
-          width: 280,
-          child: SingleChildScrollView(child: Column(children: [
-            _buildStatsCard(null, null),
-            const SizedBox(height: 14),
-            _buildStatusBreakdownCard(null),
-            const SizedBox(height: 14),
-            _buildChartCard([]),
-          ])),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildPlaceholderScannerCard() {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(_DS.radiusMd),
-          border: Border.all(color: _DS.border),
-          boxShadow: _DS.cardShadow,
-        ),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Row(children: [
-            Icon(Icons.qr_code_scanner_rounded, size: 14, color: _DS.textMuted),
-            const SizedBox(width: 8),
-            Text('QR SCANNER', style: GoogleFonts.spaceGrotesk(fontSize: 10, fontWeight: FontWeight.w700, color: _DS.textMuted)),
-            const Spacer(),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-              decoration: BoxDecoration(borderRadius: BorderRadius.circular(8), border: Border.all(color: _DS.border)),
-              child: Text('Disabled', style: GoogleFonts.spaceGrotesk(fontSize: 11, color: _DS.textMuted)),
-            ),
-          ]),
-          const SizedBox(height: 12),
-          Expanded(child: Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
-            Container(width: 140, height: 100, decoration: BoxDecoration(color: _DS.surfaceAlt, borderRadius: BorderRadius.circular(12)), child: Center(child: Icon(Icons.qr_code_2_rounded, size: 48, color: _DS.textMuted))),
-            const SizedBox(height: 12),
-            Text('Scanner disabled until event sync completes', textAlign: TextAlign.center, style: GoogleFonts.spaceGrotesk(fontSize: 13, color: _DS.textSecondary)),
-          ]))),
-        ]),
-      ),
-    );
-  }
-
-  Widget _buildNoEventSelectedBanner() {
+  Widget _buildManualPanel(bool active) {
     return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(22),
       decoration: BoxDecoration(
-        color: _DS.surfaceAlt,
-        borderRadius: BorderRadius.circular(_DS.radiusMd),
-        border: Border.all(color: _DS.border),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(_DS.radiusLg),
+        border: Border.all(color: const Color(0xFFEBEEF3)),
+        boxShadow: _DS.cardShadow,
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        _sectionLabel('Manual Attendance Entry', icon: Icons.badge_outlined),
         Row(children: [
-          Icon(Icons.event_note_outlined, size: 16, color: _DS.textMuted),
-          const SizedBox(width: 8),
-          Text('No event selected', style: GoogleFonts.spaceGrotesk(fontSize: 12, fontWeight: FontWeight.w700, color: _DS.textPrimary)),
+          Expanded(
+            child: TextField(
+              controller: _manualCtrl,
+              style: GoogleFonts.beVietnamPro(fontSize: 13),
+              decoration: _DS.inputDeco('Student ID or UID', hint: 'Enter ID and press Enter', icon: Icons.badge_outlined),
+              onSubmitted: (v) async {
+                if (v.trim().isEmpty || !active) return;
+                await _markAttendance(v.trim(), isManual: true);
+                _manualCtrl.clear();
+              },
+            ),
+          ),
+          const SizedBox(width: 12),
+          _PrimaryButton(
+            label: 'Mark Present',
+            icon: Icons.check_rounded,
+            color: UpriseColors.primaryDark,
+            onPressed: !active ? null : () async {
+              final v = _manualCtrl.text.trim();
+              if (v.isEmpty) return;
+              await _markAttendance(v, isManual: true);
+              _manualCtrl.clear();
+            },
+          ),
         ]),
-        const SizedBox(height: 10),
-        Text(
-          'Select an approved event from the selector above to see attendance details and start scanning.',
-          style: GoogleFonts.spaceGrotesk(fontSize: 12, color: _DS.textSecondary, height: 1.4),
+        const SizedBox(height: 14),
+        _InfoBanner(
+          color: const Color(0xFFEFF6FF), border: const Color(0xFFBFD7FF),
+          icon: Icons.info_outline_rounded, iconColor: const Color(0xFF2563EB),
+          text: 'Enter the student\'s ID number or system UID. Attendance opens 15 min before start time. Check-ins after 15 min grace period are marked LATE.',
+          textColor: const Color(0xFF1D4ED8),
         ),
       ]),
     );
   }
 
-  Widget _buildPlaceholderTable() {
+  Widget _buildRollCallPanel(QuerySnapshot? attSnap) {
+    final marked = (attSnap?.docs ?? [])
+        .map((d) => (d.data() as Map)['studentId']?.toString() ?? '').toSet();
+    return StreamBuilder<QuerySnapshot>(
+      stream: widget.eventDocId == null ? null
+          : FirebaseFirestore.instance.collection('registrations')
+              .where('eventId', isEqualTo: widget.eventDocId).snapshots(),
+      builder: (ctx, snap) {
+        final regs = snap.data?.docs ?? [];
+        return Container(
+          padding: const EdgeInsets.all(22),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(_DS.radiusLg),
+            border: Border.all(color: const Color(0xFFEBEEF3)),
+            boxShadow: _DS.cardShadow,
+          ),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            _sectionLabel('Roll Call — Registered Participants', icon: Icons.list_alt_rounded),
+            if (regs.isEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 20),
+                child: Text('No registered participants found.',
+                    style: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFFB0BAC8))),
+              )
+            else
+              ...regs.map((reg) {
+                final d = reg.data() as Map<String, dynamic>;
+                final sid = (d['studentId'] ?? '') as String;
+                final isMarked = marked.contains(sid);
+                return Container(
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: Color(0xFFF3F4F8)))),
+                  child: Row(children: [
+                    _StudentAvatar(name: d['studentName'] ?? '', size: 36),
+                    const SizedBox(width: 12),
+                    Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Text(d['studentName'] ?? '—',
+                          style: GoogleFonts.beVietnamPro(fontSize: 13.5, fontWeight: FontWeight.w600, color: const Color(0xFF1A202C))),
+                      Text(d['studentId'] ?? '',
+                          style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF94A3B8))),
+                    ])),
+                    isMarked ? _attBadge('present')
+                        : _PrimaryButton(
+                            label: 'Mark',
+                            icon: Icons.check_rounded,
+                            color: UpriseColors.primaryDark,
+                            onPressed: () => _markAttendance(sid, isManual: true),
+                            compact: true,
+                          ),
+                  ]),
+                );
+              }),
+          ]),
+        );
+      },
+    );
+  }
+
+  Widget _buildSubTabToolbar(List<QueryDocumentSnapshot> attDocs) {
+    return StreamBuilder<QuerySnapshot?>(
+      stream: _regStream,
+      builder: (ctx, regSnap) {
+        final regDocs = regSnap.data?.docs.cast<QueryDocumentSnapshot>() ?? [];
+        final filteredAttDocs = _filterAttendanceDocs(attDocs);
+        final filteredRegDocs = _filterRegistrantDocs(regDocs, attDocs);
+        final canExport = _subTab == 0 ? filteredAttDocs.isNotEmpty : filteredRegDocs.isNotEmpty;
+
+        return Row(children: [
+          _SubTab('Attendance', _subTab == 0, () => setState(() => _subTab = 0)),
+          const SizedBox(width: 8),
+          _SubTab('Registered Participants', _subTab == 1, () => setState(() => _subTab = 1)),
+          const Spacer(),
+          SizedBox(
+            width: 230, height: 40,
+            child: TextField(
+              controller: _search,
+              style: GoogleFonts.beVietnamPro(fontSize: 13),
+              decoration: _DS.searchDeco('Search name or ID…'),
+              onChanged: (v) => setState(() => _query = v.toLowerCase()),
+            ),
+          ),
+          const SizedBox(width: 10),
+          _FilterDropdown(value: _statusFilter, items: const ['All', 'present', 'late', 'absent'],
+              hint: 'Status', onChanged: (v) => setState(() => _statusFilter = v ?? 'All')),
+          const SizedBox(width: 10),
+          AdminExportButton(
+            enabled: canExport,
+            label: 'Export',
+            onSelected: (choice) {
+              if (_subTab == 0) {
+                if (choice == 'csv') _exportAttendanceCsv(filteredAttDocs);
+                if (choice == 'pdf') _exportAttendancePdf(filteredAttDocs);
+              } else {
+                if (choice == 'csv') _exportRegistrantCsv(filteredRegDocs, attDocs);
+                if (choice == 'pdf') _exportRegistrantPdf(filteredRegDocs, attDocs);
+              }
+            },
+          ),
+        ]);
+      },
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+class _AttendanceTable extends StatelessWidget {
+  final List<QueryDocumentSnapshot> docs;
+  final String query, statusFilter;
+  const _AttendanceTable({required this.docs, required this.query, required this.statusFilter});
+
+  @override
+  Widget build(BuildContext context) {
+    final filtered = docs.where((d) {
+      final m = d.data() as Map<String, dynamic>;
+      if (query.isNotEmpty) {
+        final name = (m['studentName'] ?? '').toString().toLowerCase();
+        final id   = (m['studentId']   ?? '').toString().toLowerCase();
+        if (!name.contains(query) && !id.contains(query)) return false;
+      }
+      if (statusFilter != 'All' && m['status'] != statusFilter) return false;
+      return true;
+    }).toList();
+
+    return _DataTable(
+      columns: const [
+        _Col('STUDENT', 4), _Col('STUDENT ID', 2), _Col('PROGRAM', 3),
+        _Col('YEAR', 2),    _Col('TIME IN', 2),    _Col('METHOD', 2), _Col('STATUS', 2),
+      ],
+      isEmpty: filtered.isEmpty,
+      emptyMessage: docs.isEmpty
+          ? 'No check-ins yet. Open attendance and start scanning.'
+          : 'No records match your filter.',
+      footer: '${docs.length} attendee${docs.length == 1 ? '' : 's'} recorded',
+      rows: filtered.map((d) {
+        final m = d.data() as Map<String, dynamic>;
+        final ts = (m['timestamp'] as Timestamp?)?.toDate();
+        return _TableRow(
+          cells: [
+            _NameCell(m['studentName'] ?? '—', m['studentEmail'] ?? ''),
+            _IdText(m['studentId'] ?? '—'),
+            Text(m['program'] ?? 'N/A',
+                style: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF374151)),
+                overflow: TextOverflow.ellipsis),
+            Text(m['yearLevel'] ?? '—',
+                style: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF64748B))),
+            Text(ts != null ? DateFormat('hh:mm a').format(ts) : '—',
+                style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w500, color: const Color(0xFF1A202C))),
+            _MethodBadge(m['method'] ?? 'qr'),
+            _attBadge(m['status'] ?? 'present'),
+          ],
+          flex: const [4, 2, 3, 2, 2, 2, 2],
+        );
+      }).toList(),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// REGISTRANTS TABLE
+// ─────────────────────────────────────────────────────────────────────────────
+class _RegistrantsTable extends StatelessWidget {
+  final Stream<QuerySnapshot>? stream;
+  final List<QueryDocumentSnapshot> attendanceDocs;
+  final String query, statusFilter;
+  const _RegistrantsTable({required this.stream, required this.attendanceDocs,
+      required this.query, required this.statusFilter});
+
+  @override
+  Widget build(BuildContext context) {
+    if (stream == null) return _EmptyState('Select a synced event to view registered participants.');
+    return StreamBuilder<QuerySnapshot>(
+      stream: stream,
+      builder: (ctx, snap) {
+        if (snap.connectionState == ConnectionState.waiting) {
+          return const Center(child: Padding(padding: EdgeInsets.all(40), child: CircularProgressIndicator()));
+        }
+        final regs = snap.data?.docs ?? [];
+        final attMap = {
+          for (final d in attendanceDocs)
+            (d.data() as Map)['studentId']?.toString() ?? '':
+                (d.data() as Map)['status']?.toString() ?? 'present'
+        };
+        final filtered = regs.where((d) {
+          final m = d.data() as Map<String, dynamic>;
+          if (query.isNotEmpty) {
+            final name = (m['studentName'] ?? '').toString().toLowerCase();
+            final id   = (m['studentId']   ?? '').toString().toLowerCase();
+            if (!name.contains(query) && !id.contains(query)) return false;
+          }
+          final status = attMap[(m['studentId'] ?? '').toString()] ?? 'absent';
+          if (statusFilter != 'All' && status != statusFilter) return false;
+          return true;
+        }).toList();
+
+        return _DataTable(
+          columns: const [
+            _Col('STUDENT', 4), _Col('STUDENT ID', 2), _Col('PROGRAM', 3),
+            _Col('REGISTERED AT', 3), _Col('STATUS', 2),
+          ],
+          isEmpty: filtered.isEmpty,
+          emptyMessage: regs.isEmpty ? 'No registered participants yet.' : 'No records match your filter.',
+          footer: '${regs.length} registered participant${regs.length == 1 ? '' : 's'}',
+          rows: filtered.map((d) {
+            final m = d.data() as Map<String, dynamic>;
+            final sid = (m['studentId'] ?? '').toString();
+            final status = attMap[sid] ?? 'absent';
+            final reg = (m['createdAt'] as Timestamp?)?.toDate();
+            return _TableRow(
+              cells: [
+                _NameCell(m['studentName'] ?? '—', m['studentEmail'] ?? ''),
+                _IdText(sid),
+                Text(m['program'] ?? 'N/A',
+                    style: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF374151)),
+                    overflow: TextOverflow.ellipsis),
+                Text(reg != null ? DateFormat('MMM dd, hh:mm a').format(reg) : '—',
+                    style: GoogleFonts.beVietnamPro(fontSize: 12.5, color: const Color(0xFF64748B))),
+                _attBadge(status),
+              ],
+              flex: const [4, 2, 3, 3, 2],
+            );
+          }).toList(),
+        );
+      },
+    );
+  }
+}
+
+// =============================================================================
+// GENERIC DATA TABLE WRAPPER
+// =============================================================================
+class _Col {
+  final String label;
+  final int flex;
+  final bool rightAlign;
+  const _Col(this.label, this.flex, {this.rightAlign = false});
+}
+
+class _DataTable extends StatelessWidget {
+  final List<_Col> columns;
+  final List<_TableRow> rows;
+  final bool isEmpty;
+  final String emptyMessage;
+  final String? footer;
+  final Widget? customFooter;
+
+  const _DataTable({
+    required this.columns,
+    required this.rows,
+    required this.isEmpty,
+    required this.emptyMessage,
+    required this.footer,
+    this.customFooter,
+  });
+
+  @override
+  Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(_DS.radiusMd),
-        border: Border.all(color: _DS.border),
+        border: Border.all(color: const Color(0xFFEBEEF3)),
         boxShadow: _DS.cardShadow,
       ),
       child: Column(children: [
+        // Header
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 13),
           decoration: const BoxDecoration(
-            color: _DS.surfaceAlt,
+            color: Color(0xFFF7F8FA),
             borderRadius: BorderRadius.vertical(top: Radius.circular(_DS.radiusMd)),
-            border: Border(bottom: BorderSide(color: _DS.border)),
+            border: Border(bottom: BorderSide(color: Color(0xFFEBEEF3))),
           ),
           child: Row(children: [
-            Expanded(flex: 4, child: _headerCell('STUDENT')),
-            Expanded(flex: 2, child: _headerCell('ID')),
-            Expanded(flex: 3, child: _headerCell('PROGRAM / TEAM')),
-            Expanded(flex: 2, child: _headerCell('YEAR')),
-            Expanded(flex: 2, child: _headerCell('TIME IN')),
-            Expanded(flex: 2, child: _headerCell('STATUS')),
+            for (final col in columns)
+              Expanded(flex: col.flex, child: col.rightAlign
+                  ? Align(alignment: Alignment.centerRight, child: _headerCell(col.label))
+                  : _headerCell(col.label)),
           ]),
         ),
-        Expanded(child: _buildEmptyTableState(message: 'No check-ins yet. Event data still syncing.')),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 11),
-          decoration: const BoxDecoration(
-            border: Border(top: BorderSide(color: _DS.border)),
-            color: _DS.surfaceAlt,
-            borderRadius: BorderRadius.vertical(bottom: Radius.circular(_DS.radiusMd)),
-          ),
-          child: Row(children: [
-            const Icon(Icons.people_outline_rounded, size: 14, color: _DS.textMuted),
-            const SizedBox(width: 6),
-            Text('0 attendees recorded', style: GoogleFonts.spaceGrotesk(fontSize: 12, color: _DS.textSecondary)),
-            const Spacer(),
-            _FooterButton(icon: Icons.download_outlined, label: 'CSV', onTap: () => _showExportDialog(asPdf: false)),
-            const SizedBox(width: 8),
-            _FooterButton(icon: Icons.picture_as_pdf_outlined, label: 'PDF', onTap: () => _showExportDialog(asPdf: true)),
-          ]),
-        ),
+        // Rows or empty state
+        if (isEmpty) _EmptyState(emptyMessage) else ...rows,
+        // Footer
+        customFooter ?? (footer != null ? _TableFooter(footer!) : const SizedBox.shrink()),
       ]),
     );
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Event day state pill — shows contextual status (Today / Future / Ended / Live)
-// ─────────────────────────────────────────────────────────────────────────────
-class _EventDayStatePill extends StatelessWidget {
-  final EventModel event;
-  final DocumentSnapshot? eventDocSnapshot;
-  const _EventDayStatePill({required this.event, this.eventDocSnapshot});
+// =============================================================================
+// SHARED REUSABLE WIDGETS
+// =============================================================================
 
-  @override
-  Widget build(BuildContext context) {
-    final isActiveFlag = (eventDocSnapshot?.data() as Map?)?['isActive'] == true;
-    final state = _computeEventDayState(event, isActiveOverride: isActiveFlag ? true : null);
-
-    String label;
-    Color bg, fg;
-    IconData icon;
-
-    switch (state) {
-      case _EventDayState.todayActive:
-        label = 'LIVE — Scanning Active';
-        bg = _DS.greenBg; fg = _DS.green; icon = Icons.sensors_rounded;
-        break;
-      case _EventDayState.todayInactive:
-        label = 'TODAY — Open to enable scanning';
-        bg = _DS.amberBg; fg = _DS.amber; icon = Icons.today_rounded;
-        break;
-      case _EventDayState.future:
-        final diff = event.date.difference(DateTime.now()).inDays + 1;
-        label = 'In $diff day${diff == 1 ? '' : 's'}';
-        bg = _DS.blueBg; fg = _DS.blue; icon = Icons.event_rounded;
-        break;
-      case _EventDayState.ended:
-        label = 'ENDED — Read-only';
-        bg = const Color(0xFFF3F4F6); fg = const Color(0xFF6B7280);
-        icon = Icons.lock_outline_rounded;
-        break;
-      default:
-        label = 'Unavailable';
-        bg = const Color(0xFFF3F4F6); fg = const Color(0xFF6B7280);
-        icon = Icons.help_outline_rounded;
-    }
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(100)),
-      child: Row(mainAxisSize: MainAxisSize.min, children: [
-        if (state == _EventDayState.todayActive)
-          _PulsingDot(color: fg)
-        else
-          Icon(icon, size: 11, color: fg),
-        const SizedBox(width: 5),
-        Flexible(child: Text(label, style: GoogleFonts.spaceGrotesk(
-          fontSize: 10, fontWeight: FontWeight.w700, color: fg,
-        ))),
-      ]),
-    );
-  }
-}
-
-class _PulsingDot extends StatefulWidget {
+class _StatCard extends StatelessWidget {
+  final String label, value;
+  final IconData icon;
   final Color color;
-  const _PulsingDot({required this.color});
-  @override
-  State<_PulsingDot> createState() => _PulsingDotState();
-}
+  const _StatCard({required this.label, required this.value, required this.icon, required this.color});
 
-class _PulsingDotState extends State<_PulsingDot> with SingleTickerProviderStateMixin {
-  late AnimationController _ctrl;
-  late Animation<double> _anim;
   @override
-  void initState() {
-    super.initState();
-    _ctrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 900))
-      ..repeat(reverse: true);
-    _anim = Tween<double>(begin: 0.4, end: 1.0).animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut));
-  }
-  @override
-  void dispose() { _ctrl.dispose(); super.dispose(); }
-  @override
-  Widget build(BuildContext context) => AnimatedBuilder(
-    animation: _anim,
-    builder: (_, __) => Container(
-      width: 7, height: 7,
+  Widget build(BuildContext context) => Expanded(
+    child: Container(
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: widget.color.withOpacity(_anim.value),
-        shape: BoxShape.circle,
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(_DS.radiusLg),
+        border: Border.all(color: const Color(0xFFEBEEF3)),
+        boxShadow: _DS.cardShadow,
       ),
+      child: Row(children: [
+        Container(
+          width: 46, height: 46,
+          decoration: BoxDecoration(color: color.withOpacity(0.10), borderRadius: BorderRadius.circular(12)),
+          child: Icon(icon, color: color, size: 22),
+        ),
+        const SizedBox(width: 14),
+        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(label,
+              style: GoogleFonts.beVietnamPro(fontSize: 11.5, color: const Color(0xFF94A3B8), fontWeight: FontWeight.w600)),
+          const SizedBox(height: 3),
+          Text(value,
+              style: GoogleFonts.beVietnamPro(fontSize: 28, fontWeight: FontWeight.w700, color: const Color(0xFF1A202C), height: 1.1)),
+        ])),
+      ]),
     ),
   );
 }
 
-class _EventStatusChip extends StatelessWidget {
-  final _EventDayState state;
-  final bool isActive;
-  const _EventStatusChip({required this.state, required this.isActive});
-
-  @override
-  Widget build(BuildContext context) {
-    String label;
-    Color bg, fg;
-    Widget leading;
-
-    if (isActive || state == _EventDayState.todayActive) {
-      label = 'LIVE';
-      bg = _DS.greenBg; fg = _DS.green;
-      leading = _PulsingDot(color: fg);
-    } else if (state == _EventDayState.todayInactive) {
-      label = 'TODAY';
-      bg = _DS.amberBg; fg = _DS.amber;
-      leading = Icon(Icons.today_rounded, size: 11, color: fg);
-    } else if (state == _EventDayState.future) {
-      label = 'UPCOMING';
-      bg = _DS.blueBg; fg = _DS.blue;
-      leading = Icon(Icons.upcoming_rounded, size: 11, color: fg);
-    } else {
-      label = 'ENDED';
-      bg = const Color(0xFFF3F4F6); fg = const Color(0xFF6B7280);
-      leading = Icon(Icons.lock_outline_rounded, size: 11, color: fg);
-    }
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(100)),
-      child: Row(mainAxisSize: MainAxisSize.min, children: [
-        leading,
-        const SizedBox(width: 5),
-        Text(label, style: GoogleFonts.spaceGrotesk(
-          fontSize: 10, fontWeight: FontWeight.w800, color: fg, letterSpacing: 0.6,
-        )),
-      ]),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Right-panel card wrapper
-// ─────────────────────────────────────────────────────────────────────────────
-class _RightCard extends StatelessWidget {
-  final String title;
-  final IconData icon;
-  final Widget child;
-  const _RightCard({required this.title, required this.icon, required this.child});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(_DS.radiusMd),
-        border: Border.all(color: _DS.border),
-        boxShadow: _DS.cardShadow,
-      ),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(children: [
-          Container(
-            padding: const EdgeInsets.all(7),
-            decoration: BoxDecoration(
-              color: UpriseColors.primaryDark.withOpacity(0.07),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Icon(icon, size: 14, color: UpriseColors.primaryDark),
-          ),
-          const SizedBox(width: 8),
-          Text(title, style: GoogleFonts.spaceGrotesk(
-            fontSize: 13, fontWeight: FontWeight.w700, color: _DS.textPrimary,
-          )),
-        ]),
-        const SizedBox(height: 14),
-        child,
-      ]),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Footer button
-// ─────────────────────────────────────────────────────────────────────────────
-class _FooterButton extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
-  const _FooterButton({required this.icon, required this.label, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return OutlinedButton.icon(
-      onPressed: onTap,
-      icon: Icon(icon, size: 13),
-      label: Text(label, style: GoogleFonts.spaceGrotesk(fontSize: 11, fontWeight: FontWeight.w600)),
-      style: OutlinedButton.styleFrom(
-        foregroundColor: UpriseColors.primaryDark,
-        side: BorderSide(color: UpriseColors.primaryDark.withOpacity(0.35)),
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-        minimumSize: Size.zero,
-        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Student Avatar
-// ─────────────────────────────────────────────────────────────────────────────
 class _StudentAvatar extends StatelessWidget {
   final String name;
   final double size;
@@ -2424,193 +1282,262 @@ class _StudentAvatar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final parts = name.trim().split(' ');
-    final initials = parts.length >= 2
-        ? '${parts[0][0]}${parts[1][0]}'.toUpperCase()
-        : (name.isNotEmpty ? name[0].toUpperCase() : '?');
+    final init = parts.length >= 2 ? '${parts[0][0]}${parts[1][0]}'.toUpperCase() : (name.isNotEmpty ? name[0].toUpperCase() : '?');
     return Container(
       width: size, height: size,
+      decoration: BoxDecoration(color: UpriseColors.primaryDark.withOpacity(0.09), borderRadius: BorderRadius.circular(size * 0.28)),
+      child: Center(child: Text(init,
+          style: GoogleFonts.beVietnamPro(fontSize: size * 0.36, fontWeight: FontWeight.w700, color: UpriseColors.primaryDark))),
+    );
+  }
+}
+
+class _NameCell extends StatelessWidget {
+  final String name, email;
+  const _NameCell(this.name, this.email);
+  @override
+  Widget build(BuildContext context) => Row(children: [
+    _StudentAvatar(name: name),
+    const SizedBox(width: 10),
+    Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Text(name,
+          style: GoogleFonts.beVietnamPro(fontSize: 13.5, fontWeight: FontWeight.w600, color: const Color(0xFF1A202C)),
+          overflow: TextOverflow.ellipsis),
+      Text(email,
+          style: GoogleFonts.beVietnamPro(fontSize: 11.5, color: const Color(0xFFB0BAC8)),
+          overflow: TextOverflow.ellipsis),
+    ])),
+  ]);
+}
+
+class _IdText extends StatelessWidget {
+  final String id;
+  const _IdText(this.id);
+  @override
+  Widget build(BuildContext context) => Text(id,
+      style: GoogleFonts.beVietnamPro(
+          fontSize: 13, fontWeight: FontWeight.w700,
+          color: UpriseColors.primaryDark, letterSpacing: 0.2));
+}
+
+class _MethodBadge extends StatelessWidget {
+  final String method;
+  const _MethodBadge(this.method);
+  @override
+  Widget build(BuildContext context) {
+    final isManual = method == 'manual';
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3.5),
       decoration: BoxDecoration(
-        color: UpriseColors.primaryDark.withOpacity(0.09),
-        borderRadius: BorderRadius.circular(size * 0.28),
+        color: isManual ? const Color(0xFFFFFBEB) : const Color(0xFFEFF6FF),
+        border: Border.all(color: isManual ? const Color(0xFFFDE68A) : const Color(0xFFBFD7FF)),
+        borderRadius: BorderRadius.circular(6),
       ),
-      child: Center(
-        child: Text(initials, style: GoogleFonts.spaceGrotesk(
-          fontSize: size * 0.35,
-          fontWeight: FontWeight.w700,
-          color: UpriseColors.primaryDark,
-        )),
-      ),
+      child: Text(isManual ? 'Manual' : 'QR Scan',
+          style: GoogleFonts.beVietnamPro(fontSize: 11, fontWeight: FontWeight.w600,
+              color: isManual ? const Color(0xFFD97706) : const Color(0xFF2563EB))),
     );
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Attendance Chart
-// ─────────────────────────────────────────────────────────────────────────────
-class _AttendanceChart extends StatelessWidget {
-  final List<DocumentSnapshot> attendanceDocs;
-  const _AttendanceChart({required this.attendanceDocs});
+class _TableRow extends StatelessWidget {
+  final List<Widget> cells;
+  final List<int> flex;
+  final VoidCallback? onTap;
+  const _TableRow({required this.cells, required this.flex, this.onTap});
 
   @override
-  Widget build(BuildContext context) {
-    if (attendanceDocs.isEmpty) {
-      return SizedBox(
-        height: 140,
-        child: Center(child: Text('No data yet',
-            style: GoogleFonts.spaceGrotesk(fontSize: 12, color: _DS.textMuted))),
-      );
-    }
-
-    final Map<DateTime, int> countByDate = {};
-    for (final doc in attendanceDocs) {
-      final ts = (doc.data() as Map<String, dynamic>)['timestamp'] as Timestamp?;
-      if (ts == null) continue;
-      final d    = ts.toDate();
-      final date = DateTime(d.year, d.month, d.day);
-      countByDate[date] = (countByDate[date] ?? 0) + 1;
-    }
-
-        if (countByDate.isEmpty) {
-          return SizedBox(
-            height: 140,
-            child: Center(child: Text('No data yet',
-                style: GoogleFonts.spaceGrotesk(fontSize: 12, color: _DS.textMuted))),
-          );
-        }
-
-    final sortedDates = countByDate.keys.toList()..sort();
-    final maxY = countByDate.values.reduce((a, b) => a > b ? a : b).toDouble();
-    final spots = List.generate(sortedDates.length,
-        (i) => FlSpot(i.toDouble(), countByDate[sortedDates[i]]!.toDouble()));
-
-    return SizedBox(
-      height: 140,
-      child: LineChart(LineChartData(
-        gridData: FlGridData(
-          show: true,
-          drawVerticalLine: false,
-          getDrawingHorizontalLine: (_) =>
-              const FlLine(color: _DS.borderLight, strokeWidth: 1),
-        ),
-        titlesData: FlTitlesData(
-          bottomTitles: AxisTitles(sideTitles: SideTitles(
-            showTitles: true,
-            reservedSize: 26,
-            getTitlesWidget: (value, _) {
-              final i = value.toInt();
-              if (i < 0 || i >= sortedDates.length) return const SizedBox();
-              return Padding(
-                padding: const EdgeInsets.only(top: 4),
-                child: Text(DateFormat('d/M').format(sortedDates[i]),
-                    style: GoogleFonts.spaceGrotesk(fontSize: 9, color: _DS.textMuted)),
-              );
-            },
-          )),
-          leftTitles: AxisTitles(sideTitles: SideTitles(
-            showTitles: true,
-            reservedSize: 24,
-            getTitlesWidget: (v, _) => Text('${v.toInt()}',
-                style: GoogleFonts.spaceGrotesk(fontSize: 9, color: _DS.textMuted)),
-          )),
-          topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-          rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-        ),
-        borderData: FlBorderData(
-          show: true,
-          border: const Border(
-            bottom: BorderSide(color: _DS.border),
-            left: BorderSide(color: _DS.border),
-          ),
-        ),
-        minX: 0,
-        maxX: (sortedDates.length - 1).toDouble(),
-        minY: 0,
-        maxY: maxY + 1,
-        lineBarsData: [
-          LineChartBarData(
-            spots: spots,
-            isCurved: true,
-            color: UpriseColors.primaryDark,
-            barWidth: 2,
-            dotData: FlDotData(
-              show: true,
-              getDotPainter: (_, __, ___, ____) => FlDotCirclePainter(
-                radius: 3,
-                color: UpriseColors.primaryDark,
-                strokeWidth: 0,
-              ),
-            ),
-            belowBarData: BarAreaData(
-              show: true,
-              color: UpriseColors.primaryDark.withOpacity(0.07),
-            ),
-          ),
-        ],
-      )),
-    );
-  }
+  Widget build(BuildContext context) => InkWell(
+    onTap: onTap,
+    hoverColor: const Color(0xFFF7F8FA),
+    child: Container(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
+      decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: Color(0xFFF3F4F8)))),
+      child: Row(children: [
+        for (var i = 0; i < cells.length; i++) Expanded(flex: flex[i], child: cells[i]),
+      ]),
+    ),
+  );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Event Model
-// ─────────────────────────────────────────────────────────────────────────────
-class EventModel {
-  final String id, title, description, location, startTime, endTime;
-  final int capacity;
-  final DateTime date;
-
-  const EventModel({
-    required this.id,
-    required this.title,
-    required this.description,
-    required this.location,
-    required this.capacity,
-    required this.startTime,
-    required this.endTime,
-    required this.date,
-  });
-
-  factory EventModel.fromFirestore(DocumentSnapshot doc) {
-    final d = doc.data() as Map<String, dynamic>;
-    return EventModel(
-      id:          doc.id,
-      title:       d['title']       as String? ?? 'Untitled Event',
-      description: d['description'] as String? ?? '',
-      location:    d['location']    as String? ?? 'TBA',
-      capacity:    (d['capacity']   as num?)?.toInt() ?? 0,
-      startTime:   d['startTime']   as String? ?? '—',
-      endTime:     d['endTime']     as String? ?? '—',
-      date:        (d['date'] as Timestamp).toDate(),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Event Dropdown Item — shows event title + date + day state indicator
-// ─────────────────────────────────────────────────────────────────────────────
-class _EventDropdownItem extends StatelessWidget {
-  final EventModel event;
-  const _EventDropdownItem({required this.event});
-
+class _TableFooter extends StatelessWidget {
+  final String text;
+  const _TableFooter(this.text);
   @override
-  Widget build(BuildContext context) {
-    final state = _computeEventDayState(event);
-    Color dotColor;
-    switch (state) {
-      case _EventDayState.todayActive:   dotColor = _DS.green; break;
-      case _EventDayState.todayInactive: dotColor = _DS.amber; break;
-      case _EventDayState.future:        dotColor = _DS.blue;  break;
-      default:                           dotColor = _DS.textMuted;
-    }
-    return Row(children: [
-      Container(width: 7, height: 7,
-          decoration: BoxDecoration(color: dotColor, shape: BoxShape.circle)),
-      const SizedBox(width: 8),
-      Expanded(child: Text(event.title,
-          style: GoogleFonts.spaceGrotesk(fontSize: 13),
-          overflow: TextOverflow.ellipsis)),
-      Text(DateFormat('MMM d').format(event.date),
-          style: GoogleFonts.spaceGrotesk(fontSize: 11, color: _DS.textMuted)),
-    ]);
-  }
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 13),
+    decoration: const BoxDecoration(
+      border: Border(top: BorderSide(color: Color(0xFFEBEEF3))),
+      color: Color(0xFFF7F8FA),
+      borderRadius: BorderRadius.vertical(bottom: Radius.circular(_DS.radiusMd)),
+    ),
+    child: Text(text, style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF94A3B8))),
+  );
 }
+
+class _EmptyState extends StatelessWidget {
+  final String message;
+  const _EmptyState(this.message);
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 48),
+    child: Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
+      Container(
+        width: 72, height: 72,
+        decoration: BoxDecoration(color: const Color(0xFFF1F4F8), borderRadius: BorderRadius.circular(18)),
+        child: const Icon(Icons.inbox_rounded, size: 34, color: Color(0xFFCDD5DF)),
+      ),
+      const SizedBox(height: 14),
+      Text(message,
+          style: GoogleFonts.beVietnamPro(fontSize: 14, fontWeight: FontWeight.w600, color: const Color(0xFF374151)),
+          textAlign: TextAlign.center),
+    ])),
+  );
+}
+
+class _InfoBanner extends StatelessWidget {
+  final Color color, border, iconColor, textColor;
+  final IconData icon;
+  final String text;
+  const _InfoBanner({required this.color, required this.border, required this.icon,
+      required this.iconColor, required this.text, required this.textColor});
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+    decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(_DS.radiusSm), border: Border.all(color: border)),
+    child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Icon(icon, size: 15, color: iconColor),
+      const SizedBox(width: 9),
+      Expanded(child: Text(text,
+          style: GoogleFonts.beVietnamPro(fontSize: 12.5, color: textColor, height: 1.5))),
+    ]),
+  );
+}
+
+class _SubTab extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+  const _SubTab(this.label, this.selected, this.onTap);
+  @override
+  Widget build(BuildContext context) => GestureDetector(
+    onTap: onTap,
+    child: AnimatedContainer(
+      duration: const Duration(milliseconds: 150),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
+      decoration: BoxDecoration(
+        color: selected ? UpriseColors.primaryDark : Colors.white,
+        borderRadius: BorderRadius.circular(_DS.radiusSm),
+        border: Border.all(color: selected ? UpriseColors.primaryDark : const Color(0xFFE4E8EF)),
+        boxShadow: selected ? [BoxShadow(color: UpriseColors.primaryDark.withOpacity(0.20), blurRadius: 8, offset: const Offset(0, 3))] : [],
+      ),
+      child: Text(label,
+          style: GoogleFonts.beVietnamPro(
+              fontSize: 13,
+              fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+              color: selected ? Colors.white : const Color(0xFF64748B))),
+    ),
+  );
+}
+
+class _ModeChip extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+  final IconData? icon;
+  const _ModeChip({required this.label, required this.selected, required this.onTap, this.icon});
+  @override
+  Widget build(BuildContext context) => GestureDetector(
+    onTap: onTap,
+    child: AnimatedContainer(
+      duration: const Duration(milliseconds: 150),
+      padding: EdgeInsets.symmetric(horizontal: icon != null ? 12 : 14, vertical: 8),
+      decoration: BoxDecoration(
+        color: selected ? UpriseColors.primaryDark : Colors.white,
+        borderRadius: BorderRadius.circular(_DS.radiusSm),
+        border: Border.all(color: selected ? UpriseColors.primaryDark : const Color(0xFFE4E8EF)),
+        boxShadow: selected ? [BoxShadow(color: UpriseColors.primaryDark.withOpacity(0.22), blurRadius: 8, offset: const Offset(0, 3))] : [],
+      ),
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        if (icon != null) ...[Icon(icon, size: 14, color: selected ? Colors.white : UpriseColors.primaryDark), const SizedBox(width: 6)],
+        Text(label,
+            style: GoogleFonts.beVietnamPro(
+                fontSize: 13, fontWeight: FontWeight.w600,
+                color: selected ? Colors.white : UpriseColors.primaryDark)),
+      ]),
+    ),
+  );
+}
+
+class _FilterDropdown extends StatelessWidget {
+  final String value;
+  final List<String> items;
+  final String hint;
+  final ValueChanged<String?> onChanged;
+  const _FilterDropdown({required this.value, required this.items, required this.hint, required this.onChanged});
+  @override
+  Widget build(BuildContext context) => Container(
+    height: 40,
+    padding: const EdgeInsets.symmetric(horizontal: 12),
+    decoration: BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(_DS.radiusSm),
+      border: Border.all(color: const Color(0xFFE4E8EF)),
+    ),
+    child: DropdownButtonHideUnderline(
+      child: DropdownButton<String>(
+        value: value,
+        icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 18, color: Color(0xFFB0BAC8)),
+        style: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF374151)),
+        items: items.map((s) => DropdownMenuItem(
+          value: s,
+          child: Text(s == 'All' ? 'All Status' : s[0].toUpperCase() + s.substring(1),
+              style: GoogleFonts.beVietnamPro(fontSize: 13)),
+        )).toList(),
+        onChanged: onChanged,
+      ),
+    ),
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// UNIFIED BUTTON COMPONENTS
+// ─────────────────────────────────────────────────────────────────────────────
+class _PrimaryButton extends StatelessWidget {
+  final String label;
+  final IconData? icon;
+  final Color color;
+  final VoidCallback? onPressed;
+  final bool loading;
+  final bool compact;
+  const _PrimaryButton({required this.label, this.icon, required this.color,
+      this.onPressed, this.loading = false, this.compact = false});
+  @override
+  Widget build(BuildContext context) => ElevatedButton(
+    onPressed: onPressed,
+    style: ElevatedButton.styleFrom(
+      backgroundColor: color,
+      foregroundColor: Colors.white,
+      disabledBackgroundColor: color.withOpacity(0.45),
+      disabledForegroundColor: Colors.white.withOpacity(0.7),
+      elevation: 0,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(_DS.radiusSm)),
+      padding: compact
+          ? const EdgeInsets.symmetric(horizontal: 14, vertical: 8)
+          : const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+    ),
+    child: Row(mainAxisSize: MainAxisSize.min, children: [
+      if (loading)
+        Padding(
+          padding: const EdgeInsets.only(right: 8),
+          child: SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)),
+        )
+      else if (icon != null) ...[
+        Icon(icon, size: compact ? 14 : 15),
+        const SizedBox(width: 6),
+      ],
+      Text(label, style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600)),
+    ]),
+  );
+}
+

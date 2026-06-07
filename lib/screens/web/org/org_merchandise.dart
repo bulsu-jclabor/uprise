@@ -106,6 +106,18 @@ class _BadgeStyle {
   const _BadgeStyle(this.bg, this.fg, this.label);
 }
 
+const List<String> _merchandiseCategories = [
+  'Apparel',
+  'Accessories',
+  'Electronics',
+  'Stationery',
+  'Home Goods',
+  'Food & Beverage',
+  'Souvenirs',
+  'Wellness',
+  'Other',
+];
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Main Screen
 // ─────────────────────────────────────────────────────────────────────────────
@@ -504,7 +516,7 @@ class _ProductsTabState extends State<_ProductsTab> {
   int _currentPage = 1;
   static const int _pageSize = 10;
 
-  final List<String> _categoryFilters = ['All', 'Apparel', 'Accessories'];
+  final List<String> _categoryFilters = ['All', ..._merchandiseCategories];
 
   @override
   void dispose() {
@@ -1238,7 +1250,7 @@ class _ProductModalState extends State<_ProductModal> {
   final _descCtrl = TextEditingController();
   final _priceCtrl = TextEditingController();
   final _stockCtrl = TextEditingController();
-  String _category = 'Apparel';
+  String _category = _merchandiseCategories.first;
   bool _submitting = false;
 
   bool get _isEdit => widget.existingProduct != null;
@@ -1366,37 +1378,32 @@ class _ProductModalState extends State<_ProductModal> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     _sectionLabel('Product Information', icon: Icons.info_outline_rounded),
-                    // Category toggle
                     Text('Category', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600, color: const Color(0xFF374151))),
                     const SizedBox(height: 6),
                     Container(
+                      height: 44,
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
                       decoration: BoxDecoration(
                         color: const Color(0xFFF8F9FB),
                         borderRadius: BorderRadius.circular(8),
                         border: Border.all(color: const Color(0xFFE2E6EA)),
                       ),
-                      child: Row(
-                        children: ['Apparel', 'Accessories'].map((c) {
-                          final sel = _category == c;
-                          return Expanded(
-                            child: GestureDetector(
-                              onTap: () => setState(() => _category = c),
-                              child: AnimatedContainer(
-                                duration: const Duration(milliseconds: 150),
-                                margin: const EdgeInsets.all(3),
-                                padding: const EdgeInsets.symmetric(vertical: 8),
-                                decoration: BoxDecoration(
-                                  color: sel ? UpriseColors.primaryDark : Colors.transparent,
-                                  borderRadius: BorderRadius.circular(6),
-                                ),
-                                child: Text(c,
-                                    textAlign: TextAlign.center,
-                                    style: GoogleFonts.beVietnamPro(
-                                        fontSize: 13, fontWeight: FontWeight.w600, color: sel ? Colors.white : const Color(0xFF64748B))),
-                              ),
-                            ),
-                          );
-                        }).toList(),
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<String>(
+                          value: _category,
+                          isExpanded: true,
+                          icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 18, color: Color(0xFF9AA5B4)),
+                          items: [
+                            if (!_merchandiseCategories.contains(_category))
+                              DropdownMenuItem(value: _category, child: Text(_category, style: GoogleFonts.beVietnamPro(fontSize: 13))),
+                            ..._merchandiseCategories.map((c) => DropdownMenuItem(value: c, child: Text(c, style: GoogleFonts.beVietnamPro(fontSize: 13)))),
+                          ],
+                          onChanged: (value) {
+                            if (value != null) {
+                              setState(() => _category = value);
+                            }
+                          },
+                        ),
                       ),
                     ),
                     const SizedBox(height: 16),

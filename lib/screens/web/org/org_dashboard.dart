@@ -19,7 +19,7 @@ import 'package:intl/intl.dart';
 import '../../auth/change_password_screen.dart';
 import 'org_event_proposals.dart';
 import 'org_events_schedule.dart';
-import 'event_management.dart';
+import 'org_attendance_qr.dart';
 import 'org_event_analytics.dart';
 import 'org_announcements.dart';
 import 'org_broadcast.dart';
@@ -75,7 +75,7 @@ const List<Map<String, dynamic>> _navItems = [
   {'label': 'Dashboard', 'icon': Icons.dashboard_rounded},
   {'label': 'Event Proposals', 'icon': Icons.description_rounded},
   {'label': 'Events & Schedules', 'icon': Icons.calendar_month_rounded},
-  {'label': 'Event Management', 'icon': Icons.event_note_rounded},
+  {'label': 'Attendance QR', 'icon': Icons.qr_code_scanner_rounded},
   {'label': 'Event Analytics', 'icon': Icons.bar_chart_rounded},
   {'label': 'Announcements', 'icon': Icons.campaign_rounded},
   {'label': 'Broadcast', 'icon': Icons.wifi_tethering_rounded},

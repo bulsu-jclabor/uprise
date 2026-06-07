@@ -168,6 +168,9 @@ class _OrgReportsScreenState extends State<OrgReportsScreen> {
   DateTime? _accomplishmentDeadline;
   bool      _deadlinesLoaded = false;
 
+  DateTime? get _eventBasedDeadline =>
+      _eventDate?.subtract(const Duration(days: 7));
+
   @override
   void initState() {
     super.initState();
@@ -342,13 +345,13 @@ class _OrgReportsScreenState extends State<OrgReportsScreen> {
       child: Row(children: [
         _DeadlineCard(
           label: 'Financial Report Deadline',
-          deadline: _financialDeadline,
+          deadline: _financialDeadline ?? _eventBasedDeadline,
           submittedOn: latestFinancial,
         ),
         const SizedBox(width: 14),
         _DeadlineCard(
           label: 'Accomplishment Report Deadline',
-          deadline: _accomplishmentDeadline,
+          deadline: _accomplishmentDeadline ?? _eventBasedDeadline,
           submittedOn: latestAccompl,
         ),
       ]),

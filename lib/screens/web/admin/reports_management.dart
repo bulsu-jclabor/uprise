@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
+import 'package:universal_html/html.dart' as html;
 import 'package:uprise/screens/web/admin/export_pdf.dart' show AdminExportPdf;
 import 'export_util.dart';
 import 'package:uprise/widgets/admin_export_button.dart';
@@ -1012,8 +1013,10 @@ class _ReportsManagementState extends State<ReportsManagement>
       final now = DateTime.now();
       final aS  = a.submittedAt != null;
       final bS  = b.submittedAt != null;
-      final aO  = deadline != null && !aS && now.isAfter(deadline);
-      final bO  = deadline != null && !bS && now.isAfter(deadline);
+      final aDeadline = deadline ?? a.eventDeadline;
+      final bDeadline = deadline ?? b.eventDeadline;
+      final aO  = aDeadline != null && !aS && now.isAfter(aDeadline);
+      final bO  = bDeadline != null && !bS && now.isAfter(bDeadline);
       if (aO && !bO) return -1;
       if (!aO && bO) return 1;
       if (aS && !bS) return 1;
@@ -1047,7 +1050,7 @@ class _ReportsManagementState extends State<ReportsManagement>
           final i           = entry.key;
           final sub         = entry.value;
           final isSubmitted = sub.submittedAt != null;
-          final rowDeadline = sub.eventDeadline;
+          final rowDeadline = deadline ?? sub.eventDeadline;
           final isOverdue   = rowDeadline != null && !isSubmitted && DateTime.now().isAfter(rowDeadline);
           final daysLeft    = rowDeadline != null && !isSubmitted ? rowDeadline.difference(DateTime.now()).inDays : 0;
           final isLast      = i == sorted.length - 1;
@@ -1571,23 +1574,30 @@ class _ReportsManagementState extends State<ReportsManagement>
                 icon: Icons.attach_file_rounded),
             const SizedBox(height: 24),
             Row(mainAxisAlignment: MainAxisAlignment.end, children: [
-              if (sub.fileUrl != null && sub.fileUrl!.isNotEmpty)
+              if (sub.fileUrl != null && sub.fileUrl!.isNotEmpty) ...[
                 ElevatedButton.icon(
-                  onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Opening: ${sub.fileUrl}'), behavior: SnackBarBehavior.floating,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)))),
+                  onPressed: () => _openSubmissionFile(sub.fileUrl!),
                   icon: const Icon(Icons.open_in_new_rounded, size: 15),
                   label: Text('Open File', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600)),
                   style: ElevatedButton.styleFrom(backgroundColor: UpriseColors.primaryDark, foregroundColor: Colors.white,
                       elevation: 0, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 11)))
-              else
-                ElevatedButton(
-                  onPressed: () => Navigator.pop(ctx),
+                      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 11))),
+                const SizedBox(width: 10),
+                ElevatedButton.icon(
+                  onPressed: () => _downloadSubmissionFile(sub.fileUrl!),
+                  icon: const Icon(Icons.download_rounded, size: 15),
+                  label: Text('Download File', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600)),
                   style: ElevatedButton.styleFrom(backgroundColor: UpriseColors.primaryDark, foregroundColor: Colors.white,
                       elevation: 0, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 11)),
-                  child: Text('Close', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600))),
+                      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 11))),
+              ],
+              const SizedBox(width: 10),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(ctx),
+                style: ElevatedButton.styleFrom(backgroundColor: UpriseColors.primaryDark, foregroundColor: Colors.white,
+                    elevation: 0, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 11)),
+                child: Text('Close', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600))),
             ]),
           ]),
         ),
@@ -1609,6 +1619,49 @@ class _ReportsManagementState extends State<ReportsManagement>
             border: Border.all(color: const Color(0xFFE2E6EA))),
         child: SelectableText(value, style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w500, color: const Color(0xFF1A202C)))),
     ]);
+  }
+
+  void _openSubmissionFile(String url) {
+    try {
+      html.window.open(url, '_blank');
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: const Text('Opening file in a new tab...'),
+        backgroundColor: UpriseColors.success,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(_DS.radiusSm)),
+      ));
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Could not open file: $e'),
+        backgroundColor: UpriseColors.error,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(_DS.radiusSm)),
+      ));
+    }
+  }
+
+  void _downloadSubmissionFile(String url) {
+    try {
+      final anchor = html.AnchorElement(href: url)
+        ..target = '_blank'
+        ..download = '';
+      html.document.body?.append(anchor);
+      anchor.click();
+      anchor.remove();
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: const Text('Download started...'),
+        backgroundColor: UpriseColors.success,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(_DS.radiusSm)),
+      ));
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Could not download file: $e'),
+        backgroundColor: UpriseColors.error,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(_DS.radiusSm)),
+      ));
+    }
   }
 
   void _sendReminder(OrgSubmission sub, String reportType) {

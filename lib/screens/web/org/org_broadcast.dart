@@ -731,6 +731,7 @@ class _OrgBroadcastScreenState extends State<OrgBroadcastScreen> {
                 minLines: 1,
                 keyboardType: TextInputType.multiline,
                 textInputAction: TextInputAction.newline,
+                onChanged: (v) => setState(() {}),
                 decoration: InputDecoration(
                   hintText:
                       'Write a message to all members…',
@@ -745,40 +746,62 @@ class _OrgBroadcastScreenState extends State<OrgBroadcastScreen> {
           ),
           const SizedBox(width: 10),
           // Send button — gradient to match brand
-          InkWell(
-            onTap: _isSending ? null : _sendMessage,
-            borderRadius: BorderRadius.circular(_DS.radiusMd),
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 180),
-              width: 46, height: 46,
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [_C.primaryDark, _C.accent],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                borderRadius:
-                    BorderRadius.circular(_DS.radiusMd),
-                boxShadow: [
-                  BoxShadow(
-                    color: _C.accent.withOpacity(0.35),
-                    blurRadius: 8,
-                    offset: const Offset(0, 2),
+          Builder(
+            builder: (ctx) {
+              final hasContent = _messageCtrl.text.trim().isNotEmpty ||
+                  _pendingAttachments.isNotEmpty ||
+                  _pendingImageUrl != null;
+              final canSend = hasContent && !_isSending;
+              return InkWell(
+                onTap: canSend ? _sendMessage : null,
+                borderRadius: BorderRadius.circular(_DS.radiusMd),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 180),
+                  width: 46, height: 46,
+                  decoration: BoxDecoration(
+                    gradient: canSend
+                        ? const LinearGradient(
+                            colors: [_C.primaryDark, _C.accent],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          )
+                        : LinearGradient(
+                            colors: [
+                              _C.primaryDark.withOpacity(0.4),
+                              _C.accent.withOpacity(0.4),
+                            ],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
+                    borderRadius:
+                        BorderRadius.circular(_DS.radiusMd),
+                    boxShadow: canSend
+                        ? [
+                            BoxShadow(
+                              color: _C.accent.withOpacity(0.35),
+                              blurRadius: 8,
+                              offset: const Offset(0, 2),
+                            ),
+                          ]
+                        : [],
                   ),
-                ],
-              ),
-              child: _isSending
-                  ? const Center(
-                      child: SizedBox(
-                        width: 18, height: 18,
-                        child: CircularProgressIndicator(
-                            color: Colors.white,
-                            strokeWidth: 2),
-                      ),
-                    )
-                  : const Icon(Icons.send_rounded,
-                      color: Colors.white, size: 20),
-            ),
+                  child: _isSending
+                      ? const Center(
+                          child: SizedBox(
+                            width: 18, height: 18,
+                            child: CircularProgressIndicator(
+                                color: Colors.white,
+                                strokeWidth: 2),
+                          ),
+                        )
+                      : Icon(Icons.send_rounded,
+                          color: canSend
+                              ? Colors.white
+                              : Colors.white.withOpacity(0.5),
+                          size: 20),
+                ),
+              );
+            },
           ),
         ]),
         const SizedBox(height: 6),
