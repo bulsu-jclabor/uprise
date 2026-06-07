@@ -1,8 +1,8 @@
 import 'dart:io';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image_picker/image_picker.dart';
 
 class StudentCertificatesScreen extends StatefulWidget {
@@ -81,6 +81,7 @@ class _StudentCertificatesScreenState
       'status'      : data['status'] ?? 'draft',
       'recipients'  : data['recipients'] ?? 0,
       'templateType': data['templateType'] ?? '',
+      // imageUrl now holds either a base64 string or empty
       'imageUrl'    : data['imageUrl'] ?? '',
       'isUploaded'  : data['isUploaded'] ?? false,
     };
@@ -100,6 +101,54 @@ class _StudentCertificatesScreenState
   }
 
   // ─────────────────────────────────────────────────────────────
+  // HELPER: decode base64 image safely
+  // ─────────────────────────────────────────────────────────────
+  bool _isBase64Image(String url) =>
+      url.startsWith('data:image') || (!url.startsWith('http') && url.isNotEmpty);
+
+  Widget _buildImage(String imageUrl, {double height = 180}) {
+    if (imageUrl.isEmpty) return const SizedBox.shrink();
+
+    // Base64 image (stored in Firestore)
+    if (_isBase64Image(imageUrl)) {
+      try {
+        final base64Str = imageUrl.contains(',')
+            ? imageUrl.split(',').last
+            : imageUrl;
+        final bytes = base64Decode(base64Str);
+        return Image.memory(
+          bytes,
+          height: height,
+          width: double.infinity,
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+        );
+      } catch (_) {
+        return const SizedBox.shrink();
+      }
+    }
+
+    // Network image (fallback for old records)
+    return Image.network(
+      imageUrl,
+      height: height,
+      width: double.infinity,
+      fit: BoxFit.cover,
+      loadingBuilder: (context, child, loadingProgress) {
+        if (loadingProgress == null) return child;
+        return Container(
+          height: height,
+          color: Colors.orange.shade50,
+          child: const Center(
+            child: CircularProgressIndicator(color: Colors.orange),
+          ),
+        );
+      },
+      errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+    );
+  }
+
+  // ─────────────────────────────────────────────────────────────
   // UPLOAD DIALOG
   // ─────────────────────────────────────────────────────────────
   Future<void> _showUploadDialog() async {
@@ -109,13 +158,13 @@ class _StudentCertificatesScreenState
     final signatoriesCtrl  = TextEditingController();
     final recipientsCtrl   = TextEditingController(text: '1');
 
-    String selectedType         = 'Participation';
+    String selectedType         = 'Academic';
     String selectedTemplateType = 'Formal Academic';
     String selectedStatus       = 'issued';
     File? pickedFile;
     bool isUploading = false;
 
-    const typeOptions         = ['Participation','Achievement','Completion','Recognition'];
+    const typeOptions         = ['Academic', 'Workshops', 'Events'];
     const templateTypeOptions = ['Formal Academic','Simple','Modern','Elegant'];
     const statusOptions       = ['issued','draft'];
 
@@ -142,7 +191,7 @@ class _StudentCertificatesScreenState
 
           Future<void> pickImage(ImageSource src) async {
             final picked = await ImagePicker()
-                .pickImage(source: src, imageQuality: 85);
+                .pickImage(source: src, imageQuality: 60, maxWidth: 800);
             if (picked != null) setSheet(() => pickedFile = File(picked.path));
           }
 
@@ -165,16 +214,24 @@ class _StudentCertificatesScreenState
             setSheet(() => isUploading = true);
 
             try {
-              // 1. Upload image to Storage
-              final fileName =
-                  '${_currentUid}_${DateTime.now().millisecondsSinceEpoch}.jpg';
-              final ref = FirebaseStorage.instance
-                  .ref()
-                  .child('certificates/$fileName');
-              await ref.putFile(pickedFile!);
-              final imageUrl = await ref.getDownloadURL();
+              // 1. Read image as bytes and encode to base64
+              final bytes = await pickedFile!.readAsBytes();
+              final base64Image = 'data:image/jpeg;base64,${base64Encode(bytes)}';
 
-              // 2. Save to Firestore
+              // 2. Check size — Firestore doc limit is 1MB
+              if (base64Image.length > 900000) {
+                setSheet(() => isUploading = false);
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                    content: Text('Image is too large. Please pick a smaller image.'),
+                    backgroundColor: Colors.red,
+                    duration: Duration(seconds: 4),
+                  ));
+                }
+                return;
+              }
+
+              // 3. Save everything (including base64 image) to Firestore
               final docRef = await FirebaseFirestore.instance
                   .collection('certificates')
                   .add({
@@ -186,13 +243,13 @@ class _StudentCertificatesScreenState
                 'type'         : selectedType,
                 'templateType' : selectedTemplateType,
                 'status'       : selectedStatus,
-                'imageUrl'     : imageUrl,
+                'imageUrl'     : base64Image,   // stored in Firestore directly
                 'issuedAt'     : FieldValue.serverTimestamp(),
                 'recipientUid' : _currentUid,
                 'isUploaded'   : true,
               });
 
-              // 3. Build local map immediately so it shows at top NOW
+              // 4. Build local map so it appears instantly on screen
               final now = DateTime.now();
               const months = [
                 'January','February','March','April','May','June',
@@ -208,24 +265,26 @@ class _StudentCertificatesScreenState
                 'status'      : selectedStatus,
                 'recipients'  : int.tryParse(recipientsCtrl.text.trim()) ?? 1,
                 'templateType': selectedTemplateType,
-                'imageUrl'    : imageUrl,
+                'imageUrl'    : base64Image,
                 'isUploaded'  : true,
               };
 
-              // 4. Insert at top of list instantly
+              // 5. Close sheet first
+              if (ctx.mounted) Navigator.pop(ctx);
+
+              // 6. Insert at top & reset filter
               if (mounted) {
                 setState(() {
                   _allCertificates.insert(0, newCert);
+                  selectedFilter = 'All';
                 });
-              }
 
-              if (ctx.mounted) Navigator.pop(ctx);
-
-              if (mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
                   content: Text('Certificate uploaded successfully!'),
                   backgroundColor: Colors.green,
                 ));
+
+                _fetchCertificates();
               }
             } catch (e) {
               setSheet(() => isUploading = false);
@@ -233,6 +292,7 @@ class _StudentCertificatesScreenState
                 ScaffoldMessenger.of(context).showSnackBar(SnackBar(
                   content: Text('Upload failed: $e'),
                   backgroundColor: Colors.red,
+                  duration: const Duration(seconds: 6),
                 ));
               }
             }
@@ -299,7 +359,26 @@ class _StudentCertificatesScreenState
                       child: pickedFile != null
                           ? ClipRRect(
                               borderRadius: BorderRadius.circular(13),
-                              child: Image.file(pickedFile!, fit: BoxFit.cover),
+                              child: Stack(
+                                fit: StackFit.expand,
+                                children: [
+                                  Image.file(pickedFile!, fit: BoxFit.cover),
+                                  Positioned(
+                                    bottom: 8, right: 8,
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 8, vertical: 4),
+                                      decoration: BoxDecoration(
+                                        color: Colors.black54,
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      child: const Text('Tap to change',
+                                          style: TextStyle(
+                                              color: Colors.white, fontSize: 11)),
+                                    ),
+                                  ),
+                                ],
+                              ),
                             )
                           : Column(
                               mainAxisAlignment: MainAxisAlignment.center,
@@ -311,6 +390,11 @@ class _StudentCertificatesScreenState
                                     style: TextStyle(
                                         color: Colors.orange.shade400,
                                         fontWeight: FontWeight.w500)),
+                                const SizedBox(height: 4),
+                                Text('Keep image under 700KB for best results',
+                                    style: TextStyle(
+                                        color: Colors.grey.shade400,
+                                        fontSize: 11)),
                               ],
                             ),
                     ),
@@ -320,36 +404,30 @@ class _StudentCertificatesScreenState
                   _sectionLabel('Certificate Details'),
                   const SizedBox(height: 12),
 
-                  // eventName *
                   TextField(
                     controller: eventNameCtrl,
                     decoration: fieldDeco('Event Name *', hint: 'e.g. Codecraft'),
                   ),
                   const SizedBox(height: 12),
 
-                  // organization
                   TextField(
                     controller: organizationCtrl,
                     decoration: fieldDeco('Organization', hint: 'e.g. SWITS'),
                   ),
                   const SizedBox(height: 12),
 
-                  // orgId
                   TextField(
                     controller: orgIdCtrl,
-                    decoration: fieldDeco('Org ID',
-                        hint: 'e.g. vJgko6vPRvJ0bGkJa0xg'),
+                    decoration: fieldDeco('Org ID', hint: 'e.g. vJgko6vPRvJ0bGkJa0xg'),
                   ),
                   const SizedBox(height: 12),
 
-                  // signatories
                   TextField(
                     controller: signatoriesCtrl,
                     decoration: fieldDeco('Signatories', hint: 'e.g. Jayson Batoon'),
                   ),
                   const SizedBox(height: 12),
 
-                  // recipients
                   TextField(
                     controller: recipientsCtrl,
                     keyboardType: TextInputType.number,
@@ -360,7 +438,6 @@ class _StudentCertificatesScreenState
                   _sectionLabel('Classification'),
                   const SizedBox(height: 12),
 
-                  // type
                   DropdownButtonFormField<String>(
                     value: selectedType,
                     decoration: fieldDeco('Type'),
@@ -373,7 +450,6 @@ class _StudentCertificatesScreenState
                   ),
                   const SizedBox(height: 12),
 
-                  // templateType
                   DropdownButtonFormField<String>(
                     value: selectedTemplateType,
                     decoration: fieldDeco('Template Type'),
@@ -386,7 +462,6 @@ class _StudentCertificatesScreenState
                   ),
                   const SizedBox(height: 12),
 
-                  // status
                   DropdownButtonFormField<String>(
                     value: selectedStatus,
                     decoration: fieldDeco('Status'),
@@ -411,10 +486,21 @@ class _StudentCertificatesScreenState
                             borderRadius: BorderRadius.circular(14)),
                       ),
                       child: isUploading
-                          ? const SizedBox(
-                              width: 22, height: 22,
-                              child: CircularProgressIndicator(
-                                  color: Colors.white, strokeWidth: 2.5),
+                          ? const Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                SizedBox(
+                                  width: 20, height: 20,
+                                  child: CircularProgressIndicator(
+                                      color: Colors.white, strokeWidth: 2.5),
+                                ),
+                                SizedBox(width: 12),
+                                Text('Uploading...',
+                                    style: TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.w600)),
+                              ],
                             )
                           : const Text('Upload Certificate',
                               style: TextStyle(
@@ -553,12 +639,16 @@ class _StudentCertificatesScreenState
                               ],
                             ),
                           )
-                        : ListView.builder(
-                            padding: const EdgeInsets.only(
-                                left: 16, right: 16, top: 4, bottom: 90),
-                            itemCount: filtered.length,
-                            itemBuilder: (context, index) =>
-                                _buildCertificateCard(filtered[index]),
+                        : RefreshIndicator(
+                            color: Colors.orange,
+                            onRefresh: _fetchCertificates,
+                            child: ListView.builder(
+                              padding: const EdgeInsets.only(
+                                  left: 16, right: 16, top: 4, bottom: 90),
+                              itemCount: filtered.length,
+                              itemBuilder: (context, index) =>
+                                  _buildCertificateCard(filtered[index]),
+                            ),
                           ),
           ),
         ],
@@ -593,16 +683,7 @@ class _StudentCertificatesScreenState
             borderRadius:
                 const BorderRadius.vertical(top: Radius.circular(16)),
             child: imageUrl.isNotEmpty
-                ? Image.network(
-                    imageUrl,
-                    height: 180, width: double.infinity,
-                    fit: BoxFit.cover,
-                    loadingBuilder: (_, child, progress) => progress == null
-                        ? child
-                        : _placeholderBanner(isDraft, isUploaded, cert),
-                    errorBuilder: (_, __, ___) =>
-                        _placeholderBanner(isDraft, isUploaded, cert),
-                  )
+                ? _buildImage(imageUrl)
                 : _placeholderBanner(isDraft, isUploaded, cert),
           ),
           Padding(
@@ -619,6 +700,20 @@ class _StudentCertificatesScreenState
                               fontWeight: FontWeight.bold,
                               fontSize: 15,
                               color: Colors.black87)),
+                      const SizedBox(height: 4),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: Colors.orange.shade50,
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Text(cert['category'],
+                            style: TextStyle(
+                                color: Colors.orange.shade700,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w500)),
+                      ),
                       const SizedBox(height: 4),
                       Text(cert['date'],
                           style: TextStyle(

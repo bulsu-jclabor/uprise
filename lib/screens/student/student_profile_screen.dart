@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 import '../auth/role_router.dart';
 import '../student/student_login.dart';
 import '../../models/profile_model.dart';
@@ -24,7 +25,14 @@ class ProfileModel extends ChangeNotifier {
   String email = '';
   String mobile = '';
   String address = '';
-  String photoUrl = ''; // ✅ Added for profile image
+  String photoUrl = '';
+  // ── ID card fields ──
+  String middleName = '';
+  String dateOfBirth = '';
+  String dateOfIssue = '';
+  String sex = '';
+  String maritalStatus = '';
+  String placeOfBirth = '';
 
   ProfileModel() {
     _loadUserData();
@@ -48,6 +56,12 @@ if (snapshot.docs.isNotEmpty) {
   mobile = data['mobile'] ?? '';
   address = data['address'] ?? '';
   photoUrl = data['photoUrl'] ?? '';
+  middleName = data['middleName'] ?? '';
+  dateOfBirth = data['dateOfBirth'] ?? '';
+  dateOfIssue = data['dateOfIssue'] ?? '';
+  sex = data['sex'] ?? '';
+  maritalStatus = data['maritalStatus'] ?? '';
+  placeOfBirth = data['placeOfBirth'] ?? '';
 }
 
       notifyListeners();
@@ -60,12 +74,24 @@ if (snapshot.docs.isNotEmpty) {
     required String mobile,
     required String address,
     String? photoUrl,
+    String? middleName,
+    String? dateOfBirth,
+    String? dateOfIssue,
+    String? sex,
+    String? maritalStatus,
+    String? placeOfBirth,
   }) async {
     this.fullName = fullName;
     this.email = email;
     this.mobile = mobile;
     this.address = address;
     if (photoUrl != null) this.photoUrl = photoUrl;
+    if (middleName != null) this.middleName = middleName;
+    if (dateOfBirth != null) this.dateOfBirth = dateOfBirth;
+    if (dateOfIssue != null) this.dateOfIssue = dateOfIssue;
+    if (sex != null) this.sex = sex;
+    if (maritalStatus != null) this.maritalStatus = maritalStatus;
+    if (placeOfBirth != null) this.placeOfBirth = placeOfBirth;
 
     final user = FirebaseAuth.instance.currentUser;
 if (user != null) {
@@ -84,6 +110,12 @@ if (user != null) {
       'mobile': mobile,
       'address': address,
       'photoUrl': this.photoUrl,
+      'middleName': this.middleName,
+      'dateOfBirth': this.dateOfBirth,
+      'dateOfIssue': this.dateOfIssue,
+      'sex': this.sex,
+      'maritalStatus': this.maritalStatus,
+      'placeOfBirth': this.placeOfBirth,
     }, SetOptions(merge: true));
   }
 }
@@ -425,7 +457,7 @@ class PersonalIdentityScreen extends StatelessWidget {
           children: [
             _IdCard1(profile: profile),
             const SizedBox(height: 16),
-            const _IdCard2(),
+            _IdCard2(profile: profile),
             const SizedBox(height: 28),
             SizedBox(
               width: double.infinity,
@@ -492,7 +524,7 @@ class _IdDownloadPreviewSheet extends StatelessWidget {
                           offset: const Offset(0, 4))
                     ],
                   ),
-                  child: const _IdCard2(),
+                  child: _IdCard2(profile: profile),
                 ),
               ),
               Container(
@@ -598,21 +630,36 @@ class _IdCard1 extends StatelessWidget {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // ── CHANGED: use profile.photoUrl instead of hardcoded URL ──
               ClipRRect(
                 borderRadius: BorderRadius.circular(8),
-                child: Image.network(
-                  'https://i.pravatar.cc/150?img=11',
-                  width: 80,
-                  height: 100,
-                  fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) => Container(
-                    width: 80,
-                    height: 100,
-                    color: const Color(0xFFF5C8A0),
-                    child: const Icon(Icons.person,
-                        size: 40, color: Colors.white),
-                  ),
-                ),
+                child: profile.photoUrl.isNotEmpty
+                    ? Image.network(
+                        profile.photoUrl,
+                        width: 80,
+                        height: 100,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => Container(
+                          width: 80,
+                          height: 100,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF5C8A0),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Icon(Icons.person,
+                              size: 40, color: Colors.white),
+                        ),
+                      )
+                    : Container(
+                        width: 80,
+                        height: 100,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF5C8A0),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Icon(Icons.person,
+                            size: 40, color: Colors.white),
+                      ),
               ),
               const SizedBox(width: 16),
               Expanded(
@@ -623,11 +670,17 @@ class _IdCard1 extends StatelessWidget {
                     const SizedBox(height: 10),
                     _IdFieldWidget(label: 'GIVEN NAMES', value: firstName),
                     const SizedBox(height: 10),
-                    const _IdFieldWidget(
-                        label: 'MIDDLE NAME', value: 'SAN JOSE'),
+                    _IdFieldWidget(
+                        label: 'MIDDLE NAME',
+                        value: profile.middleName.isNotEmpty
+                            ? profile.middleName.toUpperCase()
+                            : '—'),
                     const SizedBox(height: 10),
-                    const _IdFieldWidget(
-                        label: 'DATE OF BIRTH', value: 'JANUARY 01, 2002'),
+                    _IdFieldWidget(
+                        label: 'DATE OF BIRTH',
+                        value: profile.dateOfBirth.isNotEmpty
+                            ? profile.dateOfBirth.toUpperCase()
+                            : '—'),
                   ],
                 ),
               ),
@@ -641,7 +694,8 @@ class _IdCard1 extends StatelessWidget {
 
 // ── ID Card 2: Additional Info + QR ──
 class _IdCard2 extends StatelessWidget {
-  const _IdCard2();
+  final ProfileModel profile;
+  const _IdCard2({required this.profile});
 
   @override
   Widget build(BuildContext context) {
@@ -663,35 +717,44 @@ class _IdCard2 extends StatelessWidget {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Expanded(
+              Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     _IdFieldWidget(
-                        label: 'DATE OF ISSUE', value: '14 JUNE 2023'),
-                    SizedBox(height: 12),
-                    _IdFieldWidget(label: 'SEX', value: 'MALE'),
-                    SizedBox(height: 12),
+                        label: 'DATE OF ISSUE',
+                        value: profile.dateOfIssue.isNotEmpty
+                            ? profile.dateOfIssue.toUpperCase()
+                            : '—'),
+                    const SizedBox(height: 12),
                     _IdFieldWidget(
-                        label: 'URG NG DUGO\nBLOOD TYPE', value: 'O+'),
-                    SizedBox(height: 12),
+                        label: 'SEX',
+                        value: profile.sex.isNotEmpty
+                            ? profile.sex.toUpperCase()
+                            : '—'),
+                    const SizedBox(height: 12),
                     _IdFieldWidget(
-                        label: 'MARITAL STATUS', value: 'SINGLE'),
-                    SizedBox(height: 12),
+                        label: 'MARITAL STATUS',
+                        value: profile.maritalStatus.isNotEmpty
+                            ? profile.maritalStatus.toUpperCase()
+                            : '—'),
+                    const SizedBox(height: 12),
                     _IdFieldWidget(
                         label: 'PLACE OF BIRTH',
-                        value: 'QUEZON CITY, METRO\nMANILA'),
+                        value: profile.placeOfBirth.isNotEmpty
+                            ? profile.placeOfBirth.toUpperCase()
+                            : '—'),
                   ],
                 ),
               ),
               const SizedBox(width: 12),
-              Container(
-                width: 120,
-                height: 120,
-                decoration: BoxDecoration(
-                    color: Colors.white,
-                    border: Border.all(color: Colors.black, width: 1.5)),
-                child: CustomPaint(painter: _QrPainter()),
+              QrImageView(
+                data: profile.studentId.isNotEmpty
+                    ? profile.studentId
+                    : 'N/A',
+                version: QrVersions.auto,
+                size: 120,
+                backgroundColor: Colors.white,
               ),
             ],
           ),
@@ -730,6 +793,12 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   late final TextEditingController _emailCtrl;
   late final TextEditingController _mobileCtrl;
   late final TextEditingController _addressCtrl;
+  late final TextEditingController _middleNameCtrl;
+  late final TextEditingController _dateOfBirthCtrl;
+  late final TextEditingController _dateOfIssueCtrl;
+  late final TextEditingController _sexCtrl;
+  late final TextEditingController _maritalStatusCtrl;
+  late final TextEditingController _placeOfBirthCtrl;
 
   @override
   void initState() {
@@ -742,6 +811,18 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         TextEditingController(text: widget.profile.mobile);
     _addressCtrl =
         TextEditingController(text: widget.profile.address);
+    _middleNameCtrl =
+        TextEditingController(text: widget.profile.middleName);
+    _dateOfBirthCtrl =
+        TextEditingController(text: widget.profile.dateOfBirth);
+    _dateOfIssueCtrl =
+        TextEditingController(text: widget.profile.dateOfIssue);
+    _sexCtrl =
+        TextEditingController(text: widget.profile.sex);
+    _maritalStatusCtrl =
+        TextEditingController(text: widget.profile.maritalStatus);
+    _placeOfBirthCtrl =
+        TextEditingController(text: widget.profile.placeOfBirth);
   }
 
   @override
@@ -750,6 +831,12 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     _emailCtrl.dispose();
     _mobileCtrl.dispose();
     _addressCtrl.dispose();
+    _middleNameCtrl.dispose();
+    _dateOfBirthCtrl.dispose();
+    _dateOfIssueCtrl.dispose();
+    _sexCtrl.dispose();
+    _maritalStatusCtrl.dispose();
+    _placeOfBirthCtrl.dispose();
     super.dispose();
   }
 
@@ -759,6 +846,12 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       email: _emailCtrl.text.trim(),
       mobile: _mobileCtrl.text.trim(),
       address: _addressCtrl.text.trim(),
+      middleName: _middleNameCtrl.text.trim(),
+      dateOfBirth: _dateOfBirthCtrl.text.trim(),
+      dateOfIssue: _dateOfIssueCtrl.text.trim(),
+      sex: _sexCtrl.text.trim(),
+      maritalStatus: _maritalStatusCtrl.text.trim(),
+      placeOfBirth: _placeOfBirthCtrl.text.trim(),
     );
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
@@ -811,14 +904,16 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                                 Border.all(color: Colors.white, width: 3),
                           ),
                           child: ClipOval(
-                            child: Image.network(
-                              'https://i.pravatar.cc/150?img=11',
-                              fit: BoxFit.cover,
-                              errorBuilder: (_, __, ___) => const Icon(
-                                  Icons.person,
-                                  size: 40,
-                                  color: Colors.white),
-                            ),
+                            child: widget.profile.photoUrl.isNotEmpty
+                                ? Image.network(
+                                    widget.profile.photoUrl,
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (_, __, ___) =>
+                                        const Icon(Icons.person,
+                                            size: 40, color: Colors.white),
+                                  )
+                                : const Icon(Icons.person,
+                                    size: 40, color: Colors.white),
                           ),
                         ),
                         Positioned(
@@ -884,6 +979,58 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                     controller: _emailCtrl,
                     icon: Icons.mail_outline,
                     keyboardType: TextInputType.emailAddress,
+                  ),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 12),
+
+            // ── ID Information ──
+            Container(
+              color: Colors.white,
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('ID Information',
+                      style: TextStyle(
+                          fontWeight: FontWeight.bold, fontSize: 15)),
+                  const SizedBox(height: 16),
+                  _EditField(
+                    label: 'Middle Name',
+                    controller: _middleNameCtrl,
+                    icon: Icons.person_outline,
+                  ),
+                  const SizedBox(height: 14),
+                  _EditField(
+                    label: 'Date of Birth',
+                    controller: _dateOfBirthCtrl,
+                    icon: Icons.cake_outlined,
+                  ),
+                  const SizedBox(height: 14),
+                  _EditField(
+                    label: 'Date of Issue',
+                    controller: _dateOfIssueCtrl,
+                    icon: Icons.calendar_today_outlined,
+                  ),
+                  const SizedBox(height: 14),
+                  _EditField(
+                    label: 'Sex',
+                    controller: _sexCtrl,
+                    icon: Icons.wc_outlined,
+                  ),
+                  const SizedBox(height: 14),
+                  _EditField(
+                    label: 'Marital Status',
+                    controller: _maritalStatusCtrl,
+                    icon: Icons.favorite_border_outlined,
+                  ),
+                  const SizedBox(height: 14),
+                  _EditField(
+                    label: 'Place of Birth',
+                    controller: _placeOfBirthCtrl,
+                    icon: Icons.location_city_outlined,
                   ),
                 ],
               ),
@@ -1047,9 +1194,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       CircleAvatar(
                         radius: 42,
                         backgroundColor: kOrangeLight,
-                        backgroundImage: const NetworkImage(
-                          'https://i.pravatar.cc/150?img=11',
-                        ),
+                        backgroundImage: widget.profile.photoUrl.isNotEmpty
+                            ? NetworkImage(widget.profile.photoUrl)
+                            : null,
+                        child: widget.profile.photoUrl.isEmpty
+                            ? const Icon(Icons.person,
+                                size: 42, color: kOrange)
+                            : null,
                       ),
 
                       const SizedBox(height: 12),
@@ -1270,8 +1421,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
 // Reusable small widgets
 // ─────────────────────────────────────────────────────────────
 
-/// Section header — matches the grey label style from Edit Profile,
-/// with a horizontal padding and top spacing identical to the card spacing.
 class _SectionHeader extends StatelessWidget {
   final String text;
   const _SectionHeader(this.text);
@@ -1442,31 +1591,6 @@ class _IdFieldWidget extends StatelessWidget {
   }
 }
 
-class _QrPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()..color = Colors.black;
-    final c = size.width / 10;
-    final cells = [
-      [0,0],[0,1],[0,2],[0,3],[0,4],[0,5],[0,6],
-      [1,0],[1,6],[2,0],[2,2],[2,3],[2,4],[2,6],
-      [3,0],[3,2],[3,3],[3,4],[3,6],[4,0],[4,2],[4,3],[4,4],[4,6],
-      [5,0],[5,6],[6,0],[6,1],[6,2],[6,3],[6,4],[6,5],[6,6],
-      [0,8],[0,9],[1,8],[1,9],[2,8],[2,9],[3,8],[3,9],
-      [4,8],[4,9],[5,8],[5,9],[6,8],[6,9],
-      [8,0],[8,1],[9,0],[9,1],[8,4],[8,5],[9,4],[9,5],
-      [2,8],[3,9],[4,7],[5,8],[6,9],[7,2],[7,4],[7,6],[7,8],
-      [8,3],[8,7],[9,2],[9,6],[9,8],[9,9],
-    ];
-    for (final cell in cells) {
-      canvas.drawRect(
-          Rect.fromLTWH(cell[1] * c, cell[0] * c, c, c), paint);
-    }
-  }
-
-  @override
-  bool shouldRepaint(_QrPainter old) => false;
-}
 
 class _ContactRow extends StatelessWidget {
   final IconData icon;
