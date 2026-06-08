@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:qr_flutter/qr_flutter.dart';
+import 'package:intl/intl.dart';  
 import '../auth/role_router.dart';
 import '../student/student_login.dart';
 import '../../models/profile_model.dart';
@@ -135,6 +136,28 @@ class StudentProfileScreen extends StatefulWidget {
 
 class _StudentProfileScreenState extends State<StudentProfileScreen> {
   final ProfileModel _profile = ProfileModel();
+
+  // Helper method to fetch events by IDs
+  Future<List<QueryDocumentSnapshot>> _fetchEventsByIds(List<String> eventIds) async {
+    if (eventIds.isEmpty) return [];
+    
+    // Firestore whereIn supports max 10 items
+    final chunks = <List<String>>[];
+    for (var i = 0; i < eventIds.length; i += 10) {
+      chunks.add(eventIds.sublist(
+          i, i + 10 > eventIds.length ? eventIds.length : i + 10));
+    }
+    
+    final results = <QueryDocumentSnapshot>[];
+    for (final chunk in chunks) {
+      final snap = await FirebaseFirestore.instance
+          .collection('events')
+          .where(FieldPath.documentId, whereIn: chunk)
+          .get();
+      results.addAll(snap.docs);
+    }
+    return results;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -325,7 +348,7 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
 
                 const SizedBox(height: 12),
 
-                // ── Events Registered ──
+                // ── Events Registered (DYNAMIC FROM FIRESTORE) ──
                 Container(
                   color: Colors.white,
                   padding: const EdgeInsets.all(16),
@@ -340,39 +363,137 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
                                   fontWeight: FontWeight.bold,
                                   fontSize: 15)),
                           GestureDetector(
-                            onTap: () {},
+                            onTap: () {
+                              // Navigate to My Events tab
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('View all events - Coming Soon'),
+                                  duration: Duration(seconds: 2),
+                                ),
+                              );
+                            },
                             child: const Text('See All',
-                                style:
-                                    TextStyle(color: kOrange, fontSize: 14)),
+                                style: TextStyle(color: kOrange, fontSize: 14)),
                           ),
                         ],
                       ),
                       const SizedBox(height: 12),
-                      _EventCard(
-                        title: 'CICT Hackathon 2024',
-                        subtitle: 'Tomorrow • 9:00 AM',
-                        badge: 'UPCOMING',
-                        badgeColor: const Color(0xFF2196F3),
-                        imageUrl:
-                            'https://images.unsplash.com/photo-1504384308090-c894fdcc538d?w=80&q=60',
-                      ),
-                      const Divider(height: 1),
-                      _EventCard(
-                        title: 'Tech Symposium',
-                        subtitle: 'May 15, 2024 • 1:00 PM',
-                        badge: 'PAST',
-                        badgeColor: Colors.grey,
-                        imageUrl:
-                            'https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=80&q=60',
-                      ),
-                      const Divider(height: 1),
-                      _EventCard(
-                        title: 'Tech Symposium',
-                        subtitle: 'May 15, 2024 • 1:00 PM',
-                        badge: 'PAST',
-                        badgeColor: Colors.grey,
-                        imageUrl:
-                            'https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=80&q=60',
+                      
+                      // Dynamic events list from Firestore
+                      StreamBuilder<QuerySnapshot>(
+                        stream: FirebaseFirestore.instance
+                            .collection('registrations')
+                            .where('userId', isEqualTo: FirebaseAuth.instance.currentUser?.uid)
+                            .snapshots(),
+                        builder: (context, regSnapshot) {
+                          if (regSnapshot.connectionState == ConnectionState.waiting) {
+                            return const Center(
+                              child: Padding(
+                                padding: EdgeInsets.all(16),
+                                child: CircularProgressIndicator(),
+                              ),
+                            );
+                          }
+                          
+                          if (!regSnapshot.hasData || regSnapshot.data!.docs.isEmpty) {
+                            return const Padding(
+                              padding: EdgeInsets.symmetric(vertical: 20),
+                              child: Center(
+                                child: Text(
+                                  'No registered events yet',
+                                  style: TextStyle(color: Colors.grey, fontSize: 13),
+                                ),
+                              ),
+                            );
+                          }
+                          
+                          final registrations = regSnapshot.data!.docs;
+                          
+                          // Get event IDs from registrations
+                          final eventIds = registrations.map((doc) => doc['eventId'] as String).toList();
+                          
+                          if (eventIds.isEmpty) {
+                            return const Padding(
+                              padding: EdgeInsets.symmetric(vertical: 20),
+                              child: Center(
+                                child: Text(
+                                  'No registered events yet',
+                                  style: TextStyle(color: Colors.grey, fontSize: 13),
+                                ),
+                              ),
+                            );
+                          }
+                          
+                          return FutureBuilder<List<QueryDocumentSnapshot>>(
+                            future: _fetchEventsByIds(eventIds),
+                            builder: (context, eventSnapshot) {
+                              if (eventSnapshot.connectionState == ConnectionState.waiting) {
+                                return const Center(
+                                  child: Padding(
+                                    padding: EdgeInsets.all(16),
+                                    child: CircularProgressIndicator(),
+                                  ),
+                                );
+                              }
+                              
+                              final events = eventSnapshot.data ?? [];
+                              
+                              if (events.isEmpty) {
+                                return const Padding(
+                                  padding: EdgeInsets.symmetric(vertical: 20),
+                                  child: Center(
+                                    child: Text(
+                                      'No registered events yet',
+                                      style: TextStyle(color: Colors.grey, fontSize: 13),
+                                    ),
+                                  ),
+                                );
+                              }
+                              
+                              // Show only first 3 events
+                              final displayEvents = events.take(3).toList();
+                              
+                              return Column(
+                                children: displayEvents.asMap().entries.map((entry) {
+                                  final index = entry.key;
+                                  final doc = entry.value;
+                                  final eventData = doc.data() as Map<String, dynamic>;
+                                  
+                                  // Determine if event is upcoming or past
+                                  final eventDate = eventData['date'] is Timestamp
+                                      ? (eventData['date'] as Timestamp).toDate()
+                                      : DateTime.tryParse(eventData['date']?.toString() ?? '');
+                                  final isUpcoming = eventDate != null && eventDate.isAfter(DateTime.now());
+                                  final badgeText = isUpcoming ? 'UPCOMING' : 'PAST';
+                                  final badgeColor = isUpcoming ? const Color(0xFF2196F3) : Colors.grey;
+                                  
+                                  // Format date display
+                                  String displayDate = '';
+                                  if (eventDate != null) {
+                                    if (isUpcoming && eventDate.difference(DateTime.now()).inDays == 1) {
+                                      displayDate = 'Tomorrow • ${eventData['startTime'] ?? '9:00 AM'}';
+                                    } else {
+                                      displayDate = '${DateFormat('MMM d, yyyy').format(eventDate)} • ${eventData['startTime'] ?? '9:00 AM'}';
+                                    }
+                                  }
+                                  
+                                  return Column(
+                                    children: [
+                                      _EventCard(
+                                        title: eventData['title'] ?? 'Untitled Event',
+                                        subtitle: displayDate,
+                                        badge: badgeText,
+                                        badgeColor: badgeColor,
+                                        imageUrl: eventData['bannerUrl'] ?? '',
+                                      ),
+                                      if (index < displayEvents.length - 1) const Divider(height: 1),
+                                    ],
+                                  );
+                                }).toList(),
+                              );
+                            },
+                          );
+                        },
                       ),
                     ],
                   ),
@@ -380,28 +501,29 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
 
                 const SizedBox(height: 12),
 
+                // ── RED LOG OUT BUTTON ──
                 Padding(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 16, vertical: 8),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                   child: TextButton.icon(
-  onPressed: () async {
-  await FirebaseAuth.instance.signOut();
-  if (context.mounted) {
-    Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute(builder: (_) => const StudentLogin()),
-      (route) => false,
-    );
-  }
-},
-
-  icon: const Icon(Icons.logout, color: kOrange),
-  label: const Text('Log Out',
-      style: TextStyle(
-          color: kOrange,
-          fontSize: 15,
-          fontWeight: FontWeight.w600)),
-),
-
+                    onPressed: () async {
+                      await FirebaseAuth.instance.signOut();
+                      if (context.mounted) {
+                        Navigator.of(context).pushAndRemoveUntil(
+                          MaterialPageRoute(builder: (_) => const StudentLogin()),
+                          (route) => false,
+                        );
+                      }
+                    },
+                    icon: const Icon(Icons.logout, color: Colors.red),
+                    label: const Text(
+                      'Log Out',
+                      style: TextStyle(
+                        color: Colors.red,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
                 ),
                 const SizedBox(height: 16),
               ],
