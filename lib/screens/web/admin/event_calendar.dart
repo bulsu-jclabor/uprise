@@ -105,12 +105,16 @@ class _EventCalendarState extends State<EventCalendar> {
 
   @override
   Widget build(BuildContext context) {
+    final width = MediaQuery.of(context).size.width;
+    final isMobile = width < 720;
+    final isTablet = width >= 720 && width < 1200;
+
     return Scaffold(
       backgroundColor: const Color(0xFFFBFCFE),
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildToolbar(),
+          _buildToolbar(isMobile, isTablet),
           const SizedBox(height: 16),
           Expanded(
             child: SingleChildScrollView(
@@ -128,59 +132,72 @@ class _EventCalendarState extends State<EventCalendar> {
   }
 
   // ── Toolbar (no status filter) ───────────────────────────────────
-  Widget _buildToolbar() {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(28, 24, 28, 0),
-      child: Row(children: [
-        Container(
-          height: 40,
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: const Color(0xFFE2E6EA)),
-            boxShadow: _DS.cardShadow,
+  Widget _buildToolbar(bool isMobile, bool isTablet) {
+    final navAndToday = Row(children: [
+      Container(
+        height: 40,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: const Color(0xFFE2E6EA)),
+          boxShadow: _DS.cardShadow,
+        ),
+        child: Row(children: [
+          _NavButton(
+            icon: Icons.chevron_left_rounded,
+            onTap: () => setState(() {
+              _currentMonth = DateTime(_currentMonth.year, _currentMonth.month - 1);
+            }),
           ),
-          child: Row(children: [
-            _NavButton(
-              icon: Icons.chevron_left_rounded,
-              onTap: () => setState(() {
-                _currentMonth = DateTime(_currentMonth.year, _currentMonth.month - 1);
-              }),
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              child: Text(
-                DateFormat('MMMM yyyy').format(_currentMonth),
-                style: GoogleFonts.beVietnamPro(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w700,
-                  color: const Color(0xFF1A202C),
-                ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: Text(
+              DateFormat('MMMM yyyy').format(_currentMonth),
+              style: GoogleFonts.beVietnamPro(
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
+                color: const Color(0xFF1A202C),
               ),
             ),
-            _NavButton(
-              icon: Icons.chevron_right_rounded,
-              onTap: () => setState(() {
-                _currentMonth = DateTime(_currentMonth.year, _currentMonth.month + 1);
-              }),
-            ),
-          ]),
-        ),
-        const SizedBox(width: 10),
-        OutlinedButton.icon(
-          onPressed: () => setState(() => _currentMonth = DateTime.now()),
-          icon: const Icon(Icons.today_rounded, size: 15),
-          label: Text('Today', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600)),
-          style: OutlinedButton.styleFrom(
-            foregroundColor: UpriseColors.primaryDark,
-            side: BorderSide(color: UpriseColors.primaryDark),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
           ),
+          _NavButton(
+            icon: Icons.chevron_right_rounded,
+            onTap: () => setState(() {
+              _currentMonth = DateTime(_currentMonth.year, _currentMonth.month + 1);
+            }),
+          ),
+        ]),
+      ),
+      const SizedBox(width: 10),
+      OutlinedButton.icon(
+        onPressed: () => setState(() => _currentMonth = DateTime.now()),
+        icon: const Icon(Icons.today_rounded, size: 15),
+        label: Text('Today', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600)),
+        style: OutlinedButton.styleFrom(
+          foregroundColor: UpriseColors.primaryDark,
+          side: BorderSide(color: UpriseColors.primaryDark),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
         ),
-        const Spacer(),
-        _ExportEventsButton(),
-      ]),
+      ),
+    ]);
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(28, 24, 28, 0),
+      child: isMobile
+          ? Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                navAndToday,
+                const SizedBox(height: 10),
+                _ExportEventsButton(),
+              ],
+            )
+          : Row(children: [
+              navAndToday,
+              const Spacer(),
+              _ExportEventsButton(),
+            ]),
     );
   }
 

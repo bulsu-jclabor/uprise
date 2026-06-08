@@ -146,15 +146,19 @@ class _ExternalAccountState extends State<ExternalAccount> {
   // ── Build ──────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
+    final width = MediaQuery.of(context).size.width;
+    final isMobile = width < 720;
+    final isTablet = width >= 720 && width < 1200;
+
     return Scaffold(
       backgroundColor: const Color(0xFFFBFCFE),
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildStatsRow(),
-          _buildToolbar(),
+          _buildStatsRow(isMobile, isTablet),
+          _buildToolbar(isMobile, isTablet),
           const SizedBox(height: 16),
-          Expanded(child: _buildTable()),
+          Expanded(child: _buildTable(isMobile, isTablet)),
           const SizedBox(height: 24),
         ],
       ),
@@ -162,7 +166,7 @@ class _ExternalAccountState extends State<ExternalAccount> {
   }
 
   // ── Stats row ──────────────────────────────────────────────────────
-  Widget _buildStatsRow() {
+  Widget _buildStatsRow(bool isMobile, bool isTablet) {
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance
           .collection('external_requests')
@@ -178,81 +182,95 @@ class _ExternalAccountState extends State<ExternalAccount> {
             if (s == 'rejected') rejected++;
           }
         }
+
+        final cards = [
+          _StatCard(
+            label: 'Total Requests',
+            value: '$total',
+            icon:  Icons.people_rounded,
+            color: UpriseColors.primaryDark,
+          ),
+          _StatCard(
+            label: 'Approved',
+            value: '$approved',
+            icon:  Icons.check_circle_rounded,
+            color: const Color(0xFF059669),
+          ),
+          _StatCard(
+            label: 'Pending',
+            value: '$pending',
+            icon:  Icons.pending_rounded,
+            color: const Color(0xFFD97706),
+          ),
+          _StatCard(
+            label: 'Rejected',
+            value: '$rejected',
+            icon:  Icons.cancel_rounded,
+            color: const Color(0xFFDC2626),
+          ),
+        ];
+
         return Padding(
           padding: const EdgeInsets.fromLTRB(28, 24, 28, 0),
-          child: Row(children: [
-            _StatCard(
-              label: 'Total Requests',
-              value: '$total',
-              icon:  Icons.people_rounded,
-              color: UpriseColors.primaryDark,
-            ),
-            const SizedBox(width: 14),
-            _StatCard(
-              label: 'Approved',
-              value: '$approved',
-              icon:  Icons.check_circle_rounded,
-              color: const Color(0xFF059669),
-            ),
-            const SizedBox(width: 14),
-            _StatCard(
-              label: 'Pending',
-              value: '$pending',
-              icon:  Icons.pending_rounded,
-              color: const Color(0xFFD97706),
-            ),
-            const SizedBox(width: 14),
-            _StatCard(
-              label: 'Rejected',
-              value: '$rejected',
-              icon:  Icons.cancel_rounded,
-              color: const Color(0xFFDC2626),
-            ),
-          ]),
+          child: isMobile
+              ? Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    for (var card in cards) ...[
+                      card,
+                      const SizedBox(height: 14),
+                    ],
+                  ],
+                )
+              : Row(children: [
+                  for (var card in cards) ...[
+                    Expanded(child: card),
+                    const SizedBox(width: 14),
+                  ],
+                ]),
         );
       },
     );
   }
 
   // ── Toolbar ────────────────────────────────────────────────────────
-  Widget _buildToolbar() {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(28, 20, 28, 0),
-      child: Row(children: [
-        Expanded(
-          child: SizedBox(
-            height: 40,
-            child: TextField(
-              controller: _searchController,
-              style: GoogleFonts.beVietnamPro(fontSize: 13),
-              decoration: InputDecoration(
-                hintText: 'Search by name, email, or university…',
-                hintStyle: GoogleFonts.beVietnamPro(
-                    fontSize: 13, color: const Color(0xFF9AA5B4)),
-                prefixIcon: const Icon(Icons.search_rounded,
-                    size: 18, color: Color(0xFF9AA5B4)),
-                filled: true,
-                fillColor: Colors.white,
-                contentPadding: const EdgeInsets.symmetric(
-                    vertical: 0, horizontal: 16),
-                border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide:
-                        const BorderSide(color: Color(0xFFE2E6EA))),
-                enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide:
-                        const BorderSide(color: Color(0xFFE2E6EA))),
-                focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: BorderSide(
-                        color: UpriseColors.primaryDark, width: 1.5)),
-              ),
-              onChanged: (_) => setState(() => _currentPage = 1),
-            ),
-          ),
+  Widget _buildToolbar(bool isMobile, bool isTablet) {
+    final searchField = SizedBox(
+      height: 40,
+      child: TextField(
+        controller: _searchController,
+        style: GoogleFonts.beVietnamPro(fontSize: 13),
+        decoration: InputDecoration(
+          hintText: 'Search by name, email, or university…',
+          hintStyle: GoogleFonts.beVietnamPro(
+              fontSize: 13, color: const Color(0xFF9AA5B4)),
+          prefixIcon: const Icon(Icons.search_rounded,
+              size: 18, color: Color(0xFF9AA5B4)),
+          filled: true,
+          fillColor: Colors.white,
+          contentPadding: const EdgeInsets.symmetric(
+              vertical: 0, horizontal: 16),
+          border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide:
+                  const BorderSide(color: Color(0xFFE2E6EA))),
+          enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide:
+                  const BorderSide(color: Color(0xFFE2E6EA))),
+          focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: BorderSide(
+                  color: UpriseColors.primaryDark, width: 1.5)),
         ),
-        const SizedBox(width: 10),
+        onChanged: (_) => setState(() => _currentPage = 1),
+      ),
+    );
+
+    final actions = Wrap(
+      spacing: 10,
+      runSpacing: 10,
+      children: [
         _FilterDropdown(
           value: _statusFilter,
           items: const ['All', 'Pending', 'Approved', 'Rejected'],
@@ -261,18 +279,35 @@ class _ExternalAccountState extends State<ExternalAccount> {
             _currentPage  = 1;
           }),
         ),
-        const SizedBox(width: 10),
         _ExportButton(
           statusFilter: _statusFilter,
           searchTerm:   _searchController.text.trim(),
         ),
-      ]),
+      ],
+    );
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(28, 20, 28, 0),
+      child: isMobile
+          ? Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                searchField,
+                const SizedBox(height: 10),
+                actions,
+              ],
+            )
+          : Row(children: [
+              Expanded(child: searchField),
+              const SizedBox(width: 10),
+              actions,
+            ]),
     );
   }
 
   // ── Table ──────────────────────────────────────────────────────────
-  Widget _buildTable() {
-    return StreamBuilder<QuerySnapshot>(
+  Widget _buildTable(bool isMobile, bool isTablet) {
+    final tableContent = StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance
           .collection('external_requests')
           .orderBy('requestDate', descending: true)
@@ -343,6 +378,8 @@ class _ExternalAccountState extends State<ExternalAccount> {
         );
       },
     );
+
+    return tableContent;
   }
 
   Widget _buildTableHeader() {

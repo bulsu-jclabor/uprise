@@ -733,18 +733,26 @@ class _DashboardHomeState extends State<DashboardHome> {
   // ── Build ─────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
+    final width = MediaQuery.of(context).size.width;
+    final isMobile = width < 720;
+    final isTablet = width >= 720 && width < 1200;
+
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(28, 24, 28, 32),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildWelcomeHeader(),
+          _buildWelcomeHeader(isMobile),
           const SizedBox(height: 24),
-          _buildStatCards(),
+          _buildStatCards(isMobile, isTablet),
           const SizedBox(height: 24),
-          _buildChartCard(),
+          _buildChartCard(isMobile),
           const SizedBox(height: 24),
-          Row(
+          if (isMobile) ...[
+            _buildUpcomingEvents(),
+            const SizedBox(height: 20),
+            _buildRecentActivity(),
+          ] else Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(child: _buildUpcomingEvents()),
@@ -757,7 +765,7 @@ class _DashboardHomeState extends State<DashboardHome> {
     );
   }
 
-  Widget _buildWelcomeHeader() {
+  Widget _buildWelcomeHeader(bool isMobile) {
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
@@ -771,10 +779,8 @@ class _DashboardHomeState extends State<DashboardHome> {
           BoxShadow(color: UpriseColors.primaryDark.withOpacity(0.25), blurRadius: 20, offset: const Offset(0, 6)),
         ],
       ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
+      child: isMobile
+          ? Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text('Administrator Dashboard',
@@ -784,128 +790,178 @@ class _DashboardHomeState extends State<DashboardHome> {
                 Text("Welcome back. Here's what's happening in the CICT community today.",
                     style: GoogleFonts.beVietnamPro(
                         fontSize: 13, color: Colors.white.withOpacity(0.80), height: 1.5)),
+                const SizedBox(height: 20),
+                Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: const Icon(Icons.admin_panel_settings_rounded, color: Colors.white, size: 36),
+                ),
+              ],
+            )
+          : Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Administrator Dashboard',
+                          style: GoogleFonts.beVietnamPro(
+                              fontSize: 22, fontWeight: FontWeight.w800, color: Colors.white)),
+                      const SizedBox(height: 6),
+                      Text("Welcome back. Here's what's happening in the CICT community today.",
+                          style: GoogleFonts.beVietnamPro(
+                              fontSize: 13, color: Colors.white.withOpacity(0.80), height: 1.5)),
+                    ],
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: const Icon(Icons.admin_panel_settings_rounded, color: Colors.white, size: 36),
+                ),
               ],
             ),
-          ),
-          Container(
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.15),
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: const Icon(Icons.admin_panel_settings_rounded, color: Colors.white, size: 36),
-          ),
-        ],
-      ),
     );
   }
 
-  Widget _buildStatCards() {
+  Widget _buildStatCards(bool isMobile, bool isTablet) {
+    final cardWidgets = [
+      _buildStatCard('Active Orgs', _organizationsStream, UpriseColors.primaryDark, Icons.business_rounded),
+      _buildStatCard('Active Events', _eventsStream, UpriseColors.success, Icons.event_rounded),
+      _buildStatCard('Pending Proposals', _proposalsStream, UpriseColors.warning, Icons.pending_actions_rounded),
+      _buildStatCard('Overdue Reports', _reportsStream, UpriseColors.error, Icons.warning_amber_rounded),
+      _buildUpcomingEventsStatCard(),
+    ];
+
+    if (isMobile) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          for (var card in cardWidgets) ...[
+            card,
+            const SizedBox(height: 10),
+          ],
+        ],
+      );
+    }
+
+    final width = MediaQuery.of(context).size.width;
+    if (isTablet) {
+      final cardWidth = (width - 28 * 2 - 10) / 2;
+      return Wrap(
+        spacing: 10,
+        runSpacing: 10,
+        children: cardWidgets
+            .map((card) => SizedBox(width: cardWidth, child: card))
+            .toList(),
+      );
+    }
+
     return Row(
       children: [
-        _buildStatCard('Active Orgs', _organizationsStream, UpriseColors.primaryDark, Icons.business_rounded),
-        const SizedBox(width: 10),
-        _buildStatCard('Active Events', _eventsStream, UpriseColors.success, Icons.event_rounded),
-        const SizedBox(width: 10),
-        _buildStatCard('Pending Proposals', _proposalsStream, UpriseColors.warning, Icons.pending_actions_rounded),
-        const SizedBox(width: 10),
-        _buildStatCard('Overdue Reports', _reportsStream, UpriseColors.error, Icons.warning_amber_rounded),
-        const SizedBox(width: 10),
-        // Upcoming Events stat card - filters in memory
-        Expanded(
-          child: StreamBuilder<QuerySnapshot>(
-            stream: _allEventsStream,
-            builder: (ctx, snap) {
-              final upcomingCount = snap.hasData ? _getUpcomingEvents(snap.data!).length : 0;
-              final loading = snap.connectionState == ConnectionState.waiting;
-              
-              return Container(
-                padding: const EdgeInsets.all(18),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(_DS.radiusMd),
-                  border: Border.all(color: const Color(0xFFE8ECF0)),
-                  boxShadow: _DS.cardShadow,
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                      Container(
-                        width: 40, height: 40,
-                        decoration: BoxDecoration(
-                          color: UpriseColors.info.withOpacity(0.10),
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: Icon(Icons.upcoming_rounded, color: UpriseColors.info, size: 20),
-                      ),
-                      if (loading)
-                        SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: UpriseColors.info))
-                      else
-                        Text('$upcomingCount',
-                            style: GoogleFonts.beVietnamPro(
-                                fontSize: 28, fontWeight: FontWeight.w800, color: const Color(0xFF1A202C))),
-                    ]),
-                    const SizedBox(height: 12),
-                    Text('Upcoming Events',
-                        style: GoogleFonts.beVietnamPro(fontSize: 11, color: const Color(0xFF64748B), fontWeight: FontWeight.w600)),
-                  ],
-                ),
-              );
-            },
-          ),
-        ),
+        for (var card in cardWidgets) ...[
+          Expanded(child: card),
+          const SizedBox(width: 10),
+        ],
       ],
     );
   }
 
   Widget _buildStatCard(String label, Stream<QuerySnapshot> stream, Color color, IconData icon) {
-    return Expanded(
-      child: StreamBuilder<QuerySnapshot>(
-        stream: stream,
-        builder: (ctx, snap) {
-          final count = snap.hasData ? snap.data!.docs.length : 0;
-          final loading = snap.connectionState == ConnectionState.waiting;
-          
-          return Container(
-            padding: const EdgeInsets.all(18),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(_DS.radiusMd),
-              border: Border.all(color: const Color(0xFFE8ECF0)),
-              boxShadow: _DS.cardShadow,
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                  Container(
-                    width: 40, height: 40,
-                    decoration: BoxDecoration(
-                      color: color.withOpacity(0.10),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Icon(icon, color: color, size: 20),
+    return StreamBuilder<QuerySnapshot>(
+      stream: stream,
+      builder: (ctx, snap) {
+        final count = snap.hasData ? snap.data!.docs.length : 0;
+        final loading = snap.connectionState == ConnectionState.waiting;
+        
+        return Container(
+          padding: const EdgeInsets.all(18),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(_DS.radiusMd),
+            border: Border.all(color: const Color(0xFFE8ECF0)),
+            boxShadow: _DS.cardShadow,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                Container(
+                  width: 40, height: 40,
+                  decoration: BoxDecoration(
+                    color: color.withOpacity(0.10),
+                    borderRadius: BorderRadius.circular(10),
                   ),
-                  if (loading)
-                    SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: color))
-                  else
-                    Text('$count',
-                        style: GoogleFonts.beVietnamPro(
-                            fontSize: 28, fontWeight: FontWeight.w800, color: const Color(0xFF1A202C))),
-                ]),
-                const SizedBox(height: 12),
-                Text(label,
-                    style: GoogleFonts.beVietnamPro(fontSize: 11, color: const Color(0xFF64748B), fontWeight: FontWeight.w600)),
-              ],
-            ),
-          );
-        },
-      ),
+                  child: Icon(icon, color: color, size: 20),
+                ),
+                if (loading)
+                  SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: color))
+                else
+                  Text('$count',
+                      style: GoogleFonts.beVietnamPro(
+                          fontSize: 28, fontWeight: FontWeight.w800, color: const Color(0xFF1A202C))),
+              ]),
+              const SizedBox(height: 12),
+              Text(label,
+                  style: GoogleFonts.beVietnamPro(fontSize: 11, color: const Color(0xFF64748B), fontWeight: FontWeight.w600)),
+            ],
+          ),
+        );
+      },
     );
   }
 
-  Widget _buildChartCard() {
+  Widget _buildUpcomingEventsStatCard() {
+    return StreamBuilder<QuerySnapshot>(
+      stream: _allEventsStream,
+      builder: (ctx, snap) {
+        final upcomingCount = snap.hasData ? _getUpcomingEvents(snap.data!).length : 0;
+        final loading = snap.connectionState == ConnectionState.waiting;
+        
+        return Container(
+          padding: const EdgeInsets.all(18),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(_DS.radiusMd),
+            border: Border.all(color: const Color(0xFFE8ECF0)),
+            boxShadow: _DS.cardShadow,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                Container(
+                  width: 40, height: 40,
+                  decoration: BoxDecoration(
+                    color: UpriseColors.info.withOpacity(0.10),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(Icons.upcoming_rounded, color: UpriseColors.info, size: 20),
+                ),
+                if (loading)
+                  SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: UpriseColors.info))
+                else
+                  Text('$upcomingCount',
+                      style: GoogleFonts.beVietnamPro(
+                          fontSize: 28, fontWeight: FontWeight.w800, color: const Color(0xFF1A202C))),
+              ]),
+              const SizedBox(height: 12),
+              Text('Upcoming Events',
+                  style: GoogleFonts.beVietnamPro(fontSize: 11, color: const Color(0xFF64748B), fontWeight: FontWeight.w600)),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildChartCard(bool isMobile) {
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
@@ -956,18 +1012,20 @@ class _DashboardHomeState extends State<DashboardHome> {
           ),
           const SizedBox(height: 20),
 
-          Row(
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
             children: List.generate(6, (i) {
               final m = _monthLabel(i);
               final isActive = _selectedMonth == m;
-              return Expanded(
+              return SizedBox(
+                width: isMobile ? 96 : null,
                 child: GestureDetector(
                   onTap: () {
                     if (mounted) setState(() => _selectedMonth = m);
                   },
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 150),
-                    margin: EdgeInsets.only(left: i == 0 ? 0 : 6),
                     padding: const EdgeInsets.symmetric(vertical: 8),
                     decoration: BoxDecoration(
                       color: isActive ? UpriseColors.primaryDark : const Color(0xFFF8F9FB),

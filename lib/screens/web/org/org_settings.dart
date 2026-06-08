@@ -16,9 +16,6 @@ import '../../../theme/app_theme.dart';
 // ─────────────────────────────────────────────────────────────────────────────
 class _DS {
   static const double radiusSm = 8;
-  static const double radiusMd = 12;
-  static const double radiusLg = 16;
-  static const double radiusPill = 100;
 
   static final cardShadow = [
     BoxShadow(
@@ -113,12 +110,15 @@ class _OrgSettingsScreenState extends State<OrgSettingsScreen>
 
   @override
   Widget build(BuildContext context) {
+    final width = MediaQuery.of(context).size.width;
+    final horizontalPadding = width < 720 ? 16.0 : 28.0;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         // ── Page header ──────────────────────────────────────
         Padding(
-          padding: const EdgeInsets.fromLTRB(28, 24, 28, 0),
+          padding: EdgeInsets.fromLTRB(horizontalPadding, 24, horizontalPadding, 0),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -142,7 +142,7 @@ class _OrgSettingsScreenState extends State<OrgSettingsScreen>
 
         // ── Tab bar (standard bottom border, consistent colors) ──
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 28),
+          padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
           child: Container(
             decoration: const BoxDecoration(
               border: Border(
@@ -262,8 +262,10 @@ class _NotificationsTabState extends State<_NotificationsTab> {
   @override
   Widget build(BuildContext context) {
     if (_isLoading) return const Center(child: CircularProgressIndicator());
+    final width = MediaQuery.of(context).size.width;
+    final horizontalPadding = width < 720 ? 16.0 : 28.0;
     return SingleChildScrollView(
-      padding: const EdgeInsets.symmetric(horizontal: 28),
+      padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
       child: Container(
         margin: const EdgeInsets.only(bottom: 24),
         padding: const EdgeInsets.all(24),
@@ -487,8 +489,10 @@ class _SecurityTabState extends State<_SecurityTab> {
 
   @override
   Widget build(BuildContext context) {
+    final width = MediaQuery.of(context).size.width;
+    final horizontalPadding = width < 720 ? 16.0 : 28.0;
     return SingleChildScrollView(
-      padding: const EdgeInsets.symmetric(horizontal: 28),
+      padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
       child: Column(
         children: [
           // Password change card

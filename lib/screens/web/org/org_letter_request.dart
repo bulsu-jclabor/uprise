@@ -2,7 +2,6 @@
 // ignore_for_file: deprecated_member_use, use_build_context_synchronously
 
 import 'dart:convert';
-import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -19,13 +18,9 @@ import 'export_pdf.dart';
 // ─────────────────────────────────────────────────────────────────────────────
 class _DS {
   static const double radiusSm   = 8;
-  static const double radiusMd   = 12;
-  static const double radiusLg   = 16;
   static const double radiusPill = 100;
 
   static const Color primary     = Color(0xFFB45309);
-  static const Color primaryDark = Color(0xFF92400E);
-  static const Color primaryBg   = Color(0xFFFEF3C7);
 
   static final cardShadow = [
     BoxShadow(
@@ -210,28 +205,35 @@ class _OrgLetterRequestScreenState extends State<OrgLetterRequestScreen> {
   // ── Build ─────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
+    final width = MediaQuery.of(context).size.width;
+    final isMobile = width < 720;
+    final isTablet = width >= 720 && width < 1200;
+    final horizontalPadding = isMobile ? 16.0 : (isTablet ? 22.0 : 28.0);
+
     return Scaffold(
       backgroundColor: const Color(0xFFFBFCFE),
-      body: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _buildStatsRow(),
-          _buildToolbar(),
-          const SizedBox(height: 16),
-          Expanded(child: _buildTable()),
-          const SizedBox(height: 24),
-        ],
+      body: Padding(
+        padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildStatsRow(isMobile, horizontalPadding),
+            _buildToolbar(isMobile, isTablet, horizontalPadding),
+            const SizedBox(height: 16),
+            Expanded(child: _buildTable(horizontalPadding)),
+            const SizedBox(height: 24),
+          ],
+        ),
       ),
     );
   }
 
   // ── Stats Row ─────────────────────────────────────────────────────
-  Widget _buildStatsRow() {
+  Widget _buildStatsRow(bool isMobile, double horizontalPadding) {
     return StreamBuilder<QuerySnapshot>(
       stream: _requestsStream,
       builder: (context, snapshot) {
-        int total = 0, pending = 0, approved = 0,
-            rejected = 0, revision = 0, resubmitted = 0;
+        int total = 0, pending = 0, approved = 0, rejected = 0, revision = 0, resubmitted = 0; // ignore: unused_local_variable
         if (snapshot.hasData) {
           for (final doc in snapshot.data!.docs) {
             total++;
@@ -244,124 +246,191 @@ class _OrgLetterRequestScreenState extends State<OrgLetterRequestScreen> {
           }
         }
         return Padding(
-          padding: const EdgeInsets.fromLTRB(28, 24, 28, 0),
-          child: Row(children: [
-            _StatCard(
-              label: 'Total Requests',
-              value: '$total',
-              icon: Icons.description_outlined,
-              color: _DS.primary,
-            ),
-            const SizedBox(width: 14),
-            _StatCard(
-              label: 'Pending',
-              value: '$pending',
-              icon: Icons.pending_outlined,
-              color: const Color(0xFFD97706),
-            ),
-            const SizedBox(width: 14),
-            _StatCard(
-              label: 'Approved',
-              value: '$approved',
-              icon: Icons.check_circle_outline,
-              color: const Color(0xFF059669),
-            ),
-            const SizedBox(width: 14),
-            _StatCard(
-              label: 'Needs Revision',
-              value: '$revision',
-              icon: Icons.edit_note_rounded,
-              color: const Color(0xFF2563EB),
-            ),
-            const SizedBox(width: 14),
-            _StatCard(
-              label: 'Resubmitted',
-              value: '$resubmitted',
-              icon: Icons.refresh_rounded,
-              color: const Color(0xFF7C3AED),
-            ),
-          ]),
+          padding: EdgeInsets.fromLTRB(horizontalPadding, 24, horizontalPadding, 0),
+          child: isMobile
+              ? Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _StatCard(
+                      label: 'Total Requests',
+                      value: '$total',
+                      icon: Icons.description_outlined,
+                      color: _DS.primary,
+                    ),
+                    const SizedBox(height: 12),
+                    _StatCard(
+                      label: 'Pending',
+                      value: '$pending',
+                      icon: Icons.pending_outlined,
+                      color: const Color(0xFFD97706),
+                    ),
+                    const SizedBox(height: 12),
+                    _StatCard(
+                      label: 'Approved',
+                      value: '$approved',
+                      icon: Icons.check_circle_outline,
+                      color: const Color(0xFF059669),
+                    ),
+                    const SizedBox(height: 12),
+                    _StatCard(
+                      label: 'Needs Revision',
+                      value: '$revision',
+                      icon: Icons.edit_note_rounded,
+                      color: const Color(0xFF2563EB),
+                    ),
+                    const SizedBox(height: 12),
+                    _StatCard(
+                      label: 'Resubmitted',
+                      value: '$resubmitted',
+                      icon: Icons.refresh_rounded,
+                      color: const Color(0xFF7C3AED),
+                    ),
+                  ],
+                )
+              : Row(children: [
+                  _StatCard(
+                    label: 'Total Requests',
+                    value: '$total',
+                    icon: Icons.description_outlined,
+                    color: _DS.primary,
+                  ),
+                  const SizedBox(width: 14),
+                  _StatCard(
+                    label: 'Pending',
+                    value: '$pending',
+                    icon: Icons.pending_outlined,
+                    color: const Color(0xFFD97706),
+                  ),
+                  const SizedBox(width: 14),
+                  _StatCard(
+                    label: 'Approved',
+                    value: '$approved',
+                    icon: Icons.check_circle_outline,
+                    color: const Color(0xFF059669),
+                  ),
+                  const SizedBox(width: 14),
+                  _StatCard(
+                    label: 'Needs Revision',
+                    value: '$revision',
+                    icon: Icons.edit_note_rounded,
+                    color: const Color(0xFF2563EB),
+                  ),
+                  const SizedBox(width: 14),
+                  _StatCard(
+                    label: 'Resubmitted',
+                    value: '$resubmitted',
+                    icon: Icons.refresh_rounded,
+                    color: const Color(0xFF7C3AED),
+                  ),
+                ]),
         );
       },
     );
   }
 
   // ── Toolbar ───────────────────────────────────────────────────────
-  Widget _buildToolbar() {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(28, 20, 28, 0),
-      child: Row(
-        children: [
-          Expanded(
-            child: SizedBox(
-              height: 40,
-              child: TextField(
-                controller: _searchController,
-                style: GoogleFonts.beVietnamPro(fontSize: 13),
-                decoration: InputDecoration(
-                  hintText: 'Search by ID, subject, or message…',
-                  hintStyle: GoogleFonts.beVietnamPro(
-                      fontSize: 13, color: const Color(0xFF9AA5B4)),
-                  prefixIcon: const Icon(Icons.search_rounded,
-                      size: 18, color: Color(0xFF9AA5B4)),
-                  filled: true,
-                  fillColor: Colors.white,
-                  contentPadding:
-                      const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: const BorderSide(color: Color(0xFFE2E6EA)),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: const BorderSide(color: Color(0xFFE2E6EA)),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: const BorderSide(color: _DS.primary, width: 1.5),
-                  ),
-                ),
-                onChanged: (_) => setState(() => _currentPage = 1),
-              ),
-            ),
+  Widget _buildToolbar(bool isMobile, bool isTablet, double horizontalPadding) {
+    final fieldWidth = isMobile ? double.infinity : (isTablet ? 260.0 : 340.0);
+    final searchField = SizedBox(
+      width: fieldWidth,
+      height: 40,
+      child: TextField(
+        controller: _searchController,
+        style: GoogleFonts.beVietnamPro(fontSize: 13),
+        decoration: InputDecoration(
+          hintText: 'Search by ID, subject, or message…',
+          hintStyle: GoogleFonts.beVietnamPro(
+              fontSize: 13, color: const Color(0xFF9AA5B4)),
+          prefixIcon: const Icon(Icons.search_rounded,
+              size: 18, color: Color(0xFF9AA5B4)),
+          filled: true,
+          fillColor: Colors.white,
+          contentPadding:
+              const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: const BorderSide(color: Color(0xFFE2E6EA)),
           ),
-          const SizedBox(width: 10),
-          _FilterDropdown(
-            value: _statusFilter,
-            items: const [
-              'All',
-              'Pending',
-              'Approved',
-              'Rejected',
-              'Needs Revision',
-              'Resubmitted',
-            ],
-            hint: 'Status',
-            icon: Icons.tune_rounded,
-            onChanged: (v) => setState(() {
-              _statusFilter = v!;
-              _currentPage = 1;
-            }),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: const BorderSide(color: Color(0xFFE2E6EA)),
           ),
-          const SizedBox(width: 10),
-          _ExportButton(
-            orgId: widget.orgId,
-            statusFilter: _statusFilter,
-            searchTerm: _searchController.text.trim(),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: const BorderSide(color: _DS.primary, width: 1.5),
           ),
-          const SizedBox(width: 10),
-          _ToolbarButton(
-            label: 'New Request',
-            icon: Icons.add_rounded,
-            onPressed: _openNewRequestModal,
-          ),
+        ),
+        onChanged: (_) => setState(() => _currentPage = 1),
+      ),
+    );
+
+    final controls = [
+      _FilterDropdown(
+        value: _statusFilter,
+        items: const [
+          'All',
+          'Pending',
+          'Approved',
+          'Rejected',
+          'Needs Revision',
+          'Resubmitted',
         ],
+        hint: 'Status',
+        icon: Icons.tune_rounded,
+        onChanged: (v) => setState(() {
+          _statusFilter = v!;
+          _currentPage = 1;
+        }),
+      ),
+      _ExportButton(
+        orgId: widget.orgId,
+        statusFilter: _statusFilter,
+        searchTerm: _searchController.text.trim(),
+      ),
+      _ToolbarButton(
+        label: 'New Request',
+        icon: Icons.add_rounded,
+        onPressed: _openNewRequestModal,
+      ),
+    ];
+
+    return Padding(
+      padding: EdgeInsets.fromLTRB(horizontalPadding, 20, horizontalPadding, 0),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          if (constraints.maxWidth > 980) {
+            return Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Expanded(child: searchField),
+                const SizedBox(width: 12),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: controls
+                      .expand((widget) => [widget, const SizedBox(width: 10)])
+                      .toList()
+                    ..removeLast(),
+                ),
+              ],
+            );
+          }
+
+          return Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              searchField,
+              ...controls,
+            ],
+          );
+        },
       ),
     );
   }
 
   // ── Table ─────────────────────────────────────────────────────────
-  Widget _buildTable() {
+  Widget _buildTable(double horizontalPadding) {
     return StreamBuilder<QuerySnapshot>(
       stream: _requestsStream,
       builder: (context, snapshot) {
@@ -414,7 +483,7 @@ class _OrgLetterRequestScreenState extends State<OrgLetterRequestScreen> {
             : requests.sublist(start, end);
 
         return Container(
-          margin: const EdgeInsets.symmetric(horizontal: 28),
+          margin: EdgeInsets.zero,
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(14),

@@ -117,16 +117,20 @@ class _ActivityLogsState extends State<ActivityLogs> {
   // ── Build ─────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
+    final width = MediaQuery.of(context).size.width;
+    final isMobile = width < 720;
+    final isTablet = width >= 720 && width < 1200;
+
     return Scaffold(
       backgroundColor: const Color(0xFFFBFCFE),
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _buildHeader(),
-          _buildStatsRow(),
-          _buildToolbar(),
+          _buildStatsRow(isMobile, isTablet),
+          _buildToolbar(isMobile, isTablet),
           const SizedBox(height: 16),
-          Expanded(child: _buildTable()),
+          Expanded(child: _buildTable(isMobile, isTablet)),
           const SizedBox(height: 24),
         ],
       ),
@@ -180,7 +184,7 @@ class _ActivityLogsState extends State<ActivityLogs> {
   }
 
   // ── Stats row ─────────────────────────────────────────────────────
-  Widget _buildStatsRow() {
+  Widget _buildStatsRow(bool isMobile, bool isTablet) {
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance.collection('activity_logs').snapshots(),
       builder: (context, snapshot) {
@@ -207,114 +211,141 @@ class _ActivityLogsState extends State<ActivityLogs> {
           }
         }
 
+        final cards = [
+          _StatCard(
+            label: 'Logs (Last 24 h)',
+            value: '$total24h',
+            icon: Icons.receipt_long_rounded,
+            color: UpriseColors.primaryDark,
+            subtitle: 'Recent activity',
+          ),
+          _StatCard(
+            label: 'Critical Actions',
+            value: '$critical',
+            icon: Icons.warning_amber_rounded,
+            color: const Color(0xFF9333EA),
+            subtitle: 'Require review',
+          ),
+          _StatCard(
+            label: 'Warnings',
+            value: '$warnings',
+            icon: Icons.info_outline_rounded,
+            color: const Color(0xFFD97706),
+            subtitle: 'Flagged events',
+          ),
+          _StatCard(
+            label: 'Failed Attempts',
+            value: '$failed',
+            icon: Icons.block_rounded,
+            color: const Color(0xFFDC2626),
+            subtitle: 'Errors & unauthorized',
+          ),
+        ];
+
         return Padding(
           padding: const EdgeInsets.fromLTRB(28, 20, 28, 0),
-          child: Row(children: [
-            _StatCard(
-              label: 'Logs (Last 24 h)',
-              value: '$total24h',
-              icon: Icons.receipt_long_rounded,
-              color: UpriseColors.primaryDark,
-              subtitle: 'Recent activity',
-            ),
-            const SizedBox(width: 14),
-            _StatCard(
-              label: 'Critical Actions',
-              value: '$critical',
-              icon: Icons.warning_amber_rounded,
-              color: const Color(0xFF9333EA),
-              subtitle: 'Require review',
-            ),
-            const SizedBox(width: 14),
-            _StatCard(
-              label: 'Warnings',
-              value: '$warnings',
-              icon: Icons.info_outline_rounded,
-              color: const Color(0xFFD97706),
-              subtitle: 'Flagged events',
-            ),
-            const SizedBox(width: 14),
-            _StatCard(
-              label: 'Failed Attempts',
-              value: '$failed',
-              icon: Icons.block_rounded,
-              color: const Color(0xFFDC2626),
-              subtitle: 'Errors & unauthorized',
-            ),
-          ]),
+          child: isMobile
+              ? Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    for (var card in cards) ...[
+                      card,
+                      const SizedBox(height: 14),
+                    ],
+                  ],
+                )
+              : Row(children: [
+                  for (var card in cards) ...[
+                    Expanded(child: card),
+                    const SizedBox(width: 14),
+                  ],
+                ]),
         );
       },
     );
   }
 
   // ── Toolbar ───────────────────────────────────────────────────────
-  Widget _buildToolbar() {
+  Widget _buildToolbar(bool isMobile, bool isTablet) {
+    final searchField = SizedBox(
+      height: 40,
+      child: TextField(
+        controller: _searchController,
+        style: GoogleFonts.beVietnamPro(fontSize: 13),
+        decoration: InputDecoration(
+          hintText: 'Search user, action, module, org…',
+          hintStyle: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF9AA5B4)),
+          prefixIcon: const Icon(Icons.search_rounded, size: 18, color: Color(0xFF9AA5B4)),
+          filled: true,
+          fillColor: Colors.white,
+          contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: const BorderSide(color: Color(0xFFE2E6EA)),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: const BorderSide(color: Color(0xFFE2E6EA)),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: BorderSide(color: UpriseColors.primaryDark, width: 1.5),
+          ),
+        ),
+        onChanged: (_) => setState(() => _currentPage = 1),
+      ),
+    );
+
+    final filters = Wrap(
+      spacing: 10,
+      runSpacing: 10,
+      children: [
+        _FilterDropdown(
+          value: _selectedModule,
+          items: _modules,
+          hint: 'Module',
+          onChanged: (v) => setState(() { _selectedModule = v!; _currentPage = 1; }),
+        ),
+        _FilterDropdown(
+          value: _dateRange,
+          items: _dateRanges,
+          hint: 'Date',
+          onChanged: (v) => setState(() { _dateRange = v!; _currentPage = 1; }),
+        ),
+        _FilterDropdown(
+          value: _severity,
+          items: _severities,
+          hint: 'Severity',
+          onChanged: (v) => setState(() { _severity = v!; _currentPage = 1; }),
+        ),
+        _ExportLogsButton(),
+      ],
+    );
+
     return Padding(
       padding: const EdgeInsets.fromLTRB(28, 20, 28, 0),
-      child: Row(
-        children: [
-          // Search
-          Expanded(
-            child: SizedBox(
-              height: 40,
-              child: TextField(
-                controller: _searchController,
-                style: GoogleFonts.beVietnamPro(fontSize: 13),
-                decoration: InputDecoration(
-                  hintText: 'Search user, action, module, org…',
-                  hintStyle: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF9AA5B4)),
-                  prefixIcon: const Icon(Icons.search_rounded, size: 18, color: Color(0xFF9AA5B4)),
-                  filled: true,
-                  fillColor: Colors.white,
-                  contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: const BorderSide(color: Color(0xFFE2E6EA)),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: const BorderSide(color: Color(0xFFE2E6EA)),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: BorderSide(color: UpriseColors.primaryDark, width: 1.5),
-                  ),
-                ),
-                onChanged: (_) => setState(() => _currentPage = 1),
-              ),
+      child: isMobile
+          ? Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                searchField,
+                const SizedBox(height: 10),
+                filters,
+              ],
+            )
+          : Row(
+              children: [
+                Expanded(child: searchField),
+                const SizedBox(width: 10),
+                filters,
+              ],
             ),
-          ),
-          const SizedBox(width: 10),
-          _FilterDropdown(
-            value: _selectedModule,
-            items: _modules,
-            hint: 'Module',
-            onChanged: (v) => setState(() { _selectedModule = v!; _currentPage = 1; }),
-          ),
-          const SizedBox(width: 10),
-          _FilterDropdown(
-            value: _dateRange,
-            items: _dateRanges,
-            hint: 'Date',
-            onChanged: (v) => setState(() { _dateRange = v!; _currentPage = 1; }),
-          ),
-          const SizedBox(width: 10),
-          _FilterDropdown(
-            value: _severity,
-            items: _severities,
-            hint: 'Severity',
-            onChanged: (v) => setState(() { _severity = v!; _currentPage = 1; }),
-          ),
-          const SizedBox(width: 10),
-          _ExportLogsButton(),
-        ],
-      ),
     );
   }
 
   // ── Table ─────────────────────────────────────────────────────────
-  Widget _buildTable() {
-    return StreamBuilder<QuerySnapshot>(
+  Widget _buildTable(bool isMobile, bool isTablet) {
+    final tableContent = StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance
           .collection('activity_logs')
           .orderBy('timestamp', descending: true)
@@ -432,6 +463,10 @@ class _ActivityLogsState extends State<ActivityLogs> {
         );
       },
     );
+
+    return isMobile
+        ? SingleChildScrollView(scrollDirection: Axis.horizontal, child: tableContent)
+        : tableContent;
   }
 
   Widget _buildTableHeader() {

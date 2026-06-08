@@ -19,14 +19,11 @@ import '../../../widgets/admin_export_button.dart';
 class _C {
   // Primary brand
   static const Color primaryDark  = Color(0xFFB45309);
-  static const Color primaryLight = Color(0xFFD97706);
-  static const Color accent       = Color(0xFFF59E0B);
 
   // Surfaces
   static const Color white        = Color(0xFFFFFFFF);
   static const Color surface      = Color(0xFFF8F9FB);
   static const Color pageBg       = Color(0xFFFBFCFE);
-  static const Color feedBg       = Color(0xFFF0F2F5); // Facebook-grey feed bg
 
   // Borders
   static const Color border       = Color(0xFFE8ECF0);
@@ -51,7 +48,6 @@ class _C {
 
 class _DS {
   static const double radiusSm   = 8;
-  static const double radiusMd   = 12;
   static const double radiusLg   = 16;
   static const double radiusPill = 100;
 
@@ -397,13 +393,17 @@ class _OrgAnnouncementsScreenState extends State<OrgAnnouncementsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final width = MediaQuery.of(context).size.width;
+    final isMobile = width < 720;
+    final isTablet = width >= 720 && width < 1200;
+
     return Scaffold(
       backgroundColor: _C.pageBg,
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildStatsRow(),
-          _buildToolbar(),
+          _buildStatsRow(isMobile, isTablet),
+          _buildToolbar(isMobile, isTablet),
           const SizedBox(height: 0),
           Expanded(child: _buildFeed()),
           const SizedBox(height: 24),
@@ -413,7 +413,7 @@ class _OrgAnnouncementsScreenState extends State<OrgAnnouncementsScreen> {
   }
 
   // ── Stats row (identical pattern to StudentAccounts) ──────────────────────
-  Widget _buildStatsRow() {
+  Widget _buildStatsRow(bool isMobile, bool isTablet) {
     return StreamBuilder<QuerySnapshot>(
       stream: _stream,
       builder: (context, snap) {
@@ -427,56 +427,76 @@ class _OrgAnnouncementsScreenState extends State<OrgAnnouncementsScreen> {
             if (atts != null && atts.isNotEmpty) withAttachments++;
           }
         }
+
+        final cards = [
+          _StatCard(label: 'Total Posts', value: '$total', icon: Icons.campaign_rounded, color: _C.primaryDark),
+          _StatCard(label: 'Pinned', value: '$pinned', icon: Icons.push_pin_rounded, color: _C.warning),
+          _StatCard(label: 'With Files', value: '$withAttachments', icon: Icons.attach_file_rounded, color: _C.info),
+        ];
+
         return Padding(
-          padding: const EdgeInsets.fromLTRB(28, 24, 28, 0),
-          child: Row(children: [
-            _StatCard(label: 'Total Posts',    value: '$total',          icon: Icons.campaign_rounded,    color: _C.primaryDark),
-            const SizedBox(width: 14),
-            _StatCard(label: 'Pinned',         value: '$pinned',         icon: Icons.push_pin_rounded,    color: _C.warning),
-            const SizedBox(width: 14),
-            _StatCard(label: 'With Files',     value: '$withAttachments',icon: Icons.attach_file_rounded, color: _C.info),
-          ]),
+          padding: EdgeInsets.fromLTRB(MediaQuery.of(context).size.width < 720 ? 16.0 : 28.0, 24, MediaQuery.of(context).size.width < 720 ? 16.0 : 28.0, 0),
+          child: isMobile
+              ? Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    cards[0],
+                    const SizedBox(height: 14),
+                    cards[1],
+                    const SizedBox(height: 14),
+                    cards[2],
+                  ],
+                )
+              : Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    cards[0],
+                    const SizedBox(width: 14),
+                    cards[1],
+                    const SizedBox(width: 14),
+                    cards[2],
+                  ],
+                ),
         );
       },
     );
   }
 
   // ── Toolbar (mirrors StudentAccounts toolbar exactly) ─────────────────────
-  Widget _buildToolbar() {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(28, 20, 28, 0),
-      child: Row(children: [
-        // Search
-        SizedBox(
-          width: 280,
-          height: 40,
-          child: TextField(
-            controller: _searchController,
-            style: GoogleFonts.beVietnamPro(fontSize: 13),
-            decoration: InputDecoration(
-              hintText: 'Search announcements…',
-              hintStyle: GoogleFonts.beVietnamPro(fontSize: 13, color: _C.textFaint),
-              prefixIcon: const Icon(Icons.search_rounded, size: 18, color: _C.textFaint),
-              filled: true,
-              fillColor: Colors.white,
-              contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
-              border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  borderSide: const BorderSide(color: _C.borderSoft)),
-              enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  borderSide: const BorderSide(color: _C.borderSoft)),
-              focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  borderSide: const BorderSide(color: _C.primaryDark, width: 1.5)),
-            ),
-            onChanged: (v) => setState(() {
-              _searchQuery = v;
-              _currentPage = 1;
-            }),
-          ),
+  Widget _buildToolbar(bool isMobile, bool isTablet) {
+    final searchField = SizedBox(
+      width: isMobile ? double.infinity : 280,
+      height: 40,
+      child: TextField(
+        controller: _searchController,
+        style: GoogleFonts.beVietnamPro(fontSize: 13),
+        decoration: InputDecoration(
+          hintText: 'Search announcements…',
+          hintStyle: GoogleFonts.beVietnamPro(fontSize: 13, color: _C.textFaint),
+          prefixIcon: const Icon(Icons.search_rounded, size: 18, color: _C.textFaint),
+          filled: true,
+          fillColor: Colors.white,
+          contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
+          border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: const BorderSide(color: _C.borderSoft)),
+          enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: const BorderSide(color: _C.borderSoft)),
+          focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: const BorderSide(color: _C.primaryDark, width: 1.5)),
         ),
-        const SizedBox(width: 10),
+        onChanged: (v) => setState(() {
+          _searchQuery = v;
+          _currentPage = 1;
+        }),
+      ),
+    );
+
+    final filterAndExport = Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
         _FilterDropdown(
           value: _filterMode,
           items: const ['All', 'Pinned', 'With Attachments'],
@@ -502,10 +522,58 @@ class _OrgAnnouncementsScreenState extends State<OrgAnnouncementsScreen> {
             }
           },
         ),
-        const Spacer(),
-        // Removed duplicate create button so the composer teaser acts as the main post CTA.
+      ],
+    );
 
-      ]),
+    return Padding(
+      padding: EdgeInsets.fromLTRB(MediaQuery.of(context).size.width < 720 ? 16.0 : 28.0, 20, MediaQuery.of(context).size.width < 720 ? 16.0 : 28.0, 0),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          if (constraints.maxWidth > 980) {
+            return Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Expanded(child: searchField),
+                const SizedBox(width: 12),
+                filterAndExport,
+              ],
+            );
+          }
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              searchField,
+              const SizedBox(height: 10),
+              Wrap(spacing: 10, runSpacing: 10, children: [
+                _FilterDropdown(
+                  value: _filterMode,
+                  items: const ['All', 'Pinned', 'With Attachments'],
+                  onChanged: (v) => setState(() {
+                    _filterMode = v!;
+                    _currentPage = 1;
+                  }),
+                ),
+                AdminExportButton(
+                  label: 'Export',
+                  onSelected: (choice) async {
+                    try {
+                      final snap = await FirebaseFirestore.instance
+                          .collection('announcements')
+                          .where('orgId', isEqualTo: widget.orgId)
+                          .get();
+                      final all = snap.docs.map((d) => AnnouncementModel.fromFirestore(d)).toList();
+                      final filtered = _filtered(all);
+                      _snack('Exported ${filtered.length} records');
+                    } catch (e) {
+                      _snack('Export failed: $e', isError: true);
+                    }
+                  },
+                ),
+              ]),
+            ],
+          );
+        },
+      ),
     );
   }
 
@@ -542,8 +610,9 @@ class _OrgAnnouncementsScreenState extends State<OrgAnnouncementsScreen> {
         final end = (start + _pageSize).clamp(0, filtered.length);
         final pageItems = filtered.isEmpty ? <AnnouncementModel>[] : filtered.sublist(start, end);
 
+        final horizontalPadding = MediaQuery.of(context).size.width < 720 ? 16.0 : 28.0;
         return Container(
-          margin: const EdgeInsets.fromLTRB(28, 20, 28, 0),
+          margin: EdgeInsets.fromLTRB(horizontalPadding, 20, horizontalPadding, 0),
           decoration: BoxDecoration(
             color: _C.white,
             borderRadius: BorderRadius.circular(14),
@@ -656,8 +725,9 @@ class _OrgAnnouncementsScreenState extends State<OrgAnnouncementsScreen> {
   }
 
   Widget _buildEmptyState() {
+    final horizontalPadding = MediaQuery.of(context).size.width < 720 ? 16.0 : 28.0;
     return Container(
-      margin: const EdgeInsets.fromLTRB(28, 20, 28, 0),
+      margin: EdgeInsets.fromLTRB(horizontalPadding, 20, horizontalPadding, 0),
       decoration: BoxDecoration(
         color: _C.white,
         borderRadius: BorderRadius.circular(14),
@@ -771,9 +841,9 @@ class _OrgAnnouncementsScreenState extends State<OrgAnnouncementsScreen> {
     DateTime? scheduledDate;
     TimeOfDay? scheduledTime;
 
-    if (existing?.scheduledPublishDate != null) {
-      scheduledDate = existing!.scheduledPublishDate!.toDate();
-      scheduledTime = TimeOfDay.fromDateTime(scheduledDate!);
+    if (existing != null && existing.scheduledPublishDate != null) {
+      scheduledDate = existing.scheduledPublishDate!.toDate();
+      scheduledTime = TimeOfDay.fromDateTime(scheduledDate);
     }
 
     showDialog(

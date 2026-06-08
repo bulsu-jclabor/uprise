@@ -207,23 +207,27 @@ class _EventProposalsState extends State<EventProposals> {
   // ── Build ─────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isMobile = screenWidth < 768;
+    final isTablet = screenWidth < 1200;
+
     return Scaffold(
       backgroundColor: const Color(0xFFFBFCFE),
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildStatsRow(),
-          _buildToolbar(),
-          const SizedBox(height: 16),
-          Expanded(child: _buildTable()),
-          const SizedBox(height: 24),
+          _buildStatsRow(isMobile, isTablet),
+          _buildToolbar(isMobile, isTablet),
+          SizedBox(height: isMobile ? 12 : 16),
+          Expanded(child: _buildTable(isMobile, isTablet)),
+          SizedBox(height: isMobile ? 16 : 24),
         ],
       ),
     );
   }
 
   // ── Stats row ─────────────────────────────────────────────────────
-  Widget _buildStatsRow() {
+  Widget _buildStatsRow(bool isMobile, bool isTablet) {
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance.collection('event_proposals').snapshots(),
       builder: (context, snapshot) {
@@ -238,106 +242,178 @@ class _EventProposalsState extends State<EventProposals> {
             if (status == 'archived') archived++;
           }
         }
+        final horizontalPadding = isMobile ? 16.0 : (isTablet ? 20.0 : 28.0);
+        final cardGap = isMobile ? 8.0 : 14.0;
+        final statCards = [
+          _StatCard(
+            label: 'Total Proposals',
+            value: '$total',
+            icon: Icons.event_note_rounded,
+            color: UpriseColors.primaryDark,
+          ),
+          _StatCard(
+            label: 'Approved',
+            value: '$approved',
+            icon: Icons.check_circle_rounded,
+            color: const Color(0xFF059669),
+          ),
+          _StatCard(
+            label: 'Pending',
+            value: '$pending',
+            icon: Icons.pending_rounded,
+            color: const Color(0xFFD97706),
+          ),
+          _StatCard(
+            label: 'Rejected',
+            value: '$rejected',
+            icon: Icons.cancel_rounded,
+            color: const Color(0xFFDC2626),
+          ),
+          _StatCard(
+            label: 'Archived',
+            value: '$archived',
+            icon: Icons.archive_rounded,
+            color: const Color(0xFF6B7280),
+          ),
+        ];
+
         return Padding(
-          padding: const EdgeInsets.fromLTRB(28, 24, 28, 0),
-          child: Row(children: [
-            _StatCard(
-              label: 'Total Proposals',
-              value: '$total',
-              icon: Icons.event_note_rounded,
-              color: UpriseColors.primaryDark,
-            ),
-            const SizedBox(width: 14),
-            _StatCard(
-              label: 'Approved',
-              value: '$approved',
-              icon: Icons.check_circle_rounded,
-              color: const Color(0xFF059669),
-            ),
-            const SizedBox(width: 14),
-            _StatCard(
-              label: 'Pending',
-              value: '$pending',
-              icon: Icons.pending_rounded,
-              color: const Color(0xFFD97706),
-            ),
-            const SizedBox(width: 14),
-            _StatCard(
-              label: 'Rejected',
-              value: '$rejected',
-              icon: Icons.cancel_rounded,
-              color: const Color(0xFFDC2626),
-            ),
-            const SizedBox(width: 14),
-            _StatCard(
-              label: 'Archived',
-              value: '$archived',
-              icon: Icons.archive_rounded,
-              color: const Color(0xFF6B7280),
-            ),
-          ]),
+          padding: EdgeInsets.fromLTRB(horizontalPadding, 24, horizontalPadding, 0),
+          child: isMobile
+              ? SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: List.generate(
+                      statCards.length,
+                      (index) => Padding(
+                        padding: EdgeInsets.only(right: index < statCards.length - 1 ? cardGap : 0),
+                        child: SizedBox(width: 220, child: statCards[index]),
+                      ),
+                    ),
+                  ),
+                )
+              : Wrap(
+                  spacing: cardGap,
+                  runSpacing: cardGap,
+                  children: statCards,
+                ),
         );
       },
     );
   }
 
   // ── Toolbar ───────────────────────────────────────────────────────
-  Widget _buildToolbar() {
+  Widget _buildToolbar(bool isMobile, bool isTablet) {
+    final horizontalPadding = isMobile ? 16.0 : (isTablet ? 20.0 : 28.0);
+    final itemGap = isMobile ? 10.0 : 12.0;
+
     return Padding(
-      padding: const EdgeInsets.fromLTRB(28, 20, 28, 0),
-      child: Row(children: [
-        Expanded(
-          child: SizedBox(
-            height: 40,
-            child: TextField(
-              controller: _searchController,
-              style: GoogleFonts.beVietnamPro(fontSize: 13),
-              decoration: InputDecoration(
-                hintText: 'Search by title or organization…',
-                hintStyle: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF9AA5B4)),
-                prefixIcon: const Icon(Icons.search_rounded, size: 18, color: Color(0xFF9AA5B4)),
-                filled: true,
-                fillColor: Colors.white,
-                contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  borderSide: const BorderSide(color: Color(0xFFE2E6EA)),
+      padding: EdgeInsets.fromLTRB(horizontalPadding, isMobile ? 16 : 20, horizontalPadding, 0),
+      child: isMobile
+          ? Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                SizedBox(
+                  height: 40,
+                  child: TextField(
+                    controller: _searchController,
+                    style: GoogleFonts.beVietnamPro(fontSize: 13),
+                    decoration: InputDecoration(
+                      hintText: 'Search by title or organization…',
+                      hintStyle: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF9AA5B4)),
+                      prefixIcon: const Icon(Icons.search_rounded, size: 18, color: Color(0xFF9AA5B4)),
+                      filled: true,
+                      fillColor: Colors.white,
+                      contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: const BorderSide(color: Color(0xFFE2E6EA)),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: const BorderSide(color: Color(0xFFE2E6EA)),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: BorderSide(color: UpriseColors.primaryDark, width: 1.5),
+                      ),
+                    ),
+                    onChanged: (_) => setState(() => _currentPage = 1),
+                  ),
                 ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  borderSide: const BorderSide(color: Color(0xFFE2E6EA)),
+                SizedBox(height: itemGap),
+                _FilterDropdown(
+                  value: _statusFilter,
+                  items: const ['All', 'Pending', 'Approved', 'Rejected', 'Archived'],
+                  hint: 'Status',
+                  icon: Icons.tune_rounded,
+                  onChanged: (v) => setState(() {
+                    _statusFilter = v!;
+                    _currentPage = 1;
+                  }),
                 ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  borderSide: BorderSide(color: UpriseColors.primaryDark, width: 1.5),
+                SizedBox(height: itemGap),
+                _ExportProposalsButton(
+                  statusFilter: _statusFilter,
+                  searchTerm: _searchController.text.trim(),
+                ),
+              ],
+            )
+          : Row(children: [
+              Expanded(
+                child: SizedBox(
+                  height: 40,
+                  child: TextField(
+                    controller: _searchController,
+                    style: GoogleFonts.beVietnamPro(fontSize: 13),
+                    decoration: InputDecoration(
+                      hintText: 'Search by title or organization…',
+                      hintStyle: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF9AA5B4)),
+                      prefixIcon: const Icon(Icons.search_rounded, size: 18, color: Color(0xFF9AA5B4)),
+                      filled: true,
+                      fillColor: Colors.white,
+                      contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: const BorderSide(color: Color(0xFFE2E6EA)),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: const BorderSide(color: Color(0xFFE2E6EA)),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: BorderSide(color: UpriseColors.primaryDark, width: 1.5),
+                      ),
+                    ),
+                    onChanged: (_) => setState(() => _currentPage = 1),
+                  ),
                 ),
               ),
-              onChanged: (_) => setState(() => _currentPage = 1),
-            ),
-          ),
-        ),
-        const SizedBox(width: 10),
-        _FilterDropdown(
-          value: _statusFilter,
-          items: const ['All', 'Pending', 'Approved', 'Rejected', 'Archived'],
-          hint: 'Status',
-          icon: Icons.tune_rounded,
-          onChanged: (v) => setState(() {
-            _statusFilter = v!;
-            _currentPage = 1;
-          }),
-        ),
-        const SizedBox(width: 10),
-        _ExportProposalsButton(
-          statusFilter: _statusFilter,
-          searchTerm: _searchController.text.trim(),
-        ),
-      ]),
+              SizedBox(width: itemGap),
+              _FilterDropdown(
+                value: _statusFilter,
+                items: const ['All', 'Pending', 'Approved', 'Rejected', 'Archived'],
+                hint: 'Status',
+                icon: Icons.tune_rounded,
+                onChanged: (v) => setState(() {
+                  _statusFilter = v!;
+                  _currentPage = 1;
+                }),
+              ),
+              SizedBox(width: itemGap),
+              _ExportProposalsButton(
+                statusFilter: _statusFilter,
+                searchTerm: _searchController.text.trim(),
+              ),
+            ]),
     );
   }
 
   // ── Table ─────────────────────────────────────────────────────────
-  Widget _buildTable() {
+  Widget _buildTable(bool isMobile, bool isTablet) {
+    final horizontalPadding = isMobile ? 16.0 : (isTablet ? 20.0 : 28.0);
+
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance
           .collection('event_proposals')
@@ -373,8 +449,8 @@ class _EventProposalsState extends State<EventProposals> {
         final end        = (start + _pageSize).clamp(0, docs.length);
         final pageDocs   = docs.isEmpty ? [] : docs.sublist(start, end);
 
-        return Container(
-          margin: const EdgeInsets.symmetric(horizontal: 28),
+        final tableContent = Container(
+          margin: EdgeInsets.symmetric(horizontal: horizontalPadding),
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(14),
@@ -401,6 +477,13 @@ class _EventProposalsState extends State<EventProposals> {
             _buildFooter(docs.length, totalPages, start, end),
           ]),
         );
+
+        return isMobile
+            ? SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: tableContent,
+              )
+            : tableContent;
       },
     );
   }

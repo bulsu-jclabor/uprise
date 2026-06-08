@@ -1,6 +1,7 @@
 // lib/screens/web/org/org_merchandise.dart
 
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -244,7 +245,7 @@ class _OrgMerchandiseScreenState extends State<OrgMerchandiseScreen>
       padding: const EdgeInsets.fromLTRB(28, 20, 28, 0),
       child: Row(
         children: [
-          // Tab pills (kept for consistency)
+          // Tab pills
           Container(
             decoration: BoxDecoration(
               color: const Color(0xFFF8F9FB),
@@ -273,10 +274,8 @@ class _OrgMerchandiseScreenState extends State<OrgMerchandiseScreen>
             ),
           ),
           const Spacer(),
-          // Export button (will show different options based on active tab)
           AdminExportButton(onSelected: (format) => _exportCurrentTab(format)),
           const SizedBox(width: 10),
-          // Sales Report button
           OutlinedButton.icon(
             onPressed: () => _openSalesReport(context),
             icon: const Icon(Icons.bar_chart_outlined, size: 16),
@@ -290,7 +289,6 @@ class _OrgMerchandiseScreenState extends State<OrgMerchandiseScreen>
             ),
           ),
           const SizedBox(width: 10),
-          // Add Product button
           ElevatedButton.icon(
             onPressed: () => _openAddProductModal(context),
             icon: const Icon(Icons.add, size: 18, color: Colors.white),
@@ -366,22 +364,22 @@ class _OrgMerchandiseScreenState extends State<OrgMerchandiseScreen>
     final now = DateFormat('yyyyMMdd').format(DateTime.now());
     if (format == 'csv') {
       final buf = StringBuffer();
-      buf.writeln('Order ID,Customer,Total,Status,Date');
+      buf.writeln('Order ID,Customer,Total,Status,Date,Bundle ID');
       for (final doc in docs) {
         final d = doc.data();
         final date = DateFormat('yyyy-MM-dd').format((d['createdAt'] as Timestamp).toDate());
-        buf.writeln('"${d['orderId']}","${d['customerName']}","${d['total']}","${d['status']}","$date"');
+        buf.writeln('"${d['orderId']}","${d['customerName']}","${d['total']}","${d['status']}","$date","${d['bundleId'] ?? ''}"');
       }
       await AdminExportUtil.saveText(buf.toString(), 'orders_$now.csv', mimeType: 'text/csv');
     } else if (format == 'pdf') {
       final rows = docs.map((doc) {
         final d = doc.data();
         final date = DateFormat('yyyy-MM-dd').format((d['createdAt'] as Timestamp).toDate());
-        return ['${d['orderId']}', '${d['customerName']}', '${d['total']}', '${d['status']}', date];
+        return ['${d['orderId']}', '${d['customerName']}', '${d['total']}', '${d['status']}', date, '${d['bundleId'] ?? ''}'];
       }).toList();
       final pdfBytes = await AdminExportPdf.generateTablePdf(
         title: 'Sales Orders',
-        headers: const ['Order ID', 'Customer', 'Total', 'Status', 'Date'],
+        headers: const ['Order ID', 'Customer', 'Total', 'Status', 'Date', 'Bundle ID'],
         rows: rows,
       );
       await AdminExportUtil.saveBytes(pdfBytes, 'orders_$now.pdf', mimeType: 'application/pdf');
@@ -499,7 +497,7 @@ class _StatCard extends StatelessWidget {
 }
 
 // ============================================================
-// PRODUCTS TAB (table layout, pagination)
+// PRODUCTS TAB (unchanged)
 // ============================================================
 class _ProductsTab extends StatefulWidget {
   final String orgId;
@@ -601,7 +599,6 @@ class _ProductsTabState extends State<_ProductsTab> {
       padding: const EdgeInsets.symmetric(horizontal: 28),
       child: Row(
         children: [
-          // Search
           SizedBox(
             width: 260,
             height: 40,
@@ -626,7 +623,6 @@ class _ProductsTabState extends State<_ProductsTab> {
             ),
           ),
           const SizedBox(width: 10),
-          // Category filter dropdown
           _FilterDropdown(
             value: _categoryFilter,
             items: _categoryFilters,
@@ -865,7 +861,7 @@ class _ProductsTabState extends State<_ProductsTab> {
 }
 
 // ============================================================
-// ORDERS TAB (table layout)
+// ORDERS TAB (UPDATED with bundleId filter)
 // ============================================================
 class _OrdersTab extends StatefulWidget {
   final String orgId;
@@ -879,10 +875,12 @@ class _OrdersTabState extends State<_OrdersTab> {
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
   String _statusFilter = 'All';
+  String _bundleIdFilter = 'All';     // NEW: filter by bundleId
   int _currentPage = 1;
   static const int _pageSize = 10;
 
   final List<String> _statusFilters = ['All', 'Pending', 'Processing', 'Completed'];
+  List<String> _availableBundleIds = ['All']; // NEW: list of unique bundleIds
 
   List<OrderModel> _applyFilters(List<OrderModel> orders) {
     return orders.where((o) {
@@ -890,8 +888,30 @@ class _OrdersTabState extends State<_OrdersTab> {
           o.customerName.toLowerCase().contains(_searchQuery.toLowerCase()) ||
           o.orderId.toLowerCase().contains(_searchQuery.toLowerCase());
       final matchStatus = _statusFilter == 'All' || o.status.toLowerCase() == _statusFilter.toLowerCase();
-      return matchSearch && matchStatus;
+      final matchBundle = _bundleIdFilter == 'All' || o.bundleId == _bundleIdFilter;
+      return matchSearch && matchStatus && matchBundle;
     }).toList();
+  }
+
+  // NEW: extract unique bundleIds from orders and update state only when needed
+  void _updateBundleIds(List<OrderModel> orders) {
+    final ids = orders.map((o) => o.bundleId).where((id) => id.isNotEmpty).toSet().toList();
+    ids.sort();
+    final newBundleIds = ['All', ...ids];
+    if (listEquals(_availableBundleIds, newBundleIds) &&
+        (_bundleIdFilter == 'All' || ids.contains(_bundleIdFilter))) {
+      return;
+    }
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      setState(() {
+        _availableBundleIds = newBundleIds;
+        if (_bundleIdFilter != 'All' && !ids.contains(_bundleIdFilter)) {
+          _bundleIdFilter = 'All';
+        }
+      });
+    });
   }
 
   @override
@@ -918,7 +938,7 @@ class _OrdersTabState extends State<_OrdersTab> {
       child: Row(
         children: [
           SizedBox(
-            width: 260,
+            width: 220,
             height: 40,
             child: TextField(
               controller: _searchController,
@@ -951,6 +971,19 @@ class _OrdersTabState extends State<_OrdersTab> {
               _currentPage = 1;
             }),
           ),
+          const SizedBox(width: 10),
+          // NEW: Bundle ID filter dropdown
+          if (_availableBundleIds.length > 1)
+            _FilterDropdown(
+              value: _bundleIdFilter,
+              items: _availableBundleIds,
+              hint: 'Bundle',
+              icon: Icons.local_offer_outlined,
+              onChanged: (v) => setState(() {
+                _bundleIdFilter = v!;
+                _currentPage = 1;
+              }),
+            ),
         ],
       ),
     );
@@ -971,6 +1004,8 @@ class _OrdersTabState extends State<_OrdersTab> {
           return Center(child: Text('Error: ${snapshot.error}'));
         }
         var allOrders = snapshot.data!.docs.map((d) => OrderModel.fromFirestore(d)).toList();
+        // Update bundleId list for filter dropdown
+        _updateBundleIds(allOrders);
         allOrders = _applyFilters(allOrders);
 
         final totalPages = allOrders.isEmpty ? 1 : (allOrders.length / _pageSize).ceil();
@@ -1020,6 +1055,7 @@ class _OrdersTabState extends State<_OrdersTab> {
         Expanded(flex: 2, child: _headerCell('DATE')),
         Expanded(flex: 1, child: _headerCell('TOTAL')),
         Expanded(flex: 1, child: _headerCell('STATUS')),
+        Expanded(flex: 2, child: _headerCell('BUNDLE ID')), // NEW: show bundleId
         Expanded(flex: 2, child: Align(alignment: Alignment.centerRight, child: _headerCell('ACTIONS'))),
       ]),
     );
@@ -1064,6 +1100,19 @@ class _OrdersTabState extends State<_OrdersTab> {
                 style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w700, color: UpriseColors.primaryDark)),
           ),
           Expanded(flex: 1, child: _statusBadge(order.status)),
+          Expanded(
+            flex: 2,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(
+                color: UpriseColors.primaryDark.withAlpha(18),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Text(order.bundleId.isEmpty ? '—' : order.bundleId,
+                  style: GoogleFonts.beVietnamPro(fontSize: 10, fontWeight: FontWeight.w500, color: UpriseColors.primaryDark),
+                  overflow: TextOverflow.ellipsis),
+            ),
+          ),
           Expanded(
             flex: 2,
             child: Row(
@@ -1137,7 +1186,7 @@ class _OrdersTabState extends State<_OrdersTab> {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Reusable widgets (from student accounts)
+// Reusable widgets (unchanged)
 // ─────────────────────────────────────────────────────────────────────────────
 class _FilterDropdown extends StatelessWidget {
   final String value;
@@ -1234,7 +1283,7 @@ class _PageNumButton extends StatelessWidget {
 }
 
 // ============================================================
-// PRODUCT MODAL (restyled like manual add student)
+// PRODUCT MODAL (unchanged)
 // ============================================================
 class _ProductModal extends StatefulWidget {
   final String orgId;
@@ -1407,14 +1456,12 @@ class _ProductModalState extends State<_ProductModal> {
                       ),
                     ),
                     const SizedBox(height: 16),
-                    // Name
                     TextFormField(
                       controller: _nameCtrl,
                       decoration: _DS.inputDecoration('Product Name', hint: 'e.g., Premium Shirt 2026', icon: Icons.label_outline_rounded),
                       style: GoogleFonts.beVietnamPro(fontSize: 13),
                     ),
                     const SizedBox(height: 12),
-                    // Description
                     TextFormField(
                       controller: _descCtrl,
                       maxLines: 3,
@@ -1422,7 +1469,6 @@ class _ProductModalState extends State<_ProductModal> {
                       style: GoogleFonts.beVietnamPro(fontSize: 13),
                     ),
                     const SizedBox(height: 12),
-                    // Price & Stock row
                     Row(children: [
                       Expanded(
                         child: TextFormField(
@@ -1502,7 +1548,7 @@ class _ProductModalState extends State<_ProductModal> {
 }
 
 // ============================================================
-// PRODUCT DETAILS MODAL (simplified but clean)
+// PRODUCT DETAILS MODAL (unchanged)
 // ============================================================
 class _ProductDetailsModal extends StatelessWidget {
   final ProductModel product;
@@ -1554,7 +1600,7 @@ class _ProductDetailsModal extends StatelessWidget {
 }
 
 // ============================================================
-// ORDER DETAILS MODAL (restyled)
+// ORDER DETAILS MODAL (unchanged)
 // ============================================================
 class _OrderDetailsModal extends StatelessWidget {
   final OrderModel order;
@@ -1703,7 +1749,7 @@ class _OrderDetailsModal extends StatelessWidget {
 }
 
 // ============================================================
-// SALES REPORT MODAL (restyled)
+// SALES REPORT MODAL (unchanged)
 // ============================================================
 class _SalesReportModal extends StatelessWidget {
   final String orgId;
@@ -1713,10 +1759,10 @@ class _SalesReportModal extends StatelessWidget {
     final buf = StringBuffer();
     buf.writeln('MERCHANDISE SALES REPORT');
     buf.writeln('Generated: ${DateFormat('MMM dd, yyyy HH:mm').format(DateTime.now())}\n');
-    buf.writeln('Order ID,Customer,Total,Status,Date');
+    buf.writeln('Order ID,Customer,Total,Status,Date,Bundle ID');
     for (final o in orders) {
       final date = DateFormat('MM/dd/yyyy').format(o.createdAt.toDate());
-      buf.writeln('"${o.orderId}","${o.customerName}","${o.total.toStringAsFixed(2)}","${o.status}","$date"');
+      buf.writeln('"${o.orderId}","${o.customerName}","${o.total.toStringAsFixed(2)}","${o.status}","$date","${o.bundleId}"');
     }
     final bytes = utf8.encode(buf.toString());
     final blob = html.Blob([bytes], 'text/csv');
@@ -1938,7 +1984,7 @@ class _SalesReportModal extends StatelessWidget {
 }
 
 // ============================================================
-// MODEL CLASSES (unchanged)
+// MODEL CLASSES (UPDATED: added bundleId to OrderModel)
 // ============================================================
 class ProductModel {
   final String id;
@@ -1998,6 +2044,7 @@ class OrderModel {
   final String paymentMethod;
   final String status;
   final Timestamp createdAt;
+  final String bundleId;   // NEW: e.g. "productId_BSIT3A"
 
   OrderModel({
     required this.id,
@@ -2012,6 +2059,7 @@ class OrderModel {
     required this.paymentMethod,
     required this.status,
     required this.createdAt,
+    required this.bundleId,
   });
 
   factory OrderModel.fromFirestore(DocumentSnapshot doc) {
@@ -2030,6 +2078,7 @@ class OrderModel {
       paymentMethod: d['paymentMethod'] ?? '',
       status: d['status'] ?? 'pending',
       createdAt: d['createdAt'] as Timestamp,
+      bundleId: d['bundleId'] ?? '',   // NEW: read bundleId, default empty
     );
   }
 }

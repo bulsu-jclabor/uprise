@@ -43,7 +43,6 @@ Widget _buildImageWidget(String url, {BoxFit fit = BoxFit.cover, Widget? errorWi
 // ─────────────────────────────────────────────────────────────────────────────
 class _C {
   static const Color primaryDark  = Color(0xFFB45309);
-  static const Color primaryLight = Color(0xFFD97706);
   static const Color accent       = Color(0xFFF59E0B);
 
   static const Color white        = Color(0xFFFFFFFF);
@@ -65,7 +64,6 @@ class _C {
   static const Color error        = Color(0xFFDC2626);
   static const Color errorBg      = Color(0xFFFEF2F2);
   static const Color info         = Color(0xFF2563EB);
-  static const Color infoBg       = Color(0xFFEFF6FF);
 }
 
 class _DS {
@@ -458,15 +456,38 @@ class _OrgProfileScreenState extends State<OrgProfileScreen> {
       return const Center(
           child: CircularProgressIndicator(color: _C.primaryDark));
     }
+
+    final width = MediaQuery.of(context).size.width;
+    final isMobile = width < 720;
+    final horizontalPadding = isMobile ? 16.0 : 28.0;
+
+    final editButton = ElevatedButton.icon(
+      onPressed: _openEditProfile,
+      icon: const Icon(Icons.edit_outlined, size: 15, color: Colors.white),
+      label: Text('Edit Profile',
+          style: GoogleFonts.beVietnamPro(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: Colors.white)),
+      style: ElevatedButton.styleFrom(
+        backgroundColor: _C.primaryDark,
+        foregroundColor: Colors.white,
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 11),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        elevation: 0,
+      ),
+    );
+
     return Scaffold(
       backgroundColor: _C.pageBg,
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(28),
+        padding:
+            EdgeInsets.symmetric(horizontal: horizontalPadding, vertical: 28),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // ── Page header ────────────────────────────────────────────────
-            Row(children: [
+            if (isMobile) ...[
               Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Text('Organization Profile',
                     style: GoogleFonts.beVietnamPro(
@@ -479,31 +500,42 @@ class _OrgProfileScreenState extends State<OrgProfileScreen> {
                     style: GoogleFonts.beVietnamPro(
                         fontSize: 13, color: _C.darkGray)),
               ]),
-              const Spacer(),
-              ElevatedButton.icon(
-                onPressed: _openEditProfile,
-                icon: const Icon(Icons.edit_outlined,
-                    size: 15, color: Colors.white),
-                label: Text('Edit Profile',
-                    style: GoogleFonts.beVietnamPro(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.white)),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: _C.primaryDark,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 18, vertical: 11),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10)),
-                  elevation: 0,
-                ),
-              ),
-            ]),
+              const SizedBox(height: 16),
+              editButton,
+            ] else ...[
+              Row(children: [
+                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text('Organization Profile',
+                      style: GoogleFonts.beVietnamPro(
+                          fontSize: 22,
+                          fontWeight: FontWeight.w800,
+                          color: _C.charcoal)),
+                  const SizedBox(height: 3),
+                  Text(
+                      'Manage your organization\'s information and structure',
+                      style: GoogleFonts.beVietnamPro(
+                          fontSize: 13, color: _C.darkGray)),
+                ]),
+                const Spacer(),
+                editButton,
+              ]),
+            ],
             const SizedBox(height: 24),
 
             // ── Two-column layout ──────────────────────────────────────────
-            Row(
+            if (isMobile) ...[
+              _buildOrgInfoCard(),
+              const SizedBox(height: 20),
+              _buildAdviserCard(),
+              const SizedBox(height: 20),
+              _buildOfficersCard(),
+              const SizedBox(height: 20),
+              _buildHierarchyCard(),
+              const SizedBox(height: 20),
+              _buildSocialCard(),
+              const SizedBox(height: 16),
+              _buildQuickStatsCard(),
+            ] else Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 // Left column (main content)

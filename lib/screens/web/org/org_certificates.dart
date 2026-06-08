@@ -233,23 +233,27 @@ class _OrgCertificatesScreenState extends State<OrgCertificatesScreen> {
   // ── Build ─────────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isMobile = screenWidth < 768;
+    final isTablet = screenWidth < 1200;
+    
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildStatsRow(),
-          _buildToolbar(),
-          const SizedBox(height: 16),
-          Expanded(child: _buildTable()),
-          const SizedBox(height: 24),
+          _buildStatsRow(isMobile, isTablet),
+          _buildToolbar(isMobile, isTablet),
+          SizedBox(height: isMobile ? 12 : 16),
+          Expanded(child: _buildTable(isMobile, isTablet)),
+          SizedBox(height: isMobile ? 16 : 24),
         ],
       ),
     );
   }
 
   // ── Stats row ─────────────────────────────────────────────────────────────
-  Widget _buildStatsRow() {
+  Widget _buildStatsRow(bool isMobile, bool isTablet) {
     return StreamBuilder<QuerySnapshot>(
       stream: _certsStream,
       builder: (context, snapshot) {
@@ -259,76 +263,151 @@ class _OrgCertificatesScreenState extends State<OrgCertificatesScreen> {
         final distributed  = docs.where((d) => (d.data() as Map<String, dynamic>)['status'] == 'distributed').length;
         final pending      = docs.where((d) => (d.data() as Map<String, dynamic>)['status'] == 'pending').length;
 
+        final horizontalPadding = isMobile ? 16.0 : (isTablet ? 20.0 : 28.0);
+        final cardGap = isMobile ? 8.0 : 14.0;
+        final statCards = [
+          _StatCard(label: 'Total Certificates', value: total,       icon: Icons.card_membership_outlined,     color: UpriseColors.primaryDark),
+          _StatCard(label: 'Total Recipients',   value: totalRec,    icon: Icons.people_outline_rounded,       color: UpriseColors.accent),
+          _StatCard(label: 'Distributed',        value: distributed, icon: Icons.assignment_turned_in_outlined, color: UpriseColors.success),
+          _StatCard(label: 'Pending',            value: pending,     icon: Icons.pending_outlined,             color: UpriseColors.warning),
+        ];
+
         return Padding(
-          padding: const EdgeInsets.fromLTRB(28, 24, 28, 0),
-          child: Row(children: [
-            _StatCard(label: 'Total Certificates', value: total,       icon: Icons.card_membership_outlined,     color: UpriseColors.primaryDark),
-            const SizedBox(width: 14),
-            _StatCard(label: 'Total Recipients',   value: totalRec,    icon: Icons.people_outline_rounded,       color: UpriseColors.accent),
-            const SizedBox(width: 14),
-            _StatCard(label: 'Distributed',        value: distributed, icon: Icons.assignment_turned_in_outlined, color: UpriseColors.success),
-            const SizedBox(width: 14),
-            _StatCard(label: 'Pending',            value: pending,     icon: Icons.pending_outlined,             color: UpriseColors.warning),
-          ]),
+          padding: EdgeInsets.fromLTRB(horizontalPadding, isMobile ? 16 : 24, horizontalPadding, 0),
+          child: isMobile
+              ? SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: List.generate(
+                      statCards.length,
+                      (i) => Padding(
+                        padding: EdgeInsets.only(right: i < statCards.length - 1 ? cardGap : 0),
+                        child: SizedBox(width: 200, child: statCards[i]),
+                      ),
+                    ),
+                  ),
+                )
+              : Wrap(
+                  spacing: cardGap,
+                  runSpacing: cardGap,
+                  children: statCards,
+                ),
         );
       },
     );
   }
 
   // ── Toolbar ───────────────────────────────────────────────────────────────
-  Widget _buildToolbar() {
+  Widget _buildToolbar(bool isMobile, bool isTablet) {
+    final horizontalPadding = isMobile ? 16.0 : (isTablet ? 20.0 : 28.0);
+    final itemGap = isMobile ? 8.0 : 10.0;
+    
     return Padding(
-      padding: const EdgeInsets.fromLTRB(28, 20, 28, 0),
-      child: Row(children: [
-        Expanded(
-          child: SizedBox(
-            height: 40,
-            child: TextField(
-              controller: _searchController,
-              style: GoogleFonts.beVietnamPro(fontSize: 13),
-              decoration: InputDecoration(
-                hintText: 'Search by ID, event name, or organization…',
-                hintStyle: GoogleFonts.beVietnamPro(fontSize: 13, color: UpriseColors.greyText),
-                prefixIcon: Icon(Icons.search_rounded, size: 18, color: UpriseColors.greyText),
-                filled: true,
-                fillColor: UpriseColors.white,
-                contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: UpriseColors.mediumGray)),
-                enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: UpriseColors.mediumGray)),
-                focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: UpriseColors.primaryDark, width: 1.5)),
-              ),
-              onChanged: (v) => setState(() { _searchQuery = v.toLowerCase(); _currentPage = 1; }),
+      padding: EdgeInsets.fromLTRB(horizontalPadding, isMobile ? 14 : 20, horizontalPadding, 0),
+      child: isMobile
+          ? Column(
+              spacing: itemGap,
+              children: [
+                SizedBox(
+                  height: 40,
+                  child: TextField(
+                    controller: _searchController,
+                    style: GoogleFonts.beVietnamPro(fontSize: 12),
+                    decoration: InputDecoration(
+                      hintText: 'Search certificates...',
+                      hintStyle: GoogleFonts.beVietnamPro(fontSize: 12, color: UpriseColors.greyText),
+                      prefixIcon: Icon(Icons.search_rounded, size: 16, color: UpriseColors.greyText),
+                      filled: true,
+                      fillColor: UpriseColors.white,
+                      contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 12),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: UpriseColors.mediumGray)),
+                      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: UpriseColors.mediumGray)),
+                      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: UpriseColors.primaryDark, width: 1.5)),
+                    ),
+                    onChanged: (v) => setState(() { _searchQuery = v.toLowerCase(); _currentPage = 1; }),
+                  ),
+                ),
+                Row(
+                  spacing: itemGap,
+                  children: [
+                    Expanded(
+                      child: _FilterDropdown(
+                        value: _filterStatus,
+                        items: const ['All', 'Distributed', 'Pending', 'Draft', 'Undistributed'],
+                        onChanged: (v) => setState(() { _filterStatus = v!; _currentPage = 1; }),
+                      ),
+                    ),
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: _openGenerateFlow,
+                        icon: const Icon(Icons.add_rounded, size: 14),
+                        label: Text('Generate', style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.w600)),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: UpriseColors.primaryDark,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          elevation: 0,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            )
+          : Row(
+              spacing: itemGap,
+              children: [
+                Expanded(
+                  child: SizedBox(
+                    height: 40,
+                    child: TextField(
+                      controller: _searchController,
+                      style: GoogleFonts.beVietnamPro(fontSize: 13),
+                      decoration: InputDecoration(
+                        hintText: 'Search by ID, event name, or organization…',
+                        hintStyle: GoogleFonts.beVietnamPro(fontSize: 13, color: UpriseColors.greyText),
+                        prefixIcon: Icon(Icons.search_rounded, size: 18, color: UpriseColors.greyText),
+                        filled: true,
+                        fillColor: UpriseColors.white,
+                        contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: UpriseColors.mediumGray)),
+                        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: UpriseColors.mediumGray)),
+                        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: UpriseColors.primaryDark, width: 1.5)),
+                      ),
+                      onChanged: (v) => setState(() { _searchQuery = v.toLowerCase(); _currentPage = 1; }),
+                    ),
+                  ),
+                ),
+                _FilterDropdown(
+                  value: _filterStatus,
+                  items: const ['All', 'Distributed', 'Pending', 'Draft', 'Undistributed'],
+                  onChanged: (v) => setState(() { _filterStatus = v!; _currentPage = 1; }),
+                ),
+                Tooltip(
+                  message: 'Only approved event proposals that issue certificates can be selected.',
+                  child: ElevatedButton.icon(
+                    onPressed: _openGenerateFlow,
+                    icon: const Icon(Icons.add_rounded, size: 15),
+                    label: Text('Generate Certificate', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: UpriseColors.primaryDark,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      elevation: 0,
+                    ),
+                  ),
+                ),
+              ],
             ),
-          ),
-        ),
-        const SizedBox(width: 10),
-        _FilterDropdown(
-          value: _filterStatus,
-          items: const ['All', 'Distributed', 'Pending', 'Draft', 'Undistributed'],
-          onChanged: (v) => setState(() { _filterStatus = v!; _currentPage = 1; }),
-        ),
-        const SizedBox(width: 10),
-        Tooltip(
-          message: 'Only approved event proposals that issue certificates can be selected.',
-          child: ElevatedButton.icon(
-            onPressed: _openGenerateFlow,
-            icon: const Icon(Icons.add_rounded, size: 15),
-            label: Text('Generate Certificate', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600)),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: UpriseColors.primaryDark,
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-              elevation: 0,
-            ),
-          ),
-        ),
-      ]),
     );
   }
 
   // ── Table ─────────────────────────────────────────────────────────────────
-  Widget _buildTable() {
+  Widget _buildTable(bool isMobile, bool isTablet) {
+    final horizontalMargin = isMobile ? 12.0 : (isTablet ? 16.0 : 28.0);
+    
     return StreamBuilder<QuerySnapshot>(
       stream: _certsStream,
       builder: (context, snapshot) {
@@ -366,7 +445,7 @@ class _OrgCertificatesScreenState extends State<OrgCertificatesScreen> {
         final pageItems  = records.isEmpty ? <CertificateRecord>[] : records.sublist(start, end);
 
         return Container(
-          margin: const EdgeInsets.symmetric(horizontal: 28),
+          margin: EdgeInsets.symmetric(horizontal: horizontalMargin),
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(14),
@@ -374,16 +453,21 @@ class _OrgCertificatesScreenState extends State<OrgCertificatesScreen> {
             boxShadow: _DS.cardShadow,
           ),
           child: Column(children: [
-            _buildTableHeader(),
+            if (!isMobile) _buildTableHeader(),
             Expanded(
               child: records.isEmpty
                   ? _buildEmptyState()
-                  : ListView.builder(
-                      itemCount: pageItems.length,
-                      itemBuilder: (_, i) => _buildRow(pageItems[i], i == pageItems.length - 1),
-                    ),
+                  : isMobile
+                      ? ListView.builder(
+                          itemCount: pageItems.length,
+                          itemBuilder: (_, i) => _buildCardRow(pageItems[i], i == pageItems.length - 1),
+                        )
+                      : ListView.builder(
+                          itemCount: pageItems.length,
+                          itemBuilder: (_, i) => _buildRow(pageItems[i], i == pageItems.length - 1),
+                        ),
             ),
-            _buildFooter(records.length, totalPages, start, end),
+            _buildFooter(records.length, totalPages, start, end, isMobile),
           ]),
         );
       },
@@ -609,8 +693,58 @@ class _OrgCertificatesScreenState extends State<OrgCertificatesScreen> {
     );
   }
 
-  Widget _buildFooter(int total, int totalPages, int start, int end) {
-    const int maxVisible = 5;
+  Widget _buildCardRow(CertificateRecord r, bool isLast) {
+    return InkWell(
+      onTap: () => _viewCert(r),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          border: isLast ? null : const Border(bottom: BorderSide(color: Color(0xFFF1F5F9))),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          spacing: 10,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Expanded(
+                  child: Text(r.certificateId,
+                      style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600, color: UpriseColors.primaryDark)),
+                ),
+                _certBadge(r.status),
+              ],
+            ),
+            Text(r.eventName,
+                style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.w500, color: const Color(0xFF1A202C)),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(DateFormat('MMM d, yyyy').format(r.date),
+                    style: GoogleFonts.beVietnamPro(fontSize: 11, color: const Color(0xFF64748B))),
+                Text('${r.recipients} recipient${r.recipients != 1 ? 's' : ''}',
+                    style: GoogleFonts.beVietnamPro(fontSize: 11, color: const Color(0xFF64748B))),
+              ],
+            ),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              spacing: 4,
+              children: [
+                _ActionIconButton(icon: Icons.visibility_outlined,    tooltip: 'View',   color: const Color(0xFF2563EB),  onTap: () => _viewCert(r)),
+                _ActionIconButton(icon: Icons.edit_outlined,          tooltip: 'Edit',   color: UpriseColors.primaryDark, onTap: () => _editCert(r)),
+                _ActionIconButton(icon: Icons.delete_outline_rounded, tooltip: 'Delete', color: const Color(0xFFDC2626),  onTap: () => _confirmDelete(r)),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFooter(int total, int totalPages, int start, int end, bool isMobile) {
+    final int maxVisible = isMobile ? 3 : 5;
     int firstPage = (_currentPage - maxVisible ~/ 2).clamp(1, totalPages);
     int lastPage  = (firstPage + maxVisible - 1).clamp(1, totalPages);
     if (lastPage - firstPage + 1 < maxVisible && firstPage > 1) {
@@ -619,27 +753,52 @@ class _OrgCertificatesScreenState extends State<OrgCertificatesScreen> {
     final pages = List.generate(lastPage - firstPage + 1, (i) => firstPage + i);
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+      padding: EdgeInsets.symmetric(horizontal: isMobile ? 12 : 20, vertical: 12),
       decoration: const BoxDecoration(
         border: Border(top: BorderSide(color: Color(0xFFE8ECF0))),
         color: Color(0xFFF8F9FB),
         borderRadius: BorderRadius.vertical(bottom: Radius.circular(14)),
       ),
-      child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-        Text('Showing ${total == 0 ? 0 : start + 1}–$end of $total certificates',
-            style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF64748B))),
-        Row(children: [
-          _PageButton(icon: Icons.chevron_left_rounded,  enabled: _currentPage > 1,          onTap: () => setState(() => _currentPage--)),
-          const SizedBox(width: 4),
-          ...pages.map((p) => _PageNumButton(page: p, isActive: p == _currentPage, onTap: () => setState(() => _currentPage = p))),
-          if (lastPage < totalPages) ...[
-            Padding(padding: const EdgeInsets.symmetric(horizontal: 4), child: Text('…', style: GoogleFonts.beVietnamPro(color: const Color(0xFF64748B), fontSize: 12))),
-            _PageNumButton(page: totalPages, isActive: _currentPage == totalPages, onTap: () => setState(() => _currentPage = totalPages)),
-          ],
-          const SizedBox(width: 4),
-          _PageButton(icon: Icons.chevron_right_rounded, enabled: _currentPage < totalPages, onTap: () => setState(() => _currentPage++)),
-        ]),
-      ]),
+      child: isMobile
+          ? Column(
+              spacing: 12,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Showing ${total == 0 ? 0 : start + 1}–$end of $total',
+                    style: GoogleFonts.beVietnamPro(fontSize: 11, color: const Color(0xFF64748B))),
+                Center(
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      _PageButton(icon: Icons.chevron_left_rounded,  enabled: _currentPage > 1,          onTap: () => setState(() => _currentPage--)),
+                      const SizedBox(width: 4),
+                      ...pages.map((p) => _PageNumButton(page: p, isActive: p == _currentPage, onTap: () => setState(() => _currentPage = p))),
+                      if (lastPage < totalPages) ...[
+                        Padding(padding: const EdgeInsets.symmetric(horizontal: 4), child: Text('…', style: GoogleFonts.beVietnamPro(color: const Color(0xFF64748B), fontSize: 12))),
+                        _PageNumButton(page: totalPages, isActive: _currentPage == totalPages, onTap: () => setState(() => _currentPage = totalPages)),
+                      ],
+                      const SizedBox(width: 4),
+                      _PageButton(icon: Icons.chevron_right_rounded, enabled: _currentPage < totalPages, onTap: () => setState(() => _currentPage++)),
+                    ],
+                  ),
+                ),
+              ],
+            )
+          : Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+              Text('Showing ${total == 0 ? 0 : start + 1}–$end of $total certificates',
+                  style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF64748B))),
+              Row(children: [
+                _PageButton(icon: Icons.chevron_left_rounded,  enabled: _currentPage > 1,          onTap: () => setState(() => _currentPage--)),
+                const SizedBox(width: 4),
+                ...pages.map((p) => _PageNumButton(page: p, isActive: p == _currentPage, onTap: () => setState(() => _currentPage = p))),
+                if (lastPage < totalPages) ...[
+                  Padding(padding: const EdgeInsets.symmetric(horizontal: 4), child: Text('…', style: GoogleFonts.beVietnamPro(color: const Color(0xFF64748B), fontSize: 12))),
+                  _PageNumButton(page: totalPages, isActive: _currentPage == totalPages, onTap: () => setState(() => _currentPage = totalPages)),
+                ],
+                const SizedBox(width: 4),
+                _PageButton(icon: Icons.chevron_right_rounded, enabled: _currentPage < totalPages, onTap: () => setState(() => _currentPage++)),
+              ]),
+            ]),
     );
   }
 }
@@ -1397,7 +1556,6 @@ class _CanvaTemplateEditorState extends State<_CanvaTemplateEditor> {
     final headerSurface = UpriseColors.primaryDark;
     final headerText = UpriseColors.white;
     final borderColor = UpriseColors.primaryDark.withOpacity(0.18);
-    final buttonText = UpriseColors.charcoal;
 
     return Dialog(
       insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
@@ -1773,8 +1931,6 @@ class _LayersPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
     return Container(
       width: 180,
       color: const Color(0xFFFFF4E8),
@@ -1827,8 +1983,6 @@ class _PropertiesPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
     final sel = selected;
     return Container(
       width: 220,
@@ -2816,7 +2970,7 @@ class _ImportTemplateModalState extends State<_ImportTemplateModal> {
       final ref = FirebaseStorage.instance.ref().child(path);
       final data = _file!.bytes as Uint8List?;
       if (data == null) throw Exception('Failed to read file bytes');
-      final task = await ref.putData(data, SettableMetadata(contentType: _file!.extension == 'pdf' ? 'application/pdf' : 'image/${_file!.extension}'));
+      await ref.putData(data, SettableMetadata(contentType: _file!.extension == 'pdf' ? 'application/pdf' : 'image/${_file!.extension}'));
       final url = await ref.getDownloadURL();
       await FirebaseFirestore.instance.collection('certificate_templates').add({
         'orgId': widget.orgId,

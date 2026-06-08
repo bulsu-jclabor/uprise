@@ -250,6 +250,10 @@ class _EventManagementScreenState extends State<EventManagementScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final width = MediaQuery.of(context).size.width;
+    final isMobile = width < 720;
+    final horizontalPadding = isMobile ? 16.0 : 28.0;
+
     return Scaffold(
       backgroundColor: const Color(0xFFF6F7F9),
       body: Column(
@@ -257,7 +261,7 @@ class _EventManagementScreenState extends State<EventManagementScreen> {
         children: [
           // ── Header control panel ──
           Padding(
-            padding: const EdgeInsets.fromLTRB(28, 24, 28, 0),
+            padding: EdgeInsets.fromLTRB(horizontalPadding, 24, horizontalPadding, 0),
             child: Container(
               decoration: BoxDecoration(
                 color: Colors.white,
@@ -278,8 +282,7 @@ class _EventManagementScreenState extends State<EventManagementScreen> {
                         WidgetsBinding.instance.addPostFrameCallback(
                             (_) { if (mounted) _selectEvent(activeEvents.first); });
                       }
-                      return Row(children: [
-                        // Label pill
+                      final eventSelector = Row(children: [
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                           decoration: BoxDecoration(
@@ -318,6 +321,13 @@ class _EventManagementScreenState extends State<EventManagementScreen> {
                           _StatePill(_event!),
                         ],
                       ]);
+
+                      return isMobile
+                          ? Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [eventSelector],
+                            )
+                          : eventSelector;
                     },
                   ),
                 ),
@@ -325,7 +335,7 @@ class _EventManagementScreenState extends State<EventManagementScreen> {
               ]),
             ),
           ),
-          const SizedBox(height: 20),
+          SizedBox(height: isMobile ? 16 : 20),
           Expanded(
             child: AttendanceTab(key: const PageStorageKey('att'), orgId: widget.orgId, event: _event, eventDocId: _eventDocId),
           ),
@@ -667,8 +677,9 @@ class _AttendanceTabState extends State<AttendanceTab> with AutomaticKeepAliveCl
             final present = attDocs.where((d) => (d.data() as Map)['status'] == 'present').length;
             final late    = attDocs.where((d) => (d.data() as Map)['status'] == 'late').length;
 
+            final horizontalPadding = MediaQuery.of(ctx).size.width < 720 ? 16.0 : 28.0;
             return SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(28, 0, 28, 32),
+              padding: EdgeInsets.fromLTRB(horizontalPadding, 0, horizontalPadding, 32),
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 _buildStatsRow(attDocs.length, present, late),
                 const SizedBox(height: 20),

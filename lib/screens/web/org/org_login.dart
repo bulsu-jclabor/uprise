@@ -273,7 +273,12 @@ class _OrganizationLoginState extends State<OrganizationLogin>
               ),
             ),
             Padding(
-              padding: const EdgeInsets.fromLTRB(28, 32, 28, 28),
+              padding: EdgeInsets.fromLTRB(
+                MediaQuery.of(context).size.width < 720 ? 16.0 : 28.0,
+                32,
+                MediaQuery.of(context).size.width < 720 ? 16.0 : 28.0,
+                28,
+              ),
               child: Column(
                 children: [
                   // ── Logo ────────────────────────────────────────

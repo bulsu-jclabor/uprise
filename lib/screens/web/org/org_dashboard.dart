@@ -10,6 +10,7 @@
 //  - Unified "org" role — no officer/adviser split
 
 import 'dart:ui' as ui;
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -107,6 +108,7 @@ class _OrgDashboardState extends State<OrgDashboard> {
   bool _isLoading = true;
   String? _loadError;
   String _currentDateTime = '';
+  bool _sidebarOpen = false;
 
   final TextEditingController _searchController = TextEditingController();
   int _unreadNotifications = 0;
@@ -574,29 +576,36 @@ class _OrgDashboardState extends State<OrgDashboard> {
     }
 
     // Dashboard
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isMobile = screenWidth < 768;
+
     return Scaffold(
       backgroundColor: OrgColors.surface,
-      body: Row(
+      body: Stack(
         children: [
-          _buildSidebar(),
-          Expanded(
-            child: Column(
-              children: [
-                _buildTopBar(),
-                Expanded(
-                  child: _selectedIndex == -1
-                      ? OrgSettingsScreen(
-                          orgId: _orgId,
-                          orgName: _orgName,
-                          orgShortName: _orgShortName,
-                          orgEmail: _orgEmail,
-                        )
-                      : (_screensBuilt
-                            ? _screens[_selectedIndex]
-                            : const SizedBox()),
+          Row(
+            children: [
+              if (!isMobile) _buildSidebar(),
+              Expanded(
+                child: Column(
+                  children: [
+                    _buildTopBar(isMobile),
+                    Expanded(
+                      child: _selectedIndex == -1
+                          ? OrgSettingsScreen(
+                              orgId: _orgId,
+                              orgName: _orgName,
+                              orgShortName: _orgShortName,
+                              orgEmail: _orgEmail,
+                            )
+                          : (_screensBuilt
+                                ? _screens[_selectedIndex]
+                                : const SizedBox()),
+                    ),
+                  ],
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ],
       ),
@@ -820,10 +829,14 @@ class _OrgDashboardState extends State<OrgDashboard> {
   }
 
   // ── Top bar ───────────────────────────────────────────────────────
-  Widget _buildTopBar() {
+  Widget _buildTopBar(bool isMobile) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final horizontalPadding = screenWidth < 720 ? 12.0 : 28.0;
+    final isSmallMobile = screenWidth < 480;
+
     return Container(
       height: 64,
-      padding: const EdgeInsets.symmetric(horizontal: 28),
+      padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
       decoration: const BoxDecoration(
         color: OrgColors.white,
         border: Border(bottom: BorderSide(color: OrgColors.border)),
@@ -837,6 +850,27 @@ class _OrgDashboardState extends State<OrgDashboard> {
       ),
       child: Row(
         children: [
+          // Hamburger menu (mobile only)
+          if (isMobile)
+            GestureDetector(
+              onTap: () => setState(() => _sidebarOpen = !_sidebarOpen),
+              child: Container(
+                width: 36,
+                height: 36,
+                margin: const EdgeInsets.only(right: 12),
+                decoration: BoxDecoration(
+                  color: OrgColors.lightGray,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: OrgColors.border),
+                ),
+                child: const Icon(
+                  Icons.menu_rounded,
+                  color: OrgColors.darkGray,
+                  size: 18,
+                ),
+              ),
+            ),
+
           // Page title + subtitle
           Column(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -845,95 +879,142 @@ class _OrgDashboardState extends State<OrgDashboard> {
               Text(
                 _getCurrentTitle(),
                 style: GoogleFonts.beVietnamPro(
-                  fontSize: 17,
+                  fontSize: isSmallMobile ? 15 : 17,
                   fontWeight: FontWeight.w700,
                   color: OrgColors.charcoal,
                 ),
               ),
-              Text(
-                _orgName,
-                style: GoogleFonts.beVietnamPro(
-                  fontSize: 11,
-                  color: OrgColors.textFaint,
+              if (!isSmallMobile)
+                Text(
+                  _orgName,
+                  style: GoogleFonts.beVietnamPro(
+                    fontSize: 11,
+                    color: OrgColors.textFaint,
+                  ),
                 ),
-              ),
             ],
           ),
 
           const Spacer(),
 
-          // Datetime chip
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            decoration: BoxDecoration(
-              color: OrgColors.lightGray,
-              borderRadius: BorderRadius.circular(_DS.radiusPill),
-              border: Border.all(color: OrgColors.border),
+          // Datetime chip (hide on very small screens)
+          if (!isSmallMobile)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: OrgColors.lightGray,
+                borderRadius: BorderRadius.circular(_DS.radiusPill),
+                border: Border.all(color: OrgColors.border),
+              ),
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.access_time_rounded,
+                    size: 13,
+                    color: OrgColors.primaryDark,
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    _currentDateTime.length > 20
+                        ? _currentDateTime.substring(0, 20)
+                        : _currentDateTime,
+                    style: GoogleFonts.beVietnamPro(
+                      fontSize: 11,
+                      color: OrgColors.darkGray,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
             ),
-            child: Row(
-              children: [
-                const Icon(
-                  Icons.access_time_rounded,
-                  size: 13,
-                  color: OrgColors.primaryDark,
-                ),
-                const SizedBox(width: 6),
-                Text(
-                  _currentDateTime,
-                  style: GoogleFonts.beVietnamPro(
-                    fontSize: 11,
-                    color: OrgColors.darkGray,
-                    fontWeight: FontWeight.w500,
+          if (!isSmallMobile) const SizedBox(width: 16),
+
+          // Search (responsive width)
+          if (screenWidth >= 600)
+            SizedBox(
+              width: 240,
+              height: 38,
+              child: TextField(
+                controller: _searchController,
+                style: GoogleFonts.beVietnamPro(fontSize: 13),
+                decoration: InputDecoration(
+                  hintText: 'Search…',
+                  hintStyle: GoogleFonts.beVietnamPro(
+                    fontSize: 13,
+                    color: OrgColors.textFaint,
+                  ),
+                  prefixIcon: const Icon(
+                    Icons.search_rounded,
+                    size: 17,
+                    color: OrgColors.textFaint,
+                  ),
+                  filled: true,
+                  fillColor: OrgColors.lightGray,
+                  contentPadding: const EdgeInsets.symmetric(
+                    vertical: 0,
+                    horizontal: 16,
+                  ),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: const BorderSide(color: OrgColors.border),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: const BorderSide(color: OrgColors.border),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: const BorderSide(
+                      color: OrgColors.primaryDark,
+                      width: 1.5,
+                    ),
                   ),
                 ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 16),
-
-          // Search
-          SizedBox(
-            width: 240,
-            height: 38,
-            child: TextField(
-              controller: _searchController,
-              style: GoogleFonts.beVietnamPro(fontSize: 13),
-              decoration: InputDecoration(
-                hintText: 'Search\u2026',
-                hintStyle: GoogleFonts.beVietnamPro(
-                  fontSize: 13,
-                  color: OrgColors.textFaint,
-                ),
-                prefixIcon: const Icon(
-                  Icons.search_rounded,
-                  size: 17,
-                  color: OrgColors.textFaint,
-                ),
-                filled: true,
-                fillColor: OrgColors.lightGray,
-                contentPadding: const EdgeInsets.symmetric(
-                  vertical: 0,
-                  horizontal: 16,
-                ),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  borderSide: const BorderSide(color: OrgColors.border),
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  borderSide: const BorderSide(color: OrgColors.border),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  borderSide: const BorderSide(
-                    color: OrgColors.primaryDark,
-                    width: 1.5,
+              ),
+            )
+          else if (screenWidth >= 480)
+            SizedBox(
+              width: 120,
+              height: 38,
+              child: TextField(
+                controller: _searchController,
+                style: GoogleFonts.beVietnamPro(fontSize: 12),
+                decoration: InputDecoration(
+                  hintText: 'Search',
+                  hintStyle: GoogleFonts.beVietnamPro(
+                    fontSize: 12,
+                    color: OrgColors.textFaint,
+                  ),
+                  prefixIcon: const Icon(
+                    Icons.search_rounded,
+                    size: 16,
+                    color: OrgColors.textFaint,
+                  ),
+                  filled: true,
+                  fillColor: OrgColors.lightGray,
+                  contentPadding: const EdgeInsets.symmetric(
+                    vertical: 0,
+                    horizontal: 12,
+                  ),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: const BorderSide(color: OrgColors.border),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: const BorderSide(color: OrgColors.border),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: const BorderSide(
+                      color: OrgColors.primaryDark,
+                      width: 1.5,
+                    ),
                   ),
                 ),
               ),
             ),
-          ),
-          const SizedBox(width: 16),
+          if (screenWidth >= 600) const SizedBox(width: 16),
 
           // Notification bell
           PopupMenuButton<String>(
@@ -1046,53 +1127,77 @@ class _OrgDashboardState extends State<OrgDashboard> {
           ),
           const SizedBox(width: 12),
 
-          // Org avatar chip
-          Row(
-            children: [
-              Container(
-                width: 36,
-                height: 36,
-                decoration: BoxDecoration(
-                  color: OrgColors.primaryDark.withOpacity(0.10),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Center(
-                  child: Text(
-                    _orgShortName.isNotEmpty
-                        ? _orgShortName[0].toUpperCase()
-                        : 'O',
-                    style: GoogleFonts.beVietnamPro(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
-                      color: OrgColors.primaryDark,
+          // Org avatar chip (responsive)
+          if (screenWidth >= 480)
+            Row(
+              children: [
+                Container(
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    color: OrgColors.primaryDark.withOpacity(0.10),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Center(
+                    child: Text(
+                      _orgShortName.isNotEmpty
+                          ? _orgShortName[0].toUpperCase()
+                          : 'O',
+                      style: GoogleFonts.beVietnamPro(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: OrgColors.primaryDark,
+                      ),
                     ),
                   ),
                 ),
-              ),
-              const SizedBox(width: 10),
-              Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    _orgShortName,
-                    style: GoogleFonts.beVietnamPro(
-                      fontWeight: FontWeight.w700,
-                      fontSize: 13,
-                      color: OrgColors.charcoal,
-                    ),
-                  ),
-                  Text(
-                    'Organization',
-                    style: GoogleFonts.beVietnamPro(
-                      fontSize: 10,
-                      color: OrgColors.textFaint,
-                    ),
+                if (screenWidth >= 600) ...[
+                  const SizedBox(width: 10),
+                  Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        _orgShortName,
+                        style: GoogleFonts.beVietnamPro(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 13,
+                          color: OrgColors.charcoal,
+                        ),
+                      ),
+                      Text(
+                        'Organization',
+                        style: GoogleFonts.beVietnamPro(
+                          fontSize: 10,
+                          color: OrgColors.textFaint,
+                        ),
+                      ),
+                    ],
                   ),
                 ],
+              ],
+            )
+          else
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: OrgColors.primaryDark.withOpacity(0.10),
+                borderRadius: BorderRadius.circular(10),
               ),
-            ],
-          ),
+              child: Center(
+                child: Text(
+                  _orgShortName.isNotEmpty
+                      ? _orgShortName[0].toUpperCase()
+                      : 'O',
+                  style: GoogleFonts.beVietnamPro(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: OrgColors.primaryDark,
+                  ),
+                ),
+              ),
+            ),
         ],
       ),
     );
@@ -1114,6 +1219,7 @@ class _OrgDashboardHome extends StatefulWidget {
 class _OrgDashboardHomeState extends State<_OrgDashboardHome> {
   String _selectedSemester = '';
   String _selectedMonth = '';
+  String _chartStatusFilter = 'all'; // 'all', 'pending', 'approved', 'for_review', 'rejected'
   List<int> _chartData = [0, 0, 0, 0, 0, 0];
   bool _chartLoading = true;
 
@@ -1121,6 +1227,7 @@ class _OrgDashboardHomeState extends State<_OrgDashboardHome> {
   late final Stream<QuerySnapshot> _pendingProposalsStream;
   late final Stream<QuerySnapshot> _membersStream;
   late final Stream<QuerySnapshot> _upcomingEventsStream;
+  StreamSubscription<QuerySnapshot>? _chartDataSubscription;
 
   int get _semesterStartMonth => _selectedSemester.startsWith('1st') ? 8 : 1;
 
@@ -1186,55 +1293,64 @@ class _OrgDashboardHomeState extends State<_OrgDashboardHome> {
         .orderBy('date')
         .snapshots();
 
-    _fetchChartData();
+    _setupChartListener();
   }
 
-  void _fetchChartData() {
+  @override
+  void dispose() {
+    _chartDataSubscription?.cancel();
+    super.dispose();
+  }
+
+  void _setupChartListener() {
+    _chartDataSubscription?.cancel();
     setState(() => _chartLoading = true);
+
     final startYear = _semesterStartYear;
     final startMonth = _semesterStartMonth;
     final endMonth = startMonth == 8 ? 12 : 5;
     final endYear = startMonth == 8 ? startYear : startYear + 1;
+    final startDate = DateTime(startYear, startMonth, 1);
+    final endDate = DateTime(endYear, endMonth + 1, 1);
 
-    FirebaseFirestore.instance
-        .collection('events')
+    // Build query based on filter
+    var query = FirebaseFirestore.instance
+        .collection('event_proposals')
         .where('orgId', isEqualTo: widget.orgId)
-        .where('status', isEqualTo: 'completed')
-        .where(
-          'date',
-          isGreaterThanOrEqualTo: Timestamp.fromDate(
-            DateTime(startYear, startMonth, 1),
-          ),
-        )
-        .where(
-          'date',
-          isLessThan: Timestamp.fromDate(DateTime(endYear, endMonth + 1, 1)),
-        )
-        .get()
-        .then((snap) {
-          final counts = List.filled(6, 0);
-          for (final doc in snap.docs) {
-            final ts = doc.data()['date'] as Timestamp?;
-            if (ts == null) continue;
-            final m = ts.toDate().month;
-            int idx;
-            if (startMonth == 8) {
-              idx = m >= 8 ? m - 8 : (m == 1 ? 5 : -1);
-            } else {
-              idx = m - 1;
-            }
-            if (idx >= 0 && idx < 6) counts[idx]++;
+        .where('date', isGreaterThanOrEqualTo: Timestamp.fromDate(startDate))
+        .where('date', isLessThan: Timestamp.fromDate(endDate));
+
+    // Add status filter if not 'all'
+    if (_chartStatusFilter != 'all') {
+      query = query.where('status', isEqualTo: _chartStatusFilter);
+    }
+
+    _chartDataSubscription = query.snapshots().listen(
+      (snap) {
+        final counts = List.filled(6, 0);
+        for (final doc in snap.docs) {
+          final ts = doc.data()['date'] as Timestamp?;
+          if (ts == null) continue;
+          final m = ts.toDate().month;
+          int idx;
+          if (startMonth == 8) {
+            idx = m >= 8 ? m - 8 : (m == 1 ? 5 : -1);
+          } else {
+            idx = m - 1;
           }
-          if (mounted) {
-            setState(() {
-              _chartData = counts;
-              _chartLoading = false;
-            });
-          }
-        })
-        .catchError((_) {
-          if (mounted) setState(() => _chartLoading = false);
-        });
+          if (idx >= 0 && idx < 6) counts[idx]++;
+        }
+        if (mounted) {
+          setState(() {
+            _chartData = counts;
+            _chartLoading = false;
+          });
+        }
+      },
+      onError: (_) {
+        if (mounted) setState(() => _chartLoading = false);
+      },
+    );
   }
 
   @override
@@ -1421,7 +1537,7 @@ class _OrgDashboardHomeState extends State<_OrgDashboardHome> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Activity Overview',
+                    'Proposals Activity Overview',
                     style: GoogleFonts.beVietnamPro(
                       fontSize: 16,
                       fontWeight: FontWeight.w700,
@@ -1430,7 +1546,7 @@ class _OrgDashboardHomeState extends State<_OrgDashboardHome> {
                   ),
                   const SizedBox(height: 3),
                   Text(
-                    'Completed events per month this semester',
+                    'Event proposals per month this semester (real-time)',
                     style: GoogleFonts.beVietnamPro(
                       fontSize: 12,
                       color: OrgColors.textFaint,
@@ -1438,41 +1554,84 @@ class _OrgDashboardHomeState extends State<_OrgDashboardHome> {
                   ),
                 ],
               ),
-              Container(
-                height: 36,
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                decoration: BoxDecoration(
-                  border: Border.all(color: OrgColors.borderSoft),
-                  borderRadius: BorderRadius.circular(_DS.radiusSm),
-                  color: OrgColors.lightGray,
-                ),
-                child: DropdownButtonHideUnderline(
-                  child: DropdownButton<String>(
-                    value: _semesterOptions.contains(_selectedSemester)
-                        ? _selectedSemester
-                        : null,
-                    style: GoogleFonts.beVietnamPro(
-                      fontSize: 12,
-                      color: OrgColors.textMid,
+              Row(
+                children: [
+                  Container(
+                    height: 36,
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    decoration: BoxDecoration(
+                      border: Border.all(color: OrgColors.borderSoft),
+                      borderRadius: BorderRadius.circular(_DS.radiusSm),
+                      color: OrgColors.lightGray,
                     ),
-                    icon: const Icon(
-                      Icons.keyboard_arrow_down_rounded,
-                      size: 16,
-                      color: OrgColors.textFaint,
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<String>(
+                        value: _chartStatusFilter,
+                        style: GoogleFonts.beVietnamPro(
+                          fontSize: 12,
+                          color: OrgColors.textMid,
+                        ),
+                        icon: const Icon(
+                          Icons.keyboard_arrow_down_rounded,
+                          size: 16,
+                          color: OrgColors.textFaint,
+                        ),
+                        items: const [
+                          DropdownMenuItem(value: 'all', child: Text('All Statuses')),
+                          DropdownMenuItem(value: 'pending', child: Text('Pending')),
+                          DropdownMenuItem(value: 'approved', child: Text('Approved')),
+                          DropdownMenuItem(value: 'for_review', child: Text('For Review')),
+                          DropdownMenuItem(value: 'rejected', child: Text('Rejected')),
+                        ],
+                        onChanged: (v) {
+                          if (v != null) {
+                            setState(() {
+                              _chartStatusFilter = v;
+                              _setupChartListener();
+                            });
+                          }
+                        },
+                      ),
                     ),
-                    items: _semesterOptions
-                        .map((s) => DropdownMenuItem(value: s, child: Text(s)))
-                        .toList(),
-                    onChanged: (v) {
-                      if (v != null) {
-                        setState(() {
-                          _selectedSemester = v;
-                          _fetchChartData();
-                        });
-                      }
-                    },
                   ),
-                ),
+                  const SizedBox(width: 12),
+                  Container(
+                    height: 36,
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    decoration: BoxDecoration(
+                      border: Border.all(color: OrgColors.borderSoft),
+                      borderRadius: BorderRadius.circular(_DS.radiusSm),
+                      color: OrgColors.lightGray,
+                    ),
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<String>(
+                        value: _semesterOptions.contains(_selectedSemester)
+                            ? _selectedSemester
+                            : null,
+                        style: GoogleFonts.beVietnamPro(
+                          fontSize: 12,
+                          color: OrgColors.textMid,
+                        ),
+                        icon: const Icon(
+                          Icons.keyboard_arrow_down_rounded,
+                          size: 16,
+                          color: OrgColors.textFaint,
+                        ),
+                        items: _semesterOptions
+                            .map((s) => DropdownMenuItem(value: s, child: Text(s)))
+                            .toList(),
+                        onChanged: (v) {
+                          if (v != null) {
+                            setState(() {
+                              _selectedSemester = v;
+                              _setupChartListener();
+                            });
+                          }
+                        },
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),

@@ -506,16 +506,20 @@ class _ReportsManagementState extends State<ReportsManagement>
 
   @override
   Widget build(BuildContext context) {
+    final width = MediaQuery.of(context).size.width;
+    final isMobile = width < 720;
+    final isTablet = width >= 720 && width < 1200;
+
     return Scaffold(
       backgroundColor: const Color(0xFFFBFCFE),
-      body: _detailEvent != null ? _buildDetailView(_detailEvent!) : _buildMainView(),
+      body: _detailEvent != null ? _buildDetailView(_detailEvent!) : _buildMainView(isMobile, isTablet),
     );
   }
 
-  Widget _buildMainView() {
+  Widget _buildMainView(bool isMobile, bool isTablet) {
     return Column(children: [
-      _buildStatsRow(),
-      _buildToolbar(),
+      _buildStatsRow(isMobile, isTablet),
+      _buildToolbar(isMobile, isTablet),
       _buildTabBar(),
       const SizedBox(height: 16),
       Expanded(child: TabBarView(
@@ -532,59 +536,81 @@ class _ReportsManagementState extends State<ReportsManagement>
   }
 
   // ── Stats Row ─────────────────────────────────────────────────────
-  Widget _buildStatsRow() {
+  Widget _buildStatsRow(bool isMobile, bool isTablet) {
     final totalIncome   = _events.fold<double>(0, (s, e) => s + e.totalIncome);
     final totalExpenses = _events.fold<double>(0, (s, e) => s + e.totalExpenses);
     final netAmount     = totalIncome - totalExpenses;
     final totalReg      = _events.fold<int>(0, (s, e) => s + e.registrants);
+
+    final cards = [
+      _StatCard(label: 'Total Events',  value: '${_events.length}',  icon: Icons.event_rounded,                    color: UpriseColors.primaryDark),
+      _StatCard(label: 'Total Income',  value: '₱${_fmtK(totalIncome)}',  icon: Icons.trending_up_rounded,        color: UpriseColors.success),
+      _StatCard(label: 'Total Expenses',value: '₱${_fmtK(totalExpenses)}',icon: Icons.trending_down_rounded,      color: UpriseColors.error),
+      _StatCard(label: 'Net Amount',    value: '₱${_fmtK(netAmount)}',    icon: Icons.account_balance_wallet_rounded,
+          color: netAmount >= 0 ? UpriseColors.success : UpriseColors.error),
+      _StatCard(label: 'Registrants',   value: '$totalReg',               icon: Icons.group_rounded,              color: UpriseColors.info),
+    ];
+
     return Padding(
       padding: const EdgeInsets.fromLTRB(28, 24, 28, 0),
-      child: Row(children: [
-        _StatCard(label: 'Total Events',  value: '${_events.length}',  icon: Icons.event_rounded,                    color: UpriseColors.primaryDark),
-        const SizedBox(width: 14),
-        _StatCard(label: 'Total Income',  value: '₱${_fmtK(totalIncome)}',  icon: Icons.trending_up_rounded,        color: UpriseColors.success),
-        const SizedBox(width: 14),
-        _StatCard(label: 'Total Expenses',value: '₱${_fmtK(totalExpenses)}',icon: Icons.trending_down_rounded,      color: UpriseColors.error),
-        const SizedBox(width: 14),
-        _StatCard(label: 'Net Amount',    value: '₱${_fmtK(netAmount)}',    icon: Icons.account_balance_wallet_rounded,
-            color: netAmount >= 0 ? UpriseColors.success : UpriseColors.error),
-        const SizedBox(width: 14),
-        _StatCard(label: 'Registrants',   value: '$totalReg',               icon: Icons.group_rounded,              color: UpriseColors.info),
-      ]),
+      child: isMobile
+          ? Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                for (var card in cards) ...[
+                  card,
+                  const SizedBox(height: 14),
+                ],
+              ],
+            )
+          : Row(children: [
+              for (var card in cards) ...[
+                Expanded(child: card),
+                const SizedBox(width: 14),
+              ],
+            ]),
     );
   }
 
   // ── Toolbar ───────────────────────────────────────────────────────
-  Widget _buildToolbar() {
+  Widget _buildToolbar(bool isMobile, bool isTablet) {
     final orgNames = ['All Organizations', ..._organizations.map((o) => o['name'] as String)];
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(28, 20, 28, 0),
-      child: Row(children: [
+
+    final filterActions = Wrap(
+      spacing: 10,
+      runSpacing: 10,
+      children: [
         _FilterDropdown(
           value: _filterOrg, items: orgNames, hint: 'Organization', icon: Icons.business_rounded,
           onChanged: (v) { setState(() { _filterOrg = v!; _currentPage = 1; }); _loadEvents(); },
         ),
-        const SizedBox(width: 10),
         _FilterDropdown(
           value: _filterType,
           items: const ['All Types','Seminar','Workshop','Exhibition','Social','Cultural','Competition'],
           hint: 'Event Type', icon: Icons.category_rounded,
           onChanged: (v) { setState(() { _filterType = v!; _currentPage = 1; }); _loadEvents(); },
         ),
-        const SizedBox(width: 10),
         _FilterDropdown(
           value: _filterRange,
           items: const ['Current Semester','Last Semester','Academic Year 2024-2025'],
           hint: 'Date Range', icon: Icons.date_range_rounded,
           onChanged: (v) => setState(() => _filterRange = v!),
         ),
-        const Spacer(),
+        if (!isMobile) const Spacer(),
         _ExportButton(onExportCsv: _exportFinancialCSV, onExportPdf: _generatePDFReport),
-        const SizedBox(width: 10),
         _ToolbarButton(label: 'Set Deadlines',    icon: Icons.edit_calendar_rounded, onPressed: _showDeadlineDialog,      outlined: true),
-        const SizedBox(width: 10),
         _ToolbarButton(label: 'Generate Report',  icon: Icons.insert_drive_file_rounded, onPressed: _showGenerateReportDialog),
-      ]),
+      ],
+    );
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(28, 20, 28, 0),
+      child: isMobile
+          ? Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [filterActions],
+            )
+          : Row(children: [filterActions]),
     );
   }
 

@@ -18,37 +18,33 @@ import '../../../services/activity_logger.dart' as activity_log;
 // Design Tokens — identical to StudentAccounts / OrgAnnouncements
 // ─────────────────────────────────────────────────────────────────────────────
 class _C {
-  static const Color primaryDark  = Color(0xFFB45309);
-  static const Color primaryLight = Color(0xFFD97706);
-  static const Color accent       = Color(0xFFF59E0B);
+  static const Color primaryDark = Color(0xFFB45309);
+  static const Color accent = Color(0xFFF59E0B);
 
-  static const Color white        = Color(0xFFFFFFFF);
-  static const Color surface      = Color(0xFFF8F9FB);
-  static const Color pageBg       = Color(0xFFFBFCFE);
-  static const Color feedBg       = Color(0xFFF0F2F5);
+  static const Color white = Color(0xFFFFFFFF);
+  static const Color surface = Color(0xFFF8F9FB);
+  static const Color pageBg = Color(0xFFFBFCFE);
+  static const Color feedBg = Color(0xFFF0F2F5);
 
-  static const Color border       = Color(0xFFE8ECF0);
-  static const Color borderSoft   = Color(0xFFE2E6EA);
+  static const Color border = Color(0xFFE8ECF0);
+  static const Color borderSoft = Color(0xFFE2E6EA);
 
-  static const Color charcoal     = Color(0xFF1A202C);
-  static const Color textMid      = Color(0xFF374151);
-  static const Color darkGray     = Color(0xFF64748B);
-  static const Color textFaint    = Color(0xFF9AA5B4);
+  static const Color charcoal = Color(0xFF1A202C);
+  static const Color textMid = Color(0xFF374151);
+  static const Color darkGray = Color(0xFF64748B);
+  static const Color textFaint = Color(0xFF9AA5B4);
 
-  static const Color success      = Color(0xFF059669);
-  static const Color successBg    = Color(0xFFECFDF5);
-  static const Color warning      = Color(0xFFD97706);
-  static const Color warningBg    = Color(0xFFFFFBEB);
-  static const Color error        = Color(0xFFDC2626);
-  static const Color errorBg      = Color(0xFFFEF2F2);
-  static const Color info         = Color(0xFF2563EB);
-  static const Color infoBg       = Color(0xFFEFF6FF);
+  static const Color success = Color(0xFF059669);
+  static const Color error = Color(0xFFDC2626);
+  static const Color errorBg = Color(0xFFFEF2F2);
+  static const Color info = Color(0xFF2563EB);
+  static const Color infoBg = Color(0xFFEFF6FF);
 }
 
 class _DS {
-  static const double radiusSm   = 8;
-  static const double radiusMd   = 12;
-  static const double radiusLg   = 16;
+  static const double radiusSm = 8;
+  static const double radiusMd = 12;
+  static const double radiusLg = 16;
 
   static final List<BoxShadow> cardShadow = [
     BoxShadow(
@@ -96,16 +92,16 @@ class OrgBroadcastScreen extends StatefulWidget {
 }
 
 class _OrgBroadcastScreenState extends State<OrgBroadcastScreen> {
-  final TextEditingController _messageCtrl  = TextEditingController();
-  final ScrollController       _scrollCtrl  = ScrollController();
-  final FocusNode              _inputFocus  = FocusNode();
+  final TextEditingController _messageCtrl = TextEditingController();
+  final ScrollController _scrollCtrl = ScrollController();
+  final FocusNode _inputFocus = FocusNode();
 
   List<Attachment> _pendingAttachments = [];
   String? _pendingImageUrl;
-  bool _isSending         = false;
-  bool _isUploadingFile   = false;
-  bool _isUploadingImage  = false;
-  int  _memberCount       = 0;
+  bool _isSending = false;
+  bool _isUploadingFile = false;
+  bool _isUploadingImage = false;
+  int _memberCount = 0;
 
   @override
   void initState() {
@@ -165,13 +161,16 @@ class _OrgBroadcastScreenState extends State<OrgBroadcastScreen> {
           _snack('${file.name} exceeds 10 MB', isError: true);
           continue;
         }
-        final fileName = '${DateTime.now().millisecondsSinceEpoch}_${file.name}';
-        final ref = FirebaseStorage.instance
-            .ref()
-            .child('broadcasts/${widget.orgId}/files/$fileName');
+        final fileName =
+            '${DateTime.now().millisecondsSinceEpoch}_${file.name}';
+        final ref = FirebaseStorage.instance.ref().child(
+          'broadcasts/${widget.orgId}/files/$fileName',
+        );
         await ref.putData(bytes);
         final url = await ref.getDownloadURL();
-        setState(() => _pendingAttachments.add(Attachment(name: file.name, url: url)));
+        setState(
+          () => _pendingAttachments.add(Attachment(name: file.name, url: url)),
+        );
         uploaded++;
       }
       if (uploaded > 0) _snack('$uploaded file(s) attached');
@@ -184,13 +183,15 @@ class _OrgBroadcastScreenState extends State<OrgBroadcastScreen> {
 
   // ── Image upload ─────────────────────────────────────────────────────────
   Future<void> _pickImage() async {
-    final result = await FilePicker.platform
-        .pickFiles(type: FileType.image, allowMultiple: false);
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.image,
+      allowMultiple: false,
+    );
     if (result == null || result.files.isEmpty) return;
     setState(() => _isUploadingImage = true);
 
     try {
-      final file  = result.files.first;
+      final file = result.files.first;
       final bytes = file.bytes;
       if (bytes == null) throw 'No image data';
       if (bytes.length > 5 * 1024 * 1024) {
@@ -198,9 +199,9 @@ class _OrgBroadcastScreenState extends State<OrgBroadcastScreen> {
         return;
       }
       final fileName = '${DateTime.now().millisecondsSinceEpoch}_${file.name}';
-      final ref = FirebaseStorage.instance
-          .ref()
-          .child('broadcasts/${widget.orgId}/images/$fileName');
+      final ref = FirebaseStorage.instance.ref().child(
+        'broadcasts/${widget.orgId}/images/$fileName',
+      );
       await ref.putData(bytes, SettableMetadata(contentType: 'image/jpeg'));
       final url = await ref.getDownloadURL();
       setState(() => _pendingImageUrl = url);
@@ -215,7 +216,11 @@ class _OrgBroadcastScreenState extends State<OrgBroadcastScreen> {
   // ── Send ─────────────────────────────────────────────────────────────────
   Future<void> _sendMessage() async {
     final text = _messageCtrl.text.trim();
-    if (text.isEmpty && _pendingAttachments.isEmpty && _pendingImageUrl == null) return;
+    if (text.isEmpty &&
+        _pendingAttachments.isEmpty &&
+        _pendingImageUrl == null) {
+      return;
+    }
     setState(() => _isSending = true);
 
     try {
@@ -228,16 +233,16 @@ class _OrgBroadcastScreenState extends State<OrgBroadcastScreen> {
       final authorName = userDoc.data()?['name'] ?? user.email ?? 'Unknown';
 
       final data = <String, dynamic>{
-        'orgId':       widget.orgId,
-        'content':     text,
-        'authorId':    user.uid,
-        'authorName':  authorName,
+        'orgId': widget.orgId,
+        'content': text,
+        'authorId': user.uid,
+        'authorName': authorName,
         'attachments': _pendingAttachments
             .map((a) => {'name': a.name, 'url': a.url})
             .toList(),
-        'likes':       0,
-        'replyCount':  0,
-        'pinned':      false,
+        'likes': 0,
+        'replyCount': 0,
+        'pinned': false,
         'timestamp': FieldValue.serverTimestamp(),
       };
       if (_pendingImageUrl != null && _pendingImageUrl!.isNotEmpty) {
@@ -254,7 +259,7 @@ class _OrgBroadcastScreenState extends State<OrgBroadcastScreen> {
       _messageCtrl.clear();
       setState(() {
         _pendingAttachments = [];
-        _pendingImageUrl    = null;
+        _pendingImageUrl = null;
       });
       _inputFocus.requestFocus();
       _scrollToBottom();
@@ -271,7 +276,8 @@ class _OrgBroadcastScreenState extends State<OrgBroadcastScreen> {
       context: context,
       builder: (ctx) => Dialog(
         shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(_DS.radiusLg)),
+          borderRadius: BorderRadius.circular(_DS.radiusLg),
+        ),
         child: Container(
           width: 400,
           padding: const EdgeInsets.all(28),
@@ -279,60 +285,90 @@ class _OrgBroadcastScreenState extends State<OrgBroadcastScreen> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(children: [
-                Container(
-                  width: 42, height: 42,
-                  decoration: BoxDecoration(
+              Row(
+                children: [
+                  Container(
+                    width: 42,
+                    height: 42,
+                    decoration: BoxDecoration(
                       color: _C.errorBg,
-                      borderRadius: BorderRadius.circular(10)),
-                  child: const Icon(Icons.delete_outline_rounded,
-                      color: _C.error, size: 20),
-                ),
-                const SizedBox(width: 14),
-                Text('Delete Message',
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(
+                      Icons.delete_outline_rounded,
+                      color: _C.error,
+                      size: 20,
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+                  Text(
+                    'Delete Message',
                     style: GoogleFonts.beVietnamPro(
-                        fontSize: 17,
-                        fontWeight: FontWeight.w700,
-                        color: _C.charcoal)),
-              ]),
+                      fontSize: 17,
+                      fontWeight: FontWeight.w700,
+                      color: _C.charcoal,
+                    ),
+                  ),
+                ],
+              ),
               const SizedBox(height: 14),
               Text(
                 'This message will be permanently removed from the broadcast channel.',
                 style: GoogleFonts.beVietnamPro(
-                    fontSize: 14, color: _C.darkGray, height: 1.5),
+                  fontSize: 14,
+                  color: _C.darkGray,
+                  height: 1.5,
+                ),
               ),
               const SizedBox(height: 24),
-              Row(mainAxisAlignment: MainAxisAlignment.end, children: [
-                OutlinedButton(
-                  onPressed: () => Navigator.pop(ctx, false),
-                  style: OutlinedButton.styleFrom(
-                    side: const BorderSide(color: _C.borderSoft),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8)),
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 18, vertical: 11),
-                  ),
-                  child: Text('Cancel',
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  OutlinedButton(
+                    onPressed: () => Navigator.pop(ctx, false),
+                    style: OutlinedButton.styleFrom(
+                      side: const BorderSide(color: _C.borderSoft),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 18,
+                        vertical: 11,
+                      ),
+                    ),
+                    child: Text(
+                      'Cancel',
                       style: GoogleFonts.beVietnamPro(
-                          fontSize: 13, color: _C.textMid)),
-                ),
-                const SizedBox(width: 10),
-                ElevatedButton(
-                  onPressed: () => Navigator.pop(ctx, true),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: _C.error,
-                    foregroundColor: Colors.white,
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8)),
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 18, vertical: 11),
+                        fontSize: 13,
+                        color: _C.textMid,
+                      ),
+                    ),
                   ),
-                  child: Text('Delete',
+                  const SizedBox(width: 10),
+                  ElevatedButton(
+                    onPressed: () => Navigator.pop(ctx, true),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: _C.error,
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 18,
+                        vertical: 11,
+                      ),
+                    ),
+                    child: Text(
+                      'Delete',
                       style: GoogleFonts.beVietnamPro(
-                          fontSize: 13, fontWeight: FontWeight.w600)),
-                ),
-              ]),
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ],
           ),
         ),
@@ -372,121 +408,233 @@ class _OrgBroadcastScreenState extends State<OrgBroadcastScreen> {
 
   void _snack(String msg, {bool isError = false}) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Row(children: [
-        Icon(
-            isError ? Icons.error_outline : Icons.check_circle_outline,
-            color: Colors.white,
-            size: 16),
-        const SizedBox(width: 8),
-        Expanded(
-            child: Text(msg,
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            Icon(
+              isError ? Icons.error_outline : Icons.check_circle_outline,
+              color: Colors.white,
+              size: 16,
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                msg,
                 style: GoogleFonts.beVietnamPro(
-                    fontSize: 13, color: Colors.white))),
-      ]),
-      backgroundColor: isError ? _C.error : _C.success,
-      behavior: SnackBarBehavior.floating,
-      shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(_DS.radiusSm)),
-    ));
+                  fontSize: 13,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+          ],
+        ),
+        backgroundColor: isError ? _C.error : _C.success,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(_DS.radiusSm),
+        ),
+      ),
+    );
   }
 
   bool _sameDay(Timestamp a, Timestamp b) {
     final da = a.toDate(), db = b.toDate();
-    return da.year == db.year &&
-        da.month == db.month &&
-        da.day == db.day;
+    return da.year == db.year && da.month == db.month && da.day == db.day;
   }
 
   // ── Member count formatter ────────────────────────────────────────────────
-  String _formatCount(int n) =>
-      n.toString().replaceAllMapped(
-          RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
-          (m) => '${m[1]},');
+  String _formatCount(int n) => n.toString().replaceAllMapped(
+    RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
+    (m) => '${m[1]},',
+  );
 
   // ==========================================================================
   // BUILD
   // ==========================================================================
   @override
   Widget build(BuildContext context) {
+    final width = MediaQuery.of(context).size.width;
+    final isMobile = width < 720;
+    final horizontalPadding = isMobile ? 16.0 : 28.0;
+
     return Scaffold(
       backgroundColor: _C.pageBg,
-      body: Column(children: [
-        _buildChannelHeader(),
-        Expanded(child: _buildFeedShell()),
-        if (_pendingAttachments.isNotEmpty || _pendingImageUrl != null)
-          _buildAttachmentPreviewBar(),
-        _buildComposeBar(),
-      ]),
+      body: Column(
+        children: [
+          _buildChannelHeader(isMobile, horizontalPadding),
+          Expanded(child: _buildFeedShell(isMobile, horizontalPadding)),
+          if (_pendingAttachments.isNotEmpty || _pendingImageUrl != null)
+            _buildAttachmentPreviewBar(horizontalPadding),
+          _buildComposeBar(isMobile, horizontalPadding),
+        ],
+      ),
     );
   }
 
   // ── Channel header (mirrors StudentAccounts stat row style) ──────────────
-  Widget _buildChannelHeader() {
+  Widget _buildChannelHeader(bool isMobile, double horizontalPadding) {
     return Container(
-      padding: const EdgeInsets.fromLTRB(28, 20, 28, 18),
+      padding: EdgeInsets.fromLTRB(
+        horizontalPadding,
+        20,
+        horizontalPadding,
+        18,
+      ),
       decoration: BoxDecoration(
         color: _C.white,
         border: const Border(bottom: BorderSide(color: _C.border)),
         boxShadow: _DS.cardShadow,
       ),
-      child: Row(children: [
-        // Icon badge
-        Container(
-          width: 46, height: 46,
-          decoration: BoxDecoration(
-            color: _C.primaryDark.withOpacity(0.10),
-            borderRadius: BorderRadius.circular(13),
-          ),
-          child: const Icon(Icons.campaign_rounded,
-              color: _C.primaryDark, size: 24),
-        ),
-        const SizedBox(width: 14),
-        Expanded(
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text('Broadcast Channel',
-                style: GoogleFonts.beVietnamPro(
-                    fontSize: 17,
-                    fontWeight: FontWeight.w800,
-                    color: _C.charcoal)),
-            const SizedBox(height: 2),
-            Text(widget.orgName,
-                style: GoogleFonts.beVietnamPro(
-                    fontSize: 12, color: _C.darkGray)),
-          ]),
-        ),
-        // Member pill (mirrors stat card style)
-        StreamBuilder<QuerySnapshot>(
-          stream: FirebaseFirestore.instance
-              .collection('broadcasts')
-              .where('orgId', isEqualTo: widget.orgId)
-              .snapshots(),
-          builder: (_, snap) {
-            final count = snap.data?.docs.length ?? 0;
-            return Row(children: [
-              _HeaderPill(
-                icon: Icons.forum_outlined,
-                label: '$count messages',
-                color: _C.info,
-              ),
-              const SizedBox(width: 10),
-              if (_memberCount > 0)
-                _HeaderPill(
-                  icon: Icons.people_outline_rounded,
-                  label: '${_formatCount(_memberCount)} members',
-                  color: _C.success,
+      child: isMobile
+          ? Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      width: 46,
+                      height: 46,
+                      decoration: BoxDecoration(
+                        color: _C.primaryDark.withValues(alpha: 0.10),
+                        borderRadius: BorderRadius.circular(13),
+                      ),
+                      child: const Icon(
+                        Icons.campaign_rounded,
+                        color: _C.primaryDark,
+                        size: 24,
+                      ),
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Broadcast Channel',
+                            style: GoogleFonts.beVietnamPro(
+                              fontSize: 17,
+                              fontWeight: FontWeight.w800,
+                              color: _C.charcoal,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            widget.orgName,
+                            style: GoogleFonts.beVietnamPro(
+                              fontSize: 12,
+                              color: _C.darkGray,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
-            ]);
-          },
-        ),
-      ]),
+                const SizedBox(height: 12),
+                StreamBuilder<QuerySnapshot>(
+                  stream: FirebaseFirestore.instance
+                      .collection('broadcasts')
+                      .where('orgId', isEqualTo: widget.orgId)
+                      .snapshots(),
+                  builder: (_, snap) {
+                    final count = snap.data?.docs.length ?? 0;
+                    return Wrap(
+                      spacing: 10,
+                      runSpacing: 10,
+                      children: [
+                        _HeaderPill(
+                          icon: Icons.forum_outlined,
+                          label: '$count messages',
+                          color: _C.info,
+                        ),
+                        if (_memberCount > 0)
+                          _HeaderPill(
+                            icon: Icons.people_outline_rounded,
+                            label: '${_formatCount(_memberCount)} members',
+                            color: _C.success,
+                          ),
+                      ],
+                    );
+                  },
+                ),
+              ],
+            )
+          : Row(
+              children: [
+                // Icon badge
+                Container(
+                  width: 46,
+                  height: 46,
+                  decoration: BoxDecoration(
+                    color: _C.primaryDark.withValues(alpha: 0.10),
+                    borderRadius: BorderRadius.circular(13),
+                  ),
+                  child: const Icon(
+                    Icons.campaign_rounded,
+                    color: _C.primaryDark,
+                    size: 24,
+                  ),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Broadcast Channel',
+                        style: GoogleFonts.beVietnamPro(
+                          fontSize: 17,
+                          fontWeight: FontWeight.w800,
+                          color: _C.charcoal,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        widget.orgName,
+                        style: GoogleFonts.beVietnamPro(
+                          fontSize: 12,
+                          color: _C.darkGray,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                // Member pill (mirrors stat card style)
+                StreamBuilder<QuerySnapshot>(
+                  stream: FirebaseFirestore.instance
+                      .collection('broadcasts')
+                      .where('orgId', isEqualTo: widget.orgId)
+                      .snapshots(),
+                  builder: (_, snap) {
+                    final count = snap.data?.docs.length ?? 0;
+                    return Row(
+                      children: [
+                        _HeaderPill(
+                          icon: Icons.forum_outlined,
+                          label: '$count messages',
+                          color: _C.info,
+                        ),
+                        const SizedBox(width: 10),
+                        if (_memberCount > 0)
+                          _HeaderPill(
+                            icon: Icons.people_outline_rounded,
+                            label: '${_formatCount(_memberCount)} members',
+                            color: _C.success,
+                          ),
+                      ],
+                    );
+                  },
+                ),
+              ],
+            ),
     );
   }
 
   // ── Feed shell (same white card with shadow as StudentAccounts table) ─────
-  Widget _buildFeedShell() {
+  Widget _buildFeedShell(bool isMobile, double horizontalPadding) {
     return Container(
-      margin: const EdgeInsets.fromLTRB(28, 20, 28, 0),
+      margin: EdgeInsets.fromLTRB(horizontalPadding, 20, horizontalPadding, 0),
       decoration: BoxDecoration(
         color: _C.feedBg,
         borderRadius: BorderRadius.circular(14),
@@ -502,7 +650,8 @@ class _OrgBroadcastScreenState extends State<OrgBroadcastScreen> {
           }
           if (snap.connectionState == ConnectionState.waiting) {
             return const Center(
-                child: CircularProgressIndicator(color: _C.primaryDark));
+              child: CircularProgressIndicator(color: _C.primaryDark),
+            );
           }
           if (!snap.hasData || snap.data!.docs.isEmpty) {
             return _buildEmptyState();
@@ -519,16 +668,18 @@ class _OrgBroadcastScreenState extends State<OrgBroadcastScreen> {
             padding: const EdgeInsets.fromLTRB(24, 20, 24, 20),
             itemCount: items.length,
             itemBuilder: (ctx, i) {
-              final msg      = items[i];
-              final showSep  = i == 0 ||
-                  !_sameDay(items[i - 1].timestamp, msg.timestamp);
-              return Column(children: [
-                if (showSep) _DateSeparator(timestamp: msg.timestamp),
-                _BroadcastBubble(
-                  broadcast: msg,
-                  onDelete: () => _deleteMessage(msg),
-                ),
-              ]);
+              final msg = items[i];
+              final showSep =
+                  i == 0 || !_sameDay(items[i - 1].timestamp, msg.timestamp);
+              return Column(
+                children: [
+                  if (showSep) _DateSeparator(timestamp: msg.timestamp),
+                  _BroadcastBubble(
+                    broadcast: msg,
+                    onDelete: () => _deleteMessage(msg),
+                  ),
+                ],
+              );
             },
           );
         },
@@ -538,138 +689,199 @@ class _OrgBroadcastScreenState extends State<OrgBroadcastScreen> {
 
   Widget _buildEmptyState() {
     return Center(
-      child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-        Container(
-          width: 80, height: 80,
-          decoration: BoxDecoration(
-              color: _C.white, borderRadius: BorderRadius.circular(20),
-              boxShadow: _DS.cardShadow),
-          child: const Icon(Icons.campaign_outlined,
-              size: 40, color: _C.textFaint),
-        ),
-        const SizedBox(height: 16),
-        Text('No messages yet',
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            width: 80,
+            height: 80,
+            decoration: BoxDecoration(
+              color: _C.white,
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: _DS.cardShadow,
+            ),
+            child: const Icon(
+              Icons.campaign_outlined,
+              size: 40,
+              color: _C.textFaint,
+            ),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'No messages yet',
             style: GoogleFonts.beVietnamPro(
-                fontSize: 16,
-                fontWeight: FontWeight.w700,
-                color: _C.charcoal)),
-        const SizedBox(height: 6),
-        Text('Send a broadcast to all members below.',
-            style: GoogleFonts.beVietnamPro(
-                fontSize: 13, color: _C.darkGray)),
-      ]),
+              fontSize: 16,
+              fontWeight: FontWeight.w700,
+              color: _C.charcoal,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Send a broadcast to all members below.',
+            style: GoogleFonts.beVietnamPro(fontSize: 13, color: _C.darkGray),
+          ),
+        ],
+      ),
     );
   }
 
   Widget _buildErrorState(String error) {
     return Center(
-      child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-        Container(
-          width: 56, height: 56,
-          decoration: BoxDecoration(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            width: 56,
+            height: 56,
+            decoration: BoxDecoration(
               color: _C.errorBg,
-              borderRadius: BorderRadius.circular(16)),
-          child: const Icon(Icons.error_outline_rounded,
-              color: _C.error, size: 28),
-        ),
-        const SizedBox(height: 14),
-        Text('Failed to load messages',
-            style: GoogleFonts.beVietnamPro(
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-                color: _C.charcoal)),
-        const SizedBox(height: 6),
-        Text(error,
-            style: GoogleFonts.beVietnamPro(
-                fontSize: 12, color: _C.darkGray),
-            textAlign: TextAlign.center),
-        const SizedBox(height: 16),
-        ElevatedButton.icon(
-          onPressed: () => setState(() {}),
-          icon: const Icon(Icons.refresh_rounded, size: 15),
-          label: Text('Retry',
-              style: GoogleFonts.beVietnamPro(
-                  fontSize: 13, fontWeight: FontWeight.w600)),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: _C.primaryDark,
-            foregroundColor: Colors.white,
-            elevation: 0,
-            shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8)),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: const Icon(
+              Icons.error_outline_rounded,
+              color: _C.error,
+              size: 28,
+            ),
           ),
-        ),
-      ]),
+          const SizedBox(height: 14),
+          Text(
+            'Failed to load messages',
+            style: GoogleFonts.beVietnamPro(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: _C.charcoal,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            error,
+            style: GoogleFonts.beVietnamPro(fontSize: 12, color: _C.darkGray),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 16),
+          ElevatedButton.icon(
+            onPressed: () => setState(() {}),
+            icon: const Icon(Icons.refresh_rounded, size: 15),
+            label: Text(
+              'Retry',
+              style: GoogleFonts.beVietnamPro(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: _C.primaryDark,
+              foregroundColor: Colors.white,
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
   // ── Pending attachments preview bar ──────────────────────────────────────
-  Widget _buildAttachmentPreviewBar() {
+  Widget _buildAttachmentPreviewBar(double horizontalPadding) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(28, 10, 28, 0),
+      padding: EdgeInsets.fromLTRB(horizontalPadding, 10, horizontalPadding, 0),
       color: _C.white,
-      child: Wrap(spacing: 8, runSpacing: 8, children: [
-        // Image preview
-        if (_pendingImageUrl != null)
-          Stack(children: [
-            ClipRRect(
-              borderRadius: BorderRadius.circular(8),
-              child: Image(
-                image: _imageProviderFromUrl(_pendingImageUrl!),
-                width: 64, height: 64, fit: BoxFit.cover,
-              ),
-            ),
-            Positioned(
-              top: 3, right: 3,
-              child: InkWell(
-                onTap: () => setState(() => _pendingImageUrl = null),
-                child: Container(
-                  width: 20, height: 20,
-                  decoration: BoxDecoration(
-                      color: Colors.black.withOpacity(0.65),
-                      shape: BoxShape.circle),
-                  child: const Icon(Icons.close_rounded,
-                      size: 12, color: Colors.white),
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: [
+          // Image preview
+          if (_pendingImageUrl != null)
+            Stack(
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: Image(
+                    image: _imageProviderFromUrl(_pendingImageUrl!),
+                    width: 64,
+                    height: 64,
+                    fit: BoxFit.cover,
+                  ),
                 ),
-              ),
+                Positioned(
+                  top: 3,
+                  right: 3,
+                  child: InkWell(
+                    onTap: () => setState(() => _pendingImageUrl = null),
+                    child: Container(
+                      width: 20,
+                      height: 20,
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.65),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.close_rounded,
+                        size: 12,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
-          ]),
-        // File chips
-        ..._pendingAttachments.asMap().entries.map((e) => Container(
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 10, vertical: 6),
+          // File chips
+          ..._pendingAttachments.asMap().entries.map(
+            (e) => Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
               decoration: BoxDecoration(
                 color: _C.infoBg,
                 borderRadius: BorderRadius.circular(8),
-                border: Border.all(
-                    color: _C.info.withOpacity(0.25)),
+                border: Border.all(color: _C.info.withValues(alpha: 0.25)),
               ),
-              child: Row(mainAxisSize: MainAxisSize.min, children: [
-                const Icon(Icons.insert_drive_file_outlined,
-                    size: 14, color: _C.info),
-                const SizedBox(width: 6),
-                Text(e.value.name,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(
+                    Icons.insert_drive_file_outlined,
+                    size: 14,
+                    color: _C.info,
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    e.value.name,
                     style: GoogleFonts.beVietnamPro(
-                        fontSize: 12,
-                        color: _C.info,
-                        fontWeight: FontWeight.w500)),
-                const SizedBox(width: 6),
-                InkWell(
-                  onTap: () => setState(
-                      () => _pendingAttachments.removeAt(e.key)),
-                  child: const Icon(Icons.close_rounded,
-                      size: 13, color: _C.info),
-                ),
-              ]),
-            )),
-      ]),
+                      fontSize: 12,
+                      color: _C.info,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  InkWell(
+                    onTap: () =>
+                        setState(() => _pendingAttachments.removeAt(e.key)),
+                    child: const Icon(
+                      Icons.close_rounded,
+                      size: 13,
+                      color: _C.info,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
   // ── Compose bar ──────────────────────────────────────────────────────────
-  Widget _buildComposeBar() {
+  Widget _buildComposeBar(bool isMobile, double horizontalPadding) {
     return Container(
-      padding: const EdgeInsets.fromLTRB(28, 12, 28, 18),
+      padding: EdgeInsets.fromLTRB(
+        horizontalPadding,
+        12,
+        horizontalPadding,
+        18,
+      ),
       decoration: BoxDecoration(
         color: _C.white,
         border: const Border(top: BorderSide(color: _C.border)),
@@ -681,136 +893,168 @@ class _OrgBroadcastScreenState extends State<OrgBroadcastScreen> {
           ),
         ],
       ),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        // Toolbar row — matches the StudentAccounts outlined toolbar button style
-        Row(children: [
-          _ComposeToolbarBtn(
-            icon: Icons.attach_file_rounded,
-            label: 'Attach',
-            isLoading: _isUploadingFile,
-            onTap: _pickFiles,
-          ),
-          const SizedBox(width: 4),
-          _ComposeToolbarBtn(
-            icon: Icons.image_outlined,
-            label: 'Image',
-            isLoading: _isUploadingImage,
-            onTap: _pickImage,
-          ),
-          const Spacer(),
-          // Recipient note
-          Row(children: [
-            const Icon(Icons.people_outline_rounded,
-                size: 13, color: _C.textFaint),
-            const SizedBox(width: 5),
-            Text(
-              _memberCount > 0
-                  ? 'Sending to ${_formatCount(_memberCount)} members'
-                  : 'Sending to all members',
-              style: GoogleFonts.beVietnamPro(
-                  fontSize: 11, color: _C.textFaint),
-            ),
-          ]),
-        ]),
-        const SizedBox(height: 10),
-        // Input + send row
-        Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
-          Expanded(
-            child: Container(
-              decoration: BoxDecoration(
-                color: _C.surface,
-                borderRadius: BorderRadius.circular(_DS.radiusMd),
-                border: Border.all(color: _C.borderSoft),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Toolbar row — matches the StudentAccounts outlined toolbar button style
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            alignment: WrapAlignment.spaceBetween,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              _ComposeToolbarBtn(
+                icon: Icons.attach_file_rounded,
+                label: 'Attach',
+                isLoading: _isUploadingFile,
+                onTap: _pickFiles,
               ),
-              child: TextField(
-                controller: _messageCtrl,
-                focusNode: _inputFocus,
-                style: GoogleFonts.beVietnamPro(
-                    fontSize: 13, color: _C.charcoal),
-                maxLines: null,
-                minLines: 1,
-                keyboardType: TextInputType.multiline,
-                textInputAction: TextInputAction.newline,
-                onChanged: (v) => setState(() {}),
-                decoration: InputDecoration(
-                  hintText:
-                      'Write a message to all members…',
-                  hintStyle: GoogleFonts.beVietnamPro(
-                      fontSize: 13, color: _C.textFaint),
-                  border: InputBorder.none,
-                  contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 16, vertical: 13),
+              _ComposeToolbarBtn(
+                icon: Icons.image_outlined,
+                label: 'Image',
+                isLoading: _isUploadingImage,
+                onTap: _pickImage,
+              ),
+              SizedBox(
+                width: isMobile ? double.infinity : null,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(
+                      Icons.people_outline_rounded,
+                      size: 13,
+                      color: _C.textFaint,
+                    ),
+                    const SizedBox(width: 5),
+                    Expanded(
+                      child: Text(
+                        _memberCount > 0
+                            ? 'Sending to ${_formatCount(_memberCount)} members'
+                            : 'Sending to all members',
+                        style: GoogleFonts.beVietnamPro(
+                          fontSize: 11,
+                          color: _C.textFaint,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
                 ),
               ),
-            ),
+            ],
           ),
-          const SizedBox(width: 10),
-          // Send button — gradient to match brand
-          Builder(
-            builder: (ctx) {
-              final hasContent = _messageCtrl.text.trim().isNotEmpty ||
-                  _pendingAttachments.isNotEmpty ||
-                  _pendingImageUrl != null;
-              final canSend = hasContent && !_isSending;
-              return InkWell(
-                onTap: canSend ? _sendMessage : null,
-                borderRadius: BorderRadius.circular(_DS.radiusMd),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 180),
-                  width: 46, height: 46,
+          const SizedBox(height: 10),
+          // Input + send row
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Expanded(
+                child: Container(
                   decoration: BoxDecoration(
-                    gradient: canSend
-                        ? const LinearGradient(
-                            colors: [_C.primaryDark, _C.accent],
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                          )
-                        : LinearGradient(
-                            colors: [
-                              _C.primaryDark.withOpacity(0.4),
-                              _C.accent.withOpacity(0.4),
-                            ],
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                          ),
-                    borderRadius:
-                        BorderRadius.circular(_DS.radiusMd),
-                    boxShadow: canSend
-                        ? [
-                            BoxShadow(
-                              color: _C.accent.withOpacity(0.35),
-                              blurRadius: 8,
-                              offset: const Offset(0, 2),
-                            ),
-                          ]
-                        : [],
+                    color: _C.surface,
+                    borderRadius: BorderRadius.circular(_DS.radiusMd),
+                    border: Border.all(color: _C.borderSoft),
                   ),
-                  child: _isSending
-                      ? const Center(
-                          child: SizedBox(
-                            width: 18, height: 18,
-                            child: CircularProgressIndicator(
-                                color: Colors.white,
-                                strokeWidth: 2),
-                          ),
-                        )
-                      : Icon(Icons.send_rounded,
-                          color: canSend
-                              ? Colors.white
-                              : Colors.white.withOpacity(0.5),
-                          size: 20),
+                  child: TextField(
+                    controller: _messageCtrl,
+                    focusNode: _inputFocus,
+                    style: GoogleFonts.beVietnamPro(
+                      fontSize: 13,
+                      color: _C.charcoal,
+                    ),
+                    maxLines: null,
+                    minLines: 1,
+                    keyboardType: TextInputType.multiline,
+                    textInputAction: TextInputAction.newline,
+                    onChanged: (v) => setState(() {}),
+                    decoration: InputDecoration(
+                      hintText: 'Write a message to all members…',
+                      hintStyle: GoogleFonts.beVietnamPro(
+                        fontSize: 13,
+                        color: _C.textFaint,
+                      ),
+                      border: InputBorder.none,
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 13,
+                      ),
+                    ),
+                  ),
                 ),
-              );
-            },
+              ),
+              const SizedBox(width: 10),
+              // Send button — gradient to match brand
+              Builder(
+                builder: (ctx) {
+                  final hasContent =
+                      _messageCtrl.text.trim().isNotEmpty ||
+                      _pendingAttachments.isNotEmpty ||
+                      _pendingImageUrl != null;
+                  final canSend = hasContent && !_isSending;
+                  return InkWell(
+                    onTap: canSend ? _sendMessage : null,
+                    borderRadius: BorderRadius.circular(_DS.radiusMd),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 180),
+                      width: 46,
+                      height: 46,
+                      decoration: BoxDecoration(
+                        gradient: canSend
+                            ? const LinearGradient(
+                                colors: [_C.primaryDark, _C.accent],
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                              )
+                            : LinearGradient(
+                                colors: [
+                                  _C.primaryDark.withValues(alpha: 0.4),
+                                  _C.accent.withValues(alpha: 0.4),
+                                ],
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                              ),
+                        borderRadius: BorderRadius.circular(_DS.radiusMd),
+                        boxShadow: canSend
+                            ? [
+                                BoxShadow(
+                                  color: _C.accent.withValues(alpha: 0.35),
+                                  blurRadius: 8,
+                                  offset: const Offset(0, 2),
+                                ),
+                              ]
+                            : [],
+                      ),
+                      child: _isSending
+                          ? const Center(
+                              child: SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
+                                  color: Colors.white,
+                                  strokeWidth: 2,
+                                ),
+                              ),
+                            )
+                          : Icon(
+                              Icons.send_rounded,
+                              color: canSend
+                                  ? Colors.white
+                                  : Colors.white.withValues(alpha: 0.5),
+                              size: 20,
+                            ),
+                    ),
+                  );
+                },
+              ),
+            ],
           ),
-        ]),
-        const SizedBox(height: 6),
-        Text(
-          'Only organization officers can broadcast. Members can react and reply under each message.',
-          style: GoogleFonts.beVietnamPro(
-              fontSize: 10, color: _C.textFaint),
-        ),
-      ]),
+          const SizedBox(height: 6),
+          Text(
+            'Only organization officers can broadcast. Members can react and reply under each message.',
+            style: GoogleFonts.beVietnamPro(fontSize: 10, color: _C.textFaint),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -822,27 +1066,36 @@ class _HeaderPill extends StatelessWidget {
   final IconData icon;
   final String label;
   final Color color;
-  const _HeaderPill(
-      {required this.icon, required this.label, required this.color});
+  const _HeaderPill({
+    required this.icon,
+    required this.label,
+    required this.color,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.08),
+        color: color.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: color.withOpacity(0.2)),
+        border: Border.all(color: color.withValues(alpha: 0.2)),
       ),
-      child: Row(mainAxisSize: MainAxisSize.min, children: [
-        Icon(icon, size: 13, color: color),
-        const SizedBox(width: 6),
-        Text(label,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 13, color: color),
+          const SizedBox(width: 6),
+          Text(
+            label,
             style: GoogleFonts.beVietnamPro(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: color)),
-      ]),
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: color,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -869,29 +1122,37 @@ class _ComposeToolbarBtn extends StatelessWidget {
       onTap: isLoading ? null : onTap,
       borderRadius: BorderRadius.circular(8),
       child: Container(
-        padding: const EdgeInsets.symmetric(
-            horizontal: 10, vertical: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         decoration: BoxDecoration(
           color: _C.surface,
           borderRadius: BorderRadius.circular(8),
           border: Border.all(color: _C.borderSoft),
         ),
-        child: Row(mainAxisSize: MainAxisSize.min, children: [
-          if (isLoading)
-            const SizedBox(
-              width: 14, height: 14,
-              child: CircularProgressIndicator(
-                  strokeWidth: 2, color: _C.darkGray),
-            )
-          else
-            Icon(icon, size: 15, color: _C.darkGray),
-          const SizedBox(width: 6),
-          Text(label,
-              style: GoogleFonts.beVietnamPro(
-                  fontSize: 12,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (isLoading)
+              const SizedBox(
+                width: 14,
+                height: 14,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
                   color: _C.darkGray,
-                  fontWeight: FontWeight.w500)),
-        ]),
+                ),
+              )
+            else
+              Icon(icon, size: 15, color: _C.darkGray),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: GoogleFonts.beVietnamPro(
+                fontSize: 12,
+                color: _C.darkGray,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -905,15 +1166,19 @@ class _DateSeparator extends StatelessWidget {
   const _DateSeparator({required this.timestamp});
 
   String _label() {
-    final now  = DateTime.now();
+    final now = DateTime.now();
     final date = timestamp.toDate();
     if (date.year == now.year &&
         date.month == now.month &&
-        date.day == now.day) return 'Today';
+        date.day == now.day) {
+      return 'Today';
+    }
     final yesterday = now.subtract(const Duration(days: 1));
     if (date.year == yesterday.year &&
         date.month == yesterday.month &&
-        date.day == yesterday.day) return 'Yesterday';
+        date.day == yesterday.day) {
+      return 'Yesterday';
+    }
     return DateFormat('MMMM d, yyyy').format(date);
   }
 
@@ -921,25 +1186,29 @@ class _DateSeparator extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 16),
-      child: Row(children: [
-        const Expanded(child: Divider(color: _C.border, thickness: 1)),
-        Container(
-          margin: const EdgeInsets.symmetric(horizontal: 12),
-          padding: const EdgeInsets.symmetric(
-              horizontal: 12, vertical: 4),
-          decoration: BoxDecoration(
-            color: _C.white,
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: _C.border),
-          ),
-          child: Text(_label(),
+      child: Row(
+        children: [
+          const Expanded(child: Divider(color: _C.border, thickness: 1)),
+          Container(
+            margin: const EdgeInsets.symmetric(horizontal: 12),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+            decoration: BoxDecoration(
+              color: _C.white,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: _C.border),
+            ),
+            child: Text(
+              _label(),
               style: GoogleFonts.beVietnamPro(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                  color: _C.darkGray)),
-        ),
-        const Expanded(child: Divider(color: _C.border, thickness: 1)),
-      ]),
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: _C.darkGray,
+              ),
+            ),
+          ),
+          const Expanded(child: Divider(color: _C.border, thickness: 1)),
+        ],
+      ),
     );
   }
 }
@@ -951,20 +1220,18 @@ class _BroadcastBubble extends StatefulWidget {
   final BroadcastModel broadcast;
   final VoidCallback onDelete;
 
-  const _BroadcastBubble(
-      {required this.broadcast, required this.onDelete});
+  const _BroadcastBubble({required this.broadcast, required this.onDelete});
 
   @override
   State<_BroadcastBubble> createState() => _BroadcastBubbleState();
 }
 
 class _BroadcastBubbleState extends State<_BroadcastBubble> {
-  bool _hovered    = false;
-  bool _isPinning  = false;
-  bool _isEditing  = false;
+  bool _hovered = false;
+  bool _isPinning = false;
+  bool _isEditing = false;
 
-  String _timeLabel(Timestamp ts) =>
-      DateFormat('h:mm a').format(ts.toDate());
+  String _timeLabel(Timestamp ts) => DateFormat('h:mm a').format(ts.toDate());
 
   Widget _buildReplyMeta() {
     return StreamBuilder<QuerySnapshot>(
@@ -975,24 +1242,30 @@ class _BroadcastBubbleState extends State<_BroadcastBubble> {
           .orderBy('timestamp', descending: true)
           .snapshots(),
       builder: (context, snap) {
-        final replyCount = snap.data?.docs.length ?? widget.broadcast.replyCount;
-        return Row(children: [
-          _MiniActionChip(
-            icon: Icons.favorite_border,
-            label: '${widget.broadcast.likes}',
-          ),
-          const SizedBox(width: 10),
-          _MiniActionChip(
-            icon: Icons.mode_comment_outlined,
-            label: '$replyCount',
-          ),
-          const Spacer(),
-          Text('Replies',
+        final replyCount =
+            snap.data?.docs.length ?? widget.broadcast.replyCount;
+        return Row(
+          children: [
+            _MiniActionChip(
+              icon: Icons.favorite_border,
+              label: '${widget.broadcast.likes}',
+            ),
+            const SizedBox(width: 10),
+            _MiniActionChip(
+              icon: Icons.mode_comment_outlined,
+              label: '$replyCount',
+            ),
+            const Spacer(),
+            Text(
+              'Replies',
               style: GoogleFonts.beVietnamPro(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: _C.textFaint)),
-        ]);
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: _C.textFaint,
+              ),
+            ),
+          ],
+        );
       },
     );
   }
@@ -1009,9 +1282,13 @@ class _BroadcastBubbleState extends State<_BroadcastBubble> {
         if (!snap.hasData || snap.data!.docs.isEmpty) {
           return Padding(
             padding: const EdgeInsets.only(top: 10),
-            child: Text('No replies yet. Students can reply under this message.',
-                style: GoogleFonts.beVietnamPro(
-                    fontSize: 12, color: _C.textFaint)),
+            child: Text(
+              'No replies yet. Students can reply under this message.',
+              style: GoogleFonts.beVietnamPro(
+                fontSize: 12,
+                color: _C.textFaint,
+              ),
+            ),
           );
         }
 
@@ -1027,11 +1304,14 @@ class _BroadcastBubbleState extends State<_BroadcastBubble> {
             ...preview.map((reply) => _ReplyRow(reply: reply)),
             if (replies.length > 2) ...[
               const SizedBox(height: 6),
-              Text('View all ${replies.length} replies',
-                  style: GoogleFonts.beVietnamPro(
-                      fontSize: 12,
-                      color: _C.primaryDark,
-                      fontWeight: FontWeight.w700)),
+              Text(
+                'View all ${replies.length} replies',
+                style: GoogleFonts.beVietnamPro(
+                  fontSize: 12,
+                  color: _C.primaryDark,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
             ],
           ],
         );
@@ -1041,6 +1321,7 @@ class _BroadcastBubbleState extends State<_BroadcastBubble> {
 
   Future<void> _togglePinMessage() async {
     if (_isPinning) return;
+    final messenger = ScaffoldMessenger.of(context);
     setState(() => _isPinning = true);
     try {
       await FirebaseFirestore.instance
@@ -1048,11 +1329,16 @@ class _BroadcastBubbleState extends State<_BroadcastBubble> {
           .doc(widget.broadcast.id)
           .update({'pinned': !(widget.broadcast.pinned)});
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('Could not pin message: $e',
-            style: GoogleFonts.beVietnamPro(fontSize: 13, color: Colors.white)),
-        backgroundColor: _C.error,
-      ));
+      if (!mounted) return;
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            'Could not pin message: $e',
+            style: GoogleFonts.beVietnamPro(fontSize: 13, color: Colors.white),
+          ),
+          backgroundColor: _C.error,
+        ),
+      );
     } finally {
       if (mounted) setState(() => _isPinning = false);
     }
@@ -1072,11 +1358,14 @@ class _BroadcastBubbleState extends State<_BroadcastBubble> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Edit Message',
-                  style: GoogleFonts.beVietnamPro(
-                      fontSize: 17,
-                      fontWeight: FontWeight.w700,
-                      color: _C.charcoal)),
+              Text(
+                'Edit Message',
+                style: GoogleFonts.beVietnamPro(
+                  fontSize: 17,
+                  fontWeight: FontWeight.w700,
+                  color: _C.charcoal,
+                ),
+              ),
               const SizedBox(height: 12),
               TextField(
                 controller: controller,
@@ -1090,68 +1379,109 @@ class _BroadcastBubbleState extends State<_BroadcastBubble> {
                     borderSide: BorderSide(color: _C.borderSoft),
                   ),
                 ),
-                style: GoogleFonts.beVietnamPro(fontSize: 13, color: _C.charcoal),
+                style: GoogleFonts.beVietnamPro(
+                  fontSize: 13,
+                  color: _C.charcoal,
+                ),
               ),
               const SizedBox(height: 18),
-              Row(mainAxisAlignment: MainAxisAlignment.end, children: [
-                OutlinedButton(
-                  onPressed: () => Navigator.pop(ctx, false),
-                  style: OutlinedButton.styleFrom(
-                    side: const BorderSide(color: _C.borderSoft),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 11),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  OutlinedButton(
+                    onPressed: () => Navigator.pop(ctx, false),
+                    style: OutlinedButton.styleFrom(
+                      side: const BorderSide(color: _C.borderSoft),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 18,
+                        vertical: 11,
+                      ),
+                    ),
+                    child: Text(
+                      'Cancel',
+                      style: GoogleFonts.beVietnamPro(
+                        fontSize: 13,
+                        color: _C.textMid,
+                      ),
+                    ),
                   ),
-                  child: Text('Cancel',
-                      style: GoogleFonts.beVietnamPro(fontSize: 13, color: _C.textMid)),
-                ),
-                const SizedBox(width: 10),
-                ElevatedButton(
-                  onPressed: controller.text.trim().isEmpty
-                      ? null
-                      : () async {
-                          if (!mounted) return;
-                          setState(() => _isEditing = true);
-                          try {
-                            await FirebaseFirestore.instance
-                                .collection('broadcasts')
-                                .doc(widget.broadcast.id)
-                                .update({
-                              'content': controller.text.trim(),
-                              'editedAt': FieldValue.serverTimestamp(),
-                            });
-                            Navigator.pop(ctx, true);
-                          } catch (e) {
-                            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                              content: Text('Update failed: $e',
-                                  style: GoogleFonts.beVietnamPro(fontSize: 13, color: Colors.white)),
-                              backgroundColor: _C.error,
-                            ));
-                          } finally {
-                            if (mounted) setState(() => _isEditing = false);
-                          }
-                        },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: _C.primaryDark,
-                    foregroundColor: Colors.white,
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 11),
+                  const SizedBox(width: 10),
+                  ElevatedButton(
+                    onPressed: controller.text.trim().isEmpty
+                        ? null
+                        : () async {
+                            if (!mounted) return;
+                            final messenger = ScaffoldMessenger.of(context);
+                            setState(() => _isEditing = true);
+                            try {
+                              await FirebaseFirestore.instance
+                                  .collection('broadcasts')
+                                  .doc(widget.broadcast.id)
+                                  .update({
+                                    'content': controller.text.trim(),
+                                    'editedAt': FieldValue.serverTimestamp(),
+                                  });
+                              if (!mounted) return;
+                              Navigator.pop(context, true);
+                            } catch (e) {
+                              if (!mounted) return;
+                              messenger.showSnackBar(
+                                SnackBar(
+                                  content: Text(
+                                    'Update failed: $e',
+                                    style: GoogleFonts.beVietnamPro(
+                                      fontSize: 13,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                  backgroundColor: _C.error,
+                                ),
+                              );
+                            } finally {
+                              if (mounted) setState(() => _isEditing = false);
+                            }
+                          },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: _C.primaryDark,
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 18,
+                        vertical: 11,
+                      ),
+                    ),
+                    child: Text(
+                      'Save',
+                      style: GoogleFonts.beVietnamPro(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                   ),
-                  child: Text('Save',
-                      style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600)),
-                ),
-              ]),
+                ],
+              ),
             ],
           ),
         ),
       ),
     );
     if (result == true) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('Message updated',
-            style: GoogleFonts.beVietnamPro(fontSize: 13, color: Colors.white)),
-        backgroundColor: _C.success,
-      ));
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Message updated',
+            style: GoogleFonts.beVietnamPro(fontSize: 13, color: Colors.white),
+          ),
+          backgroundColor: _C.success,
+        ),
+      );
     }
   }
 
@@ -1161,74 +1491,82 @@ class _BroadcastBubbleState extends State<_BroadcastBubble> {
     final isMine = b.authorId == FirebaseAuth.instance.currentUser?.uid;
     return MouseRegion(
       onEnter: (_) => setState(() => _hovered = true),
-      onExit:  (_) => setState(() => _hovered = false),
+      onExit: (_) => setState(() => _hovered = false),
       child: Padding(
         padding: const EdgeInsets.only(bottom: 14),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisAlignment:
-              isMine ? MainAxisAlignment.end : MainAxisAlignment.start,
+          mainAxisAlignment: isMine
+              ? MainAxisAlignment.end
+              : MainAxisAlignment.start,
           children: [
             if (!isMine) ...[
               AnimatedOpacity(
                 opacity: _hovered ? 1.0 : 0.0,
                 duration: const Duration(milliseconds: 150),
-                child: Row(children: [
-                  InkWell(
-                    onTap: _isEditing ? null : _editMessage,
-                    borderRadius: BorderRadius.circular(8),
-                    child: Container(
-                      padding: const EdgeInsets.all(6),
-                      decoration: BoxDecoration(
-                        color: _C.surface,
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: _C.borderSoft),
-                      ),
-                      child: const Icon(Icons.edit_outlined,
-                          size: 15, color: _C.charcoal),
-                    ),
-                  ),
-                  const SizedBox(width: 6),
-                  InkWell(
-                    onTap: _isPinning ? null : _togglePinMessage,
-                    borderRadius: BorderRadius.circular(8),
-                    child: Container(
-                      padding: const EdgeInsets.all(6),
-                      decoration: BoxDecoration(
-                        color: _C.surface,
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: _C.borderSoft),
-                      ),
-                      child: Icon(
-                        widget.broadcast.pinned
-                            ? Icons.push_pin_rounded
-                            : Icons.push_pin_outlined,
-                        size: 15,
-                        color: widget.broadcast.pinned
-                            ? _C.primaryDark
-                            : _C.charcoal,
+                child: Row(
+                  children: [
+                    InkWell(
+                      onTap: _isEditing ? null : _editMessage,
+                      borderRadius: BorderRadius.circular(8),
+                      child: Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color: _C.surface,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: _C.borderSoft),
+                        ),
+                        child: const Icon(
+                          Icons.edit_outlined,
+                          size: 15,
+                          color: _C.charcoal,
+                        ),
                       ),
                     ),
-                  ),
-                  const SizedBox(width: 6),
-                  InkWell(
-                    onTap: widget.onDelete,
-                    borderRadius: BorderRadius.circular(8),
-                    child: Container(
-                      padding: const EdgeInsets.all(6),
-                      decoration: BoxDecoration(
-                        color: _C.errorBg,
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(
-                            color: _C.error.withOpacity(0.2)),
+                    const SizedBox(width: 6),
+                    InkWell(
+                      onTap: _isPinning ? null : _togglePinMessage,
+                      borderRadius: BorderRadius.circular(8),
+                      child: Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color: _C.surface,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: _C.borderSoft),
+                        ),
+                        child: Icon(
+                          widget.broadcast.pinned
+                              ? Icons.push_pin_rounded
+                              : Icons.push_pin_outlined,
+                          size: 15,
+                          color: widget.broadcast.pinned
+                              ? _C.primaryDark
+                              : _C.charcoal,
+                        ),
                       ),
-                      child: const Icon(
+                    ),
+                    const SizedBox(width: 6),
+                    InkWell(
+                      onTap: widget.onDelete,
+                      borderRadius: BorderRadius.circular(8),
+                      child: Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color: _C.errorBg,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: _C.error.withValues(alpha: 0.2),
+                          ),
+                        ),
+                        child: const Icon(
                           Icons.delete_outline_rounded,
                           size: 15,
-                          color: _C.error),
+                          color: _C.error,
+                        ),
+                      ),
                     ),
-                  ),
-                ]),
+                  ],
+                ),
               ),
               const SizedBox(width: 8),
             ],
@@ -1237,36 +1575,41 @@ class _BroadcastBubbleState extends State<_BroadcastBubble> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(children: [
-                    Text(b.authorName,
+                  Row(
+                    children: [
+                      Text(
+                        b.authorName,
                         style: GoogleFonts.beVietnamPro(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w700,
-                            color: _C.charcoal)),
-                    const SizedBox(width: 8),
-                    const Icon(Icons.circle,
-                        size: 3, color: _C.textFaint),
-                    const SizedBox(width: 8),
-                    Text(_timeLabel(b.timestamp),
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: _C.charcoal,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      const Icon(Icons.circle, size: 3, color: _C.textFaint),
+                      const SizedBox(width: 8),
+                      Text(
+                        _timeLabel(b.timestamp),
                         style: GoogleFonts.beVietnamPro(
-                            fontSize: 11, color: _C.textFaint)),
-                  ]),
+                          fontSize: 11,
+                          color: _C.textFaint,
+                        ),
+                      ),
+                    ],
+                  ),
                   const SizedBox(height: 6),
 
                   Container(
                     decoration: BoxDecoration(
                       gradient: const LinearGradient(
-                        colors: [
-                          Color(0xFFB45309),
-                          Color(0xFFD97706),
-                        ],
+                        colors: [Color(0xFFB45309), Color(0xFFD97706)],
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
                       ),
                       borderRadius: const BorderRadius.only(
-                        topLeft:     Radius.circular(4),
-                        topRight:    Radius.circular(14),
-                        bottomLeft:  Radius.circular(14),
+                        topLeft: Radius.circular(4),
+                        topRight: Radius.circular(14),
+                        bottomLeft: Radius.circular(14),
                         bottomRight: Radius.circular(14),
                       ),
                       boxShadow: _DS.bubbleShadow,
@@ -1274,11 +1617,10 @@ class _BroadcastBubbleState extends State<_BroadcastBubble> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        if (b.imageUrl != null &&
-                            b.imageUrl!.isNotEmpty) ...[
+                        if (b.imageUrl != null && b.imageUrl!.isNotEmpty) ...[
                           ClipRRect(
                             borderRadius: const BorderRadius.only(
-                              topLeft:  Radius.circular(4),
+                              topLeft: Radius.circular(4),
                               topRight: Radius.circular(14),
                             ),
                             child: Image(
@@ -1286,8 +1628,7 @@ class _BroadcastBubbleState extends State<_BroadcastBubble> {
                               width: double.infinity,
                               height: 220,
                               fit: BoxFit.cover,
-                              errorBuilder: (_, __, ___) =>
-                                  const SizedBox(),
+                              errorBuilder: (_, __, ___) => const SizedBox(),
                             ),
                           ),
                         ],
@@ -1297,11 +1638,14 @@ class _BroadcastBubbleState extends State<_BroadcastBubble> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               if (b.content.isNotEmpty)
-                                Text(b.content,
-                                    style: GoogleFonts.beVietnamPro(
-                                        fontSize: 13,
-                                        color: Colors.white,
-                                        height: 1.6)),
+                                Text(
+                                  b.content,
+                                  style: GoogleFonts.beVietnamPro(
+                                    fontSize: 13,
+                                    color: Colors.white,
+                                    height: 1.6,
+                                  ),
+                                ),
                               if (b.attachments.isNotEmpty) ...[
                                 if (b.content.isNotEmpty)
                                   const SizedBox(height: 12),
@@ -1319,20 +1663,33 @@ class _BroadcastBubbleState extends State<_BroadcastBubble> {
                     Padding(
                       padding: const EdgeInsets.only(bottom: 10),
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 6,
+                        ),
                         decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.15),
+                          color: Colors.white.withValues(alpha: 0.15),
                           borderRadius: BorderRadius.circular(12),
                         ),
-                        child: Row(mainAxisSize: MainAxisSize.min, children: [
-                          const Icon(Icons.push_pin_rounded, size: 14, color: Colors.white),
-                          const SizedBox(width: 6),
-                          Text('Pinned message',
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(
+                              Icons.push_pin_rounded,
+                              size: 14,
+                              color: Colors.white,
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              'Pinned message',
                               style: GoogleFonts.beVietnamPro(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w600,
-                                  color: Colors.white)),
-                        ]),
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   const SizedBox(height: 10),
@@ -1347,62 +1704,69 @@ class _BroadcastBubbleState extends State<_BroadcastBubble> {
               AnimatedOpacity(
                 opacity: _hovered ? 1.0 : 0.0,
                 duration: const Duration(milliseconds: 150),
-                child: Row(children: [
-                  InkWell(
-                    onTap: _isEditing ? null : _editMessage,
-                    borderRadius: BorderRadius.circular(8),
-                    child: Container(
-                      padding: const EdgeInsets.all(6),
-                      decoration: BoxDecoration(
-                        color: _C.surface,
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: _C.borderSoft),
-                      ),
-                      child: const Icon(Icons.edit_outlined,
-                          size: 15, color: _C.charcoal),
-                    ),
-                  ),
-                  const SizedBox(width: 6),
-                  InkWell(
-                    onTap: _isPinning ? null : _togglePinMessage,
-                    borderRadius: BorderRadius.circular(8),
-                    child: Container(
-                      padding: const EdgeInsets.all(6),
-                      decoration: BoxDecoration(
-                        color: _C.surface,
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: _C.borderSoft),
-                      ),
-                      child: Icon(
-                        widget.broadcast.pinned
-                            ? Icons.push_pin_rounded
-                            : Icons.push_pin_outlined,
-                        size: 15,
-                        color: widget.broadcast.pinned
-                            ? _C.primaryDark
-                            : _C.charcoal,
+                child: Row(
+                  children: [
+                    InkWell(
+                      onTap: _isEditing ? null : _editMessage,
+                      borderRadius: BorderRadius.circular(8),
+                      child: Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color: _C.surface,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: _C.borderSoft),
+                        ),
+                        child: const Icon(
+                          Icons.edit_outlined,
+                          size: 15,
+                          color: _C.charcoal,
+                        ),
                       ),
                     ),
-                  ),
-                  const SizedBox(width: 6),
-                  InkWell(
-                    onTap: widget.onDelete,
-                    borderRadius: BorderRadius.circular(8),
-                    child: Container(
-                      padding: const EdgeInsets.all(6),
-                      decoration: BoxDecoration(
-                        color: _C.errorBg,
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(
-                            color: _C.error.withOpacity(0.2)),
+                    const SizedBox(width: 6),
+                    InkWell(
+                      onTap: _isPinning ? null : _togglePinMessage,
+                      borderRadius: BorderRadius.circular(8),
+                      child: Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color: _C.surface,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: _C.borderSoft),
+                        ),
+                        child: Icon(
+                          widget.broadcast.pinned
+                              ? Icons.push_pin_rounded
+                              : Icons.push_pin_outlined,
+                          size: 15,
+                          color: widget.broadcast.pinned
+                              ? _C.primaryDark
+                              : _C.charcoal,
+                        ),
                       ),
-                      child: const Icon(
+                    ),
+                    const SizedBox(width: 6),
+                    InkWell(
+                      onTap: widget.onDelete,
+                      borderRadius: BorderRadius.circular(8),
+                      child: Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color: _C.errorBg,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: _C.error.withValues(alpha: 0.2),
+                          ),
+                        ),
+                        child: const Icon(
                           Icons.delete_outline_rounded,
                           size: 15,
-                          color: _C.error),
+                          color: _C.error,
+                        ),
+                      ),
                     ),
-                  ),
-                ]),
+                  ],
+                ),
               ),
             ],
           ],
@@ -1422,19 +1786,25 @@ class _MiniActionChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.16),
+        color: Colors.white.withValues(alpha: 0.16),
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: Colors.white.withOpacity(0.25)),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.25)),
       ),
-      child: Row(mainAxisSize: MainAxisSize.min, children: [
-        Icon(icon, size: 14, color: Colors.white),
-        const SizedBox(width: 6),
-        Text(label,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: Colors.white),
+          const SizedBox(width: 6),
+          Text(
+            label,
             style: GoogleFonts.beVietnamPro(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: Colors.white)),
-      ]),
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: Colors.white,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -1449,26 +1819,43 @@ class _ReplyRow extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.16),
+        color: Colors.white.withValues(alpha: 0.16),
         borderRadius: BorderRadius.circular(12),
       ),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(children: [
-          Text(reply.authorName,
-              style: GoogleFonts.beVietnamPro(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Text(
+                reply.authorName,
+                style: GoogleFonts.beVietnamPro(
                   fontSize: 12,
                   fontWeight: FontWeight.w700,
-                  color: Colors.white)),
-          const SizedBox(width: 8),
-          Text(DateFormat('h:mm a').format(reply.timestamp.toDate()),
-              style: GoogleFonts.beVietnamPro(
-                  fontSize: 11, color: Colors.white70)),
-        ]),
-        const SizedBox(height: 6),
-        Text(reply.content,
+                  color: Colors.white,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                DateFormat('h:mm a').format(reply.timestamp.toDate()),
+                style: GoogleFonts.beVietnamPro(
+                  fontSize: 11,
+                  color: Colors.white70,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            reply.content,
             style: GoogleFonts.beVietnamPro(
-                fontSize: 12, color: Colors.white, height: 1.5)),
-      ]),
+              fontSize: 12,
+              color: Colors.white,
+              height: 1.5,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -1509,40 +1896,47 @@ class _AttachmentChip extends StatelessWidget {
     return InkWell(
       onTap: () {
         Clipboard.setData(ClipboardData(text: att.url));
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('Link copied to clipboard'),
-          duration: Duration(seconds: 2),
-        ));
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Link copied to clipboard'),
+            duration: Duration(seconds: 2),
+          ),
+        );
       },
       borderRadius: BorderRadius.circular(8),
       child: Container(
         margin: const EdgeInsets.only(bottom: 6),
-        padding: const EdgeInsets.symmetric(
-            horizontal: 12, vertical: 9),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
         decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.18),
+          color: Colors.white.withValues(alpha: 0.18),
           borderRadius: BorderRadius.circular(8),
-          border: Border.all(
-              color: Colors.white.withOpacity(0.25)),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.25)),
         ),
-        child: Row(children: [
-          const Icon(Icons.insert_drive_file_outlined,
-              size: 15, color: Colors.white),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(att.name,
+        child: Row(
+          children: [
+            const Icon(
+              Icons.insert_drive_file_outlined,
+              size: 15,
+              color: Colors.white,
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                att.name,
                 style: GoogleFonts.beVietnamPro(
-                    fontSize: 12,
-                    color: Colors.white,
-                    fontWeight: FontWeight.w500,
-                    decoration: TextDecoration.underline,
-                    decorationColor: Colors.white),
-                overflow: TextOverflow.ellipsis),
-          ),
-          const SizedBox(width: 8),
-          const Icon(Icons.copy_outlined,
-              size: 13, color: Colors.white),
-        ]),
+                  fontSize: 12,
+                  color: Colors.white,
+                  fontWeight: FontWeight.w500,
+                  decoration: TextDecoration.underline,
+                  decorationColor: Colors.white,
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            const SizedBox(width: 8),
+            const Icon(Icons.copy_outlined, size: 13, color: Colors.white),
+          ],
+        ),
       ),
     );
   }
@@ -1558,16 +1952,16 @@ class Attachment {
 }
 
 class BroadcastModel {
-  final String     id;
-  final String     content;
-  final String     authorId;
-  final String     authorName;
-  final int        likes;
-  final int        replyCount;
-  final bool       pinned;
-  final Timestamp  timestamp;
+  final String id;
+  final String content;
+  final String authorId;
+  final String authorName;
+  final int likes;
+  final int replyCount;
+  final bool pinned;
+  final Timestamp timestamp;
   final List<Attachment> attachments;
-  final String?    imageUrl;
+  final String? imageUrl;
 
   const BroadcastModel({
     required this.id,
@@ -1588,14 +1982,14 @@ class BroadcastModel {
     if (imageUrl == '') imageUrl = null;
 
     return BroadcastModel(
-      id:          doc.id,
-      content:     d['content']    ?? '',
-      authorId:    d['authorId']   ?? '',
-      authorName:  d['authorName'] ?? 'Unknown',
-      likes:       (d['likes'] as int?) ?? 0,
-      replyCount:  (d['replyCount'] as int?) ?? 0,
-      pinned:      (d['pinned'] as bool?) ?? false,
-      timestamp:   d['timestamp']  as Timestamp,
+      id: doc.id,
+      content: d['content'] ?? '',
+      authorId: d['authorId'] ?? '',
+      authorName: d['authorName'] ?? 'Unknown',
+      likes: (d['likes'] as int?) ?? 0,
+      replyCount: (d['replyCount'] as int?) ?? 0,
+      pinned: (d['pinned'] as bool?) ?? false,
+      timestamp: d['timestamp'] as Timestamp,
       attachments: ((d['attachments'] as List?) ?? [])
           .map((a) => Attachment(name: a['name'], url: a['url']))
           .toList(),

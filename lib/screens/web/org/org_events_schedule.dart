@@ -1,3 +1,4 @@
+// ignore_for_file: unused_element_parameter
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -10,7 +11,6 @@ import '../../../services/activity_logger.dart' as activity_log;
 // ==================== DESIGN TOKENS ====================
 class _DS {
   static const double radiusSm = 8;
-  static const double radiusMd = 12;
   static const double radiusLg = 16;
   static const double radiusPill = 100;
 
@@ -257,26 +257,32 @@ class _OrgEventsScheduleScreenState extends State<OrgEventsScheduleScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final width = MediaQuery.of(context).size.width;
+    final isMobile = width < 720;
+    final isTablet = width >= 720 && width < 1200;
+    final horizontalPadding = isMobile ? 16.0 : (isTablet ? 22.0 : 28.0);
+
     return Scaffold(
       backgroundColor: const Color(0xFFFBFCFE),
       body: SingleChildScrollView(
+        padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _buildStatsRow(),
+            _buildStatsRow(isMobile, horizontalPadding),
             Padding(
-              padding: const EdgeInsets.fromLTRB(28, 8, 28, 0),
+              padding: EdgeInsets.fromLTRB(0, 8, 0, 0),
               child: Text(
                 _showOrgEventsOnly
-                    ? 'Showing your organization\'s events only'
+                    ? 'Showing only your organization’s events'
                     : 'Showing all CICT events',
                 style: GoogleFonts.beVietnamPro(fontSize: 11, color: const Color(0xFF64748B), fontStyle: FontStyle.italic),
               ),
             ),
-            _buildToolbar(),
+            _buildToolbar(isMobile, isTablet, horizontalPadding),
             const SizedBox(height: 16),
             _buildCalendarStream(),
-            _buildLegend(),
+            _buildLegend(horizontalPadding),
             const SizedBox(height: 28),
           ],
         ),
@@ -285,7 +291,7 @@ class _OrgEventsScheduleScreenState extends State<OrgEventsScheduleScreen> {
   }
 
   // ── Stats row ─────────────────────────────────────────────────────
-  Widget _buildStatsRow() {
+  Widget _buildStatsRow(bool isMobile, double horizontalPadding) {
     return StreamBuilder<QuerySnapshot>(
       // FIX: Stats always reflect whichever stream is active.
       key: ValueKey('stats_${_showOrgEventsOnly}_${widget.orgId}'),
@@ -310,18 +316,28 @@ class _OrgEventsScheduleScreenState extends State<OrgEventsScheduleScreen> {
           }
         }
         return Padding(
-          padding: const EdgeInsets.fromLTRB(28, 24, 28, 0),
+          padding: EdgeInsets.fromLTRB(horizontalPadding, 24, horizontalPadding, 0),
           child: Row(
             children: [
-              _StatCard(label: 'Total Events', value: '$total', icon: Icons.event_rounded, color: UpriseColors.primaryDark),
+              Expanded(
+                child: _StatCard(label: 'Total Events', value: '$total', icon: Icons.event_rounded, color: UpriseColors.primaryDark),
+              ),
               const SizedBox(width: 14),
-              _StatCard(label: 'Approved', value: '$approved', icon: Icons.check_circle_rounded, color: const Color(0xFF059669)),
+              Expanded(
+                child: _StatCard(label: 'Approved', value: '$approved', icon: Icons.check_circle_rounded, color: const Color(0xFF059669)),
+              ),
               const SizedBox(width: 14),
-              _StatCard(label: 'Pending', value: '$pending', icon: Icons.pending_rounded, color: const Color(0xFFD97706)),
+              Expanded(
+                child: _StatCard(label: 'Pending', value: '$pending', icon: Icons.pending_rounded, color: const Color(0xFFD97706)),
+              ),
               const SizedBox(width: 14),
-              _StatCard(label: 'Rejected', value: '$rejected', icon: Icons.cancel_rounded, color: const Color(0xFFDC2626)),
+              Expanded(
+                child: _StatCard(label: 'Rejected', value: '$rejected', icon: Icons.cancel_rounded, color: const Color(0xFFDC2626)),
+              ),
               const SizedBox(width: 14),
-              _StatCard(label: 'Archived', value: '$archived', icon: Icons.archive_rounded, color: const Color(0xFF6B7280)),
+              Expanded(
+                child: _StatCard(label: 'Archived', value: '$archived', icon: Icons.archive_rounded, color: const Color(0xFF6B7280)),
+              ),
             ],
           ),
         );
@@ -330,14 +346,16 @@ class _OrgEventsScheduleScreenState extends State<OrgEventsScheduleScreen> {
   }
 
   // ── Toolbar ───────────────────────────────────────────────────────
-  Widget _buildToolbar() {
+  Widget _buildToolbar(bool isMobile, bool isTablet, double horizontalPadding) {
+    final fieldWidth = isMobile ? double.infinity : (isTablet ? 220.0 : 280.0);
     return Padding(
-      padding: const EdgeInsets.fromLTRB(28, 20, 28, 0),
-      child: Row(
-        children: [
-          // Month navigation
-          Container(
+      padding: EdgeInsets.fromLTRB(horizontalPadding, 20, horizontalPadding, 0),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final canUseRow = constraints.maxWidth > 980;
+          final dateControl = Container(
             height: 40,
+            constraints: BoxConstraints(minWidth: fieldWidth),
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(10),
@@ -345,6 +363,7 @@ class _OrgEventsScheduleScreenState extends State<OrgEventsScheduleScreen> {
               boxShadow: _DS.cardShadow,
             ),
             child: Row(
+              mainAxisSize: MainAxisSize.min,
               children: [
                 _NavButton(
                   icon: Icons.chevron_left_rounded,
@@ -363,59 +382,86 @@ class _OrgEventsScheduleScreenState extends State<OrgEventsScheduleScreen> {
                 ),
               ],
             ),
-          ),
-          const SizedBox(width: 10),
-          OutlinedButton.icon(
-            onPressed: () => setState(() => _currentMonth = DateTime.now()),
-            icon: const Icon(Icons.today_rounded, size: 15),
-            label: Text('Today', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600)),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: UpriseColors.primaryDark,
-              side: BorderSide(color: UpriseColors.primaryDark),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          );
+
+          final controls = [
+            dateControl,
+            OutlinedButton.icon(
+              onPressed: () => setState(() => _currentMonth = DateTime.now()),
+              icon: const Icon(Icons.today_rounded, size: 15),
+              label: Text('Today', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600)),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: UpriseColors.primaryDark,
+                side: BorderSide(color: UpriseColors.primaryDark),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              ),
             ),
-          ),
-          const SizedBox(width: 10),
-          // FIX: Toggle — "Org Events" vs "All Events"
-          Container(
-            height: 40,
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: const Color(0xFFE2E6EA)),
-              boxShadow: _DS.cardShadow,
+            Container(
+              height: 40,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: const Color(0xFFE2E6EA)),
+                boxShadow: _DS.cardShadow,
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _ToggleTab(
+                    label: 'Org Events',
+                    active: _showOrgEventsOnly,
+                    onTap: () => setState(() {
+                      _showOrgEventsOnly = true;
+                      _statusFilter = 'All';
+                    }),
+                  ),
+                  _ToggleTab(
+                    label: 'All Events',
+                    active: !_showOrgEventsOnly,
+                    onTap: () => setState(() {
+                      _showOrgEventsOnly = false;
+                      _statusFilter = 'All';
+                    }),
+                  ),
+                ],
+              ),
             ),
-            child: Row(
+            _FilterDropdown(
+              value: _statusFilter,
+              items: const ['All', 'Pending', 'Approved', 'Rejected', 'Archived'],
+              onChanged: (v) => setState(() => _statusFilter = v!),
+            ),
+            AdminExportButton(onSelected: _exportEvents),
+          ];
+
+          if (canUseRow) {
+            return Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                _ToggleTab(
-                  label: 'Org Events',
-                  active: _showOrgEventsOnly,
-                  onTap: () => setState(() {
-                    _showOrgEventsOnly = true;
-                    _statusFilter = 'All';
-                  }),
+                Expanded(
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      Flexible(child: dateControl),
+                      const SizedBox(width: 10),
+                      const SizedBox(width: 0),
+                    ],
+                  ),
                 ),
-                _ToggleTab(
-                  label: 'All Events',
-                  active: !_showOrgEventsOnly,
-                  onTap: () => setState(() {
-                    _showOrgEventsOnly = false;
-                    _statusFilter = 'All';
-                  }),
-                ),
+                const SizedBox(width: 12),
+                ...controls.sublist(1).expand((widget) => [widget, const SizedBox(width: 10)]).toList()..removeLast(),
               ],
-            ),
-          ),
-          const Spacer(),
-          _FilterDropdown(
-            value: _statusFilter,
-            items: const ['All', 'Pending', 'Approved', 'Rejected', 'Archived'],
-            onChanged: (v) => setState(() => _statusFilter = v!),
-          ),
-          const SizedBox(width: 10),
-          AdminExportButton(onSelected: _exportEvents),
-        ],
+            );
+          }
+
+          return Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: controls,
+          );
+        },
       ),
     );
   }
@@ -470,8 +516,9 @@ class _OrgEventsScheduleScreenState extends State<OrgEventsScheduleScreen> {
 
     const weekdays = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
 
+    final horizontalPadding = MediaQuery.of(context).size.width < 720 ? 16.0 : 28.0;
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 28),
+      margin: EdgeInsets.symmetric(horizontal: horizontalPadding),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(14),
@@ -623,9 +670,9 @@ class _OrgEventsScheduleScreenState extends State<OrgEventsScheduleScreen> {
     );
   }
 
-  Widget _buildLegend() {
+  Widget _buildLegend(double horizontalPadding) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(28, 16, 28, 0),
+      padding: EdgeInsets.fromLTRB(horizontalPadding, 16, horizontalPadding, 0),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
         decoration: BoxDecoration(
@@ -634,15 +681,14 @@ class _OrgEventsScheduleScreenState extends State<OrgEventsScheduleScreen> {
           border: Border.all(color: const Color(0xFFE8ECF0)),
           boxShadow: _DS.cardShadow,
         ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
+        child: Wrap(
+          spacing: 20,
+          runSpacing: 10,
+          alignment: WrapAlignment.center,
           children: [
             _legendDot('Approved', const Color(0xFF059669)),
-            const SizedBox(width: 20),
             _legendDot('Pending', const Color(0xFFD97706)),
-            const SizedBox(width: 20),
             _legendDot('Rejected', const Color(0xFFDC2626)),
-            const SizedBox(width: 20),
             _legendDot('Archived', const Color(0xFF6B7280)),
           ],
         ),
@@ -1148,9 +1194,10 @@ class _EventModal extends StatefulWidget {
   final EventModel? existingEvent;
   
   // FIX: Add existingEvent to the constructor
+  // ignore: unused_element_parameter
   const _EventModal({
     required this.orgId,
-    this.existingEvent, // Add this parameter
+    this.existingEvent, // Add this parameter // ignore: unused_element_parameter
   });
 
   @override
@@ -1238,8 +1285,8 @@ class _EventModalState extends State<_EventModal> {
       if ((data['orgId'] ?? '').toString().isNotEmpty) {
         final orgDoc = await FirebaseFirestore.instance.collection('organizations').doc(data['orgId'].toString()).get();
         if (orgDoc.exists) {
-          final orgMap = orgDoc.data() as Map<String, dynamic>?;
-          if (orgMap?['name'] != null) data['orgName'] = orgMap!['name'].toString();
+          final orgMap = orgDoc.data();
+          if (orgMap != null && orgMap['name'] != null) data['orgName'] = orgMap['name'].toString();
         }
       }
     } catch (_) {}

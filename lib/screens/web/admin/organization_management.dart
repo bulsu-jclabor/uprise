@@ -284,7 +284,12 @@ class _OrganizationManagementState extends State<OrganizationManagement> {
   }
 
   @override
+  @override
   Widget build(BuildContext context) {
+    final width = MediaQuery.of(context).size.width;
+    final isMobile = width < 720;
+    final isTablet = width >= 720 && width < 1200;
+
     return Scaffold(
       backgroundColor: const Color(0xFFFBFCFE),
       body: _selectedOrganization != null
@@ -292,24 +297,24 @@ class _OrganizationManagementState extends State<OrganizationManagement> {
               organization: _selectedOrganization!,
               onBack: () => setState(() => _selectedOrganization = null),
             )
-          : _buildOrganizationList(),
+          : _buildOrganizationList(isMobile, isTablet),
     );
   }
 
-  Widget _buildOrganizationList() {
+  Widget _buildOrganizationList(bool isMobile, bool isTablet) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildStatsRow(),
-        _buildToolbar(),
+        _buildStatsRow(isMobile, isTablet),
+        _buildToolbar(isMobile, isTablet),
         const SizedBox(height: 16),
-        Expanded(child: _buildTable()),
+        Expanded(child: _buildTable(isMobile, isTablet)),
         const SizedBox(height: 24),
       ],
     );
   }
 
-  Widget _buildStatsRow() {
+  Widget _buildStatsRow(bool isMobile, bool isTablet) {
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance.collection('organizations').snapshots(),
       builder: (context, snapshot) {
@@ -332,58 +337,71 @@ class _OrganizationManagementState extends State<OrganizationManagement> {
             }
           }
         }
+
+        final cards = [
+          _StatCard(label: 'Total Organizations', value: '$total', icon: Icons.business_center_rounded, color: UpriseColors.primaryDark),
+          _StatCard(label: 'Active', value: '$active', icon: Icons.check_circle_rounded, color: const Color(0xFF059669)),
+          _StatCard(label: 'Suspended', value: '$suspended', icon: Icons.pause_circle_rounded, color: const Color(0xFFD97706)),
+          _StatCard(label: 'Archived', value: '$archived', icon: Icons.archive_rounded, color: const Color(0xFF6B7280)),
+        ];
+
         return Padding(
           padding: const EdgeInsets.fromLTRB(28, 24, 28, 0),
-          child: Row(children: [
-            _StatCard(label: 'Total Organizations', value: '$total', icon: Icons.business_center_rounded, color: UpriseColors.primaryDark),
-            const SizedBox(width: 14),
-            _StatCard(label: 'Active', value: '$active', icon: Icons.check_circle_rounded, color: const Color(0xFF059669)),
-            const SizedBox(width: 14),
-            _StatCard(label: 'Suspended', value: '$suspended', icon: Icons.pause_circle_rounded, color: const Color(0xFFD97706)),
-            const SizedBox(width: 14),
-            _StatCard(label: 'Archived', value: '$archived', icon: Icons.archive_rounded, color: const Color(0xFF6B7280)),
-          ]),
+          child: isMobile
+              ? Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    for (var card in cards) ...[
+                      card,
+                      const SizedBox(height: 14),
+                    ],
+                  ],
+                )
+              : Row(children: [
+                  for (var card in cards) ...[
+                    Expanded(child: card),
+                    const SizedBox(width: 14),
+                  ],
+                ]),
         );
       },
     );
   }
 
-  Widget _buildToolbar() {
-  return Padding(
-    padding: const EdgeInsets.fromLTRB(28, 20, 28, 0),
-    child: Row(
-      children: [
-        Expanded(
-          child: SizedBox(
-            height: 40,
-            child: TextField(
-              controller: _searchController,
-              style: GoogleFonts.beVietnamPro(fontSize: 13),
-              decoration: InputDecoration(
-                hintText: 'Search organization or adviser…',
-                hintStyle: GoogleFonts.beVietnamPro(fontSize: 13, color: UpriseColors.darkGray),
-                prefixIcon: const Icon(Icons.search_rounded, size: 18, color: Color(0xFF9AA5B4)),
-                filled: true,
-                fillColor: Colors.white,
-                contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  borderSide: const BorderSide(color: Color(0xFFE2E6EA)),
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  borderSide: const BorderSide(color: Color(0xFFE2E6EA)),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  borderSide: BorderSide(color: UpriseColors.primaryDark, width: 1.5),
-                ),
-              ),
-              onChanged: (_) => setState(() => _currentPage = 1),
-            ),
+  Widget _buildToolbar(bool isMobile, bool isTablet) {
+    final searchField = SizedBox(
+      height: 40,
+      child: TextField(
+        controller: _searchController,
+        style: GoogleFonts.beVietnamPro(fontSize: 13),
+        decoration: InputDecoration(
+          hintText: 'Search organization or adviser…',
+          hintStyle: GoogleFonts.beVietnamPro(fontSize: 13, color: UpriseColors.darkGray),
+          prefixIcon: const Icon(Icons.search_rounded, size: 18, color: Color(0xFF9AA5B4)),
+          filled: true,
+          fillColor: Colors.white,
+          contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: const BorderSide(color: Color(0xFFE2E6EA)),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: const BorderSide(color: Color(0xFFE2E6EA)),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: BorderSide(color: UpriseColors.primaryDark, width: 1.5),
           ),
         ),
-        const SizedBox(width: 10),
+        onChanged: (_) => setState(() => _currentPage = 1),
+      ),
+    );
+
+    final filterActions = Wrap(
+      spacing: 10,
+      runSpacing: 10,
+      children: [
         _FilterDropdown(
           value: _statusFilter,
           items: ['All', 'Active', 'Suspended', 'Archived'],
@@ -394,7 +412,6 @@ class _OrganizationManagementState extends State<OrganizationManagement> {
             _currentPage = 1;
           }),
         ),
-        const SizedBox(width: 10),
         _FilterDropdown(
           value: _typeFilter,
           items: _orgTypes,
@@ -405,28 +422,43 @@ class _OrganizationManagementState extends State<OrganizationManagement> {
             _currentPage = 1;
           }),
         ),
-        const SizedBox(width: 10),
         _ExportButton(
           statusFilter: _statusFilter,
           typeFilter: _typeFilter,
           searchTerm: _searchController.text.trim(),
         ),
-        
-        
-        const SizedBox(width: 10),
         _PrimaryButton(
           label: 'Create Organization',
           icon: Icons.add_rounded,
           onPressed: _showCreateOrganizationDialog,
         ),
       ],
-    ),
-  );
-}
+    );
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(28, 20, 28, 0),
+      child: isMobile
+          ? Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                searchField,
+                const SizedBox(height: 10),
+                filterActions,
+              ],
+            )
+          : Row(
+              children: [
+                Expanded(child: searchField),
+                const SizedBox(width: 10),
+                filterActions,
+              ],
+            ),
+    );
+  }
 
 
 
-  Widget _buildTable() {
+  Widget _buildTable(bool isMobile, bool isTablet) {
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance.collection('organizations').orderBy('createdAt', descending: true).snapshots(),
       builder: (context, snapshot) {
