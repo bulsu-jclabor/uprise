@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -12,7 +13,7 @@ import 'student_accounts.dart';
 import 'adviser_roles.dart';
 import 'event_proposals.dart';
 import 'event_calendar.dart';
-import 'letter_request.dart'; 
+import 'letter_request.dart';
 import 'external_account.dart';
 import '../../../services/activity_logger.dart' as activity_log;
 import 'reports_management.dart';
@@ -22,24 +23,24 @@ import 'settings.dart';
 // Design tokens — mirrors student_accounts.dart exactly
 // ─────────────────────────────────────────────────────────────────────────────
 class UpriseColors {
-  static const Color primaryDark  = Color(0xFFB45309);
+  static const Color primaryDark = Color(0xFFB45309);
   static const Color primaryLight = Color(0xFFD97706);
-  static const Color accent       = Color(0xFFF59E0B);
-  static const Color white        = Color(0xFFFFFFFF);
-  static const Color lightGray    = Color(0xFFF9FAFB);
-  static const Color mediumGray   = Color(0xFFE5E7EB);
-  static const Color darkGray     = Color(0xFF6B7280);
-  static const Color charcoal     = Color(0xFF111827);
-  static const Color success      = Color(0xFF059669);
-  static const Color warning      = Color(0xFFD97706);
-  static const Color error        = Color(0xFFDC2626);
-  static const Color info         = Color(0xFF2563EB);
+  static const Color accent = Color(0xFFF59E0B);
+  static const Color white = Color(0xFFFFFFFF);
+  static const Color lightGray = Color(0xFFF9FAFB);
+  static const Color mediumGray = Color(0xFFE5E7EB);
+  static const Color darkGray = Color(0xFF6B7280);
+  static const Color charcoal = Color(0xFF111827);
+  static const Color success = Color(0xFF059669);
+  static const Color warning = Color(0xFFD97706);
+  static const Color error = Color(0xFFDC2626);
+  static const Color info = Color(0xFF2563EB);
 }
 
 class _DS {
-  static const double radiusSm   = 8;
-  static const double radiusMd   = 12;
-  static const double radiusLg   = 16;
+  static const double radiusSm = 8;
+  static const double radiusMd = 12;
+  static const double radiusLg = 16;
   static const double radiusPill = 100;
 
   static final List<BoxShadow> cardShadow = [
@@ -55,17 +56,17 @@ class _DS {
 // Sidebar nav items
 // ─────────────────────────────────────────────────────────────────────────────
 const List<Map<String, dynamic>> _navItems = [
-  {'label': 'Dashboard',                'icon': Icons.dashboard_outlined},
-  {'label': 'Organization Management',  'icon': Icons.business_outlined},
-  {'label': 'Student Accounts',         'icon': Icons.people_outline},
-  {'label': 'Adviser Roles',            'icon': Icons.school_outlined},
-  {'label': 'Event Proposals',          'icon': Icons.pending_actions_outlined},
-  {'label': 'College Event Calendar',   'icon': Icons.calendar_today_outlined},
-  {'label': 'Letter Request',           'icon': Icons.mail_outline},
-  {'label': 'External Account',         'icon': Icons.link_outlined},
-  {'label': 'Reports Management',       'icon': Icons.assessment_outlined},
-  {'label': 'Activity Logs',            'icon': Icons.history_outlined},
-  {'label': 'Settings',                 'icon': Icons.settings_outlined},
+  {'label': 'Dashboard', 'icon': Icons.dashboard_outlined},
+  {'label': 'Organization Management', 'icon': Icons.business_outlined},
+  {'label': 'Student Accounts', 'icon': Icons.people_outline},
+  {'label': 'Adviser Roles', 'icon': Icons.school_outlined},
+  {'label': 'Event Proposals', 'icon': Icons.pending_actions_outlined},
+  {'label': 'College Event Calendar', 'icon': Icons.calendar_today_outlined},
+  {'label': 'Letter Request', 'icon': Icons.mail_outline},
+  {'label': 'External Account', 'icon': Icons.link_outlined},
+  {'label': 'Reports Management', 'icon': Icons.assessment_outlined},
+  {'label': 'Activity Logs', 'icon': Icons.history_outlined},
+  {'label': 'Settings', 'icon': Icons.settings_outlined},
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -110,7 +111,9 @@ class _AdminDashboardState extends State<AdminDashboard> {
 
   void _updateDateTime() {
     setState(() {
-      _currentDateTime = DateFormat('EEE, MMM d, yyyy • h:mm a').format(DateTime.now());
+      _currentDateTime = DateFormat(
+        'EEE, MMM d, yyyy • h:mm a',
+      ).format(DateTime.now());
     });
     Future.delayed(const Duration(seconds: 60), () {
       if (mounted) _updateDateTime();
@@ -121,20 +124,29 @@ class _AdminDashboardState extends State<AdminDashboard> {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
     try {
-      final doc = await FirebaseFirestore.instance.collection('admins').doc(user.uid).get();
+      final doc = await FirebaseFirestore.instance
+          .collection('admins')
+          .doc(user.uid)
+          .get();
       if (doc.exists) {
         setState(() {
           _adminName = doc.data()!['name'] ?? user.displayName ?? 'Admin User';
           _adminRole = doc.data()!['role'] ?? 'Administrator';
         });
       } else {
-        final uDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+        final uDoc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .get();
         setState(() {
           _adminName = uDoc.data()?['name'] ?? user.displayName ?? 'Admin User';
         });
       }
     } catch (_) {
-      setState(() => _adminName = FirebaseAuth.instance.currentUser?.displayName ?? 'Admin User');
+      setState(
+        () => _adminName =
+            FirebaseAuth.instance.currentUser?.displayName ?? 'Admin User',
+      );
     }
   }
 
@@ -149,20 +161,27 @@ class _AdminDashboardState extends State<AdminDashboard> {
           .get();
       setState(() {
         _unreadNotifications = snap.docs.length;
-        _notifications = snap.docs.map((d) => {
-          'id': d.id,
-          'title': d.data()['title'] ?? 'New Notification',
-          'message': d.data()['message'] ?? '',
-          'timestamp': d.data()['createdAt'],
-          'isRead': d.data()['isRead'] ?? false,
-        }).toList();
+        _notifications = snap.docs
+            .map(
+              (d) => {
+                'id': d.id,
+                'title': d.data()['title'] ?? 'New Notification',
+                'message': d.data()['message'] ?? '',
+                'timestamp': d.data()['createdAt'],
+                'isRead': d.data()['isRead'] ?? false,
+              },
+            )
+            .toList();
       });
     } catch (_) {}
   }
 
   Future<void> _markNotificationAsRead(String id) async {
     try {
-      await FirebaseFirestore.instance.collection('notifications').doc(id).update({'isRead': true});
+      await FirebaseFirestore.instance
+          .collection('notifications')
+          .doc(id)
+          .update({'isRead': true});
       _fetchUnreadNotifications();
     } catch (_) {}
   }
@@ -170,7 +189,10 @@ class _AdminDashboardState extends State<AdminDashboard> {
   Future<void> _logout() async {
     await _auth.logout();
     if (mounted) {
-      Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => AdminLogin()));
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => AdminLogin()),
+      );
     }
   }
 
@@ -179,7 +201,9 @@ class _AdminDashboardState extends State<AdminDashboard> {
       context: context,
       barrierColor: Colors.black54,
       builder: (ctx) => Dialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(_DS.radiusLg)),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(_DS.radiusLg),
+        ),
         child: Container(
           width: 400,
           padding: const EdgeInsets.all(28),
@@ -187,46 +211,93 @@ class _AdminDashboardState extends State<AdminDashboard> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(children: [
-                Container(
-                  width: 42, height: 42,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFFEF2F2),
-                    borderRadius: BorderRadius.circular(10),
+              Row(
+                children: [
+                  Container(
+                    width: 42,
+                    height: 42,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFEF2F2),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(
+                      Icons.logout_rounded,
+                      color: Color(0xFFDC2626),
+                      size: 20,
+                    ),
                   ),
-                  child: const Icon(Icons.logout_rounded, color: Color(0xFFDC2626), size: 20),
-                ),
-                const SizedBox(width: 14),
-                Text('Confirm Logout',
-                    style: GoogleFonts.beVietnamPro(fontSize: 17, fontWeight: FontWeight.w700, color: const Color(0xFF1A202C))),
-              ]),
+                  const SizedBox(width: 14),
+                  Text(
+                    'Confirm Logout',
+                    style: GoogleFonts.beVietnamPro(
+                      fontSize: 17,
+                      fontWeight: FontWeight.w700,
+                      color: const Color(0xFF1A202C),
+                    ),
+                  ),
+                ],
+              ),
               const SizedBox(height: 14),
-              Text('Are you sure you want to logout from the admin panel?',
-                  style: GoogleFonts.beVietnamPro(fontSize: 14, color: const Color(0xFF64748B), height: 1.5)),
+              Text(
+                'Are you sure you want to logout from the admin panel?',
+                style: GoogleFonts.beVietnamPro(
+                  fontSize: 14,
+                  color: const Color(0xFF64748B),
+                  height: 1.5,
+                ),
+              ),
               const SizedBox(height: 24),
-              Row(mainAxisAlignment: MainAxisAlignment.end, children: [
-                OutlinedButton(
-                  onPressed: () => Navigator.pop(ctx),
-                  style: OutlinedButton.styleFrom(
-                    side: const BorderSide(color: Color(0xFFE2E6EA)),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 11),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  OutlinedButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    style: OutlinedButton.styleFrom(
+                      side: const BorderSide(color: Color(0xFFE2E6EA)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 18,
+                        vertical: 11,
+                      ),
+                    ),
+                    child: Text(
+                      'Cancel',
+                      style: GoogleFonts.beVietnamPro(
+                        fontSize: 13,
+                        color: const Color(0xFF374151),
+                      ),
+                    ),
                   ),
-                  child: Text('Cancel', style: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF374151))),
-                ),
-                const SizedBox(width: 10),
-                ElevatedButton(
-                  onPressed: () { Navigator.pop(ctx); _logout(); },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: UpriseColors.error,
-                    foregroundColor: Colors.white,
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 11),
+                  const SizedBox(width: 10),
+                  ElevatedButton(
+                    onPressed: () {
+                      Navigator.pop(ctx);
+                      _logout();
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: UpriseColors.error,
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 18,
+                        vertical: 11,
+                      ),
+                    ),
+                    child: Text(
+                      'Logout',
+                      style: GoogleFonts.beVietnamPro(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                   ),
-                  child: Text('Logout', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600)),
-                ),
-              ]),
+                ],
+              ),
             ],
           ),
         ),
@@ -237,9 +308,16 @@ class _AdminDashboardState extends State<AdminDashboard> {
   String _getCurrentTitle() {
     if (_selectedIndex == -1) return 'Settings';
     const titles = [
-      'Dashboard', 'Organization Management', 'Student Accounts', 'Adviser Roles',
-      'Event Proposals', 'College Event Calendar', 'Letter Request', 'External Account',
-      'Reports Management', 'Activity Logs',
+      'Dashboard',
+      'Organization Management',
+      'Student Accounts',
+      'Adviser Roles',
+      'Event Proposals',
+      'College Event Calendar',
+      'Letter Request',
+      'External Account',
+      'Reports Management',
+      'Activity Logs',
     ];
     return titles[_selectedIndex];
   }
@@ -278,7 +356,13 @@ class _AdminDashboardState extends State<AdminDashboard> {
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
-        boxShadow: [BoxShadow(color: Color(0x22000000), blurRadius: 20, offset: Offset(4, 0))],
+        boxShadow: [
+          BoxShadow(
+            color: Color(0x22000000),
+            blurRadius: 20,
+            offset: Offset(4, 0),
+          ),
+        ],
       ),
       child: Column(
         children: [
@@ -288,7 +372,8 @@ class _AdminDashboardState extends State<AdminDashboard> {
             child: Row(
               children: [
                 Container(
-                  width: 40, height: 40,
+                  width: 40,
+                  height: 40,
                   decoration: BoxDecoration(
                     color: Colors.white.withOpacity(0.18),
                     borderRadius: BorderRadius.circular(10),
@@ -298,7 +383,11 @@ class _AdminDashboardState extends State<AdminDashboard> {
                     child: Image.asset(
                       'assets/images/logo.png',
                       fit: BoxFit.contain,
-                      errorBuilder: (_, __, ___) => const Icon(Icons.school, color: Colors.white, size: 18),
+                      errorBuilder: (_, __, ___) => const Icon(
+                        Icons.school,
+                        color: Colors.white,
+                        size: 18,
+                      ),
                     ),
                   ),
                 ),
@@ -306,19 +395,36 @@ class _AdminDashboardState extends State<AdminDashboard> {
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('UPRISE',
-                        style: GoogleFonts.beVietnamPro(
-                            color: Colors.white, fontSize: 20, fontWeight: FontWeight.w800, letterSpacing: 2.5)),
-                    Text('Admin Panel',
-                        style: GoogleFonts.beVietnamPro(
-                            color: Colors.white.withOpacity(0.65), fontSize: 10, fontWeight: FontWeight.w500, letterSpacing: 0.4)),
+                    Text(
+                      'UPRISE',
+                      style: GoogleFonts.beVietnamPro(
+                        color: Colors.white,
+                        fontSize: 20,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 2.5,
+                      ),
+                    ),
+                    Text(
+                      'Admin Panel',
+                      style: GoogleFonts.beVietnamPro(
+                        color: Colors.white.withOpacity(0.65),
+                        fontSize: 10,
+                        fontWeight: FontWeight.w500,
+                        letterSpacing: 0.4,
+                      ),
+                    ),
                   ],
                 ),
               ],
             ),
           ),
 
-          Divider(color: Colors.white.withOpacity(0.15), thickness: 1, indent: 20, endIndent: 20),
+          Divider(
+            color: Colors.white.withOpacity(0.15),
+            thickness: 1,
+            indent: 20,
+            endIndent: 20,
+          ),
           const SizedBox(height: 8),
 
           // Nav label
@@ -326,9 +432,15 @@ class _AdminDashboardState extends State<AdminDashboard> {
             padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
             child: Align(
               alignment: Alignment.centerLeft,
-              child: Text('NAVIGATION',
-                  style: GoogleFonts.beVietnamPro(
-                      color: Colors.white.withOpacity(0.45), fontSize: 10, fontWeight: FontWeight.w700, letterSpacing: 1.2)),
+              child: Text(
+                'NAVIGATION',
+                style: GoogleFonts.beVietnamPro(
+                  color: Colors.white.withOpacity(0.45),
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 1.2,
+                ),
+              ),
             ),
           ),
 
@@ -340,38 +452,61 @@ class _AdminDashboardState extends State<AdminDashboard> {
               itemBuilder: (context, index) {
                 final item = _navItems[index];
                 final isSettings = item['label'] == 'Settings';
-                final isSelected = isSettings ? _selectedIndex == -1 : _selectedIndex == index;
+                final isSelected = isSettings
+                    ? _selectedIndex == -1
+                    : _selectedIndex == index;
 
                 return GestureDetector(
-                  onTap: () => setState(() => _selectedIndex = isSettings ? -1 : index),
+                  onTap: () =>
+                      setState(() => _selectedIndex = isSettings ? -1 : index),
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 150),
                     margin: const EdgeInsets.symmetric(vertical: 2),
-                    padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 14),
+                    padding: const EdgeInsets.symmetric(
+                      vertical: 10,
+                      horizontal: 14,
+                    ),
                     decoration: BoxDecoration(
-                      color: isSelected ? Colors.white.withOpacity(0.18) : Colors.transparent,
+                      color: isSelected
+                          ? Colors.white.withOpacity(0.18)
+                          : Colors.transparent,
                       borderRadius: BorderRadius.circular(10),
                       border: isSelected
-                          ? Border.all(color: Colors.white.withOpacity(0.25), width: 1)
+                          ? Border.all(
+                              color: Colors.white.withOpacity(0.25),
+                              width: 1,
+                            )
                           : null,
                     ),
                     child: Row(
                       children: [
-                        Icon(item['icon'] as IconData,
-                            color: isSelected ? Colors.white : Colors.white.withOpacity(0.65),
-                            size: 17),
+                        Icon(
+                          item['icon'] as IconData,
+                          color: isSelected
+                              ? Colors.white
+                              : Colors.white.withOpacity(0.65),
+                          size: 17,
+                        ),
                         const SizedBox(width: 12),
                         Expanded(
-                          child: Text(item['label'] as String,
-                              overflow: TextOverflow.ellipsis,
-                              style: GoogleFonts.beVietnamPro(
-                                  color: isSelected ? Colors.white : Colors.white.withOpacity(0.75),
-                                  fontSize: 13,
-                                  fontWeight: isSelected ? FontWeight.w700 : FontWeight.w400)),
+                          child: Text(
+                            item['label'] as String,
+                            overflow: TextOverflow.ellipsis,
+                            style: GoogleFonts.beVietnamPro(
+                              color: isSelected
+                                  ? Colors.white
+                                  : Colors.white.withOpacity(0.75),
+                              fontSize: 13,
+                              fontWeight: isSelected
+                                  ? FontWeight.w700
+                                  : FontWeight.w400,
+                            ),
+                          ),
                         ),
                         if (isSelected)
                           Container(
-                            width: 6, height: 6,
+                            width: 6,
+                            height: 6,
                             decoration: BoxDecoration(
                               color: UpriseColors.accent,
                               shape: BoxShape.circle,
@@ -386,7 +521,12 @@ class _AdminDashboardState extends State<AdminDashboard> {
           ),
 
           // Divider + logout
-          Divider(color: Colors.white.withOpacity(0.15), thickness: 1, indent: 20, endIndent: 20),
+          Divider(
+            color: Colors.white.withOpacity(0.15),
+            thickness: 1,
+            indent: 20,
+            endIndent: 20,
+          ),
           GestureDetector(
             onTap: _confirmLogout,
             child: Container(
@@ -398,11 +538,20 @@ class _AdminDashboardState extends State<AdminDashboard> {
               ),
               child: Row(
                 children: [
-                  Icon(Icons.logout_rounded, color: Colors.white.withOpacity(0.75), size: 17),
+                  Icon(
+                    Icons.logout_rounded,
+                    color: Colors.white.withOpacity(0.75),
+                    size: 17,
+                  ),
                   const SizedBox(width: 12),
-                  Text('Logout',
-                      style: GoogleFonts.beVietnamPro(
-                          color: Colors.white.withOpacity(0.75), fontSize: 13, fontWeight: FontWeight.w500)),
+                  Text(
+                    'Logout',
+                    style: GoogleFonts.beVietnamPro(
+                      color: Colors.white.withOpacity(0.75),
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -421,7 +570,13 @@ class _AdminDashboardState extends State<AdminDashboard> {
       decoration: const BoxDecoration(
         color: Colors.white,
         border: Border(bottom: BorderSide(color: Color(0xFFE8ECF0))),
-        boxShadow: [BoxShadow(color: Color(0x06000000), blurRadius: 8, offset: Offset(0, 2))],
+        boxShadow: [
+          BoxShadow(
+            color: Color(0x06000000),
+            blurRadius: 8,
+            offset: Offset(0, 2),
+          ),
+        ],
       ),
       child: Row(
         children: [
@@ -430,10 +585,21 @@ class _AdminDashboardState extends State<AdminDashboard> {
             mainAxisAlignment: MainAxisAlignment.center,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(_getCurrentTitle(),
-                  style: GoogleFonts.beVietnamPro(fontSize: 17, fontWeight: FontWeight.w700, color: UpriseColors.charcoal)),
-              Text('CICT Organization Management',
-                  style: GoogleFonts.beVietnamPro(fontSize: 11, color: const Color(0xFF9AA5B4))),
+              Text(
+                _getCurrentTitle(),
+                style: GoogleFonts.beVietnamPro(
+                  fontSize: 17,
+                  fontWeight: FontWeight.w700,
+                  color: UpriseColors.charcoal,
+                ),
+              ),
+              Text(
+                'CICT Organization Management',
+                style: GoogleFonts.beVietnamPro(
+                  fontSize: 11,
+                  color: const Color(0xFF9AA5B4),
+                ),
+              ),
             ],
           ),
 
@@ -449,10 +615,20 @@ class _AdminDashboardState extends State<AdminDashboard> {
             ),
             child: Row(
               children: [
-                Icon(Icons.access_time_rounded, size: 13, color: UpriseColors.primaryDark),
+                Icon(
+                  Icons.access_time_rounded,
+                  size: 13,
+                  color: UpriseColors.primaryDark,
+                ),
                 const SizedBox(width: 6),
-                Text(_currentDateTime,
-                    style: GoogleFonts.beVietnamPro(fontSize: 11, color: const Color(0xFF64748B), fontWeight: FontWeight.w500)),
+                Text(
+                  _currentDateTime,
+                  style: GoogleFonts.beVietnamPro(
+                    fontSize: 11,
+                    color: const Color(0xFF64748B),
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
               ],
             ),
           ),
@@ -467,18 +643,36 @@ class _AdminDashboardState extends State<AdminDashboard> {
               style: GoogleFonts.beVietnamPro(fontSize: 13),
               decoration: InputDecoration(
                 hintText: 'Search…',
-                hintStyle: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF9AA5B4)),
-                prefixIcon: const Icon(Icons.search_rounded, size: 17, color: Color(0xFF9AA5B4)),
+                hintStyle: GoogleFonts.beVietnamPro(
+                  fontSize: 13,
+                  color: const Color(0xFF9AA5B4),
+                ),
+                prefixIcon: const Icon(
+                  Icons.search_rounded,
+                  size: 17,
+                  color: Color(0xFF9AA5B4),
+                ),
                 filled: true,
                 fillColor: const Color(0xFFF8F9FB),
-                contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
+                contentPadding: const EdgeInsets.symmetric(
+                  vertical: 0,
+                  horizontal: 16,
+                ),
                 border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE8ECF0))),
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: const BorderSide(color: Color(0xFFE8ECF0)),
+                ),
                 enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE8ECF0))),
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: const BorderSide(color: Color(0xFFE8ECF0)),
+                ),
                 focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: BorderSide(color: UpriseColors.primaryDark, width: 1.5)),
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: BorderSide(
+                    color: UpriseColors.primaryDark,
+                    width: 1.5,
+                  ),
+                ),
               ),
             ),
           ),
@@ -490,29 +684,47 @@ class _AdminDashboardState extends State<AdminDashboard> {
             onOpened: _fetchUnreadNotifications,
             onSelected: (v) async {
               if (v.startsWith('notification_')) {
-                await _markNotificationAsRead(v.replaceFirst('notification_', ''));
+                await _markNotificationAsRead(
+                  v.replaceFirst('notification_', ''),
+                );
               }
             },
             icon: Stack(
               children: [
                 Container(
-                  width: 36, height: 36,
+                  width: 36,
+                  height: 36,
                   decoration: BoxDecoration(
                     color: const Color(0xFFF8F9FB),
                     borderRadius: BorderRadius.circular(10),
                     border: Border.all(color: const Color(0xFFE8ECF0)),
                   ),
-                  child: const Icon(Icons.notifications_none_rounded, color: Color(0xFF64748B), size: 18),
+                  child: const Icon(
+                    Icons.notifications_none_rounded,
+                    color: Color(0xFF64748B),
+                    size: 18,
+                  ),
                 ),
                 if (_unreadNotifications > 0)
                   Positioned(
-                    right: 0, top: 0,
+                    right: 0,
+                    top: 0,
                     child: Container(
-                      width: 16, height: 16,
+                      width: 16,
+                      height: 16,
                       alignment: Alignment.center,
-                      decoration: const BoxDecoration(color: Color(0xFFDC2626), shape: BoxShape.circle),
-                      child: Text('$_unreadNotifications',
-                          style: GoogleFonts.beVietnamPro(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w700)),
+                      decoration: const BoxDecoration(
+                        color: Color(0xFFDC2626),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Text(
+                        '$_unreadNotifications',
+                        style: GoogleFonts.beVietnamPro(
+                          color: Colors.white,
+                          fontSize: 9,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
                     ),
                   ),
               ],
@@ -520,8 +732,14 @@ class _AdminDashboardState extends State<AdminDashboard> {
             itemBuilder: (context) => [
               PopupMenuItem(
                 enabled: false,
-                child: Text('Notifications',
-                    style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.w700, fontSize: 13, color: UpriseColors.charcoal)),
+                child: Text(
+                  'Notifications',
+                  style: GoogleFonts.beVietnamPro(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 13,
+                    color: UpriseColors.charcoal,
+                  ),
+                ),
               ),
               if (_notifications.isEmpty)
                 PopupMenuItem(
@@ -529,26 +747,44 @@ class _AdminDashboardState extends State<AdminDashboard> {
                   child: Padding(
                     padding: const EdgeInsets.symmetric(vertical: 16),
                     child: Center(
-                      child: Text('No new notifications',
-                          style: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF9AA5B4))),
+                      child: Text(
+                        'No new notifications',
+                        style: GoogleFonts.beVietnamPro(
+                          fontSize: 13,
+                          color: const Color(0xFF9AA5B4),
+                        ),
+                      ),
                     ),
                   ),
                 ),
-              ..._notifications.map((n) => PopupMenuItem(
-                value: 'notification_${n['id']}',
-                child: SizedBox(
-                  width: 280,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(n['title'], style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.w600, fontSize: 13)),
-                      const SizedBox(height: 3),
-                      Text(n['message'],
-                          style: GoogleFonts.beVietnamPro(fontSize: 11, color: const Color(0xFF64748B))),
-                    ],
+              ..._notifications.map(
+                (n) => PopupMenuItem(
+                  value: 'notification_${n['id']}',
+                  child: SizedBox(
+                    width: 280,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          n['title'],
+                          style: GoogleFonts.beVietnamPro(
+                            fontWeight: FontWeight.w600,
+                            fontSize: 13,
+                          ),
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          n['message'],
+                          style: GoogleFonts.beVietnamPro(
+                            fontSize: 11,
+                            color: const Color(0xFF64748B),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-              )),
+              ),
             ],
           ),
           const SizedBox(width: 12),
@@ -557,7 +793,8 @@ class _AdminDashboardState extends State<AdminDashboard> {
           Row(
             children: [
               Container(
-                width: 36, height: 36,
+                width: 36,
+                height: 36,
                 decoration: BoxDecoration(
                   color: UpriseColors.primaryDark.withOpacity(0.10),
                   borderRadius: BorderRadius.circular(10),
@@ -566,7 +803,10 @@ class _AdminDashboardState extends State<AdminDashboard> {
                   child: Text(
                     _adminName.isNotEmpty ? _adminName[0].toUpperCase() : 'A',
                     style: GoogleFonts.beVietnamPro(
-                        fontSize: 14, fontWeight: FontWeight.w700, color: UpriseColors.primaryDark),
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: UpriseColors.primaryDark,
+                    ),
                   ),
                 ),
               ),
@@ -575,11 +815,21 @@ class _AdminDashboardState extends State<AdminDashboard> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(_adminName,
-                      style: GoogleFonts.beVietnamPro(
-                          fontWeight: FontWeight.w700, fontSize: 13, color: UpriseColors.charcoal)),
-                  Text(_adminRole,
-                      style: GoogleFonts.beVietnamPro(fontSize: 10, color: const Color(0xFF9AA5B4))),
+                  Text(
+                    _adminName,
+                    style: GoogleFonts.beVietnamPro(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 13,
+                      color: UpriseColors.charcoal,
+                    ),
+                  ),
+                  Text(
+                    _adminRole,
+                    style: GoogleFonts.beVietnamPro(
+                      fontSize: 10,
+                      color: const Color(0xFF9AA5B4),
+                    ),
+                  ),
                 ],
               ),
             ],
@@ -605,19 +855,22 @@ class DashboardHome extends StatefulWidget {
 
 class _DashboardHomeState extends State<DashboardHome> {
   String _selectedSemester = '';
-  String _selectedMonth = 'AUG';
+  String _selectedMonth = '';
   List<int> _chartData = [0, 0, 0, 0, 0, 0];
   bool _chartLoading = true;
+  int? _hoveredChartIndex;
 
   late final Stream<QuerySnapshot> _organizationsStream;
   late final Stream<QuerySnapshot> _eventsStream;
   late final Stream<QuerySnapshot> _proposalsStream;
   late final Stream<QuerySnapshot> _reportsStream;
-  late final Stream<QuerySnapshot> _allEventsStream; // For upcoming events - no date filter in query
+  late final Stream<QuerySnapshot>
+  _allEventsStream; // For upcoming events - no date filter in query
 
   // ── Semester helpers ──────────────────────────────────────────────
   int get _semesterStartMonth => _selectedSemester.startsWith('1st') ? 8 : 1;
-  int get _semesterStartYear  => int.parse(_selectedSemester.split(' ').last.split('-')[0]);
+  int get _semesterStartYear =>
+      int.parse(_selectedSemester.split(' ').last.split('-')[0]);
 
   String _getCurrentSemester() {
     final now = DateTime.now();
@@ -645,17 +898,25 @@ class _DashboardHomeState extends State<DashboardHome> {
   void initState() {
     super.initState();
     _selectedSemester = _getCurrentSemester();
-    _selectedMonth = _monthLabel(0);
+    _selectedMonth = '';
 
     _organizationsStream = FirebaseFirestore.instance
-        .collection('organizations').where('status', isEqualTo: 'active').snapshots();
+        .collection('organizations')
+        .where('status', isEqualTo: 'active')
+        .snapshots();
     _eventsStream = FirebaseFirestore.instance
-        .collection('event_proposals').where('status', isEqualTo: 'approved').snapshots();
+        .collection('event_proposals')
+        .where('status', isEqualTo: 'approved')
+        .snapshots();
     _proposalsStream = FirebaseFirestore.instance
-        .collection('event_proposals').where('status', isEqualTo: 'pending').snapshots();
+        .collection('event_proposals')
+        .where('status', isEqualTo: 'pending')
+        .snapshots();
     _reportsStream = FirebaseFirestore.instance
-        .collection('reports').where('status', isEqualTo: 'overdue').snapshots();
-    
+        .collection('reports')
+        .where('status', isEqualTo: 'overdue')
+        .snapshots();
+
     // SIMPLE QUERY - no date filter to avoid index issues
     _allEventsStream = FirebaseFirestore.instance
         .collection('event_proposals')
@@ -666,37 +927,112 @@ class _DashboardHomeState extends State<DashboardHome> {
   }
 
   void _fetchChartData() {
-    setState(() => _chartLoading = true);
-    final startYear  = _semesterStartYear;
+    setState(() {
+      _chartLoading = true;
+      _hoveredChartIndex = null;
+    });
+    final startYear = _semesterStartYear;
     final startMonth = _semesterStartMonth;
-    final endMonth   = startMonth == 8 ? 12 : 5;
-    final endYear    = startMonth == 8 ? startYear : startYear + 1;
+    final endMonth = startMonth == 8 ? 12 : 5;
+    final endYear = startMonth == 8 ? startYear : startYear + 1;
 
     FirebaseFirestore.instance
-        .collection('events')
-        .where('status', isEqualTo: 'completed')
-        .where('date', isGreaterThanOrEqualTo: Timestamp.fromDate(DateTime(startYear, startMonth, 1)))
-        .where('date', isLessThan: Timestamp.fromDate(DateTime(endYear, endMonth + 1, 1)))
+        .collection('event_proposals')
+        .where(
+          'date',
+          isGreaterThanOrEqualTo: Timestamp.fromDate(
+            DateTime(startYear, startMonth, 1),
+          ),
+        )
+        .where(
+          'date',
+          isLessThan: Timestamp.fromDate(DateTime(endYear, endMonth + 1, 1)),
+        )
         .get()
         .then((snap) {
-      final counts = List.filled(6, 0);
-      for (final doc in snap.docs) {
-        final ts = doc.data()['date'] as Timestamp?;
-        if (ts == null) continue;
-        final m = ts.toDate().month;
-        int idx;
-        if (startMonth == 8) {
-          idx = m >= 8 ? m - 8 : m == 1 ? 5 : -1;
-        } else {
-          idx = m - 1;
-        }
-        if (idx >= 0 && idx < 6) counts[idx]++;
+          final counts = List.filled(6, 0);
+          for (final doc in snap.docs) {
+            final ts = doc.data()['date'] as Timestamp?;
+            if (ts == null) continue;
+            final m = ts.toDate().month;
+            int idx;
+            if (startMonth == 8) {
+              idx = m >= 8
+                  ? m - 8
+                  : m == 1
+                  ? 5
+                  : -1;
+            } else {
+              idx = m - 1;
+            }
+            if (idx >= 0 && idx < 6) counts[idx]++;
+          }
+          if (mounted) {
+            setState(() {
+              _chartData = counts;
+              _chartLoading = false;
+            });
+          }
+        })
+        .catchError((_) {
+          if (mounted) setState(() => _chartLoading = false);
+        });
+  }
+
+  void _updateHoveredChartIndex(Offset localPosition, Size size) {
+    const lp = 44.0, rp = 16.0, tp = 24.0, bp = 28.0;
+    final cw = size.width - lp - rp;
+    final ch = size.height - tp - bp;
+    if (_chartData.isEmpty) return;
+
+    double maxVal = _chartData.reduce((a, b) => a > b ? a : b).toDouble();
+    if (maxVal == 0) maxVal = 5;
+
+    int? nearestIndex;
+    double nearestDistance = double.infinity;
+
+    for (var i = 0; i < _chartData.length; i++) {
+      final point = Offset(
+        lp + (i / (_chartData.length - 1)) * cw,
+        tp + ch - (_chartData[i] / maxVal) * ch,
+      );
+      final distance = (localPosition - point).distance;
+      if (distance < nearestDistance) {
+        nearestDistance = distance;
+        nearestIndex = i;
       }
-      if (mounted) {
-        setState(() { _chartData = counts; _chartLoading = false; });
+    }
+
+    if (nearestIndex != null) {
+      final shouldHover = nearestDistance <= 20;
+      final newIndex = shouldHover ? nearestIndex : null;
+      if (_hoveredChartIndex != newIndex && mounted) {
+        setState(() => _hoveredChartIndex = newIndex);
       }
-    }).catchError((_) {
-      if (mounted) setState(() => _chartLoading = false);
+    }
+  }
+
+  void _clearHoveredChartIndex() {
+    if (_hoveredChartIndex != null && mounted) {
+      setState(() => _hoveredChartIndex = null);
+    }
+  }
+
+  List<Offset> _calculateChartPoints(Size size) {
+    const lp = 44.0, rp = 16.0, tp = 24.0, bp = 28.0;
+    final cw = size.width - lp - rp;
+    final ch = size.height - tp - bp;
+
+    if (_chartData.isEmpty) return [];
+
+    double maxVal = _chartData.reduce((a, b) => a > b ? a : b).toDouble();
+    if (maxVal == 0) maxVal = 5;
+
+    return List.generate(_chartData.length, (i) {
+      return Offset(
+        lp + (i / (_chartData.length - 1)) * cw,
+        tp + ch - (_chartData[i] / maxVal) * ch,
+      );
     });
   }
 
@@ -704,30 +1040,29 @@ class _DashboardHomeState extends State<DashboardHome> {
   List<QueryDocumentSnapshot> _getUpcomingEvents(QuerySnapshot snap) {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
-    
+
     return snap.docs.where((doc) {
       final data = doc.data() as Map<String, dynamic>;
       final dateField = data['date'];
       if (dateField == null) return false;
-      
+
       Timestamp ts;
       if (dateField is Timestamp) {
         ts = dateField;
       } else {
         return false;
       }
-      
+
       final eventDate = ts.toDate();
       final eventDay = DateTime(eventDate.year, eventDate.month, eventDate.day);
-      
+
       return eventDay.isAfter(today) || eventDay.isAtSameMomentAs(today);
-    }).toList()
-      ..sort((a, b) {
-        final dateA = (a.data() as Map)['date'] as Timestamp?;
-        final dateB = (b.data() as Map)['date'] as Timestamp?;
-        if (dateA == null || dateB == null) return 0;
-        return dateA.toDate().compareTo(dateB.toDate());
-      });
+    }).toList()..sort((a, b) {
+      final dateA = (a.data() as Map)['date'] as Timestamp?;
+      final dateB = (b.data() as Map)['date'] as Timestamp?;
+      if (dateA == null || dateB == null) return 0;
+      return dateA.toDate().compareTo(dateB.toDate());
+    });
   }
 
   // ── Build ─────────────────────────────────────────────────────────
@@ -752,14 +1087,20 @@ class _DashboardHomeState extends State<DashboardHome> {
             _buildUpcomingEvents(),
             const SizedBox(height: 20),
             _buildRecentActivity(),
-          ] else Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(child: _buildUpcomingEvents()),
-              const SizedBox(width: 20),
-              Expanded(child: _buildRecentActivity()),
-            ],
-          ),
+            const SizedBox(height: 20),
+            _buildPerformanceSummary(),
+          ] else ...[
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(child: _buildUpcomingEvents()),
+                const SizedBox(width: 20),
+                Expanded(child: _buildRecentActivity()),
+              ],
+            ),
+            const SizedBox(height: 20),
+            _buildPerformanceSummary(),
+          ],
         ],
       ),
     );
@@ -776,20 +1117,34 @@ class _DashboardHomeState extends State<DashboardHome> {
         ),
         borderRadius: BorderRadius.circular(_DS.radiusLg),
         boxShadow: [
-          BoxShadow(color: UpriseColors.primaryDark.withOpacity(0.25), blurRadius: 20, offset: const Offset(0, 6)),
+          BoxShadow(
+            color: UpriseColors.primaryDark.withOpacity(0.25),
+            blurRadius: 20,
+            offset: const Offset(0, 6),
+          ),
         ],
       ),
       child: isMobile
           ? Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Administrator Dashboard',
-                    style: GoogleFonts.beVietnamPro(
-                        fontSize: 22, fontWeight: FontWeight.w800, color: Colors.white)),
+                Text(
+                  'Administrator Dashboard',
+                  style: GoogleFonts.beVietnamPro(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w800,
+                    color: Colors.white,
+                  ),
+                ),
                 const SizedBox(height: 6),
-                Text("Welcome back. Here's what's happening in the CICT community today.",
-                    style: GoogleFonts.beVietnamPro(
-                        fontSize: 13, color: Colors.white.withOpacity(0.80), height: 1.5)),
+                Text(
+                  "Welcome back. Here's what's happening in the CICT community today.",
+                  style: GoogleFonts.beVietnamPro(
+                    fontSize: 13,
+                    color: Colors.white.withOpacity(0.80),
+                    height: 1.5,
+                  ),
+                ),
                 const SizedBox(height: 20),
                 Container(
                   padding: const EdgeInsets.all(14),
@@ -797,7 +1152,11 @@ class _DashboardHomeState extends State<DashboardHome> {
                     color: Colors.white.withOpacity(0.15),
                     borderRadius: BorderRadius.circular(14),
                   ),
-                  child: const Icon(Icons.admin_panel_settings_rounded, color: Colors.white, size: 36),
+                  child: const Icon(
+                    Icons.admin_panel_settings_rounded,
+                    color: Colors.white,
+                    size: 36,
+                  ),
                 ),
               ],
             )
@@ -807,13 +1166,23 @@ class _DashboardHomeState extends State<DashboardHome> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('Administrator Dashboard',
-                          style: GoogleFonts.beVietnamPro(
-                              fontSize: 22, fontWeight: FontWeight.w800, color: Colors.white)),
+                      Text(
+                        'Administrator Dashboard',
+                        style: GoogleFonts.beVietnamPro(
+                          fontSize: 22,
+                          fontWeight: FontWeight.w800,
+                          color: Colors.white,
+                        ),
+                      ),
                       const SizedBox(height: 6),
-                      Text("Welcome back. Here's what's happening in the CICT community today.",
-                          style: GoogleFonts.beVietnamPro(
-                              fontSize: 13, color: Colors.white.withOpacity(0.80), height: 1.5)),
+                      Text(
+                        "Welcome back. Here's what's happening in the CICT community today.",
+                        style: GoogleFonts.beVietnamPro(
+                          fontSize: 13,
+                          color: Colors.white.withOpacity(0.80),
+                          height: 1.5,
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -823,7 +1192,11 @@ class _DashboardHomeState extends State<DashboardHome> {
                     color: Colors.white.withOpacity(0.15),
                     borderRadius: BorderRadius.circular(14),
                   ),
-                  child: const Icon(Icons.admin_panel_settings_rounded, color: Colors.white, size: 36),
+                  child: const Icon(
+                    Icons.admin_panel_settings_rounded,
+                    color: Colors.white,
+                    size: 36,
+                  ),
                 ),
               ],
             ),
@@ -832,10 +1205,30 @@ class _DashboardHomeState extends State<DashboardHome> {
 
   Widget _buildStatCards(bool isMobile, bool isTablet) {
     final cardWidgets = [
-      _buildStatCard('Active Orgs', _organizationsStream, UpriseColors.primaryDark, Icons.business_rounded),
-      _buildStatCard('Active Events', _eventsStream, UpriseColors.success, Icons.event_rounded),
-      _buildStatCard('Pending Proposals', _proposalsStream, UpriseColors.warning, Icons.pending_actions_rounded),
-      _buildStatCard('Overdue Reports', _reportsStream, UpriseColors.error, Icons.warning_amber_rounded),
+      _buildStatCard(
+        'Active Orgs',
+        _organizationsStream,
+        UpriseColors.primaryDark,
+        Icons.business_rounded,
+      ),
+      _buildStatCard(
+        'Active Events',
+        _eventsStream,
+        UpriseColors.success,
+        Icons.event_rounded,
+      ),
+      _buildStatCard(
+        'Pending Proposals',
+        _proposalsStream,
+        UpriseColors.warning,
+        Icons.pending_actions_rounded,
+      ),
+      _buildStatCard(
+        'Overdue Reports',
+        _reportsStream,
+        UpriseColors.error,
+        Icons.warning_amber_rounded,
+      ),
       _buildUpcomingEventsStatCard(),
     ];
 
@@ -843,43 +1236,57 @@ class _DashboardHomeState extends State<DashboardHome> {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          for (var card in cardWidgets) ...[
-            card,
-            const SizedBox(height: 10),
-          ],
+          for (var card in cardWidgets) ...[card, const SizedBox(height: 10)],
         ],
       );
     }
 
     final width = MediaQuery.of(context).size.width;
     if (isTablet) {
-      final cardWidth = (width - 28 * 2 - 10) / 2;
-      return Wrap(
-        spacing: 10,
-        runSpacing: 10,
-        children: cardWidgets
-            .map((card) => SizedBox(width: cardWidth, child: card))
-            .toList(),
+      return SizedBox(
+        width: double.infinity,
+        child: SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          physics: const BouncingScrollPhysics(),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              for (var i = 0; i < cardWidgets.length; i++) ...[
+                SizedBox(
+                  width: math.min(320.0, width * 0.45),
+                  child: cardWidgets[i],
+                ),
+                if (i != cardWidgets.length - 1) const SizedBox(width: 10),
+              ],
+            ],
+          ),
+        ),
       );
     }
 
     return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        for (var card in cardWidgets) ...[
-          Expanded(child: card),
-          const SizedBox(width: 10),
+        for (var i = 0; i < cardWidgets.length; i++) ...[
+          Expanded(child: cardWidgets[i]),
+          if (i != cardWidgets.length - 1) const SizedBox(width: 10),
         ],
       ],
     );
   }
 
-  Widget _buildStatCard(String label, Stream<QuerySnapshot> stream, Color color, IconData icon) {
+  Widget _buildStatCard(
+    String label,
+    Stream<QuerySnapshot> stream,
+    Color color,
+    IconData icon,
+  ) {
     return StreamBuilder<QuerySnapshot>(
       stream: stream,
       builder: (ctx, snap) {
         final count = snap.hasData ? snap.data!.docs.length : 0;
         final loading = snap.connectionState == ConnectionState.waiting;
-        
+
         return Container(
           padding: const EdgeInsets.all(18),
           decoration: BoxDecoration(
@@ -891,25 +1298,47 @@ class _DashboardHomeState extends State<DashboardHome> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                Container(
-                  width: 40, height: 40,
-                  decoration: BoxDecoration(
-                    color: color.withOpacity(0.10),
-                    borderRadius: BorderRadius.circular(10),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: color.withOpacity(0.10),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Icon(icon, color: color, size: 20),
                   ),
-                  child: Icon(icon, color: color, size: 20),
-                ),
-                if (loading)
-                  SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: color))
-                else
-                  Text('$count',
+                  if (loading)
+                    SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: color,
+                      ),
+                    )
+                  else
+                    Text(
+                      '$count',
                       style: GoogleFonts.beVietnamPro(
-                          fontSize: 28, fontWeight: FontWeight.w800, color: const Color(0xFF1A202C))),
-              ]),
+                        fontSize: 28,
+                        fontWeight: FontWeight.w800,
+                        color: const Color(0xFF1A202C),
+                      ),
+                    ),
+                ],
+              ),
               const SizedBox(height: 12),
-              Text(label,
-                  style: GoogleFonts.beVietnamPro(fontSize: 11, color: const Color(0xFF64748B), fontWeight: FontWeight.w600)),
+              Text(
+                label,
+                style: GoogleFonts.beVietnamPro(
+                  fontSize: 11,
+                  color: const Color(0xFF64748B),
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
             ],
           ),
         );
@@ -921,9 +1350,11 @@ class _DashboardHomeState extends State<DashboardHome> {
     return StreamBuilder<QuerySnapshot>(
       stream: _allEventsStream,
       builder: (ctx, snap) {
-        final upcomingCount = snap.hasData ? _getUpcomingEvents(snap.data!).length : 0;
+        final upcomingCount = snap.hasData
+            ? _getUpcomingEvents(snap.data!).length
+            : 0;
         final loading = snap.connectionState == ConnectionState.waiting;
-        
+
         return Container(
           padding: const EdgeInsets.all(18),
           decoration: BoxDecoration(
@@ -935,25 +1366,51 @@ class _DashboardHomeState extends State<DashboardHome> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                Container(
-                  width: 40, height: 40,
-                  decoration: BoxDecoration(
-                    color: UpriseColors.info.withOpacity(0.10),
-                    borderRadius: BorderRadius.circular(10),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: UpriseColors.info.withOpacity(0.10),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Icon(
+                      Icons.upcoming_rounded,
+                      color: UpriseColors.info,
+                      size: 20,
+                    ),
                   ),
-                  child: Icon(Icons.upcoming_rounded, color: UpriseColors.info, size: 20),
-                ),
-                if (loading)
-                  SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: UpriseColors.info))
-                else
-                  Text('$upcomingCount',
+                  if (loading)
+                    SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: UpriseColors.info,
+                      ),
+                    )
+                  else
+                    Text(
+                      '$upcomingCount',
                       style: GoogleFonts.beVietnamPro(
-                          fontSize: 28, fontWeight: FontWeight.w800, color: const Color(0xFF1A202C))),
-              ]),
+                        fontSize: 28,
+                        fontWeight: FontWeight.w800,
+                        color: const Color(0xFF1A202C),
+                      ),
+                    ),
+                ],
+              ),
               const SizedBox(height: 12),
-              Text('Upcoming Events',
-                  style: GoogleFonts.beVietnamPro(fontSize: 11, color: const Color(0xFF64748B), fontWeight: FontWeight.w600)),
+              Text(
+                'Upcoming Events',
+                style: GoogleFonts.beVietnamPro(
+                  fontSize: 11,
+                  color: const Color(0xFF64748B),
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
             ],
           ),
         );
@@ -976,14 +1433,27 @@ class _DashboardHomeState extends State<DashboardHome> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text('Activity Overview',
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Activity Overview',
                     style: GoogleFonts.beVietnamPro(
-                        fontSize: 16, fontWeight: FontWeight.w700, color: const Color(0xFF1A202C))),
-                const SizedBox(height: 3),
-                Text('Completed events per month this semester',
-                    style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF9AA5B4))),
-              ]),
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                      color: const Color(0xFF1A202C),
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    'All event proposals per month this semester',
+                    style: GoogleFonts.beVietnamPro(
+                      fontSize: 12,
+                      color: const Color(0xFF9AA5B4),
+                    ),
+                  ),
+                ],
+              ),
               Container(
                 height: 36,
                 padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -994,15 +1464,28 @@ class _DashboardHomeState extends State<DashboardHome> {
                 ),
                 child: DropdownButtonHideUnderline(
                   child: DropdownButton<String>(
-                    value: _semesterOptions.contains(_selectedSemester) ? _selectedSemester : null,
-                    style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF374151)),
-                    icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 16, color: Color(0xFF9AA5B4)),
+                    value: _semesterOptions.contains(_selectedSemester)
+                        ? _selectedSemester
+                        : null,
+                    style: GoogleFonts.beVietnamPro(
+                      fontSize: 12,
+                      color: const Color(0xFF374151),
+                    ),
+                    icon: const Icon(
+                      Icons.keyboard_arrow_down_rounded,
+                      size: 16,
+                      color: Color(0xFF9AA5B4),
+                    ),
                     items: _semesterOptions
                         .map((s) => DropdownMenuItem(value: s, child: Text(s)))
                         .toList(),
                     onChanged: (v) {
                       if (v != null && mounted) {
-                        setState(() { _selectedSemester = v; _fetchChartData(); });
+                        setState(() {
+                          _selectedSemester = v;
+                          _selectedMonth = _monthLabel(0);
+                          _fetchChartData();
+                        });
                       }
                     },
                   ),
@@ -1010,56 +1493,576 @@ class _DashboardHomeState extends State<DashboardHome> {
               ),
             ],
           ),
-          const SizedBox(height: 20),
-
-          Wrap(
-            spacing: 6,
-            runSpacing: 6,
-            children: List.generate(6, (i) {
-              final m = _monthLabel(i);
-              final isActive = _selectedMonth == m;
-              return SizedBox(
-                width: isMobile ? 96 : null,
-                child: GestureDetector(
-                  onTap: () {
-                    if (mounted) setState(() => _selectedMonth = m);
-                  },
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 150),
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                    decoration: BoxDecoration(
-                      color: isActive ? UpriseColors.primaryDark : const Color(0xFFF8F9FB),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(
-                          color: isActive ? UpriseColors.primaryDark : const Color(0xFFE2E6EA)),
-                    ),
-                    child: Text(m,
-                        textAlign: TextAlign.center,
-                        style: GoogleFonts.beVietnamPro(
-                            color: isActive ? Colors.white : const Color(0xFF64748B),
-                            fontSize: 12,
-                            fontWeight: isActive ? FontWeight.w700 : FontWeight.w500)),
-                  ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  vertical: 6,
+                  horizontal: 10,
                 ),
-              );
-            }),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF8F9FB),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: const Color(0xFFE8ECF0)),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 8,
+                      height: 8,
+                      decoration: BoxDecoration(
+                        color: UpriseColors.primaryDark,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Includes all proposal statuses',
+                      style: GoogleFonts.beVietnamPro(
+                        fontSize: 11,
+                        color: const Color(0xFF64748B),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF8F9FB),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: const Color(0xFFE8ECF0)),
+            ),
+            child: Text(
+              _hoveredChartIndex != null
+                  ? 'Viewing ${List.generate(6, _monthLabel)[_hoveredChartIndex!]}: ${_chartData[_hoveredChartIndex!]} proposals.'
+                  : 'Monthly proposal trend. Hover or tap a dot on the chart for details.',
+              style: GoogleFonts.beVietnamPro(
+                fontSize: 12,
+                color: const Color(0xFF64748B),
+              ),
+            ),
           ),
           const SizedBox(height: 20),
 
           SizedBox(
-            height: 200,
-            child: _chartLoading
-                ? Center(child: CircularProgressIndicator(color: UpriseColors.primaryDark))
-                : CustomPaint(
-                    painter: _LineChartPainter(
-                      data: _chartData.map((e) => e.toDouble()).toList(),
-                      months: List.generate(6, _monthLabel),
-                      selectedMonth: _selectedMonth,
+            height: 280,
+            child: LayoutBuilder(
+              builder: (ctx, constraints) {
+                final chartSize = Size(
+                  constraints.maxWidth,
+                  constraints.maxHeight,
+                );
+                final points = _calculateChartPoints(chartSize);
+                return MouseRegion(
+                  cursor: SystemMouseCursors.click,
+                  onHover: (event) =>
+                      _updateHoveredChartIndex(event.localPosition, chartSize),
+                  onExit: (_) => _clearHoveredChartIndex(),
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.translucent,
+                    onTapDown: (details) => _updateHoveredChartIndex(
+                      details.localPosition,
+                      chartSize,
                     ),
-                    size: Size.infinite,
+                    child: Stack(
+                      children: [
+                        _chartLoading
+                            ? Center(
+                                child: CircularProgressIndicator(
+                                  color: UpriseColors.primaryDark,
+                                ),
+                              )
+                            : CustomPaint(
+                                painter: _LineChartPainter(
+                                  data: _chartData
+                                      .map((e) => e.toDouble())
+                                      .toList(),
+                                  months: List.generate(6, _monthLabel),
+                                  selectedMonth: _selectedMonth,
+                                  hoveredIndex: _hoveredChartIndex,
+                                ),
+                                size: Size.infinite,
+                              ),
+                        if (!_chartLoading &&
+                            _hoveredChartIndex != null &&
+                            _hoveredChartIndex! < points.length)
+                          Positioned(
+                            left: (points[_hoveredChartIndex!].dx - 80).clamp(
+                              0.0,
+                              chartSize.width - 160,
+                            ),
+                            top: (points[_hoveredChartIndex!].dy - 72).clamp(
+                              10.0,
+                              chartSize.height - 90,
+                            ),
+                            child: Container(
+                              width: 160,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 10,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(10),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withOpacity(0.08),
+                                    blurRadius: 16,
+                                    offset: const Offset(0, 6),
+                                  ),
+                                ],
+                                border: Border.all(
+                                  color: const Color(0xFFE8ECF0),
+                                ),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    List.generate(
+                                      6,
+                                      _monthLabel,
+                                    )[_hoveredChartIndex!],
+                                    style: GoogleFonts.beVietnamPro(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w700,
+                                      color: UpriseColors.primaryDark,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    '${_chartData[_hoveredChartIndex!]} proposal(s)',
+                                    style: GoogleFonts.beVietnamPro(
+                                      fontSize: 11,
+                                      color: const Color(0xFF64748B),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    'Hover or tap a dot for details',
+                                    style: GoogleFonts.beVietnamPro(
+                                      fontSize: 10,
+                                      color: const Color(0xFF9AA5B4),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
                   ),
+                );
+              },
+            ),
           ),
         ],
+      ),
+    );
+  }
+
+  Future<List<_OrgPerformance>> _loadPerformanceSummary() async {
+    try {
+      final proposalsSnap = await FirebaseFirestore.instance
+          .collection('event_proposals')
+          .get();
+      final ordersSnap = await FirebaseFirestore.instance
+          .collection('orders')
+          .get();
+
+      // Debug: print counts
+      // ignore: avoid_print
+      print(
+        '[admin_dashboard] proposals: ${proposalsSnap.docs.length}, orders: ${ordersSnap.docs.length}',
+      );
+
+      final proposalStats = <String, Map<String, dynamic>>{};
+      final orderStats = <String, Map<String, dynamic>>{};
+      final orgIds = <String>{};
+
+      for (final doc in proposalsSnap.docs) {
+        final data = doc.data();
+        final orgId = (data['orgId'] as String?)?.trim() ?? '';
+        if (orgId.isEmpty) continue;
+        orgIds.add(orgId);
+        final orgName = (data['orgName'] as String?)?.trim() ?? '';
+        final stat = proposalStats.putIfAbsent(
+          orgId,
+          () => {'orgName': orgName, 'proposalCount': 0, 'approvedCount': 0},
+        );
+        if (orgName.isNotEmpty) {
+          stat['orgName'] = orgName;
+        }
+        stat['proposalCount'] = (stat['proposalCount'] as int) + 1;
+        if ((data['status'] as String?)?.toLowerCase() == 'approved') {
+          stat['approvedCount'] = (stat['approvedCount'] as int) + 1;
+        }
+      }
+
+      for (final doc in ordersSnap.docs) {
+        final data = doc.data();
+        final orgId = (data['orgId'] as String?)?.trim() ?? '';
+        if (orgId.isEmpty) continue;
+        orgIds.add(orgId);
+        final stat = orderStats.putIfAbsent(
+          orgId,
+          () => {'orderCount': 0, 'revenue': 0.0},
+        );
+        stat['orderCount'] = (stat['orderCount'] as int) + 1;
+        final total = (data['total'] is num)
+            ? (data['total'] as num).toDouble()
+            : 0.0;
+        stat['revenue'] = (stat['revenue'] as double) + total;
+      }
+
+      final missingOrgIds = orgIds.where((id) {
+        final stat = proposalStats[id];
+        return stat == null || (stat['orgName'] as String).isEmpty;
+      }).toList();
+      final orgNameMap = <String, String>{};
+
+      for (var i = 0; i < missingOrgIds.length; i += 10) {
+        final batch = missingOrgIds.skip(i).take(10).toList();
+        if (batch.isEmpty) continue;
+        final orgDocs = await FirebaseFirestore.instance
+            .collection('organizations')
+            .where(FieldPath.documentId, whereIn: batch)
+            .get();
+        for (final doc in orgDocs.docs) {
+          orgNameMap[doc.id] =
+              (doc.data()['name'] as String?) ?? 'Organization';
+        }
+      }
+
+      // Debug: sample orgs
+      // ignore: avoid_print
+      print(
+        '[admin_dashboard] orgIds found: ${orgIds.length}, sample: ${orgIds.take(5).toList()}',
+      );
+
+      return orgIds.map((orgId) {
+        final proposalStat = proposalStats[orgId];
+        final orderStat = orderStats[orgId];
+        final orgName =
+            (proposalStat?['orgName'] as String?)?.isNotEmpty == true
+            ? proposalStat!['orgName'] as String
+            : orgNameMap[orgId] ?? 'Organization';
+        return _OrgPerformance(
+          orgId: orgId,
+          orgName: orgName,
+          proposals: proposalStat?['proposalCount'] as int? ?? 0,
+          approvedEvents: proposalStat?['approvedCount'] as int? ?? 0,
+          merchOrders: orderStat?['orderCount'] as int? ?? 0,
+          merchRevenue: orderStat?['revenue'] as double? ?? 0.0,
+        );
+      }).toList();
+    } catch (e, s) {
+      // ignore: avoid_print
+      print('[admin_dashboard] _loadPerformanceSummary error: $e');
+      // ignore: avoid_print
+      print(s);
+      return <_OrgPerformance>[];
+    }
+  }
+
+  Widget _buildPerformanceSummary() {
+    return FutureBuilder<List<_OrgPerformance>>(
+      future: _loadPerformanceSummary(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(_DS.radiusLg),
+              border: Border.all(color: const Color(0xFFE8ECF0)),
+              boxShadow: _DS.cardShadow,
+            ),
+            child: const Center(child: CircularProgressIndicator()),
+          );
+        }
+
+        if (snapshot.hasError) {
+          return Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(_DS.radiusLg),
+              border: Border.all(color: const Color(0xFFE8ECF0)),
+              boxShadow: _DS.cardShadow,
+            ),
+            child: _emptyPlaceholder(
+              Icons.error_outline_rounded,
+              'Unable to load performance summary',
+            ),
+          );
+        }
+
+        final items = snapshot.data ?? [];
+        if (items.isEmpty) {
+          return Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(_DS.radiusLg),
+              border: Border.all(color: const Color(0xFFE8ECF0)),
+              boxShadow: _DS.cardShadow,
+            ),
+            child: _emptyPlaceholder(
+              Icons.dashboard_outlined,
+              'No performance data available',
+            ),
+          );
+        }
+
+        final topProposals = [...items]
+          ..sort((a, b) => b.proposals.compareTo(a.proposals));
+        final topApproved = [...items]
+          ..sort((a, b) => b.approvedEvents.compareTo(a.approvedEvents));
+        final topMerch = [...items]
+          ..sort((a, b) => b.merchOrders.compareTo(a.merchOrders));
+
+        return Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(_DS.radiusLg),
+            border: Border.all(color: const Color(0xFFE8ECF0)),
+            boxShadow: _DS.cardShadow,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Top Performing Organizations',
+                style: GoogleFonts.beVietnamPro(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                  color: const Color(0xFF1A202C),
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'A quick glance at top orgs by proposals, approved events, and merchandise orders.',
+                style: GoogleFonts.beVietnamPro(
+                  fontSize: 12,
+                  color: const Color(0xFF9AA5B4),
+                ),
+              ),
+              const SizedBox(height: 18),
+              LayoutBuilder(
+                builder: (ctx, constraints) {
+                  final w = constraints.maxWidth;
+                  if (w >= 1000) {
+                    final cardWidth = math.min(340.0, (w - 32) / 3);
+                    return Center(
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          SizedBox(
+                            width: cardWidth,
+                            child: _buildPerformanceMetricCard(
+                              title: 'Most Proposals',
+                              orgName: topProposals.first.orgName,
+                              metric: '${topProposals.first.proposals}',
+                              subtitle: 'Total event proposals',
+                              color: UpriseColors.primaryDark,
+                            ),
+                          ),
+                          const SizedBox(width: 16),
+                          SizedBox(
+                            width: cardWidth,
+                            child: _buildPerformanceMetricCard(
+                              title: 'Most Approved Events',
+                              orgName: topApproved.first.orgName,
+                              metric: '${topApproved.first.approvedEvents}',
+                              subtitle: 'Approved event proposals',
+                              color: UpriseColors.success,
+                            ),
+                          ),
+                          const SizedBox(width: 16),
+                          SizedBox(
+                            width: cardWidth,
+                            child: _buildPerformanceMetricCard(
+                              title: 'Best Merchandise Orders',
+                              orgName: topMerch.first.orgName,
+                              metric: '${topMerch.first.merchOrders}',
+                              subtitle:
+                                  '${NumberFormat.currency(symbol: '₱', decimalDigits: 0).format(topMerch.first.merchRevenue)} revenue',
+                              color: UpriseColors.info,
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }
+
+                  if (w >= 700) {
+                    return Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: _buildPerformanceMetricCard(
+                            title: 'Most Proposals',
+                            orgName: topProposals.first.orgName,
+                            metric: '${topProposals.first.proposals}',
+                            subtitle: 'Total event proposals',
+                            color: UpriseColors.primaryDark,
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: _buildPerformanceMetricCard(
+                            title: 'Most Approved Events',
+                            orgName: topApproved.first.orgName,
+                            metric: '${topApproved.first.approvedEvents}',
+                            subtitle: 'Approved event proposals',
+                            color: UpriseColors.success,
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: _buildPerformanceMetricCard(
+                            title: 'Best Merchandise Orders',
+                            orgName: topMerch.first.orgName,
+                            metric: '${topMerch.first.merchOrders}',
+                            subtitle:
+                                '${NumberFormat.currency(symbol: '₱', decimalDigits: 0).format(topMerch.first.merchRevenue)} revenue',
+                            color: UpriseColors.info,
+                          ),
+                        ),
+                      ],
+                    );
+                  }
+
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      _buildPerformanceMetricCard(
+                        title: 'Most Proposals',
+                        orgName: topProposals.first.orgName,
+                        metric: '${topProposals.first.proposals}',
+                        subtitle: 'Total event proposals',
+                        color: UpriseColors.primaryDark,
+                      ),
+                      const SizedBox(height: 12),
+                      _buildPerformanceMetricCard(
+                        title: 'Most Approved Events',
+                        orgName: topApproved.first.orgName,
+                        metric: '${topApproved.first.approvedEvents}',
+                        subtitle: 'Approved event proposals',
+                        color: UpriseColors.success,
+                      ),
+                      const SizedBox(height: 12),
+                      _buildPerformanceMetricCard(
+                        title: 'Best Merchandise Orders',
+                        orgName: topMerch.first.orgName,
+                        metric: '${topMerch.first.merchOrders}',
+                        subtitle:
+                            '${NumberFormat.currency(symbol: '₱', decimalDigits: 0).format(topMerch.first.merchRevenue)} revenue',
+                        color: UpriseColors.info,
+                      ),
+                    ],
+                  );
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildPerformanceMetricCard({
+    required String title,
+    required String orgName,
+    required String metric,
+    required String subtitle,
+    required Color color,
+    double? width,
+  }) {
+    return SizedBox(
+      width: width,
+      child: Container(
+        constraints: const BoxConstraints(minHeight: 176),
+        padding: const EdgeInsets.all(18),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(_DS.radiusMd),
+          border: Border.all(color: const Color(0xFFE8ECF0)),
+          boxShadow: _DS.cardShadow,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    color: color.withOpacity(0.10),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(
+                    Icons.star_border_rounded,
+                    color: color,
+                    size: 20,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    title,
+                    style: GoogleFonts.beVietnamPro(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: const Color(0xFF1A202C),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Text(
+              orgName,
+              style: GoogleFonts.beVietnamPro(
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+                color: UpriseColors.charcoal,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              metric,
+              style: GoogleFonts.beVietnamPro(
+                fontSize: 22,
+                fontWeight: FontWeight.w800,
+                color: UpriseColors.charcoal,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              subtitle,
+              style: GoogleFonts.beVietnamPro(
+                fontSize: 12,
+                color: const Color(0xFF64748B),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1078,43 +2081,72 @@ class _DashboardHomeState extends State<DashboardHome> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-              Text('Upcoming CICT Events',
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Upcoming CICT Events',
                   style: GoogleFonts.beVietnamPro(
-                      fontSize: 15, fontWeight: FontWeight.w700, color: const Color(0xFF1A202C))),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                decoration: BoxDecoration(
-                  color: UpriseColors.primaryDark.withOpacity(0.08),
-                  borderRadius: BorderRadius.circular(_DS.radiusPill),
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                    color: const Color(0xFF1A202C),
+                  ),
                 ),
-                child: Text('View All',
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 5,
+                  ),
+                  decoration: BoxDecoration(
+                    color: UpriseColors.primaryDark.withOpacity(0.08),
+                    borderRadius: BorderRadius.circular(_DS.radiusPill),
+                  ),
+                  child: Text(
+                    'View All',
                     style: GoogleFonts.beVietnamPro(
-                        fontSize: 11, fontWeight: FontWeight.w600, color: UpriseColors.primaryDark)),
-              ),
-            ]),
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: UpriseColors.primaryDark,
+                    ),
+                  ),
+                ),
+              ],
+            ),
             const SizedBox(height: 16),
             StreamBuilder<QuerySnapshot>(
               stream: _allEventsStream,
               builder: (ctx, snap) {
                 if (snap.connectionState == ConnectionState.waiting) {
-                  return const Center(child: Padding(padding: EdgeInsets.all(24), child: CircularProgressIndicator()));
+                  return const Center(
+                    child: Padding(
+                      padding: EdgeInsets.all(24),
+                      child: CircularProgressIndicator(),
+                    ),
+                  );
                 }
                 if (snap.hasError) {
-                  return _emptyPlaceholder(Icons.error_outline_rounded, 'Error loading events');
+                  return _emptyPlaceholder(
+                    Icons.error_outline_rounded,
+                    'Error loading events',
+                  );
                 }
-                
+
                 final upcomingEvents = _getUpcomingEvents(snap.data!);
                 final displayEvents = upcomingEvents.take(4).toList();
-                
+
                 if (displayEvents.isEmpty) {
-                  return _emptyPlaceholder(Icons.calendar_today_outlined, 'No upcoming events');
+                  return _emptyPlaceholder(
+                    Icons.calendar_today_outlined,
+                    'No upcoming events',
+                  );
                 }
-                
+
                 return Column(
                   children: displayEvents.map((doc) {
                     final d = doc.data() as Map<String, dynamic>;
-                    final eventDate = d['date'] is Timestamp ? (d['date'] as Timestamp).toDate() : DateTime.now();
+                    final eventDate = d['date'] is Timestamp
+                        ? (d['date'] as Timestamp).toDate()
+                        : DateTime.now();
                     return _EventRow(
                       date: eventDate.toIso8601String(),
                       title: d['title'] ?? 'Untitled',
@@ -1144,9 +2176,14 @@ class _DashboardHomeState extends State<DashboardHome> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Recent Activity',
-                style: GoogleFonts.beVietnamPro(
-                    fontSize: 15, fontWeight: FontWeight.w700, color: const Color(0xFF1A202C))),
+            Text(
+              'Recent Activity',
+              style: GoogleFonts.beVietnamPro(
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+                color: const Color(0xFF1A202C),
+              ),
+            ),
             const SizedBox(height: 16),
             StreamBuilder<QuerySnapshot>(
               stream: FirebaseFirestore.instance
@@ -1156,13 +2193,24 @@ class _DashboardHomeState extends State<DashboardHome> {
                   .snapshots(),
               builder: (ctx, snap) {
                 if (snap.connectionState == ConnectionState.waiting) {
-                  return const Center(child: Padding(padding: EdgeInsets.all(24), child: CircularProgressIndicator()));
+                  return const Center(
+                    child: Padding(
+                      padding: EdgeInsets.all(24),
+                      child: CircularProgressIndicator(),
+                    ),
+                  );
                 }
                 if (snap.hasError) {
-                  return _emptyPlaceholder(Icons.error_outline_rounded, 'Error loading activity');
+                  return _emptyPlaceholder(
+                    Icons.error_outline_rounded,
+                    'Error loading activity',
+                  );
                 }
                 if (!snap.hasData || snap.data!.docs.isEmpty) {
-                  return _emptyPlaceholder(Icons.history_rounded, 'No recent activity');
+                  return _emptyPlaceholder(
+                    Icons.history_rounded,
+                    'No recent activity',
+                  );
                 }
                 return Column(
                   children: snap.data!.docs.map((doc) {
@@ -1189,7 +2237,8 @@ class _DashboardHomeState extends State<DashboardHome> {
         child: Column(
           children: [
             Container(
-              width: 52, height: 52,
+              width: 52,
+              height: 52,
               decoration: BoxDecoration(
                 color: const Color(0xFFF1F5F9),
                 borderRadius: BorderRadius.circular(14),
@@ -1197,8 +2246,13 @@ class _DashboardHomeState extends State<DashboardHome> {
               child: Icon(icon, size: 26, color: const Color(0xFF9AA5B4)),
             ),
             const SizedBox(height: 12),
-            Text(message,
-                style: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF9AA5B4))),
+            Text(
+              message,
+              style: GoogleFonts.beVietnamPro(
+                fontSize: 13,
+                color: const Color(0xFF9AA5B4),
+              ),
+            ),
           ],
         ),
       ),
@@ -1217,6 +2271,24 @@ class _StatConfig {
   const _StatConfig(this.label, this.stream, this.color, this.icon);
 }
 
+class _OrgPerformance {
+  final String orgId;
+  final String orgName;
+  final int proposals;
+  final int approvedEvents;
+  final int merchOrders;
+  final double merchRevenue;
+
+  const _OrgPerformance({
+    required this.orgId,
+    required this.orgName,
+    required this.proposals,
+    required this.approvedEvents,
+    required this.merchOrders,
+    required this.merchRevenue,
+  });
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Line chart painter (refined version)
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1224,11 +2296,13 @@ class _LineChartPainter extends CustomPainter {
   final List<double> data;
   final List<String> months;
   final String selectedMonth;
+  final int? hoveredIndex;
 
   const _LineChartPainter({
     required this.data,
     required this.months,
     required this.selectedMonth,
+    this.hoveredIndex,
   });
 
   @override
@@ -1250,21 +2324,35 @@ class _LineChartPainter extends CustomPainter {
       final y = tp + (i / 4) * ch;
       canvas.drawLine(Offset(lp, y), Offset(lp + cw, y), gridPaint);
       final val = (maxVal * (1 - i / 4)).toInt();
-      _drawText(canvas, '$val', Offset(lp - 8, y - 6),
-          fontSize: 10, color: const Color(0xFF9AA5B4), align: TextAlign.right);
+      _drawText(
+        canvas,
+        '$val',
+        Offset(lp - 8, y - 6),
+        fontSize: 10,
+        color: const Color(0xFF9AA5B4),
+        align: TextAlign.right,
+      );
     }
 
     // Points
     final points = <Offset>[];
     for (int i = 0; i < data.length; i++) {
-      points.add(Offset(lp + (i / (data.length - 1)) * cw, tp + ch - (data[i] / maxVal) * ch));
+      points.add(
+        Offset(
+          lp + (i / (data.length - 1)) * cw,
+          tp + ch - (data[i] / maxVal) * ch,
+        ),
+      );
     }
 
     // Area fill
     final areaPath = Path()..moveTo(points[0].dx, points[0].dy);
     for (int i = 1; i < points.length; i++) {
-      final c1 = Offset((points[i-1].dx + points[i].dx) / 2, points[i-1].dy);
-      final c2 = Offset((points[i-1].dx + points[i].dx) / 2, points[i].dy);
+      final c1 = Offset(
+        (points[i - 1].dx + points[i].dx) / 2,
+        points[i - 1].dy,
+      );
+      final c2 = Offset((points[i - 1].dx + points[i].dx) / 2, points[i].dy);
       areaPath.cubicTo(c1.dx, c1.dy, c2.dx, c2.dy, points[i].dx, points[i].dy);
     }
     areaPath
@@ -1275,47 +2363,96 @@ class _LineChartPainter extends CustomPainter {
       areaPath,
       Paint()
         ..shader = LinearGradient(
-          begin: Alignment.topCenter, end: Alignment.bottomCenter,
-          colors: [UpriseColors.primaryDark.withOpacity(0.12), UpriseColors.primaryDark.withOpacity(0)],
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            UpriseColors.primaryDark.withOpacity(0.12),
+            UpriseColors.primaryDark.withOpacity(0),
+          ],
         ).createShader(Rect.fromLTWH(0, tp, size.width, ch)),
     );
 
     // Line
     final linePath = Path()..moveTo(points[0].dx, points[0].dy);
     for (int i = 1; i < points.length; i++) {
-      final c1 = Offset((points[i-1].dx + points[i].dx) / 2, points[i-1].dy);
-      final c2 = Offset((points[i-1].dx + points[i].dx) / 2, points[i].dy);
+      final c1 = Offset(
+        (points[i - 1].dx + points[i].dx) / 2,
+        points[i - 1].dy,
+      );
+      final c2 = Offset((points[i - 1].dx + points[i].dx) / 2, points[i].dy);
       linePath.cubicTo(c1.dx, c1.dy, c2.dx, c2.dy, points[i].dx, points[i].dy);
     }
-    canvas.drawPath(linePath,
-        Paint()..color = UpriseColors.primaryDark..strokeWidth = 2.5..style = PaintingStyle.stroke);
+    canvas.drawPath(
+      linePath,
+      Paint()
+        ..color = UpriseColors.primaryDark
+        ..strokeWidth = 2.5
+        ..style = PaintingStyle.stroke,
+    );
 
     // Points & labels
     for (int i = 0; i < points.length; i++) {
       final isSelected = months[i] == selectedMonth;
-      if (isSelected) {
-        canvas.drawCircle(points[i], 8,
-            Paint()..color = UpriseColors.primaryDark.withOpacity(0.15));
+      final isHovered = hoveredIndex == i;
+      if (isSelected || isHovered) {
+        canvas.drawLine(
+          Offset(points[i].dx, points[i].dy),
+          Offset(points[i].dx, tp + ch),
+          Paint()
+            ..color = UpriseColors.primaryDark.withOpacity(0.16)
+            ..strokeWidth = 1.5,
+        );
+        canvas.drawCircle(
+          points[i],
+          10,
+          Paint()..color = UpriseColors.primaryDark.withOpacity(0.12),
+        );
       }
-      canvas.drawCircle(points[i], isSelected ? 5 : 4,
-          Paint()..color = Colors.white);
-      canvas.drawCircle(points[i], isSelected ? 5 : 4,
-          Paint()..color = isSelected ? UpriseColors.accent : UpriseColors.primaryDark..style = PaintingStyle.stroke..strokeWidth = 2);
+      canvas.drawCircle(
+        points[i],
+        isSelected || isHovered ? 6 : 4,
+        Paint()..color = Colors.white,
+      );
+      canvas.drawCircle(
+        points[i],
+        isSelected || isHovered ? 6 : 4,
+        Paint()
+          ..color = isSelected || isHovered
+              ? UpriseColors.accent
+              : UpriseColors.primaryDark
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 2,
+      );
 
-      if (isSelected) {
-        _drawText(canvas, '${data[i].toInt()}',
-            Offset(points[i].dx, points[i].dy - 16),
-            fontSize: 12, color: UpriseColors.primaryDark, fontWeight: FontWeight.bold);
+      if (isSelected || isHovered) {
+        _drawText(
+          canvas,
+          '${data[i].toInt()}',
+          Offset(points[i].dx, points[i].dy - 18),
+          fontSize: 12,
+          color: UpriseColors.primaryDark,
+          fontWeight: FontWeight.bold,
+        );
       }
-      _drawText(canvas, months[i],
-          Offset(points[i].dx, size.height - 16),
-          fontSize: 11,
-          color: isSelected ? UpriseColors.primaryDark : const Color(0xFF9AA5B4),
-          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal);
+      _drawText(
+        canvas,
+        months[i],
+        Offset(points[i].dx, size.height - 16),
+        fontSize: 11,
+        color: isSelected || isHovered
+            ? UpriseColors.primaryDark
+            : const Color(0xFF9AA5B4),
+        fontWeight: isSelected || isHovered
+            ? FontWeight.bold
+            : FontWeight.normal,
+      );
     }
   }
 
-  void _drawText(Canvas canvas, String text, Offset position, {
+  void _drawText(
+    Canvas canvas,
+    String text,
+    Offset position, {
     double fontSize = 12,
     Color color = const Color(0xFF64748B),
     FontWeight fontWeight = FontWeight.normal,
@@ -1324,12 +2461,19 @@ class _LineChartPainter extends CustomPainter {
     final tp = TextPainter(
       text: TextSpan(
         text: text,
-        style: GoogleFonts.beVietnamPro(fontSize: fontSize, color: color, fontWeight: fontWeight),
+        style: GoogleFonts.beVietnamPro(
+          fontSize: fontSize,
+          color: color,
+          fontWeight: fontWeight,
+        ),
       ),
       textAlign: align,
       textDirection: ui.TextDirection.ltr,
     )..layout();
-    tp.paint(canvas, Offset(position.dx - tp.width / 2, position.dy - tp.height / 2));
+    tp.paint(
+      canvas,
+      Offset(position.dx - tp.width / 2, position.dy - tp.height / 2),
+    );
   }
 
   @override
@@ -1348,7 +2492,20 @@ class _EventRow extends StatelessWidget {
     if (date == null) return (month: 'TBD', day: '--');
     try {
       final dt = DateTime.parse(date!);
-      const m = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+      const m = [
+        'JAN',
+        'FEB',
+        'MAR',
+        'APR',
+        'MAY',
+        'JUN',
+        'JUL',
+        'AUG',
+        'SEP',
+        'OCT',
+        'NOV',
+        'DEC',
+      ];
       return (month: m[dt.month - 1], day: '${dt.day}');
     } catch (_) {
       return (month: 'TBD', day: '--');
@@ -1364,7 +2521,8 @@ class _EventRow extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           Container(
-            width: 48, height: 52,
+            width: 48,
+            height: 52,
             decoration: BoxDecoration(
               color: UpriseColors.primaryDark.withOpacity(0.08),
               borderRadius: BorderRadius.circular(10),
@@ -1372,12 +2530,23 @@ class _EventRow extends StatelessWidget {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Text(d.month,
-                    style: GoogleFonts.beVietnamPro(
-                        fontSize: 9, fontWeight: FontWeight.w700, color: UpriseColors.primaryDark)),
-                Text(d.day,
-                    style: GoogleFonts.beVietnamPro(
-                        fontSize: 20, fontWeight: FontWeight.w800, color: UpriseColors.primaryDark, height: 1.1)),
+                Text(
+                  d.month,
+                  style: GoogleFonts.beVietnamPro(
+                    fontSize: 9,
+                    fontWeight: FontWeight.w700,
+                    color: UpriseColors.primaryDark,
+                  ),
+                ),
+                Text(
+                  d.day,
+                  style: GoogleFonts.beVietnamPro(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w800,
+                    color: UpriseColors.primaryDark,
+                    height: 1.1,
+                  ),
+                ),
               ],
             ),
           ),
@@ -1386,23 +2555,50 @@ class _EventRow extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title ?? 'Untitled',
-                    style: GoogleFonts.beVietnamPro(
-                        fontSize: 13, fontWeight: FontWeight.w600, color: const Color(0xFF1A202C)),
-                    overflow: TextOverflow.ellipsis),
+                Text(
+                  title ?? 'Untitled',
+                  style: GoogleFonts.beVietnamPro(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: const Color(0xFF1A202C),
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
                 const SizedBox(height: 3),
-                Row(children: [
-                  const Icon(Icons.location_on_outlined, size: 11, color: Color(0xFF9AA5B4)),
-                  const SizedBox(width: 3),
-                  Flexible(child: Text(location ?? 'TBA',
-                      style: GoogleFonts.beVietnamPro(fontSize: 11, color: const Color(0xFF9AA5B4)),
-                      overflow: TextOverflow.ellipsis)),
-                  const SizedBox(width: 8),
-                  const Icon(Icons.access_time_rounded, size: 11, color: Color(0xFF9AA5B4)),
-                  const SizedBox(width: 3),
-                  Text(time ?? 'TBA',
-                      style: GoogleFonts.beVietnamPro(fontSize: 11, color: const Color(0xFF9AA5B4))),
-                ]),
+                Row(
+                  children: [
+                    const Icon(
+                      Icons.location_on_outlined,
+                      size: 11,
+                      color: Color(0xFF9AA5B4),
+                    ),
+                    const SizedBox(width: 3),
+                    Flexible(
+                      child: Text(
+                        location ?? 'TBA',
+                        style: GoogleFonts.beVietnamPro(
+                          fontSize: 11,
+                          color: const Color(0xFF9AA5B4),
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    const Icon(
+                      Icons.access_time_rounded,
+                      size: 11,
+                      color: Color(0xFF9AA5B4),
+                    ),
+                    const SizedBox(width: 3),
+                    Text(
+                      time ?? 'TBA',
+                      style: GoogleFonts.beVietnamPro(
+                        fontSize: 11,
+                        color: const Color(0xFF9AA5B4),
+                      ),
+                    ),
+                  ],
+                ),
               ],
             ),
           ),
@@ -1418,23 +2614,29 @@ class _EventRow extends StatelessWidget {
 class _ActivityRow extends StatelessWidget {
   final String title, module;
   final Timestamp? timestamp;
-  const _ActivityRow({required this.title, required this.module, this.timestamp});
+  const _ActivityRow({
+    required this.title,
+    required this.module,
+    this.timestamp,
+  });
 
   String _timeAgo() {
     if (timestamp == null) return 'Just now';
     final diff = DateTime.now().difference(timestamp!.toDate());
-    if (diff.inMinutes < 1)  return 'Just now';
+    if (diff.inMinutes < 1) return 'Just now';
     if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
-    if (diff.inHours  < 24)  return '${diff.inHours}h ago';
-    if (diff.inDays   < 7)   return '${diff.inDays}d ago';
+    if (diff.inHours < 24) return '${diff.inHours}h ago';
+    if (diff.inDays < 7) return '${diff.inDays}d ago';
     return '${(diff.inDays / 7).floor()}w ago';
   }
 
   Color _dotColor() {
     final l = title.toLowerCase();
-    if (l.contains('proposal') || l.contains('pending')) return UpriseColors.warning;
-    if (l.contains('verified') || l.contains('created')) return UpriseColors.success;
-    if (l.contains('deleted')  || l.contains('error'))   return UpriseColors.error;
+    if (l.contains('proposal') || l.contains('pending'))
+      return UpriseColors.warning;
+    if (l.contains('verified') || l.contains('created'))
+      return UpriseColors.success;
+    if (l.contains('deleted') || l.contains('error')) return UpriseColors.error;
     return UpriseColors.primaryDark;
   }
 
@@ -1448,8 +2650,12 @@ class _ActivityRow extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.only(top: 4),
             child: Container(
-              width: 8, height: 8,
-              decoration: BoxDecoration(color: _dotColor(), shape: BoxShape.circle),
+              width: 8,
+              height: 8,
+              decoration: BoxDecoration(
+                color: _dotColor(),
+                shape: BoxShape.circle,
+              ),
             ),
           ),
           const SizedBox(width: 12),
@@ -1457,24 +2663,42 @@ class _ActivityRow extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title,
-                    style: GoogleFonts.beVietnamPro(
-                        fontSize: 13, fontWeight: FontWeight.w500, color: const Color(0xFF1A202C))),
+                Text(
+                  title,
+                  style: GoogleFonts.beVietnamPro(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                    color: const Color(0xFF1A202C),
+                  ),
+                ),
                 if (module.isNotEmpty) ...[
                   const SizedBox(height: 2),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 7,
+                      vertical: 2,
+                    ),
                     decoration: BoxDecoration(
                       color: const Color(0xFFF1F5F9),
                       borderRadius: BorderRadius.circular(4),
                     ),
-                    child: Text(module,
-                        style: GoogleFonts.beVietnamPro(fontSize: 10, color: const Color(0xFF64748B))),
+                    child: Text(
+                      module,
+                      style: GoogleFonts.beVietnamPro(
+                        fontSize: 10,
+                        color: const Color(0xFF64748B),
+                      ),
+                    ),
                   ),
                 ],
                 const SizedBox(height: 3),
-                Text(_timeAgo(),
-                    style: GoogleFonts.beVietnamPro(fontSize: 10, color: const Color(0xFF9AA5B4))),
+                Text(
+                  _timeAgo(),
+                  style: GoogleFonts.beVietnamPro(
+                    fontSize: 10,
+                    color: const Color(0xFF9AA5B4),
+                  ),
+                ),
               ],
             ),
           ),

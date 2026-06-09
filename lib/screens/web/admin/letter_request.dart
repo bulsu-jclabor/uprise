@@ -5,7 +5,10 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:uprise/widgets/admin_export_button.dart';
 import 'package:intl/intl.dart';
+import 'export_util.dart';
+import 'export_pdf.dart';
 import '../../../services/activity_logger.dart' as activity_log;
 import '../../../services/firestore_collections.dart';
 import '../../../utils/platform_file_utils.dart' as platform_file_utils;
@@ -1173,18 +1176,10 @@ class _ExportButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return OutlinedButton.icon(
-      onPressed: () => _exportCSV(context),
-      icon: const Icon(Icons.download_outlined, size: 16),
-      label: Text('Export CSV', style: GoogleFonts.beVietnamPro(fontSize: 13)),
-      style: OutlinedButton.styleFrom(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-      ),
-    );
+    return AdminExportButton(onSelected: (choice) => _doExport(context, choice));
   }
 
-  Future<void> _exportCSV(BuildContext context) async {
+  Future<void> _doExport(BuildContext context, String format) async {
     final messenger = ScaffoldMessenger.of(context);
     try {
       var snap = await FirestoreCollections.letterRequests.orderBy('timestamp', descending: true).get();
@@ -1209,15 +1204,53 @@ class _ExportButton extends StatelessWidget {
         messenger.showSnackBar(const SnackBar(content: Text('No data to export.')));
         return;
       }
-      final buffer = StringBuffer();
-      buffer.writeln('Letter ID,Organization,Subject,Message,Status,Date Submitted');
-      for (final doc in docs) {
-        final d = doc.data() as Map<String, dynamic>?;
-        final date = (d?['timestamp'] as Timestamp?)?.toDate().toString().substring(0, 10) ?? '';
-        final message = (d?['message'] ?? '').toString().replaceAll(',', ';');
-        buffer.writeln('"${d?['letterId']}","${d?['orgName']}","${d?['subject']}","$message","${d?['status']}","$date"');
+
+      final now = DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
+      if (format == 'csv') {
+        final buffer = StringBuffer();
+        buffer.writeln('Letter ID,Organization,Subject,Message,Status,Date Submitted');
+        for (final doc in docs) {
+          final d = doc.data() as Map<String, dynamic>?;
+          final date = (d?['timestamp'] as Timestamp?)?.toDate().toString().substring(0, 10) ?? '';
+          final message = (d?['message'] ?? '').toString();
+          String escape(String value) => '"${value.replaceAll('"', '""')}"';
+          buffer.writeln([
+            escape(d?['letterId'] ?? ''),
+            escape(d?['orgName'] ?? ''),
+            escape(d?['subject'] ?? ''),
+            escape(message),
+            escape(d?['status'] ?? ''),
+            escape(date),
+          ].join(','));
+        }
+        final fileName = 'letter_requests_$now.csv';
+        await AdminExportUtil.saveText(buffer.toString(), fileName, mimeType: 'text/csv');
+        messenger.showSnackBar(SnackBar(content: Text('Download started: $fileName')));
+      } else if (format == 'pdf') {
+        final rows = docs.map((doc) {
+          final d = doc.data() as Map<String, dynamic>?;
+          final date = (d?['timestamp'] as Timestamp?)?.toDate().toString().substring(0, 10) ?? '';
+          return [
+            d?['letterId'] ?? '',
+            d?['orgName'] ?? '',
+            d?['subject'] ?? '',
+            d?['message'] ?? '',
+            d?['status'] ?? '',
+            date,
+          ].map((value) => value.toString()).toList();
+        }).toList();
+
+        final pdfBytes = await AdminExportPdf.generateTablePdf(
+          title: 'Letter Requests Report',
+          headers: const ['Letter ID', 'Organization', 'Subject', 'Message', 'Status', 'Date Submitted'],
+          rows: rows,
+        );
+        final fileName = 'letter_requests_$now.pdf';
+        await AdminExportUtil.saveBytes(pdfBytes, fileName, mimeType: 'application/pdf');
+        messenger.showSnackBar(SnackBar(content: Text('Download started: $fileName')));
+      } else {
+        throw UnsupportedError('Unsupported export format: $format');
       }
-      messenger.showSnackBar(SnackBar(content: Text('Exported ${docs.length} records to CSV')));
     } catch (e) {
       messenger.showSnackBar(
         SnackBar(

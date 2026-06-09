@@ -14,6 +14,7 @@ import 'package:http/http.dart' as http;
 import 'package:file_picker/file_picker.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:uprise/widgets/admin_export_button.dart';
 import 'package:intl/intl.dart';
 import '../../theme/app_theme.dart';
 
@@ -1040,65 +1041,25 @@ class _ExportButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      height: 40,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: const Color(0xFFE2E6EA)),
-      ),
-      child: PopupMenuButton<String>(
-        onSelected: (choice) async {
-          final docs = await _getFilteredDocs();
-          if (docs.isEmpty) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: const Text('No data to export.'),
-                backgroundColor: UpriseColors.error,
-                behavior: SnackBarBehavior.floating,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-              ),
-            );
-            return;
-          }
-          if (choice == 'csv') {
-            await _exportCSV(context, docs);
-          } else if (choice == 'pdf') {
-            await _exportPDF(context, docs);
-          }
-        },
-        itemBuilder: (_) => [
-          PopupMenuItem(
-            value: 'csv',
-            child: Row(children: [
-              const Icon(Icons.table_chart_rounded, size: 16, color: Color(0xFF64748B)),
-              const SizedBox(width: 10),
-              Text('Export as CSV', style: GoogleFonts.beVietnamPro(fontSize: 13)),
-            ]),
+    return AdminExportButton(onSelected: (choice) async {
+      final docs = await _getFilteredDocs();
+      if (docs.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('No data to export.'),
+            backgroundColor: UpriseColors.error,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
           ),
-          PopupMenuItem(
-            value: 'pdf',
-            child: Row(children: [
-              const Icon(Icons.picture_as_pdf_rounded, size: 16, color: Color(0xFF64748B)),
-              const SizedBox(width: 10),
-              Text('Export as PDF', style: GoogleFonts.beVietnamPro(fontSize: 13)),
-            ]),
-          ),
-        ],
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 14),
-          child: Row(
-            children: [
-              const Icon(Icons.download_rounded, size: 16, color: Color(0xFF374151)),
-              const SizedBox(width: 6),
-              Text('Export', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w500, color: const Color(0xFF374151))),
-              const SizedBox(width: 4),
-              const Icon(Icons.keyboard_arrow_down_rounded, size: 16, color: Color(0xFF9AA5B4)),
-            ],
-          ),
-        ),
-      ),
-    );
+        );
+        return;
+      }
+      if (choice == 'csv') {
+        await _exportCSV(context, docs);
+      } else if (choice == 'pdf') {
+        await _exportPDF(context, docs);
+      }
+    });
   }
 }
 

@@ -234,10 +234,17 @@ class _StudentAccountsState extends State<StudentAccounts> {
                     ),
                   ),
                 )
-              : Wrap(
-                  spacing: cardGap,
-                  runSpacing: cardGap,
-                  children: statCards,
+              : Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: List.generate(
+                    statCards.length,
+                    (index) => Expanded(
+                      child: Padding(
+                        padding: EdgeInsets.only(right: index < statCards.length - 1 ? cardGap : 0),
+                        child: statCards[index],
+                      ),
+                    ),
+                  ),
                 ),
         );
       },
@@ -2010,41 +2017,39 @@ class _StatCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.all(18),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: const Color(0xFFE8ECF0)),
-          boxShadow: _DS.cardShadow,
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(
-                color: color.withOpacity(0.10),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Icon(icon, color: color, size: 22),
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE8ECF0)),
+        boxShadow: _DS.cardShadow,
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.10),
+              borderRadius: BorderRadius.circular(12),
             ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(label,
-                      style: GoogleFonts.beVietnamPro(fontSize: 11, color: const Color(0xFF64748B), fontWeight: FontWeight.w500)),
-                  const SizedBox(height: 2),
-                  Text(value,
-                      style: GoogleFonts.beVietnamPro(fontSize: 28, fontWeight: FontWeight.w700, color: const Color(0xFF1A202C))),
-                ],
-              ),
+            child: Icon(icon, color: color, size: 22),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(label,
+                    style: GoogleFonts.beVietnamPro(fontSize: 11, color: const Color(0xFF64748B), fontWeight: FontWeight.w500)),
+                const SizedBox(height: 2),
+                Text(value,
+                    style: GoogleFonts.beVietnamPro(fontSize: 28, fontWeight: FontWeight.w700, color: const Color(0xFF1A202C))),
+              ],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
