@@ -1,6 +1,5 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import '../screens/guest/guest_home_screen.dart';
 
 class AuthService {
   static final Map<String, String> _roleCache = {};
@@ -39,8 +38,7 @@ class AuthService {
       if (orgId != null && orgId.isNotEmpty) data['orgId'] = orgId;
       await _firestore.collection('users').doc(result.user!.uid).set(data);
       return result.user;
-    } catch (e) {
-      print('❌ Registration error: $e');
+    } catch (_) {
       return null;
     }
   }
@@ -53,8 +51,7 @@ class AuthService {
       return result.user;
     } on FirebaseAuthException {
       rethrow;
-    } catch (e) {
-      print('❌ Login error: $e');
+    } catch (_) {
       return null;
     }
   }
@@ -90,20 +87,13 @@ class AuthService {
   Future<bool> needsPasswordChange(String uid) async {
     try {
       final doc = await _firestore.collection('users').doc(uid).get();
-      if (!doc.exists) {
-        print('AuthService.needsPasswordChange: user doc not found for uid=$uid');
-        return false;
-      }
+      if (!doc.exists) return false;
       final data = doc.data() as Map<String, dynamic>? ?? {};
-      final bool isFirstLogin = data['isFirstLogin'] == true;
-      final bool mustChangePassword = data['mustChangePassword'] == true;
-      final bool needsPasswordChange = data['needsPasswordChange'] == true;
-      final bool firstLogin = data['firstLogin'] == true;
-      final bool result = isFirstLogin || mustChangePassword || needsPasswordChange || firstLogin;
-      print('AuthService.needsPasswordChange uid=$uid data=$data result=$result');
-      return result;
-    } catch (e, st) {
-      print('AuthService.needsPasswordChange error uid=$uid: $e\n$st');
+      return data['isFirstLogin'] == true ||
+          data['mustChangePassword'] == true ||
+          data['needsPasswordChange'] == true ||
+          data['firstLogin'] == true;
+    } catch (_) {
       return false;
     }
   }

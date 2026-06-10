@@ -1,5 +1,4 @@
-// lib/models/user_model.dart
-import 'package:cloud_firestore/cloud_firestore.dart';  // ← IDAGDAG ITO
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class UserModel {
   final String id;
@@ -8,21 +7,34 @@ class UserModel {
   final String studentId;
   final String role;
   final String? profilePicture;
+  final String? photoUrl;
   final bool isFirstLogin;
+  final bool mustChangePassword;
   final String? organizationId;
+  final String? orgId;
+  final String? mobile;
+  final String? address;
   final DateTime createdAt;
 
-  UserModel({
+  const UserModel({
     required this.id,
     required this.email,
     required this.fullName,
-    required this.studentId,
+    this.studentId = '',
     required this.role,
     this.profilePicture,
-    required this.isFirstLogin,
+    this.photoUrl,
+    this.isFirstLogin = false,
+    this.mustChangePassword = false,
     this.organizationId,
+    this.orgId,
+    this.mobile,
+    this.address,
     required this.createdAt,
   });
+
+  bool get needsPasswordChange =>
+      isFirstLogin || mustChangePassword;
 
   Map<String, dynamic> toMap() {
     return {
@@ -30,10 +42,15 @@ class UserModel {
       'fullName': fullName,
       'studentId': studentId,
       'role': role,
-      'profilePicture': profilePicture,
+      if (profilePicture != null) 'profilePicture': profilePicture,
+      if (photoUrl != null) 'photoUrl': photoUrl,
       'isFirstLogin': isFirstLogin,
-      'organizationId': organizationId,
-      'createdAt': createdAt,
+      'mustChangePassword': mustChangePassword,
+      if (organizationId != null) 'organizationId': organizationId,
+      if (orgId != null) 'orgId': orgId,
+      if (mobile != null) 'mobile': mobile,
+      if (address != null) 'address': address,
+      'createdAt': Timestamp.fromDate(createdAt),
     };
   }
 
@@ -44,9 +61,16 @@ class UserModel {
       fullName: map['fullName'] ?? '',
       studentId: map['studentId'] ?? '',
       role: map['role'] ?? 'guest',
-      profilePicture: map['profilePicture'],
-      isFirstLogin: map['isFirstLogin'] ?? false,
-      organizationId: map['organizationId'],
+      profilePicture: map['profilePicture'] as String?,
+      photoUrl: map['photoUrl'] as String?,
+      isFirstLogin: map['isFirstLogin'] as bool? ?? false,
+      mustChangePassword: (map['mustChangePassword'] as bool? ?? false) ||
+          (map['needsPasswordChange'] as bool? ?? false) ||
+          (map['firstLogin'] as bool? ?? false),
+      organizationId: map['organizationId'] as String?,
+      orgId: map['orgId'] as String?,
+      mobile: map['mobile'] as String?,
+      address: map['address'] as String?,
       createdAt: (map['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
     );
   }

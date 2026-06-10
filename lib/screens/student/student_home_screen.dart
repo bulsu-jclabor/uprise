@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
 import '../../widgets/common/bottom_nav_bar.dart';
+import '../../widgets/common/loading_widget.dart';
 import '../../widgets/student/announcements_feed.dart';
 import '../../widgets/student/profile_summary.dart';
 import 'student_events_screen.dart';
@@ -154,26 +155,25 @@ class _HomeContent extends StatelessWidget {
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) {
                 return const Padding(
-                  padding: EdgeInsets.all(32),
-                  child: Center(child: CircularProgressIndicator()),
+                  padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  child: SkeletonLoader(count: 2, height: 110),
+                );
+              }
+
+              if (snapshot.hasError) {
+                return const Padding(
+                  padding: EdgeInsets.all(16),
+                  child: UpriseErrorState(message: 'Could not load events.'),
                 );
               }
 
               if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                return Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Container(
-                    padding: const EdgeInsets.all(32),
-                    decoration: BoxDecoration(
-                      color: Colors.grey[50],
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: const Center(
-                      child: Text(
-                        'No upcoming events',
-                        style: TextStyle(color: Colors.grey),
-                      ),
-                    ),
+                return const Padding(
+                  padding: EdgeInsets.all(16),
+                  child: UpriseEmptyState(
+                    icon: Icons.calendar_today_outlined,
+                    title: 'No upcoming events',
+                    subtitle: 'Check back later for new events from your organizations.',
                   ),
                 );
               }

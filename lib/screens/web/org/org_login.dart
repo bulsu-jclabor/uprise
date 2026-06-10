@@ -74,8 +74,12 @@ class _OrganizationLoginState extends State<OrganizationLogin>
   Future<void> _login() async {
     final email    = _emailController.text.trim();
     final password = _passwordController.text.trim();
-    if (email.isEmpty)    { _showError('Please enter your email address'); return; }
-    if (password.isEmpty) { _showError('Please enter your password');      return; }
+    if (email.isEmpty) { _showError('Please enter your email address'); return; }
+    if (!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(email)) {
+      _showError('Please enter a valid email address');
+      return;
+    }
+    if (password.isEmpty) { _showError('Please enter your password'); return; }
 
     setState(() => _isLoading = true);
     try {

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import '../../../widgets/common/loading_widget.dart';
 
 // ── Notification model ────────────────────────────────────────
 class AppNotification {
@@ -34,9 +35,14 @@ class AppNotification {
 }
 
 // ── Notifications Screen ──────────────────────────────────────
-class StudentNotificationsScreen extends StatelessWidget {
+class StudentNotificationsScreen extends StatefulWidget {
   const StudentNotificationsScreen({super.key});
 
+  @override
+  State<StudentNotificationsScreen> createState() => _StudentNotificationsScreenState();
+}
+
+class _StudentNotificationsScreenState extends State<StudentNotificationsScreen> {
   ({IconData icon, Color bg, Color fg}) _typeStyle(String type) {
     switch (type) {
       case 'event':
@@ -82,26 +88,16 @@ class StudentNotificationsScreen extends StatelessWidget {
   }
 
   Future<void> _markAsRead(String notifId) async {
-    final uid = FirebaseAuth.instance.currentUser?.uid;
-    if (uid == null) return;
     await FirebaseFirestore.instance
-        .collection('users')
-        .doc(uid)
         .collection('notifications')
         .doc(notifId)
         .update({'isRead': true});
   }
 
   Future<void> _markAllAsRead(List<AppNotification> notifs) async {
-    final uid = FirebaseAuth.instance.currentUser?.uid;
-    if (uid == null) return;
     final batch = FirebaseFirestore.instance.batch();
     for (final n in notifs.where((n) => !n.isRead)) {
-      final ref = FirebaseFirestore.instance
-          .collection('users')
-          .doc(uid)
-          .collection('notifications')
-          .doc(n.id);
+      final ref = FirebaseFirestore.instance.collection('notifications').doc(n.id);
       batch.update(ref, {'isRead': true});
     }
     await batch.commit();
@@ -129,9 +125,8 @@ class StudentNotificationsScreen extends StatelessWidget {
             stream: uid == null
                 ? null
                 : FirebaseFirestore.instance
-                    .collection('users')
-                    .doc(uid)
                     .collection('notifications')
+                    .where('userId', isEqualTo: uid)
                     .where('isRead', isEqualTo: false)
                     .snapshots(),
             builder: (context, snap) {
@@ -151,17 +146,26 @@ class StudentNotificationsScreen extends StatelessWidget {
         ],
       ),
       body: uid == null
-          ? const Center(child: Text('Not logged in'))
+          ? const UpriseEmptyState(icon: Icons.person_off_outlined, title: 'Not logged in')
           : StreamBuilder<QuerySnapshot>(
               stream: FirebaseFirestore.instance
-                  .collection('users')
-                  .doc(uid)
                   .collection('notifications')
+                  .where('userId', isEqualTo: uid)
                   .orderBy('createdAt', descending: true)
+                  .limit(50)
                   .snapshots(),
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
+                  return const Padding(
+                    padding: EdgeInsets.all(16),
+                    child: SkeletonLoader(count: 5, height: 72),
+                  );
+                }
+                if (snapshot.hasError) {
+                  return UpriseErrorState(
+                    message: 'Could not load notifications.',
+                    onRetry: () => setState(() {}),
+                  );
                 }
                 if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
                   return _EmptyState();

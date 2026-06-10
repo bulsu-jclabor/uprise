@@ -74,8 +74,13 @@ class _AdminLoginState extends State<AdminLogin>
   }
 
   Future<void> _login() async {
-    if (_emailController.text.trim().isEmpty) {
+    final email = _emailController.text.trim();
+    if (email.isEmpty) {
       _showError('Please enter your email address');
+      return;
+    }
+    if (!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(email)) {
+      _showError('Please enter a valid email address');
       return;
     }
     if (_passwordController.text.trim().isEmpty) {

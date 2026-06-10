@@ -5,7 +5,6 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../auth_service.dart';
 import '../guest/guest_home_screen.dart';
 import '../student/student_home_screen.dart'; // ✅ Import your home screen
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'student_change_password_screen.dart';
 
 
@@ -26,72 +25,60 @@ class _StudentLoginState extends State<StudentLogin> {
   final AuthService _auth = AuthService();
 
   Future<void> _login() async {
-  if (_emailController.text.trim().isEmpty ||
-      _passwordController.text.trim().isEmpty) {
-    _showError('Please enter email and password');
-    return;
-  }
+    final email = _emailController.text.trim();
+    final password = _passwordController.text.trim();
 
-  if (!mounted) return;
-  setState(() => _isLoading = true);
-
-  try {
-    User? user = await _auth.loginWithEmail(
-      _emailController.text.trim(),
-      _passwordController.text.trim(),
-    );
+    if (email.isEmpty || password.isEmpty) {
+      _showError('Please enter email and password');
+      return;
+    }
+    if (!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(email)) {
+      _showError('Please enter a valid email address');
+      return;
+    }
 
     if (!mounted) return;
+    setState(() => _isLoading = true);
 
-    if (user == null) {
-      _showError('Invalid email or password');
-    } else {
-      // ✅ CHECK IF NEED MAG CHANGE PASSWORD
-      final studentDoc = await FirebaseFirestore.instance
-          .collection('students')
-          .doc(user.uid)
-          .get();
-      
-      final mustChangePassword = studentDoc.data()?['mustChangePassword'] ?? false;
-      
-      if (mustChangePassword == true) {
-        // ✅ GO TO CHANGE PASSWORD SCREEN
-        Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(
-            builder: (_) => StudentChangePasswordScreen(),
-          ),
-          (route) => false,
-        );
+    try {
+      final user = await _auth.loginWithEmail(email, password);
+
+      if (!mounted) return;
+
+      if (user == null) {
+        _showError('Invalid email or password');
       } else {
-        // ✅ NORMAL LOGIN
-        Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (_) => const StudentHomeScreen()),
-          (route) => false,
-        );
+        final mustChange = await _auth.needsPasswordChange(user.uid);
+
+        if (!mounted) return;
+
+        if (mustChange) {
+          Navigator.of(context).pushAndRemoveUntil(
+            MaterialPageRoute(builder: (_) => StudentChangePasswordScreen()),
+            (route) => false,
+          );
+        } else {
+          Navigator.of(context).pushAndRemoveUntil(
+            MaterialPageRoute(builder: (_) => const StudentHomeScreen()),
+            (route) => false,
+          );
+        }
       }
+    } on FirebaseAuthException catch (e) {
+      if (!mounted) return;
+      String message = 'Login failed. Please try again.';
+      if (e.code == 'user-not-found') message = 'No account found with this email';
+      else if (e.code == 'wrong-password') message = 'Incorrect password';
+      else if (e.code == 'invalid-email') message = 'Please enter a valid email address';
+      else if (e.code == 'too-many-requests') message = 'Too many attempts. Please wait and try again.';
+      _showError(message);
+    } catch (_) {
+      if (mounted) _showError('An error occurred. Please try again.');
     }
-  } on FirebaseAuthException catch (e) {
+
     if (!mounted) return;
-
-    String message = 'Login failed';
-    if (e.code == 'user-not-found') {
-      message = 'No account found with this email';
-    } else if (e.code == 'wrong-password') {
-      message = 'Incorrect password';
-    } else if (e.code == 'invalid-email') {
-      message = 'Please enter a valid email address';
-    }
-
-    _showError(message);
-  } catch (_) {
-    if (mounted) {
-      _showError('An error occurred. Please try again.');
-    }
+    setState(() => _isLoading = false);
   }
-
-  if (!mounted) return;
-  setState(() => _isLoading = false);
-}
 
   void _showError(String message) {
     if (!mounted) return;
