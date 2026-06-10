@@ -285,7 +285,6 @@ class _OrganizationManagementState extends State<OrganizationManagement> {
   }
 
   @override
-  @override
   Widget build(BuildContext context) {
     final width = MediaQuery.of(context).size.width;
     final isMobile = width < 720;
@@ -1087,7 +1086,7 @@ class _PrimaryButton extends StatelessWidget {
   }
 }
 
-// ============ ORGANIZATION AVATAR ============
+// ============ ORGANIZATION AVATAR (COMPLETE FIX) ============
 class _OrgAvatar extends StatelessWidget {
   final String logoUrl, name;
   const _OrgAvatar({required this.logoUrl, required this.name});
@@ -1102,18 +1101,83 @@ class _OrgAvatar extends StatelessWidget {
         borderRadius: BorderRadius.circular(10),
         border: Border.all(color: const Color(0xFFE2E6EA)),
       ),
-      child: logoUrl.isNotEmpty
-          ? ClipRRect(
-              borderRadius: BorderRadius.circular(10),
-              child: logoUrl.startsWith('data:')
-                  ? Image.memory(
-                      base64Decode(logoUrl.split(',').last),
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => _initials(),
-                    )
-                  : Image.network(logoUrl, fit: BoxFit.cover, errorBuilder: (_, __, ___) => _initials()),
-            )
-          : _initials(),
+      child: _buildImage(),
+    );
+  }
+
+  Widget _buildImage() {
+    // Debug print
+    print('Loading image from: $logoUrl');
+    
+    if (logoUrl.isEmpty || logoUrl == 'null') {
+      print('No image URL provided');
+      return _initials();
+    }
+    
+    // Handle base64 data URIs
+    if (logoUrl.startsWith('data:')) {
+      print('Base64 image detected');
+      try {
+        final base64Str = logoUrl.split(',').last;
+        return ClipRRect(
+          borderRadius: BorderRadius.circular(10),
+          child: Image.memory(
+            base64Decode(base64Str),
+            fit: BoxFit.cover,
+            errorBuilder: (context, error, stackTrace) {
+              print('Base64 image error: $error');
+              return _initials();
+            },
+          ),
+        );
+      } catch (e) {
+        print('Base64 decode error: $e');
+        return _initials();
+      }
+    }
+    
+    // Handle Firebase Storage URLs (they may need special handling)
+    String imageUrl = logoUrl;
+    
+    // Convert HTTP to HTTPS
+    if (imageUrl.startsWith('http://')) {
+      imageUrl = imageUrl.replaceFirst('http://', 'https://');
+      print('Converted HTTP to HTTPS: $imageUrl');
+    }
+    
+    // For Firebase Storage, ensure token is included
+    if (imageUrl.contains('firebasestorage.googleapis.com')) {
+      print('Firebase Storage URL detected');
+      // Firebase Storage URLs are usually fine as-is
+    }
+    
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(10),
+      child: Image.network(
+        imageUrl,
+        fit: BoxFit.cover,
+        loadingBuilder: (context, child, loadingProgress) {
+          if (loadingProgress == null) return child;
+          print('Loading progress: ${loadingProgress.cumulativeBytesLoaded}/${loadingProgress.expectedTotalBytes}');
+          return Center(
+            child: SizedBox(
+              width: 20,
+              height: 20,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                value: loadingProgress.expectedTotalBytes != null
+                    ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
+                    : null,
+              ),
+            ),
+          );
+        },
+        errorBuilder: (context, error, stackTrace) {
+          print('Network image error: $error');
+          print('Failed URL: $imageUrl');
+          return _initials();
+        },
+      ),
     );
   }
 
@@ -1878,10 +1942,15 @@ class _CreateOrganizationDialogState extends State<_CreateOrganizationDialog> {
       return;
     }
 
-    String? logoUrl;
-    if (_logoBytes != null) {
-      logoUrl = _createLogoDataUri(_logoBytes!, _logoXFile?.name ?? 'logo');
-    }
+    // In _createOrganization method, add debug prints:
+String? logoUrl;
+if (_logoBytes != null) {
+  logoUrl = _createLogoDataUri(_logoBytes!, _logoXFile?.name ?? 'logo');
+  print('Logo Data URI created, length: ${logoUrl.length}');
+  print('Logo URI preview: ${logoUrl.substring(0, logoUrl.length > 100 ? 100 : logoUrl.length)}');
+} else {
+  print('No logo bytes found!');
+}
 
     final orgRef = FirebaseFirestore.instance.collection('organizations').doc();
     final orgId = orgRef.id;
@@ -1969,9 +2038,8 @@ class _CreateOrganizationDialogState extends State<_CreateOrganizationDialog> {
 
     await batch.commit();
 
-    // ✅ ✅ ✅ BAGONG CODE: Auto-create ng adviser role ✅ ✅ ✅
+    // ✅ AUTO-CREATE ADVISER ROLE
     if (primaryAdviser.name.trim().isNotEmpty) {
-      // Check kung may existing adviser role na (para iwas duplicate)
       final existingRole = await FirebaseFirestore.instance
           .collection('adviser_roles')
           .where('orgId', isEqualTo: orgId)
@@ -1979,7 +2047,6 @@ class _CreateOrganizationDialogState extends State<_CreateOrganizationDialog> {
           .get();
       
       if (existingRole.docs.isEmpty) {
-        // Walang existing role, gumawa ng bago
         await FirebaseFirestore.instance.collection('adviser_roles').add({
           'orgId': orgId,
           'orgName': orgName,
@@ -1989,9 +2056,9 @@ class _CreateOrganizationDialogState extends State<_CreateOrganizationDialog> {
           'adviserEmail': primaryAdviser.email.trim().toLowerCase(),
           'adviserPhone': primaryAdviser.phone,
           'adviserRank': primaryAdviser.title.isNotEmpty ? primaryAdviser.title : 'Instructor',
-          'president': '',      // i-fi-fill-up later sa org side
-          'vicePresident': '',  // i-fi-fill-up later sa org side
-          'secretary': '',      // i-fi-fill-up later sa org side
+          'president': '',
+          'vicePresident': '',
+          'secretary': '',
           'archived': false,
           'createdAt': FieldValue.serverTimestamp(),
           'createdBy': FirebaseAuth.instance.currentUser?.uid,
@@ -2259,6 +2326,15 @@ class _EditOrganizationDialogState extends State<_EditOrganizationDialog> {
 
       final batch = FirebaseFirestore.instance.batch();
 
+       // 🔴 OPTION 1: Keep existing logo URL
+      String logoUrl = widget.organization.logoUrl;
+      
+      // 🔴 OPTION 2: FOR TESTING - Force use test image URL (uncomment to use)
+      // logoUrl = 'https://picsum.photos/200/200';
+      
+      // 🔴 OPTION 3: FOR TESTING - Use Flutter logo (uncomment to use)
+      // logoUrl = 'https://flutter.github.io/assets-for-api-docs/assets/widgets/owl.jpg';
+
       batch.update(
         FirebaseFirestore.instance.collection('organizations').doc(widget.organization.id),
         {
@@ -2327,7 +2403,7 @@ class _EditOrganizationDialogState extends State<_EditOrganizationDialog> {
   }
 }
 
-// ============ ORGANIZATION DETAIL PAGE ============
+// ============ ORGANIZATION DETAIL PAGE (FIXED FOR MOBILE) ============
 class _OrganizationDetailPage extends StatefulWidget {
   final Organization organization;
   final VoidCallback onBack;
@@ -2385,12 +2461,7 @@ class _OrganizationDetailPageState extends State<_OrganizationDetailPage> {
                   borderRadius: BorderRadius.circular(16),
                   border: Border.all(color: const Color(0xFFE2E6EA)),
                 ),
-                child: org.logoUrl.isNotEmpty
-                    ? ClipRRect(
-                        borderRadius: BorderRadius.circular(15),
-                        child: Image.network(org.logoUrl, fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) => _logoPlaceholder(org.name)))
-                    : _logoPlaceholder(org.name),
+                child: _buildDetailLogo(),
               ),
               const SizedBox(width: 24),
               Expanded(
@@ -2468,6 +2539,57 @@ class _OrganizationDetailPageState extends State<_OrganizationDetailPage> {
           ),
         ]),
       ]),
+    );
+  }
+
+  Widget _buildDetailLogo() {
+    final logoUrl = widget.organization.logoUrl;
+    
+    if (logoUrl.isEmpty) {
+      return _logoPlaceholder(widget.organization.name);
+    }
+    
+    // Handle base64 data URIs
+    if (logoUrl.startsWith('data:')) {
+      try {
+        final base64Str = logoUrl.split(',').last;
+        return ClipRRect(
+          borderRadius: BorderRadius.circular(15),
+          child: Image.memory(
+            base64Decode(base64Str),
+            fit: BoxFit.cover,
+            errorBuilder: (_, __, ___) => _logoPlaceholder(widget.organization.name),
+          ),
+        );
+      } catch (_) {
+        return _logoPlaceholder(widget.organization.name);
+      }
+    }
+    
+    // Handle network URLs - ensure HTTPS
+    String secureUrl = logoUrl;
+    if (secureUrl.startsWith('http://')) {
+      secureUrl = secureUrl.replaceFirst('http://', 'https://');
+    }
+    
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(15),
+      child: Image.network(
+        secureUrl,
+        fit: BoxFit.cover,
+        loadingBuilder: (context, child, loadingProgress) {
+          if (loadingProgress == null) return child;
+          return Center(
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              value: loadingProgress.expectedTotalBytes != null
+                  ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
+                  : null,
+            ),
+          );
+        },
+        errorBuilder: (_, __, ___) => _logoPlaceholder(widget.organization.name),
+      ),
     );
   }
 
