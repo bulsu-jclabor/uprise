@@ -1,7 +1,8 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'student_broadcast_screen.dart'; // Import the broadcast screen
+import 'student_broadcast_screen.dart';
 
 class StudentOrganizationsDetailsScreen extends StatefulWidget {
   final String orgId;
@@ -14,6 +15,45 @@ class StudentOrganizationsDetailsScreen extends StatefulWidget {
 
 class _StudentOrganizationsDetailsScreenState
     extends State<StudentOrganizationsDetailsScreen> {
+
+  /// Handles both base64 data URIs (data:image/...;base64,...) and regular network URLs
+  ImageProvider? _buildLogoImage(String? logoUrl) {
+    if (logoUrl == null || logoUrl.isEmpty) return null;
+
+    if (logoUrl.startsWith('data:')) {
+      try {
+        final base64Str = logoUrl.split(',').last;
+        return MemoryImage(base64Decode(base64Str));
+      } catch (_) {
+        return null;
+      }
+    }
+
+    return NetworkImage(logoUrl);
+  }
+
+  /// Handles both base64 data URIs and regular network URLs for cover image
+  DecorationImage? _buildCoverImage(String? coverUrl) {
+    if (coverUrl == null || coverUrl.isEmpty) return null;
+
+    if (coverUrl.startsWith('data:')) {
+      try {
+        final base64Str = coverUrl.split(',').last;
+        return DecorationImage(
+          image: MemoryImage(base64Decode(base64Str)),
+          fit: BoxFit.cover,
+        );
+      } catch (_) {
+        return null;
+      }
+    }
+
+    return DecorationImage(
+      image: NetworkImage(coverUrl),
+      fit: BoxFit.cover,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -42,7 +82,6 @@ class _StudentOrganizationsDetailsScreenState
               elevation: 0,
               centerTitle: false,
               actions: [
-                // Broadcast Channel Icon
                 IconButton(
                   onPressed: () {
                     Navigator.push(
@@ -58,15 +97,15 @@ class _StudentOrganizationsDetailsScreenState
                   icon: const Icon(Icons.radio, color: Colors.orange),
                 ),
                 const SizedBox(width: 8),
-                // Event Gallery Icon
                 IconButton(
                   onPressed: () {
-                    // TODO: Navigate to Event Gallery Screen
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Event Gallery - Coming Soon')),
+                      const SnackBar(
+                          content: Text('Event Gallery - Coming Soon')),
                     );
                   },
-                  icon: const Icon(Icons.grid_view_rounded, color: Colors.orange),
+                  icon: const Icon(Icons.grid_view_rounded,
+                      color: Colors.orange),
                 ),
                 const SizedBox(width: 16),
               ],
@@ -75,7 +114,6 @@ class _StudentOrganizationsDetailsScreenState
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Header with Cover Image
                   Stack(
                     children: [
                       Container(
@@ -83,14 +121,10 @@ class _StudentOrganizationsDetailsScreenState
                         width: double.infinity,
                         decoration: BoxDecoration(
                           color: Colors.orange[50],
-                          image: org['coverUrl'] != null && (org['coverUrl'] as String).isNotEmpty
-                              ? DecorationImage(
-                                  image: NetworkImage(org['coverUrl']),
-                                  fit: BoxFit.cover,
-                                )
-                              : null,
+                          image: _buildCoverImage(org['coverUrl']),
                         ),
-                        child: org['coverUrl'] == null || (org['coverUrl'] as String).isEmpty
+                        child: (org['coverUrl'] == null ||
+                                (org['coverUrl'] as String).isEmpty)
                             ? Center(
                                 child: Icon(Icons.business,
                                     size: 60, color: Colors.orange[200]),
@@ -114,10 +148,7 @@ class _StudentOrganizationsDetailsScreenState
                           child: CircleAvatar(
                             radius: 45,
                             backgroundColor: Colors.white,
-                            backgroundImage: (org['logoUrl'] != null &&
-                                    (org['logoUrl'] as String).isNotEmpty)
-                                ? NetworkImage(org['logoUrl'])
-                                : null,
+                            backgroundImage: _buildLogoImage(org['logoUrl']),
                             child: (org['logoUrl'] == null ||
                                     (org['logoUrl'] as String).isEmpty)
                                 ? Text(
@@ -136,13 +167,11 @@ class _StudentOrganizationsDetailsScreenState
                   ),
                   const SizedBox(height: 40),
 
-                  // Organization Info
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Organization Name
                         Text(
                           org['name'] ?? '',
                           style: const TextStyle(
@@ -151,8 +180,6 @@ class _StudentOrganizationsDetailsScreenState
                           ),
                         ),
                         const SizedBox(height: 4),
-                        
-                        // Category / Type
                         Text(
                           org['category'] ?? 'Student Council',
                           style: TextStyle(
@@ -161,8 +188,6 @@ class _StudentOrganizationsDetailsScreenState
                           ),
                         ),
                         const SizedBox(height: 8),
-                        
-                        // ACCREDITED badge
                         Container(
                           padding: const EdgeInsets.symmetric(
                               horizontal: 12, vertical: 6),
@@ -181,8 +206,6 @@ class _StudentOrganizationsDetailsScreenState
                           ),
                         ),
                         const SizedBox(height: 20),
-
-                        // ABOUT Section
                         const Text(
                           'ABOUT',
                           style: TextStyle(
@@ -200,8 +223,6 @@ class _StudentOrganizationsDetailsScreenState
                           ),
                         ),
                         const SizedBox(height: 24),
-
-                        // Organization Adviser
                         Container(
                           padding: const EdgeInsets.all(16),
                           decoration: BoxDecoration(
@@ -254,8 +275,6 @@ class _StudentOrganizationsDetailsScreenState
                           ),
                         ),
                         const SizedBox(height: 24),
-
-                        // Executive Officers Section
                         const Text(
                           'Executive Officers',
                           style: TextStyle(
@@ -281,13 +300,20 @@ class _StudentOrganizationsDetailsScreenState
                                 contentPadding: EdgeInsets.zero,
                                 leading: CircleAvatar(
                                   backgroundColor: Colors.orange[100],
-                                  child: Text(
-                                    (officer['name'] ?? '')[0],
-                                    style: const TextStyle(
-                                      color: Colors.orange,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
+                                  backgroundImage: _buildLogoImage(
+                                      officer['photoUrl']),
+                                  child: (officer['photoUrl'] == null ||
+                                          (officer['photoUrl'] as String?)
+                                                  ?.isEmpty ==
+                                              true)
+                                      ? Text(
+                                          (officer['name'] ?? '')[0],
+                                          style: const TextStyle(
+                                            color: Colors.orange,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        )
+                                      : null,
                                 ),
                                 title: Text(
                                   officer['name'] ?? '',
@@ -306,8 +332,6 @@ class _StudentOrganizationsDetailsScreenState
                             },
                           ),
                         const SizedBox(height: 24),
-
-                        // Upcoming Events Section
                         const Text(
                           'Upcoming Events',
                           style: TextStyle(
@@ -375,8 +399,7 @@ class _StudentOrganizationsDetailsScreenState
                                     const SizedBox(width: 12),
                                     Expanded(
                                       child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
+                                        crossAxisAlignment: CrossAxisAlignment.start,
                                         children: [
                                           Text(
                                             event['title'] ?? '',
@@ -389,7 +412,8 @@ class _StudentOrganizationsDetailsScreenState
                                           Row(
                                             children: [
                                               Icon(Icons.location_on,
-                                                  size: 12, color: Colors.grey[500]),
+                                                  size: 12,
+                                                  color: Colors.grey[500]),
                                               const SizedBox(width: 4),
                                               Text(
                                                 event['location'] ?? '',
@@ -400,7 +424,8 @@ class _StudentOrganizationsDetailsScreenState
                                               ),
                                               const SizedBox(width: 12),
                                               Icon(Icons.access_time,
-                                                  size: 12, color: Colors.grey[500]),
+                                                  size: 12,
+                                                  color: Colors.grey[500]),
                                               const SizedBox(width: 4),
                                               Text(
                                                 event['time'] ?? '',
@@ -420,8 +445,6 @@ class _StudentOrganizationsDetailsScreenState
                             },
                           ),
                         const SizedBox(height: 24),
-
-                        // Recent Announcements Section
                         const Text(
                           'Recent Announcements',
                           style: TextStyle(
@@ -443,12 +466,16 @@ class _StudentOrganizationsDetailsScreenState
                             separatorBuilder: (_, __) => const SizedBox(height: 12),
                             itemBuilder: (context, index) {
                               final announcement = announcements[index];
-                              final isUrgent = announcement['type'] == 'urgent' ||
-                                  (announcement['title'] ?? '').contains('URGENT');
+                              final isUrgent =
+                                  announcement['type'] == 'urgent' ||
+                                      (announcement['title'] ?? '')
+                                          .contains('URGENT');
                               return Container(
                                 padding: const EdgeInsets.all(12),
                                 decoration: BoxDecoration(
-                                  color: isUrgent ? Colors.red[50] : Colors.grey[50],
+                                  color: isUrgent
+                                      ? Colors.red[50]
+                                      : Colors.grey[50],
                                   borderRadius: BorderRadius.circular(12),
                                   border: isUrgent
                                       ? Border.all(color: Colors.red[200]!)
@@ -470,21 +497,24 @@ class _StudentOrganizationsDetailsScreenState
                                             ? Icons.priority_high
                                             : Icons.campaign,
                                         size: 18,
-                                        color: isUrgent ? Colors.red : Colors.orange,
+                                        color: isUrgent
+                                            ? Colors.red
+                                            : Colors.orange,
                                       ),
                                     ),
                                     const SizedBox(width: 12),
                                     Expanded(
                                       child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
+                                        crossAxisAlignment: CrossAxisAlignment.start,
                                         children: [
                                           Text(
                                             announcement['title'] ?? '',
                                             style: TextStyle(
                                               fontSize: 13,
                                               fontWeight: FontWeight.w600,
-                                              color: isUrgent ? Colors.red[800] : Colors.black87,
+                                              color: isUrgent
+                                                  ? Colors.red[800]
+                                                  : Colors.black87,
                                             ),
                                           ),
                                           const SizedBox(height: 4),
