@@ -21,6 +21,7 @@ import '../../auth/change_password_screen.dart';
 import 'org_event_proposals.dart';
 import 'org_events_schedule.dart';
 import 'org_attendance_qr.dart';
+import 'org_certificates.dart';
 import 'org_event_analytics.dart';
 import 'org_announcements.dart';
 import 'org_broadcast.dart';
@@ -77,6 +78,7 @@ const List<Map<String, dynamic>> _navItems = [
   {'label': 'Event Proposals', 'icon': Icons.description_rounded},
   {'label': 'Events & Schedules', 'icon': Icons.calendar_month_rounded},
   {'label': 'Attendance QR', 'icon': Icons.qr_code_scanner_rounded},
+  {'label': 'Certificates', 'icon': Icons.verified_rounded},  // <-- ADDED
   {'label': 'Event Analytics', 'icon': Icons.bar_chart_rounded},
   {'label': 'Announcements', 'icon': Icons.campaign_rounded},
   {'label': 'Broadcast', 'icon': Icons.wifi_tethering_rounded},
@@ -249,6 +251,7 @@ class _OrgDashboardState extends State<OrgDashboard> {
       OrgEventProposalsScreen(orgId: _orgId),
       OrgEventsScheduleScreen(orgId: _orgId),
       EventManagementScreen(orgId: _orgId),
+      OrgCertificatesScreen(orgId: _orgId),  // <-- ADDED
       OrgEventAnalyticsScreen(orgId: _orgId),
       OrgAnnouncementsScreen(orgId: _orgId),
       OrgBroadcastScreen(orgId: _orgId),
@@ -2092,9 +2095,7 @@ class _OrgDashboardHomeState extends State<_OrgDashboardHome> {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Stat card widget
-// ─────────────────────────────────────────────────────────────────────────────
+// ── Stat card widget ────────────────────────────────────────────────────────
 class _StatCardWidget extends StatelessWidget {
   final String label;
   final IconData icon;
@@ -2170,9 +2171,7 @@ class _StatCardWidget extends StatelessWidget {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Merch sales card (FutureBuilder)
-// ─────────────────────────────────────────────────────────────────────────────
+// ── Merch sales card (FutureBuilder) ────────────────────────────────────────
 class _MerchSalesStatCard extends StatelessWidget {
   final String orgId;
   const _MerchSalesStatCard({required this.orgId});
@@ -2266,9 +2265,7 @@ class _MerchSalesStatCard extends StatelessWidget {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Line chart painter
-// ─────────────────────────────────────────────────────────────────────────────
+// ── Line chart painter ──────────────────────────────────────────────────────
 class _LineChartPainter extends CustomPainter {
   final List<double> data;
   final List<String> months;
@@ -2439,9 +2436,7 @@ class _LineChartPainter extends CustomPainter {
       old.data != data || old.selectedMonth != selectedMonth;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Event row
-// ─────────────────────────────────────────────────────────────────────────────
+// ── Event row ──────────────────────────────────────────────────────────────
 class _EventRow extends StatelessWidget {
   final String? date, title, location, time;
   const _EventRow({this.date, this.title, this.location, this.time});
@@ -2566,9 +2561,7 @@ class _EventRow extends StatelessWidget {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Activity row
-// ─────────────────────────────────────────────────────────────────────────────
+// ── Activity row ────────────────────────────────────────────────────────────
 class _ActivityRow extends StatelessWidget {
   final String title, module;
   final Timestamp? timestamp;

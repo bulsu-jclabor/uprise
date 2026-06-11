@@ -498,6 +498,7 @@ class _StudentAccountsState extends State<StudentAccounts> {
         Expanded(flex: 3, child: _headerCell('FULL NAME')),
         Expanded(flex: 2, child: _headerCell('COURSE')),
         Expanded(flex: 1, child: _headerCell('YEAR')),
+        Expanded(flex: 1, child: _headerCell('SECTION')), // NEW
         Expanded(flex: 3, child: _headerCell('EMAIL')),
         Expanded(
             flex: 2,
@@ -595,6 +596,17 @@ class _StudentAccountsState extends State<StudentAccounts> {
               flex: 1,
               child: Text(
                 data['yearLevel'] ?? '—',
+                style: GoogleFonts.beVietnamPro(
+                    fontSize: 12,
+                    color: isArchived ? const Color(0xFF9AA5B4) : const Color(0xFF64748B)),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            // NEW: Section column
+            Expanded(
+              flex: 1,
+              child: Text(
+                data['section'] ?? '—',
                 style: GoogleFonts.beVietnamPro(
                     fontSize: 12,
                     color: isArchived ? const Color(0xFF9AA5B4) : const Color(0xFF64748B)),
@@ -992,6 +1004,8 @@ class _StudentAccountsState extends State<StudentAccounts> {
                         child: _detailItem('Year Level', data['yearLevel'] ?? '—', Icons.calendar_today_outlined),
                       ),
                     ]),
+                    const SizedBox(height: 14),
+                    _detailItem('Section', data['section'] ?? '—', Icons.groups_outlined), // NEW
                     const SizedBox(height: 14),
                     _detailItem('Email', data['email'] ?? '—', Icons.email_outlined),
                   ],
@@ -1443,7 +1457,7 @@ class _StudentAccountsState extends State<StudentAccounts> {
                             const SizedBox(width: 10),
                             Expanded(
                               child: Text(
-                                'Required columns (in order):\nStudent ID · Full Name · Course · Year Level · Email',
+                                'Required columns (in order):\nStudent ID · Full Name · Course · Year Level · Section · Email', // NEW: added Section
                                 style: GoogleFonts.beVietnamPro(
                                   fontSize: 12,
                                   color: const Color(0xFF1D4ED8),
@@ -1606,6 +1620,7 @@ class _StudentAccountsState extends State<StudentAccounts> {
     final idCtrl = TextEditingController();
     final nameCtrl = TextEditingController();
     final emailCtrl = TextEditingController();
+    final sectionCtrl = TextEditingController(); // NEW
     String course = 'BSIT';
     String yearLevel = '1st Year';
     bool isCreating = false;
@@ -1713,6 +1728,14 @@ class _StudentAccountsState extends State<StudentAccounts> {
                             ),
                           ]),
                           const SizedBox(height: 12),
+                          // NEW: Section field
+                          TextFormField(
+                            controller: sectionCtrl,
+                            decoration: _DS.inputDecoration('Section', hint: 'e.g., 3H-G1', icon: Icons.groups_outlined),
+                            style: GoogleFonts.beVietnamPro(fontSize: 13),
+                            validator: (v) => v == null || v.trim().isEmpty ? 'Required' : null,
+                          ),
+                          const SizedBox(height: 12),
                           TextFormField(
                             controller: emailCtrl,
                             decoration: _DS.inputDecoration('Email Address', hint: 'e.g., student@university.edu.ph', icon: Icons.email_outlined),
@@ -1780,6 +1803,7 @@ class _StudentAccountsState extends State<StudentAccounts> {
                                     'fullName': nameCtrl.text.trim(),
                                     'course': course,
                                     'yearLevel': yearLevel,
+                                    'section': sectionCtrl.text.trim(), // NEW
                                     'email': emailCtrl.text.trim().toLowerCase(),
                                   });
                                   if (mounted) {
@@ -1863,6 +1887,7 @@ class _StudentAccountsState extends State<StudentAccounts> {
       'fullName': fullName,
       'course': student['course'],
       'yearLevel': student['yearLevel'],
+      'section': student['section'] ?? '', // NEW
       'email': email,
       'tempPassword': password,
       'mustChangePassword': true,
@@ -1907,7 +1932,7 @@ class _StudentAccountsState extends State<StudentAccounts> {
             'origin': 'http://localhost',
           },
           body: jsonEncode({
-            'service_id': 'service_s3ke8zd',
+            'service_id': 'service_3d0rwbg',
             'template_id': 'template_76fn2md',
             'user_id': 'tmx47wQJmb1uMNUpr',
             'template_params': {
@@ -1954,12 +1979,14 @@ class _StudentAccountsState extends State<StudentAccounts> {
       for (int i = 1; i < rows.length; i++) {
         final row = rows[i];
         if (row.length >= 5) {
+          final hasSection = row.length >= 6; // NEW: section is column 4 when 6 cols present
           students.add({
             'studentId': row[0]?.toString().trim() ?? '',
             'fullName': row[1]?.toString().trim() ?? '',
             'course': _normalizeCourse(row[2]?.toString().trim() ?? ''),
             'yearLevel': row[3]?.toString().trim() ?? '',
-            'email': row[4]?.toString().trim() ?? '',
+            'section': hasSection ? (row[4]?.toString().trim() ?? '') : '', // NEW
+            'email': hasSection ? (row[5]?.toString().trim() ?? '') : (row[4]?.toString().trim() ?? ''), // NEW
           });
         }
       }
@@ -1971,12 +1998,14 @@ class _StudentAccountsState extends State<StudentAccounts> {
         for (int i = 1; i < (sheet?.rows.length ?? 0); i++) {
           final row = sheet!.rows[i];
           if (row.length >= 5) {
+            final hasSection = row.length >= 6; // NEW
             students.add({
               'studentId': row[0]?.value?.toString().trim() ?? '',
               'fullName': row[1]?.value?.toString().trim() ?? '',
               'course': _normalizeCourse(row[2]?.value?.toString().trim() ?? ''),
               'yearLevel': row[3]?.value?.toString().trim() ?? '',
-              'email': row[4]?.value?.toString().trim() ?? '',
+              'section': hasSection ? (row[4]?.value?.toString().trim() ?? '') : '', // NEW
+              'email': hasSection ? (row[5]?.value?.toString().trim() ?? '') : (row[4]?.value?.toString().trim() ?? ''), // NEW
             });
           }
         }
@@ -1997,12 +2026,14 @@ class _StudentAccountsState extends State<StudentAccounts> {
       for (int i = 1; i < rows.length; i++) {
         final row = rows[i];
         if (row.length >= 5) {
+          final hasSection = row.length >= 6; // NEW
           students.add({
             'studentId': row[0]?.toString().trim() ?? '',
             'fullName': row[1]?.toString().trim() ?? '',
             'course': _normalizeCourse(row[2]?.toString().trim() ?? ''),
             'yearLevel': row[3]?.toString().trim() ?? '',
-            'email': row[4]?.toString().trim() ?? '',
+            'section': hasSection ? (row[4]?.toString().trim() ?? '') : '', // NEW
+            'email': hasSection ? (row[5]?.toString().trim() ?? '') : (row[4]?.toString().trim() ?? ''), // NEW
           });
         }
       }
@@ -2013,12 +2044,14 @@ class _StudentAccountsState extends State<StudentAccounts> {
         for (int i = 1; i < (sheet?.rows.length ?? 0); i++) {
           final row = sheet!.rows[i];
           if (row.length >= 5) {
+            final hasSection = row.length >= 6; // NEW
             students.add({
               'studentId': row[0]?.value?.toString().trim() ?? '',
               'fullName': row[1]?.value?.toString().trim() ?? '',
               'course': _normalizeCourse(row[2]?.value?.toString().trim() ?? ''),
               'yearLevel': row[3]?.value?.toString().trim() ?? '',
-              'email': row[4]?.value?.toString().trim() ?? '',
+              'section': hasSection ? (row[4]?.value?.toString().trim() ?? '') : '', // NEW
+              'email': hasSection ? (row[5]?.value?.toString().trim() ?? '') : (row[4]?.value?.toString().trim() ?? ''), // NEW
             });
           }
         }
@@ -2231,7 +2264,7 @@ class _ExportStudentsButton extends StatelessWidget {
 
       if (format == 'csv') {
         final buf = StringBuffer();
-        buf.writeln('Student ID,Full Name,Course,Year Level,Email,Archived');
+        buf.writeln('Student ID,Full Name,Course,Year Level,Section,Email,Archived'); // NEW: added Section
         for (final doc in docs) {
           final d = doc.data();
           String esc(String s) => '"${s.replaceAll('"', '""')}"';
@@ -2240,6 +2273,7 @@ class _ExportStudentsButton extends StatelessWidget {
             esc(d['fullName'] ?? ''),
             esc(d['course'] ?? ''),
             esc(d['yearLevel'] ?? ''),
+            esc(d['section'] ?? ''), // NEW
             esc(d['email'] ?? ''),
             esc(d['archived'] == true ? 'Yes' : 'No'),
           ].join(','));
@@ -2253,13 +2287,14 @@ class _ExportStudentsButton extends StatelessWidget {
             d['fullName'] ?? '',
             d['course'] ?? '',
             d['yearLevel'] ?? '',
+            d['section'] ?? '', // NEW
             d['email'] ?? '',
           ].map((value) => value.toString()).toList();
         }).toList();
 
         final pdfBytes = await AdminExportPdf.generateTablePdf(
           title: 'Student Accounts Report',
-          headers: const ['Student ID', 'Full Name', 'Course', 'Year Level', 'Email'],
+          headers: const ['Student ID', 'Full Name', 'Course', 'Year Level', 'Section', 'Email'], // NEW
           rows: rows,
         );
         await AdminExportUtil.saveBytes(pdfBytes, 'students_$now.pdf', mimeType: 'application/pdf');

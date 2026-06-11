@@ -975,17 +975,18 @@ class _OrderTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final d        = doc.data() as Map<String, dynamic>;
-    final orderId  = d['orderId'] as String?
+    final d           = doc.data() as Map<String, dynamic>;
+    final orderId     = d['orderId'] as String?
         ?? 'ORD-${doc.id.substring(0, 6).toUpperCase()}';
-    final status   = (d['status']  as String?) ?? 'pending';
-    final total    = (d['total']   ?? 0).toDouble();
-    final ts       = d['createdAt'] as Timestamp?;
-    final dateStr  = ts != null
+    final status      = (d['status']       as String?) ?? 'pending';
+    final pickupStatus = (d['pickupStatus'] as String?) ?? 'Pending'; // NEW
+    final total       = (d['total']        ?? 0).toDouble();
+    final ts          = d['createdAt'] as Timestamp?;
+    final dateStr     = ts != null
         ? DateFormat('MMM dd, yyyy').format(ts.toDate())
         : '—';
-    final items    = (d['items'] as List?) ?? [];
-    final fmt      = NumberFormat('#,##0.00');
+    final items = (d['items'] as List?) ?? [];
+    final fmt   = NumberFormat('#,##0.00');
 
     final Color statusColor;
     final IconData statusIcon;
@@ -1034,6 +1035,9 @@ class _OrderTile extends StatelessWidget {
                     color: Colors.black87),
               ),
               const Spacer(),
+              // NEW: Pickup status badge
+              _PickupBadge(status: pickupStatus),
+              const SizedBox(width: 6),
               Container(
                 padding:
                     const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -1261,8 +1265,9 @@ class _CartSheet extends StatelessWidget {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
 
-    // Fetch student name
+    // Fetch student name and section // NEW: also fetch section
     String customerName = '';
+    String studentSection = ''; // NEW
     try {
       final snap = await FirebaseFirestore.instance
           .collection('students')
@@ -1271,6 +1276,7 @@ class _CartSheet extends StatelessWidget {
           .get();
       if (snap.docs.isNotEmpty) {
         customerName = snap.docs.first.data()['fullName'] as String? ?? '';
+        studentSection = snap.docs.first.data()['section'] as String? ?? ''; // NEW
       }
     } catch (_) {}
 
@@ -1284,6 +1290,8 @@ class _CartSheet extends StatelessWidget {
       'customerEmail'   : user.email ?? '',
       'customerPhone'   : '',
       'customerAddress' : '',
+      'section'         : studentSection,  // NEW
+      'pickupStatus'    : 'Pending',        // NEW
       'items'           : cart
           .map((i) => {
                 'productId' : i.product.id,
@@ -1428,6 +1436,35 @@ class _QtyBtn extends StatelessWidget {
         ),
         child: Icon(icon, size: 14, color: Colors.black54),
       ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+// NEW: Pickup status badge for My Orders tab
+// ─────────────────────────────────────────────────────────────
+class _PickupBadge extends StatelessWidget {
+  final String status;
+  const _PickupBadge({required this.status});
+
+  @override
+  Widget build(BuildContext context) {
+    final Color bg, fg;
+    final String label;
+    switch (status) {
+      case 'Ready for Pickup':
+        bg = const Color(0xFFEFF6FF); fg = const Color(0xFF2563EB); label = 'READY';
+        break;
+      case 'Claimed':
+        bg = const Color(0xFFECFDF5); fg = const Color(0xFF059669); label = 'CLAIMED';
+        break;
+      default:
+        bg = const Color(0xFFFFF3E0); fg = _kOrange; label = 'PENDING';
+    }
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(8)),
+      child: Text(label, style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: fg, letterSpacing: 0.5)),
     );
   }
 }

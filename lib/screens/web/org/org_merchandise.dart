@@ -1,10 +1,13 @@
 // lib/screens/web/org/org_merchandise.dart
 
 import 'dart:convert';
+import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_storage/firebase_storage.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:fl_chart/fl_chart.dart';
@@ -188,6 +191,14 @@ class _OrgMerchandiseScreenState extends State<OrgMerchandiseScreen>
         final products = productSnap.data?.docs ?? [];
         final totalProducts = products.length;
         final lowStock = products.where((p) => ((p.data() as Map)['stock'] ?? 0) <= 5).length;
+        double totalProfit = 0;
+        for (final doc in products) {
+          final d = doc.data() as Map;
+          final price = ((d['price'] ?? 0) as num).toDouble();
+          final costPrice = ((d['costPrice'] ?? 0) as num).toDouble();
+          final sold = ((d['sold'] ?? 0) as num).toInt();
+          totalProfit += (price - costPrice) * sold;
+        }
 
         return StreamBuilder<QuerySnapshot>(
           stream: FirebaseFirestore.instance
@@ -224,6 +235,13 @@ class _OrgMerchandiseScreenState extends State<OrgMerchandiseScreen>
                   value: '₱${NumberFormat('#,###').format(totalRevenue)}',
                   icon: Icons.payments_outlined,
                   color: UpriseColors.warning,
+                ),
+                const SizedBox(width: 14),
+                _StatCard(
+                  label: 'Total Profit',
+                  value: '₱${NumberFormat('#,###').format(totalProfit)}',
+                  icon: Icons.trending_up_outlined,
+                  color: UpriseColors.success,
                 ),
                 const SizedBox(width: 14),
                 _StatCard(
@@ -364,22 +382,22 @@ class _OrgMerchandiseScreenState extends State<OrgMerchandiseScreen>
     final now = DateFormat('yyyyMMdd').format(DateTime.now());
     if (format == 'csv') {
       final buf = StringBuffer();
-      buf.writeln('Order ID,Customer,Total,Status,Date,Bundle ID');
+      buf.writeln('Order ID,Customer,Section,Total,Status,Pickup Status,Date,Bundle ID'); // NEW: added Section, Pickup Status
       for (final doc in docs) {
         final d = doc.data();
         final date = DateFormat('yyyy-MM-dd').format((d['createdAt'] as Timestamp).toDate());
-        buf.writeln('"${d['orderId']}","${d['customerName']}","${d['total']}","${d['status']}","$date","${d['bundleId'] ?? ''}"');
+        buf.writeln('"${d['orderId']}","${d['customerName']}","${d['section'] ?? ''}","${d['total']}","${d['status']}","${d['pickupStatus'] ?? 'Pending'}","$date","${d['bundleId'] ?? ''}"');
       }
       await AdminExportUtil.saveText(buf.toString(), 'orders_$now.csv', mimeType: 'text/csv');
     } else if (format == 'pdf') {
       final rows = docs.map((doc) {
         final d = doc.data();
         final date = DateFormat('yyyy-MM-dd').format((d['createdAt'] as Timestamp).toDate());
-        return ['${d['orderId']}', '${d['customerName']}', '${d['total']}', '${d['status']}', date, '${d['bundleId'] ?? ''}'];
+        return ['${d['orderId']}', '${d['customerName']}', '${d['section'] ?? ''}', '${d['total']}', '${d['status']}', '${d['pickupStatus'] ?? 'Pending'}', date]; // NEW: added Section, Pickup Status
       }).toList();
       final pdfBytes = await AdminExportPdf.generateTablePdf(
         title: 'Sales Orders',
-        headers: const ['Order ID', 'Customer', 'Total', 'Status', 'Date', 'Bundle ID'],
+        headers: const ['Order ID', 'Customer', 'Section', 'Total', 'Status', 'Pickup Status', 'Date'], // NEW
         rows: rows,
       );
       await AdminExportUtil.saveBytes(pdfBytes, 'orders_$now.pdf', mimeType: 'application/pdf');
@@ -511,10 +529,12 @@ class _ProductsTabState extends State<_ProductsTab> {
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
   String _categoryFilter = 'All';
+  String _statusFilter = 'All';
   int _currentPage = 1;
   static const int _pageSize = 10;
 
   final List<String> _categoryFilters = ['All', ..._merchandiseCategories];
+  final List<String> _statusFilters = ['All', 'Available', 'Out of Stock', 'Discontinued'];
 
   @override
   void dispose() {
@@ -535,7 +555,11 @@ class _ProductsTabState extends State<_ProductsTab> {
           p.name.toLowerCase().contains(_searchQuery.toLowerCase()) ||
           p.category.toLowerCase().contains(_searchQuery.toLowerCase());
       final matchCat = _categoryFilter == 'All' || p.category == _categoryFilter;
-      return matchSearch && matchCat;
+      final matchStatus = _statusFilter == 'All' ||
+          (_statusFilter == 'Available' && p.status == 'available') ||
+          (_statusFilter == 'Out of Stock' && p.status == 'out_of_stock') ||
+          (_statusFilter == 'Discontinued' && p.status == 'discontinued');
+      return matchSearch && matchCat && matchStatus;
     }).toList();
   }
 
@@ -633,6 +657,17 @@ class _ProductsTabState extends State<_ProductsTab> {
               _currentPage = 1;
             }),
           ),
+          const SizedBox(width: 10),
+          _FilterDropdown(
+            value: _statusFilter,
+            items: _statusFilters,
+            hint: 'Status',
+            icon: Icons.circle_outlined,
+            onChanged: (v) => setState(() {
+              _statusFilter = v!;
+              _currentPage = 1;
+            }),
+          ),
         ],
       ),
     );
@@ -698,6 +733,7 @@ class _ProductsTabState extends State<_ProductsTab> {
         Expanded(flex: 1, child: _headerCell('PRICE')),
         Expanded(flex: 1, child: _headerCell('STOCK')),
         Expanded(flex: 1, child: _headerCell('SOLD')),
+        Expanded(flex: 1, child: _headerCell('STATUS')),
         Expanded(flex: 2, child: Align(alignment: Alignment.centerRight, child: _headerCell('ACTIONS'))),
       ]),
     );
@@ -705,6 +741,26 @@ class _ProductsTabState extends State<_ProductsTab> {
 
   Widget _headerCell(String text) => Text(text,
       style: GoogleFonts.beVietnamPro(fontSize: 11, fontWeight: FontWeight.w700, color: const Color(0xFF64748B), letterSpacing: 0.7));
+
+  Widget _productStatusBadge(String status) {
+    final Color bg, fg;
+    final String label;
+    switch (status) {
+      case 'out_of_stock':
+        bg = const Color(0xFFFEF2F2); fg = const Color(0xFFDC2626); label = 'OUT OF STOCK';
+        break;
+      case 'discontinued':
+        bg = const Color(0xFFF3F4F6); fg = const Color(0xFF6B7280); label = 'DISCONTINUED';
+        break;
+      default:
+        bg = const Color(0xFFECFDF5); fg = const Color(0xFF059669); label = 'AVAILABLE';
+    }
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(_DS.radiusPill)),
+      child: Text(label, style: GoogleFonts.beVietnamPro(fontSize: 9, fontWeight: FontWeight.w700, color: fg, letterSpacing: 0.5)),
+    );
+  }
 
   Widget _buildProductRow(ProductModel product, {required bool isLast}) {
     return Container(
@@ -718,14 +774,20 @@ class _ProductsTabState extends State<_ProductsTab> {
             flex: 2,
             child: Row(
               children: [
-                Container(
-                  width: 36,
-                  height: 36,
-                  decoration: BoxDecoration(
-                    color: UpriseColors.primaryDark.withAlpha(26),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: const Icon(Icons.shopping_bag_outlined, size: 18, color: UpriseColors.primaryDark),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: product.imageUrl.isEmpty
+                      ? Container(
+                          width: 40, height: 40,
+                          decoration: BoxDecoration(color: UpriseColors.primaryDark.withAlpha(26), borderRadius: BorderRadius.circular(8)),
+                          child: const Icon(Icons.shopping_bag_outlined, size: 18, color: UpriseColors.primaryDark),
+                        )
+                      : Image.network(product.imageUrl, width: 40, height: 40, fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => Container(
+                            width: 40, height: 40,
+                            decoration: BoxDecoration(color: UpriseColors.primaryDark.withAlpha(26), borderRadius: BorderRadius.circular(8)),
+                            child: const Icon(Icons.shopping_bag_outlined, size: 18, color: UpriseColors.primaryDark),
+                          )),
                 ),
                 const SizedBox(width: 10),
                 Expanded(
@@ -770,6 +832,10 @@ class _ProductsTabState extends State<_ProductsTab> {
             flex: 1,
             child: Text('${product.sold}',
                 style: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF374151))),
+          ),
+          Expanded(
+            flex: 1,
+            child: _productStatusBadge(product.status),
           ),
           Expanded(
             flex: 2,
@@ -875,12 +941,16 @@ class _OrdersTabState extends State<_OrdersTab> {
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
   String _statusFilter = 'All';
-  String _bundleIdFilter = 'All';     // NEW: filter by bundleId
+  String _bundleIdFilter = 'All';
+  String _sectionFilter = 'All';      // NEW
+  String _pickupStatusFilter = 'All'; // NEW
   int _currentPage = 1;
   static const int _pageSize = 10;
+  bool _isBulkUpdating = false;       // NEW
 
   final List<String> _statusFilters = ['All', 'Pending', 'Processing', 'Completed'];
-  List<String> _availableBundleIds = ['All']; // NEW: list of unique bundleIds
+  List<String> _availableBundleIds = ['All'];
+  List<String> _availableSections = ['All']; // NEW
 
   List<OrderModel> _applyFilters(List<OrderModel> orders) {
     return orders.where((o) {
@@ -889,11 +959,12 @@ class _OrdersTabState extends State<_OrdersTab> {
           o.orderId.toLowerCase().contains(_searchQuery.toLowerCase());
       final matchStatus = _statusFilter == 'All' || o.status.toLowerCase() == _statusFilter.toLowerCase();
       final matchBundle = _bundleIdFilter == 'All' || o.bundleId == _bundleIdFilter;
-      return matchSearch && matchStatus && matchBundle;
+      final matchSection = _sectionFilter == 'All' || o.section == _sectionFilter;         // NEW
+      final matchPickup = _pickupStatusFilter == 'All' || o.pickupStatus == _pickupStatusFilter; // NEW
+      return matchSearch && matchStatus && matchBundle && matchSection && matchPickup;
     }).toList();
   }
 
-  // NEW: extract unique bundleIds from orders and update state only when needed
   void _updateBundleIds(List<OrderModel> orders) {
     final ids = orders.map((o) => o.bundleId).where((id) => id.isNotEmpty).toSet().toList();
     ids.sort();
@@ -902,7 +973,6 @@ class _OrdersTabState extends State<_OrdersTab> {
         (_bundleIdFilter == 'All' || ids.contains(_bundleIdFilter))) {
       return;
     }
-
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       setState(() {
@@ -912,6 +982,162 @@ class _OrdersTabState extends State<_OrdersTab> {
         }
       });
     });
+  }
+
+  // NEW: extract unique sections and update state when changed
+  void _updateSections(List<OrderModel> orders) {
+    final sections = orders.map((o) => o.section).where((s) => s.isNotEmpty).toSet().toList();
+    sections.sort();
+    final newSections = ['All', ...sections];
+    if (listEquals(_availableSections, newSections) &&
+        (_sectionFilter == 'All' || sections.contains(_sectionFilter))) {
+      return;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      setState(() {
+        _availableSections = newSections;
+        if (_sectionFilter != 'All' && !sections.contains(_sectionFilter)) {
+          _sectionFilter = 'All';
+        }
+      });
+    });
+  }
+
+  // NEW: update a single order's pickupStatus
+  Future<void> _updateOrderPickupStatus(String orderId, String pickupStatus) async {
+    try {
+      await FirebaseFirestore.instance.collection('orders').doc(orderId).update({'pickupStatus': pickupStatus});
+      if (mounted) _showSnack('Updated to "$pickupStatus"', UpriseColors.success);
+    } catch (e) {
+      if (mounted) _showSnack('Error: $e', UpriseColors.error);
+    }
+  }
+
+  // NEW: bulk update all orders in a section
+  Future<void> _bulkUpdateSection(String section, String pickupStatus, List<OrderModel> sectionOrders) async {
+    final count = sectionOrders.length;
+    final confirmed = await _showBulkConfirmDialog(
+      title: 'Update Section $section',
+      message: 'Mark $count order${count == 1 ? '' : 's'} in section $section as "$pickupStatus"?',
+    );
+    if (!confirmed) return;
+    setState(() => _isBulkUpdating = true);
+    try {
+      final db = FirebaseFirestore.instance;
+      WriteBatch current = db.batch();
+      int opCount = 0;
+      final List<WriteBatch> batches = [];
+      for (final order in sectionOrders) {
+        current.update(db.collection('orders').doc(order.id), {'pickupStatus': pickupStatus});
+        opCount++;
+        if (opCount >= 500) { batches.add(current); current = db.batch(); opCount = 0; }
+      }
+      if (opCount > 0) batches.add(current);
+      for (final b in batches) { await b.commit(); }
+      if (mounted) _showSnack('Updated $count orders to "$pickupStatus"', UpriseColors.success);
+    } catch (e) {
+      if (mounted) _showSnack('Error: $e', UpriseColors.error);
+    } finally {
+      if (mounted) setState(() => _isBulkUpdating = false);
+    }
+  }
+
+  // NEW: bulk update ALL orders across all sections
+  Future<void> _bulkUpdateAll(String pickupStatus, List<OrderModel> allOrders) async {
+    final count = allOrders.length;
+    final confirmed = await _showBulkConfirmDialog(
+      title: 'Mark ALL as "$pickupStatus"',
+      message: 'This will update $count order${count == 1 ? '' : 's'} across all sections to "$pickupStatus".',
+    );
+    if (!confirmed) return;
+    setState(() => _isBulkUpdating = true);
+    try {
+      final db = FirebaseFirestore.instance;
+      WriteBatch current = db.batch();
+      int opCount = 0;
+      final List<WriteBatch> batches = [];
+      for (final order in allOrders) {
+        current.update(db.collection('orders').doc(order.id), {'pickupStatus': pickupStatus});
+        opCount++;
+        if (opCount >= 500) { batches.add(current); current = db.batch(); opCount = 0; }
+      }
+      if (opCount > 0) batches.add(current);
+      for (final b in batches) { await b.commit(); }
+      if (mounted) _showSnack('Updated $count orders to "$pickupStatus"', UpriseColors.success);
+    } catch (e) {
+      if (mounted) _showSnack('Error: $e', UpriseColors.error);
+    } finally {
+      if (mounted) setState(() => _isBulkUpdating = false);
+    }
+  }
+
+  // NEW: confirmation dialog for bulk operations
+  Future<bool> _showBulkConfirmDialog({required String title, required String message}) async {
+    return await showDialog<bool>(
+      context: context,
+      builder: (ctx) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        child: Container(
+          width: 400,
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(children: [
+                Container(
+                  width: 40, height: 40,
+                  decoration: BoxDecoration(color: const Color(0xFFFFF7ED), borderRadius: BorderRadius.circular(10)),
+                  child: const Icon(Icons.update_rounded, color: Color(0xFFB45309), size: 20),
+                ),
+                const SizedBox(width: 12),
+                Expanded(child: Text(title, style: GoogleFonts.beVietnamPro(fontSize: 16, fontWeight: FontWeight.w700))),
+                IconButton(icon: const Icon(Icons.close_rounded, size: 18), onPressed: () => Navigator.pop(ctx, false)),
+              ]),
+              const SizedBox(height: 16),
+              Text(message, style: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF64748B), height: 1.5)),
+              const SizedBox(height: 24),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  OutlinedButton(
+                    onPressed: () => Navigator.pop(ctx, false),
+                    style: OutlinedButton.styleFrom(
+                      side: const BorderSide(color: Color(0xFFE2E6EA)),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                    ),
+                    child: Text('Cancel', style: GoogleFonts.beVietnamPro(fontSize: 13)),
+                  ),
+                  const SizedBox(width: 10),
+                  ElevatedButton(
+                    onPressed: () => Navigator.pop(ctx, true),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: UpriseColors.primaryDark,
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                    ),
+                    child: Text('Confirm', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600)),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    ) ?? false;
+  }
+
+  void _showSnack(String msg, Color color) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(msg, style: GoogleFonts.beVietnamPro()),
+      backgroundColor: color,
+      behavior: SnackBarBehavior.floating,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+    ));
   }
 
   @override
@@ -938,7 +1164,7 @@ class _OrdersTabState extends State<_OrdersTab> {
       child: Row(
         children: [
           SizedBox(
-            width: 220,
+            width: 200,
             height: 40,
             child: TextField(
               controller: _searchController,
@@ -972,7 +1198,32 @@ class _OrdersTabState extends State<_OrdersTab> {
             }),
           ),
           const SizedBox(width: 10),
-          // NEW: Bundle ID filter dropdown
+          // NEW: Section filter dropdown
+          if (_availableSections.length > 1) ...[
+            _FilterDropdown(
+              value: _sectionFilter,
+              items: _availableSections,
+              hint: 'Section',
+              icon: Icons.groups_outlined,
+              onChanged: (v) => setState(() {
+                _sectionFilter = v!;
+                _currentPage = 1;
+              }),
+            ),
+            const SizedBox(width: 10),
+          ],
+          // NEW: Pickup Status filter dropdown
+          _FilterDropdown(
+            value: _pickupStatusFilter,
+            items: const ['All', 'Pending', 'Ready for Pickup', 'Claimed'],
+            hint: 'Pickup',
+            icon: Icons.local_shipping_outlined,
+            onChanged: (v) => setState(() {
+              _pickupStatusFilter = v!;
+              _currentPage = 1;
+            }),
+          ),
+          const SizedBox(width: 10),
           if (_availableBundleIds.length > 1)
             _FilterDropdown(
               value: _bundleIdFilter,
@@ -1003,10 +1254,21 @@ class _OrdersTabState extends State<_OrdersTab> {
         if (snapshot.hasError) {
           return Center(child: Text('Error: ${snapshot.error}'));
         }
-        var allOrders = snapshot.data!.docs.map((d) => OrderModel.fromFirestore(d)).toList();
-        // Update bundleId list for filter dropdown
-        _updateBundleIds(allOrders);
-        allOrders = _applyFilters(allOrders);
+        // NEW: keep raw (unfiltered) orders for banners and bulk operations
+        final rawOrders = snapshot.data!.docs.map((d) => OrderModel.fromFirestore(d)).toList();
+        _updateBundleIds(rawOrders);
+        _updateSections(rawOrders); // NEW
+
+        // NEW: build section groups from unfiltered orders for the banner
+        final Map<String, List<OrderModel>> sectionGroups = {};
+        for (final o in rawOrders) {
+          if (o.section.isNotEmpty) {
+            sectionGroups.putIfAbsent(o.section, () => []).add(o);
+          }
+        }
+        final sortedSections = sectionGroups.keys.toList()..sort();
+
+        var allOrders = _applyFilters(rawOrders);
 
         final totalPages = allOrders.isEmpty ? 1 : (allOrders.length / _pageSize).ceil();
         final safePage = _currentPage.clamp(1, totalPages);
@@ -1014,30 +1276,164 @@ class _OrdersTabState extends State<_OrdersTab> {
         final end = (start + _pageSize).clamp(0, allOrders.length);
         final pageOrders = allOrders.sublist(start, end);
 
-        return Container(
-          margin: const EdgeInsets.symmetric(horizontal: 28),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: const Color(0xFFE8ECF0)),
-            boxShadow: _DS.cardShadow,
-          ),
-          child: Column(
-            children: [
-              _buildTableHeader(),
-              Expanded(
-                child: allOrders.isEmpty
-                    ? _buildEmptyState(Icons.shopping_cart_outlined, 'No orders yet', 'Orders will appear here after checkout.')
-                    : ListView.builder(
-                        itemCount: pageOrders.length,
-                        itemBuilder: (_, i) => _buildOrderRow(pageOrders[i], isLast: i == pageOrders.length - 1),
-                      ),
+        // NEW: outer Column wraps banners + table
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // NEW: Level 2 — global bulk buttons (above section banner)
+            if (rawOrders.isNotEmpty)
+              _buildGlobalBulkButtons(rawOrders),
+            // NEW: Level 1 — per-section summary banner
+            if (sectionGroups.isNotEmpty)
+              _buildSectionBanner(sortedSections, sectionGroups),
+            if (rawOrders.isNotEmpty || sectionGroups.isNotEmpty)
+              const SizedBox(height: 8),
+            // Table
+            Expanded(
+              child: Container(
+                margin: const EdgeInsets.symmetric(horizontal: 28),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: const Color(0xFFE8ECF0)),
+                  boxShadow: _DS.cardShadow,
+                ),
+                child: Column(
+                  children: [
+                    _buildTableHeader(),
+                    Expanded(
+                      child: allOrders.isEmpty
+                          ? _buildEmptyState(Icons.shopping_cart_outlined, 'No orders yet', 'Orders will appear here after checkout.')
+                          : ListView.builder(
+                              itemCount: pageOrders.length,
+                              itemBuilder: (_, i) => _buildOrderRow(pageOrders[i], isLast: i == pageOrders.length - 1),
+                            ),
+                    ),
+                    _buildFooter(allOrders.length, totalPages, start, end),
+                  ],
+                ),
               ),
-              _buildFooter(allOrders.length, totalPages, start, end),
-            ],
-          ),
+            ),
+          ],
         );
       },
+    );
+  }
+
+  // NEW: Level 2 global bulk action bar
+  Widget _buildGlobalBulkButtons(List<OrderModel> allOrders) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(28, 0, 28, 8),
+      child: Row(
+        children: [
+          Text('Bulk Actions:',
+              style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.w600, color: const Color(0xFF64748B))),
+          const SizedBox(width: 10),
+          OutlinedButton.icon(
+            onPressed: _isBulkUpdating ? null : () => _bulkUpdateAll('Ready for Pickup', allOrders),
+            icon: const Icon(Icons.check_circle_outline, size: 14),
+            label: Text('Mark ALL as Ready', style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.w600)),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: const Color(0xFF2563EB),
+              side: const BorderSide(color: Color(0xFF93C5FD)),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            ),
+          ),
+          const SizedBox(width: 8),
+          OutlinedButton.icon(
+            onPressed: _isBulkUpdating ? null : () => _bulkUpdateAll('Claimed', allOrders),
+            icon: const Icon(Icons.done_all_rounded, size: 14),
+            label: Text('Mark ALL as Claimed', style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.w600)),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: const Color(0xFF059669),
+              side: const BorderSide(color: Color(0xFF6EE7B7)),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            ),
+          ),
+          if (_isBulkUpdating) ...[
+            const SizedBox(width: 12),
+            const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
+            const SizedBox(width: 8),
+            Text('Updating…', style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF64748B))),
+          ],
+        ],
+      ),
+    );
+  }
+
+  // NEW: Level 1 per-section summary banner
+  Widget _buildSectionBanner(List<String> sortedSections, Map<String, List<OrderModel>> sectionGroups) {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(28, 0, 28, 0),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFFBEB),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: const Color(0xFFFEF3C7)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: [
+            const Icon(Icons.groups_outlined, size: 15, color: Color(0xFFD97706)),
+            const SizedBox(width: 6),
+            Text('Section Summary',
+                style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.w700, color: const Color(0xFFD97706))),
+          ]),
+          const SizedBox(height: 10),
+          ...sortedSections.map((section) {
+            final orders = sectionGroups[section]!;
+            final itemCount = orders.fold<int>(0, (sum, o) => sum + o.items.fold<int>(0, (s, i) => s + i.quantity));
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: UpriseColors.primaryDark.withAlpha(18),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(section,
+                        style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.w700, color: UpriseColors.primaryDark)),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    '${orders.length} order${orders.length == 1 ? '' : 's'} / $itemCount item${itemCount == 1 ? '' : 's'}',
+                    style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF64748B)),
+                  ),
+                  const Spacer(),
+                  TextButton(
+                    onPressed: _isBulkUpdating ? null : () => _bulkUpdateSection(section, 'Ready for Pickup', orders),
+                    style: TextButton.styleFrom(
+                      foregroundColor: const Color(0xFF2563EB),
+                      backgroundColor: const Color(0xFFEFF6FF),
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      minimumSize: Size.zero,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                    ),
+                    child: Text('Ready', style: GoogleFonts.beVietnamPro(fontSize: 11, fontWeight: FontWeight.w600)),
+                  ),
+                  const SizedBox(width: 6),
+                  TextButton(
+                    onPressed: _isBulkUpdating ? null : () => _bulkUpdateSection(section, 'Claimed', orders),
+                    style: TextButton.styleFrom(
+                      foregroundColor: const Color(0xFF059669),
+                      backgroundColor: const Color(0xFFECFDF5),
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      minimumSize: Size.zero,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                    ),
+                    child: Text('Claimed', style: GoogleFonts.beVietnamPro(fontSize: 11, fontWeight: FontWeight.w600)),
+                  ),
+                ],
+              ),
+            );
+          }),
+        ],
+      ),
     );
   }
 
@@ -1052,11 +1448,11 @@ class _OrdersTabState extends State<_OrdersTab> {
       child: Row(children: [
         Expanded(flex: 2, child: _headerCell('ORDER ID')),
         Expanded(flex: 2, child: _headerCell('CUSTOMER')),
-        Expanded(flex: 2, child: _headerCell('DATE')),
+        Expanded(flex: 1, child: _headerCell('SECTION')),       // NEW
+        Expanded(flex: 1, child: _headerCell('DATE')),
         Expanded(flex: 1, child: _headerCell('TOTAL')),
-        Expanded(flex: 1, child: _headerCell('STATUS')),
-        Expanded(flex: 2, child: _headerCell('BUNDLE ID')), // NEW: show bundleId
-        Expanded(flex: 2, child: Align(alignment: Alignment.centerRight, child: _headerCell('ACTIONS'))),
+        Expanded(flex: 2, child: _headerCell('PICKUP STATUS')), // NEW
+        Expanded(flex: 1, child: Align(alignment: Alignment.centerRight, child: _headerCell('ACTIONS'))),
       ]),
     );
   }
@@ -1090,8 +1486,24 @@ class _OrdersTabState extends State<_OrdersTab> {
               ],
             ),
           ),
+          // NEW: Section column
           Expanded(
-            flex: 2,
+            flex: 1,
+            child: order.section.isEmpty
+                ? Text('—', style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF9AA5B4)))
+                : Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: UpriseColors.primaryDark.withAlpha(18),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(order.section,
+                        style: GoogleFonts.beVietnamPro(fontSize: 10, fontWeight: FontWeight.w600, color: UpriseColors.primaryDark),
+                        overflow: TextOverflow.ellipsis),
+                  ),
+          ),
+          Expanded(
+            flex: 1,
             child: Text(date, style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF64748B))),
           ),
           Expanded(
@@ -1099,22 +1511,10 @@ class _OrdersTabState extends State<_OrdersTab> {
             child: Text('₱${NumberFormat('#,###.00').format(order.total)}',
                 style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w700, color: UpriseColors.primaryDark)),
           ),
-          Expanded(flex: 1, child: _statusBadge(order.status)),
+          // NEW: Pickup Status column with colored badge
+          Expanded(flex: 2, child: _pickupStatusBadge(order.pickupStatus)),
           Expanded(
-            flex: 2,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-              decoration: BoxDecoration(
-                color: UpriseColors.primaryDark.withAlpha(18),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Text(order.bundleId.isEmpty ? '—' : order.bundleId,
-                  style: GoogleFonts.beVietnamPro(fontSize: 10, fontWeight: FontWeight.w500, color: UpriseColors.primaryDark),
-                  overflow: TextOverflow.ellipsis),
-            ),
-          ),
-          Expanded(
-            flex: 2,
+            flex: 1,
             child: Row(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
@@ -1123,11 +1523,43 @@ class _OrdersTabState extends State<_OrdersTab> {
                   tooltip: 'View Details',
                   onTap: () => showDialog(context: context, builder: (_) => _OrderDetailsModal(order: order)),
                 ),
+                // NEW: 3-dot menu for individual pickup status update
+                PopupMenuButton<String>(
+                  icon: const Icon(Icons.more_vert, size: 16, color: Color(0xFF64748B)),
+                  tooltip: 'Update Pickup Status',
+                  onSelected: (value) => _updateOrderPickupStatus(order.id, value),
+                  itemBuilder: (_) => [
+                    PopupMenuItem(value: 'Pending', child: Text('Pending', style: GoogleFonts.beVietnamPro(fontSize: 13))),
+                    PopupMenuItem(value: 'Ready for Pickup', child: Text('Ready for Pickup', style: GoogleFonts.beVietnamPro(fontSize: 13))),
+                    PopupMenuItem(value: 'Claimed', child: Text('Claimed', style: GoogleFonts.beVietnamPro(fontSize: 13))),
+                  ],
+                ),
               ],
             ),
           ),
         ],
       ),
+    );
+  }
+
+  // NEW: colored badge for pickup status
+  Widget _pickupStatusBadge(String status) {
+    final Color bg, fg;
+    final String label;
+    switch (status) {
+      case 'Ready for Pickup':
+        bg = const Color(0xFFEFF6FF); fg = const Color(0xFF2563EB); label = 'READY';
+        break;
+      case 'Claimed':
+        bg = const Color(0xFFECFDF5); fg = const Color(0xFF059669); label = 'CLAIMED';
+        break;
+      default:
+        bg = const Color(0xFFFFFBEB); fg = const Color(0xFFD97706); label = 'PENDING';
+    }
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(_DS.radiusPill)),
+      child: Text(label, style: GoogleFonts.beVietnamPro(fontSize: 10, fontWeight: FontWeight.w700, color: fg, letterSpacing: 0.6)),
     );
   }
 
@@ -1297,9 +1729,15 @@ class _ProductModal extends StatefulWidget {
 class _ProductModalState extends State<_ProductModal> {
   final _nameCtrl = TextEditingController();
   final _descCtrl = TextEditingController();
+  final _costPriceCtrl = TextEditingController();
   final _priceCtrl = TextEditingController();
   final _stockCtrl = TextEditingController();
   String _category = _merchandiseCategories.first;
+  String _productStatus = 'available';
+  List<ProductVariant> _variants = [];
+  Uint8List? _imageBytes;
+  String? _pickedImageName;
+  bool _uploadingImage = false;
   bool _submitting = false;
 
   bool get _isEdit => widget.existingProduct != null;
@@ -1311,9 +1749,22 @@ class _ProductModalState extends State<_ProductModal> {
       final p = widget.existingProduct!;
       _nameCtrl.text = p.name;
       _descCtrl.text = p.description;
+      _costPriceCtrl.text = p.costPrice.toStringAsFixed(2);
       _priceCtrl.text = p.price.toStringAsFixed(2);
       _stockCtrl.text = p.stock.toString();
       _category = p.category;
+      _productStatus = p.status;
+      _variants = List.from(p.variants);
+    }
+    _stockCtrl.addListener(_onStockChanged);
+  }
+
+  void _onStockChanged() {
+    final stock = int.tryParse(_stockCtrl.text.trim()) ?? -1;
+    if (stock == 0 && _productStatus != 'discontinued') {
+      setState(() => _productStatus = 'out_of_stock');
+    } else if (stock > 0) {
+      setState(() => _productStatus = 'available');
     }
   }
 
@@ -1321,6 +1772,7 @@ class _ProductModalState extends State<_ProductModal> {
   void dispose() {
     _nameCtrl.dispose();
     _descCtrl.dispose();
+    _costPriceCtrl.dispose();
     _priceCtrl.dispose();
     _stockCtrl.dispose();
     super.dispose();
@@ -1344,31 +1796,81 @@ class _ProductModalState extends State<_ProductModal> {
 
     setState(() => _submitting = true);
     final user = FirebaseAuth.instance.currentUser;
+    final oldStock = _isEdit ? widget.existingProduct!.stock : 0;
     final data = <String, dynamic>{
       'orgId': widget.orgId,
       'name': _nameCtrl.text.trim(),
       'description': _descCtrl.text.trim(),
       'category': _category,
+      'costPrice': double.tryParse(_costPriceCtrl.text.trim()) ?? 0,
       'price': price,
       'stock': stock,
+      'status': _productStatus,
+      'variants': _variants.map((v) => v.toMap()).toList(),
       'updatedAt': FieldValue.serverTimestamp(),
     };
 
     try {
+      String productId;
       if (_isEdit) {
-        await FirebaseFirestore.instance.collection('products').doc(widget.existingProduct!.id).update(data);
-        await activity_log.ActivityLogger.log(action: 'edit_product', module: 'merchandise', details: {'orgId': widget.orgId, 'productId': widget.existingProduct!.id});
+        productId = widget.existingProduct!.id;
+        await FirebaseFirestore.instance.collection('products').doc(productId).update(data);
+        await activity_log.ActivityLogger.log(action: 'edit_product', module: 'merchandise', details: {'orgId': widget.orgId, 'productId': productId});
       } else {
         data['sold'] = 0;
         data['isArchived'] = false;
         data['imageUrl'] = '';
         data['createdAt'] = FieldValue.serverTimestamp();
         data['createdBy'] = user?.uid ?? '';
-        await FirebaseFirestore.instance.collection('products').add(data);
+        final docRef = await FirebaseFirestore.instance.collection('products').add(data);
+        productId = docRef.id;
         await activity_log.ActivityLogger.log(action: 'create_product', module: 'merchandise', details: {'orgId': widget.orgId, 'name': data['name']});
+      }
+      if (stock != oldStock || !_isEdit) {
+        final reason = !_isEdit ? 'initial' : (stock > oldStock ? 'restocked' : 'adjusted');
+        await FirebaseFirestore.instance.collection('stock_logs').add({
+          'productId': productId,
+          'oldStock': oldStock,
+          'newStock': stock,
+          'reason': reason,
+          'changedBy': user?.email ?? '',
+          'timestamp': FieldValue.serverTimestamp(),
+        });
+      }
+      final oldVariantStocks = <String, int>{
+        for (final v in (widget.existingProduct?.variants ?? [])) v.id: v.stock,
+      };
+      for (final v in _variants) {
+        final isNew = !oldVariantStocks.containsKey(v.id);
+        final oldVarStock = isNew ? 0 : oldVariantStocks[v.id]!;
+        if (isNew ? v.stock > 0 : v.stock != oldVarStock) {
+          final varReason = isNew ? 'initial' : (v.stock > oldVarStock ? 'restocked' : 'adjusted');
+          await FirebaseFirestore.instance.collection('stock_logs').add({
+            'productId': productId,
+            'variantId': v.id,
+            'variantLabel': [if (v.size.isNotEmpty) v.size, if (v.color.isNotEmpty) v.color].join(' / '),
+            'oldStock': oldVarStock,
+            'newStock': v.stock,
+            'reason': varReason,
+            'changedBy': user?.email ?? '',
+            'timestamp': FieldValue.serverTimestamp(),
+          });
+        }
+      }
+      if (_imageBytes != null) {
+        setState(() => _uploadingImage = true);
+        final ext = (_pickedImageName?.split('.').last ?? 'jpg').toLowerCase();
+        final contentType = ext == 'png' ? 'image/png' : 'image/jpeg';
+        final path = 'products/${widget.orgId}/$productId/${DateTime.now().millisecondsSinceEpoch}.$ext';
+        final storageRef = FirebaseStorage.instance.ref().child(path);
+        await storageRef.putData(_imageBytes!, SettableMetadata(contentType: contentType));
+        final imageUrl = await storageRef.getDownloadURL();
+        await FirebaseFirestore.instance.collection('products').doc(productId).update({'imageUrl': imageUrl});
+        if (mounted) setState(() => _uploadingImage = false);
       }
       if (mounted) Navigator.pop(context);
     } catch (e) {
+      if (mounted) setState(() => _uploadingImage = false);
       if (mounted) _showError('Error: $e');
     } finally {
       if (mounted) setState(() => _submitting = false);
@@ -1426,6 +1928,8 @@ class _ProductModalState extends State<_ProductModal> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    _buildImagePicker(),
+                    const SizedBox(height: 16),
                     _sectionLabel('Product Information', icon: Icons.info_outline_rounded),
                     Text('Category', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600, color: const Color(0xFF374151))),
                     const SizedBox(height: 6),
@@ -1469,7 +1973,43 @@ class _ProductModalState extends State<_ProductModal> {
                       style: GoogleFonts.beVietnamPro(fontSize: 13),
                     ),
                     const SizedBox(height: 12),
+                    Text('Status', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600, color: const Color(0xFF374151))),
+                    const SizedBox(height: 6),
+                    Container(
+                      height: 44,
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF8F9FB),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: const Color(0xFFE2E6EA)),
+                      ),
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<String>(
+                          value: _productStatus,
+                          isExpanded: true,
+                          icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 18, color: Color(0xFF9AA5B4)),
+                          items: [
+                            DropdownMenuItem(value: 'available', child: Text('Available', style: GoogleFonts.beVietnamPro(fontSize: 13))),
+                            DropdownMenuItem(value: 'out_of_stock', child: Text('Out of Stock', style: GoogleFonts.beVietnamPro(fontSize: 13))),
+                            DropdownMenuItem(value: 'discontinued', child: Text('Discontinued', style: GoogleFonts.beVietnamPro(fontSize: 13))),
+                          ],
+                          onChanged: (value) {
+                            if (value != null) setState(() => _productStatus = value);
+                          },
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
                     Row(children: [
+                      Expanded(
+                        child: TextFormField(
+                          controller: _costPriceCtrl,
+                          keyboardType: TextInputType.numberWithOptions(decimal: true),
+                          decoration: _DS.inputDecoration('Cost Price', hint: '0.00', icon: Icons.money_off_outlined),
+                          style: GoogleFonts.beVietnamPro(fontSize: 13),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
                       Expanded(
                         child: TextFormField(
                           controller: _priceCtrl,
@@ -1488,6 +2028,21 @@ class _ProductModalState extends State<_ProductModal> {
                         ),
                       ),
                     ]),
+                    const SizedBox(height: 16),
+                    _sectionLabel('Variants', icon: Icons.tune_rounded),
+                    ..._variants.map((v) => _buildVariantChip(v)),
+                    if (_variants.isNotEmpty) const SizedBox(height: 8),
+                    OutlinedButton.icon(
+                      onPressed: _submitting ? null : _openAddVariantDialog,
+                      icon: const Icon(Icons.add, size: 14),
+                      label: Text('Add Variant', style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.w600)),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: UpriseColors.primaryDark,
+                        side: BorderSide(color: UpriseColors.primaryDark),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -1534,6 +2089,111 @@ class _ProductModalState extends State<_ProductModal> {
     );
   }
 
+  Widget _buildImagePicker() {
+    final existingUrl = widget.existingProduct?.imageUrl ?? '';
+    final hasImage = _imageBytes != null || existingUrl.isNotEmpty;
+    return GestureDetector(
+      onTap: _submitting || _uploadingImage ? null : _pickImage,
+      child: Container(
+        height: 110,
+        decoration: BoxDecoration(
+          color: const Color(0xFFF8F9FB),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: hasImage ? UpriseColors.primaryDark.withAlpha(77) : const Color(0xFFE2E6EA),
+          ),
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(8),
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              if (_imageBytes != null)
+                Image.memory(_imageBytes!, fit: BoxFit.cover, width: double.infinity, height: 110)
+              else if (existingUrl.isNotEmpty)
+                Image.network(existingUrl, fit: BoxFit.cover, width: double.infinity, height: 110,
+                    errorBuilder: (_, __, ___) => const SizedBox())
+              else
+                Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+                  const Icon(Icons.add_photo_alternate_outlined, size: 32, color: Color(0xFF9AA5B4)),
+                  const SizedBox(height: 6),
+                  Text('Upload Product Image', style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF9AA5B4))),
+                ]),
+              Positioned(
+                bottom: 8, right: 8,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  decoration: BoxDecoration(color: UpriseColors.primaryDark, borderRadius: BorderRadius.circular(6)),
+                  child: _uploadingImage
+                      ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                      : Row(mainAxisSize: MainAxisSize.min, children: [
+                          const Icon(Icons.upload_rounded, size: 13, color: Colors.white),
+                          const SizedBox(width: 4),
+                          Text(hasImage ? 'Change' : 'Upload',
+                              style: GoogleFonts.beVietnamPro(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.white)),
+                        ]),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _pickImage() async {
+    final result = await FilePicker.platform.pickFiles(type: FileType.image, allowMultiple: false);
+    if (result == null || result.files.isEmpty) return;
+    final file = result.files.first;
+    final bytes = file.bytes;
+    if (bytes == null) return;
+    setState(() {
+      _imageBytes = bytes;
+      _pickedImageName = file.name;
+    });
+  }
+
+  void _openAddVariantDialog() async {
+    final variant = await showDialog<ProductVariant>(
+      context: context,
+      builder: (_) => const _VariantDialog(),
+    );
+    if (variant != null) {
+      setState(() => _variants.add(variant));
+    }
+  }
+
+  Widget _buildVariantChip(ProductVariant v) {
+    final label = [if (v.size.isNotEmpty) v.size, if (v.color.isNotEmpty) v.color].join(' / ');
+    return Container(
+      margin: const EdgeInsets.only(bottom: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8F9FB),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFFE2E6EA)),
+      ),
+      child: Row(children: [
+        Container(width: 28, height: 28, decoration: BoxDecoration(color: UpriseColors.primaryDark.withAlpha(18), borderRadius: BorderRadius.circular(6)),
+            child: const Icon(Icons.tune_rounded, size: 14, color: UpriseColors.primaryDark)),
+        const SizedBox(width: 10),
+        Expanded(child: Text(label.isEmpty ? 'Variant' : label,
+            style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600, color: const Color(0xFF1A202C)))),
+        Text('Stock: ${v.stock}', style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF64748B))),
+        if (v.priceOffset != null) ...[
+          const SizedBox(width: 10),
+          Text('${v.priceOffset! >= 0 ? '+' : ''}₱${NumberFormat('#,###.##').format(v.priceOffset)}',
+              style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.w600, color: UpriseColors.primaryDark)),
+        ],
+        const SizedBox(width: 8),
+        GestureDetector(
+          onTap: () => setState(() => _variants.removeWhere((x) => x.id == v.id)),
+          child: const Icon(Icons.close_rounded, size: 16, color: Color(0xFF9AA5B4)),
+        ),
+      ]),
+    );
+  }
+
   Widget _sectionLabel(String text, {IconData? icon}) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
@@ -1547,8 +2207,146 @@ class _ProductModalState extends State<_ProductModal> {
   }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Variant Dialog
+// ─────────────────────────────────────────────────────────────────────────────
+class _VariantDialog extends StatefulWidget {
+  const _VariantDialog();
+
+  @override
+  State<_VariantDialog> createState() => _VariantDialogState();
+}
+
+class _VariantDialogState extends State<_VariantDialog> {
+  final _sizeCtrl = TextEditingController();
+  final _colorCtrl = TextEditingController();
+  final _stockCtrl = TextEditingController();
+  final _priceOffsetCtrl = TextEditingController();
+
+  @override
+  void dispose() {
+    _sizeCtrl.dispose();
+    _colorCtrl.dispose();
+    _stockCtrl.dispose();
+    _priceOffsetCtrl.dispose();
+    super.dispose();
+  }
+
+  void _save() {
+    if (_sizeCtrl.text.trim().isEmpty && _colorCtrl.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Enter at least a size or color.', style: GoogleFonts.beVietnamPro()),
+        backgroundColor: UpriseColors.error,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      ));
+      return;
+    }
+    final stock = int.tryParse(_stockCtrl.text.trim()) ?? 0;
+    final priceOffset = _priceOffsetCtrl.text.trim().isEmpty
+        ? null
+        : double.tryParse(_priceOffsetCtrl.text.trim());
+    Navigator.pop(context, ProductVariant(
+      id: DateTime.now().millisecondsSinceEpoch.toString(),
+      size: _sizeCtrl.text.trim(),
+      color: _colorCtrl.text.trim(),
+      stock: stock,
+      priceOffset: priceOffset,
+    ));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: Container(
+        width: 440,
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(children: [
+              Container(width: 36, height: 36, decoration: BoxDecoration(color: UpriseColors.primaryDark.withAlpha(18), borderRadius: BorderRadius.circular(8)),
+                  child: const Icon(Icons.tune_rounded, size: 18, color: UpriseColors.primaryDark)),
+              const SizedBox(width: 12),
+              Expanded(child: Text('Add Variant', style: GoogleFonts.beVietnamPro(fontSize: 15, fontWeight: FontWeight.w700))),
+              IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.close_rounded, size: 18, color: Color(0xFF64748B))),
+            ]),
+            const SizedBox(height: 20),
+            Row(children: [
+              Expanded(
+                child: TextFormField(
+                  controller: _sizeCtrl,
+                  decoration: _DS.inputDecoration('Size', hint: 'e.g., M, L, XL', icon: Icons.straighten_outlined),
+                  style: GoogleFonts.beVietnamPro(fontSize: 13),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: TextFormField(
+                  controller: _colorCtrl,
+                  decoration: _DS.inputDecoration('Color', hint: 'e.g., Red, Blue', icon: Icons.color_lens_outlined),
+                  style: GoogleFonts.beVietnamPro(fontSize: 13),
+                ),
+              ),
+            ]),
+            const SizedBox(height: 12),
+            Row(children: [
+              Expanded(
+                child: TextFormField(
+                  controller: _stockCtrl,
+                  keyboardType: TextInputType.number,
+                  decoration: _DS.inputDecoration('Stock', hint: '0', icon: Icons.inventory_2_outlined),
+                  style: GoogleFonts.beVietnamPro(fontSize: 13),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: TextFormField(
+                  controller: _priceOffsetCtrl,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true, signed: true),
+                  decoration: _DS.inputDecoration('Price Offset', hint: '+0.00 (optional)', icon: Icons.add_circle_outline_rounded),
+                  style: GoogleFonts.beVietnamPro(fontSize: 13),
+                ),
+              ),
+            ]),
+            const SizedBox(height: 24),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                OutlinedButton(
+                  onPressed: () => Navigator.pop(context),
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: Color(0xFFE2E6EA)),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  ),
+                  child: Text('Cancel', style: GoogleFonts.beVietnamPro(fontSize: 13)),
+                ),
+                const SizedBox(width: 10),
+                ElevatedButton(
+                  onPressed: _save,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: UpriseColors.primaryDark,
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  ),
+                  child: Text('Add Variant', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600)),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 // ============================================================
-// PRODUCT DETAILS MODAL (unchanged)
+// PRODUCT DETAILS MODAL
 // ============================================================
 class _ProductDetailsModal extends StatelessWidget {
   final ProductModel product;
@@ -1559,25 +2357,233 @@ class _ProductDetailsModal extends StatelessWidget {
     return Dialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
       child: Container(
-        width: 460,
-        padding: const EdgeInsets.all(24),
+        width: 500,
+        constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.82),
         child: Column(
           mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(children: [
-              Container(width: 42, height: 42, decoration: BoxDecoration(color: UpriseColors.primaryDark.withAlpha(26), borderRadius: BorderRadius.circular(10)),
-                  child: const Icon(Icons.shopping_bag_outlined, size: 20, color: UpriseColors.primaryDark)),
-              const SizedBox(width: 14),
-              Expanded(child: Text(product.name, style: GoogleFonts.beVietnamPro(fontSize: 16, fontWeight: FontWeight.w700))),
-              IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.close_rounded, size: 20, color: Color(0xFF64748B))),
-            ]),
-            const SizedBox(height: 16),
-            _detailItem('Category', product.category),
-            _detailItem('Price', '₱${NumberFormat('#,###').format(product.price)}'),
-            _detailItem('Stock', '${product.stock} units'),
-            _detailItem('Sold', '${product.sold} units'),
-            if (product.description.isNotEmpty) _detailItem('Description', product.description),
+            // Header
+            Container(
+              padding: const EdgeInsets.fromLTRB(24, 20, 16, 20),
+              decoration: BoxDecoration(
+                color: UpriseColors.primaryDark.withAlpha(18),
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(18)),
+                border: const Border(bottom: BorderSide(color: Color(0xFFE8ECF0))),
+              ),
+              child: Row(children: [
+                Container(width: 42, height: 42, decoration: BoxDecoration(color: UpriseColors.primaryDark.withAlpha(26), borderRadius: BorderRadius.circular(10)),
+                    child: const Icon(Icons.shopping_bag_outlined, size: 20, color: UpriseColors.primaryDark)),
+                const SizedBox(width: 14),
+                Expanded(child: Text(product.name, style: GoogleFonts.beVietnamPro(fontSize: 16, fontWeight: FontWeight.w700))),
+                IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.close_rounded, size: 20, color: Color(0xFF64748B))),
+              ]),
+            ),
+            // Body
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (product.imageUrl.isNotEmpty) ...[
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(10),
+                        child: Image.network(
+                          product.imageUrl,
+                          width: double.infinity,
+                          height: 160,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => const SizedBox(),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                    ],
+                    _detailItem('Category', product.category),
+                    _detailItem('Price', '₱${NumberFormat('#,###').format(product.price)}'),
+                    _detailItem('Stock', '${product.stock} units'),
+                    _detailItem('Sold', '${product.sold} units'),
+                    _detailItem('Status', product.status.replaceAll('_', ' ').toUpperCase()),
+                    if (product.description.isNotEmpty) _detailItem('Description', product.description),
+                    if (product.variants.isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      Row(children: [
+                        const Icon(Icons.tune_rounded, size: 15, color: UpriseColors.primaryDark),
+                        const SizedBox(width: 6),
+                        Text('Variants', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w700, color: UpriseColors.primaryDark)),
+                        const SizedBox(width: 12),
+                        Expanded(child: Divider(color: const Color(0xFFE2E6EA), thickness: 1)),
+                      ]),
+                      const SizedBox(height: 8),
+                      Container(
+                        decoration: BoxDecoration(
+                          border: Border.all(color: const Color(0xFFE8ECF0)),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Column(children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                            decoration: const BoxDecoration(
+                              color: Color(0xFFF8F9FB),
+                              borderRadius: BorderRadius.vertical(top: Radius.circular(8)),
+                              border: Border(bottom: BorderSide(color: Color(0xFFE8ECF0))),
+                            ),
+                            child: Row(children: [
+                              Expanded(flex: 2, child: Text('SIZE', style: GoogleFonts.beVietnamPro(fontSize: 10, fontWeight: FontWeight.w700, color: const Color(0xFF64748B), letterSpacing: 0.5))),
+                              Expanded(flex: 2, child: Text('COLOR', style: GoogleFonts.beVietnamPro(fontSize: 10, fontWeight: FontWeight.w700, color: const Color(0xFF64748B), letterSpacing: 0.5))),
+                              Expanded(flex: 1, child: Text('STOCK', style: GoogleFonts.beVietnamPro(fontSize: 10, fontWeight: FontWeight.w700, color: const Color(0xFF64748B), letterSpacing: 0.5))),
+                              Expanded(flex: 2, child: Text('PRICE', style: GoogleFonts.beVietnamPro(fontSize: 10, fontWeight: FontWeight.w700, color: const Color(0xFF64748B), letterSpacing: 0.5))),
+                            ]),
+                          ),
+                          ...product.variants.asMap().entries.map((entry) {
+                            final v = entry.value;
+                            final isLast = entry.key == product.variants.length - 1;
+                            final effectivePrice = product.price + (v.priceOffset ?? 0);
+                            return Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+                              decoration: BoxDecoration(
+                                border: isLast ? null : const Border(bottom: BorderSide(color: Color(0xFFF1F5F9))),
+                              ),
+                              child: Row(children: [
+                                Expanded(flex: 2, child: Text(v.size.isEmpty ? '—' : v.size, style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.w500))),
+                                Expanded(flex: 2, child: Text(v.color.isEmpty ? '—' : v.color, style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.w500))),
+                                Expanded(flex: 1, child: Text('${v.stock}', style: GoogleFonts.beVietnamPro(fontSize: 12))),
+                                Expanded(flex: 2, child: Row(children: [
+                                  Text('₱${NumberFormat('#,###.##').format(effectivePrice)}',
+                                      style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.w700, color: UpriseColors.primaryDark)),
+                                  if (v.priceOffset != null && v.priceOffset != 0) ...[
+                                    const SizedBox(width: 4),
+                                    Text('(${v.priceOffset! >= 0 ? '+' : ''}${NumberFormat('#,###.##').format(v.priceOffset!)})',
+                                        style: GoogleFonts.beVietnamPro(fontSize: 10, color: const Color(0xFF64748B))),
+                                  ],
+                                ])),
+                              ]),
+                            );
+                          }),
+                        ]),
+                      ),
+                    ],
+                    const SizedBox(height: 8),
+                    // Stock History section
+                    Row(children: [
+                      const Icon(Icons.history_rounded, size: 15, color: UpriseColors.primaryDark),
+                      const SizedBox(width: 6),
+                      Text('Stock History', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w700, color: UpriseColors.primaryDark)),
+                      const SizedBox(width: 12),
+                      Expanded(child: Divider(color: const Color(0xFFE2E6EA), thickness: 1)),
+                    ]),
+                    const SizedBox(height: 10),
+                    StreamBuilder<QuerySnapshot>(
+                      stream: FirebaseFirestore.instance
+                          .collection('stock_logs')
+                          .where('productId', isEqualTo: product.id)
+                          .orderBy('timestamp', descending: true)
+                          .limit(20)
+                          .snapshots(),
+                      builder: (context, snap) {
+                        if (snap.connectionState == ConnectionState.waiting) {
+                          return const Center(child: Padding(
+                            padding: EdgeInsets.all(16),
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ));
+                        }
+                        final logs = snap.data?.docs ?? [];
+                        if (logs.isEmpty) {
+                          return Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            child: Text('No stock changes recorded yet.',
+                                style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF9AA5B4))),
+                          );
+                        }
+                        return Column(
+                          children: logs.map((doc) {
+                            final d = doc.data() as Map<String, dynamic>;
+                            final ts = d['timestamp'] as Timestamp?;
+                            final date = ts != null
+                                ? DateFormat('MMM d, yyyy h:mm a').format(ts.toDate())
+                                : '—';
+                            final oldS = d['oldStock'] ?? 0;
+                            final newS = d['newStock'] ?? 0;
+                            final reason = (d['reason'] ?? '').toString();
+                            final by = d['changedBy'] ?? '—';
+                            final isIncrease = newS > oldS;
+                            return Container(
+                              margin: const EdgeInsets.only(bottom: 8),
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFF8F9FB),
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: const Color(0xFFE8ECF0)),
+                              ),
+                              child: Row(
+                                children: [
+                                  Container(
+                                    width: 32, height: 32,
+                                    decoration: BoxDecoration(
+                                      color: isIncrease ? const Color(0xFFECFDF5) : const Color(0xFFFEF2F2),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Icon(
+                                      isIncrease ? Icons.arrow_upward_rounded : Icons.arrow_downward_rounded,
+                                      size: 16,
+                                      color: isIncrease ? const Color(0xFF059669) : const Color(0xFFDC2626),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Row(children: [
+                                          Text('$oldS → $newS units',
+                                              style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600, color: const Color(0xFF1A202C))),
+                                          const SizedBox(width: 8),
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                            decoration: BoxDecoration(
+                                              color: UpriseColors.primaryDark.withAlpha(18),
+                                              borderRadius: BorderRadius.circular(4),
+                                            ),
+                                            child: Text(reason.toUpperCase(),
+                                                style: GoogleFonts.beVietnamPro(fontSize: 9, fontWeight: FontWeight.w700, color: UpriseColors.primaryDark, letterSpacing: 0.5)),
+                                          ),
+                                        ]),
+                                        const SizedBox(height: 2),
+                                        Text('$date · $by',
+                                            style: GoogleFonts.beVietnamPro(fontSize: 11, color: const Color(0xFF64748B))),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          }).toList(),
+                        );
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            // Footer
+            Container(
+              padding: const EdgeInsets.fromLTRB(24, 12, 24, 18),
+              decoration: const BoxDecoration(
+                border: Border(top: BorderSide(color: Color(0xFFE8ECF0))),
+                color: Color(0xFFF8F9FB),
+                borderRadius: BorderRadius.vertical(bottom: Radius.circular(18)),
+              ),
+              child: Row(mainAxisAlignment: MainAxisAlignment.end, children: [
+                OutlinedButton(
+                  onPressed: () => Navigator.pop(context),
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: Color(0xFFE2E6EA)),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+                  ),
+                  child: Text('Close', style: GoogleFonts.beVietnamPro(fontSize: 13)),
+                ),
+              ]),
+            ),
           ],
         ),
       ),
@@ -1781,83 +2787,99 @@ class _SalesReportModal extends StatelessWidget {
         width: 720,
         constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.85),
         child: StreamBuilder<QuerySnapshot>(
-          stream: FirebaseFirestore.instance.collection('orders').where('orgId', isEqualTo: orgId).orderBy('createdAt', descending: true).snapshots(),
-          builder: (context, snapshot) {
-            final orders = snapshot.hasData ? snapshot.data!.docs.map((d) => OrderModel.fromFirestore(d)).toList() : <OrderModel>[];
-
-            double totalRevenue = 0;
-            int completed = 0, processing = 0;
-            for (final o in orders) {
-              totalRevenue += o.total;
-              if (o.status.toLowerCase() == 'completed') completed++;
-              if (o.status.toLowerCase() == 'processing') processing++;
+          stream: FirebaseFirestore.instance.collection('products').where('orgId', isEqualTo: orgId).snapshots(),
+          builder: (context, productSnap) {
+            final Map<String, double> costByProductId = {};
+            for (final doc in productSnap.data?.docs ?? []) {
+              final d = doc.data() as Map<String, dynamic>;
+              costByProductId[doc.id] = (d['costPrice'] ?? 0).toDouble();
             }
+            return StreamBuilder<QuerySnapshot>(
+              stream: FirebaseFirestore.instance.collection('orders').where('orgId', isEqualTo: orgId).orderBy('createdAt', descending: true).snapshots(),
+              builder: (context, snapshot) {
+                final orders = snapshot.hasData ? snapshot.data!.docs.map((d) => OrderModel.fromFirestore(d)).toList() : <OrderModel>[];
 
-            final Map<String, double> monthly = {};
-            for (final o in orders) {
-              final m = DateFormat('yyyy-MM').format(o.createdAt.toDate());
-              monthly[m] = (monthly[m] ?? 0) + o.total;
-            }
-            final months = monthly.keys.toList()..sort();
+                double totalRevenue = 0;
+                int completed = 0, processing = 0;
+                for (final o in orders) {
+                  totalRevenue += o.total;
+                  if (o.status.toLowerCase() == 'completed') completed++;
+                  if (o.status.toLowerCase() == 'processing') processing++;
+                }
 
-            final Map<String, int> unitsSold = {};
-            final Map<String, double> revByProduct = {};
-            for (final o in orders) {
-              for (final item in o.items) {
-                unitsSold[item.name] = (unitsSold[item.name] ?? 0) + item.quantity;
-                revByProduct[item.name] = (revByProduct[item.name] ?? 0) + item.totalPrice;
-              }
-            }
-            final top5 = (unitsSold.entries.toList()..sort((a, b) => b.value.compareTo(a.value))).take(5).toList();
+                final Map<String, double> monthly = {};
+                for (final o in orders) {
+                  final m = DateFormat('yyyy-MM').format(o.createdAt.toDate());
+                  monthly[m] = (monthly[m] ?? 0) + o.total;
+                }
+                final months = monthly.keys.toList()..sort();
 
-            return Column(
-              children: [
-                // Header
-                Container(
-                  padding: const EdgeInsets.fromLTRB(24, 20, 20, 20),
-                  decoration: const BoxDecoration(
-                    color: Color(0xFFF8F9FB),
-                    borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
-                  ),
-                  child: Row(children: [
-                    Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      Text('Sales Report', style: GoogleFonts.beVietnamPro(fontSize: 16, fontWeight: FontWeight.w700)),
-                      Text('Merchandise Performance', style: GoogleFonts.beVietnamPro(fontSize: 11, color: const Color(0xFF64748B))),
-                    ]),
-                    const Spacer(),
-                    OutlinedButton.icon(
-                      onPressed: orders.isEmpty ? null : () => _exportReport(context, orders),
-                      icon: const Icon(Icons.download_outlined, size: 15),
-                      label: Text('Export CSV', style: GoogleFonts.beVietnamPro(fontSize: 12)),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: UpriseColors.primaryDark,
-                        side: BorderSide(color: UpriseColors.primaryDark),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                final Map<String, int> unitsSold = {};
+                final Map<String, double> revByProduct = {};
+                final Map<String, double> profitByProduct = {};
+                double totalProfit = 0;
+                for (final o in orders) {
+                  for (final item in o.items) {
+                    unitsSold[item.name] = (unitsSold[item.name] ?? 0) + item.quantity;
+                    revByProduct[item.name] = (revByProduct[item.name] ?? 0) + item.totalPrice;
+                    final cost = costByProductId[item.productId] ?? 0;
+                    final itemProfit = (item.price - cost) * item.quantity;
+                    profitByProduct[item.name] = (profitByProduct[item.name] ?? 0) + itemProfit;
+                    totalProfit += itemProfit;
+                  }
+                }
+                final top5 = (unitsSold.entries.toList()..sort((a, b) => b.value.compareTo(a.value))).take(5).toList();
+
+                return Column(
+                  children: [
+                    // Header
+                    Container(
+                      padding: const EdgeInsets.fromLTRB(24, 20, 20, 20),
+                      decoration: const BoxDecoration(
+                        color: Color(0xFFF8F9FB),
+                        borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
                       ),
-                    ),
-                    const SizedBox(width: 8),
-                    IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.close_rounded, size: 20, color: Color(0xFF64748B))),
-                  ]),
-                ),
-                // Body
-                Expanded(
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.all(24),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _sectionTitle('Overview'),
-                        const SizedBox(height: 10),
-                        Row(children: [
-                          _miniStatCard('Total Sales', orders.length.toString(), UpriseColors.info),
-                          const SizedBox(width: 10),
-                          _miniStatCard('Total Revenue', '₱${NumberFormat('#,###').format(totalRevenue)}', UpriseColors.primaryDark, highlight: true),
-                          const SizedBox(width: 10),
-                          _miniStatCard('Completed', completed.toString(), UpriseColors.success),
-                          const SizedBox(width: 10),
-                          _miniStatCard('Processing', processing.toString(), UpriseColors.warning),
+                      child: Row(children: [
+                        Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                          Text('Sales Report', style: GoogleFonts.beVietnamPro(fontSize: 16, fontWeight: FontWeight.w700)),
+                          Text('Merchandise Performance', style: GoogleFonts.beVietnamPro(fontSize: 11, color: const Color(0xFF64748B))),
                         ]),
+                        const Spacer(),
+                        OutlinedButton.icon(
+                          onPressed: orders.isEmpty ? null : () => _exportReport(context, orders),
+                          icon: const Icon(Icons.download_outlined, size: 15),
+                          label: Text('Export CSV', style: GoogleFonts.beVietnamPro(fontSize: 12)),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: UpriseColors.primaryDark,
+                            side: BorderSide(color: UpriseColors.primaryDark),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.close_rounded, size: 20, color: Color(0xFF64748B))),
+                      ]),
+                    ),
+                    // Body
+                    Expanded(
+                      child: SingleChildScrollView(
+                        padding: const EdgeInsets.all(24),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _sectionTitle('Overview'),
+                            const SizedBox(height: 10),
+                            Row(children: [
+                              _miniStatCard('Total Sales', orders.length.toString(), UpriseColors.info),
+                              const SizedBox(width: 10),
+                              _miniStatCard('Total Revenue', '₱${NumberFormat('#,###').format(totalRevenue)}', UpriseColors.primaryDark, highlight: true),
+                              const SizedBox(width: 10),
+                              _miniStatCard('Total Profit', '₱${NumberFormat('#,###').format(totalProfit)}', UpriseColors.success, highlight: true),
+                              const SizedBox(width: 10),
+                              _miniStatCard('Completed', completed.toString(), UpriseColors.success),
+                              const SizedBox(width: 10),
+                              _miniStatCard('Processing', processing.toString(), UpriseColors.warning),
+                            ]),
                         const SizedBox(height: 20),
                         _sectionTitle('Monthly Revenue'),
                         const SizedBox(height: 12),
@@ -1900,64 +2922,79 @@ class _SalesReportModal extends StatelessWidget {
                         const SizedBox(height: 20),
                         _sectionTitle('Popular Items'),
                         const SizedBox(height: 10),
-                        if (top5.isEmpty)
-                          Text('No product sales yet', style: GoogleFonts.beVietnamPro(color: const Color(0xFF64748B), fontSize: 12))
-                        else
-                          ...top5.map((entry) {
-                            final rev = revByProduct[entry.key] ?? 0;
-                            return Padding(
-                              padding: const EdgeInsets.symmetric(vertical: 6),
-                              child: Row(
-                                children: [
-                                  Container(width: 36, height: 36, decoration: BoxDecoration(color: UpriseColors.primaryDark.withAlpha(20), borderRadius: BorderRadius.circular(8)),
-                                      child: const Icon(Icons.shopping_bag_outlined, size: 18, color: UpriseColors.primaryDark)),
-                                  const SizedBox(width: 10),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Text(entry.key, style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600)),
-                                        Text('${entry.value} units sold', style: GoogleFonts.beVietnamPro(fontSize: 11, color: const Color(0xFF64748B))),
-                                      ],
-                                    ),
+                            if (top5.isEmpty)
+                              Text('No product sales yet', style: GoogleFonts.beVietnamPro(color: const Color(0xFF64748B), fontSize: 12))
+                            else
+                              ...top5.map((entry) {
+                                final rev = revByProduct[entry.key] ?? 0;
+                                final profit = profitByProduct[entry.key] ?? 0;
+                                return Padding(
+                                  padding: const EdgeInsets.symmetric(vertical: 6),
+                                  child: Row(
+                                    children: [
+                                      Container(width: 36, height: 36, decoration: BoxDecoration(color: UpriseColors.primaryDark.withAlpha(20), borderRadius: BorderRadius.circular(8)),
+                                          child: const Icon(Icons.shopping_bag_outlined, size: 18, color: UpriseColors.primaryDark)),
+                                      const SizedBox(width: 10),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Text(entry.key, style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600)),
+                                            Text('${entry.value} units sold', style: GoogleFonts.beVietnamPro(fontSize: 11, color: const Color(0xFF64748B))),
+                                          ],
+                                        ),
+                                      ),
+                                      Column(
+                                        crossAxisAlignment: CrossAxisAlignment.end,
+                                        children: [
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                                            decoration: BoxDecoration(color: UpriseColors.primaryDark.withAlpha(20), borderRadius: BorderRadius.circular(20)),
+                                            child: Text('₱${NumberFormat('#,###').format(rev)}',
+                                                style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.w700, color: UpriseColors.primaryDark)),
+                                          ),
+                                          const SizedBox(height: 3),
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                                            decoration: BoxDecoration(color: UpriseColors.success.withAlpha(26), borderRadius: BorderRadius.circular(20)),
+                                            child: Text('Profit ₱${NumberFormat('#,###').format(profit)}',
+                                                style: GoogleFonts.beVietnamPro(fontSize: 11, fontWeight: FontWeight.w700, color: UpriseColors.success)),
+                                          ),
+                                        ],
+                                      ),
+                                    ],
                                   ),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                    decoration: BoxDecoration(color: UpriseColors.primaryDark.withAlpha(20), borderRadius: BorderRadius.circular(20)),
-                                    child: Text('₱${NumberFormat('#,###').format(rev)}',
-                                        style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.w700, color: UpriseColors.primaryDark)),
-                                  ),
-                                ],
-                              ),
-                            );
-                          }),
-                      ],
-                    ),
-                  ),
-                ),
-                // Footer
-                Container(
-                  padding: const EdgeInsets.fromLTRB(24, 12, 24, 20),
-                  decoration: const BoxDecoration(
-                    border: Border(top: BorderSide(color: Color(0xFFE8ECF0))),
-                    color: Color(0xFFF8F9FB),
-                    borderRadius: BorderRadius.vertical(bottom: Radius.circular(18)),
-                  ),
-                  child: Row(mainAxisAlignment: MainAxisAlignment.end, children: [
-                    ElevatedButton(
-                      onPressed: () => Navigator.pop(context),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: UpriseColors.primaryDark,
-                        foregroundColor: Colors.white,
-                        elevation: 0,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                                );
+                              }),
+                          ],
+                        ),
                       ),
-                      child: Text('Done', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600)),
                     ),
-                  ]),
-                ),
-              ],
+                    // Footer
+                    Container(
+                      padding: const EdgeInsets.fromLTRB(24, 12, 24, 20),
+                      decoration: const BoxDecoration(
+                        border: Border(top: BorderSide(color: Color(0xFFE8ECF0))),
+                        color: Color(0xFFF8F9FB),
+                        borderRadius: BorderRadius.vertical(bottom: Radius.circular(18)),
+                      ),
+                      child: Row(mainAxisAlignment: MainAxisAlignment.end, children: [
+                        ElevatedButton(
+                          onPressed: () => Navigator.pop(context),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: UpriseColors.primaryDark,
+                            foregroundColor: Colors.white,
+                            elevation: 0,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                          ),
+                          child: Text('Done', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600)),
+                        ),
+                      ]),
+                    ),
+                  ],
+                );
+              },
             );
           },
         ),
@@ -1984,19 +3021,48 @@ class _SalesReportModal extends StatelessWidget {
 }
 
 // ============================================================
-// MODEL CLASSES (UPDATED: added bundleId to OrderModel)
+// MODEL CLASSES
 // ============================================================
+class ProductVariant {
+  final String id;
+  final String size;
+  final String color;
+  final int stock;
+  final double? priceOffset;
+
+  ProductVariant({required this.id, required this.size, required this.color, required this.stock, this.priceOffset});
+
+  factory ProductVariant.fromMap(Map<String, dynamic> map) => ProductVariant(
+    id: map['id'] ?? '',
+    size: map['size'] ?? '',
+    color: map['color'] ?? '',
+    stock: ((map['stock'] ?? 0) as num).toInt(),
+    priceOffset: map['priceOffset'] != null ? (map['priceOffset'] as num).toDouble() : null,
+  );
+
+  Map<String, dynamic> toMap() => {
+    'id': id,
+    'size': size,
+    'color': color,
+    'stock': stock,
+    if (priceOffset != null) 'priceOffset': priceOffset,
+  };
+}
+
 class ProductModel {
   final String id;
   final String name;
   final String description;
   final String category;
   final double price;
+  final double costPrice;
   final int stock;
   final int sold;
   final String imageUrl;
+  final String status;
+  final List<ProductVariant> variants;
 
-  ProductModel({required this.id, required this.name, required this.description, required this.category, required this.price, required this.stock, required this.sold, this.imageUrl = ''});
+  ProductModel({required this.id, required this.name, required this.description, required this.category, required this.price, this.costPrice = 0, required this.stock, required this.sold, this.imageUrl = '', this.status = 'available', this.variants = const []});
 
   factory ProductModel.fromFirestore(DocumentSnapshot doc) {
     final d = doc.data() as Map<String, dynamic>;
@@ -2006,9 +3072,14 @@ class ProductModel {
       description: d['description'] ?? '',
       category: d['category'] ?? '',
       price: (d['price'] ?? 0).toDouble(),
+      costPrice: (d['costPrice'] ?? 0).toDouble(),
       stock: d['stock'] ?? 0,
       sold: d['sold'] ?? 0,
       imageUrl: d['imageUrl'] ?? '',
+      status: d['status'] ?? 'available',
+      variants: ((d['variants'] as List?) ?? [])
+          .map((v) => ProductVariant.fromMap(v as Map<String, dynamic>))
+          .toList(),
     );
   }
 }
@@ -2044,7 +3115,9 @@ class OrderModel {
   final String paymentMethod;
   final String status;
   final Timestamp createdAt;
-  final String bundleId;   // NEW: e.g. "productId_BSIT3A"
+  final String bundleId;
+  final String section;      // NEW
+  final String pickupStatus; // NEW: "Pending", "Ready for Pickup", "Claimed"
 
   OrderModel({
     required this.id,
@@ -2060,6 +3133,8 @@ class OrderModel {
     required this.status,
     required this.createdAt,
     required this.bundleId,
+    this.section = '',              // NEW
+    this.pickupStatus = 'Pending',  // NEW
   });
 
   factory OrderModel.fromFirestore(DocumentSnapshot doc) {
@@ -2078,7 +3153,9 @@ class OrderModel {
       paymentMethod: d['paymentMethod'] ?? '',
       status: d['status'] ?? 'pending',
       createdAt: d['createdAt'] as Timestamp,
-      bundleId: d['bundleId'] ?? '',   // NEW: read bundleId, default empty
+      bundleId: d['bundleId'] ?? '',
+      section: d['section'] ?? '',                    // NEW
+      pickupStatus: d['pickupStatus'] ?? 'Pending',   // NEW
     );
   }
 }
