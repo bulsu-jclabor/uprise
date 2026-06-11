@@ -41,22 +41,31 @@ class _StudentChangePasswordScreenState
     setState(() => _isLoading = true);
 
     try {
-      // ✅ Update password sa Firebase Auth
       await user.updatePassword(newPassword);
 
-      // ✅ Update Firestore - set mustChangePassword = false
-      final snapshot = await FirebaseFirestore.instance
-          .collection('students')
-          .where('uid', isEqualTo: user.uid)
-          .limit(1)
-          .get();
-
-      if (snapshot.docs.isNotEmpty) {
-        await snapshot.docs.first.reference.update({
+      final uid = user.uid;
+      final futures = <Future>[
+        // Clear flag in users collection (read by auth_service.needsPasswordChange)
+        FirebaseFirestore.instance.collection('users').doc(uid).update({
           'mustChangePassword': false,
-          'tempPassword': FieldValue.delete(), // optional cleanup
-        });
-      }
+        }),
+        // Clear temp password and flag in students collection
+        FirebaseFirestore.instance
+            .collection('students')
+            .where('uid', isEqualTo: uid)
+            .limit(1)
+            .get()
+            .then((snap) {
+          if (snap.docs.isNotEmpty) {
+            return snap.docs.first.reference.update({
+              'mustChangePassword': false,
+              'tempPassword': FieldValue.delete(),
+            });
+          }
+          return Future.value();
+        }),
+      ];
+      await Future.wait(futures);
 
       // ✅ Sign out and go back to login
       await FirebaseAuth.instance.signOut();

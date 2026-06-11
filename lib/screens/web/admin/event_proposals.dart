@@ -11,6 +11,7 @@ import 'package:uprise/widgets/admin_export_button.dart';
 import 'export_util.dart';
 import 'export_pdf.dart';
 import '../../../services/activity_logger.dart' as activity_log;
+import '../../../services/notification_service.dart';
 import '../../theme/app_theme.dart';
 import 'package:intl/intl.dart';
 
@@ -163,19 +164,19 @@ class EventProposals extends StatefulWidget {
 }
 
 class _EventProposalsState extends State<EventProposals> {
-  final TextEditingController _searchController = TextEditingController();
-  String _statusFilter = 'All';
+  String _statusFilter = 'Pending';
   int _currentPage = 1;
   static const int _pageSize = 10;
-
-  // Cache for organization logos
-  final Map<String, String> _orgLogoCache = {};
+  final TextEditingController _searchController = TextEditingController();
 
   @override
   void dispose() {
     _searchController.dispose();
     super.dispose();
   }
+
+  // Cache for organization logos
+  final Map<String, String> _orgLogoCache = {};
 
   // Helper to check if widget is still mounted
   bool get _isMounted => mounted;
@@ -314,40 +315,33 @@ class _EventProposalsState extends State<EventProposals> {
     final horizontalPadding = isMobile ? 16.0 : (isTablet ? 20.0 : 28.0);
     final itemGap = isMobile ? 10.0 : 12.0;
 
+    final searchField = SizedBox(
+      height: 40,
+      child: TextField(
+        controller: _searchController,
+        style: GoogleFonts.beVietnamPro(fontSize: 13),
+        decoration: InputDecoration(
+          hintText: 'Search proposal…',
+          hintStyle: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF9AA5B4)),
+          prefixIcon: const Icon(Icons.search_rounded, size: 18, color: Color(0xFF9AA5B4)),
+          filled: true,
+          fillColor: Colors.white,
+          contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE2E6EA))),
+          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE2E6EA))),
+          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: UpriseColors.primaryDark, width: 1.5)),
+        ),
+        onChanged: (_) => setState(() => _currentPage = 1),
+      ),
+    );
+
     return Padding(
       padding: EdgeInsets.fromLTRB(horizontalPadding, isMobile ? 16 : 20, horizontalPadding, 0),
       child: isMobile
           ? Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                SizedBox(
-                  height: 40,
-                  child: TextField(
-                    controller: _searchController,
-                    style: GoogleFonts.beVietnamPro(fontSize: 13),
-                    decoration: InputDecoration(
-                      hintText: 'Search by title or organization…',
-                      hintStyle: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF9AA5B4)),
-                      prefixIcon: const Icon(Icons.search_rounded, size: 18, color: Color(0xFF9AA5B4)),
-                      filled: true,
-                      fillColor: Colors.white,
-                      contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
-                        borderSide: const BorderSide(color: Color(0xFFE2E6EA)),
-                      ),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
-                        borderSide: const BorderSide(color: Color(0xFFE2E6EA)),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
-                        borderSide: BorderSide(color: UpriseColors.primaryDark, width: 1.5),
-                      ),
-                    ),
-                    onChanged: (_) => setState(() => _currentPage = 1),
-                  ),
-                ),
+                searchField,
                 SizedBox(height: itemGap),
                 _FilterDropdown(
                   value: _statusFilter,
@@ -367,36 +361,7 @@ class _EventProposalsState extends State<EventProposals> {
               ],
             )
           : Row(children: [
-              Expanded(
-                child: SizedBox(
-                  height: 40,
-                  child: TextField(
-                    controller: _searchController,
-                    style: GoogleFonts.beVietnamPro(fontSize: 13),
-                    decoration: InputDecoration(
-                      hintText: 'Search by title or organization…',
-                      hintStyle: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF9AA5B4)),
-                      prefixIcon: const Icon(Icons.search_rounded, size: 18, color: Color(0xFF9AA5B4)),
-                      filled: true,
-                      fillColor: Colors.white,
-                      contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
-                        borderSide: const BorderSide(color: Color(0xFFE2E6EA)),
-                      ),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
-                        borderSide: const BorderSide(color: Color(0xFFE2E6EA)),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
-                        borderSide: BorderSide(color: UpriseColors.primaryDark, width: 1.5),
-                      ),
-                    ),
-                    onChanged: (_) => setState(() => _currentPage = 1),
-                  ),
-                ),
-              ),
+              Expanded(child: searchField),
               SizedBox(width: itemGap),
               _FilterDropdown(
                 value: _statusFilter,
@@ -436,17 +401,23 @@ class _EventProposalsState extends State<EventProposals> {
 
         var docs = snapshot.data!.docs;
 
-        if (_statusFilter != 'All') {
+        if (_statusFilter == 'All') {
+          docs = docs
+              .where((d) => (d.data() as Map)['status'] != 'archived')
+              .toList();
+        } else {
           docs = docs
               .where((d) => (d.data() as Map)['status'] == _statusFilter.toLowerCase())
               .toList();
         }
-        final term = _searchController.text.trim().toLowerCase();
-        if (term.isNotEmpty) {
+
+        final _searchTerm = _searchController.text.trim().toLowerCase();
+        if (_searchTerm.isNotEmpty) {
           docs = docs.where((d) {
             final data = d.data() as Map;
-            return (data['title'] ?? '').toString().toLowerCase().contains(term) ||
-                (data['orgName'] ?? '').toString().toLowerCase().contains(term);
+            return (data['title'] ?? '').toString().toLowerCase().contains(_searchTerm) ||
+                (data['orgName'] ?? '').toString().toLowerCase().contains(_searchTerm) ||
+                (data['submittedBy'] ?? '').toString().toLowerCase().contains(_searchTerm);
           }).toList();
         }
 
@@ -1165,7 +1136,20 @@ class _EventProposalsState extends State<EventProposals> {
       };
       
       await FirebaseFirestore.instance.collection('events').add(eventData);
-      
+
+      // Notify all org members about the newly approved event
+      () async {
+        try {
+          await NotificationService.sendToOrgMembers(
+            orgId: orgId,
+            title: 'New Event: $title',
+            body: 'An event on ${DateFormat('MMM dd, yyyy').format(date)} has been approved and added to the calendar.',
+            type: 'event_approved',
+            data: {'eventTitle': title, 'eventDate': date.toIso8601String()},
+          );
+        } catch (_) {}
+      }();
+
       await activity_log.ActivityLogger.log(
         action: 'auto_create_event_from_approved_proposal',
         module: 'Event Management',

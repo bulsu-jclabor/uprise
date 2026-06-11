@@ -34,6 +34,9 @@ class ProfileModel extends ChangeNotifier {
   String sex = '';
   String maritalStatus = '';
   String placeOfBirth = '';
+  // ── Organization ──
+  String orgId = '';
+  String orgName = '';
 
   ProfileModel() {
     _loadUserData();
@@ -63,6 +66,18 @@ if (snapshot.docs.isNotEmpty) {
   sex = data['sex'] ?? '';
   maritalStatus = data['maritalStatus'] ?? '';
   placeOfBirth = data['placeOfBirth'] ?? '';
+  orgId = data['orgId'] ?? '';
+
+  // Resolve org name if orgId is set
+  if (orgId.isNotEmpty) {
+    final orgSnap = await FirebaseFirestore.instance
+        .collection('organizations')
+        .doc(orgId)
+        .get();
+    if (orgSnap.exists) {
+      orgName = orgSnap.data()?['orgName'] ?? orgSnap.data()?['name'] ?? '';
+    }
+  }
 }
 
       notifyListeners();
@@ -303,6 +318,74 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
                 ),
 
                 const SizedBox(height: 12),
+
+                // ── Organization ──
+                if (_profile.orgName.isNotEmpty)
+                  Container(
+                    color: Colors.white,
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('Organization',
+                            style: TextStyle(
+                                fontWeight: FontWeight.bold, fontSize: 15)),
+                        const SizedBox(height: 12),
+                        Container(
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            gradient: const LinearGradient(
+                              colors: [Color(0xFFFF6B00), Color(0xFFFF8C42)],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            ),
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          child: Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(10),
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withOpacity(0.25),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(Icons.groups,
+                                    color: Colors.white, size: 22),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Text(
+                                      'ASSIGNED ORGANIZATION',
+                                      style: TextStyle(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w700,
+                                        color: Colors.white70,
+                                        letterSpacing: 0.8,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      _profile.orgName,
+                                      style: const TextStyle(
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.w800,
+                                        color: Colors.white,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                if (_profile.orgName.isNotEmpty) const SizedBox(height: 12),
 
                 // ── Contact Information ──
                 Container(

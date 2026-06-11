@@ -282,10 +282,10 @@ class AdviserRoles extends StatefulWidget {
 }
 
 class _AdviserRolesState extends State<AdviserRoles> {
-  final TextEditingController _searchController = TextEditingController();
-  String _statusFilter = 'Active'; 
+  String _statusFilter = 'Active';
   int    _currentPage     = 1;
   static const int _pageSize = 10;
+  final TextEditingController _searchController = TextEditingController();
 
   List<OrgModel> _orgs          = [];
   List<String>   _adviserNames  = [];
@@ -308,9 +308,9 @@ class _AdviserRolesState extends State<AdviserRoles> {
 
   @override
   void dispose() {
+    _searchController.dispose();
     _metaListener.cancel();
     _officersListener.cancel();
-    _searchController.dispose();
     super.dispose();
   }
 
@@ -549,7 +549,7 @@ class _AdviserRolesState extends State<AdviserRoles> {
         controller: _searchController,
         style: GoogleFonts.beVietnamPro(fontSize: 13),
         decoration: InputDecoration(
-          hintText: 'Search by org, adviser, or officer…',
+          hintText: 'Search adviser or organization…',
           hintStyle: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF9AA5B4)),
           prefixIcon: const Icon(Icons.search_rounded, size: 18, color: Color(0xFF9AA5B4)),
           filled: true,
@@ -591,17 +591,15 @@ class _AdviserRolesState extends State<AdviserRoles> {
       child: isMobile
           ? Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [searchField, const SizedBox(height: 10), actions],
+            )
+          : Row(
               children: [
-                searchField,
-                const SizedBox(height: 10),
+                Expanded(child: searchField),
+                const SizedBox(width: 10),
                 actions,
               ],
-            )
-          : Row(children: [
-              Expanded(child: searchField),
-              const SizedBox(width: 10),
-              actions,
-            ]),
+            ),
     );
   }
 
@@ -629,19 +627,15 @@ class _AdviserRolesState extends State<AdviserRoles> {
           return orgId.isNotEmpty && orgName.isNotEmpty;
         }).toList();
 
-        final term = _searchController.text.trim().toLowerCase();
-        if (term.isNotEmpty) {
+        final _searchTerm = _searchController.text.trim().toLowerCase();
+        if (_searchTerm.isNotEmpty) {
           docs = docs.where((d) {
-            final data = d.data() as Map<String, dynamic>;
-            return (data['orgName']     ?? '').toString().toLowerCase().contains(term) ||
-                   (data['orgAbbrev']   ?? '').toString().toLowerCase().contains(term) ||
-                   (data['adviserName'] ?? '').toString().toLowerCase().contains(term) ||
-                   (data['president']   ?? '').toString().toLowerCase().contains(term) ||
-                   (data['vicePresident'] ?? '').toString().toLowerCase().contains(term) ||
-                   (data['secretary']   ?? '').toString().toLowerCase().contains(term);
+            final data = d.data() as Map;
+            return (data['adviserName'] ?? '').toString().toLowerCase().contains(_searchTerm) ||
+                (data['orgName'] ?? '').toString().toLowerCase().contains(_searchTerm) ||
+                (data['position'] ?? '').toString().toLowerCase().contains(_searchTerm);
           }).toList();
         }
-
 
         final totalPages = docs.isEmpty ? 1 : (docs.length / _pageSize).ceil();
         final safePage   = _currentPage.clamp(1, totalPages);
@@ -941,14 +935,17 @@ Expanded(
                   _buildInfoRow('Email', data['adviserEmail'] ?? '—', Icons.email_outlined),
                   _buildInfoRow('Phone', data['adviserPhone'] ?? '—', Icons.phone_outlined),
                   const SizedBox(height: 10),
-                  Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-  Row(children: [
-    const Icon(Icons.work_outline, size: 13, color: Color(0xFF9AA5B4)),
-    const SizedBox(width: 6),
-    Text('Position', style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF64748B))),
-  ]),
-  _PositionBadge(rank),
-]),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Row(children: [
+                        const Icon(Icons.work_outline, size: 13, color: Color(0xFF9AA5B4)),
+                        const SizedBox(width: 6),
+                        Text('Position', style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF64748B))),
+                      ]),
+                      _PositionBadge(rank),
+                    ],
+                  ),
                 ]),
                 const SizedBox(height: 12),
                 _viewCard('Officers', [
@@ -984,19 +981,19 @@ Expanded(
                     ),
                   ),
                 const Spacer(),
-               if (!archived)
-  ElevatedButton.icon(
-    onPressed: () { Navigator.pop(ctx); _showEditDialog(data, docId); },
-    icon: const Icon(Icons.edit_outlined, size: 15),
-    label: Text('Edit', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600)),
-    style: ElevatedButton.styleFrom(
-      backgroundColor: UpriseColors.primaryDark,
-      foregroundColor: Colors.white,
-      elevation: 0,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 11),
-    ),
-  ),
+                if (!archived)
+                  ElevatedButton.icon(
+                    onPressed: () { Navigator.pop(ctx); _showEditDialog(data, docId); },
+                    icon: const Icon(Icons.edit_outlined, size: 15),
+                    label: Text('Edit', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: UpriseColors.primaryDark,
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 11),
+                    ),
+                  ),
               ]),
             ),
           ]),

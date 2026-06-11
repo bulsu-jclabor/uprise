@@ -1,6 +1,8 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:http/http.dart' as http;
 import 'student_events_screen.dart';
 
 // ─────────────────────────────────────────────────────────────
@@ -25,12 +27,78 @@ class EventDetailScreen extends StatefulWidget {
 class _EventDetailScreenState extends State<EventDetailScreen> {
   late bool _isRegistered;
   late int _slotsLeft;
+  bool _isOnWaitlist = false;
+  bool _waitlistLoading = false;
 
   @override
   void initState() {
     super.initState();
     _isRegistered = widget.event.isRegistered;
     _slotsLeft = widget.event.slotsLeft;
+    _checkWaitlistStatus();
+  }
+
+  Future<void> _checkWaitlistStatus() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null || _slotsLeft > 0) return;
+    final snap = await FirebaseFirestore.instance
+        .collection('event_waitlist')
+        .where('eventId', isEqualTo: widget.event.id)
+        .where('userId', isEqualTo: user.uid)
+        .limit(1)
+        .get();
+    if (mounted && snap.docs.isNotEmpty) {
+      setState(() => _isOnWaitlist = true);
+    }
+  }
+
+  Future<void> _joinWaitlist() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+    setState(() => _waitlistLoading = true);
+    try {
+      final db = FirebaseFirestore.instance;
+      final existing = await db
+          .collection('event_waitlist')
+          .where('eventId', isEqualTo: widget.event.id)
+          .where('userId', isEqualTo: user.uid)
+          .get();
+      if (existing.docs.isNotEmpty) {
+        setState(() {
+          _isOnWaitlist = true;
+          _waitlistLoading = false;
+        });
+        return;
+      }
+      final countSnap = await db
+          .collection('event_waitlist')
+          .where('eventId', isEqualTo: widget.event.id)
+          .count()
+          .get();
+      final position = (countSnap.count ?? 0) + 1;
+      await db.collection('event_waitlist').add({
+        'eventId': widget.event.id,
+        'eventTitle': widget.event.title,
+        'userId': user.uid,
+        'email': user.email ?? '',
+        'position': position,
+        'addedAt': FieldValue.serverTimestamp(),
+      });
+      setState(() {
+        _isOnWaitlist = true;
+        _waitlistLoading = false;
+      });
+    } catch (_) {
+      setState(() => _waitlistLoading = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Failed to join waitlist. Try again.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   void _onRegistered() {
@@ -329,7 +397,12 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                     else if (_isRegistered)
                       _RegisteredChip()
                     else if (_slotsLeft <= 0)
-                      _FullChip()
+                      _isOnWaitlist
+                          ? _OnWaitlistChip()
+                          : _WaitlistButton(
+                              loading: _waitlistLoading,
+                              onTap: _joinWaitlist,
+                            )
                     else
                       _RegisterButton(
                         onTap: () {
@@ -462,6 +535,34 @@ class _EventRegistrationScreenState
 
       // ── 5. Success ──
       widget.onRegistered();
+
+      // Non-blocking RSVP confirmation email
+      () async {
+        try {
+          await http.post(
+            Uri.parse('https://api.emailjs.com/api/v1.0/email/send'),
+            headers: {
+              'Content-Type': 'application/json',
+              'origin': 'http://localhost',
+            },
+            body: jsonEncode({
+              'service_id': 'service_s3ke8zd',
+              'template_id': 'template_rsvp_confirm',
+              'user_id': 'tmx47wQJmb1uMNUpr',
+              'template_params': {
+                'to_email': _emailCtrl.text.trim(),
+                'student_name':
+                    '${_firstNameCtrl.text.trim()} ${_lastNameCtrl.text.trim()}',
+                'event_title': widget.event.title,
+                'event_date': widget.event.date,
+                'event_time': widget.event.time,
+                'event_location': widget.event.location,
+              },
+            }),
+          );
+        } catch (_) {}
+      }();
+
       setState(() {
         _isLoading = false;
         _submitted = true;
@@ -1175,26 +1276,77 @@ class _RegisteredChip extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────
-//  FULL CHIP (when no slots left)
+//  WAITLIST BUTTON (when no slots left)
 // ─────────────────────────────────────────────────────────────
-class _FullChip extends StatelessWidget {
+class _WaitlistButton extends StatelessWidget {
+  final VoidCallback onTap;
+  final bool loading;
+  const _WaitlistButton({required this.onTap, required this.loading});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: loading ? null : onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+        decoration: BoxDecoration(
+          color: const Color(0xFF1565C0),
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF1565C0).withOpacity(0.3),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: loading
+            ? const SizedBox(
+                width: 22,
+                height: 22,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2.5,
+                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                ),
+              )
+            : const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.queue, size: 16, color: Colors.white),
+                  SizedBox(width: 6),
+                  Text('Join Waitlist',
+                      style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700)),
+                ],
+              ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+//  ON WAITLIST CHIP
+// ─────────────────────────────────────────────────────────────
+class _OnWaitlistChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
       decoration: BoxDecoration(
-        color: const Color(0xFFFFF3E0),
+        color: const Color(0xFFE3F2FD),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFFFB74D)),
+        border: Border.all(color: const Color(0xFF1565C0)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: const [
-          Icon(Icons.block, size: 16, color: Color(0xFFE65100)),
+          Icon(Icons.queue, size: 16, color: Color(0xFF1565C0)),
           SizedBox(width: 6),
-          Text('Event Full',
+          Text('On Waitlist',
               style: TextStyle(
-                  color: Color(0xFFE65100),
+                  color: Color(0xFF1565C0),
                   fontSize: 14,
                   fontWeight: FontWeight.w700)),
         ],

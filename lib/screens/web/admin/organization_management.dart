@@ -261,11 +261,17 @@ class OrganizationManagement extends StatefulWidget {
 }
 
 class _OrganizationManagementState extends State<OrganizationManagement> {
-  final TextEditingController _searchController = TextEditingController();
-  String _statusFilter = 'All';
+  String _statusFilter = 'Active';
   String _typeFilter = 'All Types';
   int _currentPage = 1;
   static const int _pageSize = 10;
+  final TextEditingController _searchController = TextEditingController();
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
 
   final List<String> _orgTypes = [
     'All Types',
@@ -376,24 +382,15 @@ class _OrganizationManagementState extends State<OrganizationManagement> {
         controller: _searchController,
         style: GoogleFonts.beVietnamPro(fontSize: 13),
         decoration: InputDecoration(
-          hintText: 'Search organization or adviser…',
-          hintStyle: GoogleFonts.beVietnamPro(fontSize: 13, color: UpriseColors.darkGray),
+          hintText: 'Search organization…',
+          hintStyle: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF9AA5B4)),
           prefixIcon: const Icon(Icons.search_rounded, size: 18, color: Color(0xFF9AA5B4)),
           filled: true,
           fillColor: Colors.white,
           contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(10),
-            borderSide: const BorderSide(color: Color(0xFFE2E6EA)),
-          ),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(10),
-            borderSide: const BorderSide(color: Color(0xFFE2E6EA)),
-          ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(10),
-            borderSide: BorderSide(color: UpriseColors.primaryDark, width: 1.5),
-          ),
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE2E6EA))),
+          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE2E6EA))),
+          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: UpriseColors.primaryDark, width: 1.5)),
         ),
         onChanged: (_) => setState(() => _currentPage = 1),
       ),
@@ -441,11 +438,7 @@ class _OrganizationManagementState extends State<OrganizationManagement> {
       child: isMobile
           ? Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                searchField,
-                const SizedBox(height: 10),
-                filterActions,
-              ],
+              children: [searchField, const SizedBox(height: 10), filterActions],
             )
           : Row(
               children: [
@@ -477,17 +470,13 @@ class _OrganizationManagementState extends State<OrganizationManagement> {
         if (_typeFilter != 'All Types') {
           docs = docs.where((d) => (d.data() as Map)['type'] == _typeFilter).toList();
         }
-        final term = _searchController.text.trim().toLowerCase();
-        if (term.isNotEmpty) {
+        final _searchTerm = _searchController.text.trim().toLowerCase();
+        if (_searchTerm.isNotEmpty) {
           docs = docs.where((d) {
             final data = d.data() as Map;
-            final adviserMatch = (data['adviserName'] ?? '').toString().toLowerCase().contains(term);
-            final advisers = (data['advisers'] as List?) ?? [];
-            final multiAdviserMatch = advisers.any((a) =>
-                (a['name'] ?? '').toString().toLowerCase().contains(term));
-            return (data['name'] ?? '').toString().toLowerCase().contains(term) ||
-                adviserMatch ||
-                multiAdviserMatch;
+            return (data['orgName'] ?? '').toString().toLowerCase().contains(_searchTerm) ||
+                (data['shortName'] ?? '').toString().toLowerCase().contains(_searchTerm) ||
+                (data['type'] ?? '').toString().toLowerCase().contains(_searchTerm);
           }).toList();
         }
 

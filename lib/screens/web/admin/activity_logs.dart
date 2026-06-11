@@ -333,33 +333,14 @@ class _ActivityLogsState extends State<ActivityLogs> {
         style: GoogleFonts.beVietnamPro(fontSize: 13),
         decoration: InputDecoration(
           hintText: 'Search user, action, module, org…',
-          hintStyle: GoogleFonts.beVietnamPro(
-            fontSize: 13,
-            color: const Color(0xFF9AA5B4),
-          ),
-          prefixIcon: const Icon(
-            Icons.search_rounded,
-            size: 18,
-            color: Color(0xFF9AA5B4),
-          ),
+          hintStyle: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF9AA5B4)),
+          prefixIcon: const Icon(Icons.search_rounded, size: 18, color: Color(0xFF9AA5B4)),
           filled: true,
           fillColor: Colors.white,
-          contentPadding: const EdgeInsets.symmetric(
-            vertical: 0,
-            horizontal: 16,
-          ),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(10),
-            borderSide: const BorderSide(color: Color(0xFFE2E6EA)),
-          ),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(10),
-            borderSide: const BorderSide(color: Color(0xFFE2E6EA)),
-          ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(10),
-            borderSide: BorderSide(color: UpriseColors.primaryDark, width: 1.5),
-          ),
+          contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE2E6EA))),
+          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE2E6EA))),
+          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: UpriseColors.primaryDark, width: 1.5)),
         ),
         onChanged: (_) => setState(() => _currentPage = 1),
       ),
@@ -476,7 +457,7 @@ class _ActivityLogsState extends State<ActivityLogs> {
           if (_severity != 'All Severities' && data['severity'] != _severity)
             continue;
 
-          // Search
+          // Search filter
           final term = _searchController.text.trim().toLowerCase();
           if (term.isNotEmpty) {
             final user = (data['user'] ?? '').toString().toLowerCase();
@@ -486,8 +467,7 @@ class _ActivityLogsState extends State<ActivityLogs> {
             if (!user.contains(term) &&
                 !action.contains(term) &&
                 !module.contains(term) &&
-                !orgId.contains(term))
-              continue;
+                !orgId.contains(term)) continue;
           }
 
           logs.add({...data, '_ts': ts});

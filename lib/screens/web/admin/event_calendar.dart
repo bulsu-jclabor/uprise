@@ -78,8 +78,11 @@ Widget _sectionLabel(String text, {IconData? icon}) {
 // ─────────────────────────────────────────────────────────────────────────────
 class _Event {
   final String id, title, time, category, organization;
+  final String location, description, guestSpeaker;
+  final int capacity;
+  final List<String> tags;
   final DateTime date;
-  
+
   _Event({
     required this.id,
     required this.title,
@@ -87,6 +90,11 @@ class _Event {
     required this.time,
     required this.category,
     required this.organization,
+    this.location = '',
+    this.description = '',
+    this.guestSpeaker = '',
+    this.capacity = 0,
+    this.tags = const [],
   });
 }
 
@@ -224,11 +232,16 @@ class _EventCalendarState extends State<EventCalendar> {
           final d = doc.data() as Map<String, dynamic>;
           return _Event(
             id:           doc.id,
-            title:        d['title']   ?? 'Untitled',
-            date:         (d['date']   as Timestamp).toDate(),
-            time:         d['time']    ?? 'TBD',
+            title:        d['title']    ?? 'Untitled',
+            date:         (d['date']    as Timestamp).toDate(),
+            time:         d['startTime'] ?? d['time'] ?? 'TBD',
             category:     d['category'] ?? 'Other',
-            organization: d['orgName'] ?? 'Unknown',
+            organization: d['orgName']  ?? 'Unknown',
+            location:     d['location']    ?? '',
+            description:  d['description'] ?? '',
+            guestSpeaker: d['guestSpeaker'] ?? '',
+            capacity:     (d['capacity'] as num?)?.toInt() ?? 0,
+            tags:         List<String>.from(d['tags'] ?? []),
           );
         }).toList();
 
@@ -575,14 +588,60 @@ class _EventCalendarState extends State<EventCalendar> {
                       Row(children: [
                         Expanded(child: _detailItem('Category', event.category, Icons.category_outlined, valueColor: _getCategoryColor(event.category))),
                         const SizedBox(width: 16),
-                        Expanded(child: _detailItem('Date',     DateFormat('MMMM d, yyyy').format(event.date), Icons.calendar_today_outlined)),
+                        Expanded(child: _detailItem('Date', DateFormat('MMMM d, yyyy').format(event.date), Icons.calendar_today_outlined)),
                       ]),
                       const SizedBox(height: 14),
                       Row(children: [
-                        Expanded(child: _detailItem('Time',     _formatTime(event.time), Icons.access_time_rounded)),
+                        Expanded(child: _detailItem('Time', _formatTime(event.time), Icons.access_time_rounded)),
                         const SizedBox(width: 16),
                         Expanded(child: _detailItem('Organization', event.organization, Icons.group_outlined)),
                       ]),
+                      if (event.location.isNotEmpty) ...[
+                        const SizedBox(height: 14),
+                        _detailItem('Location', event.location, Icons.location_on_outlined),
+                      ],
+                      if (event.capacity > 0) ...[
+                        const SizedBox(height: 14),
+                        _detailItem('Capacity', '${event.capacity} participants', Icons.people_outline_rounded),
+                      ],
+                      if (event.guestSpeaker.isNotEmpty) ...[
+                        const SizedBox(height: 14),
+                        _detailItem('Guest Speaker', event.guestSpeaker, Icons.record_voice_over_outlined),
+                      ],
+                      if (event.description.isNotEmpty) ...[
+                        const SizedBox(height: 20),
+                        _sectionLabel('Description', icon: Icons.description_outlined),
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF8F9FB),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: const Color(0xFFE8ECF0)),
+                          ),
+                          child: Text(
+                            event.description,
+                            style: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF374151), height: 1.6),
+                          ),
+                        ),
+                      ],
+                      if (event.tags.isNotEmpty) ...[
+                        const SizedBox(height: 20),
+                        _sectionLabel('Tags', icon: Icons.label_outline_rounded),
+                        Wrap(
+                          spacing: 6,
+                          runSpacing: 6,
+                          children: event.tags.map((tag) => Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: _getCategoryColor(event.category).withOpacity(0.08),
+                              borderRadius: BorderRadius.circular(100),
+                              border: Border.all(color: _getCategoryColor(event.category).withOpacity(0.2)),
+                            ),
+                            child: Text(tag, style: GoogleFonts.beVietnamPro(fontSize: 11, fontWeight: FontWeight.w600, color: _getCategoryColor(event.category))),
+                          )).toList(),
+                        ),
+                      ],
                     ],
                   ),
                 ),

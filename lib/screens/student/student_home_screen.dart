@@ -1,4 +1,5 @@
 // lib/screens/student/student_home_screen.dart
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -58,13 +59,169 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
   }
 }
 
-class _HomeContent extends StatelessWidget {
+class _HomeContent extends StatefulWidget {
   const _HomeContent();
+
+  @override
+  State<_HomeContent> createState() => _HomeContentState();
+}
+
+class _HomeContentState extends State<_HomeContent> {
+  Map<String, dynamic>? _orgData;
+  bool _orgLoading = true;
+  bool _isOffline = false;
+  StreamSubscription<QuerySnapshot>? _cacheMonitor;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadOrgData();
+    _cacheMonitor = FirebaseFirestore.instance
+        .collection('events')
+        .limit(1)
+        .snapshots(includeMetadataChanges: true)
+        .listen((snap) {
+      if (mounted && snap.metadata.isFromCache != _isOffline) {
+        setState(() => _isOffline = snap.metadata.isFromCache);
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _cacheMonitor?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _loadOrgData() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      setState(() => _orgLoading = false);
+      return;
+    }
+    try {
+      final studentSnap = await FirebaseFirestore.instance
+          .collection('students')
+          .where('uid', isEqualTo: user.uid)
+          .limit(1)
+          .get();
+
+      if (studentSnap.docs.isEmpty) {
+        setState(() => _orgLoading = false);
+        return;
+      }
+
+      final orgId = studentSnap.docs.first.data()['orgId'] as String?;
+      if (orgId == null || orgId.isEmpty) {
+        setState(() => _orgLoading = false);
+        return;
+      }
+
+      final orgSnap = await FirebaseFirestore.instance
+          .collection('organizations')
+          .doc(orgId)
+          .get();
+
+      setState(() {
+        _orgData = orgSnap.exists ? orgSnap.data() : null;
+        _orgLoading = false;
+      });
+    } catch (_) {
+      setState(() => _orgLoading = false);
+    }
+  }
+
+  Widget _buildOrgCard() {
+    if (_orgLoading) {
+      return const Padding(
+        padding: EdgeInsets.fromLTRB(16, 8, 16, 0),
+        child: SizedBox(
+          height: 72,
+          child: Center(child: LinearProgressIndicator(color: Color(0xFFFF6B00))),
+        ),
+      );
+    }
+    if (_orgData == null) return const SizedBox.shrink();
+
+    final orgName = _orgData!['orgName'] ?? _orgData!['name'] ?? 'Your Organization';
+    final logoUrl = (_orgData!['logoUrl'] ?? '') as String;
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            colors: [Color(0xFFFF6B00), Color(0xFFFF8C42)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFFFF6B00).withOpacity(0.3),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.25),
+                shape: BoxShape.circle,
+              ),
+              child: ClipOval(
+                child: logoUrl.isNotEmpty
+                    ? Image.network(
+                        logoUrl,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) =>
+                            const Icon(Icons.groups, color: Colors.white, size: 26),
+                      )
+                    : const Icon(Icons.groups, color: Colors.white, size: 26),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'YOUR ORGANIZATION',
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.white70,
+                      letterSpacing: 0.8,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    orgName,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800,
+                      color: Colors.white,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(Icons.chevron_right, color: Colors.white70),
+          ],
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     final user = FirebaseAuth.instance.currentUser;
-    
+
     return CustomScrollView(
       slivers: [
         // App Bar
@@ -98,11 +255,37 @@ class _HomeContent extends StatelessWidget {
           ],
         ),
         
+        // Offline indicator
+        if (_isOffline)
+          SliverToBoxAdapter(
+            child: Container(
+              color: const Color(0xFFFFF3CD),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+              child: const Row(
+                children: [
+                  Icon(Icons.wifi_off_rounded, size: 14, color: Color(0xFF856404)),
+                  SizedBox(width: 6),
+                  Text(
+                    'Offline — showing cached data',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Color(0xFF856404),
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
         // Profile Summary
         SliverToBoxAdapter(
           child: ProfileSummary(userEmail: user?.email ?? 'student@cict.bulsu.edu.ph'),
         ),
-        
+
+        // Organization Card
+        SliverToBoxAdapter(child: _buildOrgCard()),
+
         // Upcoming Events Section Header
         SliverToBoxAdapter(
           child: Padding(

@@ -18,8 +18,6 @@ import 'guest_profile_screen.dart';
 // ─────────────────────────────────────────────────────────────
 const _kPrimary   = Color(0xFFFF6B00);
 const _kPrimaryBg = Color(0xFFFFF3EB);
-const _kDark      = Color(0xFF1A1A2E);
-const _kBg        = Color(0xFFF5F5F5);
 
 // ─────────────────────────────────────────────────────────────
 //  GUEST SHELL
@@ -41,6 +39,8 @@ class _GuestHomeScreenState extends State<GuestHomeScreen> {
   GuestQrAttendanceScreen(),
   GuestProfileScreen(),
 ];
+
+  void switchTab(int index) => setState(() => _currentIndex = index);
 
   @override
   Widget build(BuildContext context) {
@@ -247,28 +247,16 @@ class _GuestHomeContent extends StatelessWidget {
         SliverToBoxAdapter(
           child: _QuickActions(
             onEventsTap: () {
-              context
-                  .findAncestorStateOfType<_GuestHomeScreenState>()
-                  ?.setState(() =>
-                      context
-                          .findAncestorStateOfType<_GuestHomeScreenState>()!
-                          ._currentIndex = 2);
+              final s = context.findAncestorStateOfType<_GuestHomeScreenState>();
+              if (s != null) s.switchTab(2);
             },
             onAnnouncementsTap: () {
-              context
-                  .findAncestorStateOfType<_GuestHomeScreenState>()
-                  ?.setState(() =>
-                      context
-                          .findAncestorStateOfType<_GuestHomeScreenState>()!
-                          ._currentIndex = 1);
+              final s = context.findAncestorStateOfType<_GuestHomeScreenState>();
+              if (s != null) s.switchTab(1);
             },
             onAttendanceTap: () {
-              context
-                  .findAncestorStateOfType<_GuestHomeScreenState>()
-                  ?.setState(() =>
-                      context
-                          .findAncestorStateOfType<_GuestHomeScreenState>()!
-                          ._currentIndex = 3);
+              final s = context.findAncestorStateOfType<_GuestHomeScreenState>();
+              if (s != null) s.switchTab(3);
             },
           ),
         ),

@@ -39,11 +39,10 @@ class AdminLetterRequestScreen extends StatefulWidget {
 }
 
 class _AdminLetterRequestScreenState extends State<AdminLetterRequestScreen> {
-  final TextEditingController _searchController = TextEditingController();
   String _statusFilter = 'All';
   int _currentPage = 1;
   static const int _pageSize = 10;
-
+  final TextEditingController _searchController = TextEditingController();
   final Map<String, String> _orgLogoCache = {};
 
   @override
@@ -51,6 +50,7 @@ class _AdminLetterRequestScreenState extends State<AdminLetterRequestScreen> {
     _searchController.dispose();
     super.dispose();
   }
+
 
   Future<String> _fetchOrgLogo(String orgId) async {
     if (_orgLogoCache.containsKey(orgId)) {
@@ -146,7 +146,7 @@ class _AdminLetterRequestScreenState extends State<AdminLetterRequestScreen> {
         controller: _searchController,
         style: GoogleFonts.beVietnamPro(fontSize: 13),
         decoration: InputDecoration(
-          hintText: 'Search by org name, subject, or message...',
+          hintText: 'Search letter request…',
           hintStyle: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF9AA5B4)),
           prefixIcon: const Icon(Icons.search_rounded, size: 18, color: Color(0xFF9AA5B4)),
           filled: true,
@@ -154,10 +154,7 @@ class _AdminLetterRequestScreenState extends State<AdminLetterRequestScreen> {
           contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
           border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE2E6EA))),
           enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE2E6EA))),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(10),
-            borderSide: const BorderSide(color: AdminColors.primaryDark, width: 1.5),
-          ),
+          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AdminColors.primaryDark, width: 1.5)),
         ),
         onChanged: (_) => setState(() => _currentPage = 1),
       ),
@@ -169,7 +166,7 @@ class _AdminLetterRequestScreenState extends State<AdminLetterRequestScreen> {
       children: [
         _FilterDropdown(
           value: _statusFilter,
-          items: const ['All', 'Pending', 'Approved', 'Rejected', 'Needs Revision', 'Resubmitted'],
+          items: const ['All', 'Pending', 'Approved', 'Rejected', 'Needs Revision', 'Resubmitted', 'Archived'],
           hint: 'Status',
           icon: Icons.tune_rounded,
           onChanged: (v) => setState(() {
@@ -189,17 +186,15 @@ class _AdminLetterRequestScreenState extends State<AdminLetterRequestScreen> {
       child: isMobile
           ? Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [searchField, const SizedBox(height: 10), actions],
+            )
+          : Row(
               children: [
-                searchField,
-                const SizedBox(height: 10),
+                Expanded(child: searchField),
+                const SizedBox(width: 10),
                 actions,
               ],
-            )
-          : Row(children: [
-              Expanded(child: searchField),
-              const SizedBox(width: 10),
-              actions,
-            ]),
+            ),
     );
   }
 
@@ -216,23 +211,29 @@ class _AdminLetterRequestScreenState extends State<AdminLetterRequestScreen> {
 
         var docs = snapshot.data!.docs;
 
-        final term = _searchController.text.trim().toLowerCase();
-        if (term.isNotEmpty) {
+        if (_statusFilter == 'Archived') {
+          docs = docs.where((d) => (d.data() as Map)['isArchived'] == true).toList();
+        } else {
+          // Always hide archived items unless explicitly viewing them
+          docs = docs.where((d) => (d.data() as Map)['isArchived'] != true).toList();
+          if (_statusFilter != 'All') {
+            String filterValue = _statusFilter;
+            if (filterValue == 'Needs Revision') filterValue = 'revision';
+            if (filterValue == 'Resubmitted') filterValue = 'resubmitted';
+            docs = docs.where((d) {
+              final status = ((d.data() as Map)['status'] ?? 'pending').toString().toLowerCase();
+              return status == filterValue.toLowerCase();
+            }).toList();
+          }
+        }
+
+        final _searchTerm = _searchController.text.trim().toLowerCase();
+        if (_searchTerm.isNotEmpty) {
           docs = docs.where((d) {
             final data = d.data() as Map;
-            return (data['orgName'] ?? '').toString().toLowerCase().contains(term) ||
-                   (data['subject'] ?? '').toString().toLowerCase().contains(term) ||
-                   (data['message'] ?? '').toString().toLowerCase().contains(term);
-          }).toList();
-        }
-        
-        String filterValue = _statusFilter;
-        if (filterValue == 'Needs Revision') filterValue = 'revision';
-        if (filterValue == 'Resubmitted') filterValue = 'resubmitted';
-        if (filterValue != 'All') {
-          docs = docs.where((d) {
-            final status = ((d.data() as Map)['status'] ?? 'pending').toString().toLowerCase();
-            return status == filterValue.toLowerCase();
+            return (data['purpose'] ?? data['title'] ?? '').toString().toLowerCase().contains(_searchTerm) ||
+                (data['orgName'] ?? '').toString().toLowerCase().contains(_searchTerm) ||
+                (data['requestedBy'] ?? data['submittedBy'] ?? '').toString().toLowerCase().contains(_searchTerm);
           }).toList();
         }
 

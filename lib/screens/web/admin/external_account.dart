@@ -242,26 +242,14 @@ class _ExternalAccountState extends State<ExternalAccount> {
         style: GoogleFonts.beVietnamPro(fontSize: 13),
         decoration: InputDecoration(
           hintText: 'Search by name, email, or university…',
-          hintStyle: GoogleFonts.beVietnamPro(
-              fontSize: 13, color: const Color(0xFF9AA5B4)),
-          prefixIcon: const Icon(Icons.search_rounded,
-              size: 18, color: Color(0xFF9AA5B4)),
+          hintStyle: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF9AA5B4)),
+          prefixIcon: const Icon(Icons.search_rounded, size: 18, color: Color(0xFF9AA5B4)),
           filled: true,
           fillColor: Colors.white,
-          contentPadding: const EdgeInsets.symmetric(
-              vertical: 0, horizontal: 16),
-          border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(10),
-              borderSide:
-                  const BorderSide(color: Color(0xFFE2E6EA))),
-          enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(10),
-              borderSide:
-                  const BorderSide(color: Color(0xFFE2E6EA))),
-          focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(10),
-              borderSide: BorderSide(
-                  color: UpriseColors.primaryDark, width: 1.5)),
+          contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE2E6EA))),
+          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE2E6EA))),
+          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: UpriseColors.primaryDark, width: 1.5)),
         ),
         onChanged: (_) => setState(() => _currentPage = 1),
       ),
@@ -276,13 +264,10 @@ class _ExternalAccountState extends State<ExternalAccount> {
           items: const ['All', 'Pending', 'Approved', 'Rejected'],
           onChanged: (v) => setState(() {
             _statusFilter = v!;
-            _currentPage  = 1;
+            _currentPage = 1;
           }),
         ),
-        _ExportButton(
-          statusFilter: _statusFilter,
-          searchTerm:   _searchController.text.trim(),
-        ),
+        _ExportButton(statusFilter: _statusFilter, searchTerm: _searchController.text.trim()),
       ],
     );
 
@@ -291,17 +276,15 @@ class _ExternalAccountState extends State<ExternalAccount> {
       child: isMobile
           ? Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [searchField, const SizedBox(height: 10), actions],
+            )
+          : Row(
               children: [
-                searchField,
-                const SizedBox(height: 10),
+                Expanded(child: searchField),
+                const SizedBox(width: 10),
                 actions,
               ],
-            )
-          : Row(children: [
-              Expanded(child: searchField),
-              const SizedBox(width: 10),
-              actions,
-            ]),
+            ),
     );
   }
 
@@ -322,15 +305,16 @@ class _ExternalAccountState extends State<ExternalAccount> {
 
         var docs = snapshot.data!.docs;
 
-        final term = _searchController.text.trim().toLowerCase();
-        if (term.isNotEmpty) {
+        final _searchTerm = _searchController.text.trim().toLowerCase();
+        if (_searchTerm.isNotEmpty) {
           docs = docs.where((d) {
             final data = d.data() as Map;
-            return (data['userName']   ?? '').toString().toLowerCase().contains(term) ||
-                   (data['email']      ?? '').toString().toLowerCase().contains(term) ||
-                   (data['university'] ?? '').toString().toLowerCase().contains(term);
+            return (data['userName'] ?? '').toString().toLowerCase().contains(_searchTerm) ||
+                (data['email'] ?? '').toString().toLowerCase().contains(_searchTerm) ||
+                (data['university'] ?? '').toString().toLowerCase().contains(_searchTerm);
           }).toList();
         }
+
         if (_statusFilter != 'All') {
           docs = docs
               .where((d) =>
@@ -1207,10 +1191,7 @@ class _FilterDropdown extends StatelessWidget {
 
 class _ExportButton extends StatelessWidget {
   final String statusFilter, searchTerm;
-  const _ExportButton({
-    required this.statusFilter,
-    required this.searchTerm,
-  });
+  const _ExportButton({required this.statusFilter, this.searchTerm = ''});
 
   @override
   Widget build(BuildContext context) {
@@ -1232,11 +1213,12 @@ class _ExportButton extends StatelessWidget {
             .toList();
       }
       if (searchTerm.isNotEmpty) {
+        final term = searchTerm.toLowerCase();
         docs = docs.where((d) {
           final data = d.data();
-          return (data['userName']   ?? '').toString().toLowerCase().contains(searchTerm) ||
-                 (data['email']      ?? '').toString().toLowerCase().contains(searchTerm) ||
-                 (data['university'] ?? '').toString().toLowerCase().contains(searchTerm);
+          return (data['userName'] ?? '').toString().toLowerCase().contains(term) ||
+              (data['email'] ?? '').toString().toLowerCase().contains(term) ||
+              (data['university'] ?? '').toString().toLowerCase().contains(term);
         }).toList();
       }
 

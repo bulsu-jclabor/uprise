@@ -146,17 +146,17 @@ class StudentAccounts extends StatefulWidget {
 }
 
 class _StudentAccountsState extends State<StudentAccounts> {
-  final TextEditingController _searchController = TextEditingController();
   String _courseFilter = 'All Courses';
   String _archiveFilter = 'Active Only'; // 'Active Only', 'Archived Only', 'All'
   int _currentPage = 1;
-  static const int _pageSize = 10;
+  final TextEditingController _searchController = TextEditingController();
 
   @override
   void dispose() {
     _searchController.dispose();
     super.dispose();
   }
+  static const int _pageSize = 10;
 
   @override
   Widget build(BuildContext context) {
@@ -256,50 +256,33 @@ class _StudentAccountsState extends State<StudentAccounts> {
     final horizontalPadding = isMobile ? 16.0 : (isTablet ? 20.0 : 28.0);
     final itemGap = isMobile ? 10.0 : 12.0;
 
+    final searchField = SizedBox(
+      height: 40,
+      child: TextField(
+        controller: _searchController,
+        style: GoogleFonts.beVietnamPro(fontSize: 13),
+        decoration: InputDecoration(
+          hintText: 'Search student…',
+          hintStyle: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF9AA5B4)),
+          prefixIcon: const Icon(Icons.search_rounded, size: 18, color: Color(0xFF9AA5B4)),
+          filled: true,
+          fillColor: Colors.white,
+          contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE2E6EA))),
+          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE2E6EA))),
+          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: UpriseColors.primaryDark, width: 1.5)),
+        ),
+        onChanged: (_) => setState(() => _currentPage = 1),
+      ),
+    );
+
     return Padding(
       padding: EdgeInsets.fromLTRB(horizontalPadding, isMobile ? 16 : 20, horizontalPadding, 0),
       child: isMobile
           ? Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                SizedBox(
-                  height: 40,
-                  child: TextField(
-                    controller: _searchController,
-                    style: GoogleFonts.beVietnamPro(fontSize: 13),
-                    decoration: InputDecoration(
-                      hintText: 'Search by name, ID, or email…',
-                      hintStyle: GoogleFonts.beVietnamPro(
-                          fontSize: 13,
-                          color: const Color(0xFF9AA5B4)),
-                      prefixIcon: const Icon(
-                          Icons.search_rounded,
-                          size: 18,
-                          color: Color(0xFF9AA5B4)),
-                      filled: true,
-                      fillColor: Colors.white,
-                      contentPadding: const EdgeInsets.symmetric(
-                          vertical: 0, horizontal: 16),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
-                        borderSide:
-                            const BorderSide(color: Color(0xFFE2E6EA)),
-                      ),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
-                        borderSide:
-                            const BorderSide(color: Color(0xFFE2E6EA)),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
-                        borderSide: BorderSide(
-                            color: UpriseColors.primaryDark,
-                            width: 1.5),
-                      ),
-                    ),
-                    onChanged: (_) => setState(() => _currentPage = 1),
-                  ),
-                ),
+                searchField,
                 SizedBox(height: itemGap),
                 _FilterDropdown(
                   value: _courseFilter,
@@ -354,47 +337,7 @@ class _StudentAccountsState extends State<StudentAccounts> {
             )
           : Row(
               children: [
-                // Search
-                Expanded(
-                  child: SizedBox(
-                    height: 40,
-                    child: TextField(
-                      controller: _searchController,
-                      style: GoogleFonts.beVietnamPro(fontSize: 13),
-                      decoration: InputDecoration(
-                        hintText: 'Search by name, ID, or email…',
-                        hintStyle: GoogleFonts.beVietnamPro(
-                            fontSize: 13,
-                            color: const Color(0xFF9AA5B4)),
-                        prefixIcon: const Icon(
-                            Icons.search_rounded,
-                            size: 18,
-                            color: Color(0xFF9AA5B4)),
-                        filled: true,
-                        fillColor: Colors.white,
-                        contentPadding: const EdgeInsets.symmetric(
-                            vertical: 0, horizontal: 16),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                          borderSide:
-                              const BorderSide(color: Color(0xFFE2E6EA)),
-                        ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                          borderSide:
-                              const BorderSide(color: Color(0xFFE2E6EA)),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                          borderSide: BorderSide(
-                              color: UpriseColors.primaryDark,
-                              width: 1.5),
-                        ),
-                      ),
-                      onChanged: (_) => setState(() => _currentPage = 1),
-                    ),
-                  ),
-                ),
+                Expanded(child: searchField),
                 SizedBox(width: itemGap),
                 _FilterDropdown(
                   value: _courseFilter,
@@ -477,31 +420,20 @@ class _StudentAccountsState extends State<StudentAccounts> {
           docs = docs.where((d) => (d.data() as Map)['archived'] == true).toList();
         }
 
-        // Search filter
-        final term = _searchController.text.trim().toLowerCase();
-        if (term.isNotEmpty) {
-          docs = docs.where((d) {
-            final data = d.data() as Map;
-            return (data['fullName'] ?? '')
-                    .toString()
-                    .toLowerCase()
-                    .contains(term) ||
-                (data['studentId'] ?? '')
-                    .toString()
-                    .toLowerCase()
-                    .contains(term) ||
-                (data['email'] ?? '')
-                    .toString()
-                    .toLowerCase()
-                    .contains(term);
-          }).toList();
-        }
-        
         // Course filter
         if (_courseFilter != 'All Courses') {
           docs = docs
               .where((d) => (d.data() as Map)['course'] == _courseFilter)
               .toList();
+        }
+        final _searchTerm = _searchController.text.trim().toLowerCase();
+        if (_searchTerm.isNotEmpty) {
+          docs = docs.where((d) {
+            final data = d.data() as Map;
+            return (data['fullName'] ?? '').toString().toLowerCase().contains(_searchTerm) ||
+                (data['studentId'] ?? '').toString().toLowerCase().contains(_searchTerm) ||
+                (data['email'] ?? '').toString().toLowerCase().contains(_searchTerm);
+          }).toList();
         }
 
         final totalPages = docs.isEmpty ? 1 : (docs.length / _pageSize).ceil();
@@ -696,7 +628,7 @@ class _StudentAccountsState extends State<StudentAccounts> {
                     _ActionIconButton(
                       icon: Icons.email_outlined,
                       tooltip: 'Resend Credentials',
-                      onTap: () => _resendCredentials(
+                      onTap: () => _confirmResendCredentials(
                         docId,
                         data['email'] ?? '',
                         data['studentId'] ?? '',
@@ -1119,6 +1051,103 @@ class _StudentAccountsState extends State<StudentAccounts> {
         ),
       ],
     );
+  }
+
+  Future<void> _confirmResendCredentials(
+    String docId,
+    String email,
+    String studentId,
+    String? existingPassword,
+  ) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      barrierColor: Colors.black54,
+      builder: (ctx) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        child: Container(
+          width: 400,
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(children: [
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFFF7ED),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(Icons.email_outlined, color: Color(0xFFB45309), size: 20),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    'Resend Credentials',
+                    style: GoogleFonts.beVietnamPro(fontSize: 16, fontWeight: FontWeight.w700, color: const Color(0xFF1A202C)),
+                  ),
+                ),
+                IconButton(icon: const Icon(Icons.close_rounded, size: 18), onPressed: () => Navigator.pop(ctx, false)),
+              ]),
+              const SizedBox(height: 16),
+              Text(
+                'Send login credentials to:',
+                style: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF64748B)),
+              ),
+              const SizedBox(height: 8),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF8F9FB),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: const Color(0xFFE2E6EA)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(email, style: GoogleFonts.beVietnamPro(fontSize: 14, fontWeight: FontWeight.w600, color: const Color(0xFF1A202C))),
+                    Text('ID: $studentId', style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF64748B))),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 20),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  OutlinedButton(
+                    onPressed: () => Navigator.pop(ctx, false),
+                    style: OutlinedButton.styleFrom(
+                      side: const BorderSide(color: Color(0xFFE2E6EA)),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                    ),
+                    child: Text('Cancel', style: GoogleFonts.beVietnamPro(fontSize: 13)),
+                  ),
+                  const SizedBox(width: 10),
+                  ElevatedButton.icon(
+                    onPressed: () => Navigator.pop(ctx, true),
+                    icon: const Icon(Icons.send_rounded, size: 15),
+                    label: Text('Send', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFFB45309),
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (confirmed == true) {
+      await _resendCredentials(docId, email, studentId, existingPassword);
+    }
   }
 
   Future<void> _resendCredentials(
@@ -1827,10 +1856,9 @@ class _StudentAccountsState extends State<StudentAccounts> {
       throw Exception('Account creation failed: ${e.toString()}');
     }
     await cred.user?.updateDisplayName(fullName);
-    await FirebaseFirestore.instance
-        .collection('students')
-        .doc(cred.user!.uid)
-        .set({
+    final uid = cred.user!.uid;
+    final batch = FirebaseFirestore.instance.batch();
+    batch.set(FirebaseFirestore.instance.collection('students').doc(uid), {
       'studentId': studentId,
       'fullName': fullName,
       'course': student['course'],
@@ -1840,8 +1868,18 @@ class _StudentAccountsState extends State<StudentAccounts> {
       'mustChangePassword': true,
       'archived': false,
       'createdAt': FieldValue.serverTimestamp(),
-      'uid': cred.user!.uid,
+      'uid': uid,
     });
+    // Create users doc so auth_service.needsPasswordChange() can read the flag
+    batch.set(FirebaseFirestore.instance.collection('users').doc(uid), {
+      'uid': uid,
+      'email': email,
+      'fullName': fullName,
+      'role': 'student',
+      'mustChangePassword': true,
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+    await batch.commit();
     await secondaryAuth.signOut();
     
     // Send credentials email

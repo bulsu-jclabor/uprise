@@ -13,6 +13,7 @@ import 'screens/web/org/org_login.dart';
 import 'screens/web/org/org_dashboard.dart';
 import 'screens/student/student_login.dart';
 import 'screens/student/student_home_screen.dart';
+import 'screens/public/certificate_verify_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -28,6 +29,23 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Public certificate verification — no auth required
+    if (kIsWeb) {
+      final verifyCode = Uri.base.queryParameters['verify'];
+      if (verifyCode != null && verifyCode.isNotEmpty) {
+        return MaterialApp(
+          title: 'UPRISE - Certificate Verification',
+          debugShowCheckedModeBanner: false,
+          theme: ThemeData(
+            primaryColor: const Color(0xFFB45309),
+            fontFamily: 'BeVietnamPro',
+            useMaterial3: true,
+          ),
+          home: CertificateVerifyScreen(verificationCode: verifyCode),
+        );
+      }
+    }
+
     return MaterialApp(
       title: 'UPRISE - Portal',
       debugShowCheckedModeBanner: false,

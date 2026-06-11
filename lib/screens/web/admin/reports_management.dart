@@ -247,8 +247,21 @@ class _ReportsManagementState extends State<ReportsManagement>
 
   String _filterOrg = 'All Organizations';
   String _filterType = 'All Types';
-  String _filterRange = 'Current Semester';
+  String _filterRange = 'All Time';
+  String _filterAcademicYear = 'All Years';
+  String _filterSemester = 'All Semesters';
+  String _filterStatus = 'All';
   final String _reportView = 'By Event';
+
+  static const List<String> _academicYears = [
+    'All Years', '2025-2026', '2024-2025', '2023-2024',
+  ];
+  static const List<String> _semesters = [
+    'All Semesters', '1st Semester', '2nd Semester', 'Summer',
+  ];
+  static const List<String> _statusOptions = [
+    'All', 'Approved', 'Pending', 'Rejected',
+  ];
 
   List<EventReport> _events = [];
   List<Map<String, dynamic>> _organizations = [];
@@ -288,6 +301,55 @@ class _ReportsManagementState extends State<ReportsManagement>
     super.dispose();
   }
 
+  // ── Date range helper ─────────────────────────────────────────────
+
+  (DateTime?, DateTime?) _computeDateRange() {
+    final now = DateTime.now();
+    int startYear;
+    int endYear;
+
+    if (_filterAcademicYear == 'All Years') {
+      if (_filterSemester == 'All Semesters' && _filterRange == 'All Time') {
+        return (null, null);
+      }
+    }
+
+    if (_filterAcademicYear != 'All Years') {
+      final parts = _filterAcademicYear.split('-');
+      startYear = int.tryParse(parts[0]) ?? now.year;
+      endYear = int.tryParse(parts[1]) ?? now.year + 1;
+    } else {
+      // Use current academic year based on month
+      startYear = now.month >= 8 ? now.year : now.year - 1;
+      endYear = startYear + 1;
+    }
+
+    switch (_filterSemester) {
+      case '1st Semester':
+        return (DateTime(startYear, 8, 1), DateTime(startYear + 1, 1, 31, 23, 59));
+      case '2nd Semester':
+        return (DateTime(startYear + 1, 2, 1), DateTime(startYear + 1, 6, 30, 23, 59));
+      case 'Summer':
+        return (DateTime(startYear + 1, 6, 1), DateTime(startYear + 1, 8, 31, 23, 59));
+      default: // All Semesters within academic year
+        if (_filterAcademicYear != 'All Years') {
+          return (DateTime(startYear, 8, 1), DateTime(endYear, 7, 31, 23, 59));
+        }
+    }
+
+    // Fall back to _filterRange
+    switch (_filterRange) {
+      case 'Last 30 Days':
+        return (now.subtract(const Duration(days: 30)), now);
+      case 'Last 90 Days':
+        return (now.subtract(const Duration(days: 90)), now);
+      case 'This Year':
+        return (DateTime(now.year, 1, 1), DateTime(now.year, 12, 31, 23, 59));
+      default:
+        return (null, null);
+    }
+  }
+
   // ── Firebase loaders ──────────────────────────────────────────────
 
   Future<void> _loadOrganizations() async {
@@ -311,9 +373,10 @@ class _ReportsManagementState extends State<ReportsManagement>
     if (!mounted) return;
     setState(() => _loadingEvents = true);
     try {
-      Query query = FirebaseFirestore.instance
-          .collection('events')
-          .where('status', isEqualTo: 'approved');
+      Query query = FirebaseFirestore.instance.collection('events');
+      if (_filterStatus != 'All') {
+        query = query.where('status', isEqualTo: _filterStatus.toLowerCase());
+      }
       if (_filterType != 'All Types')
         query = query.where('type', isEqualTo: _filterType);
       if (_filterOrg != 'All Organizations') {
@@ -323,6 +386,13 @@ class _ReportsManagementState extends State<ReportsManagement>
         );
         if ((org['id'] as String).isNotEmpty)
           query = query.where('orgId', isEqualTo: org['id']);
+      }
+      final (rangeStart, rangeEnd) = _computeDateRange();
+      if (rangeStart != null) {
+        query = query.where('date', isGreaterThanOrEqualTo: Timestamp.fromDate(rangeStart));
+      }
+      if (rangeEnd != null) {
+        query = query.where('date', isLessThanOrEqualTo: Timestamp.fromDate(rangeEnd));
       }
       final eventsSnap = await query.get();
       final orgMap = {
@@ -554,8 +624,11 @@ class _ReportsManagementState extends State<ReportsManagement>
     await FirebaseFirestore.instance.collection('generated_reports').add({
       'fileName': fileName,
       'dateRange': _filterRange,
+      'academicYear': _filterAcademicYear,
+      'semester': _filterSemester,
       'organization': _filterOrg,
       'eventType': _filterType,
+      'status': _filterStatus,
       'reportView': _reportView,
       'generatedAt': FieldValue.serverTimestamp(),
       'format': format,
@@ -567,7 +640,7 @@ class _ReportsManagementState extends State<ReportsManagement>
       severity: 'info',
       details: {
         'fileName': fileName,
-        'filters': 'Org: $_filterOrg, Type: $_filterType, Range: $_filterRange',
+        'filters': 'Org: $_filterOrg, Type: $_filterType, AY: $_filterAcademicYear, Sem: $_filterSemester, Status: $_filterStatus',
       },
     );
   }
@@ -781,45 +854,48 @@ class _ReportsManagementState extends State<ReportsManagement>
   }
 
   Widget _buildStatsRow(bool isMobile, bool isTablet) {
-    final now = DateTime.now();
     final totalEvents = _events.length;
-    final upcoming = _events.where((e) => e.date.isAfter(now)).length;
     final totalIncome = _events.fold<double>(0, (s, e) => s + e.totalIncome);
     final totalExpenses = _events.fold<double>(0, (s, e) => s + e.totalExpenses);
 
+    // Submission stats from both collections
+    final finSubmitted = _financialSubs.where((s) => s.submittedAt != null).length;
+    final accSubmitted = _accomplishmentSubs.where((s) => s.submittedAt != null).length;
+    final totalOrgs = _financialSubs.length;
+    final pendingCount = totalOrgs > 0
+        ? (totalOrgs - finSubmitted) + (totalOrgs - accSubmitted)
+        : 0;
+
+    final cards = [
+      _StatCard(label: 'Total Events', value: '$totalEvents', icon: Icons.event_rounded, color: UpriseColors.primaryDark),
+      _StatCard(label: 'Total Income', value: '₱${_fmtK(totalIncome)}', icon: Icons.attach_money_rounded, color: UpriseColors.success),
+      _StatCard(label: 'Total Expenses', value: '₱${_fmtK(totalExpenses)}', icon: Icons.money_off_rounded, color: UpriseColors.error),
+      _StatCard(label: 'Reports Submitted', value: '${finSubmitted + accSubmitted}', icon: Icons.assignment_turned_in_rounded, color: UpriseColors.info),
+      _StatCard(label: 'Pending Reports', value: '$pendingCount', icon: Icons.pending_actions_rounded, color: UpriseColors.warning),
+    ];
+
     return Padding(
       padding: const EdgeInsets.fromLTRB(28, 20, 28, 10),
-      child: Row(
-        children: [
-          _StatCard(
-            label: 'Total Events',
-            value: '$totalEvents',
-            icon: Icons.event_rounded,
-            color: UpriseColors.primaryDark,
-          ),
-          const SizedBox(width: 14),
-          _StatCard(
-            label: 'Upcoming',
-            value: '$upcoming',
-            icon: Icons.schedule_rounded,
-            color: UpriseColors.info,
-          ),
-          const SizedBox(width: 14),
-          _StatCard(
-            label: 'Total Income',
-            value: '₱${_fmtK(totalIncome)}',
-            icon: Icons.attach_money_rounded,
-            color: UpriseColors.success,
-          ),
-          const SizedBox(width: 14),
-          _StatCard(
-            label: 'Total Expenses',
-            value: '₱${_fmtK(totalExpenses)}',
-            icon: Icons.money_off_rounded,
-            color: UpriseColors.error,
-          ),
-        ],
-      ),
+      child: isMobile
+          ? SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  for (int i = 0; i < cards.length; i++) ...[
+                    SizedBox(width: 180, child: cards[i]),
+                    if (i < cards.length - 1) const SizedBox(width: 14),
+                  ],
+                ],
+              ),
+            )
+          : Row(
+              children: [
+                for (int i = 0; i < cards.length; i++) ...[
+                  Expanded(child: cards[i]),
+                  if (i < cards.length - 1) const SizedBox(width: 14),
+                ],
+              ],
+            ),
     );
   }
 
@@ -840,44 +916,59 @@ class _ReportsManagementState extends State<ReportsManagement>
           hint: 'Organization',
           icon: Icons.business_rounded,
           onChanged: (v) {
-            setState(() {
-              _filterOrg = v!;
-              _currentPage = 1;
-            });
+            setState(() { _filterOrg = v!; _currentPage = 1; });
             _loadEvents();
           },
         ),
         _FilterDropdown(
           value: _filterType,
-          items: const [
-            'All Types',
-            'Seminar',
-            'Workshop',
-            'Exhibition',
-            'Social',
-            'Cultural',
-            'Competition',
-          ],
-          hint: 'Event Type',
+          items: const ['All Types', 'Seminar', 'Workshop', 'Exhibition', 'Social', 'Cultural', 'Competition'],
+          hint: 'Report Type',
           icon: Icons.category_rounded,
           onChanged: (v) {
-            setState(() {
-              _filterType = v!;
-              _currentPage = 1;
-            });
+            setState(() { _filterType = v!; _currentPage = 1; });
+            _loadEvents();
+          },
+        ),
+        _FilterDropdown(
+          value: _filterAcademicYear,
+          items: _academicYears,
+          hint: 'Academic Year',
+          icon: Icons.school_rounded,
+          onChanged: (v) {
+            setState(() { _filterAcademicYear = v!; _currentPage = 1; });
+            _loadEvents();
+          },
+        ),
+        _FilterDropdown(
+          value: _filterSemester,
+          items: _semesters,
+          hint: 'Semester',
+          icon: Icons.calendar_view_month_rounded,
+          onChanged: (v) {
+            setState(() { _filterSemester = v!; _currentPage = 1; });
+            _loadEvents();
+          },
+        ),
+        _FilterDropdown(
+          value: _filterStatus,
+          items: _statusOptions,
+          hint: 'Status',
+          icon: Icons.tune_rounded,
+          onChanged: (v) {
+            setState(() { _filterStatus = v!; _currentPage = 1; });
             _loadEvents();
           },
         ),
         _FilterDropdown(
           value: _filterRange,
-          items: const [
-            'Current Semester',
-            'Last Semester',
-            'Academic Year 2024-2025',
-          ],
+          items: const ['All Time', 'Last 30 Days', 'Last 90 Days', 'This Year'],
           hint: 'Date Range',
           icon: Icons.date_range_rounded,
-          onChanged: (v) => setState(() => _filterRange = v!),
+          onChanged: (v) {
+            setState(() { _filterRange = v!; _currentPage = 1; });
+            _loadEvents();
+          },
         ),
       ],
     );

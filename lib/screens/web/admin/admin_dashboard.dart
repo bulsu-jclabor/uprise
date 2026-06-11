@@ -81,7 +81,6 @@ class AdminDashboard extends StatefulWidget {
 class _AdminDashboardState extends State<AdminDashboard> {
   int _selectedIndex = 0;
   final AuthService _auth = AuthService();
-  final TextEditingController _searchController = TextEditingController();
   int _unreadNotifications = 0;
   List<Map<String, dynamic>> _notifications = [];
   String _adminName = 'Admin User';
@@ -634,50 +633,6 @@ class _AdminDashboardState extends State<AdminDashboard> {
           ),
           const SizedBox(width: 16),
 
-          // Search
-          SizedBox(
-            width: 240,
-            height: 38,
-            child: TextField(
-              controller: _searchController,
-              style: GoogleFonts.beVietnamPro(fontSize: 13),
-              decoration: InputDecoration(
-                hintText: 'Search…',
-                hintStyle: GoogleFonts.beVietnamPro(
-                  fontSize: 13,
-                  color: const Color(0xFF9AA5B4),
-                ),
-                prefixIcon: const Icon(
-                  Icons.search_rounded,
-                  size: 17,
-                  color: Color(0xFF9AA5B4),
-                ),
-                filled: true,
-                fillColor: const Color(0xFFF8F9FB),
-                contentPadding: const EdgeInsets.symmetric(
-                  vertical: 0,
-                  horizontal: 16,
-                ),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  borderSide: const BorderSide(color: Color(0xFFE8ECF0)),
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  borderSide: const BorderSide(color: Color(0xFFE8ECF0)),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  borderSide: BorderSide(
-                    color: UpriseColors.primaryDark,
-                    width: 1.5,
-                  ),
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(width: 16),
-
           // Notification bell
           PopupMenuButton<String>(
             offset: const Offset(0, 48),
@@ -1083,6 +1038,8 @@ class _DashboardHomeState extends State<DashboardHome> {
           const SizedBox(height: 24),
           _buildChartCard(isMobile),
           const SizedBox(height: 24),
+          _buildTopOrgsCard(isMobile),
+          const SizedBox(height: 24),
           if (isMobile) ...[
             _buildUpcomingEvents(),
             const SizedBox(height: 20),
@@ -1415,6 +1372,187 @@ class _DashboardHomeState extends State<DashboardHome> {
           ),
         );
       },
+    );
+  }
+
+  Widget _buildTopOrgsCard(bool isMobile) {
+    final now = DateTime.now();
+    final semesterStart = now.month >= 8
+        ? DateTime(now.year, 8, 1)
+        : now.month >= 2
+            ? DateTime(now.year, 2, 1)
+            : DateTime(now.year - 1, 8, 1);
+
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(_DS.radiusLg),
+        border: Border.all(color: const Color(0xFFE8ECF0)),
+        boxShadow: _DS.cardShadow,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 36, height: 36,
+                decoration: BoxDecoration(
+                  color: UpriseColors.primaryDark.withOpacity(0.10),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(Icons.leaderboard_rounded,
+                    color: UpriseColors.primaryDark, size: 18),
+              ),
+              const SizedBox(width: 12),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Top Organizations',
+                      style: GoogleFonts.beVietnamPro(
+                          fontSize: 15, fontWeight: FontWeight.w700,
+                          color: const Color(0xFF1A202C))),
+                  Text('Most active orgs this semester by approved events',
+                      style: GoogleFonts.beVietnamPro(
+                          fontSize: 12, color: const Color(0xFF9AA5B4))),
+                ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+          FutureBuilder<QuerySnapshot>(
+            future: FirebaseFirestore.instance
+                .collection('events')
+                .where('status', isEqualTo: 'approved')
+                .where('date', isGreaterThanOrEqualTo: Timestamp.fromDate(semesterStart))
+                .get(),
+            builder: (ctx, evSnap) {
+              if (!evSnap.hasData) {
+                return const Center(
+                  child: Padding(
+                    padding: EdgeInsets.symmetric(vertical: 24),
+                    child: CircularProgressIndicator(strokeWidth: 2,
+                        color: UpriseColors.primaryDark),
+                  ),
+                );
+              }
+
+              // Count events per orgId
+              final counts = <String, int>{};
+              final orgNames = <String, String>{};
+              for (final doc in evSnap.data!.docs) {
+                final d = doc.data() as Map<String, dynamic>;
+                final oid = d['orgId']?.toString() ?? '';
+                if (oid.isEmpty) continue;
+                counts[oid] = (counts[oid] ?? 0) + 1;
+                if (!orgNames.containsKey(oid)) {
+                  orgNames[oid] = d['orgName']?.toString() ?? oid;
+                }
+              }
+
+              if (counts.isEmpty) {
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 24),
+                  child: Center(
+                    child: Text('No events found this semester.',
+                        style: GoogleFonts.beVietnamPro(
+                            fontSize: 13, color: const Color(0xFF9AA5B4))),
+                  ),
+                );
+              }
+
+              final sorted = counts.entries.toList()
+                ..sort((a, b) => b.value.compareTo(a.value));
+              final top = sorted.take(isMobile ? 5 : 8).toList();
+              final maxCount = top.first.value.toDouble();
+
+              return Column(
+                children: top.asMap().entries.map((entry) {
+                  final rank = entry.key + 1;
+                  final orgId = entry.value.key;
+                  final count = entry.value.value;
+                  final name = orgNames[orgId] ?? orgId;
+                  final ratio = count / maxCount;
+
+                  final rankColor = rank == 1
+                      ? const Color(0xFFD97706)
+                      : rank == 2
+                          ? const Color(0xFF64748B)
+                          : rank == 3
+                              ? const Color(0xFFB45309)
+                              : const Color(0xFF94A3B8);
+
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 14),
+                    child: Row(
+                      children: [
+                        SizedBox(
+                          width: 24,
+                          child: Text('#$rank',
+                              style: GoogleFonts.beVietnamPro(
+                                  fontSize: 12, fontWeight: FontWeight.w700,
+                                  color: rankColor)),
+                        ),
+                        const SizedBox(width: 10),
+                        SizedBox(
+                          width: 28, height: 28,
+                          child: CircleAvatar(
+                            backgroundColor:
+                                UpriseColors.primaryDark.withOpacity(0.10),
+                            child: Text(
+                              name.isNotEmpty ? name[0].toUpperCase() : '?',
+                              style: GoogleFonts.beVietnamPro(
+                                  fontSize: 11, fontWeight: FontWeight.w800,
+                                  color: UpriseColors.primaryDark),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(name,
+                                  style: GoogleFonts.beVietnamPro(
+                                      fontSize: 13, fontWeight: FontWeight.w600,
+                                      color: const Color(0xFF1A202C)),
+                                  overflow: TextOverflow.ellipsis),
+                              const SizedBox(height: 4),
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(3),
+                                child: LinearProgressIndicator(
+                                  value: ratio,
+                                  backgroundColor: const Color(0xFFF1F5F9),
+                                  color: UpriseColors.primaryDark,
+                                  minHeight: 5,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: UpriseColors.primaryDark.withOpacity(0.08),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Text('$count event${count > 1 ? 's' : ''}',
+                              style: GoogleFonts.beVietnamPro(
+                                  fontSize: 11, fontWeight: FontWeight.w700,
+                                  color: UpriseColors.primaryDark)),
+                        ),
+                      ],
+                    ),
+                  );
+                }).toList(),
+              );
+            },
+          ),
+        ],
+      ),
     );
   }
 
