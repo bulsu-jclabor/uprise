@@ -1,4 +1,4 @@
-// ignore_for_file: unnecessary_cast, unused_field, deprecated_member_use
+﻿// ignore_for_file: unnecessary_cast, unused_field, deprecated_member_use
 
 import 'dart:ui' show ImageByteFormat;
 
@@ -287,10 +287,16 @@ class _OrgCertificatesScreenState extends State<OrgCertificatesScreen> {
                     ),
                   ),
                 )
-              : Wrap(
-                  spacing: cardGap,
-                  runSpacing: cardGap,
-                  children: statCards,
+              : Row(
+                  children: List.generate(
+                    statCards.length,
+                    (i) => Expanded(
+                      child: Padding(
+                        padding: EdgeInsets.only(right: i < statCards.length - 1 ? cardGap : 0),
+                        child: statCards[i],
+                      ),
+                    ),
+                  ),
                 ),
         );
       },
@@ -606,6 +612,12 @@ class _OrgCertificatesScreenState extends State<OrgCertificatesScreen> {
                 const SizedBox(width: 14),
                 Text('Delete Certificate',
                     style: GoogleFonts.beVietnamPro(fontSize: 17, fontWeight: FontWeight.w700, color: const Color(0xFF1A202C))),
+                const Spacer(),
+                IconButton(
+                  icon: const Icon(Icons.arrow_back_rounded, color: Color(0xFF1A202C), size: 20),
+                  tooltip: 'Back',
+                  onPressed: () => Navigator.pop(ctx),
+                ),
               ]),
               const SizedBox(height: 16),
               Text('Delete "${r.certificateId}"? This action cannot be undone.',
@@ -815,30 +827,28 @@ class _StatCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.all(18),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: const Color(0xFFE8ECF0)),
-          boxShadow: _DS.cardShadow,
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE8ECF0)),
+        boxShadow: _DS.cardShadow,
+      ),
+      child: Row(children: [
+        Container(
+          width: 44, height: 44,
+          decoration: BoxDecoration(color: color.withOpacity(0.10), borderRadius: BorderRadius.circular(12)),
+          child: Icon(icon, color: color, size: 22),
         ),
-        child: Row(children: [
-          Container(
-            width: 44, height: 44,
-            decoration: BoxDecoration(color: color.withOpacity(0.10), borderRadius: BorderRadius.circular(12)),
-            child: Icon(icon, color: color, size: 22),
-          ),
-          const SizedBox(width: 14),
-          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        const SizedBox(width: 14),
+        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(label, style: GoogleFonts.beVietnamPro(fontSize: 11, color: const Color(0xFF64748B), fontWeight: FontWeight.w500)),
             const SizedBox(height: 2),
             Text('$value', style: GoogleFonts.beVietnamPro(fontSize: 28, fontWeight: FontWeight.w700, color: const Color(0xFF1A202C))),
           ])),
         ]),
-      ),
-    );
+      );
   }
 }
 
@@ -1029,7 +1039,7 @@ class _SelectTemplateModalState extends State<_SelectTemplateModal> {
                     style: GoogleFonts.beVietnamPro(fontSize: 11, color: Colors.white.withOpacity(0.7))),
               ])),
               IconButton(
-                icon: const Icon(Icons.close_rounded, color: Colors.white, size: 20),
+                icon: const Icon(Icons.arrow_back_rounded, color: Colors.white, size: 20),
                 onPressed: () => Navigator.pop(context),
               ),
             ]),
@@ -1590,15 +1600,10 @@ class _CanvaTemplateEditorState extends State<_CanvaTemplateEditor> {
                 _EditorTopBtn(label: '🗑 Delete', onTap: _deleteSelected, danger: true),
               ],
               const Spacer(),
-              OutlinedButton(
+              IconButton(
+                icon: const Icon(Icons.arrow_back_rounded, color: UpriseColors.white, size: 20),
+                tooltip: 'Back',
                 onPressed: () => Navigator.pop(context),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: UpriseColors.primaryDark.withOpacity(0.85),
-                  side: BorderSide(color: UpriseColors.primaryDark.withOpacity(0.2)),
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                ),
-                child: Text('Cancel', style: GoogleFonts.beVietnamPro(fontSize: 13, color: UpriseColors.primaryDark.withOpacity(0.85))),
               ),
               const SizedBox(width: 8),
               ElevatedButton.icon(
@@ -1621,16 +1626,18 @@ class _CanvaTemplateEditorState extends State<_CanvaTemplateEditor> {
           Expanded(
             child: Row(children: [
               // Left: layers panel
-              _LayersPanel(
-                elements: _elements,
-                selectedId: _selectedId,
-                onSelect: (id) => setState(() => _selectedId = id),
-                onReorder: (oldI, newI) {
-                  setState(() {
-                    final el = _elements.removeAt(oldI);
-                    _elements.insert(newI, el);
-                  });
-                },
+              RepaintBoundary(
+                child: _LayersPanel(
+                  elements: _elements,
+                  selectedId: _selectedId,
+                  onSelect: (id) => setState(() => _selectedId = id),
+                  onReorder: (oldI, newI) {
+                    setState(() {
+                      final el = _elements.removeAt(oldI);
+                      _elements.insert(newI, el);
+                    });
+                  },
+                ),
               ),
               // Centre: canvas
               Expanded(
@@ -1680,11 +1687,13 @@ class _CanvaTemplateEditorState extends State<_CanvaTemplateEditor> {
                 ),
               ),
               // Right: properties panel
-              _PropertiesPanel(
-                bgColor: _bgColor,
-                onBgColorChanged: (c) => setState(() => _bgColor = c),
-                selected: sel,
-                onUpdate: _updateSelected,
+              RepaintBoundary(
+                child: _PropertiesPanel(
+                  bgColor: _bgColor,
+                  onBgColorChanged: (c) => setState(() => _bgColor = c),
+                  selected: sel,
+                  onUpdate: _updateSelected,
+                ),
               ),
             ]),
           ),
@@ -1695,6 +1704,34 @@ class _CanvaTemplateEditorState extends State<_CanvaTemplateEditor> {
 }
 
 // ── Canvas area ───────────────────────────────────────────────────────────────
+// Extracted ResizeHandle to avoid rebuilding on drag
+class _ResizeHandle extends StatelessWidget {
+  final void Function(DragStartDetails) onPanStart;
+  final void Function(DragUpdateDetails) onPanUpdate;
+  final void Function(DragEndDetails) onPanEnd;
+  final Color color;
+
+  const _ResizeHandle({
+    required this.onPanStart,
+    required this.onPanUpdate,
+    required this.onPanEnd,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onPanStart: onPanStart,
+      onPanUpdate: onPanUpdate,
+      onPanEnd: onPanEnd,
+      child: Container(
+        width: 10, height: 10,
+        decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(2)),
+      ),
+    );
+  }
+}
+
 class _CanvasArea extends StatelessWidget {
   final Color bgColor;
   final List<_CanvasElement> elements;
@@ -1717,23 +1754,25 @@ class _CanvasArea extends StatelessWidget {
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: onDeselect,
-      child: Container(
-        width: canvasW,
-        height: canvasH,
-        color: bgColor,
-        child: Stack(
-          clipBehavior: Clip.none,
-          children: elements.map((el) {
-            final isSel = el.id == selectedId;
-            return _CanvasElementWidget(
-              el: el,
-              isSelected: isSel,
-              onTap: () => onSelect(el.id),
-              onMove: (dx, dy) => onMove(el.id, dx, dy),
-              onResize: (dw, dh) => onResize(el.id, dw, dh),
-              onTextCommit: (t) => onTextCommit(el.id, t),
-            );
-          }).toList(),
+      child: RepaintBoundary(
+        child: Container(
+          width: canvasW,
+          height: canvasH,
+          color: bgColor,
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: elements.map((el) {
+              final isSel = el.id == selectedId;
+              return _CanvasElementWidget(
+                el: el,
+                isSelected: isSel,
+                onTap: () => onSelect(el.id),
+                onMove: (dx, dy) => onMove(el.id, dx, dy),
+                onResize: (dw, dh) => onResize(el.id, dw, dh),
+                onTextCommit: (t) => onTextCommit(el.id, t),
+              );
+            }).toList(),
+          ),
         ),
       ),
     );
@@ -1790,54 +1829,52 @@ class _CanvasElementWidgetState extends State<_CanvasElementWidget> {
     final colorScheme = Theme.of(context).colorScheme;
     return Positioned(
       left: el.x, top: el.y,
-      child: GestureDetector(
-        onTap: () { widget.onTap(); setState(() => _editing = false); },
-        onDoubleTap: () {
-          if (el.type == 'text') setState(() => _editing = true);
-        },
-        onPanStart: (d) => _lastDrag = d.globalPosition,
-        onPanUpdate: (d) {
-          if (_lastDrag != null) {
-            widget.onMove(d.globalPosition.dx - _lastDrag!.dx, d.globalPosition.dy - _lastDrag!.dy);
-            _lastDrag = d.globalPosition;
-          }
-        },
-        onPanEnd: (_) => _lastDrag = null,
-        child: SizedBox(
-          width: el.w,
-          height: el.type == 'divider' ? 10 : el.h,
-          child: Stack(clipBehavior: Clip.none, children: [
-            // The element itself
-            _buildContent(el),
-            // Selection outline
-            if (widget.isSelected)
-              Positioned.fill(
-                child: Container(
-                  decoration: BoxDecoration(
-                    border: Border.all(color: colorScheme.primary, width: 1.5),
-                  ),
-                ),
-              ),
-            // Resize handle
-            if (widget.isSelected)
-              Positioned(
-                right: -5, bottom: -5,
-                child: GestureDetector(
-                  onPanStart: (d) => _lastResize = d.globalPosition,
-                  onPanUpdate: (d) {
-                    if (_lastResize != null) {
-                      widget.onResize(d.globalPosition.dx - _lastResize!.dx, d.globalPosition.dy - _lastResize!.dy);
-                      _lastResize = d.globalPosition;
-                    }
-                  },
-                  onPanEnd: (_) => _lastResize = null,
+      child: RepaintBoundary(
+        child: GestureDetector(
+          onTap: () { widget.onTap(); setState(() => _editing = false); },
+          onDoubleTap: () {
+            if (el.type == 'text') setState(() => _editing = true);
+          },
+          onPanStart: (d) => _lastDrag = d.globalPosition,
+          onPanUpdate: (d) {
+            if (_lastDrag != null) {
+              widget.onMove(d.globalPosition.dx - _lastDrag!.dx, d.globalPosition.dy - _lastDrag!.dy);
+              _lastDrag = d.globalPosition;
+            }
+          },
+          onPanEnd: (_) => _lastDrag = null,
+          child: SizedBox(
+            width: el.w,
+            height: el.type == 'divider' ? 10 : el.h,
+            child: Stack(clipBehavior: Clip.none, children: [
+              // The element itself
+              _buildContent(el),
+              // Selection outline
+              if (widget.isSelected)
+                Positioned.fill(
                   child: Container(
-                    width: 10, height: 10,
-                    decoration: BoxDecoration(color: colorScheme.primary, borderRadius: BorderRadius.circular(2)),
+                    decoration: BoxDecoration(
+                      border: Border.all(color: colorScheme.primary, width: 1.5),
+                    ),
                   ),
                 ),
-              ),
-          ]),
+              // Resize handle
+              if (widget.isSelected)
+                Positioned(
+                  right: -5, bottom: -5,
+                  child: _ResizeHandle(onPanStart: (d) => _lastResize = d.globalPosition,
+                    onPanUpdate: (d) {
+                      if (_lastResize != null) {
+                        widget.onResize(d.globalPosition.dx - _lastResize!.dx, d.globalPosition.dy - _lastResize!.dy);
+                        _lastResize = d.globalPosition;
+                      }
+                    },
+                    onPanEnd: (_) => _lastResize = null,
+                    color: colorScheme.primary,
+                  ),
+                ),
+            ]),
+          ),
         ),
       ),
     );
@@ -2467,7 +2504,8 @@ class _GenerateCertificateModalState extends State<_GenerateCertificateModal> {
                   ),
                 ])),
                 IconButton(
-                  icon: const Icon(Icons.close_rounded, color: Colors.white, size: 20),
+                  icon: const Icon(Icons.arrow_back_rounded, color: Colors.white, size: 20),
+                  tooltip: 'Back',
                   onPressed: _isSubmitting ? null : () => Navigator.pop(context),
                 ),
               ]),
@@ -2902,7 +2940,8 @@ class _CertPreviewDialog extends StatelessWidget {
               _certBadge(record.status),
               const SizedBox(width: 8),
               IconButton(
-                icon: const Icon(Icons.close_rounded, color: Colors.white, size: 20),
+                icon: const Icon(Icons.arrow_back_rounded, color: Colors.white, size: 20),
+                tooltip: 'Back',
                 onPressed: () => Navigator.pop(context),
               ),
             ]),
@@ -2990,32 +3029,49 @@ class _ImportTemplateModalState extends State<_ImportTemplateModal> {
   @override
   Widget build(BuildContext context) {
     return Dialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
       child: Container(
         width: 520,
-        padding: const EdgeInsets.all(20),
         child: Column(mainAxisSize: MainAxisSize.min, children: [
-          Text('Import Certificate Template', style: GoogleFonts.beVietnamPro(fontSize: 17, fontWeight: FontWeight.w700)),
-          const SizedBox(height: 12),
-          TextField(
-            decoration: InputDecoration(labelText: 'Template name'),
-            onChanged: (v) => setState(() => _name = v),
-          ),
-          const SizedBox(height: 12),
-          Row(children: [
-            ElevatedButton.icon(onPressed: _pickFile, icon: const Icon(Icons.upload_file), label: const Text('Choose file')),
-            const SizedBox(width: 12),
-            Expanded(child: Text(_file?.name ?? 'No file selected', overflow: TextOverflow.ellipsis)),
-          ]),
-          const SizedBox(height: 16),
-          Row(mainAxisAlignment: MainAxisAlignment.end, children: [
-            OutlinedButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-            const SizedBox(width: 10),
-            ElevatedButton(
-              onPressed: (_file == null || _name == null || _name!.trim().isEmpty || _isUploading) ? null : _upload,
-              child: _isUploading ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : const Text('Upload'),
+          Container(
+            padding: const EdgeInsets.fromLTRB(20, 16, 16, 16),
+            decoration: BoxDecoration(
+              color: UpriseColors.primaryDark,
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(18)),
             ),
-          ]),
+            child: Row(children: [
+              Expanded(child: Text('Import Certificate Template', style: GoogleFonts.beVietnamPro(fontSize: 17, fontWeight: FontWeight.w700, color: Colors.white))),
+              IconButton(
+                icon: const Icon(Icons.arrow_back_rounded, color: Colors.white, size: 20),
+                tooltip: 'Back',
+                onPressed: () => Navigator.pop(context),
+              ),
+            ]),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              TextField(
+                decoration: InputDecoration(labelText: 'Template name'),
+                onChanged: (v) => setState(() => _name = v),
+              ),
+              const SizedBox(height: 12),
+              Row(children: [
+                ElevatedButton.icon(onPressed: _pickFile, icon: const Icon(Icons.upload_file), label: const Text('Choose file')),
+                const SizedBox(width: 12),
+                Expanded(child: Text(_file?.name ?? 'No file selected', overflow: TextOverflow.ellipsis)),
+              ]),
+              const SizedBox(height: 16),
+              Row(mainAxisAlignment: MainAxisAlignment.end, children: [
+                OutlinedButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+                const SizedBox(width: 10),
+                ElevatedButton(
+                  onPressed: (_file == null || _name == null || _name!.trim().isEmpty || _isUploading) ? null : _upload,
+                  child: _isUploading ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : const Text('Upload'),
+                ),
+              ]),
+            ]),
+          ),
         ]),
       ),
     );
