@@ -149,3 +149,41 @@ exports.processEmailQueue = functions.pubsub.schedule('every 5 minutes').onRun(a
   }
   return results;
 });
+
+// Immediate processing: when a queue doc is created, attempt to send it right away.
+// This ensures user-visible credential emails are attempted immediately instead
+// of waiting for the 5-minute scheduled job.
+exports.onEmailQueued = functions.firestore
+  .document('email_queue/{docId}')
+  .onCreate(async (snap, context) => {
+    const payload = snap.data();
+    if (!payload) return null;
+    const to = payload.to_email;
+    const studentId = payload.student_id;
+    const password = payload.password;
+    const docRef = snap.ref;
+
+    const mailOptions = {
+      from: '"UPRISE System 🎓" <' + (functions.config().gmail.user || 'noreply@example.com') + '>',
+      to: to,
+      subject: `UPRISE – Student Credentials for ${studentId}`,
+      html: `<div style="font-family: Arial, sans-serif; max-width:500px; margin:auto;">
+        <h2>UPRISE – Account Created</h2>
+        <p>Your account has been created.</p>
+        <p><strong>Student ID:</strong> ${studentId}</p>
+        <p><strong>Password:</strong> ${password}</p>
+        <p>Please change your password after first login.</p>
+      </div>`
+    };
+
+    try {
+      await transporter.sendMail(mailOptions);
+      await docRef.delete();
+      console.log('Queued email sent and removed:', docRef.id);
+      return { success: true };
+    } catch (err) {
+      console.error('Immediate queue send failed for', docRef.id, err);
+      await docRef.update({ attempts: (payload.attempts || 0) + 1, lastError: err.toString(), updatedAt: admin.firestore.FieldValue.serverTimestamp() });
+      return null;
+    }
+  });
