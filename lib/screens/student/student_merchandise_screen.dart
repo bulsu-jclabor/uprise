@@ -17,20 +17,28 @@ const _kCard        = Colors.white;
 // Models (mirrors org_merchandise.dart)
 // ─────────────────────────────────────────────────────────────
 class ProductVariant {
-  final String name;
-  final double additionalPrice;
+  final String id;
+  final String size;
+  final String color;
   final int stock;
+  final double? priceOffset;
 
   const ProductVariant({
-    required this.name,
-    this.additionalPrice = 0,
-    this.stock = 0,
+    required this.id,
+    required this.size,
+    required this.color,
+    required this.stock,
+    this.priceOffset,
   });
 
   factory ProductVariant.fromMap(Map<String, dynamic> m) => ProductVariant(
-        name            : m['name'] as String? ?? '',
-        additionalPrice : (m['additionalPrice'] ?? 0).toDouble(),
-        stock           : (m['stock'] ?? 0) as int,
+        id         : m['id'] as String? ?? '',
+        size       : m['size'] as String? ?? '',
+        color      : m['color'] as String? ?? '',
+        stock      : ((m['stock'] ?? 0) as num).toInt(),
+        priceOffset: m['priceOffset'] != null
+            ? (m['priceOffset'] as num).toDouble()
+            : null,
       );
 }
 
@@ -196,9 +204,9 @@ class _StudentMerchandiseScreenState
   // ── Cart helpers ──────────────────────────────────────────
   void _addToCart(_Product product, {ProductVariant? variant}) {
     setState(() {
-      final variantId    = variant?.name;
+      final variantId    = variant?.id;
       final variantPrice = variant != null
-          ? product.price + variant.additionalPrice
+          ? product.price + (variant.priceOffset ?? 0)
           : null;
       final key      = '${product.id}_${variantId ?? ''}';
       final maxStock = variant?.stock ?? product.stock;
@@ -209,8 +217,8 @@ class _StudentMerchandiseScreenState
         _cart.add(_CartItem(
           product      : product,
           variantId    : variantId,
-          variantSize  : variantId,
-          variantColor : '',
+          variantSize  : variant?.size,
+          variantColor : variant?.color,
           variantPrice : variantPrice,
         ));
       }
@@ -220,7 +228,7 @@ class _StudentMerchandiseScreenState
   void _increaseItem(String cartKey) {
     setState(() {
       final item     = _cart.firstWhere((i) => i.cartKey == cartKey);
-      final variants = item.product.variants.where((v) => v.name == item.variantId);
+      final variants = item.product.variants.where((v) => v.id == item.variantId);
       final maxStock = variants.isEmpty ? item.product.stock : variants.first.stock;
       if (item.quantity < maxStock) item.quantity++;
     });
@@ -1062,7 +1070,7 @@ class _VariantPickerSheetState extends State<_VariantPickerSheet> {
             itemBuilder: (_, i) {
               final v          = variants[i];
               final selected   = _selectedIndex == i;
-              final totalPrice = widget.product.price + v.additionalPrice;
+              final totalPrice = widget.product.price + (v.priceOffset ?? 0);
               final inStock    = v.stock > 0;
 
               return GestureDetector(
@@ -1085,16 +1093,27 @@ class _VariantPickerSheetState extends State<_VariantPickerSheet> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
-                              v.name,
-                              style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                                color: inStock
-                                    ? Colors.black87
-                                    : Colors.black38,
+                            if (v.size.isNotEmpty)
+                              Text(
+                                'Size: ${v.size}',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: inStock
+                                      ? Colors.black87
+                                      : Colors.black38,
+                                ),
                               ),
-                            ),
+                            if (v.color.isNotEmpty)
+                              Text(
+                                'Color: ${v.color}',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: inStock
+                                      ? Colors.black54
+                                      : Colors.black38,
+                                ),
+                              ),
                             const SizedBox(height: 2),
                             Text(
                               inStock
@@ -1239,17 +1258,19 @@ class _VariantsTable extends StatelessWidget {
       borderRadius: BorderRadius.circular(8),
       child: Table(
         columnWidths: const {
-          0: FlexColumnWidth(2.2),
-          1: FlexColumnWidth(1),
-          2: FlexColumnWidth(1.8),
+          0: FlexColumnWidth(1.5),
+          1: FlexColumnWidth(1.5),
+          2: FlexColumnWidth(1),
+          3: FlexColumnWidth(1.8),
         },
         children: [
           TableRow(
             decoration: const BoxDecoration(color: _kBg),
             children: [
-              _cell('Variant', header: true),
-              _cell('Stock', header: true),
-              _cell('Price', header: true),
+              _cell('SIZE', header: true),
+              _cell('COLOR', header: true),
+              _cell('STOCK', header: true),
+              _cell('PRICE', header: true),
             ],
           ),
           for (final v in product.variants)
@@ -1260,14 +1281,15 @@ class _VariantsTable extends StatelessWidget {
                 ),
               ),
               children: [
-                _cell(v.name),
+                _cell(v.size.isNotEmpty ? v.size : '—'),
+                _cell(v.color.isNotEmpty ? v.color : '—'),
                 _cell(
                   v.stock > 0 ? '${v.stock}' : 'Out',
                   color: v.stock > 0
                       ? Colors.green.shade600
                       : Colors.redAccent,
                 ),
-                _cell('₱${fmt.format(basePrice + v.additionalPrice)}'),
+                _cell('₱${fmt.format(basePrice + (v.priceOffset ?? 0))}'),
               ],
             ),
         ],
@@ -1733,7 +1755,7 @@ class _CartSheet extends StatelessWidget {
 
           if (hasVariant) {
             final idx =
-                variantList.indexWhere((v) => v['name'] == item.variantId);
+                variantList.indexWhere((v) => v['id'] == item.variantId);
             if (idx != -1) {
               logOldStock               = (variantList[idx]['stock'] ?? 0) as int;
               logNewStock               = (logOldStock - item.quantity).clamp(0, 999999);
