@@ -111,15 +111,12 @@ class _BadgeStyle {
 }
 
 const List<String> _merchandiseCategories = [
-  'Apparel',
-  'Accessories',
-  'Electronics',
-  'Stationery',
-  'Home Goods',
-  'Food & Beverage',
-  'Souvenirs',
-  'Wellness',
-  'Other',
+  'T-Shirts / Uniforms',
+  'Lanyards / IDs',
+  'Stickers / Pins',
+  'Tumblers / Water Bottles',
+  'Notebooks / Planners',
+  'Others',
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1732,8 +1729,9 @@ class _ProductModalState extends State<_ProductModal> {
   final _costPriceCtrl = TextEditingController();
   final _priceCtrl = TextEditingController();
   final _stockCtrl = TextEditingController();
+  final _customCategoryCtrl = TextEditingController();
   String _category = _merchandiseCategories.first;
-  String _productStatus = 'available';
+  bool _isDiscontinued = false;
   List<ProductVariant> _variants = [];
   Uint8List? _imageBytes;
   String? _pickedImageName;
@@ -1752,19 +1750,14 @@ class _ProductModalState extends State<_ProductModal> {
       _costPriceCtrl.text = p.costPrice.toStringAsFixed(2);
       _priceCtrl.text = p.price.toStringAsFixed(2);
       _stockCtrl.text = p.stock.toString();
-      _category = p.category;
-      _productStatus = p.status;
+      if (_merchandiseCategories.contains(p.category)) {
+        _category = p.category;
+      } else {
+        _category = 'Others';
+        _customCategoryCtrl.text = p.category;
+      }
+      _isDiscontinued = p.status == 'discontinued';
       _variants = List.from(p.variants);
-    }
-    _stockCtrl.addListener(_onStockChanged);
-  }
-
-  void _onStockChanged() {
-    final stock = int.tryParse(_stockCtrl.text.trim()) ?? -1;
-    if (stock == 0 && _productStatus != 'discontinued') {
-      setState(() => _productStatus = 'out_of_stock');
-    } else if (stock > 0) {
-      setState(() => _productStatus = 'available');
     }
   }
 
@@ -1775,6 +1768,7 @@ class _ProductModalState extends State<_ProductModal> {
     _costPriceCtrl.dispose();
     _priceCtrl.dispose();
     _stockCtrl.dispose();
+    _customCategoryCtrl.dispose();
     super.dispose();
   }
 
@@ -1788,34 +1782,54 @@ class _ProductModalState extends State<_ProductModal> {
       _showError('Enter a valid price');
       return;
     }
-    final stock = int.tryParse(_stockCtrl.text.trim()) ?? -1;
-    if (stock < 0) {
-      _showError('Enter a valid stock quantity');
+
+    final hasVariants = _variants.isNotEmpty;
+    int stock;
+    if (hasVariants) {
+      stock = _variants.fold<int>(0, (sum, v) => sum + v.stock);
+    } else {
+      stock = int.tryParse(_stockCtrl.text.trim()) ?? -1;
+      if (stock < 0) {
+        _showError('Enter a valid stock quantity');
+        return;
+      }
+    }
+
+    final effectiveCategory = _category == 'Others'
+        ? _customCategoryCtrl.text.trim()
+        : _category;
+    if (effectiveCategory.isEmpty) {
+      _showError('Enter a custom category name');
       return;
     }
 
+    final computedStatus = (_isEdit && _isDiscontinued)
+        ? 'discontinued'
+        : (stock == 0 ? 'out_of_stock' : 'available');
+
     setState(() => _submitting = true);
-    final user = FirebaseAuth.instance.currentUser;
-    final oldStock = _isEdit ? widget.existingProduct!.stock : 0;
-    final data = <String, dynamic>{
-      'orgId': widget.orgId,
-      'name': _nameCtrl.text.trim(),
-      'description': _descCtrl.text.trim(),
-      'category': _category,
-      'costPrice': double.tryParse(_costPriceCtrl.text.trim()) ?? 0,
-      'price': price,
-      'stock': stock,
-      'status': _productStatus,
-      'variants': _variants.map((v) => v.toMap()).toList(),
-      'updatedAt': FieldValue.serverTimestamp(),
-    };
 
     try {
+      final user = FirebaseAuth.instance.currentUser;
+      final oldStock = _isEdit ? widget.existingProduct!.stock : 0;
+      final data = <String, dynamic>{
+        'orgId': widget.orgId,
+        'name': _nameCtrl.text.trim(),
+        'description': _descCtrl.text.trim(),
+        'category': effectiveCategory,
+        'costPrice': double.tryParse(_costPriceCtrl.text.trim()) ?? 0,
+        'price': price,
+        'stock': stock,
+        'status': computedStatus,
+        'variants': _variants.map((v) => v.toMap()).toList(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      };
+
+      // ── Critical: main product write ────────────────────────
       String productId;
       if (_isEdit) {
         productId = widget.existingProduct!.id;
         await FirebaseFirestore.instance.collection('products').doc(productId).update(data);
-        await activity_log.ActivityLogger.log(action: 'edit_product', module: 'merchandise', details: {'orgId': widget.orgId, 'productId': productId});
       } else {
         data['sold'] = 0;
         data['isArchived'] = false;
@@ -1824,41 +1838,11 @@ class _ProductModalState extends State<_ProductModal> {
         data['createdBy'] = user?.uid ?? '';
         final docRef = await FirebaseFirestore.instance.collection('products').add(data);
         productId = docRef.id;
-        await activity_log.ActivityLogger.log(action: 'create_product', module: 'merchandise', details: {'orgId': widget.orgId, 'name': data['name']});
       }
-      if (stock != oldStock || !_isEdit) {
-        final reason = !_isEdit ? 'initial' : (stock > oldStock ? 'restocked' : 'adjusted');
-        await FirebaseFirestore.instance.collection('stock_logs').add({
-          'productId': productId,
-          'oldStock': oldStock,
-          'newStock': stock,
-          'reason': reason,
-          'changedBy': user?.email ?? '',
-          'timestamp': FieldValue.serverTimestamp(),
-        });
-      }
-      final oldVariantStocks = <String, int>{
-        for (final v in (widget.existingProduct?.variants ?? [])) v.id: v.stock,
-      };
-      for (final v in _variants) {
-        final isNew = !oldVariantStocks.containsKey(v.id);
-        final oldVarStock = isNew ? 0 : oldVariantStocks[v.id]!;
-        if (isNew ? v.stock > 0 : v.stock != oldVarStock) {
-          final varReason = isNew ? 'initial' : (v.stock > oldVarStock ? 'restocked' : 'adjusted');
-          await FirebaseFirestore.instance.collection('stock_logs').add({
-            'productId': productId,
-            'variantId': v.id,
-            'variantLabel': [if (v.size.isNotEmpty) v.size, if (v.color.isNotEmpty) v.color].join(' / '),
-            'oldStock': oldVarStock,
-            'newStock': v.stock,
-            'reason': varReason,
-            'changedBy': user?.email ?? '',
-            'timestamp': FieldValue.serverTimestamp(),
-          });
-        }
-      }
+
+      // ── Image upload ─────────────────────────────────────────
       if (_imageBytes != null) {
-        setState(() => _uploadingImage = true);
+        if (mounted) setState(() => _uploadingImage = true);
         final ext = (_pickedImageName?.split('.').last ?? 'jpg').toLowerCase();
         final contentType = ext == 'png' ? 'image/png' : 'image/jpeg';
         final path = 'products/${widget.orgId}/$productId/${DateTime.now().millisecondsSinceEpoch}.$ext';
@@ -1866,14 +1850,60 @@ class _ProductModalState extends State<_ProductModal> {
         await storageRef.putData(_imageBytes!, SettableMetadata(contentType: contentType));
         final imageUrl = await storageRef.getDownloadURL();
         await FirebaseFirestore.instance.collection('products').doc(productId).update({'imageUrl': imageUrl});
-        if (mounted) setState(() => _uploadingImage = false);
       }
+
+      // ── Non-critical: log writes (failures don't block close) ─
+      try {
+        if (stock != oldStock || !_isEdit) {
+          final reason = !_isEdit ? 'initial' : (stock > oldStock ? 'restocked' : 'adjusted');
+          await FirebaseFirestore.instance.collection('stock_logs').add({
+            'productId': productId,
+            'oldStock': oldStock,
+            'newStock': stock,
+            'reason': reason,
+            'changedBy': user?.email ?? '',
+            'timestamp': FieldValue.serverTimestamp(),
+          });
+        }
+        final oldVariantStocks = <String, int>{
+          for (final v in (widget.existingProduct?.variants ?? [])) v.id: v.stock,
+        };
+        for (final v in _variants) {
+          final isNew = !oldVariantStocks.containsKey(v.id);
+          final oldVarStock = isNew ? 0 : oldVariantStocks[v.id]!;
+          if (isNew ? v.stock > 0 : v.stock != oldVarStock) {
+            final varReason = isNew ? 'initial' : (v.stock > oldVarStock ? 'restocked' : 'adjusted');
+            await FirebaseFirestore.instance.collection('stock_logs').add({
+              'productId': productId,
+              'variantId': v.id,
+              'variantLabel': [if (v.size.isNotEmpty) v.size, if (v.color.isNotEmpty) v.color].join(' / '),
+              'oldStock': oldVarStock,
+              'newStock': v.stock,
+              'reason': varReason,
+              'changedBy': user?.email ?? '',
+              'timestamp': FieldValue.serverTimestamp(),
+            });
+          }
+        }
+        await activity_log.ActivityLogger.log(
+          action: _isEdit ? 'edit_product' : 'create_product',
+          module: 'merchandise',
+          details: _isEdit
+              ? {'orgId': widget.orgId, 'productId': productId}
+              : {'orgId': widget.orgId, 'name': data['name']},
+        );
+      } catch (_) {
+        // Log failures are non-critical; product is already saved
+      }
+
       if (mounted) Navigator.pop(context);
     } catch (e) {
-      if (mounted) setState(() => _uploadingImage = false);
-      if (mounted) _showError('Error: $e');
+      if (mounted) _showError('Error saving product: $e');
     } finally {
-      if (mounted) setState(() => _submitting = false);
+      if (mounted) setState(() {
+        _submitting = false;
+        _uploadingImage = false;
+      });
     }
   }
 
@@ -1931,6 +1961,14 @@ class _ProductModalState extends State<_ProductModal> {
                     _buildImagePicker(),
                     const SizedBox(height: 16),
                     _sectionLabel('Product Information', icon: Icons.info_outline_rounded),
+                    // Product Name
+                    TextFormField(
+                      controller: _nameCtrl,
+                      decoration: _DS.inputDecoration('Product Name', hint: 'e.g., Premium Shirt 2026', icon: Icons.label_outline_rounded),
+                      style: GoogleFonts.beVietnamPro(fontSize: 13),
+                    ),
+                    const SizedBox(height: 12),
+                    // Category
                     Text('Category', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600, color: const Color(0xFF374151))),
                     const SizedBox(height: 6),
                     Container(
@@ -1946,26 +1984,23 @@ class _ProductModalState extends State<_ProductModal> {
                           value: _category,
                           isExpanded: true,
                           icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 18, color: Color(0xFF9AA5B4)),
-                          items: [
-                            if (!_merchandiseCategories.contains(_category))
-                              DropdownMenuItem(value: _category, child: Text(_category, style: GoogleFonts.beVietnamPro(fontSize: 13))),
-                            ..._merchandiseCategories.map((c) => DropdownMenuItem(value: c, child: Text(c, style: GoogleFonts.beVietnamPro(fontSize: 13)))),
-                          ],
+                          items: _merchandiseCategories.map((c) => DropdownMenuItem(value: c, child: Text(c, style: GoogleFonts.beVietnamPro(fontSize: 13)))).toList(),
                           onChanged: (value) {
-                            if (value != null) {
-                              setState(() => _category = value);
-                            }
+                            if (value != null) setState(() => _category = value);
                           },
                         ),
                       ),
                     ),
-                    const SizedBox(height: 16),
-                    TextFormField(
-                      controller: _nameCtrl,
-                      decoration: _DS.inputDecoration('Product Name', hint: 'e.g., Premium Shirt 2026', icon: Icons.label_outline_rounded),
-                      style: GoogleFonts.beVietnamPro(fontSize: 13),
-                    ),
+                    if (_category == 'Others') ...[
+                      const SizedBox(height: 8),
+                      TextFormField(
+                        controller: _customCategoryCtrl,
+                        decoration: _DS.inputDecoration('Custom Category', hint: 'Type category name…', icon: Icons.edit_outlined),
+                        style: GoogleFonts.beVietnamPro(fontSize: 13),
+                      ),
+                    ],
                     const SizedBox(height: 12),
+                    // Description
                     TextFormField(
                       controller: _descCtrl,
                       maxLines: 3,
@@ -1973,33 +2008,7 @@ class _ProductModalState extends State<_ProductModal> {
                       style: GoogleFonts.beVietnamPro(fontSize: 13),
                     ),
                     const SizedBox(height: 12),
-                    Text('Status', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600, color: const Color(0xFF374151))),
-                    const SizedBox(height: 6),
-                    Container(
-                      height: 44,
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFF8F9FB),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: const Color(0xFFE2E6EA)),
-                      ),
-                      child: DropdownButtonHideUnderline(
-                        child: DropdownButton<String>(
-                          value: _productStatus,
-                          isExpanded: true,
-                          icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 18, color: Color(0xFF9AA5B4)),
-                          items: [
-                            DropdownMenuItem(value: 'available', child: Text('Available', style: GoogleFonts.beVietnamPro(fontSize: 13))),
-                            DropdownMenuItem(value: 'out_of_stock', child: Text('Out of Stock', style: GoogleFonts.beVietnamPro(fontSize: 13))),
-                            DropdownMenuItem(value: 'discontinued', child: Text('Discontinued', style: GoogleFonts.beVietnamPro(fontSize: 13))),
-                          ],
-                          onChanged: (value) {
-                            if (value != null) setState(() => _productStatus = value);
-                          },
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
+                    // Cost Price | Price (2 columns — base price shown on mobile)
                     Row(children: [
                       Expanded(
                         child: TextFormField(
@@ -2014,20 +2023,48 @@ class _ProductModalState extends State<_ProductModal> {
                         child: TextFormField(
                           controller: _priceCtrl,
                           keyboardType: TextInputType.numberWithOptions(decimal: true),
-                          decoration: _DS.inputDecoration('Price', hint: '0.00', icon: Icons.attach_money_outlined),
-                          style: GoogleFonts.beVietnamPro(fontSize: 13),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: TextFormField(
-                          controller: _stockCtrl,
-                          keyboardType: TextInputType.number,
-                          decoration: _DS.inputDecoration('Stock Quantity', hint: '0', icon: Icons.inventory_2_outlined),
+                          decoration: _DS.inputDecoration('Base Price', hint: '0.00', icon: Icons.attach_money_outlined),
                           style: GoogleFonts.beVietnamPro(fontSize: 13),
                         ),
                       ),
                     ]),
+                    // Stock field — only shown when no variants exist
+                    if (_variants.isEmpty) ...[
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: _stockCtrl,
+                        keyboardType: TextInputType.number,
+                        decoration: _DS.inputDecoration('Stock Quantity', hint: '0', icon: Icons.inventory_2_outlined),
+                        style: GoogleFonts.beVietnamPro(fontSize: 13),
+                      ),
+                    ],
+                    // Discontinued toggle — edit mode only
+                    if (_isEdit) ...[
+                      const SizedBox(height: 10),
+                      Row(
+                        children: [
+                          SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: Checkbox(
+                              value: _isDiscontinued,
+                              activeColor: const Color(0xFF6B7280),
+                              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              onChanged: _submitting ? null : (v) => setState(() => _isDiscontinued = v ?? false),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            'Mark as Discontinued',
+                            style: GoogleFonts.beVietnamPro(
+                              fontSize: 13,
+                              color: _isDiscontinued ? const Color(0xFF6B7280) : const Color(0xFF374151),
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
                     const SizedBox(height: 16),
                     _sectionLabel('Variants', icon: Icons.tune_rounded),
                     ..._variants.map((v) => _buildVariantChip(v)),
@@ -2400,7 +2437,7 @@ class _ProductDetailsModal extends StatelessWidget {
                     ],
                     _detailItem('Category', product.category),
                     _detailItem('Price', '₱${NumberFormat('#,###').format(product.price)}'),
-                    _detailItem('Stock', '${product.stock} units'),
+                    _detailItem('Stock', '${product.variants.isNotEmpty ? product.variants.fold<int>(0, (sum, v) => sum + v.stock) : product.stock} units'),
                     _detailItem('Sold', '${product.sold} units'),
                     _detailItem('Status', product.status.replaceAll('_', ' ').toUpperCase()),
                     if (product.description.isNotEmpty) _detailItem('Description', product.description),

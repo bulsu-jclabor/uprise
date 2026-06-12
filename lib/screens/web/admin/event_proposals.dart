@@ -164,7 +164,7 @@ class EventProposals extends StatefulWidget {
 }
 
 class _EventProposalsState extends State<EventProposals> {
-  String _statusFilter = 'Pending';
+  String _statusFilter = 'All';
   int _currentPage = 1;
   static const int _pageSize = 10;
   final TextEditingController _searchController = TextEditingController();

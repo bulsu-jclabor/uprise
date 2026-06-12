@@ -16,6 +16,24 @@ const _kCard        = Colors.white;
 // ─────────────────────────────────────────────────────────────
 // Models (mirrors org_merchandise.dart)
 // ─────────────────────────────────────────────────────────────
+class ProductVariant {
+  final String name;
+  final double additionalPrice;
+  final int stock;
+
+  const ProductVariant({
+    required this.name,
+    this.additionalPrice = 0,
+    this.stock = 0,
+  });
+
+  factory ProductVariant.fromMap(Map<String, dynamic> m) => ProductVariant(
+        name            : m['name'] as String? ?? '',
+        additionalPrice : (m['additionalPrice'] ?? 0).toDouble(),
+        stock           : (m['stock'] ?? 0) as int,
+      );
+}
+
 class _Product {
   final String id;
   final String orgId;
@@ -26,6 +44,9 @@ class _Product {
   final int stock;
   final int sold;
   final String imageUrl;
+  final String status;
+  final double costPrice;
+  final List<ProductVariant> variants;
 
   const _Product({
     required this.id,
@@ -37,10 +58,14 @@ class _Product {
     required this.stock,
     required this.sold,
     required this.imageUrl,
+    this.status    = 'available',
+    this.costPrice = 0,
+    this.variants  = const [],
   });
 
   factory _Product.fromFirestore(DocumentSnapshot doc) {
     final d = doc.data() as Map<String, dynamic>;
+    final rawVariants = d['variants'];
     return _Product(
       id         : doc.id,
       orgId      : d['orgId']       as String? ?? '',
@@ -51,18 +76,42 @@ class _Product {
       stock      : (d['stock']  ?? 0) as int,
       sold       : (d['sold']   ?? 0) as int,
       imageUrl   : d['imageUrl'] as String? ?? '',
+      status     : d['status']    as String? ?? 'available',
+      costPrice  : (d['costPrice'] ?? 0).toDouble(),
+      variants   : rawVariants is List
+          ? rawVariants
+              .whereType<Map<String, dynamic>>()
+              .map(ProductVariant.fromMap)
+              .toList()
+          : const [],
     );
   }
 
-  bool get inStock => stock > 0;
+  bool get inStock {
+    if (variants.isNotEmpty) return variants.any((v) => v.stock > 0);
+    return stock > 0;
+  }
 }
 
 class _CartItem {
   final _Product product;
-  int quantity = 1; // ✅ initialized to 1 — fixes the error
-  _CartItem({required this.product});
+  int quantity;
+  final String? variantId;
+  final String? variantSize;
+  final String? variantColor;
+  final double? variantPrice;
 
-  double get subtotal => product.price * quantity;
+  _CartItem({
+    required this.product,
+    this.quantity    = 1,
+    this.variantId   ,
+    this.variantSize ,
+    this.variantColor,
+    this.variantPrice,
+  });
+
+  String get cartKey => '${product.id}_${variantId ?? ''}';
+  double get subtotal => (variantPrice ?? product.price) * quantity;
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -145,30 +194,49 @@ class _StudentMerchandiseScreenState
   }
 
   // ── Cart helpers ──────────────────────────────────────────
-  void _addToCart(_Product product) {
+  void _addToCart(_Product product, {ProductVariant? variant}) {
     setState(() {
-      final existing = _cart.where((i) => i.product.id == product.id);
+      final variantId    = variant?.name;
+      final variantPrice = variant != null
+          ? product.price + variant.additionalPrice
+          : null;
+      final key      = '${product.id}_${variantId ?? ''}';
+      final maxStock = variant?.stock ?? product.stock;
+      final existing = _cart.where((i) => i.cartKey == key);
       if (existing.isNotEmpty) {
-        if (existing.first.quantity < product.stock) {
-          existing.first.quantity++;
-        }
+        if (existing.first.quantity < maxStock) existing.first.quantity++;
       } else {
-        _cart.add(_CartItem(product: product));
+        _cart.add(_CartItem(
+          product      : product,
+          variantId    : variantId,
+          variantSize  : variantId,
+          variantColor : '',
+          variantPrice : variantPrice,
+        ));
       }
     });
   }
 
-  void _removeFromCart(String productId) {
-    setState(() => _cart.removeWhere((i) => i.product.id == productId));
+  void _increaseItem(String cartKey) {
+    setState(() {
+      final item     = _cart.firstWhere((i) => i.cartKey == cartKey);
+      final variants = item.product.variants.where((v) => v.name == item.variantId);
+      final maxStock = variants.isEmpty ? item.product.stock : variants.first.stock;
+      if (item.quantity < maxStock) item.quantity++;
+    });
   }
 
-  void _decreaseQty(String productId) {
+  void _removeFromCart(String cartKey) {
+    setState(() => _cart.removeWhere((i) => i.cartKey == cartKey));
+  }
+
+  void _decreaseQty(String cartKey) {
     setState(() {
-      final item = _cart.firstWhere((i) => i.product.id == productId);
+      final item = _cart.firstWhere((i) => i.cartKey == cartKey);
       if (item.quantity > 1) {
         item.quantity--;
       } else {
-        _cart.removeWhere((i) => i.product.id == productId);
+        _cart.removeWhere((i) => i.cartKey == cartKey);
       }
     });
   }
@@ -274,19 +342,18 @@ class _StudentMerchandiseScreenState
         builder: (ctx, setModalState) => _CartSheet(
           cart: _cart,
           orgId: _studentOrgId ?? '',
-          onIncrease: (id) {
-            _addToCart(
-                _cart.firstWhere((i) => i.product.id == id).product);
+          onIncrease: (cartKey) {
+            _increaseItem(cartKey);
             setModalState(() {});
             setState(() {});
           },
-          onDecrease: (id) {
-            _decreaseQty(id);
+          onDecrease: (cartKey) {
+            _decreaseQty(cartKey);
             setModalState(() {});
             setState(() {});
           },
-          onRemove: (id) {
-            _removeFromCart(id);
+          onRemove: (cartKey) {
+            _removeFromCart(cartKey);
             setModalState(() {});
             setState(() {});
           },
@@ -376,8 +443,8 @@ class _TabPill extends StatelessWidget {
 // Products Tab  (fetches from org's 'products' collection)
 // ─────────────────────────────────────────────────────────────
 class _ProductsTab extends StatefulWidget {
-  final String? orgId;           // null = show all orgs' products
-  final void Function(_Product) onAddToCart;
+  final String? orgId;
+  final void Function(_Product, {ProductVariant? variant}) onAddToCart;
   final List<_CartItem> cart;
 
   const _ProductsTab({
@@ -498,7 +565,8 @@ class _ProductsTabState extends State<_ProductsTab> {
                       itemCount: products.length,
                       itemBuilder: (ctx, i) => _ProductCard(
                         product: products[i],
-                        onAdd: () => widget.onAddToCart(products[i]),
+                        onAdd: ({ProductVariant? variant}) =>
+                            widget.onAddToCart(products[i], variant: variant),
                         cartQty: widget.cart
                             .where((c) => c.product.id == products[i].id)
                             .fold(0, (s, c) => s + c.quantity),
@@ -611,7 +679,7 @@ class _CategoryRow extends StatelessWidget {
 // ─────────────────────────────────────────────────────────────
 class _ProductCard extends StatelessWidget {
   final _Product product;
-  final VoidCallback onAdd;
+  final void Function({ProductVariant? variant}) onAdd;
   final int cartQty;
   const _ProductCard(
       {required this.product, required this.onAdd, required this.cartQty});
@@ -652,14 +720,16 @@ class _ProductCard extends StatelessWidget {
                               _imgPlaceholder(product.name),
                         )
                       : _imgPlaceholder(product.name),
-                  if (!product.inStock)
+                  if (product.status == 'discontinued' || !product.inStock)
                     Positioned.fill(
                       child: Container(
                         color: Colors.black45,
-                        child: const Center(
+                        child: Center(
                           child: Text(
-                            'OUT OF STOCK',
-                            style: TextStyle(
+                            product.status == 'discontinued'
+                                ? 'DISCONTINUED'
+                                : 'OUT OF STOCK',
+                            style: const TextStyle(
                                 color: Colors.white,
                                 fontSize: 10,
                                 fontWeight: FontWeight.bold),
@@ -667,6 +737,11 @@ class _ProductCard extends StatelessWidget {
                         ),
                       ),
                     ),
+                  Positioned(
+                    top: 6,
+                    left: 6,
+                    child: _StatusBadge(status: product.status),
+                  ),
                   if (cartQty > 0)
                     Positioned(
                       top: 6,
@@ -720,9 +795,9 @@ class _ProductCard extends StatelessWidget {
                             fontWeight: FontWeight.w700,
                             color: _kOrange),
                       ),
-                      if (product.inStock)
+                      if (product.inStock && product.status != 'discontinued')
                         GestureDetector(
-                          onTap: onAdd,
+                          onTap: () => _triggerAdd(context),
                           child: Container(
                             padding: const EdgeInsets.all(6),
                             decoration: const BoxDecoration(
@@ -738,7 +813,7 @@ class _ProductCard extends StatelessWidget {
                   const SizedBox(height: 4),
                   Text(
                     product.inStock
-                        ? '${product.stock} left'
+                        ? '${product.variants.isNotEmpty ? product.variants.fold<int>(0, (sum, v) => sum + v.stock) : product.stock} left'
                         : 'Out of stock',
                     style: TextStyle(
                       fontSize: 10,
@@ -770,6 +845,27 @@ class _ProductCard extends StatelessWidget {
           ),
         ),
       );
+
+  void _triggerAdd(BuildContext context, {bool closeParent = false}) {
+    if (product.variants.isNotEmpty) {
+      showModalBottomSheet(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        builder: (_) => _VariantPickerSheet(
+          product: product,
+          onSelect: (variant) {
+            Navigator.pop(context);
+            onAdd(variant: variant);
+            if (closeParent) Navigator.pop(context);
+          },
+        ),
+      );
+    } else {
+      onAdd();
+      if (closeParent) Navigator.pop(context);
+    }
+  }
 
   void _showDetails(BuildContext context) {
     final fmt = NumberFormat('#,##0.00');
@@ -813,9 +909,18 @@ class _ProductCard extends StatelessWidget {
                     ),
                   ),
                 const SizedBox(height: 16),
-                Text(product.name,
-                    style: const TextStyle(
-                        fontSize: 20, fontWeight: FontWeight.bold)),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Text(product.name,
+                          style: const TextStyle(
+                              fontSize: 20, fontWeight: FontWeight.bold)),
+                    ),
+                    const SizedBox(width: 8),
+                    _StatusBadge(status: product.status),
+                  ],
+                ),
                 const SizedBox(height: 4),
                 Text(product.category,
                     style: const TextStyle(
@@ -841,26 +946,40 @@ class _ProductCard extends StatelessWidget {
                   children: [
                     _DetailChip(
                         icon: Icons.inventory_2_outlined,
-                        label: '${product.stock} in stock'),
+                        label: '${product.variants.isNotEmpty ? product.variants.fold<int>(0, (sum, v) => sum + v.stock) : product.stock} in stock'),
                     const SizedBox(width: 8),
                     _DetailChip(
                         icon: Icons.sell_outlined,
                         label: '${product.sold} sold'),
                   ],
                 ),
+                if (product.variants.isNotEmpty) ...[
+                  const SizedBox(height: 16),
+                  const Text(
+                    'Variants',
+                    style: TextStyle(
+                        fontSize: 13, fontWeight: FontWeight.w700),
+                  ),
+                  const SizedBox(height: 8),
+                  _VariantsTable(
+                      product: product, basePrice: product.price),
+                ],
                 const SizedBox(height: 20),
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton.icon(
-                    onPressed: product.inStock
-                        ? () {
-                            onAdd();
-                            Navigator.pop(context);
-                          }
-                        : null,
+                    onPressed:
+                        product.inStock && product.status != 'discontinued'
+                            ? () => _triggerAdd(context, closeParent: true)
+                            : null,
                     icon: const Icon(Icons.shopping_cart_outlined, size: 18),
                     label: Text(
-                        product.inStock ? 'Add to Cart' : 'Out of Stock'),
+                      product.status == 'discontinued'
+                          ? 'Discontinued'
+                          : product.inStock
+                              ? 'Add to Cart'
+                              : 'Out of Stock',
+                    ),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: _kOrange,
                       foregroundColor: Colors.white,
@@ -875,6 +994,164 @@ class _ProductCard extends StatelessWidget {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+// Variant Picker Sheet
+// ─────────────────────────────────────────────────────────────
+class _VariantPickerSheet extends StatefulWidget {
+  final _Product product;
+  final void Function(ProductVariant) onSelect;
+  const _VariantPickerSheet(
+      {required this.product, required this.onSelect});
+
+  @override
+  State<_VariantPickerSheet> createState() => _VariantPickerSheetState();
+}
+
+class _VariantPickerSheetState extends State<_VariantPickerSheet> {
+  int? _selectedIndex;
+
+  @override
+  Widget build(BuildContext context) {
+    final fmt      = NumberFormat('#,##0.00');
+    final variants = widget.product.variants;
+
+    return Container(
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      padding: EdgeInsets.only(
+        left: 20,
+        right: 20,
+        top: 8,
+        bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Center(
+            child: Container(
+              width: 40,
+              height: 4,
+              margin: const EdgeInsets.only(bottom: 16),
+              decoration: BoxDecoration(
+                color: Colors.grey.shade300,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+          const Text(
+            'Select Variant',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+          ),
+          Text(
+            widget.product.name,
+            style: const TextStyle(fontSize: 12, color: Colors.black45),
+          ),
+          const SizedBox(height: 16),
+          ListView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: variants.length,
+            itemBuilder: (_, i) {
+              final v          = variants[i];
+              final selected   = _selectedIndex == i;
+              final totalPrice = widget.product.price + v.additionalPrice;
+              final inStock    = v.stock > 0;
+
+              return GestureDetector(
+                onTap: inStock ? () => setState(() => _selectedIndex = i) : null,
+                child: Container(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 14, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: selected ? _kOrangeLight : _kBg,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: selected ? _kOrange : Colors.transparent,
+                      width: 1.5,
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              v.name,
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                color: inStock
+                                    ? Colors.black87
+                                    : Colors.black38,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              inStock
+                                  ? '${v.stock} left'
+                                  : 'Out of stock',
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: inStock
+                                    ? Colors.green.shade600
+                                    : Colors.redAccent,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Text(
+                        '₱${fmt.format(totalPrice)}',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                          color: inStock ? _kOrange : Colors.black38,
+                        ),
+                      ),
+                      if (selected)
+                        const Padding(
+                          padding: EdgeInsets.only(left: 8),
+                          child: Icon(Icons.check_circle,
+                              color: _kOrange, size: 18),
+                        ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+          const SizedBox(height: 8),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: _selectedIndex == null
+                  ? null
+                  : () => widget.onSelect(variants[_selectedIndex!]),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _kOrange,
+                foregroundColor: Colors.white,
+                disabledBackgroundColor: Colors.grey.shade300,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
+              ),
+              child: const Text(
+                'Add to Cart',
+                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -905,6 +1182,110 @@ class _DetailChip extends StatelessWidget {
       ),
     );
   }
+}
+
+// ─────────────────────────────────────────────────────────────
+// Status badge for product card and detail sheet
+// ─────────────────────────────────────────────────────────────
+class _StatusBadge extends StatelessWidget {
+  final String status;
+  const _StatusBadge({required this.status});
+
+  @override
+  Widget build(BuildContext context) {
+    final Color bg;
+    final String label;
+    switch (status) {
+      case 'out_of_stock':
+        bg = Colors.red.shade600; label = 'OUT OF STOCK';
+        break;
+      case 'discontinued':
+        bg = Colors.grey.shade600; label = 'DISCONTINUED';
+        break;
+      default:
+        bg = Colors.green.shade600; label = 'AVAILABLE';
+    }
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(5),
+      ),
+      child: Text(
+        label,
+        style: const TextStyle(
+          fontSize: 8,
+          fontWeight: FontWeight.bold,
+          color: Colors.white,
+          letterSpacing: 0.4,
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+// Variants table for product detail sheet
+// ─────────────────────────────────────────────────────────────
+class _VariantsTable extends StatelessWidget {
+  final _Product product;
+  final double basePrice;
+  const _VariantsTable({required this.product, required this.basePrice});
+
+  @override
+  Widget build(BuildContext context) {
+    final fmt = NumberFormat('#,##0.00');
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(8),
+      child: Table(
+        columnWidths: const {
+          0: FlexColumnWidth(2.2),
+          1: FlexColumnWidth(1),
+          2: FlexColumnWidth(1.8),
+        },
+        children: [
+          TableRow(
+            decoration: const BoxDecoration(color: _kBg),
+            children: [
+              _cell('Variant', header: true),
+              _cell('Stock', header: true),
+              _cell('Price', header: true),
+            ],
+          ),
+          for (final v in product.variants)
+            TableRow(
+              decoration: BoxDecoration(
+                border: Border(
+                  bottom: BorderSide(color: Colors.grey.shade100),
+                ),
+              ),
+              children: [
+                _cell(v.name),
+                _cell(
+                  v.stock > 0 ? '${v.stock}' : 'Out',
+                  color: v.stock > 0
+                      ? Colors.green.shade600
+                      : Colors.redAccent,
+                ),
+                _cell('₱${fmt.format(basePrice + v.additionalPrice)}'),
+              ],
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _cell(String text, {bool header = false, Color? color}) => Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        child: Text(
+          text,
+          style: TextStyle(
+            fontSize: header ? 11 : 12,
+            fontWeight: header ? FontWeight.w700 : FontWeight.normal,
+            color: color ?? (header ? Colors.black54 : Colors.black87),
+          ),
+        ),
+      );
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -1202,11 +1583,9 @@ class _CartSheet extends StatelessWidget {
                     children: cart
                         .map((item) => _CartItemRow(
                               item: item,
-                              onIncrease: () =>
-                                  onIncrease(item.product.id),
-                              onDecrease: () =>
-                                  onDecrease(item.product.id),
-                              onRemove: () => onRemove(item.product.id),
+                              onIncrease: () => onIncrease(item.cartKey),
+                              onDecrease: () => onDecrease(item.cartKey),
+                              onRemove: () => onRemove(item.cartKey),
                             ))
                         .toList(),
                   ),
@@ -1265,9 +1644,8 @@ class _CartSheet extends StatelessWidget {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
 
-    // Fetch student name and section // NEW: also fetch section
     String customerName = '';
-    String studentSection = ''; // NEW
+    String studentSection = '';
     try {
       final snap = await FirebaseFirestore.instance
           .collection('students')
@@ -1275,40 +1653,141 @@ class _CartSheet extends StatelessWidget {
           .limit(1)
           .get();
       if (snap.docs.isNotEmpty) {
-        customerName = snap.docs.first.data()['fullName'] as String? ?? '';
-        studentSection = snap.docs.first.data()['section'] as String? ?? ''; // NEW
+        customerName   = snap.docs.first.data()['fullName'] as String? ?? '';
+        studentSection = snap.docs.first.data()['section'] as String? ?? '';
       }
     } catch (_) {}
 
     final orderId =
         'ORD-${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}';
 
+    final db       = FirebaseFirestore.instance;
+    final orderRef = db.collection('orders').doc();
+
     final orderData = {
-      'orderId'         : orderId,
-      'orgId'           : orgId,
-      'customerName'    : customerName,
-      'customerEmail'   : user.email ?? '',
-      'customerPhone'   : '',
-      'customerAddress' : '',
-      'section'         : studentSection,  // NEW
-      'pickupStatus'    : 'Pending',        // NEW
-      'items'           : cart
+      'orderId'        : orderId,
+      'orgId'          : orgId,
+      'customerName'   : customerName,
+      'customerEmail'  : user.email ?? '',
+      'customerPhone'  : '',
+      'customerAddress': '',
+      'section'        : studentSection,
+      'pickupStatus'   : 'Pending',
+      'items'          : cart
           .map((i) => {
-                'productId' : i.product.id,
-                'name'      : i.product.name,
-                'quantity'  : i.quantity,
-                'price'     : i.product.price,
-                'totalPrice': i.subtotal,
+                'productId'   : i.product.id,
+                'name'        : i.product.name,
+                'variantId'   : i.variantId   ?? '',
+                'variantSize' : i.variantSize  ?? '',
+                'variantColor': i.variantColor ?? '',
+                'quantity'    : i.quantity,
+                'price'       : i.variantPrice ?? i.product.price,
+                'totalPrice'  : i.subtotal,
               })
           .toList(),
-      'total'         : _total,
-      'paymentMethod' : 'Cash on Pickup',
-      'status'        : 'pending',
-      'createdAt'     : FieldValue.serverTimestamp(),
+      'total'        : _total,
+      'paymentMethod': 'Cash on Pickup',
+      'status'       : 'pending',
+      'createdAt'    : FieldValue.serverTimestamp(),
     };
 
+    final productIds = cart.map((i) => i.product.id).toSet().toList();
+
     try {
-      await FirebaseFirestore.instance.collection('orders').add(orderData);
+      await db.runTransaction((txn) async {
+        // ── Phase 1: read all product docs ───────────────────
+        final snaps = <String, DocumentSnapshot>{};
+        for (final id in productIds) {
+          snaps[id] = await txn.get(db.collection('products').doc(id));
+        }
+
+        // ── Phase 2: compute updates, then write ─────────────
+        // Accumulate mutable state per product so multiple cart
+        // items sharing a product are handled in one update.
+        final productState = <String, Map<String, dynamic>>{};
+
+        for (final id in productIds) {
+          final d = snaps[id]!.data() as Map<String, dynamic>? ?? {};
+          productState[id] = {
+            'stock'   : (d['stock'] ?? 0) as int,
+            'status'  : (d['status'] ?? 'available') as String,
+            'variants': (d['variants'] is List)
+                ? (d['variants'] as List)
+                    .whereType<Map<String, dynamic>>()
+                    .map((v) => Map<String, dynamic>.from(v))
+                    .toList()
+                : <Map<String, dynamic>>[],
+            'variantsModified': false,
+          };
+        }
+
+        for (final item in cart) {
+          final state      = productState[item.product.id]!;
+          final variantList =
+              state['variants'] as List<Map<String, dynamic>>;
+          final hasVariant =
+              item.variantId != null && item.variantId!.isNotEmpty;
+
+          final int logOldStock;
+          final int logNewStock;
+
+          if (hasVariant) {
+            final idx =
+                variantList.indexWhere((v) => v['name'] == item.variantId);
+            if (idx != -1) {
+              logOldStock               = (variantList[idx]['stock'] ?? 0) as int;
+              logNewStock               = (logOldStock - item.quantity).clamp(0, 999999);
+              variantList[idx]['stock'] = logNewStock;
+              state['variantsModified'] = true;
+            } else {
+              logOldStock = 0;
+              logNewStock = 0;
+            }
+            // Always decrement overall product stock too
+            state['stock'] = ((state['stock'] as int) - item.quantity).clamp(0, 999999);
+          } else {
+            logOldStock    = state['stock'] as int;
+            logNewStock    = (logOldStock - item.quantity).clamp(0, 999999);
+            state['stock'] = logNewStock;
+          }
+
+          txn.set(db.collection('stock_logs').doc(), {
+            'productId'  : item.product.id,
+            'productName': item.product.name,
+            if (hasVariant) 'variantId': item.variantId,
+            'reason'     : 'sold',
+            'oldStock'   : logOldStock,
+            'newStock'   : logNewStock,
+            'quantity'   : item.quantity,
+            'changedBy'  : 'customer',
+            'changedAt'  : FieldValue.serverTimestamp(),
+            'orderId'    : orderId,
+          });
+        }
+
+        // Apply product stock updates
+        for (final entry in productState.entries) {
+          final state      = entry.value;
+          final variantList =
+              state['variants'] as List<Map<String, dynamic>>;
+          final update = <String, dynamic>{'stock': state['stock']};
+          if (state['variantsModified'] as bool) {
+            update['variants'] = variantList;
+          }
+          // Auto-update status when stock hits 0 (skip discontinued products)
+          final currentStatus = state['status'] as String;
+          if (currentStatus != 'discontinued') {
+            final effectiveStock = variantList.isNotEmpty
+                ? variantList.fold<int>(0, (s, v) => s + ((v['stock'] ?? 0) as int))
+                : state['stock'] as int;
+            update['status'] = effectiveStock == 0 ? 'out_of_stock' : 'available';
+          }
+          txn.update(db.collection('products').doc(entry.key), update);
+        }
+
+        txn.set(orderRef, orderData);
+      });
+
       onOrderPlaced();
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1371,7 +1850,17 @@ class _CartItemRow extends StatelessWidget {
                         fontSize: 13, fontWeight: FontWeight.w600),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis),
-                Text('₱${fmt.format(item.product.price)}',
+                if (item.variantSize != null &&
+                    item.variantSize!.isNotEmpty)
+                  Text(
+                    item.variantSize!,
+                    style: const TextStyle(
+                        fontSize: 10, color: Colors.black38),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                Text(
+                    '₱${fmt.format(item.variantPrice ?? item.product.price)}',
                     style: const TextStyle(
                         fontSize: 11, color: Colors.black45)),
               ],
