@@ -95,11 +95,8 @@ class _OrgFinanceScreenState extends State<OrgFinanceScreen> {
     'All', 'Workshops', 'Competitions', 'Partnerships', 'Socials', 'Retail', 'General'
   ];
 
-  Stream<QuerySnapshot> get _transactionsStream => FirebaseFirestore.instance
-      .collection('transactions')
-      .where('orgId', isEqualTo: widget.orgId)
-      .orderBy('date', descending: true)
-      .snapshots();
+  late final Stream<QuerySnapshot> _transactionsStream;
+  late final Stream<QuerySnapshot> _statsStream;
 
   List<TransactionModel> _filterTransactions(List<TransactionModel> list) {
     return list.where((t) {
@@ -592,6 +589,20 @@ class _OrgFinanceScreenState extends State<OrgFinanceScreen> {
   }
 
   @override
+  void initState() {
+    super.initState();
+    _transactionsStream = FirebaseFirestore.instance
+        .collection('transactions')
+        .where('orgId', isEqualTo: widget.orgId)
+        .orderBy('date', descending: true)
+        .snapshots();
+    _statsStream = FirebaseFirestore.instance
+        .collection('transactions')
+        .where('orgId', isEqualTo: widget.orgId)
+        .snapshots();
+  }
+
+  @override
   void dispose() {
     _searchController.dispose();
     super.dispose();
@@ -617,10 +628,7 @@ class _OrgFinanceScreenState extends State<OrgFinanceScreen> {
   // ── Stats Row ──────────────────────────────────────────────────────
   Widget _buildStatsRow() {
     return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection('transactions')
-          .where('orgId', isEqualTo: widget.orgId)
-          .snapshots(),
+      stream: _statsStream,
       builder: (context, snapshot) {
         double income = 0, expense = 0;
         if (snapshot.hasData) {
@@ -806,7 +814,7 @@ class _OrgFinanceScreenState extends State<OrgFinanceScreen> {
       child: StreamBuilder<QuerySnapshot>(
         stream: _transactionsStream,
         builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
+          if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
             return const Center(child: CircularProgressIndicator());
           }
           final transactions = snapshot.hasData
@@ -860,7 +868,7 @@ class _OrgFinanceScreenState extends State<OrgFinanceScreen> {
                                   ),
                       ),
                       if (filtered.isNotEmpty)
-                        _buildFooter(filtered.length, totalPages, start, end),
+                        _buildFooter(filtered.length, totalPages, start, end, safePage),
                     ],
                   ),
                 ),
@@ -1078,9 +1086,9 @@ class _OrgFinanceScreenState extends State<OrgFinanceScreen> {
     );
   }
 
-  Widget _buildFooter(int total, int totalPages, int start, int end) {
+  Widget _buildFooter(int total, int totalPages, int start, int end, int safePage) {
     const int maxVisible = 5;
-    int firstPage = (_currentPage - maxVisible ~/ 2).clamp(1, totalPages);
+    int firstPage = (safePage - maxVisible ~/ 2).clamp(1, totalPages);
     int lastPage = (firstPage + maxVisible - 1).clamp(1, totalPages);
     if (lastPage - firstPage + 1 < maxVisible && firstPage > 1) {
       firstPage = (lastPage - maxVisible + 1).clamp(1, totalPages);
@@ -1106,12 +1114,12 @@ class _OrgFinanceScreenState extends State<OrgFinanceScreen> {
           Row(children: [
             _PageButton(
                 icon: Icons.chevron_left_rounded,
-                enabled: _currentPage > 1,
-                onTap: () => setState(() => _currentPage--)),
+                enabled: safePage > 1,
+                onTap: () => setState(() => _currentPage = safePage - 1)),
             const SizedBox(width: 4),
             ...pages.map((p) => _PageNumButton(
                   page: p,
-                  isActive: p == _currentPage,
+                  isActive: p == safePage,
                   onTap: () => setState(() => _currentPage = p),
                 )),
             if (lastPage < totalPages) ...[
@@ -1123,15 +1131,15 @@ class _OrgFinanceScreenState extends State<OrgFinanceScreen> {
               ),
               _PageNumButton(
                 page: totalPages,
-                isActive: _currentPage == totalPages,
+                isActive: safePage == totalPages,
                 onTap: () => setState(() => _currentPage = totalPages),
               ),
             ],
             const SizedBox(width: 4),
             _PageButton(
                 icon: Icons.chevron_right_rounded,
-                enabled: _currentPage < totalPages,
-                onTap: () => setState(() => _currentPage++)),
+                enabled: safePage < totalPages,
+                onTap: () => setState(() => _currentPage = safePage + 1)),
           ]),
         ],
       ),
