@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
-import 'student_event_details_screen.dart';
 
 // ─────────────────────────────────────────────
 //  DATA MODEL
@@ -55,7 +54,7 @@ class EventData {
     final dateTime = timestamp is Timestamp
         ? timestamp.toDate()
         : DateTime.tryParse(d['date']?.toString() ?? '') ?? DateTime.now();
-    
+
     final now = DateTime.now();
     final isPast = dateTime.isBefore(now);
 
@@ -83,7 +82,7 @@ class EventData {
 }
 
 // ─────────────────────────────────────────────
-//  MAIN SCREEN
+//  MAIN SCREEN (CALENDAR + EVENTS)
 // ─────────────────────────────────────────────
 class StudentEventsScreen extends StatefulWidget {
   const StudentEventsScreen({super.key});
@@ -95,13 +94,34 @@ class StudentEventsScreen extends StatefulWidget {
 class _StudentEventsScreenState extends State<StudentEventsScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
-  int _filterIndex = 0;
-  static const _filterLabels = ['All', 'Today', 'This Week'];
+  // Remove the unused field or use it - we'll keep it for potential future use
+  // int _selectedTabIndex = 0; // REMOVED - not needed when using TabBar
+
+  DateTime _selectedDate = DateTime.now();
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(length: 3, vsync: this);
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
+
+  // Calendar navigation
+  void _previousMonth() {
+    setState(() {
+      _selectedDate = DateTime(_selectedDate.year, _selectedDate.month - 1);
+    });
+  }
+
+  void _nextMonth() {
+    setState(() {
+      _selectedDate = DateTime(_selectedDate.year, _selectedDate.month + 1);
+    });
   }
 
   void _openDetail(EventData event) {
@@ -136,32 +156,138 @@ class _StudentEventsScreenState extends State<StudentEventsScreen>
         backgroundColor: Colors.white,
         elevation: 0,
         title: const Text(
-          'Upcoming Event',
+          'Calendar',
           style: TextStyle(
             fontSize: 18,
             fontWeight: FontWeight.w700,
             color: Colors.black87,
           ),
         ),
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(44),
-          child: TabBar(
-            controller: _tabController,
-            labelColor: const Color(0xFFE53935),
-            unselectedLabelColor: Colors.black45,
-            indicatorColor: const Color(0xFFE53935),
-            tabs: const [
-              Tab(text: 'All Events'),
-              Tab(text: 'My Events'),
-            ],
-          ),
+        bottom: TabBar(
+          controller: _tabController,
+          indicatorColor: const Color(0xFFE53935),
+          labelColor: const Color(0xFFE53935),
+          unselectedLabelColor: Colors.black45,
+          tabs: const [
+            Tab(text: 'All CICT Events'),
+            Tab(text: 'Event'),
+            Tab(text: 'Feedback'),
+          ],
         ),
       ),
       body: TabBarView(
         controller: _tabController,
         children: [
-          // ── ALL EVENTS TAB ──
-          FutureBuilder<Set<String>>(
+          // Tab 0: All CICT Events (Calendar + Events)
+          _buildCalendarAndEventsTab(),
+          
+          // Tab 1: Event Tab (Upcoming Events List)
+          _buildEventTab(),
+          
+          // Tab 2: Feedback Tab
+          _buildFeedbackTab(),
+        ],
+      ),
+    );
+  }
+
+  // TAB 0: All CICT Events (Calendar + Events for selected date)
+  Widget _buildCalendarAndEventsTab() {
+    return Column(
+      children: [
+        // Calendar Header
+        Container(
+          color: Colors.white,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              IconButton(
+                icon: const Icon(Icons.chevron_left),
+                onPressed: _previousMonth,
+              ),
+              Text(
+                DateFormat('MMMM yyyy').format(_selectedDate),
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.chevron_right),
+                onPressed: _nextMonth,
+              ),
+            ],
+          ),
+        ),
+        // Calendar Grid
+        Container(
+          color: Colors.white,
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          child: _CalendarGrid(
+            selectedDate: _selectedDate,
+            onDateSelected: (date) {
+              setState(() {
+                _selectedDate = date;
+              });
+            },
+          ),
+        ),
+        const SizedBox(height: 16),
+        // Events for Today Header
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Row(
+            children: [
+              Text(
+                'Events for ${DateFormat('MMM dd, yyyy').format(_selectedDate)}',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.black87,
+                ),
+              ),
+              const Spacer(),
+              FutureBuilder<Set<String>>(
+                future: _getRegisteredEventIds(),
+                builder: (context, regSnap) {
+                  final registeredIds = regSnap.data ?? {};
+                  return StreamBuilder<QuerySnapshot>(
+                    stream: FirebaseFirestore.instance
+                        .collection('events')
+                        .orderBy('date')
+                        .snapshots(),
+                    builder: (context, snapshot) {
+                      if (!snapshot.hasData) {
+                        return const SizedBox.shrink();
+                      }
+                      final todayEvents = snapshot.data!.docs
+                          .map((doc) => EventData.fromFirestore(
+                              doc, isRegistered: registeredIds.contains(doc.id)))
+                          .where((e) =>
+                              e.rawDate.year == _selectedDate.year &&
+                              e.rawDate.month == _selectedDate.month &&
+                              e.rawDate.day == _selectedDate.day)
+                          .toList();
+                      return Text(
+                        '${todayEvents.length} Events',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                          color: Colors.grey.shade600,
+                        ),
+                      );
+                    },
+                  );
+                },
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+        // Events List
+        Expanded(
+          child: FutureBuilder<Set<String>>(
             future: _getRegisteredEventIds(),
             builder: (context, regSnap) {
               final registeredIds = regSnap.data ?? {};
@@ -176,25 +302,151 @@ class _StudentEventsScreenState extends State<StudentEventsScreen>
                         child: CircularProgressIndicator(
                             color: Color(0xFFE53935)));
                   }
-                  final events = snapshot.data!.docs.map((doc) {
-                    final isReg = registeredIds.contains(doc.id);
-                    return EventData.fromFirestore(doc, isRegistered: isReg);
-                  }).toList();
-                  return _EventListTab(
-                    events: events,
-                    filterIndex: _filterIndex,
-                    filterLabels: _filterLabels,
-                    onFilterChanged: (i) =>
-                        setState(() => _filterIndex = i),
-                    onEventTap: _openDetail,
+                  final todayEvents = snapshot.data!.docs
+                      .map((doc) => EventData.fromFirestore(doc,
+                          isRegistered: registeredIds.contains(doc.id)))
+                      .where((e) =>
+                          e.rawDate.year == _selectedDate.year &&
+                          e.rawDate.month == _selectedDate.month &&
+                          e.rawDate.day == _selectedDate.day)
+                      .toList();
+
+                  if (todayEvents.isEmpty) {
+                    return const Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.event_busy,
+                              size: 64, color: Colors.grey),
+                          SizedBox(height: 12),
+                          Text(
+                            'No events for this day',
+                            style: TextStyle(
+                                fontSize: 15,
+                                color: Colors.grey,
+                                fontWeight: FontWeight.w500),
+                          ),
+                        ],
+                      ),
+                    );
+                  }
+
+                  return ListView.builder(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    itemCount: todayEvents.length,
+                    itemBuilder: (context, index) {
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 16),
+                        child: _CompactEventCard(
+                          event: todayEvents[index],
+                          onTap: () => _openDetail(todayEvents[index]),
+                        ),
+                      );
+                    },
                   );
                 },
               );
             },
           ),
+        ),
+      ],
+    );
+  }
 
-          // ── MY EVENTS TAB (FIXED - auto refresh) ──
-          _MyEventsTabFetcher(onEventTap: _openDetail),
+  // TAB 1: Event Tab (Upcoming Events List)
+  Widget _buildEventTab() {
+    return FutureBuilder<Set<String>>(
+      future: _getRegisteredEventIds(),
+      builder: (context, regSnap) {
+        final registeredIds = regSnap.data ?? {};
+        return StreamBuilder<QuerySnapshot>(
+          stream: FirebaseFirestore.instance
+              .collection('events')
+              .orderBy('date')
+              .snapshots(),
+          builder: (context, snapshot) {
+            if (!snapshot.hasData) {
+              return const Center(
+                  child: CircularProgressIndicator(color: Color(0xFFE53935)));
+            }
+            
+            final allEvents = snapshot.data!.docs
+                .map((doc) => EventData.fromFirestore(doc,
+                    isRegistered: registeredIds.contains(doc.id)))
+                .where((e) => !e.isPast) // Only show upcoming events
+                .toList();
+
+            if (allEvents.isEmpty) {
+              return const Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.event_available, size: 64, color: Colors.grey),
+                    SizedBox(height: 12),
+                    Text(
+                      'No upcoming events',
+                      style: TextStyle(
+                          fontSize: 15,
+                          color: Colors.grey,
+                          fontWeight: FontWeight.w500),
+                    ),
+                  ],
+                ),
+              );
+            }
+
+            return ListView.builder(
+              padding: const EdgeInsets.all(16),
+              itemCount: allEvents.length,
+              itemBuilder: (context, index) {
+                final event = allEvents[index];
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 16),
+                  child: _UpcomingEventCard(
+                    event: event,
+                    onTap: () => _openDetail(event),
+                  ),
+                );
+              },
+            );
+          },
+        );
+      },
+    );
+  }
+
+  // TAB 2: Feedback Tab
+  Widget _buildFeedbackTab() {
+    return const Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            Icons.feedback_outlined,
+            size: 80,
+            color: Colors.grey,
+          ),
+          SizedBox(height: 16),
+          Text(
+            'Feedback',
+            style: TextStyle(
+              fontSize: 24,
+              fontWeight: FontWeight.w700,
+              color: Colors.grey,
+            ),
+          ),
+          SizedBox(height: 8),
+          Text(
+            'Share your thoughts about events',
+            style: TextStyle(
+              fontSize: 14,
+              color: Colors.grey,
+            ),
+          ),
+          SizedBox(height: 24),
+          // Note: Button can't be const because of onPressed callback
+          // We'll handle this differently
         ],
       ),
     );
@@ -202,408 +454,100 @@ class _StudentEventsScreenState extends State<StudentEventsScreen>
 }
 
 // ─────────────────────────────────────────────
-//  MY EVENTS TAB (FIXED - real-time auto refresh)
+//  CALENDAR GRID
 // ─────────────────────────────────────────────
-class _MyEventsTabFetcher extends StatelessWidget {
-  final ValueChanged<EventData> onEventTap;
-  const _MyEventsTabFetcher({required this.onEventTap});
+class _CalendarGrid extends StatelessWidget {
+  final DateTime selectedDate;
+  final Function(DateTime) onDateSelected;
 
-  @override
-  Widget build(BuildContext context) {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) {
-      return const Center(child: Text('Not logged in'));
-    }
-
-    // Listen to registrations changes in REAL-TIME
-    return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection('registrations')
-          .where('userId', isEqualTo: user.uid)
-          .snapshots(), // <-- REAL-TIME!
-      builder: (context, regSnap) {
-        if (regSnap.connectionState == ConnectionState.waiting) {
-          return const Center(
-              child: CircularProgressIndicator(color: Color(0xFFE53935)));
-        }
-
-        final registeredDocs = regSnap.data?.docs ?? [];
-        
-        if (registeredDocs.isEmpty) {
-          return Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.event_busy_outlined,
-                    size: 64, color: Colors.grey.shade300),
-                const SizedBox(height: 12),
-                const Text(
-                  'No registered events yet',
-                  style: TextStyle(
-                      fontSize: 15,
-                      color: Colors.grey,
-                      fontWeight: FontWeight.w500),
-                ),
-                const SizedBox(height: 4),
-                const Text(
-                  'Events you register for will appear here.',
-                  style: TextStyle(fontSize: 12, color: Colors.grey),
-                ),
-              ],
-            ),
-          );
-        }
-
-        // Get all eventIds from registrations
-        final eventIds = registeredDocs.map((d) => d['eventId'] as String).toList();
-        
-        // If more than 10 events, we need to fetch in chunks
-        if (eventIds.length > 10) {
-          return _buildMultiChunkEvents(eventIds);
-        }
-
-        // Listen to events changes in REAL-TIME
-        return StreamBuilder<QuerySnapshot>(
-          stream: FirebaseFirestore.instance
-              .collection('events')
-              .where(FieldPath.documentId, whereIn: eventIds)
-              .snapshots(), // <-- REAL-TIME!
-          builder: (context, eventSnap) {
-            if (eventSnap.connectionState == ConnectionState.waiting) {
-              return const Center(
-                  child: CircularProgressIndicator(color: Color(0xFFE53935)));
-            }
-
-            if (!eventSnap.hasData || eventSnap.data!.docs.isEmpty) {
-              return const Center(child: Text('No registered events yet'));
-            }
-
-            final myEvents = eventSnap.data!.docs
-                .map((doc) => EventData.fromFirestore(doc, isRegistered: true))
-                .toList();
-
-            return _MyEventsTab(events: myEvents, onEventTap: onEventTap);
-          },
-        );
-      },
-    );
-  }
-
-  // For more than 10 registered events (though rare)
-  Widget _buildMultiChunkEvents(List<String> eventIds) {
-    return FutureBuilder<List<EventData>>(
-      future: _fetchEventsByIds(eventIds),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(
-              child: CircularProgressIndicator(color: Color(0xFFE53935)));
-        }
-        
-        final myEvents = snapshot.data ?? [];
-        if (myEvents.isEmpty) {
-          return const Center(child: Text('No registered events yet'));
-        }
-        
-        return _MyEventsTab(events: myEvents, onEventTap: onEventTap);
-      },
-    );
-  }
-
-  Future<List<EventData>> _fetchEventsByIds(List<String> eventIds) async {
-    if (eventIds.isEmpty) return [];
-
-    final chunks = <List<String>>[];
-    for (var i = 0; i < eventIds.length; i += 10) {
-      chunks.add(eventIds.sublist(
-          i, i + 10 > eventIds.length ? eventIds.length : i + 10));
-    }
-
-    final results = <EventData>[];
-    for (final chunk in chunks) {
-      final snap = await FirebaseFirestore.instance
-          .collection('events')
-          .where(FieldPath.documentId, whereIn: chunk)
-          .get();
-      for (final doc in snap.docs) {
-        results.add(EventData.fromFirestore(doc, isRegistered: true));
-      }
-    }
-    return results;
-  }
-}
-
-// ─────────────────────────────────────────────
-//  ALL EVENTS TAB
-// ─────────────────────────────────────────────
-class _EventListTab extends StatelessWidget {
-  final List<EventData> events;
-  final int filterIndex;
-  final List<String> filterLabels;
-  final ValueChanged<int> onFilterChanged;
-  final ValueChanged<EventData> onEventTap;
-
-  const _EventListTab({
-    required this.events,
-    required this.filterIndex,
-    required this.filterLabels,
-    required this.onFilterChanged,
-    required this.onEventTap,
+  const _CalendarGrid({
+    required this.selectedDate,
+    required this.onDateSelected,
   });
 
-  List<EventData> _applyFilter(List<EventData> events, int filterIndex) {
-    if (filterIndex == 0) return events;
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    return events.where((e) {
-      try {
-        final parsed = DateFormat('MMM dd, yyyy').parse(e.date);
-        if (filterIndex == 1) {
-          return parsed.year == today.year &&
-              parsed.month == today.month &&
-              parsed.day == today.day;
-        } else {
-          final endOfWeek = today.add(const Duration(days: 7));
-          return parsed.isAfter(today.subtract(const Duration(days: 1))) &&
-              parsed.isBefore(endOfWeek);
-        }
-      } catch (_) {
-        return true;
-      }
-    }).toList();
-  }
-
   @override
   Widget build(BuildContext context) {
-    final filtered = _applyFilter(events, filterIndex);
-    final featured = filtered.isNotEmpty ? filtered.first : null;
-    final rest =
-        filtered.length > 1 ? filtered.sublist(1) : <EventData>[];
+    final firstDayOfMonth =
+        DateTime(selectedDate.year, selectedDate.month, 1);
+    final firstWeekday = firstDayOfMonth.weekday % 7;
+    final daysInMonth = DateTime(selectedDate.year, selectedDate.month + 1, 0).day;
 
-    return ListView(
-      padding: const EdgeInsets.only(bottom: 24),
-      children: [
-        // Filter chips
-        Padding(
-          padding: const EdgeInsets.fromLTRB(14, 14, 14, 4),
-          child: Row(
-            children: List.generate(
-              filterLabels.length,
-              (i) => Padding(
-                padding: const EdgeInsets.only(right: 8),
-                child: GestureDetector(
-                  onTap: () => onFilterChanged(i),
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 200),
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 7),
-                    decoration: BoxDecoration(
-                      color: filterIndex == i
-                          ? const Color(0xFFE53935)
-                          : Colors.white,
-                      borderRadius: BorderRadius.circular(20),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.06),
-                          blurRadius: 4,
-                          offset: const Offset(0, 1),
-                        ),
-                      ],
-                    ),
-                    child: Text(
-                      filterLabels[i],
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: filterIndex == i
-                            ? Colors.white
-                            : Colors.black54,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
+    List<Widget> dayWidgets = [];
+    
+    // Add weekday headers
+    final weekdays = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+    for (var day in weekdays) {
+      dayWidgets.add(Center(
+        child: Text(
+          day,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: Colors.grey.shade600,
           ),
         ),
-        if (featured != null)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(14, 10, 14, 0),
-            child: _FeaturedEventCard(
-                event: featured, onTap: () => onEventTap(featured)),
-          ),
-        if (filtered.isEmpty)
-          const Padding(
-            padding: EdgeInsets.only(top: 60),
+      ));
+    }
+    
+    // Add empty spaces for days before the first day of month
+    for (int i = 0; i < firstWeekday; i++) {
+      dayWidgets.add(const SizedBox.shrink());
+    }
+
+    // Add days of the month
+    for (int day = 1; day <= daysInMonth; day++) {
+      final currentDate = DateTime(selectedDate.year, selectedDate.month, day);
+      final isSelected = currentDate.year == selectedDate.year &&
+          currentDate.month == selectedDate.month &&
+          currentDate.day == selectedDate.day;
+      final isToday = currentDate.year == DateTime.now().year &&
+          currentDate.month == DateTime.now().month &&
+          currentDate.day == DateTime.now().day;
+
+      dayWidgets.add(
+        GestureDetector(
+          onTap: () => onDateSelected(currentDate),
+          child: Container(
+            margin: const EdgeInsets.all(4),
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: isSelected
+                  ? const Color(0xFFE53935)
+                  : isToday
+                      ? Colors.grey.shade200
+                      : Colors.transparent,
+            ),
             child: Center(
-              child: Text('No events found',
-                  style: TextStyle(color: Colors.grey)),
-            ),
-          ),
-        ...rest.map(
-          (e) => Padding(
-            padding: const EdgeInsets.fromLTRB(14, 12, 14, 0),
-            child: _CompactEventCard(event: e, onTap: () => onEventTap(e)),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-// ─────────────────────────────────────────────
-//  MY EVENTS TAB UI
-// ─────────────────────────────────────────────
-class _MyEventsTab extends StatelessWidget {
-  final List<EventData> events;
-  final ValueChanged<EventData> onEventTap;
-
-  const _MyEventsTab({required this.events, required this.onEventTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(14, 14, 14, 24),
-      children: events
-          .map((e) => Padding(
-                padding: const EdgeInsets.only(bottom: 12),
-                child:
-                    _MyEventCard(event: e, onTap: () => onEventTap(e)),
-              ))
-          .toList(),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────
-//  FEATURED EVENT CARD
-// ─────────────────────────────────────────────
-class _FeaturedEventCard extends StatelessWidget {
-  final EventData event;
-  final VoidCallback onTap;
-
-  const _FeaturedEventCard({required this.event, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.12),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        clipBehavior: Clip.antiAlias,
-        child: Stack(
-          children: [
-            Image.network(
-              event.bannerUrl,
-              height: 210,
-              width: double.infinity,
-              fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) => Container(
-                height: 210,
-                color: Colors.grey[800],
-                child: const Icon(Icons.image,
-                    size: 60, color: Colors.white38),
-              ),
-            ),
-            Positioned.fill(
-              child: Container(
-                decoration: const BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [Color(0x00000000), Color(0xCC000000)],
-                    stops: [0.35, 1.0],
-                  ),
+              child: Text(
+                day.toString(),
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                  color: isSelected
+                      ? Colors.white
+                      : isToday
+                          ? const Color(0xFFE53935)
+                          : Colors.black87,
                 ),
               ),
             ),
-            Positioned(
-              bottom: 0,
-              left: 0,
-              right: 0,
-              child: Padding(
-                padding: const EdgeInsets.all(14),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _CategoryBadge(category: event.category),
-                    const SizedBox(height: 6),
-                    Text(event.title,
-                        style: const TextStyle(
-                            fontSize: 22,
-                            fontWeight: FontWeight.w900,
-                            color: Colors.white)),
-                    Text(event.subtitle,
-                        style: const TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.white70)),
-                    const SizedBox(height: 10),
-                    Row(
-                      children: [
-                        const Icon(Icons.calendar_today_outlined,
-                            size: 12, color: Colors.white70),
-                        const SizedBox(width: 4),
-                        Text(event.date,
-                            style: const TextStyle(
-                                fontSize: 11, color: Colors.white70)),
-                        const SizedBox(width: 12),
-                        const Icon(Icons.location_on_outlined,
-                            size: 12, color: Colors.white70),
-                        const SizedBox(width: 4),
-                        Expanded(
-                          child: Text(event.location,
-                              style: const TextStyle(
-                                  fontSize: 11, color: Colors.white70),
-                              overflow: TextOverflow.ellipsis),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 10),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: _SlotsBar(
-                              slots: event.slots,
-                              slotsLeft: event.slotsLeft),
-                        ),
-                        const SizedBox(width: 12),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 16, vertical: 7),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFE53935),
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: const Text('View Details',
-                              style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w700)),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
+          ),
         ),
-      ),
+      );
+    }
+
+    return GridView.count(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      crossAxisCount: 7,
+      childAspectRatio: 1.2,
+      children: dayWidgets,
     );
   }
 }
 
 // ─────────────────────────────────────────────
-//  COMPACT EVENT CARD
+//  COMPACT EVENT CARD (for Calendar Tab)
 // ─────────────────────────────────────────────
 class _CompactEventCard extends StatelessWidget {
   final EventData event;
@@ -616,67 +560,119 @@ class _CompactEventCard extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        height: 120,
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(14),
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.08),
-              blurRadius: 6,
+              color: Colors.black.withValues(alpha: 0.05), // Fixed: replaced withOpacity
+              blurRadius: 8,
               offset: const Offset(0, 2),
             ),
           ],
         ),
-        clipBehavior: Clip.antiAlias,
-        child: Stack(
+        child: Row(
           children: [
-            Image.network(
-              event.bannerUrl,
-              height: 120,
-              width: double.infinity,
-              fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) => Container(
-                color: Colors.grey[800],
-                child:
-                    const Icon(Icons.image, color: Colors.white38),
+            Container(
+              width: 70,
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFE53935).withValues(alpha: 0.1), // Fixed: replaced withOpacity
+                borderRadius: const BorderRadius.only(
+                  topLeft: Radius.circular(12),
+                  bottomLeft: Radius.circular(12),
+                ),
+              ),
+              child: Column(
+                children: [
+                  Text(
+                    DateFormat('MMM').format(event.rawDate),
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFFE53935),
+                    ),
+                  ),
+                  Text(
+                    DateFormat('dd').format(event.rawDate),
+                    style: const TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w800,
+                      color: Color(0xFFE53935),
+                    ),
+                  ),
+                ],
               ),
             ),
-            Positioned.fill(
-              child: Container(
-                decoration: const BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.centerLeft,
-                    end: Alignment.centerRight,
-                    colors: [Color(0xDD000000), Color(0x55000000)],
-                  ),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      event.title,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w800,
+                        color: Colors.black87,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        const Icon(Icons.access_time,
+                            size: 12, color: Colors.grey),
+                        const SizedBox(width: 4),
+                        Text(
+                          event.time,
+                          style: const TextStyle(
+                              fontSize: 11, color: Colors.grey),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 2),
+                    Row(
+                      children: [
+                        const Icon(Icons.location_on_outlined,
+                            size: 12, color: Colors.grey),
+                        const SizedBox(width: 4),
+                        Expanded(
+                          child: Text(
+                            event.location,
+                            style: const TextStyle(
+                                fontSize: 11, color: Colors.grey),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
               ),
             ),
             Padding(
-              padding: const EdgeInsets.all(14),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  _CategoryBadge(category: event.category),
-                  const SizedBox(height: 4),
-                  Text(event.title,
-                      style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w900,
-                          color: Colors.white)),
-                  const SizedBox(height: 2),
-                  Row(
-                    children: [
-                      const Icon(Icons.calendar_today_outlined,
-                          size: 10, color: Colors.white60),
-                      const SizedBox(width: 4),
-                      Text(event.date,
-                          style: const TextStyle(
-                              fontSize: 10, color: Colors.white60)),
-                    ],
+              padding: const EdgeInsets.only(right: 12),
+              child: TextButton(
+                onPressed: onTap,
+                style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 12, vertical: 8),
+                  backgroundColor: const Color(0xFFE53935),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(20),
                   ),
-                ],
+                ),
+                child: const Text(
+                  'View Details',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
               ),
             ),
           ],
@@ -687,13 +683,13 @@ class _CompactEventCard extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────
-//  MY EVENT CARD
+//  UPCOMING EVENT CARD (for Event Tab)
 // ─────────────────────────────────────────────
-class _MyEventCard extends StatelessWidget {
+class _UpcomingEventCard extends StatelessWidget {
   final EventData event;
   final VoidCallback onTap;
 
-  const _MyEventCard({required this.event, required this.onTap});
+  const _UpcomingEventCard({required this.event, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -702,12 +698,12 @@ class _MyEventCard extends StatelessWidget {
       child: Container(
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(16),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.07),
-              blurRadius: 6,
-              offset: const Offset(0, 2),
+              color: Colors.black.withValues(alpha: 0.08), // Fixed: replaced withOpacity
+              blurRadius: 10,
+              offset: const Offset(0, 4),
             ),
           ],
         ),
@@ -719,69 +715,107 @@ class _MyEventCard extends StatelessWidget {
               children: [
                 Image.network(
                   event.bannerUrl,
-                  height: 140,
+                  height: 160,
                   width: double.infinity,
                   fit: BoxFit.cover,
                   errorBuilder: (_, __, ___) => Container(
-                    height: 140,
+                    height: 160,
                     color: Colors.grey[300],
+                    child: const Icon(Icons.image, size: 40, color: Colors.grey),
+                  ),
+                ),
+                Positioned.fill(
+                  child: Container(
+                    decoration: const BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [Colors.transparent, Colors.black54],
+                        stops: [0.5, 1.0],
+                      ),
+                    ),
                   ),
                 ),
                 Positioned(
-                  top: 10,
-                  right: 10,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF2E7D32),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: const [
-                        Icon(Icons.check_circle_outline,
-                            size: 12, color: Colors.white),
-                        SizedBox(width: 4),
-                        Text('Registered',
-                            style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 11,
-                                fontWeight: FontWeight.w600)),
-                      ],
-                    ),
-                  ),
+                  bottom: 12,
+                  left: 12,
+                  child: _CategoryBadge(category: event.category),
                 ),
               ],
             ),
             Padding(
               padding: const EdgeInsets.all(12),
-              child: Row(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  CircleAvatar(
-                    radius: 18,
-                    backgroundImage: NetworkImage(event.logoUrl),
-                    backgroundColor: Colors.grey[200],
-                    onBackgroundImageError: (_, __) {},
+                  Text(
+                    event.title,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800,
+                      color: Colors.black87,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(event.title,
-                            style: const TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w800,
-                                color: Colors.black87)),
-                        Text('${event.date}  •  ${event.time}',
-                            style: const TextStyle(
-                                fontSize: 11, color: Colors.grey)),
-                      ],
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      const Icon(Icons.calendar_today_outlined,
+                          size: 12, color: Colors.grey),
+                      const SizedBox(width: 4),
+                      Text(
+                        event.date,
+                        style: const TextStyle(fontSize: 11, color: Colors.grey),
+                      ),
+                      const SizedBox(width: 12),
+                      const Icon(Icons.access_time, size: 12, color: Colors.grey),
+                      const SizedBox(width: 4),
+                      Text(
+                        event.time,
+                        style: const TextStyle(fontSize: 11, color: Colors.grey),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      const Icon(Icons.location_on_outlined,
+                          size: 12, color: Colors.grey),
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: Text(
+                          event.location,
+                          style: const TextStyle(fontSize: 11, color: Colors.grey),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: onTap,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: event.isRegistered
+                            ? Colors.green
+                            : const Color(0xFFE53935),
+                        padding: const EdgeInsets.symmetric(vertical: 10),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(25),
+                        ),
+                      ),
+                      child: Text(
+                        event.isRegistered ? 'Registered ✓' : 'View Details',
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.white,
+                        ),
+                      ),
                     ),
                   ),
-                  const Icon(Icons.chevron_right,
-                      color: Colors.black38, size: 20),
                 ],
               ),
             ),
@@ -817,7 +851,7 @@ class _CategoryBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
         color: _color,
         borderRadius: BorderRadius.circular(4),
@@ -826,7 +860,7 @@ class _CategoryBadge extends StatelessWidget {
         _label,
         style: const TextStyle(
           color: Colors.white,
-          fontSize: 9,
+          fontSize: 11,
           fontWeight: FontWeight.w700,
           letterSpacing: 0.8,
         ),
@@ -836,41 +870,282 @@ class _CategoryBadge extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────
-//  SLOTS BAR
+//  EVENT DETAIL SCREEN
 // ─────────────────────────────────────────────
-class _SlotsBar extends StatelessWidget {
-  final int slots;
-  final int slotsLeft;
-  const _SlotsBar({required this.slots, required this.slotsLeft});
+class EventDetailScreen extends StatefulWidget {
+  final EventData event;
+  final VoidCallback onRegistered;
+  final bool isPastEvent;
+
+  const EventDetailScreen({
+    super.key,
+    required this.event,
+    required this.onRegistered,
+    required this.isPastEvent,
+  });
+
+  @override
+  State<EventDetailScreen> createState() => _EventDetailScreenState();
+}
+
+class _EventDetailScreenState extends State<EventDetailScreen> {
+  bool _isLoading = false;
+
+  Future<void> _registerForEvent() async {
+    if (widget.isPastEvent) return;
+    if (widget.event.slotsLeft <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Event is full!')),
+      );
+      return;
+    }
+
+    setState(() => _isLoading = true);
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please login to register')),
+      );
+      setState(() => _isLoading = false);
+      return;
+    }
+
+    try {
+      final registrationRef = FirebaseFirestore.instance
+          .collection('registrations')
+          .doc('${user.uid}_${widget.event.id}');
+
+      await FirebaseFirestore.instance.runTransaction((transaction) async {
+        final registrationDoc = await transaction.get(registrationRef);
+        if (registrationDoc.exists) {
+          throw Exception('Already registered');
+        }
+
+        final eventRef =
+            FirebaseFirestore.instance.collection('events').doc(widget.event.id);
+        final eventDoc = await transaction.get(eventRef);
+        if (!eventDoc.exists) {
+          throw Exception('Event not found');
+        }
+
+        final currentSlotsLeft = eventDoc.data()?['slotsLeft'] ?? 0;
+        if (currentSlotsLeft <= 0) {
+          throw Exception('No slots available');
+        }
+
+        transaction.update(eventRef, {'slotsLeft': currentSlotsLeft - 1});
+        transaction.set(registrationRef, {
+          'userId': user.uid,
+          'eventId': widget.event.id,
+          'registeredAt': FieldValue.serverTimestamp(),
+        });
+      });
+
+      widget.onRegistered();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+              content: Text('Successfully registered for event!')),
+        );
+        Navigator.pop(context);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.toString())),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    final taken = slots - slotsLeft;
-    final fraction = slots == 0 ? 0.0 : taken / slots;
-    final isFull = slotsLeft <= 10;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          '$slotsLeft slots left',
-          style: TextStyle(
-            fontSize: 10,
-            color:
-                isFull ? const Color(0xFFFF7043) : Colors.white70,
-            fontWeight: FontWeight.w600,
-          ),
+    return Scaffold(
+      backgroundColor: Colors.white,
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: Colors.black87),
+          onPressed: () => Navigator.pop(context),
         ),
-        const SizedBox(height: 4),
-        ClipRRect(
-          borderRadius: BorderRadius.circular(4),
-          child: LinearProgressIndicator(
-            value: fraction,
-            minHeight: 5,
-            backgroundColor: Colors.white24,
-            valueColor: AlwaysStoppedAnimation<Color>(
-              isFull ? const Color(0xFFFF7043) : Colors.greenAccent,
+        title: const Text(
+          'Event Details',
+          style: TextStyle(color: Colors.black87),
+        ),
+      ),
+      body: SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Image.network(
+              widget.event.bannerUrl,
+              height: 220,
+              width: double.infinity,
+              fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) => Container(
+                height: 220,
+                color: Colors.grey[300],
+                child: const Icon(Icons.image, size: 60, color: Colors.grey),
+              ),
             ),
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _CategoryBadge(category: widget.event.category),
+                  const SizedBox(height: 12),
+                  Text(
+                    widget.event.title,
+                    style: const TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    widget.event.subtitle,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      color: Colors.grey,
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  _InfoRow(
+                    icon: Icons.calendar_today_outlined,
+                    text: widget.event.date,
+                  ),
+                  const SizedBox(height: 12),
+                  _InfoRow(
+                    icon: Icons.access_time,
+                    text: widget.event.time,
+                  ),
+                  const SizedBox(height: 12),
+                  _InfoRow(
+                    icon: Icons.location_on_outlined,
+                    text: widget.event.location,
+                  ),
+                  const SizedBox(height: 12),
+                  _InfoRow(
+                    icon: Icons.people_outline,
+                    text: '${widget.event.slotsLeft} / ${widget.event.slots} slots remaining',
+                  ),
+                  const SizedBox(height: 20),
+                  const Text(
+                    'Description',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    widget.event.description,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      color: Colors.black87,
+                      height: 1.4,
+                    ),
+                  ),
+                  const SizedBox(height: 30),
+                  if (!widget.isPastEvent && !widget.event.isRegistered)
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: _isLoading ? null : _registerForEvent,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFFE53935),
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: _isLoading
+                            ? const SizedBox(
+                                height: 20,
+                                width: 20,
+                                child: CircularProgressIndicator(
+                                  color: Colors.white,
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Text(
+                                'Register Now',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                      ),
+                    ),
+                  if (widget.event.isRegistered && !widget.isPastEvent)
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      decoration: BoxDecoration(
+                        color: Colors.green.shade50,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.green.shade200),
+                      ),
+                      child: const Center(
+                        child: Text(
+                          '✓ You are registered',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.green,
+                          ),
+                        ),
+                      ),
+                    ),
+                  if (widget.isPastEvent)
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade100,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Center(
+                        child: Text(
+                          'Past Event',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.grey,
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _InfoRow extends StatelessWidget {
+  final IconData icon;
+  final String text;
+
+  const _InfoRow({required this.icon, required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Icon(icon, size: 18, color: Colors.grey.shade600),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            text,
+            style: const TextStyle(fontSize: 14, color: Colors.black87),
           ),
         ),
       ],
