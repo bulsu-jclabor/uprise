@@ -1,6 +1,5 @@
 // lib/screens/web/org/org_broadcast.dart
-// Redesigned: Professional + polished broadcast channel UI
-// Matches StudentAccounts / OrgAnnouncements design language exactly
+// Fixed: Message order (newest at bottom) + working image upload
 // All Firestore parameters preserved for student-side compatibility
 
 import 'dart:convert';
@@ -12,6 +11,7 @@ import 'package:firebase_storage/firebase_storage.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:image_picker/image_picker.dart';
 import '../../../services/activity_logger.dart' as activity_log;
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -128,10 +128,11 @@ class _OrgBroadcastScreenState extends State<OrgBroadcastScreen> {
     } catch (_) {}
   }
 
+  // FIXED: Messages ordered ascending (oldest first, newest at bottom)
   Stream<QuerySnapshot> get _broadcastsStream => FirebaseFirestore.instance
       .collection('broadcasts')
       .where('orgId', isEqualTo: widget.orgId)
-      .orderBy('timestamp', descending: true)
+      .orderBy('timestamp', descending: false)  // Changed to false
       .snapshots();
 
   void _scrollToBottom() {
@@ -181,31 +182,70 @@ class _OrgBroadcastScreenState extends State<OrgBroadcastScreen> {
     }
   }
 
-  // ── Image upload ─────────────────────────────────────────────────────────
+  // ── Image upload (FIXED with ImagePicker for better compatibility) ───────
   Future<void> _pickImage() async {
-    final result = await FilePicker.platform.pickFiles(
-      type: FileType.image,
-      allowMultiple: false,
+    // Show options for camera or gallery
+    final source = await showDialog<ImageSource>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text(
+          'Select Image Source',
+          style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.w700),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.photo_library),
+              title: Text('Gallery', style: GoogleFonts.beVietnamPro()),
+              onTap: () => Navigator.pop(ctx, ImageSource.gallery),
+            ),
+            ListTile(
+              leading: const Icon(Icons.camera_alt),
+              title: Text('Camera', style: GoogleFonts.beVietnamPro()),
+              onTap: () => Navigator.pop(ctx, ImageSource.camera),
+            ),
+          ],
+        ),
+      ),
     );
-    if (result == null || result.files.isEmpty) return;
+    
+    if (source == null) return;
+    
     setState(() => _isUploadingImage = true);
 
     try {
-      final file = result.files.first;
-      final bytes = file.bytes;
-      if (bytes == null) throw 'No image data';
-      if (bytes.length > 5 * 1024 * 1024) {
-        _snack('Image too large — max 5 MB', isError: true);
+      final picker = ImagePicker();
+      final XFile? pickedFile = await picker.pickImage(
+        source: source,
+        maxWidth: 1920,
+        maxHeight: 1080,
+        imageQuality: 80,
+      );
+      
+      if (pickedFile == null) {
+        setState(() => _isUploadingImage = false);
         return;
       }
-      final fileName = '${DateTime.now().millisecondsSinceEpoch}_${file.name}';
+      
+      final bytes = await pickedFile.readAsBytes();
+      if (bytes.length > 5 * 1024 * 1024) {
+        _snack('Image too large — max 5 MB', isError: true);
+        setState(() => _isUploadingImage = false);
+        return;
+      }
+      
+      final fileName = '${DateTime.now().millisecondsSinceEpoch}_${pickedFile.name}';
       final ref = FirebaseStorage.instance.ref().child(
         'broadcasts/${widget.orgId}/images/$fileName',
       );
+      
       await ref.putData(bytes, SettableMetadata(contentType: 'image/jpeg'));
       final url = await ref.getDownloadURL();
+      
       setState(() => _pendingImageUrl = url);
-      _snack('Image ready');
+      _snack('Image ready to send');
     } catch (e) {
       _snack('Failed to upload image: $e', isError: true);
     } finally {
@@ -562,7 +602,6 @@ class _OrgBroadcastScreenState extends State<OrgBroadcastScreen> {
             )
           : Row(
               children: [
-                // Icon badge
                 Container(
                   width: 46,
                   height: 46,
@@ -600,7 +639,6 @@ class _OrgBroadcastScreenState extends State<OrgBroadcastScreen> {
                     ],
                   ),
                 ),
-                // Member pill (mirrors stat card style)
                 StreamBuilder<QuerySnapshot>(
                   stream: FirebaseFirestore.instance
                       .collection('broadcasts')
@@ -661,7 +699,16 @@ class _OrgBroadcastScreenState extends State<OrgBroadcastScreen> {
               .map((d) => BroadcastModel.fromFirestore(d))
               .toList();
 
-          _scrollToBottom();
+          // Auto-scroll to bottom on new messages
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (_scrollCtrl.hasClients) {
+              _scrollCtrl.animateTo(
+                _scrollCtrl.position.maxScrollExtent,
+                duration: const Duration(milliseconds: 200),
+                curve: Curves.easeOut,
+              );
+            }
+          });
 
           return ListView.builder(
             controller: _scrollCtrl,
@@ -669,8 +716,7 @@ class _OrgBroadcastScreenState extends State<OrgBroadcastScreen> {
             itemCount: items.length,
             itemBuilder: (ctx, i) {
               final msg = items[i];
-              final showSep =
-                  i == 0 || !_sameDay(items[i - 1].timestamp, msg.timestamp);
+              final showSep = i == 0 || !_sameDay(items[i - 1].timestamp, msg.timestamp);
               return Column(
                 children: [
                   if (showSep) _DateSeparator(timestamp: msg.timestamp),
@@ -804,6 +850,12 @@ class _OrgBroadcastScreenState extends State<OrgBroadcastScreen> {
                     width: 64,
                     height: 64,
                     fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => Container(
+                      width: 64,
+                      height: 64,
+                      color: _C.errorBg,
+                      child: const Icon(Icons.broken_image, color: _C.error),
+                    ),
                   ),
                 ),
                 Positioned(
@@ -896,7 +948,7 @@ class _OrgBroadcastScreenState extends State<OrgBroadcastScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Toolbar row — matches the StudentAccounts outlined toolbar button style
+          // Toolbar row
           Wrap(
             spacing: 8,
             runSpacing: 8,
@@ -983,7 +1035,6 @@ class _OrgBroadcastScreenState extends State<OrgBroadcastScreen> {
                 ),
               ),
               const SizedBox(width: 10),
-              // Send button — gradient to match brand
               Builder(
                 builder: (ctx) {
                   final hasContent =
@@ -1628,7 +1679,17 @@ class _BroadcastBubbleState extends State<_BroadcastBubble> {
                               width: double.infinity,
                               height: 220,
                               fit: BoxFit.cover,
-                              errorBuilder: (_, __, ___) => const SizedBox(),
+                              errorBuilder: (_, __, ___) => Container(
+                                height: 220,
+                                color: Colors.black26,
+                                child: const Center(
+                                  child: Icon(
+                                    Icons.broken_image,
+                                    color: Colors.white,
+                                    size: 40,
+                                  ),
+                                ),
+                              ),
                             ),
                           ),
                         ],
