@@ -8,6 +8,25 @@ import '../admin/export_util.dart';
 import '../admin/export_pdf.dart';
 import '../../../services/activity_logger.dart' as activity_log;
 
+// ==================== CATEGORY COLORS (matching admin side) ====================
+Map<String, Color> _categoryColors = {
+  'Workshop':         const Color(0xFF8B5CF6),  // Violet
+  'Seminar':          const Color(0xFF3B82F6),  // Blue
+  'Competition':      const Color(0xFFEF4444),  // Red
+  'General Assembly': const Color(0xFFF59E0B),  // Orange
+  'Social':           const Color(0xFFEC4899),  // Pink
+  'Outreach':         const Color(0xFF10B981),  // Green
+  'Sports':           const Color(0xFF14B8A6),  // Teal
+  'Academic':         const Color(0xFF6366F1),  // Indigo
+  'Technical':        const Color(0xFF06B6D4),  // Cyan
+  'Cultural':         const Color(0xFFD946EF),  // Fuchsia
+  'Other':            const Color(0xFF6B7280),  // Gray
+};
+
+Color _getCategoryColor(String category) {
+  return _categoryColors[category] ?? const Color(0xFF6B7280);
+}
+
 // ==================== DESIGN TOKENS ====================
 class _DS {
   static const double radiusSm = 8;
@@ -73,6 +92,7 @@ class UpriseColors {
   static const Color darkText = Color(0xFF1A202C);
 }
 
+// Keep CategoryColors for chips and dropdown dots only
 class CategoryColors {
   static const Map<String, Color> bg = {
     'Academic': Color(0xFFDCFCE7),
@@ -122,6 +142,7 @@ Widget _sectionLabel(String text, {IconData? icon}) {
 }
 
 Widget _categoryChip(String category) {
+  // Keep original chip colors
   return Container(
     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
     decoration: BoxDecoration(
@@ -220,22 +241,23 @@ class OrgEventsScheduleScreen extends StatefulWidget {
 
 class _OrgEventsScheduleScreenState extends State<OrgEventsScheduleScreen> {
   DateTime _currentMonth = DateTime.now();
-  String _statusFilter = 'All';
   List<EventModel> _cachedEvents = [];
 
-  // FIX: true = only THIS org's events; false = all orgs' events (entire college).
+  // true = only THIS org's events; false = all orgs' events (entire college).
   bool _showOrgEventsOnly = true;
 
-  // ── FIX: Two clean, separate streams ──────────────────────────────
-  // "Org Events" mode — only documents belonging to this org.
+  // ── Streams with status filter applied at Firestore level ──────────────
+  // "Org Events" mode — only approved events belonging to this org.
   Stream<QuerySnapshot> get _orgEventsStream => FirebaseFirestore.instance
       .collection('events')
       .where('orgId', isEqualTo: widget.orgId)
+      .where('status', isEqualTo: 'approved')
       .snapshots();
 
-  // "All Events" mode — every event across all orgs/colleges.
+  // "All Events" mode — every approved event across all orgs/colleges.
   Stream<QuerySnapshot> get _allEventsStream => FirebaseFirestore.instance
       .collection('events')
+      .where('status', isEqualTo: 'approved')
       .orderBy('date')
       .snapshots();
 
@@ -269,20 +291,18 @@ class _OrgEventsScheduleScreenState extends State<OrgEventsScheduleScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _buildStatsRow(isMobile, horizontalPadding),
             Padding(
-              padding: EdgeInsets.fromLTRB(0, 8, 0, 0),
+              padding: EdgeInsets.fromLTRB(0, 24, 0, 0),
               child: Text(
                 _showOrgEventsOnly
-                    ? 'Showing only your organization’s events'
-                    : 'Showing all CICT events',
+                    ? 'Showing only your organization’s approved events'
+                    : 'Showing all CICT approved events',
                 style: GoogleFonts.beVietnamPro(fontSize: 11, color: const Color(0xFF64748B), fontStyle: FontStyle.italic),
               ),
             ),
             _buildToolbar(isMobile, isTablet, horizontalPadding),
             const SizedBox(height: 16),
             _buildCalendarStream(),
-            _buildLegend(horizontalPadding),
             const SizedBox(height: 28),
           ],
         ),
@@ -290,69 +310,14 @@ class _OrgEventsScheduleScreenState extends State<OrgEventsScheduleScreen> {
     );
   }
 
-  // ── Stats row ─────────────────────────────────────────────────────
-  Widget _buildStatsRow(bool isMobile, double horizontalPadding) {
-    return StreamBuilder<QuerySnapshot>(
-      // FIX: Stats always reflect whichever stream is active.
-      key: ValueKey('stats_${_showOrgEventsOnly}_${widget.orgId}'),
-      stream: _activeStream,
-      builder: (context, snapshot) {
-        int total = 0, pending = 0, approved = 0, rejected = 0, archived = 0;
-        if (snapshot.hasData) {
-          // FIX: When in "all events" mode the stream has no orgId filter,
-          // so we do NOT apply a secondary local orgId filter — we show all.
-          // When in "org events" mode, Firestore already filtered by orgId.
-          final docs = snapshot.data!.docs
-              .map((d) => EventModel.fromFirestore(d))
-              .toList();
-          total = docs.length;
-          for (final e in docs) {
-            switch (e.status) {
-              case 'pending': pending++; break;
-              case 'approved': approved++; break;
-              case 'rejected': rejected++; break;
-              case 'archived': archived++; break;
-            }
-          }
-        }
-        return Padding(
-          padding: EdgeInsets.fromLTRB(horizontalPadding, 24, horizontalPadding, 0),
-          child: Row(
-            children: [
-              Expanded(
-                child: _StatCard(label: 'Total Events', value: '$total', icon: Icons.event_rounded, color: UpriseColors.primaryDark),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: _StatCard(label: 'Approved', value: '$approved', icon: Icons.check_circle_rounded, color: const Color(0xFF059669)),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: _StatCard(label: 'Pending', value: '$pending', icon: Icons.pending_rounded, color: const Color(0xFFD97706)),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: _StatCard(label: 'Rejected', value: '$rejected', icon: Icons.cancel_rounded, color: const Color(0xFFDC2626)),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: _StatCard(label: 'Archived', value: '$archived', icon: Icons.archive_rounded, color: const Color(0xFF6B7280)),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  // ── Toolbar ───────────────────────────────────────────────────────
+  // ── Toolbar (no stats, no status filter) ─────────────────────────────────
   Widget _buildToolbar(bool isMobile, bool isTablet, double horizontalPadding) {
     final fieldWidth = isMobile ? double.infinity : (isTablet ? 220.0 : 280.0);
     return Padding(
       padding: EdgeInsets.fromLTRB(horizontalPadding, 20, horizontalPadding, 0),
       child: LayoutBuilder(
         builder: (context, constraints) {
-          final canUseRow = constraints.maxWidth > 980;
+          final canUseRow = constraints.maxWidth > 800;
           final dateControl = Container(
             height: 40,
             constraints: BoxConstraints(minWidth: fieldWidth),
@@ -413,7 +378,6 @@ class _OrgEventsScheduleScreenState extends State<OrgEventsScheduleScreen> {
                     active: _showOrgEventsOnly,
                     onTap: () => setState(() {
                       _showOrgEventsOnly = true;
-                      _statusFilter = 'All';
                     }),
                   ),
                   _ToggleTab(
@@ -421,16 +385,10 @@ class _OrgEventsScheduleScreenState extends State<OrgEventsScheduleScreen> {
                     active: !_showOrgEventsOnly,
                     onTap: () => setState(() {
                       _showOrgEventsOnly = false;
-                      _statusFilter = 'All';
                     }),
                   ),
                 ],
               ),
-            ),
-            _FilterDropdown(
-              value: _statusFilter,
-              items: const ['All', 'Pending', 'Approved', 'Rejected', 'Archived'],
-              onChanged: (v) => setState(() => _statusFilter = v!),
             ),
             AdminExportButton(onSelected: _exportEvents),
           ];
@@ -439,17 +397,8 @@ class _OrgEventsScheduleScreenState extends State<OrgEventsScheduleScreen> {
             return Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                Expanded(
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      Flexible(child: dateControl),
-                      const SizedBox(width: 10),
-                      const SizedBox(width: 0),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 12),
+                Flexible(child: dateControl),
+                const SizedBox(width: 10),
                 ...controls.sublist(1).expand((widget) => [widget, const SizedBox(width: 10)]).toList()..removeLast(),
               ],
             );
@@ -466,12 +415,10 @@ class _OrgEventsScheduleScreenState extends State<OrgEventsScheduleScreen> {
     );
   }
 
-  // ── Calendar stream ───────────────────────────────────────────────
+  // ── Calendar stream (only approved events from Firestore) ───────────────
   Widget _buildCalendarStream() {
     return StreamBuilder<QuerySnapshot>(
-      // FIX: Key changes whenever the active stream or org changes,
-      // forcing a rebuild and preventing stale data.
-      key: ValueKey('cal_${_showOrgEventsOnly}_${widget.orgId}_$_statusFilter'),
+      key: ValueKey('cal_${_showOrgEventsOnly}_${widget.orgId}'),
       stream: _activeStream,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting && snapshot.data == null) {
@@ -481,8 +428,7 @@ class _OrgEventsScheduleScreenState extends State<OrgEventsScheduleScreen> {
           return Center(child: Text('Error: ${snapshot.error}'));
         }
 
-        // FIX: Convert all docs to EventModel — no secondary orgId filter needed
-        // because the stream already handles scoping correctly.
+        // Convert all docs to EventModel — all are already approved from Firestore
         var allEvents = (snapshot.data?.docs ?? [])
             .map((doc) => EventModel.fromFirestore(doc))
             .toList();
@@ -490,13 +436,8 @@ class _OrgEventsScheduleScreenState extends State<OrgEventsScheduleScreen> {
         allEvents.sort((a, b) => a.date.compareTo(b.date));
         _archivePastEvents(allEvents);
 
-        // Apply status filter if needed.
-        final filtered = _statusFilter == 'All'
-            ? allEvents
-            : allEvents.where((e) => e.status.toLowerCase() == _statusFilter.toLowerCase()).toList();
-
-        _cachedEvents = filtered;
-        return _buildCalendarGrid(filtered);
+        _cachedEvents = allEvents;
+        return _buildCalendarGrid(allEvents);
       },
     );
   }
@@ -635,11 +576,11 @@ class _OrgEventsScheduleScreenState extends State<OrgEventsScheduleScreen> {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
                     decoration: BoxDecoration(
-                      color: CategoryColors.getDot(events.first.category).withOpacity(0.12),
+                      color: _getCategoryColor(events.first.category).withOpacity(0.12),
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: Text('${events.length}',
-                        style: GoogleFonts.beVietnamPro(fontSize: 9, fontWeight: FontWeight.w700, color: CategoryColors.getDot(events.first.category))),
+                        style: GoogleFonts.beVietnamPro(fontSize: 9, fontWeight: FontWeight.w700, color: _getCategoryColor(events.first.category))),
                   ),
               ],
             ),
@@ -650,13 +591,17 @@ class _OrgEventsScheduleScreenState extends State<OrgEventsScheduleScreen> {
                 width: double.infinity,
                 padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
                 decoration: BoxDecoration(
-                  color: CategoryColors.getBg(e.category).withOpacity(0.6),
+                  color: _getCategoryColor(e.category).withOpacity(0.12),
                   borderRadius: BorderRadius.circular(4),
-                  border: Border(left: BorderSide(color: CategoryColors.getDot(e.category), width: 2)),
+                  border: Border(left: BorderSide(color: _getCategoryColor(e.category), width: 2)),
                 ),
                 child: Text(
                   e.title.length > 13 ? '${e.title.substring(0, 13)}…' : e.title,
-                  style: GoogleFonts.beVietnamPro(fontSize: 9.5, fontWeight: FontWeight.w600, color: CategoryColors.getFg(e.category)),
+                  style: GoogleFonts.beVietnamPro(
+                    fontSize: 9.5,
+                    fontWeight: FontWeight.w600,
+                    color: _getCategoryColor(e.category),
+                  ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -667,42 +612,6 @@ class _OrgEventsScheduleScreenState extends State<OrgEventsScheduleScreen> {
           ],
         ),
       ),
-    );
-  }
-
-  Widget _buildLegend(double horizontalPadding) {
-    return Padding(
-      padding: EdgeInsets.fromLTRB(horizontalPadding, 16, horizontalPadding, 0),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: const Color(0xFFE8ECF0)),
-          boxShadow: _DS.cardShadow,
-        ),
-        child: Wrap(
-          spacing: 20,
-          runSpacing: 10,
-          alignment: WrapAlignment.center,
-          children: [
-            _legendDot('Approved', const Color(0xFF059669)),
-            _legendDot('Pending', const Color(0xFFD97706)),
-            _legendDot('Rejected', const Color(0xFFDC2626)),
-            _legendDot('Archived', const Color(0xFF6B7280)),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _legendDot(String label, Color color) {
-    return Row(
-      children: [
-        Container(width: 10, height: 10, decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(3))),
-        const SizedBox(width: 6),
-        Text(label, style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF64748B), fontWeight: FontWeight.w500)),
-      ],
     );
   }
 
@@ -792,7 +701,7 @@ class _OrgEventsScheduleScreenState extends State<OrgEventsScheduleScreen> {
               Container(
                 padding: const EdgeInsets.fromLTRB(24, 20, 20, 20),
                 decoration: BoxDecoration(
-                  color: UpriseColors.primaryDark,
+                  color: _getCategoryColor(event.category), // Changed from UpriseColors.primaryDark
                   borderRadius: const BorderRadius.vertical(top: Radius.circular(18)),
                 ),
                 child: Column(
@@ -864,7 +773,7 @@ class _OrgEventsScheduleScreenState extends State<OrgEventsScheduleScreen> {
                     Row(children: [
                       Expanded(child: _detailItem('Status', event.status[0].toUpperCase() + event.status.substring(1), Icons.circle_outlined, valueColor: _statusColor(event.status))),
                       const SizedBox(width: 16),
-                      Expanded(child: _detailItem('Category', event.category, Icons.category_outlined)),
+                      Expanded(child: _detailItem('Category', event.category, Icons.category_outlined, valueColor: _getCategoryColor(event.category))),
                     ]),
                     const SizedBox(height: 14),
                     Row(children: [
@@ -878,18 +787,18 @@ class _OrgEventsScheduleScreenState extends State<OrgEventsScheduleScreen> {
                       Container(
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
-                          color: CategoryColors.getBg(event.category).withOpacity(0.3),
+                          color: _getCategoryColor(event.category).withOpacity(0.1),
                           borderRadius: BorderRadius.circular(10),
-                          border: Border.all(color: CategoryColors.getDot(event.category).withOpacity(0.2)),
+                          border: Border.all(color: _getCategoryColor(event.category).withOpacity(0.2)),
                         ),
                         child: Row(children: [
                           Container(
                             width: 40, height: 40,
                             decoration: BoxDecoration(
-                              color: CategoryColors.getDot(event.category).withOpacity(0.2),
+                              color: _getCategoryColor(event.category).withOpacity(0.2),
                               borderRadius: BorderRadius.circular(8),
                             ),
-                            child: Icon(Icons.person_rounded, color: CategoryColors.getDot(event.category)),
+                            child: Icon(Icons.person_rounded, color: _getCategoryColor(event.category)),
                           ),
                           const SizedBox(width: 12),
                           Expanded(child: Text(event.guestSpeaker,
@@ -915,11 +824,11 @@ class _OrgEventsScheduleScreenState extends State<OrgEventsScheduleScreen> {
                         children: event.tags.map((tag) => Container(
                           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                           decoration: BoxDecoration(
-                            color: UpriseColors.primaryDark.withOpacity(0.1),
+                            color: _getCategoryColor(event.category).withOpacity(0.1),
                             borderRadius: BorderRadius.circular(20),
-                            border: Border.all(color: UpriseColors.primaryDark.withOpacity(0.3)),
+                            border: Border.all(color: _getCategoryColor(event.category).withOpacity(0.3)),
                           ),
-                          child: Text(tag, style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.w500, color: UpriseColors.primaryDark)),
+                          child: Text(tag, style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.w500, color: _getCategoryColor(event.category))),
                         )).toList(),
                       ),
                     ],
@@ -1033,70 +942,6 @@ class _OrgEventsScheduleScreenState extends State<OrgEventsScheduleScreen> {
 }
 
 // ==================== REUSABLE WIDGETS ====================
-class _StatCard extends StatelessWidget {
-  final String label, value;
-  final IconData icon;
-  final Color color;
-  const _StatCard({required this.label, required this.value, required this.icon, required this.color});
-
-  @override
-  Widget build(BuildContext context) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.all(18),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: const Color(0xFFE8ECF0)),
-          boxShadow: _DS.cardShadow,
-        ),
-        child: Row(children: [
-          Container(
-            width: 44, height: 44,
-            decoration: BoxDecoration(color: color.withOpacity(0.10), borderRadius: BorderRadius.circular(12)),
-            child: Icon(icon, color: color, size: 22),
-          ),
-          const SizedBox(width: 14),
-          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(label, style: GoogleFonts.beVietnamPro(fontSize: 11, color: const Color(0xFF64748B), fontWeight: FontWeight.w500)),
-            const SizedBox(height: 2),
-            Text(value, style: GoogleFonts.beVietnamPro(fontSize: 28, fontWeight: FontWeight.w700, color: const Color(0xFF1A202C))),
-          ])),
-        ]),
-      ),
-    );
-  }
-}
-
-class _FilterDropdown extends StatelessWidget {
-  final String value;
-  final List<String> items;
-  final ValueChanged<String?> onChanged;
-  const _FilterDropdown({required this.value, required this.items, required this.onChanged});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: 40,
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: const Color(0xFFE2E6EA)),
-      ),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<String>(
-          value: value,
-          icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 18, color: Color(0xFF9AA5B4)),
-          style: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF374151)),
-          items: items.map((s) => DropdownMenuItem(value: s, child: Text(s, style: GoogleFonts.beVietnamPro(fontSize: 13)))).toList(),
-          onChanged: onChanged,
-        ),
-      ),
-    );
-  }
-}
-
 class _NavButton extends StatelessWidget {
   final IconData icon;
   final VoidCallback onTap;
@@ -1115,7 +960,6 @@ class _NavButton extends StatelessWidget {
   }
 }
 
-// FIX: Extracted toggle tab into its own widget for cleanliness.
 class _ToggleTab extends StatelessWidget {
   final String label;
   final bool active;
@@ -1152,26 +996,45 @@ class _EventListTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final categoryColor = _getCategoryColor(event.category);
+    
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(10),
       child: Container(
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
-          color: CategoryColors.getBg(event.category).withOpacity(0.2),
+          color: categoryColor.withOpacity(0.05),
           borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: CategoryColors.getDot(event.category).withOpacity(0.3)),
+          border: Border.all(color: categoryColor.withOpacity(0.2)),
         ),
         child: Row(children: [
           Container(
             width: 4, height: 48,
-            decoration: BoxDecoration(color: CategoryColors.getDot(event.category), borderRadius: BorderRadius.circular(2)),
+            decoration: BoxDecoration(
+              color: categoryColor,
+              borderRadius: BorderRadius.circular(2),
+            ),
           ),
           const SizedBox(width: 12),
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(event.title, style: GoogleFonts.beVietnamPro(fontSize: 14, fontWeight: FontWeight.w600, color: const Color(0xFF1A202C))),
             const SizedBox(height: 3),
-            Text(event.location, style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF64748B))),
+            Row(children: [
+              Container(
+                width: 8, height: 8,
+                decoration: BoxDecoration(
+                  color: categoryColor,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(width: 4),
+              Text(event.category,
+                  style: GoogleFonts.beVietnamPro(fontSize: 11, color: categoryColor)),
+              const SizedBox(width: 8),
+              Text(event.location,
+                  style: GoogleFonts.beVietnamPro(fontSize: 11, color: const Color(0xFF64748B))),
+            ]),
           ])),
           Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
             _categoryChip(event.category),
@@ -1193,11 +1056,9 @@ class _EventModal extends StatefulWidget {
   final String orgId;
   final EventModel? existingEvent;
   
-  // FIX: Add existingEvent to the constructor
-  // ignore: unused_element_parameter
   const _EventModal({
     required this.orgId,
-    this.existingEvent, // Add this parameter // ignore: unused_element_parameter
+    this.existingEvent,
   });
 
   @override
@@ -1279,6 +1140,7 @@ class _EventModalState extends State<_EventModal> {
       'date': Timestamp.fromDate(_selectedDate!),
       'updatedAt': FieldValue.serverTimestamp(),
       'orgId': widget.existingEvent?.orgId ?? widget.orgId,
+      'status': 'pending', // Always start as pending
     };
 
     try {
