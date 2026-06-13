@@ -81,7 +81,7 @@ class _Product {
       description: d['description'] as String? ?? '',
       category   : d['category']    as String? ?? '',
       price      : (d['price']  ?? 0).toDouble(),
-      stock      : (d['stock']  ?? 0) as int,
+      stock      : (d['stock']   ?? 0) as int,
       sold       : (d['sold']   ?? 0) as int,
       imageUrl   : d['imageUrl'] as String? ?? '',
       status     : d['status']    as String? ?? 'available',
@@ -162,8 +162,6 @@ class _StudentMerchandiseScreenState
     super.dispose();
   }
 
-  // Determine which org the current student belongs to,
-  // falling back to a "show all" mode if none is set.
   Future<void> _resolveOrgId() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) { setState(() => _loadingOrgId = false); return; }
@@ -274,7 +272,6 @@ class _StudentMerchandiseScreenState
           child: Container(height: 2, color: _kOrange),
         ),
         actions: [
-          // Cart badge
           Stack(
             alignment: Alignment.center,
             children: [
@@ -313,7 +310,6 @@ class _StudentMerchandiseScreenState
           ? const Center(child: CircularProgressIndicator(color: _kOrange))
           : Column(
               children: [
-                // Tab Pills
                 _TabRow(
                   selectedTab: _selectedTab,
                   onTap: (i) {
@@ -321,18 +317,16 @@ class _StudentMerchandiseScreenState
                     setState(() => _selectedTab = i);
                   },
                 ),
-                // Tab Views
                 Expanded(
                   child: TabBarView(
                     controller: _tabController,
                     physics: const NeverScrollableScrollPhysics(),
                     children: [
                       _ProductsTab(
-                        orgId: _studentOrgId,
                         onAddToCart: _addToCart,
                         cart: _cart,
                       ),
-                      _MyOrdersTab(orgId: _studentOrgId),
+                      const _MyOrdersTab(),
                     ],
                   ),
                 ),
@@ -374,7 +368,6 @@ class _StudentMerchandiseScreenState
                 backgroundColor: _kOrange,
               ),
             );
-            // Switch to My Orders tab
             _tabController.animateTo(1);
             setState(() => _selectedTab = 1);
           },
@@ -448,15 +441,13 @@ class _TabPill extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────
-// Products Tab  (fetches from org's 'products' collection)
+// Products Tab - FETCHES ALL PRODUCTS FROM ALL ORGS
 // ─────────────────────────────────────────────────────────────
 class _ProductsTab extends StatefulWidget {
-  final String? orgId;
   final void Function(_Product, {ProductVariant? variant}) onAddToCart;
   final List<_CartItem> cart;
 
   const _ProductsTab({
-    required this.orgId,
     required this.onAddToCart,
     required this.cart,
   });
@@ -477,22 +468,16 @@ class _ProductsTabState extends State<_ProductsTab> {
   }
 
   Stream<QuerySnapshot> get _stream {
-    Query q = FirebaseFirestore.instance
+    return FirebaseFirestore.instance
         .collection('products')
-        .where('archived', isEqualTo: false);
-
-    // Scoped to student's org if set, otherwise fetch all public products
-    if (widget.orgId != null) {
-      q = q.where('orgId', isEqualTo: widget.orgId);
-    }
-    return q.snapshots();
+        .where('isArchived', isEqualTo: false)
+        .snapshots();
   }
 
   @override
   Widget build(BuildContext context) {
     return Column(
       children: [
-        // Search + filter bar
         _SearchBar(
           controller: _searchCtrl,
           onChanged: (v) => setState(() => _search = v),
@@ -518,7 +503,6 @@ class _ProductsTabState extends State<_ProductsTab> {
                   .map((d) => _Product.fromFirestore(d))
                   .toList();
 
-              // Build category list
               final categories = [
                 'All',
                 ...{for (final p in products) p.category}
@@ -527,7 +511,6 @@ class _ProductsTabState extends State<_ProductsTab> {
                   ..sort(),
               ];
 
-              // Filter
               if (_selectedCat != 'All') {
                 products = products
                     .where((p) => p.category == _selectedCat)
@@ -554,7 +537,6 @@ class _ProductsTabState extends State<_ProductsTab> {
 
               return Column(
                 children: [
-                  // Category chips
                   _CategoryRow(
                     categories: categories,
                     selected: _selectedCat,
@@ -712,7 +694,6 @@ class _ProductCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Image
             ClipRRect(
               borderRadius:
                   const BorderRadius.vertical(top: Radius.circular(14)),
@@ -1007,9 +988,6 @@ class _ProductCard extends StatelessWidget {
   }
 }
 
-// ─────────────────────────────────────────────────────────────
-// Variant Picker Sheet
-// ─────────────────────────────────────────────────────────────
 class _VariantPickerSheet extends StatefulWidget {
   final _Product product;
   final void Function(ProductVariant) onSelect;
@@ -1203,9 +1181,6 @@ class _DetailChip extends StatelessWidget {
   }
 }
 
-// ─────────────────────────────────────────────────────────────
-// Status badge for product card and detail sheet
-// ─────────────────────────────────────────────────────────────
 class _StatusBadge extends StatelessWidget {
   final String status;
   const _StatusBadge({required this.status});
@@ -1243,9 +1218,6 @@ class _StatusBadge extends StatelessWidget {
   }
 }
 
-// ─────────────────────────────────────────────────────────────
-// Variants table for product detail sheet
-// ─────────────────────────────────────────────────────────────
 class _VariantsTable extends StatelessWidget {
   final _Product product;
   final double basePrice;
@@ -1311,31 +1283,21 @@ class _VariantsTable extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────
-// My Orders Tab
+// My Orders Tab - FIXED (no orgId filter)
 // ─────────────────────────────────────────────────────────────
 class _MyOrdersTab extends StatelessWidget {
-  final String? orgId;
-  const _MyOrdersTab({required this.orgId});
+  const _MyOrdersTab();
 
   Stream<QuerySnapshot> get _stream {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
       return const Stream.empty();
     }
-    Query q = FirebaseFirestore.instance
+    return FirebaseFirestore.instance
         .collection('orders')
         .where('customerEmail', isEqualTo: user.email)
-        .orderBy('createdAt', descending: true);
-
-    // Scope to org if known
-    if (orgId != null) {
-      q = FirebaseFirestore.instance
-          .collection('orders')
-          .where('customerEmail', isEqualTo: user.email)
-          .where('orgId', isEqualTo: orgId)
-          .orderBy('createdAt', descending: true);
-    }
-    return q.snapshots();
+        .orderBy('createdAt', descending: true)
+        .snapshots();
   }
 
   @override
@@ -1382,7 +1344,7 @@ class _OrderTile extends StatelessWidget {
     final orderId     = d['orderId'] as String?
         ?? 'ORD-${doc.id.substring(0, 6).toUpperCase()}';
     final status      = (d['status']       as String?) ?? 'pending';
-    final pickupStatus = (d['pickupStatus'] as String?) ?? 'Pending'; // NEW
+    final pickupStatus = (d['pickupStatus'] as String?) ?? 'Pending';
     final total       = (d['total']        ?? 0).toDouble();
     final ts          = d['createdAt'] as Timestamp?;
     final dateStr     = ts != null
@@ -1438,7 +1400,6 @@ class _OrderTile extends StatelessWidget {
                     color: Colors.black87),
               ),
               const Spacer(),
-              // NEW: Pickup status badge
               _PickupBadge(status: pickupStatus),
               const SizedBox(width: 6),
               Container(
@@ -1561,7 +1522,6 @@ class _CartSheet extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Handle
           Container(
             width: 40,
             height: 4,
@@ -1587,7 +1547,6 @@ class _CartSheet extends StatelessWidget {
           const SizedBox(height: 10),
           const Divider(height: 1),
 
-          // Items
           ConstrainedBox(
             constraints: const BoxConstraints(maxHeight: 280),
             child: cart.isEmpty
@@ -1688,7 +1647,7 @@ class _CartSheet extends StatelessWidget {
 
     final orderData = {
       'orderId'        : orderId,
-      'orgId'          : orgId,
+      'orgId'          : cart.isNotEmpty ? cart.first.product.orgId : '',
       'customerName'   : customerName,
       'customerEmail'  : user.email ?? '',
       'customerPhone'  : '',
@@ -1717,15 +1676,11 @@ class _CartSheet extends StatelessWidget {
 
     try {
       await db.runTransaction((txn) async {
-        // ── Phase 1: read all product docs ───────────────────
         final snaps = <String, DocumentSnapshot>{};
         for (final id in productIds) {
           snaps[id] = await txn.get(db.collection('products').doc(id));
         }
 
-        // ── Phase 2: compute updates, then write ─────────────
-        // Accumulate mutable state per product so multiple cart
-        // items sharing a product are handled in one update.
         final productState = <String, Map<String, dynamic>>{};
 
         for (final id in productIds) {
@@ -1765,7 +1720,6 @@ class _CartSheet extends StatelessWidget {
               logOldStock = 0;
               logNewStock = 0;
             }
-            // Always decrement overall product stock too
             state['stock'] = ((state['stock'] as int) - item.quantity).clamp(0, 999999);
           } else {
             logOldStock    = state['stock'] as int;
@@ -1787,7 +1741,6 @@ class _CartSheet extends StatelessWidget {
           });
         }
 
-        // Apply product stock updates
         for (final entry in productState.entries) {
           final state      = entry.value;
           final variantList =
@@ -1796,7 +1749,6 @@ class _CartSheet extends StatelessWidget {
           if (state['variantsModified'] as bool) {
             update['variants'] = variantList;
           }
-          // Auto-update status when stock hits 0 (skip discontinued products)
           final currentStatus = state['status'] as String;
           if (currentStatus != 'discontinued') {
             final effectiveStock = variantList.isNotEmpty
@@ -1841,7 +1793,6 @@ class _CartItemRow extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 6),
       child: Row(
         children: [
-          // Thumbnail
           ClipRRect(
             borderRadius: BorderRadius.circular(6),
             child: item.product.imageUrl.isNotEmpty
@@ -1888,7 +1839,6 @@ class _CartItemRow extends StatelessWidget {
               ],
             ),
           ),
-          // Qty controls
           Row(
             children: [
               _QtyBtn(
@@ -1951,9 +1901,6 @@ class _QtyBtn extends StatelessWidget {
   }
 }
 
-// ─────────────────────────────────────────────────────────────
-// NEW: Pickup status badge for My Orders tab
-// ─────────────────────────────────────────────────────────────
 class _PickupBadge extends StatelessWidget {
   final String status;
   const _PickupBadge({required this.status});
@@ -1980,9 +1927,6 @@ class _PickupBadge extends StatelessWidget {
   }
 }
 
-// ─────────────────────────────────────────────────────────────
-// Empty hint
-// ─────────────────────────────────────────────────────────────
 class _EmptyHint extends StatelessWidget {
   final IconData icon;
   final String title;
