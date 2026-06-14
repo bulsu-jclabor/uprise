@@ -90,6 +90,8 @@ class _OrgFinanceScreenState extends State<OrgFinanceScreen> {
   String _filterCategory = 'All';
   int _currentPage = 1;
   static const int _pageSize = 10;
+  final ScrollController _tableScrollController = ScrollController();
+  String? _highlightedTransactionId;
 
   final List<String> _categories = [
     'All', 'Workshops', 'Competitions', 'Partnerships', 'Socials', 'Retail', 'General'
@@ -129,7 +131,37 @@ class _OrgFinanceScreenState extends State<OrgFinanceScreen> {
       context: context,
       barrierDismissible: false,
       builder: (_) => _TransactionModal(orgId: widget.orgId),
-    ).then((_) => setState(() {}));
+    ).then((result) {
+      // Reset filters and go to first page so the newly added transaction is visible
+      if (result is String && result.isNotEmpty) {
+        setState(() {
+          _currentPage = 1;
+          _searchQuery = '';
+          _searchController.clear();
+          _filterType = 'all';
+          _filterCategory = 'All';
+          _highlightedTransactionId = result;
+        });
+        // Remove highlight after a short delay
+        Future.delayed(const Duration(seconds: 4), () {
+          if (mounted && _highlightedTransactionId == result) {
+            setState(() => _highlightedTransactionId = null);
+          }
+        });
+      } else {
+        setState(() { _currentPage = 1; });
+      }
+      // Scroll the table to top after frame
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (_tableScrollController.hasClients) {
+          _tableScrollController.animateTo(
+            0,
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeOut,
+          );
+        }
+      });
+    });
   }
 
   void _openEditModal(TransactionModel transaction) {
@@ -137,7 +169,27 @@ class _OrgFinanceScreenState extends State<OrgFinanceScreen> {
       context: context,
       barrierDismissible: false,
       builder: (_) => _TransactionModal(orgId: widget.orgId, existingTransaction: transaction),
-    ).then((_) => setState(() {}));
+    ).then((result) {
+      if (result is String && result.isNotEmpty) {
+        setState(() {
+          _highlightedTransactionId = result;
+        });
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (_tableScrollController.hasClients) {
+            _tableScrollController.animateTo(
+              0,
+              duration: const Duration(milliseconds: 300),
+              curve: Curves.easeOut,
+            );
+          }
+        });
+        Future.delayed(const Duration(seconds: 3), () {
+          if (mounted && _highlightedTransactionId == result) setState(() => _highlightedTransactionId = null);
+        });
+      } else {
+        setState(() {});
+      }
+    });
   }
 
   Future<void> _deleteTransaction(TransactionModel transaction) async {
@@ -592,10 +644,11 @@ class _OrgFinanceScreenState extends State<OrgFinanceScreen> {
   void initState() {
     super.initState();
     _transactionsStream = FirebaseFirestore.instance
-        .collection('transactions')
-        .where('orgId', isEqualTo: widget.orgId)
-        .orderBy('date', descending: true)
-        .snapshots();
+      .collection('transactions')
+      .where('orgId', isEqualTo: widget.orgId)
+      // Removed server-side orderBy to avoid requiring a composite index.
+      // We will sort the transactions client-side in _transactionsFromSnapshot().
+      .snapshots();
     _statsStream = FirebaseFirestore.instance
         .collection('transactions')
         .where('orgId', isEqualTo: widget.orgId)
@@ -604,8 +657,61 @@ class _OrgFinanceScreenState extends State<OrgFinanceScreen> {
 
   @override
   void dispose() {
+    _tableScrollController.dispose();
     _searchController.dispose();
     super.dispose();
+  }
+
+  List<TransactionModel> _transactionsFromSnapshot(QuerySnapshot? snap) {
+    if (snap == null) return <TransactionModel>[];
+    final out = <TransactionModel>[];
+    for (final doc in snap.docs) {
+      try {
+        out.add(TransactionModel.fromFirestore(doc));
+      } catch (e) {
+        // Skip invalid documents to avoid breaking the whole list
+        debugPrint('org_finance: skipping invalid transaction ${doc.id}: $e');
+      }
+    }
+    return out;
+  }
+
+  Widget _buildStreamErrorWidget(Object? error) {
+    final msg = error?.toString() ?? 'Unknown error';
+    debugPrint('org_finance: stream error: $msg');
+    // Try to extract a Firebase console index URL
+    final urlRegex = RegExp(r'https://console\.firebase\.google\.com/[^\s"<>]+');
+    final match = urlRegex.firstMatch(msg);
+    final url = match?.group(0);
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24.0),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.error_outline, size: 48, color: OrgColors.error),
+            const SizedBox(height: 12),
+            Text('Error loading transactions',
+                style: GoogleFonts.beVietnamPro(
+                    fontSize: 16, fontWeight: FontWeight.w700)),
+            const SizedBox(height: 8),
+            Text(
+              'There was a problem fetching transactions. This often means Firestore needs a composite index for the current query.',
+              textAlign: TextAlign.center,
+              style: GoogleFonts.beVietnamPro(fontSize: 13, color: OrgColors.darkGray),
+            ),
+            const SizedBox(height: 10),
+            SelectableText(msg, style: GoogleFonts.beVietnamPro(fontSize: 12)),
+            if (url != null) ...[
+              const SizedBox(height: 10),
+              Text('Open this link in your browser to create the index:', style: GoogleFonts.beVietnamPro(fontSize: 12)),
+              const SizedBox(height: 6),
+              SelectableText(url, style: GoogleFonts.beVietnamPro(fontSize: 12, color: OrgColors.info)),
+            ],
+          ],
+        ),
+      ),
+    );
   }
 
   @override
@@ -744,11 +850,24 @@ class _OrgFinanceScreenState extends State<OrgFinanceScreen> {
           StreamBuilder<QuerySnapshot>(
             stream: _transactionsStream,
             builder: (context, snapshot) {
-              final transactions = snapshot.hasData
-                  ? snapshot.data!.docs
-                      .map((doc) => TransactionModel.fromFirestore(doc))
-                      .toList()
-                  : <TransactionModel>[];
+              if (snapshot.hasError) {
+                return OutlinedButton.icon(
+                  onPressed: null,
+                  icon: const Icon(Icons.insert_drive_file_outlined, size: 15),
+                  label: Text('Generate Report',
+                      style: GoogleFonts.beVietnamPro(
+                          fontSize: 13, fontWeight: FontWeight.w600)),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: OrgColors.primaryDark,
+                    side: const BorderSide(color: OrgColors.primaryDark),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 10),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10)),
+                  ),
+                );
+              }
+              final transactions = _transactionsFromSnapshot(snapshot.data);
               return OutlinedButton.icon(
                 onPressed: () =>
                     _showGenerateReportDialog(context, transactions),
@@ -772,11 +891,10 @@ class _OrgFinanceScreenState extends State<OrgFinanceScreen> {
           StreamBuilder<QuerySnapshot>(
             stream: _transactionsStream,
             builder: (context, snapshot) {
-              final transactions = snapshot.hasData
-                  ? snapshot.data!.docs
-                      .map((doc) => TransactionModel.fromFirestore(doc))
-                      .toList()
-                  : <TransactionModel>[];
+              if (snapshot.hasError) {
+                return AdminExportButton(label: 'Export', onSelected: (_) {});
+              }
+              final transactions = _transactionsFromSnapshot(snapshot.data);
               return AdminExportButton(
                 label: 'Export',
                 onSelected: (choice) =>
@@ -814,14 +932,13 @@ class _OrgFinanceScreenState extends State<OrgFinanceScreen> {
       child: StreamBuilder<QuerySnapshot>(
         stream: _transactionsStream,
         builder: (context, snapshot) {
+          if (snapshot.hasError) {
+            return _buildStreamErrorWidget(snapshot.error);
+          }
           if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
             return const Center(child: CircularProgressIndicator());
           }
-          final transactions = snapshot.hasData
-              ? snapshot.data!.docs
-                  .map((doc) => TransactionModel.fromFirestore(doc))
-                  .toList()
-              : <TransactionModel>[];
+          final transactions = _transactionsFromSnapshot(snapshot.data);
           final filtered = _filterTransactions(transactions);
 
           final totalPages =
@@ -854,12 +971,13 @@ class _OrgFinanceScreenState extends State<OrgFinanceScreen> {
                                 icon: Icons.receipt_long_outlined,
                                 title: 'No transactions yet',
                                 subtitle: 'Click "Add Transaction" to get started.')
-                            : filtered.isEmpty
+                                : filtered.isEmpty
                                 ? _buildEmptyState(
                                     icon: Icons.search_off_rounded,
                                     title: 'No matching transactions',
                                     subtitle: 'Try adjusting your search or filters.')
                                 : ListView.builder(
+                                    controller: _tableScrollController,
                                     itemCount: pageDocs.length,
                                     itemBuilder: (_, i) => _buildTransactionRow(
                                       transaction: pageDocs[i],
@@ -1458,13 +1576,25 @@ class _TransactionModalState extends State<_TransactionModal> {
     final snapshot = await FirebaseFirestore.instance
         .collection('events')
         .where('orgId', isEqualTo: widget.orgId)
-        .orderBy('date', descending: false)
         .get();
     setState(() {
       _events = snapshot.docs.map((doc) {
         final data = doc.data();
-        return {'id': doc.id, 'name': data['title'] ?? 'Untitled'};
+        return {
+          'id': doc.id,
+          'name': data['title'] ?? 'Untitled',
+          'date': data['date']
+        };
       }).toList();
+      // Sort client-side by date if available
+      _events.sort((a, b) {
+        final da = a['date'] as Timestamp?;
+        final db = b['date'] as Timestamp?;
+        if (da == null && db == null) return 0;
+        if (da == null) return 1;
+        if (db == null) return -1;
+        return da.toDate().compareTo(db.toDate());
+      });
       _loadingEvents = false;
       if (_events.isNotEmpty && !_isEdit) {
         _selectedEventId = _events.first['id'];
@@ -1530,10 +1660,11 @@ class _TransactionModalState extends State<_TransactionModal> {
             'transactionId': widget.existingTransaction!.id
           },
         );
+        if (mounted) Navigator.pop(context, widget.existingTransaction!.id);
       } else {
         data['createdBy'] = user?.uid ?? '';
         data['createdAt'] = FieldValue.serverTimestamp();
-        await FirebaseFirestore.instance.collection('transactions').add(data);
+        final ref = await FirebaseFirestore.instance.collection('transactions').add(data);
         await activity_log.ActivityLogger.log(
           action: 'create_transaction',
           module: 'finance',
@@ -1543,8 +1674,8 @@ class _TransactionModalState extends State<_TransactionModal> {
             'type': _type
           },
         );
+        if (mounted) Navigator.pop(context, ref.id);
       }
-      if (mounted) Navigator.pop(context);
     } catch (e) {
       if (mounted) _showError('Error: $e');
     } finally {

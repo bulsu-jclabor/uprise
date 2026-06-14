@@ -1931,7 +1931,7 @@ class _StudentAccountsState extends State<StudentAccounts> {
             'Content-Type': 'application/json',
             'origin': 'http://localhost',
           },
-          body: jsonEncode({
+          body: jsonEncode({ 
             'service_id': 'service_s3ke8zd',
             'template_id': 'template_76fn2md',
             'user_id': 'tmx47wQJmb1uMNUpr',
