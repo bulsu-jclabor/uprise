@@ -1,8 +1,7 @@
-// lib/screens/web/org/org_reports.dart
+﻿// lib/screens/web/org/org_reports.dart
 // ignore_for_file: use_build_context_synchronously, deprecated_member_use
 
 import 'dart:async';
-import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -26,12 +25,12 @@ class _DS {
   static const double radiusPill = 100;
 
   // Brand amber
-  static const Color primary     = Color(0xFFB45309);
+  static const Color primary     = Color(0xFFEA580C);
   static const Color primaryBg   = Color(0xFFFEF3C7);
 
   static final cardShadow = [
     BoxShadow(
-      color: Colors.black.withOpacity(0.06),
+      color: Colors.black.withAlpha(15),
       blurRadius: 12,
       offset: const Offset(0, 4),
     ),
@@ -108,7 +107,7 @@ Widget _sectionLabel(String text, {IconData? icon}) => Padding(
 
 Widget _statusBadge(String status) {
   final Map<String, _BadgeStyle> styles = {
-    'pending':  _BadgeStyle(const Color(0xFFFFFBEB), const Color(0xFFD97706), 'PENDING'),
+    'pending':  _BadgeStyle(const Color(0xFFFFFBEB), const Color(0xFFFB923C), 'PENDING'),
     'approved': _BadgeStyle(const Color(0xFFECFDF5), const Color(0xFF059669), 'APPROVED'),
     'rejected': _BadgeStyle(const Color(0xFFFEF2F2), const Color(0xFFDC2626), 'REJECTED'),
     'review':   _BadgeStyle(const Color(0xFFEDE9FE), const Color(0xFF5B21B6), 'ON REVIEW'),
@@ -187,21 +186,33 @@ class _OrgReportsScreenState extends State<OrgReportsScreen> {
 
   Future<void> _loadEventDate() async {
     try {
-      final doc = await FirebaseFirestore.instance
-          .collection('orgs')
-          .doc(widget.orgId)
+      final now = DateTime.now();
+      final snap = await FirebaseFirestore.instance
+          .collection('events')
+          .where('orgId', isEqualTo: widget.orgId)
+          .where('status', isEqualTo: 'approved')
           .get();
-      if (doc.exists) {
-        final data  = doc.data()!;
-        final ts    = data['eventDate']  as Timestamp?;
-        final label = data['eventLabel'] as String?;
-        if (ts != null) {
-          _eventDate  = ts.toDate();
-          _eventLabel = (label?.isNotEmpty == true) ? label! : 'Upcoming Event';
-          _updateRemaining();
-          _countdownTimer = Timer.periodic(
-              const Duration(seconds: 1), (_) => _updateRemaining());
+
+      DateTime? nextDate;
+      String nextLabel = '';
+      for (final doc in snap.docs) {
+        final data = doc.data();
+        final ts = data['date'] as Timestamp?;
+        if (ts == null) continue;
+        final date = ts.toDate();
+        if (date.isBefore(now)) continue;
+        if (nextDate == null || date.isBefore(nextDate)) {
+          nextDate = date;
+          nextLabel = data['title']?.toString() ?? 'Upcoming Event';
         }
+      }
+
+      if (nextDate != null) {
+        _eventDate  = nextDate;
+        _eventLabel = nextLabel;
+        _updateRemaining();
+        _countdownTimer = Timer.periodic(
+            const Duration(seconds: 1), (_) => _updateRemaining());
       }
     } catch (_) {}
     if (mounted) setState(() => _eventLoaded = true);
@@ -322,7 +333,7 @@ class _OrgReportsScreenState extends State<OrgReportsScreen> {
         const SizedBox(width: 14),
         _StatCard(label: 'Accomplishment',         value: '$accompl',   icon: Icons.assignment_turned_in_outlined, color: const Color(0xFF2563EB)),
         const SizedBox(width: 14),
-        _StatCard(label: 'Pending Review',         value: '$pending',   icon: Icons.pending_outlined,             color: const Color(0xFFD97706)),
+        _StatCard(label: 'Pending Review',         value: '$pending',   icon: Icons.pending_outlined,             color: const Color(0xFFFB923C)),
         const SizedBox(width: 14),
         _StatCard(label: 'Approved',               value: '$approved',  icon: Icons.check_circle_outline,         color: const Color(0xFF059669)),
       ]),
@@ -482,9 +493,9 @@ class _OrgReportsScreenState extends State<OrgReportsScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 13),
       decoration: const BoxDecoration(
-        color: Color(0xFFF8F9FB),
+        color: Color(0xFFFFF7ED),
         borderRadius: BorderRadius.vertical(top: Radius.circular(14)),
-        border: Border(bottom: BorderSide(color: Color(0xFFE8ECF0))),
+        border: Border(bottom: BorderSide(color: Color(0xFFFB923C))),
       ),
       child: Row(children: [
         Expanded(flex: 2, child: _headerCell('REPORT ID')),
@@ -864,7 +875,7 @@ class _StatusDropdown extends StatelessWidget {
   const _StatusDropdown({required this.report});
 
   static const _cfg = <String, Map<String, dynamic>>{
-    'pending':  {'label': 'PENDING',   'bg': Color(0xFFFFFBEB), 'fg': Color(0xFFD97706)},
+    'pending':  {'label': 'PENDING',   'bg': Color(0xFFFFFBEB), 'fg': Color(0xFFFB923C)},
     'approved': {'label': 'APPROVED',  'bg': Color(0xFFECFDF5), 'fg': Color(0xFF059669)},
     'rejected': {'label': 'REJECTED',  'bg': Color(0xFFFEF2F2), 'fg': Color(0xFFDC2626)},
     'review':   {'label': 'ON REVIEW', 'bg': Color(0xFFEDE9FE), 'fg': Color(0xFF5B21B6)},
@@ -960,7 +971,7 @@ class _ViewReportModal extends StatelessWidget {
                   width: 38,
                   height: 38,
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.15),
+                    color: Colors.white.withAlpha(38),
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: const Icon(Icons.article_outlined,
@@ -980,7 +991,7 @@ class _ViewReportModal extends StatelessWidget {
                       Text(report.reportId,
                           style: GoogleFonts.beVietnamPro(
                             fontSize: 12,
-                            color: Colors.white.withOpacity(0.7),
+                            color: Colors.white.withAlpha(179),
                           )),
                     ],
                   ),
@@ -1139,7 +1150,7 @@ class _ViewReportModal extends StatelessWidget {
       case 'approved': return const Color(0xFF059669);
       case 'rejected': return const Color(0xFFDC2626);
       case 'review':   return const Color(0xFF5B21B6);
-      default:         return const Color(0xFFD97706);
+      default:         return const Color(0xFFFB923C);
     }
   }
 
@@ -1246,8 +1257,6 @@ class _ReportModalState extends State<_ReportModal> {
           .child('reports/${widget.orgId}/$name');
       if (file.bytes != null) {
         await ref.putData(file.bytes!);
-      } else {
-        await ref.putFile(File(file.path!));
       }
       final url = await ref.getDownloadURL();
       setState(() {
@@ -1390,7 +1399,7 @@ class _ReportModalState extends State<_ReportModal> {
                   width: 38,
                   height: 38,
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.15),
+                    color: Colors.white.withAlpha(38),
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: Icon(
@@ -1607,7 +1616,7 @@ class _ReportModalState extends State<_ReportModal> {
                       padding: const EdgeInsets.symmetric(
                           horizontal: 20, vertical: 11),
                       disabledBackgroundColor:
-                          _DS.primary.withOpacity(0.5),
+                          _DS.primary.withAlpha(128),
                     ),
                   ),
                 ],
@@ -1628,7 +1637,7 @@ class _ReportModalState extends State<_ReportModal> {
           color: const Color(0xFFF8F9FB),
           borderRadius: BorderRadius.circular(10),
           border: Border.all(
-              color: _DS.primary.withOpacity(0.4), width: 1.5),
+              color: _DS.primary.withAlpha(102), width: 1.5),
         ),
         child: Column(children: [
           const SizedBox(
@@ -1658,7 +1667,7 @@ class _ReportModalState extends State<_ReportModal> {
           Container(
             padding: const EdgeInsets.all(7),
             decoration: BoxDecoration(
-              color: const Color(0xFF059669).withOpacity(0.1),
+              color: const Color(0xFF059669).withAlpha(26),
               borderRadius: BorderRadius.circular(8),
             ),
             child: const Icon(Icons.check_circle_rounded,
@@ -1706,7 +1715,7 @@ class _ReportModalState extends State<_ReportModal> {
             width: 48,
             height: 48,
             decoration: BoxDecoration(
-              color: _DS.primary.withOpacity(0.08),
+              color: _DS.primary.withAlpha(20),
               borderRadius: BorderRadius.circular(12),
             ),
             child: Icon(Icons.cloud_upload_rounded,
@@ -1965,7 +1974,7 @@ class _DeadlineCard extends StatelessWidget {
             : const Color(0xFF059669))
         : (deadline != null && now.isAfter(deadline!)
             ? const Color(0xFFDC2626)
-            : const Color(0xFFD97706));
+            : const Color(0xFFFB923C));
 
     return Expanded(
       child: Container(
@@ -1981,7 +1990,7 @@ class _DeadlineCard extends StatelessWidget {
             width: 42,
             height: 42,
             decoration: BoxDecoration(
-              color: statusColor.withOpacity(0.1),
+              color: statusColor.withAlpha(26),
               borderRadius: BorderRadius.circular(10),
             ),
             child: Icon(Icons.event_outlined,
@@ -2014,7 +2023,7 @@ class _DeadlineCard extends StatelessWidget {
             padding: const EdgeInsets.symmetric(
                 horizontal: 10, vertical: 5),
             decoration: BoxDecoration(
-              color: statusColor.withOpacity(0.1),
+              color: statusColor.withAlpha(26),
               borderRadius:
                   BorderRadius.circular(_DS.radiusPill),
             ),
@@ -2363,7 +2372,7 @@ class _StatCard extends StatelessWidget {
               width: 44,
               height: 44,
               decoration: BoxDecoration(
-                color: color.withOpacity(0.10),
+                color: color.withAlpha(26),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Icon(icon, color: color, size: 22),

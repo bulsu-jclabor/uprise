@@ -1,4 +1,4 @@
-// lib/screens/web/org/org_dashboard.dart
+﻿// lib/screens/web/org/org_dashboard.dart
 //
 // Redesigned to match AdminDashboard pattern exactly:
 //  - Gradient welcome header card with icon
@@ -36,9 +36,9 @@ import 'org_settings.dart';
 // Design tokens
 // ─────────────────────────────────────────────────────────────────────────────
 class OrgColors {
-  static const Color primaryDark = Color(0xFFB45309);
-  static const Color primaryLight = Color(0xFFD97706);
-  static const Color accent = Color(0xFFF59E0B);
+  static const Color primaryDark = Color(0xFFEA580C);
+  static const Color primaryLight = Color(0xFFFB923C);
+  static const Color accent = Color(0xFFF97316);
   static const Color white = Color(0xFFFFFFFF);
   static const Color surface = Color(0xFFF8F9FB);
   static const Color lightGray = Color(0xFFF8F9FB);
@@ -49,7 +49,7 @@ class OrgColors {
   static const Color charcoal = Color(0xFF1A202C);
   static const Color textMid = Color(0xFF374151);
   static const Color success = Color(0xFF059669);
-  static const Color warning = Color(0xFFD97706);
+  static const Color warning = Color(0xFFFB923C);
   static const Color error = Color(0xFFDC2626);
   static const Color errorBg = Color(0xFFFEF2F2);
   static const Color info = Color(0xFF2563EB);
@@ -107,6 +107,7 @@ class _OrgDashboardState extends State<OrgDashboard> {
   String _orgName = '';
   String _orgShortName = '';
   String _orgEmail = '';
+  String? _orgLogoUrl;
   bool _isLoading = true;
   String? _loadError;
   String _currentDateTime = '';
@@ -228,6 +229,7 @@ class _OrgDashboardState extends State<OrgDashboard> {
           _orgName = orgData['name'] as String? ?? 'Organization';
           _orgShortName = orgData['shortName'] as String? ?? 'ORG';
           _orgEmail = orgData['email'] as String? ?? '';
+          _orgLogoUrl = orgData['logoUrl'] as String?;
           _buildScreens();
           _isLoading = false;
         });
@@ -277,22 +279,19 @@ class _OrgDashboardState extends State<OrgDashboard> {
       final snap = await FirebaseFirestore.instance
           .collection('notifications')
           .where('userId', isEqualTo: uid)
-          .where('orgId', isEqualTo: _orgId)
-          .where('isRead', isEqualTo: false)
           .get();
       if (mounted) {
-        setState(() {
-          _unreadNotifications = snap.docs.length;
-          _notifications = snap.docs
-              .map(
-                (d) => {
+        final all = snap.docs
+            .map((d) => {
                   'id': d.id,
                   'title': d.data()['title'] ?? 'New Notification',
                   'message': d.data()['body'] ?? d.data()['message'] ?? '',
                   'isRead': d.data()['isRead'] ?? false,
-                },
-              )
-              .toList();
+                })
+            .toList();
+        setState(() {
+          _notifications = all.where((n) => n['isRead'] == false).toList();
+          _unreadNotifications = _notifications.length;
         });
       }
     } catch (_) {}
@@ -621,7 +620,7 @@ class _OrgDashboardState extends State<OrgDashboard> {
       width: 256,
       decoration: const BoxDecoration(
         gradient: LinearGradient(
-          colors: [Color(0xFFA84208), Color(0xFFD97706)],
+          colors: [Color(0xFFEA580C), Color(0xFFFB923C)],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
@@ -641,21 +640,22 @@ class _OrgDashboardState extends State<OrgDashboard> {
             child: Row(
               children: [
                 Container(
-                  width: 40,
-                  height: 40,
+                  width: 44,
+                  height: 44,
                   decoration: BoxDecoration(
                     color: Colors.white.withOpacity(0.18),
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  child: Padding(
-                    padding: const EdgeInsets.all(7),
+                  clipBehavior: Clip.antiAlias,
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(10),
                     child: Image.asset(
                       'assets/images/logo.png',
                       fit: BoxFit.contain,
                       errorBuilder: (_, __, ___) => const Icon(
                         Icons.school_rounded,
                         color: Colors.white,
-                        size: 18,
+                        size: 26,
                       ),
                     ),
                   ),
@@ -842,7 +842,7 @@ class _OrgDashboardState extends State<OrgDashboard> {
       padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
       decoration: const BoxDecoration(
         color: OrgColors.white,
-        border: Border(bottom: BorderSide(color: OrgColors.border)),
+        border: Border(bottom: BorderSide(color: OrgColors.accent, width: 2)),
         boxShadow: [
           BoxShadow(
             color: Color(0x06000000),
@@ -884,7 +884,7 @@ class _OrgDashboardState extends State<OrgDashboard> {
                 style: GoogleFonts.beVietnamPro(
                   fontSize: isSmallMobile ? 15 : 17,
                   fontWeight: FontWeight.w700,
-                  color: OrgColors.charcoal,
+                  color: OrgColors.accent,
                 ),
               ),
               if (!isSmallMobile)
@@ -905,9 +905,9 @@ class _OrgDashboardState extends State<OrgDashboard> {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
               decoration: BoxDecoration(
-                color: OrgColors.lightGray,
+                color: const Color(0xFFFFF7ED),
                 borderRadius: BorderRadius.circular(_DS.radiusPill),
-                border: Border.all(color: OrgColors.border),
+                border: Border.all(color: OrgColors.primaryLight),
               ),
               child: Row(
                 children: [
@@ -1138,21 +1138,36 @@ class _OrgDashboardState extends State<OrgDashboard> {
                   width: 36,
                   height: 36,
                   decoration: BoxDecoration(
-                    color: OrgColors.primaryDark.withOpacity(0.10),
+                    color: OrgColors.primaryDark.withAlpha(26),
                     borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: OrgColors.primaryDark.withAlpha(40)),
                   ),
-                  child: Center(
-                    child: Text(
-                      _orgShortName.isNotEmpty
-                          ? _orgShortName[0].toUpperCase()
-                          : 'O',
-                      style: GoogleFonts.beVietnamPro(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                        color: OrgColors.primaryDark,
-                      ),
-                    ),
-                  ),
+                  clipBehavior: Clip.antiAlias,
+                  child: _orgLogoUrl != null
+                      ? Image.network(
+                          _orgLogoUrl!,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => Center(
+                            child: Text(
+                              _orgShortName.isNotEmpty ? _orgShortName[0].toUpperCase() : 'O',
+                              style: GoogleFonts.beVietnamPro(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w700,
+                                color: OrgColors.primaryDark,
+                              ),
+                            ),
+                          ),
+                        )
+                      : Center(
+                          child: Text(
+                            _orgShortName.isNotEmpty ? _orgShortName[0].toUpperCase() : 'O',
+                            style: GoogleFonts.beVietnamPro(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                              color: OrgColors.primaryDark,
+                            ),
+                          ),
+                        ),
                 ),
                 if (screenWidth >= 600) ...[
                   const SizedBox(width: 10),
@@ -1364,26 +1379,24 @@ class _OrgDashboardHomeState extends State<_OrgDashboardHome> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _buildWelcomeHeader(),
-          const SizedBox(height: 24),
+          const SizedBox(height: 20),
           _buildStatCards(),
-          const SizedBox(height: 24),
-          _buildChartCard(),
-          const SizedBox(height: 24),
+          const SizedBox(height: 20),
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(child: _buildUpcomingEvents()),
+              Expanded(flex: 3, child: _buildChartCard()),
               const SizedBox(width: 20),
-              Expanded(child: _buildRecentProposals()),
+              Expanded(flex: 2, child: _buildUpcomingEvents()),
             ],
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 20),
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(child: _buildRecentActivity()),
+              Expanded(child: _buildRecentProposals()),
               const SizedBox(width: 20),
-              Expanded(child: _buildTopMerchandise()),
+              Expanded(child: _buildRecentActivity()),
             ],
           ),
         ],
@@ -1397,7 +1410,7 @@ class _OrgDashboardHomeState extends State<_OrgDashboardHome> {
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
-          colors: [Color(0xFFA84208), Color(0xFFD97706)],
+          colors: [Color(0xFFEA580C), Color(0xFFFB923C)],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
@@ -1544,7 +1557,7 @@ class _OrgDashboardHomeState extends State<_OrgDashboardHome> {
                     style: GoogleFonts.beVietnamPro(
                       fontSize: 16,
                       fontWeight: FontWeight.w700,
-                      color: OrgColors.charcoal,
+                      color: OrgColors.accent,
                     ),
                   ),
                   const SizedBox(height: 3),
@@ -1727,7 +1740,7 @@ class _OrgDashboardHomeState extends State<_OrgDashboardHome> {
                   style: GoogleFonts.beVietnamPro(
                     fontSize: 15,
                     fontWeight: FontWeight.w700,
-                    color: OrgColors.charcoal,
+                    color: OrgColors.accent,
                   ),
                 ),
                 Container(
@@ -1821,7 +1834,7 @@ class _OrgDashboardHomeState extends State<_OrgDashboardHome> {
               style: GoogleFonts.beVietnamPro(
                 fontSize: 15,
                 fontWeight: FontWeight.w700,
-                color: OrgColors.charcoal,
+                color: OrgColors.accent,
               ),
             ),
             const SizedBox(height: 16),
@@ -1889,7 +1902,7 @@ class _OrgDashboardHomeState extends State<_OrgDashboardHome> {
                   style: GoogleFonts.beVietnamPro(
                     fontSize: 15,
                     fontWeight: FontWeight.w700,
-                    color: OrgColors.charcoal,
+                    color: OrgColors.accent,
                   ),
                 ),
                 Container(
@@ -1990,7 +2003,7 @@ class _OrgDashboardHomeState extends State<_OrgDashboardHome> {
                   style: GoogleFonts.beVietnamPro(
                     fontSize: 15,
                     fontWeight: FontWeight.w700,
-                    color: OrgColors.charcoal,
+                    color: OrgColors.accent,
                   ),
                 ),
                 Container(
@@ -2336,8 +2349,8 @@ class _LineChartPainter extends CustomPainter {
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
           colors: [
-            OrgColors.primaryDark.withOpacity(0.12),
-            OrgColors.primaryDark.withOpacity(0),
+            OrgColors.primaryDark.withOpacity(0.28),
+            OrgColors.primaryDark.withOpacity(0.02),
           ],
         ).createShader(Rect.fromLTWH(0, tp, size.width, ch)),
     );
@@ -2356,8 +2369,9 @@ class _LineChartPainter extends CustomPainter {
       linePath,
       Paint()
         ..color = OrgColors.primaryDark
-        ..strokeWidth = 2.5
-        ..style = PaintingStyle.stroke,
+        ..strokeWidth = 3
+        ..style = PaintingStyle.stroke
+        ..strokeCap = StrokeCap.round,
     );
 
     // Data points

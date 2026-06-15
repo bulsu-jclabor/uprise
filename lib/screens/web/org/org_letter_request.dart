@@ -1,4 +1,4 @@
-// lib/screens/web/org/org_letter_request.dart
+﻿// lib/screens/web/org/org_letter_request.dart
 // ignore_for_file: deprecated_member_use, use_build_context_synchronously
 
 import 'dart:convert';
@@ -20,7 +20,7 @@ class _DS {
   static const double radiusSm   = 8;
   static const double radiusPill = 100;
 
-  static const Color primary     = Color(0xFFB45309);
+  static const Color primary     = Color(0xFFEA580C);
 
   static final cardShadow = [
     BoxShadow(
@@ -104,7 +104,7 @@ Widget _sectionLabel(String text, {IconData? icon}) {
 Widget _statusBadge(String status) {
   final Map<String, _BadgeStyle> styles = {
     'pending': _BadgeStyle(
-        const Color(0xFFFFFBEB), const Color(0xFFD97706), 'PENDING'),
+        const Color(0xFFFFFBEB), const Color(0xFFFB923C), 'PENDING'),
     'approved': _BadgeStyle(
         const Color(0xFFECFDF5), const Color(0xFF059669), 'APPROVED'),
     'rejected': _BadgeStyle(
@@ -262,7 +262,7 @@ class _OrgLetterRequestScreenState extends State<OrgLetterRequestScreen> {
                       label: 'Pending',
                       value: '$pending',
                       icon: Icons.pending_outlined,
-                      color: const Color(0xFFD97706),
+                      color: const Color(0xFFFB923C),
                     ),
                     const SizedBox(height: 12),
                     _StatCard(
@@ -299,7 +299,7 @@ class _OrgLetterRequestScreenState extends State<OrgLetterRequestScreen> {
                     label: 'Pending',
                     value: '$pending',
                     icon: Icons.pending_outlined,
-                    color: const Color(0xFFD97706),
+                    color: const Color(0xFFFB923C),
                   ),
                   const SizedBox(width: 14),
                   _StatCard(
@@ -516,9 +516,9 @@ class _OrgLetterRequestScreenState extends State<OrgLetterRequestScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 13),
       decoration: const BoxDecoration(
-        color: Color(0xFFF8F9FB),
+        color: Color(0xFFFFF7ED),
         borderRadius: BorderRadius.vertical(top: Radius.circular(14)),
-        border: Border(bottom: BorderSide(color: Color(0xFFE8ECF0))),
+        border: Border(bottom: BorderSide(color: Color(0xFFFB923C))),
       ),
       child: Row(children: [
         Expanded(flex: 2, child: _headerCell('LETTER ID')),
@@ -647,7 +647,7 @@ class _OrgLetterRequestScreenState extends State<OrgLetterRequestScreen> {
                   _ActionIconButton(
                     icon: Icons.archive_outlined,
                     tooltip: 'Archive',
-                    color: const Color(0xFFD97706),
+                    color: const Color(0xFFFB923C),
                     onTap: () => _archiveRequest(request),
                   ),
                 ],
@@ -1318,7 +1318,7 @@ class _RequestDetailsDialog extends StatelessWidget {
       case 'rejected':    return const Color(0xFFDC2626);
       case 'revision':    return const Color(0xFF2563EB);
       case 'resubmitted': return const Color(0xFF7C3AED);
-      default:            return const Color(0xFFD97706);
+      default:            return const Color(0xFFFB923C);
     }
   }
 

@@ -1,4 +1,4 @@
-import 'dart:convert';
+﻿import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -15,7 +15,7 @@ Map<String, Color> _categoryColors = {
   'Workshop':         const Color(0xFF8B5CF6),
   'Seminar':          const Color(0xFF3B82F6),
   'Competition':      const Color(0xFFEF4444),
-  'General Assembly': const Color(0xFFF59E0B),
+  'General Assembly': const Color(0xFFF97316),
   'Social':           const Color(0xFFEC4899),
   'Outreach':         const Color(0xFF10B981),
   'Sports':           const Color(0xFF14B8A6),
@@ -276,9 +276,9 @@ class _EventCalendarState extends State<EventCalendar> {
       child: Column(children: [
         Container(
           decoration: const BoxDecoration(
-            color: Color(0xFFF8F9FB),
+            color: Color(0xFFFFF7ED),
             borderRadius: BorderRadius.vertical(top: Radius.circular(14)),
-            border: Border(bottom: BorderSide(color: Color(0xFFE8ECF0))),
+            border: Border(bottom: BorderSide(color: Color(0xFFFB923C))),
           ),
           child: Row(
             children: weekdays.map((d) => Expanded(

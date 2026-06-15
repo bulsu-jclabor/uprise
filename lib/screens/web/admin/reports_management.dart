@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
@@ -31,8 +31,8 @@ class _DS {
 // Theme Colors
 // ─────────────────────────────────────────────────────────────────────────────
 class UpriseColors {
-  static const Color primary = Color(0xFFE87722);
-  static const Color primaryDark = Color(0xFFC45E00);
+  static const Color primary = Color(0xFFF97316);
+  static const Color primaryDark = Color(0xFFEA580C);
   static const Color primaryLight = Color(0xFFFFF3E8);
   static const Color white = Color(0xFFFFFFFF);
   static const Color lightGray = Color(0xFFF7F8FA);
@@ -43,7 +43,7 @@ class UpriseColors {
   static const Color successBg = Color(0xFFECFDF5);
   static const Color error = Color(0xFFDC2626);
   static const Color errorBg = Color(0xFFFEF2F2);
-  static const Color warning = Color(0xFFD97706);
+  static const Color warning = Color(0xFFFB923C);
   static const Color warningBg = Color(0xFFFFFBEB);
   static const Color info = Color(0xFF2563EB);
   static const Color infoBg = Color(0xFFEFF6FF);
@@ -842,9 +842,9 @@ class _ReportsManagementState extends State<ReportsManagement>
             controller: _tabController,
             physics: const NeverScrollableScrollPhysics(),
             children: [
-              _buildEventsTable(showFinancial: true, showCountdown: true),
-              _buildEventsTable(showFinancial: false, showCountdown: false),
-              _buildFinancialTab(),
+              _buildEventSummaryTab(),
+              _buildSubmissionFilesTab('Accomplishment', _accomplishmentSubs, _accomplishmentDeadline, _loadingAccomplishment),
+              _buildSubmissionFilesTab('Financial', _financialSubs, _financialDeadline, _loadingFinancial),
               _buildSubmissionTrackerTab(),
             ],
           ),
@@ -1088,15 +1088,178 @@ class _ReportsManagementState extends State<ReportsManagement>
     );
   }
 
-  // ── Financial Tab (with recent reports bar) ───────────────────────
-  Widget _buildFinancialTab() {
+  // ── Event Summary Tab — analytics overview ────────────────────────
+  Widget _buildEventSummaryTab() {
+    if (_loadingEvents) return const Center(child: CircularProgressIndicator());
+
+    final typeCount = <String, int>{};
+    final orgCount = <String, int>{};
+    int totalAttendees = 0;
+    int totalRegistrants = 0;
+
+    for (final e in _events) {
+      typeCount[e.type] = (typeCount[e.type] ?? 0) + 1;
+      orgCount[e.orgName] = (orgCount[e.orgName] ?? 0) + 1;
+      totalAttendees += e.attendees;
+      totalRegistrants += e.registrants;
+    }
+
+    final avgRate = totalRegistrants > 0
+        ? (totalAttendees / totalRegistrants * 100).round()
+        : 0;
+
+    final sortedTypes = typeCount.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+    final sortedOrgs = orgCount.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+    final maxTypeCount = sortedTypes.isEmpty ? 1 : sortedTypes.first.value;
+    final maxOrgCount = sortedOrgs.isEmpty ? 1 : sortedOrgs.first.value;
+
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Expanded(
-          child: _buildEventsTable(showFinancial: true, showCountdown: false),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(28, 8, 28, 12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(children: [
+                _summaryAnalyticCard('Total Events', '${_events.length}', Icons.event_rounded, UpriseColors.primaryDark),
+                const SizedBox(width: 14),
+                _summaryAnalyticCard('Avg Attendance', '$avgRate%', Icons.people_rounded, UpriseColors.success),
+                const SizedBox(width: 14),
+                _summaryAnalyticCard('Total Attendees', '$totalAttendees', Icons.how_to_reg_rounded, UpriseColors.info),
+                const SizedBox(width: 14),
+                _summaryAnalyticCard('Active Orgs', '${orgCount.length}', Icons.business_rounded, UpriseColors.warning),
+              ]),
+              const SizedBox(height: 14),
+              Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Expanded(
+                  child: Container(
+                    padding: const EdgeInsets.all(18),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: const Color(0xFFE8ECF0)),
+                      boxShadow: _DS.cardShadow,
+                    ),
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      _sectionLabel('Events by Type', icon: Icons.category_rounded),
+                      if (sortedTypes.isEmpty)
+                        Text('No events to display.', style: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF64748B)))
+                      else
+                        ...sortedTypes.map((entry) {
+                          final r = maxTypeCount > 0 ? entry.value / maxTypeCount : 0.0;
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 10),
+                            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                              Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                                Text(entry.key, style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF374151))),
+                                Text('${entry.value}', style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.w700, color: UpriseColors.primaryDark)),
+                              ]),
+                              const SizedBox(height: 4),
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(3),
+                                child: LinearProgressIndicator(value: r.toDouble(), backgroundColor: const Color(0xFFE8ECF0), color: UpriseColors.primaryDark, minHeight: 6),
+                              ),
+                            ]),
+                          );
+                        }),
+                    ]),
+                  ),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Container(
+                    padding: const EdgeInsets.all(18),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: const Color(0xFFE8ECF0)),
+                      boxShadow: _DS.cardShadow,
+                    ),
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      _sectionLabel('Events by Organization', icon: Icons.business_rounded),
+                      if (sortedOrgs.isEmpty)
+                        Text('No events to display.', style: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF64748B)))
+                      else
+                        ...sortedOrgs.take(6).map((entry) {
+                          final r = maxOrgCount > 0 ? entry.value / maxOrgCount : 0.0;
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 10),
+                            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                              Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                                Expanded(child: Text(entry.key, style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF374151)), overflow: TextOverflow.ellipsis)),
+                                const SizedBox(width: 8),
+                                Text('${entry.value}', style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.w700, color: UpriseColors.info)),
+                              ]),
+                              const SizedBox(height: 4),
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(3),
+                                child: LinearProgressIndicator(value: r.toDouble(), backgroundColor: const Color(0xFFE8ECF0), color: UpriseColors.info, minHeight: 6),
+                              ),
+                            ]),
+                          );
+                        }),
+                    ]),
+                  ),
+                ),
+              ]),
+            ],
+          ),
         ),
-        _buildRecentReportsBar(),
+        Expanded(child: _buildEventsTable(showFinancial: false, showCountdown: false)),
       ],
+    );
+  }
+
+  Widget _summaryAnalyticCard(String label, String value, IconData icon, Color color) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: const Color(0xFFE8ECF0)),
+          boxShadow: _DS.cardShadow,
+        ),
+        child: Row(children: [
+          Container(
+            width: 38, height: 38,
+            decoration: BoxDecoration(color: color.withAlpha(26), borderRadius: BorderRadius.circular(10)),
+            child: Icon(icon, color: color, size: 18),
+          ),
+          const SizedBox(width: 10),
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(label, style: GoogleFonts.beVietnamPro(fontSize: 10, color: const Color(0xFF64748B), fontWeight: FontWeight.w500)),
+            const SizedBox(height: 1),
+            Text(value, style: GoogleFonts.beVietnamPro(fontSize: 18, fontWeight: FontWeight.w700, color: const Color(0xFF1A202C))),
+          ])),
+        ]),
+      ),
+    );
+  }
+
+  // ── Submission Files Tab (Financial & Accomplishment) ─────────────
+  Widget _buildSubmissionFilesTab(
+    String reportType,
+    List<OrgSubmission> submissions,
+    DateTime? deadline,
+    bool loading,
+  ) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(28, 0, 28, 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const SizedBox(height: 8),
+          _buildSubmissionTable(reportType, submissions, deadline, loading),
+          if (reportType == 'Financial') ...[
+            const SizedBox(height: 24),
+            _buildRecentReportsBar(),
+          ],
+        ],
+      ),
     );
   }
 
@@ -1156,9 +1319,9 @@ class _ReportsManagementState extends State<ReportsManagement>
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 13),
       decoration: const BoxDecoration(
-        color: Color(0xFFF8F9FB),
+        color: Color(0xFFFFF7ED),
         borderRadius: BorderRadius.vertical(top: Radius.circular(14)),
-        border: Border(bottom: BorderSide(color: Color(0xFFE8ECF0))),
+        border: Border(bottom: BorderSide(color: Color(0xFFFB923C))),
       ),
       child: Row(
         children: showFinancial
@@ -1576,9 +1739,9 @@ class _ReportsManagementState extends State<ReportsManagement>
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 13),
             decoration: const BoxDecoration(
-              color: Color(0xFFF8F9FB),
-              borderRadius: BorderRadius.vertical(top: Radius.circular(14)),
-              border: Border(bottom: BorderSide(color: Color(0xFFE8ECF0))),
+        color: Color(0xFFFFF7ED),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(14)),
+        border: Border(bottom: BorderSide(color: Color(0xFFFB923C))),
             ),
             child: Row(
               children: [
@@ -1957,9 +2120,9 @@ class _ReportsManagementState extends State<ReportsManagement>
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 13),
             decoration: const BoxDecoration(
-              color: Color(0xFFF8F9FB),
-              borderRadius: BorderRadius.vertical(top: Radius.circular(14)),
-              border: Border(bottom: BorderSide(color: Color(0xFFE8ECF0))),
+        color: Color(0xFFFFF7ED),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(14)),
+        border: Border(bottom: BorderSide(color: Color(0xFFFB923C))),
             ),
             child: Row(
               children: [

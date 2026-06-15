@@ -1,4 +1,4 @@
-import 'dart:typed_data';
+﻿import 'dart:typed_data';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../../../utils/platform_file_utils.dart' as platform_file_utils;
@@ -81,7 +81,7 @@ Widget _sectionLabel(String text, {IconData? icon}) {
 Widget _statusBadge(String status) {
   const Map<String, _BadgeStyle> styles = {
     'approved': _BadgeStyle(Color(0xFFECFDF5), Color(0xFF059669), 'APPROVED'),
-    'pending':  _BadgeStyle(Color(0xFFFFFBEB), Color(0xFFD97706), 'PENDING'),
+    'pending':  _BadgeStyle(Color(0xFFFFFBEB), Color(0xFFFB923C), 'PENDING'),
     'rejected': _BadgeStyle(Color(0xFFFEF2F2), Color(0xFFDC2626), 'REJECTED'),
     'archived': _BadgeStyle(Color(0xFFF3F4F6), Color(0xFF6B7280), 'ARCHIVED'),
   };
@@ -262,7 +262,7 @@ class _EventProposalsState extends State<EventProposals> {
             label: 'Pending',
             value: '$pending',
             icon: Icons.pending_rounded,
-            color: const Color(0xFFD97706),
+            color: const Color(0xFFFB923C),
           ),
           _StatCard(
             label: 'Rejected',
@@ -471,9 +471,9 @@ class _EventProposalsState extends State<EventProposals> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 13),
       decoration: const BoxDecoration(
-        color: Color(0xFFF8F9FB),
+        color: Color(0xFFFFF7ED),
         borderRadius: BorderRadius.vertical(top: Radius.circular(14)),
-        border: Border(bottom: BorderSide(color: Color(0xFFE8ECF0))),
+        border: Border(bottom: BorderSide(color: Color(0xFFFB923C), width: 1)),
       ),
       child: Row(children: [
         Expanded(flex: 2, child: _headerCell('ORGANIZATION')),
@@ -1316,7 +1316,7 @@ class _EventProposalsState extends State<EventProposals> {
                                       ? const Color(0xFFDC2626)
                                       : status == 'archived'
                                           ? const Color(0xFF6B7280)
-                                          : const Color(0xFFD97706)),
+                                          : const Color(0xFFFB923C)),
                         ),
                         const SizedBox(width: 16),
                         Expanded(

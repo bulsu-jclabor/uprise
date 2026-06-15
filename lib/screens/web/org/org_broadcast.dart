@@ -1,4 +1,4 @@
-// lib/screens/web/org/org_broadcast.dart
+﻿// lib/screens/web/org/org_broadcast.dart
 // Complete with all features: edit, pin, replies, file/image upload, right/left alignment
 
 import 'dart:convert';
@@ -17,8 +17,8 @@ import '../../../services/activity_logger.dart' as activity_log;
 // Design Tokens
 // ─────────────────────────────────────────────────────────────────────────────
 class _C {
-  static const Color primaryDark = Color(0xFFB45309);
-  static const Color accent = Color(0xFFF59E0B);
+  static const Color primaryDark = Color(0xFFEA580C);
+  static const Color accent = Color(0xFFF97316);
   static const Color white = Color(0xFFFFFFFF);
   static const Color surface = Color(0xFFF8F9FB);
   static const Color pageBg = Color(0xFFFBFCFE);
@@ -408,7 +408,7 @@ class _OrgBroadcastScreenState extends State<OrgBroadcastScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('Broadcast Channel', style: GoogleFonts.beVietnamPro(fontSize: 17, fontWeight: FontWeight.w800, color: _C.charcoal)),
+                          Text('Broadcast Channel', style: GoogleFonts.beVietnamPro(fontSize: 17, fontWeight: FontWeight.w800, color: _C.primaryDark)),
                           const SizedBox(height: 2),
                           Text(widget.orgName, style: GoogleFonts.beVietnamPro(fontSize: 12, color: _C.darkGray)),
                         ],
@@ -444,7 +444,7 @@ class _OrgBroadcastScreenState extends State<OrgBroadcastScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('Broadcast Channel', style: GoogleFonts.beVietnamPro(fontSize: 17, fontWeight: FontWeight.w800, color: _C.charcoal)),
+                      Text('Broadcast Channel', style: GoogleFonts.beVietnamPro(fontSize: 17, fontWeight: FontWeight.w800, color: _C.primaryDark)),
                       const SizedBox(height: 2),
                       Text(widget.orgName, style: GoogleFonts.beVietnamPro(fontSize: 12, color: _C.darkGray)),
                     ],

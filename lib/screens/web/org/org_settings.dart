@@ -127,7 +127,7 @@ class _OrgSettingsScreenState extends State<OrgSettingsScreen>
                 style: GoogleFonts.beVietnamPro(
                     fontSize: 24,
                     fontWeight: FontWeight.bold,
-                    color: const Color(0xFF1A202C)),
+                    color: UpriseColors.accent),
               ),
               const SizedBox(height: 2),
               Text(

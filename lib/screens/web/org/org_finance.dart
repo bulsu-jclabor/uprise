@@ -1,4 +1,4 @@
-
+﻿
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -12,16 +12,16 @@ import 'export_pdf.dart';
 
 // ============ COLOR SCHEME ============
 class OrgColors {
-  static const Color primaryDark  = Color(0xFFB45309);
-  static const Color primaryLight = Color(0xFFD97706);
-  static const Color accent       = Color(0xFFF59E0B);
+  static const Color primaryDark  = Color(0xFFEA580C);
+  static const Color primaryLight = Color(0xFFFB923C);
+  static const Color accent       = Color(0xFFF97316);
   static const Color white        = Color(0xFFFFFFFF);
   static const Color lightGray    = Color(0xFFF8F9FB);
   static const Color mediumGray   = Color(0xFFE8ECF0);
   static const Color darkGray     = Color(0xFF64748B);
   static const Color charcoal     = Color(0xFF1A202C);
   static const Color success      = Color(0xFF059669);
-  static const Color warning      = Color(0xFFD97706);
+  static const Color warning      = Color(0xFFFB923C);
   static const Color error        = Color(0xFFDC2626);
   static const Color info         = Color(0xFF2563EB);
 }

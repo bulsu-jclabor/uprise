@@ -1,4 +1,4 @@
-// ignore_for_file: unused_field, duplicate_ignore, use_build_context_synchronously, deprecated_member_use
+﻿// ignore_for_file: unused_field, duplicate_ignore, use_build_context_synchronously, deprecated_member_use
 import 'dart:convert';
 import 'dart:async';
 import '../../../utils/platform_file_utils.dart' as platform_file_utils;
@@ -45,7 +45,7 @@ class _BadgeStyle {
 Widget _statusBadge(String status) {
   final Map<String, _BadgeStyle> styles = {
     'approved':   _BadgeStyle(const Color(0xFFECFDF5), const Color(0xFF059669), 'APPROVED'),
-    'pending':    _BadgeStyle(const Color(0xFFFFFBEB), const Color(0xFFD97706), 'PENDING'),
+    'pending':    _BadgeStyle(const Color(0xFFFFFBEB), const Color(0xFFFB923C), 'PENDING'),
     'rejected':   _BadgeStyle(const Color(0xFFFEF2F2), const Color(0xFFDC2626), 'REJECTED'),
     'for_review': _BadgeStyle(const Color(0xFFEFF6FF), const Color(0xFF2563EB), 'FOR REVIEW'),
   };
@@ -471,7 +471,7 @@ Future<void> _archiveProposal(String docId, String title) async {
         label: 'Pending',
         stream: _pendingStream,
         icon: Icons.hourglass_empty_rounded,
-        color: const Color(0xFFD97706),
+        color: const Color(0xFFFB923C),
       ),
       _StatCard(
         label: 'Approved',
@@ -702,9 +702,9 @@ Future<void> _archiveProposal(String docId, String title) async {
   return Container(
     padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 13),
     decoration: const BoxDecoration(
-      color: Color(0xFFF8F9FB),
+      color: Color(0xFFFFF7ED),
       borderRadius: BorderRadius.vertical(top: Radius.circular(14)),
-      border: Border(bottom: BorderSide(color: Color(0xFFE8ECF0))),
+      border: Border(bottom: BorderSide(color: Color(0xFFFB923C))),
     ),
     child: Row(children: [
       Expanded(flex: 4, child: _headerCell('EVENT TITLE')),  // <-- EVENT TITLE na agad
@@ -881,7 +881,7 @@ Future<void> _archiveProposal(String docId, String title) async {
       fg = const Color(0xFF2563EB);
     } else {
       bg = const Color(0xFFFFFBEB);
-      fg = const Color(0xFFD97706);
+      fg = const Color(0xFFFB923C);
     }
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),

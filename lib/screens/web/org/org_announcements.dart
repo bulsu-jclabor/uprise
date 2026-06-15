@@ -18,7 +18,7 @@ import '../../../widgets/admin_export_button.dart';
 // ─────────────────────────────────────────────────────────────────────────────
 class _C {
   // Primary brand
-  static const Color primaryDark  = Color(0xFFB45309);
+  static const Color primaryDark  = Color(0xFFEA580C);
 
   // Surfaces
   static const Color white        = Color(0xFFFFFFFF);
@@ -38,7 +38,7 @@ class _C {
   // Semantic
   static const Color success      = Color(0xFF059669);
   static const Color successBg    = Color(0xFFECFDF5);
-  static const Color warning      = Color(0xFFD97706);
+  static const Color warning      = Color(0xFFFB923C);
   static const Color warningBg    = Color(0xFFFFFBEB);
   static const Color error        = Color(0xFFDC2626);
   static const Color errorBg      = Color(0xFFFEF2F2);

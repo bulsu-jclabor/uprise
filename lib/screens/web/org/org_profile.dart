@@ -1,4 +1,4 @@
-// lib/screens/web/org/org_profile.dart
+﻿// lib/screens/web/org/org_profile.dart
 // Redesigned: Professional, matches StudentAccounts / OrgAnnouncements design language
 // All Firestore parameters and logic fully preserved
 
@@ -42,8 +42,8 @@ Widget _buildImageWidget(String url, {BoxFit fit = BoxFit.cover, Widget? errorWi
 // Design Tokens — identical to StudentAccounts / OrgAnnouncements
 // ─────────────────────────────────────────────────────────────────────────────
 class _C {
-  static const Color primaryDark  = Color(0xFFB45309);
-  static const Color accent       = Color(0xFFF59E0B);
+  static const Color primaryDark  = Color(0xFFEA580C);
+  static const Color accent       = Color(0xFFF97316);
 
   static const Color white        = Color(0xFFFFFFFF);
   static const Color surface      = Color(0xFFF8F9FB);
@@ -59,7 +59,7 @@ class _C {
 
   static const Color success      = Color(0xFF059669);
   static const Color successBg    = Color(0xFFECFDF5);
-  static const Color warning      = Color(0xFFD97706);
+  static const Color warning      = Color(0xFFFB923C);
   static const Color warningBg    = Color(0xFFFFFBEB);
   static const Color error        = Color(0xFFDC2626);
   static const Color errorBg      = Color(0xFFFEF2F2);
@@ -109,7 +109,7 @@ Widget _sectionLabel(String title, {IconData? icon}) {
         style: GoogleFonts.beVietnamPro(
             fontSize: 14,
             fontWeight: FontWeight.w700,
-            color: _C.charcoal)),
+            color: _C.primaryDark)),
     const SizedBox(width: 12),
     const Expanded(child: Divider(color: _C.borderSoft, thickness: 1)),
   ]);
@@ -493,7 +493,7 @@ class _OrgProfileScreenState extends State<OrgProfileScreen> {
                     style: GoogleFonts.beVietnamPro(
                         fontSize: 22,
                         fontWeight: FontWeight.w800,
-                        color: _C.charcoal)),
+                        color: _C.accent)),
                 const SizedBox(height: 3),
                 Text(
                     'Manage your organization\'s information and structure',

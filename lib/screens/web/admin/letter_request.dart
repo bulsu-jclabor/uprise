@@ -1,4 +1,4 @@
-// lib/screens/web/admin/letter_request.dart - CORRECTED VERSION
+﻿// lib/screens/web/admin/letter_request.dart - CORRECTED VERSION
 
 import 'dart:convert';
 import 'dart:typed_data';
@@ -15,16 +15,16 @@ import '../../../utils/platform_file_utils.dart' as platform_file_utils;
 
 // ============ COLOR SCHEME ============
 class AdminColors {
-  static const Color primaryDark = Color(0xFFB45309);
-  static const Color primaryLight = Color(0xFFD97706);
-  static const Color accent = Color(0xFFF59E0B);
+  static const Color primaryDark = Color(0xFFEA580C);
+  static const Color primaryLight = Color(0xFFFB923C);
+  static const Color accent = Color(0xFFF97316);
   static const Color white = Color(0xFFFFFFFF);
   static const Color lightGray = Color(0xFFF9FAFB);
   static const Color mediumGray = Color(0xFFE5E7EB);
   static const Color darkGray = Color(0xFF6B7280);
   static const Color charcoal = Color(0xFF111827);
   static const Color success = Color(0xFF16A34A);
-  static const Color warning = Color(0xFFD97706);
+  static const Color warning = Color(0xFFFB923C);
   static const Color error = Color(0xFFDC2626);
   static const Color info = Color(0xFF2563EB);
   static const Color purple = Color(0xFF7C3AED);
@@ -277,9 +277,9 @@ class _AdminLetterRequestScreenState extends State<AdminLetterRequestScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
       decoration: const BoxDecoration(
-        color: Color(0xFFF8F9FB),
+        color: Color(0xFFFFF7ED),
         borderRadius: BorderRadius.vertical(top: Radius.circular(14)),
-        border: Border(bottom: BorderSide(color: Color(0xFFE8ECF0))),
+        border: Border(bottom: BorderSide(color: Color(0xFFFB923C))),
       ),
       child: Row(children: [
         Expanded(flex: 3, child: _headerCell('REQUESTOR')),
@@ -559,7 +559,7 @@ class _AdminLetterRequestScreenState extends State<AdminLetterRequestScreen> {
         style = {'bg': const Color(0xFFF0FDF4), 'fg': const Color(0xFF16A34A), 'label': 'RESUBMITTED'};
         break;
       default:
-        style = {'bg': const Color(0xFFFFFBEB), 'fg': const Color(0xFFD97706), 'label': 'PENDING'};
+        style = {'bg': const Color(0xFFFFFBEB), 'fg': const Color(0xFFFB923C), 'label': 'PENDING'};
     }
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),

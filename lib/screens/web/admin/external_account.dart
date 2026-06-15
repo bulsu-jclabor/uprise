@@ -1,4 +1,4 @@
-import 'dart:convert';
+﻿import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -56,7 +56,7 @@ Widget _sectionLabel(String text, {IconData? icon}) {
 Widget _statusBadge(String status) {
   const styles = {
     'approved': (Color(0xFFECFDF5), Color(0xFF059669), 'APPROVED'),
-    'pending':  (Color(0xFFFFFBEB), Color(0xFFD97706), 'PENDING'),
+    'pending':  (Color(0xFFFFFBEB), Color(0xFFFB923C), 'PENDING'),
     'rejected': (Color(0xFFFEF2F2), Color(0xFFDC2626), 'REJECTED'),
   };
   final s     = styles[status.toLowerCase()];
@@ -200,7 +200,7 @@ class _ExternalAccountState extends State<ExternalAccount> {
             label: 'Pending',
             value: '$pending',
             icon:  Icons.pending_rounded,
-            color: const Color(0xFFD97706),
+            color: const Color(0xFFFB923C),
           ),
           _StatCard(
             label: 'Rejected',
@@ -370,10 +370,10 @@ class _ExternalAccountState extends State<ExternalAccount> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 13),
       decoration: const BoxDecoration(
-        color: Color(0xFFF8F9FB),
+        color: Color(0xFFFFF7ED),
         borderRadius:
             BorderRadius.vertical(top: Radius.circular(14)),
-        border: Border(bottom: BorderSide(color: Color(0xFFE8ECF0))),
+        border: Border(bottom: BorderSide(color: Color(0xFFFB923C))),
       ),
       child: Row(children: [
         Expanded(flex: 3, child: _headerCell('FULL NAME')),

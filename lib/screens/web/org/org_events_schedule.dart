@@ -1,4 +1,4 @@
-// ignore_for_file: unused_element_parameter
+﻿// ignore_for_file: unused_element_parameter
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -13,7 +13,7 @@ Map<String, Color> _categoryColors = {
   'Workshop':         const Color(0xFF8B5CF6),  // Violet
   'Seminar':          const Color(0xFF3B82F6),  // Blue
   'Competition':      const Color(0xFFEF4444),  // Red
-  'General Assembly': const Color(0xFFF59E0B),  // Orange
+  'General Assembly': const Color(0xFFF97316),  // Orange
   'Social':           const Color(0xFFEC4899),  // Pink
   'Outreach':         const Color(0xFF10B981),  // Green
   'Sports':           const Color(0xFF14B8A6),  // Teal
@@ -82,11 +82,11 @@ class _DS {
 }
 
 class UpriseColors {
-  static const Color primaryDark = Color(0xFFB45309);
-  static const Color primaryLight = Color(0xFFD97706);
+  static const Color primaryDark = Color(0xFFEA580C);
+  static const Color primaryLight = Color(0xFFFB923C);
   static const Color error = Color(0xFFDC2626);
   static const Color success = Color(0xFF059669);
-  static const Color warning = Color(0xFFD97706);
+  static const Color warning = Color(0xFFFB923C);
   static const Color info = Color(0xFF3B82F6);
   static const Color greyText = Color(0xFF64748B);
   static const Color darkText = Color(0xFF1A202C);
@@ -107,7 +107,7 @@ class CategoryColors {
     'Technical': Color(0xFF1D4ED8),
     'Cultural': Color(0xFFBE185D),
     'Sports': Color(0xFFEA580C),
-    'Workshop': Color(0xFFB45309),
+    'Workshop': Color(0xFFEA580C),
     'Other': Color(0xFF374151),
   };
   static const Map<String, Color> dot = {
@@ -115,7 +115,7 @@ class CategoryColors {
     'Technical': Color(0xFF3B82F6),
     'Cultural': Color(0xFFEC4899),
     'Sports': Color(0xFFF97316),
-    'Workshop': Color(0xFFF59E0B),
+    'Workshop': Color(0xFFF97316),
     'Other': Color(0xFF9CA3AF),
   };
   static Color getBg(String cat) => bg[cat] ?? bg['Other']!;
@@ -159,7 +159,7 @@ Widget _categoryChip(String category) {
 Color _statusColor(String status) {
   switch (status.toLowerCase()) {
     case 'approved': return const Color(0xFF059669);
-    case 'pending': return const Color(0xFFD97706);
+    case 'pending': return const Color(0xFFFB923C);
     case 'rejected': return const Color(0xFFDC2626);
     case 'archived': return const Color(0xFF6B7280);
     default: return UpriseColors.primaryDark;
@@ -470,9 +470,9 @@ class _OrgEventsScheduleScreenState extends State<OrgEventsScheduleScreen> {
         children: [
           Container(
             decoration: const BoxDecoration(
-              color: Color(0xFFF8F9FB),
+              color: Color(0xFFFFF7ED),
               borderRadius: BorderRadius.vertical(top: Radius.circular(14)),
-              border: Border(bottom: BorderSide(color: Color(0xFFE8ECF0))),
+              border: Border(bottom: BorderSide(color: Color(0xFFFB923C))),
             ),
             child: Row(
               children: weekdays.map((d) => Expanded(

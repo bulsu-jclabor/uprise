@@ -1,4 +1,4 @@
-// lib/screens/web/org/org_event_analytics.dart
+﻿// lib/screens/web/org/org_event_analytics.dart
 //
 // Redesigned to match the student-accounts / org-event-proposals design system.
 // Added:  • Tab 2 — Participant Feedback (filterable, live)
@@ -39,7 +39,7 @@ class _DS {
 
 // ── Color aliases (re-uses UpriseColors where possible) ─────────────────────
 class _C {
-  static const Color amber = Color(0xFFD97706);
+  static const Color amber = Color(0xFFFB923C);
   static const Color green = Color(0xFF059669);
   static const Color red = Color(0xFFDC2626);
   static const Color blue = Color(0xFF2563EB);
@@ -1153,7 +1153,7 @@ class _OrgEventAnalyticsScreenState extends State<OrgEventAnalyticsScreen>
                         (i) => Icon(
                           i < rating ? Icons.star : Icons.star_border,
                           size: 14,
-                          color: const Color(0xFFF59E0B),
+                          color: const Color(0xFFF97316),
                         ),
                       ),
                     ),
@@ -1248,7 +1248,7 @@ class _OrgEventAnalyticsScreenState extends State<OrgEventAnalyticsScreen>
                 const Icon(
                   Icons.info_outline_rounded,
                   size: 15,
-                  color: Color(0xFFD97706),
+                  color: Color(0xFFFB923C),
                 ),
                 const SizedBox(width: 8),
                 Expanded(
@@ -1536,7 +1536,7 @@ class _OrgEventAnalyticsScreenState extends State<OrgEventAnalyticsScreen>
                         style: GoogleFonts.beVietnamPro(
                           fontSize: 14,
                           fontWeight: FontWeight.w700,
-                          color: _C.charcoal,
+                          color: UpriseColors.primaryDark,
                         ),
                       ),
                       const Spacer(),
@@ -2034,9 +2034,9 @@ class _DistributionCard extends StatelessWidget {
     final counts = data.starCounts;
     final total = data.totalFeedbacks;
     final segs = [
-      _Seg(5, counts[5]!, const Color(0xFFB45309)),
-      _Seg(4, counts[4]!, const Color(0xFFD97706)),
-      _Seg(3, counts[3]!, const Color(0xFFF59E0B)),
+      _Seg(5, counts[5]!, const Color(0xFFEA580C)),
+      _Seg(4, counts[4]!, const Color(0xFFFB923C)),
+      _Seg(3, counts[3]!, const Color(0xFFF97316)),
       _Seg(2, counts[2]!, const Color(0xFFFCD34D)),
       _Seg(1, counts[1]!, const Color(0xFFE5E7EB)),
     ];
@@ -2055,7 +2055,7 @@ class _DistributionCard extends StatelessWidget {
             style: GoogleFonts.beVietnamPro(
               fontSize: 14,
               fontWeight: FontWeight.w700,
-              color: _C.charcoal,
+              color: UpriseColors.primaryDark,
             ),
           ),
           const SizedBox(height: 16),
@@ -2890,7 +2890,7 @@ class _QuestionPreview extends StatelessWidget {
             (i) => Icon(
               i < 4 ? Icons.star : Icons.star_border,
               size: 22,
-              color: const Color(0xFFF59E0B),
+              color: const Color(0xFFF97316),
             ),
           ),
         );

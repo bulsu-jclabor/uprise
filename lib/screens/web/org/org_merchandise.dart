@@ -1,4 +1,4 @@
-// lib/screens/web/org/org_merchandise.dart
+﻿// lib/screens/web/org/org_merchandise.dart
 
 import 'dart:convert';
 import 'dart:typed_data';
@@ -81,7 +81,7 @@ class _DS {
 Widget _statusBadge(String status) {
   final Map<String, _BadgeStyle> styles = {
     'published': _BadgeStyle(const Color(0xFFECFDF5), const Color(0xFF059669), 'PUBLISHED'),
-    'draft': _BadgeStyle(const Color(0xFFFFFBEB), const Color(0xFFD97706), 'DRAFT'),
+    'draft': _BadgeStyle(const Color(0xFFFFFBEB), const Color(0xFFFB923C), 'DRAFT'),
     'archived': _BadgeStyle(const Color(0xFFFEF2F2), const Color(0xFFDC2626), 'ARCHIVED'),
   };
   final s = styles[status.toLowerCase()] ??
@@ -720,9 +720,9 @@ class _ProductsTabState extends State<_ProductsTab> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 13),
       decoration: const BoxDecoration(
-        color: Color(0xFFF8F9FB),
+        color: Color(0xFFFFF7ED),
         borderRadius: BorderRadius.vertical(top: Radius.circular(14)),
-        border: Border(bottom: BorderSide(color: Color(0xFFE8ECF0))),
+        border: Border(bottom: BorderSide(color: Color(0xFFFB923C))),
       ),
       child: Row(children: [
         Expanded(flex: 2, child: _headerCell('PRODUCT')),
@@ -1086,7 +1086,7 @@ class _OrdersTabState extends State<_OrdersTab> {
                 Container(
                   width: 40, height: 40,
                   decoration: BoxDecoration(color: const Color(0xFFFFF7ED), borderRadius: BorderRadius.circular(10)),
-                  child: const Icon(Icons.update_rounded, color: Color(0xFFB45309), size: 20),
+                  child: const Icon(Icons.update_rounded, color: Color(0xFFEA580C), size: 20),
                 ),
                 const SizedBox(width: 12),
                 Expanded(child: Text(title, style: GoogleFonts.beVietnamPro(fontSize: 16, fontWeight: FontWeight.w700))),
@@ -1374,10 +1374,10 @@ class _OrdersTabState extends State<_OrdersTab> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(children: [
-            const Icon(Icons.groups_outlined, size: 15, color: Color(0xFFD97706)),
+            const Icon(Icons.groups_outlined, size: 15, color: Color(0xFFFB923C)),
             const SizedBox(width: 6),
             Text('Section Summary',
-                style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.w700, color: const Color(0xFFD97706))),
+                style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.w700, color: const Color(0xFFFB923C))),
           ]),
           const SizedBox(height: 10),
           ...sortedSections.map((section) {
@@ -1438,9 +1438,9 @@ class _OrdersTabState extends State<_OrdersTab> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 13),
       decoration: const BoxDecoration(
-        color: Color(0xFFF8F9FB),
+        color: Color(0xFFFFF7ED),
         borderRadius: BorderRadius.vertical(top: Radius.circular(14)),
-        border: Border(bottom: BorderSide(color: Color(0xFFE8ECF0))),
+        border: Border(bottom: BorderSide(color: Color(0xFFFB923C))),
       ),
       child: Row(children: [
         Expanded(flex: 2, child: _headerCell('ORDER ID')),
@@ -1551,7 +1551,7 @@ class _OrdersTabState extends State<_OrdersTab> {
         bg = const Color(0xFFECFDF5); fg = const Color(0xFF059669); label = 'CLAIMED';
         break;
       default:
-        bg = const Color(0xFFFFFBEB); fg = const Color(0xFFD97706); label = 'PENDING';
+        bg = const Color(0xFFFFFBEB); fg = const Color(0xFFFB923C); label = 'PENDING';
     }
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
@@ -2460,9 +2460,9 @@ class _ProductDetailsModal extends StatelessWidget {
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
                             decoration: const BoxDecoration(
-                              color: Color(0xFFF8F9FB),
+                              color: Color(0xFFFFF7ED),
                               borderRadius: BorderRadius.vertical(top: Radius.circular(8)),
-                              border: Border(bottom: BorderSide(color: Color(0xFFE8ECF0))),
+                              border: Border(bottom: BorderSide(color: Color(0xFFFB923C))),
                             ),
                             child: Row(children: [
                               Expanded(flex: 2, child: Text('SIZE', style: GoogleFonts.beVietnamPro(fontSize: 10, fontWeight: FontWeight.w700, color: const Color(0xFF64748B), letterSpacing: 0.5))),

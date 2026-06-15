@@ -1,4 +1,4 @@
-import 'dart:convert';
+﻿import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -106,7 +106,7 @@ class _SeverityBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     final Map<String, _BadgeStyle> styles = {
       'info':     _BadgeStyle(const Color(0xFFEFF6FF), const Color(0xFF2563EB), 'INFO'),
-      'warning':  _BadgeStyle(const Color(0xFFFFFBEB), const Color(0xFFD97706), 'WARNING'),
+      'warning':  _BadgeStyle(const Color(0xFFFFFBEB), const Color(0xFFFB923C), 'WARNING'),
       'error':    _BadgeStyle(const Color(0xFFFEF2F2), const Color(0xFFDC2626), 'ERROR'),
       'critical': _BadgeStyle(const Color(0xFFFDF2F8), const Color(0xFF9333EA), 'CRITICAL'),
     };
@@ -484,7 +484,7 @@ class _AdminSettingsState extends State<AdminSettings>
                   style: GoogleFonts.beVietnamPro(
                     fontSize: 22,
                     fontWeight: FontWeight.w700,
-                    color: const Color(0xFF1A202C),
+                    color: UpriseColors.accent,
                   ),
                 ),
                 const SizedBox(height: 3),

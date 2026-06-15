@@ -1,4 +1,4 @@
-// ignore_for_file: unused_field, duplicate_ignore, use_build_context_synchronously, deprecated_member_use
+﻿// ignore_for_file: unused_field, duplicate_ignore, use_build_context_synchronously, deprecated_member_use
 import 'dart:io';
 import 'dart:math';
 import 'dart:convert';
@@ -489,9 +489,9 @@ class _StudentAccountsState extends State<StudentAccounts> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 13),
       decoration: const BoxDecoration(
-        color: Color(0xFFF8F9FB),
+        color: Color(0xFFFFF7ED),
         borderRadius: BorderRadius.vertical(top: Radius.circular(14)),
-        border: Border(bottom: BorderSide(color: Color(0xFFE8ECF0))),
+        border: Border(bottom: BorderSide(color: Color(0xFFFB923C))),
       ),
       child: Row(children: [
         Expanded(flex: 2, child: _headerCell('STUDENT ID')),
@@ -836,7 +836,7 @@ class _StudentAccountsState extends State<StudentAccounts> {
                         border: Border.all(color: const Color(0xFFFED7AA)),
                       ),
                       child: Row(children: [
-                        const Icon(Icons.info_outline_rounded, size: 15, color: Color(0xFFD97706)),
+                        const Icon(Icons.info_outline_rounded, size: 15, color: Color(0xFFFB923C)),
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
@@ -1093,7 +1093,7 @@ class _StudentAccountsState extends State<StudentAccounts> {
                     color: const Color(0xFFFFF7ED),
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  child: const Icon(Icons.email_outlined, color: Color(0xFFB45309), size: 20),
+                  child: const Icon(Icons.email_outlined, color: Color(0xFFEA580C), size: 20),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -1145,7 +1145,7 @@ class _StudentAccountsState extends State<StudentAccounts> {
                     icon: const Icon(Icons.send_rounded, size: 15),
                     label: Text('Send', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600)),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFFB45309),
+                      backgroundColor: const Color(0xFFEA580C),
                       foregroundColor: Colors.white,
                       elevation: 0,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
@@ -1184,7 +1184,7 @@ class _StudentAccountsState extends State<StudentAccounts> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(sent ? 'Credentials resent to $email.' : 'Credentials queued but sending failed for $email.'),
-          backgroundColor: sent ? const Color(0xFF059669) : const Color(0xFFF59E0B),
+          backgroundColor: sent ? const Color(0xFF059669) : const Color(0xFFF97316),
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         ),

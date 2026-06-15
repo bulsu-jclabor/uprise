@@ -1,4 +1,4 @@
-// ignore_for_file: unused_element_parameter
+﻿// ignore_for_file: unused_element_parameter
 
 import 'dart:typed_data';
 import 'dart:convert';
@@ -131,7 +131,7 @@ Widget _headerCell(String text) => Text(text,
 Widget _attBadge(String status) {
   final Map<String, (Color, Color, Color, String)> s = {
     'present': (const Color(0xFFECFDF5), const Color(0xFF059669), const Color(0xFFBBF7D0), 'PRESENT'),
-    'late':    (const Color(0xFFFFFBEB), const Color(0xFFD97706), const Color(0xFFFDE68A), 'LATE'),
+    'late':    (const Color(0xFFFFFBEB), const Color(0xFFFB923C), const Color(0xFFFDE68A), 'LATE'),
     'absent':  (const Color(0xFFFEF2F2), const Color(0xFFDC2626), const Color(0xFFFECACA), 'ABSENT'),
   };
   final style = s[status.toLowerCase()] ??
@@ -358,7 +358,7 @@ class _StatePill extends StatelessWidget {
     final state = _eventState(event);
     final (Color bg, Color fg, Color border, String txt, IconData icon) = switch (state) {
       _EState.active        => (const Color(0xFFECFDF5), const Color(0xFF059669), const Color(0xFFBBF7D0), 'LIVE', Icons.fiber_manual_record),
-      _EState.todayInactive => (const Color(0xFFFFFBEB), const Color(0xFFD97706), const Color(0xFFFDE68A), 'TODAY', Icons.today_rounded),
+      _EState.todayInactive => (const Color(0xFFFFFBEB), const Color(0xFFFB923C), const Color(0xFFFDE68A), 'TODAY', Icons.today_rounded),
       _EState.future        => (const Color(0xFFEFF6FF), const Color(0xFF2563EB), const Color(0xFFBFD7FF), 'UPCOMING', Icons.event_rounded),
       _EState.ended         => (const Color(0xFFF3F4F6), const Color(0xFF6B7280), const Color(0xFFE5E7EB), 'ENDED', Icons.lock_outline_rounded),
     };
@@ -742,7 +742,7 @@ class _AttendanceTabState extends State<AttendanceTab> with AutomaticKeepAliveCl
       const SizedBox(width: 14),
       _StatCard(label: 'Present', value: '$present', icon: Icons.check_circle_rounded, color: const Color(0xFF059669)),
       const SizedBox(width: 14),
-      _StatCard(label: 'Late', value: '$late', icon: Icons.schedule_rounded, color: const Color(0xFFD97706)),
+      _StatCard(label: 'Late', value: '$late', icon: Icons.schedule_rounded, color: const Color(0xFFFB923C)),
       const SizedBox(width: 14),
       _StatCard(label: 'Absent', value: '${total - present - late}', icon: Icons.cancel_rounded, color: const Color(0xFFDC2626)),
     ]);
@@ -1376,7 +1376,7 @@ class _MethodBadge extends StatelessWidget {
       ),
       child: Text(isManual ? 'Manual' : 'QR Scan',
           style: GoogleFonts.beVietnamPro(fontSize: 11, fontWeight: FontWeight.w600,
-              color: isManual ? const Color(0xFFD97706) : const Color(0xFF2563EB))),
+              color: isManual ? const Color(0xFFFB923C) : const Color(0xFF2563EB))),
     );
   }
 }

@@ -1,4 +1,4 @@
-// lib/screens/web/admin/adviser_roles.dart
+﻿// lib/screens/web/admin/adviser_roles.dart
 
 import 'dart:async';
 import 'dart:convert';
@@ -117,7 +117,7 @@ class _RankBadge extends StatelessWidget {
   static Color colorOf(String rank) {
     switch (rank.toLowerCase()) {
       case 'senior':    return const Color(0xFF2563EB);
-      case 'junior':    return const Color(0xFFD97706);
+      case 'junior':    return const Color(0xFFFB923C);
       case 'professor': return const Color(0xFF7C3AED);
       default:          return const Color(0xFF059669);
     }
@@ -147,7 +147,7 @@ class _PositionBadge extends StatelessWidget {
     switch (position.toLowerCase()) {
       case 'dean':          return const Color(0xFF7C3AED);
       case 'program chair': return const Color(0xFF2563EB);
-      case 'department head': return const Color(0xFFD97706);
+      case 'department head': return const Color(0xFFFB923C);
       case 'coordinator':   return const Color(0xFF059669);
       default:              return const Color(0xFF6B7280);
     }
@@ -675,9 +675,9 @@ class _AdviserRolesState extends State<AdviserRoles> {
   return Container(
     padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 13),
     decoration: const BoxDecoration(
-      color: Color(0xFFF8F9FB),
+      color: Color(0xFFFFF7ED),
       borderRadius: BorderRadius.vertical(top: Radius.circular(14)),
-      border: Border(bottom: BorderSide(color: Color(0xFFE8ECF0))),
+      border: Border(bottom: BorderSide(color: Color(0xFFFB923C))),
     ),
     child: Row(children: [
       Expanded(flex: 2, child: _headerCell('ORGANIZATION')),

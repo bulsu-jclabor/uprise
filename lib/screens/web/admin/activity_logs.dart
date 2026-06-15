@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:uprise/widgets/admin_export_button.dart';
@@ -35,7 +35,7 @@ class _SeverityBadge extends StatelessWidget {
       'info': _Style(const Color(0xFFEFF6FF), const Color(0xFF2563EB), 'INFO'),
       'warning': _Style(
         const Color(0xFFFFFBEB),
-        const Color(0xFFD97706),
+        const Color(0xFFFB923C),
         'WARNING',
       ),
       'error': _Style(
@@ -216,7 +216,7 @@ class _ActivityLogsState extends State<ActivityLogs> {
                   style: GoogleFonts.beVietnamPro(
                     fontSize: 22,
                     fontWeight: FontWeight.w700,
-                    color: const Color(0xFF1A202C),
+                    color: UpriseColors.accent,
                   ),
                 ),
                 const SizedBox(height: 3),
@@ -287,7 +287,7 @@ class _ActivityLogsState extends State<ActivityLogs> {
             label: 'Warnings',
             value: '$warnings',
             icon: Icons.info_outline_rounded,
-            color: const Color(0xFFD97706),
+            color: const Color(0xFFFB923C),
             subtitle: 'Flagged events',
           ),
           _StatCard(
@@ -537,9 +537,9 @@ class _ActivityLogsState extends State<ActivityLogs> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 13),
       decoration: const BoxDecoration(
-        color: Color(0xFFF8F9FB),
+        color: Color(0xFFFFF7ED),
         borderRadius: BorderRadius.vertical(top: Radius.circular(14)),
-        border: Border(bottom: BorderSide(color: Color(0xFFE8ECF0))),
+        border: Border(bottom: BorderSide(color: Color(0xFFFB923C))),
       ),
       child: Row(
         children: [

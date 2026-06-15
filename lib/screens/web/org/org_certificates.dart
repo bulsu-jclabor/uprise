@@ -484,9 +484,9 @@ class _OrgCertificatesScreenState extends State<OrgCertificatesScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 13),
       decoration: const BoxDecoration(
-        color: Color(0xFFF8F9FB),
+        color: Color(0xFFFFF7ED),
         borderRadius: BorderRadius.vertical(top: Radius.circular(14)),
-        border: Border(bottom: BorderSide(color: Color(0xFFE8ECF0))),
+        border: Border(bottom: BorderSide(color: Color(0xFFFB923C))),
       ),
       child: Row(children: [
         Expanded(flex: 2, child: _headerCell('CERTIFICATE ID')),
@@ -1405,7 +1405,7 @@ List<_CanvasElement> _defaultElementsFor(String templateType) {
       textCol = const Color(0xFFECFDF5);
       break;
     default: // Formal Academic
-      accent  = const Color(0xFFB45309);
+      accent  = const Color(0xFFEA580C);
       textCol = const Color(0xFF1A202C);
   }
   return [
@@ -2153,7 +2153,7 @@ class _ColorSwatch extends StatelessWidget {
   void _showPicker(BuildContext context) {
     final swatches = [
       Colors.white, const Color(0xFFF8F9FB), const Color(0xFF1A202C), Colors.black,
-      const Color(0xFFB45309), const Color(0xFFD97706), const Color(0xFFFCD34D),
+      const Color(0xFFEA580C), const Color(0xFFFB923C), const Color(0xFFFCD34D),
       const Color(0xFF059669), const Color(0xFF10B981), const Color(0xFF34D399),
       const Color(0xFF2563EB), const Color(0xFF60A5FA), const Color(0xFF1E3A5F),
       const Color(0xFFDC2626), const Color(0xFFFCA5A5),
