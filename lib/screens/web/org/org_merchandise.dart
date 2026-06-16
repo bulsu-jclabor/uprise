@@ -1,4 +1,4 @@
-﻿// lib/screens/web/org/org_merchandise.dart
+// lib/screens/web/org/org_merchandise.dart
 
 import 'dart:convert';
 import 'dart:typed_data';
@@ -45,9 +45,13 @@ class _DS {
           ? Icon(icon, size: 18, color: const Color(0xFF9AA5B4))
           : null,
       labelStyle: GoogleFonts.beVietnamPro(
-          fontSize: 13, color: const Color(0xFF64748B)),
+        fontSize: 13,
+        color: const Color(0xFF64748B),
+      ),
       hintStyle: GoogleFonts.beVietnamPro(
-          fontSize: 13, color: const Color(0xFF9AA5B4)),
+        fontSize: 13,
+        color: const Color(0xFF9AA5B4),
+      ),
       filled: true,
       fillColor: const Color(0xFFF8F9FB),
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
@@ -80,12 +84,29 @@ class _DS {
 // ─────────────────────────────────────────────────────────────────────────────
 Widget _statusBadge(String status) {
   final Map<String, _BadgeStyle> styles = {
-    'published': _BadgeStyle(const Color(0xFFECFDF5), const Color(0xFF059669), 'PUBLISHED'),
-    'draft': _BadgeStyle(const Color(0xFFFFFBEB), const Color(0xFFFB923C), 'DRAFT'),
-    'archived': _BadgeStyle(const Color(0xFFFEF2F2), const Color(0xFFDC2626), 'ARCHIVED'),
+    'published': _BadgeStyle(
+      const Color(0xFFECFDF5),
+      const Color(0xFF059669),
+      'PUBLISHED',
+    ),
+    'draft': _BadgeStyle(
+      const Color(0xFFFFFBEB),
+      const Color(0xFFFB923C),
+      'DRAFT',
+    ),
+    'archived': _BadgeStyle(
+      const Color(0xFFFEF2F2),
+      const Color(0xFFDC2626),
+      'ARCHIVED',
+    ),
   };
-  final s = styles[status.toLowerCase()] ??
-      _BadgeStyle(const Color(0xFFF3F4F6), const Color(0xFF6B7280), status.toUpperCase());
+  final s =
+      styles[status.toLowerCase()] ??
+      _BadgeStyle(
+        const Color(0xFFF3F4F6),
+        const Color(0xFF6B7280),
+        status.toUpperCase(),
+      );
   return Container(
     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
     decoration: BoxDecoration(
@@ -187,7 +208,9 @@ class _OrgMerchandiseScreenState extends State<OrgMerchandiseScreen>
       builder: (context, productSnap) {
         final products = productSnap.data?.docs ?? [];
         final totalProducts = products.length;
-        final lowStock = products.where((p) => ((p.data() as Map)['stock'] ?? 0) <= 5).length;
+        final lowStock = products
+            .where((p) => ((p.data() as Map)['stock'] ?? 0) <= 5)
+            .length;
         double totalProfit = 0;
         for (final doc in products) {
           final d = doc.data() as Map;
@@ -212,42 +235,46 @@ class _OrgMerchandiseScreenState extends State<OrgMerchandiseScreen>
 
             return Padding(
               padding: const EdgeInsets.fromLTRB(28, 24, 28, 0),
-              child: Row(children: [
-                _StatCard(
-                  label: 'Total Products',
-                  value: totalProducts.toString(),
-                  icon: Icons.shopping_bag_outlined,
-                  color: UpriseColors.info,
-                ),
-                const SizedBox(width: 14),
-                _StatCard(
-                  label: 'Total Sales',
-                  value: totalSales.toString(),
-                  icon: Icons.shopping_cart_outlined,
-                  color: UpriseColors.success,
-                ),
-                const SizedBox(width: 14),
-                _StatCard(
-                  label: 'Total Revenue',
-                  value: '₱${NumberFormat('#,###').format(totalRevenue)}',
-                  icon: Icons.payments_outlined,
-                  color: UpriseColors.warning,
-                ),
-                const SizedBox(width: 14),
-                _StatCard(
-                  label: 'Total Profit',
-                  value: '₱${NumberFormat('#,###').format(totalProfit)}',
-                  icon: Icons.trending_up_outlined,
-                  color: UpriseColors.success,
-                ),
-                const SizedBox(width: 14),
-                _StatCard(
-                  label: 'Low Stock',
-                  value: lowStock.toString(),
-                  icon: Icons.warning_amber_outlined,
-                  color: lowStock > 0 ? UpriseColors.error : const Color(0xFF6B7280),
-                ),
-              ]),
+              child: Row(
+                children: [
+                  _StatCard(
+                    label: 'Total Products',
+                    value: totalProducts.toString(),
+                    icon: Icons.shopping_bag_outlined,
+                    color: UpriseColors.info,
+                  ),
+                  const SizedBox(width: 14),
+                  _StatCard(
+                    label: 'Total Sales',
+                    value: totalSales.toString(),
+                    icon: Icons.shopping_cart_outlined,
+                    color: UpriseColors.success,
+                  ),
+                  const SizedBox(width: 14),
+                  _StatCard(
+                    label: 'Total Revenue',
+                    value: '₱${NumberFormat('#,###').format(totalRevenue)}',
+                    icon: Icons.payments_outlined,
+                    color: UpriseColors.warning,
+                  ),
+                  const SizedBox(width: 14),
+                  _StatCard(
+                    label: 'Total Profit',
+                    value: '₱${NumberFormat('#,###').format(totalProfit)}',
+                    icon: Icons.trending_up_outlined,
+                    color: UpriseColors.success,
+                  ),
+                  const SizedBox(width: 14),
+                  _StatCard(
+                    label: 'Low Stock',
+                    value: lowStock.toString(),
+                    icon: Icons.warning_amber_outlined,
+                    color: lowStock > 0
+                        ? UpriseColors.error
+                        : const Color(0xFF6B7280),
+                  ),
+                ],
+              ),
             );
           },
         );
@@ -294,12 +321,19 @@ class _OrgMerchandiseScreenState extends State<OrgMerchandiseScreen>
           OutlinedButton.icon(
             onPressed: () => _openSalesReport(context),
             icon: const Icon(Icons.bar_chart_outlined, size: 16),
-            label: Text('Sales Report',
-                style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600)),
+            label: Text(
+              'Sales Report',
+              style: GoogleFonts.beVietnamPro(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
             style: OutlinedButton.styleFrom(
               foregroundColor: UpriseColors.primaryDark,
               side: BorderSide(color: UpriseColors.primaryDark),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
             ),
           ),
@@ -307,12 +341,20 @@ class _OrgMerchandiseScreenState extends State<OrgMerchandiseScreen>
           ElevatedButton.icon(
             onPressed: () => _openAddProductModal(context),
             icon: const Icon(Icons.add, size: 18, color: Colors.white),
-            label: Text('Add Product',
-                style: GoogleFonts.beVietnamPro(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 13)),
+            label: Text(
+              'Add Product',
+              style: GoogleFonts.beVietnamPro(
+                color: Colors.white,
+                fontWeight: FontWeight.w600,
+                fontSize: 13,
+              ),
+            ),
             style: ElevatedButton.styleFrom(
               backgroundColor: UpriseColors.primaryDark,
               padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
               elevation: 0,
             ),
           ),
@@ -347,20 +389,36 @@ class _OrgMerchandiseScreenState extends State<OrgMerchandiseScreen>
       buf.writeln('Product Name,Category,Price,Stock,Sold');
       for (final doc in docs) {
         final d = doc.data();
-        buf.writeln('"${d['name']}","${d['category']}","${d['price']}","${d['stock']}","${d['sold']}"');
+        buf.writeln(
+          '"${d['name']}","${d['category']}","${d['price']}","${d['stock']}","${d['sold']}"',
+        );
       }
-      await AdminExportUtil.saveText(buf.toString(), 'products_$now.csv', mimeType: 'text/csv');
+      await AdminExportUtil.saveText(
+        buf.toString(),
+        'products_$now.csv',
+        mimeType: 'text/csv',
+      );
     } else if (format == 'pdf') {
       final rows = docs.map((doc) {
         final d = doc.data();
-        return ['${d['name']}', '${d['category']}', '${d['price']}', '${d['stock']}', '${d['sold']}'];
+        return [
+          '${d['name']}',
+          '${d['category']}',
+          '${d['price']}',
+          '${d['stock']}',
+          '${d['sold']}',
+        ];
       }).toList();
       final pdfBytes = await AdminExportPdf.generateTablePdf(
         title: 'Product Inventory',
         headers: const ['Name', 'Category', 'Price', 'Stock', 'Sold'],
         rows: rows,
       );
-      await AdminExportUtil.saveBytes(pdfBytes, 'products_$now.pdf', mimeType: 'application/pdf');
+      await AdminExportUtil.saveBytes(
+        pdfBytes,
+        'products_$now.pdf',
+        mimeType: 'application/pdf',
+      );
     }
     _showSnack('Exported products', UpriseColors.success);
   }
@@ -379,25 +437,57 @@ class _OrgMerchandiseScreenState extends State<OrgMerchandiseScreen>
     final now = DateFormat('yyyyMMdd').format(DateTime.now());
     if (format == 'csv') {
       final buf = StringBuffer();
-      buf.writeln('Order ID,Customer,Section,Total,Status,Pickup Status,Date,Bundle ID'); // NEW: added Section, Pickup Status
+      buf.writeln(
+        'Order ID,Customer,Section,Total,Status,Pickup Status,Date,Bundle ID',
+      );
       for (final doc in docs) {
         final d = doc.data();
-        final date = DateFormat('yyyy-MM-dd').format((d['createdAt'] as Timestamp).toDate());
-        buf.writeln('"${d['orderId']}","${d['customerName']}","${d['section'] ?? ''}","${d['total']}","${d['status']}","${d['pickupStatus'] ?? 'Pending'}","$date","${d['bundleId'] ?? ''}"');
+        final date = DateFormat(
+          'yyyy-MM-dd',
+        ).format((d['createdAt'] as Timestamp).toDate());
+        buf.writeln(
+          '"${d['orderId']}","${d['customerName']}","${d['section'] ?? ''}","${d['total']}","${d['status']}","${d['pickupStatus'] ?? 'Pending'}","$date","${d['bundleId'] ?? ''}"',
+        );
       }
-      await AdminExportUtil.saveText(buf.toString(), 'orders_$now.csv', mimeType: 'text/csv');
+      await AdminExportUtil.saveText(
+        buf.toString(),
+        'orders_$now.csv',
+        mimeType: 'text/csv',
+      );
     } else if (format == 'pdf') {
       final rows = docs.map((doc) {
         final d = doc.data();
-        final date = DateFormat('yyyy-MM-dd').format((d['createdAt'] as Timestamp).toDate());
-        return ['${d['orderId']}', '${d['customerName']}', '${d['section'] ?? ''}', '${d['total']}', '${d['status']}', '${d['pickupStatus'] ?? 'Pending'}', date]; // NEW: added Section, Pickup Status
+        final date = DateFormat(
+          'yyyy-MM-dd',
+        ).format((d['createdAt'] as Timestamp).toDate());
+        return [
+          '${d['orderId']}',
+          '${d['customerName']}',
+          '${d['section'] ?? ''}',
+          '${d['total']}',
+          '${d['status']}',
+          '${d['pickupStatus'] ?? 'Pending'}',
+          date,
+        ];
       }).toList();
       final pdfBytes = await AdminExportPdf.generateTablePdf(
         title: 'Sales Orders',
-        headers: const ['Order ID', 'Customer', 'Section', 'Total', 'Status', 'Pickup Status', 'Date'], // NEW
+        headers: const [
+          'Order ID',
+          'Customer',
+          'Section',
+          'Total',
+          'Status',
+          'Pickup Status',
+          'Date',
+        ],
         rows: rows,
       );
-      await AdminExportUtil.saveBytes(pdfBytes, 'orders_$now.pdf', mimeType: 'application/pdf');
+      await AdminExportUtil.saveBytes(
+        pdfBytes,
+        'orders_$now.pdf',
+        mimeType: 'application/pdf',
+      );
     }
     _showSnack('Exported orders', UpriseColors.success);
   }
@@ -407,7 +497,9 @@ class _OrgMerchandiseScreenState extends State<OrgMerchandiseScreen>
       context: context,
       barrierDismissible: false,
       builder: (_) => _ProductModal(orgId: widget.orgId),
-    );
+    ).then((_) {
+      setState(() {});
+    });
   }
 
   void _openSalesReport(BuildContext context) {
@@ -418,12 +510,14 @@ class _OrgMerchandiseScreenState extends State<OrgMerchandiseScreen>
   }
 
   void _showSnack(String msg, Color color) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(msg, style: GoogleFonts.beVietnamPro()),
-      backgroundColor: color,
-      behavior: SnackBarBehavior.floating,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-    ));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(msg, style: GoogleFonts.beVietnamPro()),
+        backgroundColor: color,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      ),
+    );
   }
 }
 
@@ -434,7 +528,11 @@ class _PillTab extends StatelessWidget {
   final String label;
   final bool selected;
   final VoidCallback onTap;
-  const _PillTab({required this.label, required this.selected, required this.onTap});
+  const _PillTab({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -448,11 +546,14 @@ class _PillTab extends StatelessWidget {
           color: selected ? UpriseColors.primaryDark : Colors.transparent,
           borderRadius: BorderRadius.circular(6),
         ),
-        child: Text(label,
-            style: GoogleFonts.beVietnamPro(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                color: selected ? Colors.white : const Color(0xFF64748B))),
+        child: Text(
+          label,
+          style: GoogleFonts.beVietnamPro(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: selected ? Colors.white : const Color(0xFF64748B),
+          ),
+        ),
       ),
     );
   }
@@ -465,7 +566,12 @@ class _StatCard extends StatelessWidget {
   final String label, value;
   final IconData icon;
   final Color color;
-  const _StatCard({required this.label, required this.value, required this.icon, required this.color});
+  const _StatCard({
+    required this.label,
+    required this.value,
+    required this.icon,
+    required this.color,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -494,13 +600,23 @@ class _StatCard extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(label,
-                      style: GoogleFonts.beVietnamPro(
-                          fontSize: 11, color: const Color(0xFF64748B), fontWeight: FontWeight.w500)),
+                  Text(
+                    label,
+                    style: GoogleFonts.beVietnamPro(
+                      fontSize: 11,
+                      color: const Color(0xFF64748B),
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
                   const SizedBox(height: 2),
-                  Text(value,
-                      style: GoogleFonts.beVietnamPro(
-                          fontSize: 28, fontWeight: FontWeight.w700, color: const Color(0xFF1A202C))),
+                  Text(
+                    value,
+                    style: GoogleFonts.beVietnamPro(
+                      fontSize: 28,
+                      fontWeight: FontWeight.w700,
+                      color: const Color(0xFF1A202C),
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -512,7 +628,7 @@ class _StatCard extends StatelessWidget {
 }
 
 // ============================================================
-// PRODUCTS TAB (unchanged)
+// PRODUCTS TAB - Card Grid with Infinite Scroll
 // ============================================================
 class _ProductsTab extends StatefulWidget {
   final String orgId;
@@ -527,32 +643,126 @@ class _ProductsTabState extends State<_ProductsTab> {
   String _searchQuery = '';
   String _categoryFilter = 'All';
   String _statusFilter = 'All';
-  int _currentPage = 1;
-  static const int _pageSize = 10;
 
   final List<String> _categoryFilters = ['All', ..._merchandiseCategories];
-  final List<String> _statusFilters = ['All', 'Available', 'Out of Stock', 'Discontinued'];
+  final List<String> _statusFilters = [
+    'All',
+    'Available',
+    'Out of Stock',
+    'Discontinued',
+  ];
+
+  bool _hasMore = true;
+  bool _isLoading = false;
+  final ScrollController _scrollController = ScrollController();
+  List<ProductModel> _products = [];
+  DocumentSnapshot? _lastDocument;
+  bool _isInitialLoad = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController.addListener(_onScroll);
+    _loadProducts();
+  }
 
   @override
   void dispose() {
     _searchController.dispose();
+    _scrollController.dispose();
     super.dispose();
   }
 
-  Stream<QuerySnapshot> get _stream => FirebaseFirestore.instance
-      .collection('products')
-      .where('orgId', isEqualTo: widget.orgId)
-      .where('isArchived', isEqualTo: false)
-      .orderBy('createdAt', descending: true)
-      .snapshots();
+  void _onScroll() {
+    if (_scrollController.position.pixels >=
+        _scrollController.position.maxScrollExtent - 200) {
+      _loadMoreProducts();
+    }
+  }
+
+  Future<void> _loadProducts({bool reset = true}) async {
+    if (_isLoading) return;
+    if (reset) {
+      setState(() {
+        _products = [];
+        _lastDocument = null;
+        _hasMore = true;
+        _isInitialLoad = true;
+      });
+    }
+    await _fetchProducts(reset: reset);
+  }
+
+  Future<void> _fetchProducts({bool reset = true}) async {
+    if (_isLoading || !_hasMore) return;
+
+    setState(() => _isLoading = true);
+
+    try {
+      var query = FirebaseFirestore.instance
+          .collection('products')
+          .where('orgId', isEqualTo: widget.orgId)
+          .where('isArchived', isEqualTo: false)
+          .orderBy('createdAt', descending: true);
+
+      if (!reset && _lastDocument != null) {
+        query = query.startAfterDocument(_lastDocument!);
+      }
+
+      query = query.limit(20);
+      final snapshot = await query.get();
+
+      if (snapshot.docs.isEmpty) {
+        setState(() {
+          _hasMore = false;
+          _isLoading = false;
+          _isInitialLoad = false;
+        });
+        return;
+      }
+
+      final newProducts = snapshot.docs
+          .map((d) => ProductModel.fromFirestore(d))
+          .toList();
+
+      final filtered = _applyFilters(newProducts);
+
+      setState(() {
+        if (reset) {
+          _products = filtered;
+        } else {
+          _products.addAll(filtered);
+        }
+        _lastDocument = snapshot.docs.last;
+        _hasMore = snapshot.docs.length >= 20;
+        _isLoading = false;
+        _isInitialLoad = false;
+      });
+    } catch (e) {
+      setState(() {
+        _isLoading = false;
+        _isInitialLoad = false;
+      });
+      if (mounted) _showSnack('Error loading products: $e', UpriseColors.error);
+    }
+  }
+
+  void _loadMoreProducts() {
+    if (!_isLoading && _hasMore && !_isInitialLoad) {
+      _fetchProducts(reset: false);
+    }
+  }
 
   List<ProductModel> _applyFilters(List<ProductModel> list) {
     return list.where((p) {
-      final matchSearch = _searchQuery.isEmpty ||
+      final matchSearch =
+          _searchQuery.isEmpty ||
           p.name.toLowerCase().contains(_searchQuery.toLowerCase()) ||
           p.category.toLowerCase().contains(_searchQuery.toLowerCase());
-      final matchCat = _categoryFilter == 'All' || p.category == _categoryFilter;
-      final matchStatus = _statusFilter == 'All' ||
+      final matchCat =
+          _categoryFilter == 'All' || p.category == _categoryFilter;
+      final matchStatus =
+          _statusFilter == 'All' ||
           (_statusFilter == 'Available' && p.status == 'available') ||
           (_statusFilter == 'Out of Stock' && p.status == 'out_of_stock') ||
           (_statusFilter == 'Discontinued' && p.status == 'discontinued');
@@ -565,42 +775,73 @@ class _ProductsTabState extends State<_ProductsTab> {
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        title: Text('Archive Product', style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.w700)),
-        content: Text('Archive "${product.name}"? It will be hidden from the store.', style: GoogleFonts.beVietnamPro()),
+        title: Text(
+          'Archive Product',
+          style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.w700),
+        ),
+        content: Text(
+          'Archive "${product.name}"? It will be hidden from the store.',
+          style: GoogleFonts.beVietnamPro(),
+        ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text('Cancel', style: GoogleFonts.beVietnamPro())),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text('Cancel', style: GoogleFonts.beVietnamPro()),
+          ),
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
-            style: ElevatedButton.styleFrom(backgroundColor: UpriseColors.warning, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
-            child: Text('Archive', style: GoogleFonts.beVietnamPro(color: Colors.white)),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: UpriseColors.warning,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+            child: Text(
+              'Archive',
+              style: GoogleFonts.beVietnamPro(color: Colors.white),
+            ),
           ),
         ],
       ),
     );
     if (confirm != true) return;
     try {
-      await FirebaseFirestore.instance.collection('products').doc(product.id).update({
-        'isArchived': true,
-        'archivedAt': FieldValue.serverTimestamp(),
-      });
+      await FirebaseFirestore.instance
+          .collection('products')
+          .doc(product.id)
+          .update({
+            'isArchived': true,
+            'archivedAt': FieldValue.serverTimestamp(),
+          });
       await activity_log.ActivityLogger.log(
         action: 'archive_product',
         module: 'merchandise',
-        details: {'orgId': widget.orgId, 'productId': product.id, 'name': product.name},
+        details: {
+          'orgId': widget.orgId,
+          'productId': product.id,
+          'name': product.name,
+        },
       );
-      if (mounted) _showSnack('Product archived', UpriseColors.success);
+      if (mounted) {
+        _showSnack('Product archived', UpriseColors.success);
+        setState(() {
+          _products.removeWhere((p) => p.id == product.id);
+        });
+      }
     } catch (e) {
       if (mounted) _showSnack('Error: $e', UpriseColors.error);
     }
   }
 
   void _showSnack(String msg, Color color) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(msg, style: GoogleFonts.beVietnamPro()),
-      backgroundColor: color,
-      behavior: SnackBarBehavior.floating,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-    ));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(msg, style: GoogleFonts.beVietnamPro()),
+        backgroundColor: color,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      ),
+    );
   }
 
   @override
@@ -609,7 +850,7 @@ class _ProductsTabState extends State<_ProductsTab> {
       children: [
         _buildToolbar(),
         const SizedBox(height: 16),
-        Expanded(child: _buildTable()),
+        Expanded(child: _buildProductGrid()),
         const SizedBox(height: 24),
       ],
     );
@@ -625,21 +866,45 @@ class _ProductsTabState extends State<_ProductsTab> {
             height: 40,
             child: TextField(
               controller: _searchController,
-              onChanged: (value) => setState(() {
-                _searchQuery = value;
-                _currentPage = 1;
-              }),
+              onChanged: (value) {
+                setState(() {
+                  _searchQuery = value;
+                });
+                _loadProducts(reset: true);
+              },
               style: GoogleFonts.beVietnamPro(fontSize: 13),
               decoration: InputDecoration(
                 hintText: 'Search products...',
-                hintStyle: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF9AA5B4)),
-                prefixIcon: const Icon(Icons.search_rounded, size: 18, color: Color(0xFF9AA5B4)),
+                hintStyle: GoogleFonts.beVietnamPro(
+                  fontSize: 13,
+                  color: const Color(0xFF9AA5B4),
+                ),
+                prefixIcon: const Icon(
+                  Icons.search_rounded,
+                  size: 18,
+                  color: Color(0xFF9AA5B4),
+                ),
                 filled: true,
                 fillColor: Colors.white,
-                contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE2E6EA))),
-                enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE2E6EA))),
-                focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: UpriseColors.primaryDark, width: 1.5)),
+                contentPadding: const EdgeInsets.symmetric(
+                  vertical: 0,
+                  horizontal: 16,
+                ),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: const BorderSide(color: Color(0xFFE2E6EA)),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: const BorderSide(color: Color(0xFFE2E6EA)),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: BorderSide(
+                    color: UpriseColors.primaryDark,
+                    width: 1.5,
+                  ),
+                ),
               ),
             ),
           ),
@@ -649,10 +914,12 @@ class _ProductsTabState extends State<_ProductsTab> {
             items: _categoryFilters,
             hint: 'Category',
             icon: Icons.category_outlined,
-            onChanged: (v) => setState(() {
-              _categoryFilter = v!;
-              _currentPage = 1;
-            }),
+            onChanged: (v) {
+              setState(() {
+                _categoryFilter = v!;
+              });
+              _loadProducts(reset: true);
+            },
           ),
           const SizedBox(width: 10),
           _FilterDropdown(
@@ -660,208 +927,19 @@ class _ProductsTabState extends State<_ProductsTab> {
             items: _statusFilters,
             hint: 'Status',
             icon: Icons.circle_outlined,
-            onChanged: (v) => setState(() {
-              _statusFilter = v!;
-              _currentPage = 1;
-            }),
+            onChanged: (v) {
+              setState(() {
+                _statusFilter = v!;
+              });
+              _loadProducts(reset: true);
+            },
           ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildTable() {
-    return StreamBuilder<QuerySnapshot>(
-      stream: _stream,
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
-        }
-        if (snapshot.hasError) {
-          return Center(child: Text('Error: ${snapshot.error}'));
-        }
-        var allProducts = snapshot.data!.docs.map((d) => ProductModel.fromFirestore(d)).toList();
-        allProducts = _applyFilters(allProducts);
-
-        final totalPages = allProducts.isEmpty ? 1 : (allProducts.length / _pageSize).ceil();
-        final safePage = _currentPage.clamp(1, totalPages);
-        final start = (safePage - 1) * _pageSize;
-        final end = (start + _pageSize).clamp(0, allProducts.length);
-        final pageProducts = allProducts.sublist(start, end);
-
-        return Container(
-          margin: const EdgeInsets.symmetric(horizontal: 28),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: const Color(0xFFE8ECF0)),
-            boxShadow: _DS.cardShadow,
-          ),
-          child: Column(
-            children: [
-              _buildTableHeader(),
-              Expanded(
-                child: allProducts.isEmpty
-                    ? _buildEmptyState(Icons.inventory_2_outlined, 'No products yet', 'Click "Add Product" to get started.')
-                    : ListView.builder(
-                        itemCount: pageProducts.length,
-                        itemBuilder: (_, i) => _buildProductRow(pageProducts[i], isLast: i == pageProducts.length - 1),
-                      ),
-              ),
-              _buildFooter(allProducts.length, totalPages, start, end),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildTableHeader() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 13),
-      decoration: const BoxDecoration(
-        color: Color(0xFFFFF7ED),
-        borderRadius: BorderRadius.vertical(top: Radius.circular(14)),
-        border: Border(bottom: BorderSide(color: Color(0xFFFB923C))),
-      ),
-      child: Row(children: [
-        Expanded(flex: 2, child: _headerCell('PRODUCT')),
-        Expanded(flex: 1, child: _headerCell('CATEGORY')),
-        Expanded(flex: 1, child: _headerCell('PRICE')),
-        Expanded(flex: 1, child: _headerCell('STOCK')),
-        Expanded(flex: 1, child: _headerCell('SOLD')),
-        Expanded(flex: 1, child: _headerCell('STATUS')),
-        Expanded(flex: 2, child: Align(alignment: Alignment.centerRight, child: _headerCell('ACTIONS'))),
-      ]),
-    );
-  }
-
-  Widget _headerCell(String text) => Text(text,
-      style: GoogleFonts.beVietnamPro(fontSize: 11, fontWeight: FontWeight.w700, color: const Color(0xFF64748B), letterSpacing: 0.7));
-
-  Widget _productStatusBadge(String status) {
-    final Color bg, fg;
-    final String label;
-    switch (status) {
-      case 'out_of_stock':
-        bg = const Color(0xFFFEF2F2); fg = const Color(0xFFDC2626); label = 'OUT OF STOCK';
-        break;
-      case 'discontinued':
-        bg = const Color(0xFFF3F4F6); fg = const Color(0xFF6B7280); label = 'DISCONTINUED';
-        break;
-      default:
-        bg = const Color(0xFFECFDF5); fg = const Color(0xFF059669); label = 'AVAILABLE';
-    }
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(_DS.radiusPill)),
-      child: Text(label, style: GoogleFonts.beVietnamPro(fontSize: 9, fontWeight: FontWeight.w700, color: fg, letterSpacing: 0.5)),
-    );
-  }
-
-  Widget _buildProductRow(ProductModel product, {required bool isLast}) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-      decoration: BoxDecoration(
-        border: isLast ? null : const Border(bottom: BorderSide(color: Color(0xFFF1F5F9))),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            flex: 2,
-            child: Row(
-              children: [
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(8),
-                  child: product.imageUrl.isEmpty
-                      ? Container(
-                          width: 40, height: 40,
-                          decoration: BoxDecoration(color: UpriseColors.primaryDark.withAlpha(26), borderRadius: BorderRadius.circular(8)),
-                          child: const Icon(Icons.shopping_bag_outlined, size: 18, color: UpriseColors.primaryDark),
-                        )
-                      : Image.network(product.imageUrl, width: 40, height: 40, fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => Container(
-                            width: 40, height: 40,
-                            decoration: BoxDecoration(color: UpriseColors.primaryDark.withAlpha(26), borderRadius: BorderRadius.circular(8)),
-                            child: const Icon(Icons.shopping_bag_outlined, size: 18, color: UpriseColors.primaryDark),
-                          )),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(product.name,
-                          style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600, color: const Color(0xFF1A202C)),
-                          overflow: TextOverflow.ellipsis),
-                      if (product.stock <= 5)
-                        Text('Low stock',
-                            style: GoogleFonts.beVietnamPro(fontSize: 10, color: UpriseColors.error, fontWeight: FontWeight.w500)),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Expanded(
-            flex: 1,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-              decoration: BoxDecoration(
-                color: UpriseColors.primaryDark.withAlpha(18),
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: Text(product.category,
-                  style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.w600, color: UpriseColors.primaryDark)),
-            ),
-          ),
-          Expanded(
-            flex: 1,
-            child: Text('₱${NumberFormat('#,###').format(product.price)}',
-                style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w700, color: UpriseColors.primaryDark)),
-          ),
-          Expanded(
-            flex: 1,
-            child: Text('${product.stock}',
-                style: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF374151))),
-          ),
-          Expanded(
-            flex: 1,
-            child: Text('${product.sold}',
-                style: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF374151))),
-          ),
-          Expanded(
-            flex: 1,
-            child: _productStatusBadge(product.status),
-          ),
-          Expanded(
-            flex: 2,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                _ActionIconButton(
-                  icon: Icons.visibility_outlined,
-                  tooltip: 'View Details',
-                  onTap: () => showDialog(context: context, builder: (_) => _ProductDetailsModal(product: product)),
-                ),
-                const SizedBox(width: 4),
-                _ActionIconButton(
-                  icon: Icons.edit_outlined,
-                  tooltip: 'Edit',
-                  onTap: () => showDialog(
-                    context: context,
-                    barrierDismissible: false,
-                    builder: (_) => _ProductModal(orgId: widget.orgId, existingProduct: product),
-                  ),
-                ),
-                const SizedBox(width: 4),
-                _ActionIconButton(
-                  icon: Icons.archive_outlined,
-                  tooltip: 'Archive',
-                  color: UpriseColors.warning,
-                  onTap: () => _archiveProduct(product),
-                ),
-              ],
+          const Spacer(),
+          Text(
+            '${_products.length} products',
+            style: GoogleFonts.beVietnamPro(
+              fontSize: 13,
+              color: const Color(0xFF64748B),
             ),
           ),
         ],
@@ -869,730 +947,65 @@ class _ProductsTabState extends State<_ProductsTab> {
     );
   }
 
-  Widget _buildFooter(int total, int totalPages, int start, int end) {
-    const int maxVisible = 5;
-    int firstPage = (_currentPage - maxVisible ~/ 2).clamp(1, totalPages);
-    int lastPage = (firstPage + maxVisible - 1).clamp(1, totalPages);
-    if (lastPage - firstPage + 1 < maxVisible && firstPage > 1) {
-      firstPage = (lastPage - maxVisible + 1).clamp(1, totalPages);
+  Widget _buildProductGrid() {
+    if (_isInitialLoad) {
+      return const Center(child: CircularProgressIndicator());
     }
-    final pages = List.generate(lastPage - firstPage + 1, (i) => firstPage + i);
 
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-      decoration: const BoxDecoration(
-        border: Border(top: BorderSide(color: Color(0xFFE8ECF0))),
-        color: Color(0xFFF8F9FB),
-        borderRadius: BorderRadius.vertical(bottom: Radius.circular(14)),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text('Showing ${total == 0 ? 0 : start + 1}–$end of $total products',
-              style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF64748B))),
-          Row(children: [
-            _PageButton(icon: Icons.chevron_left_rounded, enabled: _currentPage > 1, onTap: () => setState(() => _currentPage--)),
-            const SizedBox(width: 4),
-            ...pages.map((p) => _PageNumButton(page: p, isActive: p == _currentPage, onTap: () => setState(() => _currentPage = p))),
-            if (lastPage < totalPages) ...[
-              Padding(padding: const EdgeInsets.symmetric(horizontal: 4), child: Text('…', style: GoogleFonts.beVietnamPro(color: const Color(0xFF64748B), fontSize: 12))),
-              _PageNumButton(page: totalPages, isActive: _currentPage == totalPages, onTap: () => setState(() => _currentPage = totalPages)),
-            ],
-            const SizedBox(width: 4),
-            _PageButton(icon: Icons.chevron_right_rounded, enabled: _currentPage < totalPages, onTap: () => setState(() => _currentPage++)),
-          ]),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildEmptyState(IconData icon, String message, String subtitle) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Container(width: 80, height: 80, decoration: BoxDecoration(color: const Color(0xFFF1F5F9), borderRadius: BorderRadius.circular(20)),
-              child: Icon(icon, size: 40, color: const Color(0xFF9AA5B4))),
-          const SizedBox(height: 16),
-          Text(message, style: GoogleFonts.beVietnamPro(fontSize: 15, fontWeight: FontWeight.w600, color: const Color(0xFF374151))),
-          const SizedBox(height: 6),
-          Text(subtitle, style: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF64748B))),
-        ],
-      ),
-    );
-  }
-}
-
-// ============================================================
-// ORDERS TAB (UPDATED with bundleId filter)
-// ============================================================
-class _OrdersTab extends StatefulWidget {
-  final String orgId;
-  const _OrdersTab({required this.orgId});
-
-  @override
-  State<_OrdersTab> createState() => _OrdersTabState();
-}
-
-class _OrdersTabState extends State<_OrdersTab> {
-  final TextEditingController _searchController = TextEditingController();
-  String _searchQuery = '';
-  String _statusFilter = 'All';
-  String _bundleIdFilter = 'All';
-  String _sectionFilter = 'All';      // NEW
-  String _pickupStatusFilter = 'All'; // NEW
-  int _currentPage = 1;
-  static const int _pageSize = 10;
-  bool _isBulkUpdating = false;       // NEW
-
-  final List<String> _statusFilters = ['All', 'Pending', 'Processing', 'Completed'];
-  List<String> _availableBundleIds = ['All'];
-  List<String> _availableSections = ['All']; // NEW
-
-  List<OrderModel> _applyFilters(List<OrderModel> orders) {
-    return orders.where((o) {
-      final matchSearch = _searchQuery.isEmpty ||
-          o.customerName.toLowerCase().contains(_searchQuery.toLowerCase()) ||
-          o.orderId.toLowerCase().contains(_searchQuery.toLowerCase());
-      final matchStatus = _statusFilter == 'All' || o.status.toLowerCase() == _statusFilter.toLowerCase();
-      final matchBundle = _bundleIdFilter == 'All' || o.bundleId == _bundleIdFilter;
-      final matchSection = _sectionFilter == 'All' || o.section == _sectionFilter;         // NEW
-      final matchPickup = _pickupStatusFilter == 'All' || o.pickupStatus == _pickupStatusFilter; // NEW
-      return matchSearch && matchStatus && matchBundle && matchSection && matchPickup;
-    }).toList();
-  }
-
-  void _updateBundleIds(List<OrderModel> orders) {
-    final ids = orders.map((o) => o.bundleId).where((id) => id.isNotEmpty).toSet().toList();
-    ids.sort();
-    final newBundleIds = ['All', ...ids];
-    if (listEquals(_availableBundleIds, newBundleIds) &&
-        (_bundleIdFilter == 'All' || ids.contains(_bundleIdFilter))) {
-      return;
+    if (_products.isEmpty) {
+      return _buildEmptyState(
+        Icons.inventory_2_outlined,
+        'No products found',
+        _searchQuery.isNotEmpty ||
+                _categoryFilter != 'All' ||
+                _statusFilter != 'All'
+            ? 'Try adjusting your filters'
+            : 'Click "Add Product" to get started.',
+      );
     }
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      setState(() {
-        _availableBundleIds = newBundleIds;
-        if (_bundleIdFilter != 'All' && !ids.contains(_bundleIdFilter)) {
-          _bundleIdFilter = 'All';
-        }
-      });
-    });
-  }
 
-  // NEW: extract unique sections and update state when changed
-  void _updateSections(List<OrderModel> orders) {
-    final sections = orders.map((o) => o.section).where((s) => s.isNotEmpty).toSet().toList();
-    sections.sort();
-    final newSections = ['All', ...sections];
-    if (listEquals(_availableSections, newSections) &&
-        (_sectionFilter == 'All' || sections.contains(_sectionFilter))) {
-      return;
-    }
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      setState(() {
-        _availableSections = newSections;
-        if (_sectionFilter != 'All' && !sections.contains(_sectionFilter)) {
-          _sectionFilter = 'All';
-        }
-      });
-    });
-  }
-
-  // NEW: update a single order's pickupStatus
-  Future<void> _updateOrderPickupStatus(String orderId, String pickupStatus) async {
-    try {
-      await FirebaseFirestore.instance.collection('orders').doc(orderId).update({'pickupStatus': pickupStatus});
-      if (mounted) _showSnack('Updated to "$pickupStatus"', UpriseColors.success);
-    } catch (e) {
-      if (mounted) _showSnack('Error: $e', UpriseColors.error);
-    }
-  }
-
-  // NEW: bulk update all orders in a section
-  Future<void> _bulkUpdateSection(String section, String pickupStatus, List<OrderModel> sectionOrders) async {
-    final count = sectionOrders.length;
-    final confirmed = await _showBulkConfirmDialog(
-      title: 'Update Section $section',
-      message: 'Mark $count order${count == 1 ? '' : 's'} in section $section as "$pickupStatus"?',
-    );
-    if (!confirmed) return;
-    setState(() => _isBulkUpdating = true);
-    try {
-      final db = FirebaseFirestore.instance;
-      WriteBatch current = db.batch();
-      int opCount = 0;
-      final List<WriteBatch> batches = [];
-      for (final order in sectionOrders) {
-        current.update(db.collection('orders').doc(order.id), {'pickupStatus': pickupStatus});
-        opCount++;
-        if (opCount >= 500) { batches.add(current); current = db.batch(); opCount = 0; }
-      }
-      if (opCount > 0) batches.add(current);
-      for (final b in batches) { await b.commit(); }
-      if (mounted) _showSnack('Updated $count orders to "$pickupStatus"', UpriseColors.success);
-    } catch (e) {
-      if (mounted) _showSnack('Error: $e', UpriseColors.error);
-    } finally {
-      if (mounted) setState(() => _isBulkUpdating = false);
-    }
-  }
-
-  // NEW: bulk update ALL orders across all sections
-  Future<void> _bulkUpdateAll(String pickupStatus, List<OrderModel> allOrders) async {
-    final count = allOrders.length;
-    final confirmed = await _showBulkConfirmDialog(
-      title: 'Mark ALL as "$pickupStatus"',
-      message: 'This will update $count order${count == 1 ? '' : 's'} across all sections to "$pickupStatus".',
-    );
-    if (!confirmed) return;
-    setState(() => _isBulkUpdating = true);
-    try {
-      final db = FirebaseFirestore.instance;
-      WriteBatch current = db.batch();
-      int opCount = 0;
-      final List<WriteBatch> batches = [];
-      for (final order in allOrders) {
-        current.update(db.collection('orders').doc(order.id), {'pickupStatus': pickupStatus});
-        opCount++;
-        if (opCount >= 500) { batches.add(current); current = db.batch(); opCount = 0; }
-      }
-      if (opCount > 0) batches.add(current);
-      for (final b in batches) { await b.commit(); }
-      if (mounted) _showSnack('Updated $count orders to "$pickupStatus"', UpriseColors.success);
-    } catch (e) {
-      if (mounted) _showSnack('Error: $e', UpriseColors.error);
-    } finally {
-      if (mounted) setState(() => _isBulkUpdating = false);
-    }
-  }
-
-  // NEW: confirmation dialog for bulk operations
-  Future<bool> _showBulkConfirmDialog({required String title, required String message}) async {
-    return await showDialog<bool>(
-      context: context,
-      builder: (ctx) => Dialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        child: Container(
-          width: 400,
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(children: [
-                Container(
-                  width: 40, height: 40,
-                  decoration: BoxDecoration(color: const Color(0xFFFFF7ED), borderRadius: BorderRadius.circular(10)),
-                  child: const Icon(Icons.update_rounded, color: Color(0xFFEA580C), size: 20),
-                ),
-                const SizedBox(width: 12),
-                Expanded(child: Text(title, style: GoogleFonts.beVietnamPro(fontSize: 16, fontWeight: FontWeight.w700))),
-                IconButton(icon: const Icon(Icons.close_rounded, size: 18), onPressed: () => Navigator.pop(ctx, false)),
-              ]),
-              const SizedBox(height: 16),
-              Text(message, style: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF64748B), height: 1.5)),
-              const SizedBox(height: 24),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  OutlinedButton(
-                    onPressed: () => Navigator.pop(ctx, false),
-                    style: OutlinedButton.styleFrom(
-                      side: const BorderSide(color: Color(0xFFE2E6EA)),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                    ),
-                    child: Text('Cancel', style: GoogleFonts.beVietnamPro(fontSize: 13)),
-                  ),
-                  const SizedBox(width: 10),
-                  ElevatedButton(
-                    onPressed: () => Navigator.pop(ctx, true),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: UpriseColors.primaryDark,
-                      foregroundColor: Colors.white,
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                    ),
-                    child: Text('Confirm', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600)),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-    ) ?? false;
-  }
-
-  void _showSnack(String msg, Color color) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(msg, style: GoogleFonts.beVietnamPro()),
-      backgroundColor: color,
-      behavior: SnackBarBehavior.floating,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-    ));
-  }
-
-  @override
-  void dispose() {
-    _searchController.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        _buildToolbar(),
-        const SizedBox(height: 16),
-        Expanded(child: _buildTable()),
-        const SizedBox(height: 24),
-      ],
-    );
-  }
-
-  Widget _buildToolbar() {
-    return Padding(
+    return GridView.builder(
+      controller: _scrollController,
       padding: const EdgeInsets.symmetric(horizontal: 28),
-      child: Row(
-        children: [
-          SizedBox(
-            width: 200,
-            height: 40,
-            child: TextField(
-              controller: _searchController,
-              onChanged: (value) => setState(() {
-                _searchQuery = value;
-                _currentPage = 1;
-              }),
-              style: GoogleFonts.beVietnamPro(fontSize: 13),
-              decoration: InputDecoration(
-                hintText: 'Search orders...',
-                hintStyle: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF9AA5B4)),
-                prefixIcon: const Icon(Icons.search_rounded, size: 18, color: Color(0xFF9AA5B4)),
-                filled: true,
-                fillColor: Colors.white,
-                contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE2E6EA))),
-                enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE2E6EA))),
-                focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: UpriseColors.primaryDark, width: 1.5)),
-              ),
-            ),
-          ),
-          const SizedBox(width: 10),
-          _FilterDropdown(
-            value: _statusFilter,
-            items: _statusFilters,
-            hint: 'Status',
-            icon: Icons.tune_rounded,
-            onChanged: (v) => setState(() {
-              _statusFilter = v!;
-              _currentPage = 1;
-            }),
-          ),
-          const SizedBox(width: 10),
-          // NEW: Section filter dropdown
-          if (_availableSections.length > 1) ...[
-            _FilterDropdown(
-              value: _sectionFilter,
-              items: _availableSections,
-              hint: 'Section',
-              icon: Icons.groups_outlined,
-              onChanged: (v) => setState(() {
-                _sectionFilter = v!;
-                _currentPage = 1;
-              }),
-            ),
-            const SizedBox(width: 10),
-          ],
-          // NEW: Pickup Status filter dropdown
-          _FilterDropdown(
-            value: _pickupStatusFilter,
-            items: const ['All', 'Pending', 'Ready for Pickup', 'Claimed'],
-            hint: 'Pickup',
-            icon: Icons.local_shipping_outlined,
-            onChanged: (v) => setState(() {
-              _pickupStatusFilter = v!;
-              _currentPage = 1;
-            }),
-          ),
-          const SizedBox(width: 10),
-          if (_availableBundleIds.length > 1)
-            _FilterDropdown(
-              value: _bundleIdFilter,
-              items: _availableBundleIds,
-              hint: 'Bundle',
-              icon: Icons.local_offer_outlined,
-              onChanged: (v) => setState(() {
-                _bundleIdFilter = v!;
-                _currentPage = 1;
-              }),
-            ),
-        ],
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 4,
+        crossAxisSpacing: 16,
+        mainAxisSpacing: 16,
+        childAspectRatio: 0.75,
       ),
-    );
-  }
-
-  Widget _buildTable() {
-    return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection('orders')
-          .where('orgId', isEqualTo: widget.orgId)
-          .orderBy('createdAt', descending: true)
-          .snapshots(),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
+      itemCount: _products.length + (_hasMore ? 1 : 0),
+      itemBuilder: (context, index) {
+        if (index == _products.length) {
+          return _buildLoadingMoreIndicator();
         }
-        if (snapshot.hasError) {
-          return Center(child: Text('Error: ${snapshot.error}'));
-        }
-        // NEW: keep raw (unfiltered) orders for banners and bulk operations
-        final rawOrders = snapshot.data!.docs.map((d) => OrderModel.fromFirestore(d)).toList();
-        _updateBundleIds(rawOrders);
-        _updateSections(rawOrders); // NEW
-
-        // NEW: build section groups from unfiltered orders for the banner
-        final Map<String, List<OrderModel>> sectionGroups = {};
-        for (final o in rawOrders) {
-          if (o.section.isNotEmpty) {
-            sectionGroups.putIfAbsent(o.section, () => []).add(o);
-          }
-        }
-        final sortedSections = sectionGroups.keys.toList()..sort();
-
-        var allOrders = _applyFilters(rawOrders);
-
-        final totalPages = allOrders.isEmpty ? 1 : (allOrders.length / _pageSize).ceil();
-        final safePage = _currentPage.clamp(1, totalPages);
-        final start = (safePage - 1) * _pageSize;
-        final end = (start + _pageSize).clamp(0, allOrders.length);
-        final pageOrders = allOrders.sublist(start, end);
-
-        // NEW: outer Column wraps banners + table
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // NEW: Level 2 — global bulk buttons (above section banner)
-            if (rawOrders.isNotEmpty)
-              _buildGlobalBulkButtons(rawOrders),
-            // NEW: Level 1 — per-section summary banner
-            if (sectionGroups.isNotEmpty)
-              _buildSectionBanner(sortedSections, sectionGroups),
-            if (rawOrders.isNotEmpty || sectionGroups.isNotEmpty)
-              const SizedBox(height: 8),
-            // Table
-            Expanded(
-              child: Container(
-                margin: const EdgeInsets.symmetric(horizontal: 28),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: const Color(0xFFE8ECF0)),
-                  boxShadow: _DS.cardShadow,
-                ),
-                child: Column(
-                  children: [
-                    _buildTableHeader(),
-                    Expanded(
-                      child: allOrders.isEmpty
-                          ? _buildEmptyState(Icons.shopping_cart_outlined, 'No orders yet', 'Orders will appear here after checkout.')
-                          : ListView.builder(
-                              itemCount: pageOrders.length,
-                              itemBuilder: (_, i) => _buildOrderRow(pageOrders[i], isLast: i == pageOrders.length - 1),
-                            ),
-                    ),
-                    _buildFooter(allOrders.length, totalPages, start, end),
-                  ],
-                ),
-              ),
+        return _ProductCard(
+          product: _products[index],
+          onTap: () => showDialog(
+            context: context,
+            builder: (_) => _ProductDetailsModal(product: _products[index]),
+          ),
+          onArchive: () => _archiveProduct(_products[index]),
+          onEdit: () => showDialog(
+            context: context,
+            barrierDismissible: false,
+            builder: (_) => _ProductModal(
+              orgId: widget.orgId,
+              existingProduct: _products[index],
             ),
-          ],
+          ).then((_) => _loadProducts(reset: true)),
         );
       },
     );
   }
 
-  // NEW: Level 2 global bulk action bar
-  Widget _buildGlobalBulkButtons(List<OrderModel> allOrders) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(28, 0, 28, 8),
-      child: Row(
-        children: [
-          Text('Bulk Actions:',
-              style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.w600, color: const Color(0xFF64748B))),
-          const SizedBox(width: 10),
-          OutlinedButton.icon(
-            onPressed: _isBulkUpdating ? null : () => _bulkUpdateAll('Ready for Pickup', allOrders),
-            icon: const Icon(Icons.check_circle_outline, size: 14),
-            label: Text('Mark ALL as Ready', style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.w600)),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: const Color(0xFF2563EB),
-              side: const BorderSide(color: Color(0xFF93C5FD)),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            ),
-          ),
-          const SizedBox(width: 8),
-          OutlinedButton.icon(
-            onPressed: _isBulkUpdating ? null : () => _bulkUpdateAll('Claimed', allOrders),
-            icon: const Icon(Icons.done_all_rounded, size: 14),
-            label: Text('Mark ALL as Claimed', style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.w600)),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: const Color(0xFF059669),
-              side: const BorderSide(color: Color(0xFF6EE7B7)),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            ),
-          ),
-          if (_isBulkUpdating) ...[
-            const SizedBox(width: 12),
-            const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
-            const SizedBox(width: 8),
-            Text('Updating…', style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF64748B))),
-          ],
-        ],
-      ),
-    );
-  }
-
-  // NEW: Level 1 per-section summary banner
-  Widget _buildSectionBanner(List<String> sortedSections, Map<String, List<OrderModel>> sectionGroups) {
+  Widget _buildLoadingMoreIndicator() {
     return Container(
-      margin: const EdgeInsets.fromLTRB(28, 0, 28, 0),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: const Color(0xFFFFFBEB),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: const Color(0xFFFEF3C7)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(children: [
-            const Icon(Icons.groups_outlined, size: 15, color: Color(0xFFFB923C)),
-            const SizedBox(width: 6),
-            Text('Section Summary',
-                style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.w700, color: const Color(0xFFFB923C))),
-          ]),
-          const SizedBox(height: 10),
-          ...sortedSections.map((section) {
-            final orders = sectionGroups[section]!;
-            final itemCount = orders.fold<int>(0, (sum, o) => sum + o.items.fold<int>(0, (s, i) => s + i.quantity));
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: UpriseColors.primaryDark.withAlpha(18),
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: Text(section,
-                        style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.w700, color: UpriseColors.primaryDark)),
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    '${orders.length} order${orders.length == 1 ? '' : 's'} / $itemCount item${itemCount == 1 ? '' : 's'}',
-                    style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF64748B)),
-                  ),
-                  const Spacer(),
-                  TextButton(
-                    onPressed: _isBulkUpdating ? null : () => _bulkUpdateSection(section, 'Ready for Pickup', orders),
-                    style: TextButton.styleFrom(
-                      foregroundColor: const Color(0xFF2563EB),
-                      backgroundColor: const Color(0xFFEFF6FF),
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                      minimumSize: Size.zero,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-                    ),
-                    child: Text('Ready', style: GoogleFonts.beVietnamPro(fontSize: 11, fontWeight: FontWeight.w600)),
-                  ),
-                  const SizedBox(width: 6),
-                  TextButton(
-                    onPressed: _isBulkUpdating ? null : () => _bulkUpdateSection(section, 'Claimed', orders),
-                    style: TextButton.styleFrom(
-                      foregroundColor: const Color(0xFF059669),
-                      backgroundColor: const Color(0xFFECFDF5),
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                      minimumSize: Size.zero,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-                    ),
-                    child: Text('Claimed', style: GoogleFonts.beVietnamPro(fontSize: 11, fontWeight: FontWeight.w600)),
-                  ),
-                ],
-              ),
-            );
-          }),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildTableHeader() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 13),
-      decoration: const BoxDecoration(
-        color: Color(0xFFFFF7ED),
-        borderRadius: BorderRadius.vertical(top: Radius.circular(14)),
-        border: Border(bottom: BorderSide(color: Color(0xFFFB923C))),
-      ),
-      child: Row(children: [
-        Expanded(flex: 2, child: _headerCell('ORDER ID')),
-        Expanded(flex: 2, child: _headerCell('CUSTOMER')),
-        Expanded(flex: 1, child: _headerCell('SECTION')),       // NEW
-        Expanded(flex: 1, child: _headerCell('DATE')),
-        Expanded(flex: 1, child: _headerCell('TOTAL')),
-        Expanded(flex: 2, child: _headerCell('PICKUP STATUS')), // NEW
-        Expanded(flex: 1, child: Align(alignment: Alignment.centerRight, child: _headerCell('ACTIONS'))),
-      ]),
-    );
-  }
-
-  Widget _headerCell(String text) => Text(text,
-      style: GoogleFonts.beVietnamPro(fontSize: 11, fontWeight: FontWeight.w700, color: const Color(0xFF64748B), letterSpacing: 0.7));
-
-  Widget _buildOrderRow(OrderModel order, {required bool isLast}) {
-    final date = DateFormat('MMM d, yyyy').format(order.createdAt.toDate());
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-      decoration: BoxDecoration(
-        border: isLast ? null : const Border(bottom: BorderSide(color: Color(0xFFF1F5F9))),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            flex: 2,
-            child: Text(order.orderId,
-                style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600, color: UpriseColors.primaryDark)),
-          ),
-          Expanded(
-            flex: 2,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(order.customerName,
-                    style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w500, color: const Color(0xFF1A202C))),
-                Text(order.customerEmail,
-                    style: GoogleFonts.beVietnamPro(fontSize: 11, color: const Color(0xFF64748B))),
-              ],
-            ),
-          ),
-          // NEW: Section column
-          Expanded(
-            flex: 1,
-            child: order.section.isEmpty
-                ? Text('—', style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF9AA5B4)))
-                : Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: UpriseColors.primaryDark.withAlpha(18),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Text(order.section,
-                        style: GoogleFonts.beVietnamPro(fontSize: 10, fontWeight: FontWeight.w600, color: UpriseColors.primaryDark),
-                        overflow: TextOverflow.ellipsis),
-                  ),
-          ),
-          Expanded(
-            flex: 1,
-            child: Text(date, style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF64748B))),
-          ),
-          Expanded(
-            flex: 1,
-            child: Text('₱${NumberFormat('#,###.00').format(order.total)}',
-                style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w700, color: UpriseColors.primaryDark)),
-          ),
-          // NEW: Pickup Status column with colored badge
-          Expanded(flex: 2, child: _pickupStatusBadge(order.pickupStatus)),
-          Expanded(
-            flex: 1,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                _ActionIconButton(
-                  icon: Icons.visibility_outlined,
-                  tooltip: 'View Details',
-                  onTap: () => showDialog(context: context, builder: (_) => _OrderDetailsModal(order: order)),
-                ),
-                // NEW: 3-dot menu for individual pickup status update
-                PopupMenuButton<String>(
-                  icon: const Icon(Icons.more_vert, size: 16, color: Color(0xFF64748B)),
-                  tooltip: 'Update Pickup Status',
-                  onSelected: (value) => _updateOrderPickupStatus(order.id, value),
-                  itemBuilder: (_) => [
-                    PopupMenuItem(value: 'Pending', child: Text('Pending', style: GoogleFonts.beVietnamPro(fontSize: 13))),
-                    PopupMenuItem(value: 'Ready for Pickup', child: Text('Ready for Pickup', style: GoogleFonts.beVietnamPro(fontSize: 13))),
-                    PopupMenuItem(value: 'Claimed', child: Text('Claimed', style: GoogleFonts.beVietnamPro(fontSize: 13))),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // NEW: colored badge for pickup status
-  Widget _pickupStatusBadge(String status) {
-    final Color bg, fg;
-    final String label;
-    switch (status) {
-      case 'Ready for Pickup':
-        bg = const Color(0xFFEFF6FF); fg = const Color(0xFF2563EB); label = 'READY';
-        break;
-      case 'Claimed':
-        bg = const Color(0xFFECFDF5); fg = const Color(0xFF059669); label = 'CLAIMED';
-        break;
-      default:
-        bg = const Color(0xFFFFFBEB); fg = const Color(0xFFFB923C); label = 'PENDING';
-    }
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(_DS.radiusPill)),
-      child: Text(label, style: GoogleFonts.beVietnamPro(fontSize: 10, fontWeight: FontWeight.w700, color: fg, letterSpacing: 0.6)),
-    );
-  }
-
-  Widget _buildFooter(int total, int totalPages, int start, int end) {
-    const int maxVisible = 5;
-    int firstPage = (_currentPage - maxVisible ~/ 2).clamp(1, totalPages);
-    int lastPage = (firstPage + maxVisible - 1).clamp(1, totalPages);
-    if (lastPage - firstPage + 1 < maxVisible && firstPage > 1) {
-      firstPage = (lastPage - maxVisible + 1).clamp(1, totalPages);
-    }
-    final pages = List.generate(lastPage - firstPage + 1, (i) => firstPage + i);
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-      decoration: const BoxDecoration(
-        border: Border(top: BorderSide(color: Color(0xFFE8ECF0))),
-        color: Color(0xFFF8F9FB),
-        borderRadius: BorderRadius.vertical(bottom: Radius.circular(14)),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text('Showing ${total == 0 ? 0 : start + 1}–$end of $total orders',
-              style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF64748B))),
-          Row(children: [
-            _PageButton(icon: Icons.chevron_left_rounded, enabled: _currentPage > 1, onTap: () => setState(() => _currentPage--)),
-            const SizedBox(width: 4),
-            ...pages.map((p) => _PageNumButton(page: p, isActive: p == _currentPage, onTap: () => setState(() => _currentPage = p))),
-            if (lastPage < totalPages) ...[
-              Padding(padding: const EdgeInsets.symmetric(horizontal: 4), child: Text('…', style: GoogleFonts.beVietnamPro(color: const Color(0xFF64748B), fontSize: 12))),
-              _PageNumButton(page: totalPages, isActive: _currentPage == totalPages, onTap: () => setState(() => _currentPage = totalPages)),
-            ],
-            const SizedBox(width: 4),
-            _PageButton(icon: Icons.chevron_right_rounded, enabled: _currentPage < totalPages, onTap: () => setState(() => _currentPage++)),
-          ]),
-        ],
+      height: 80,
+      alignment: Alignment.center,
+      child: const SizedBox(
+        width: 24,
+        height: 24,
+        child: CircularProgressIndicator(strokeWidth: 2),
       ),
     );
   }
@@ -1602,117 +1015,302 @@ class _OrdersTabState extends State<_OrdersTab> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Container(width: 80, height: 80, decoration: BoxDecoration(color: const Color(0xFFF1F5F9), borderRadius: BorderRadius.circular(20)),
-              child: Icon(icon, size: 40, color: const Color(0xFF9AA5B4))),
+          Container(
+            width: 80,
+            height: 80,
+            decoration: BoxDecoration(
+              color: const Color(0xFFF1F5F9),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Icon(icon, size: 40, color: const Color(0xFF9AA5B4)),
+          ),
           const SizedBox(height: 16),
-          Text(message, style: GoogleFonts.beVietnamPro(fontSize: 15, fontWeight: FontWeight.w600, color: const Color(0xFF374151))),
+          Text(
+            message,
+            style: GoogleFonts.beVietnamPro(
+              fontSize: 15,
+              fontWeight: FontWeight.w600,
+              color: const Color(0xFF374151),
+            ),
+          ),
           const SizedBox(height: 6),
-          Text(subtitle, style: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF64748B))),
+          Text(
+            subtitle,
+            style: GoogleFonts.beVietnamPro(
+              fontSize: 13,
+              color: const Color(0xFF64748B),
+            ),
+          ),
         ],
       ),
     );
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Reusable widgets (unchanged)
-// ─────────────────────────────────────────────────────────────────────────────
-class _FilterDropdown extends StatelessWidget {
-  final String value;
-  final List<String> items;
-  final String hint;
-  final IconData icon;
-  final ValueChanged<String?> onChanged;
-
-  const _FilterDropdown({required this.value, required this.items, required this.hint, required this.icon, required this.onChanged});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: 40,
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(10), border: Border.all(color: const Color(0xFFE2E6EA))),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<String>(
-          value: value,
-          icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 18, color: Color(0xFF9AA5B4)),
-          style: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF374151)),
-          items: items.map((s) => DropdownMenuItem(value: s, child: Text(s, style: GoogleFonts.beVietnamPro(fontSize: 13)))).toList(),
-          onChanged: onChanged,
-        ),
-      ),
-    );
-  }
-}
-
-class _ActionIconButton extends StatelessWidget {
-  final IconData icon;
-  final String tooltip;
-  final VoidCallback? onTap;
-  final Color? color;
-  const _ActionIconButton({required this.icon, required this.tooltip, required this.onTap, this.color});
-
-  @override
-  Widget build(BuildContext context) {
-    return Tooltip(
-      message: tooltip,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(6),
-        child: Padding(
-          padding: const EdgeInsets.all(5),
-          child: Icon(icon, size: 16, color: onTap == null ? const Color(0xFFD1D5DB) : (color ?? const Color(0xFF64748B))),
-        ),
-      ),
-    );
-  }
-}
-
-class _PageButton extends StatelessWidget {
-  final IconData icon;
-  final bool enabled;
+// ============================================================
+// PRODUCT CARD WIDGET
+// ============================================================
+class _ProductCard extends StatelessWidget {
+  final ProductModel product;
   final VoidCallback onTap;
-  const _PageButton({required this.icon, required this.enabled, required this.onTap});
+  final VoidCallback onArchive;
+  final VoidCallback onEdit;
+
+  const _ProductCard({
+    required this.product,
+    required this.onTap,
+    required this.onArchive,
+    required this.onEdit,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: enabled ? onTap : null,
-      borderRadius: BorderRadius.circular(6),
-      child: Padding(padding: const EdgeInsets.all(4), child: Icon(icon, size: 20, color: enabled ? const Color(0xFF374151) : const Color(0xFFD1D5DB))),
-    );
-  }
-}
+    final totalStock = product.variants.isNotEmpty
+        ? product.variants.fold<int>(0, (sum, v) => sum + v.stock)
+        : product.stock;
+    final isLowStock = totalStock <= 5 && totalStock > 0;
+    final isOutOfStock = totalStock == 0;
 
-class _PageNumButton extends StatelessWidget {
-  final int page;
-  final bool isActive;
-  final VoidCallback onTap;
-  const _PageNumButton({required this.page, required this.isActive, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 2),
-        width: 28,
-        height: 28,
-        alignment: Alignment.center,
         decoration: BoxDecoration(
-          color: isActive ? UpriseColors.primaryDark : Colors.transparent,
-          borderRadius: BorderRadius.circular(6),
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: const Color(0xFFE8ECF0)),
+          boxShadow: _DS.cardShadow,
         ),
-        child: Text('$page',
-            style: GoogleFonts.beVietnamPro(
-                fontSize: 12, fontWeight: isActive ? FontWeight.w700 : FontWeight.normal, color: isActive ? Colors.white : const Color(0xFF374151))),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Image Section
+            Expanded(
+              flex: 3,
+              child: ClipRRect(
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(12),
+                ),
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    product.imageUrl.isNotEmpty
+                        ? Image.network(
+                            product.imageUrl,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) => Container(
+                              color: const Color(0xFFF8F9FB),
+                              child: const Icon(
+                                Icons.shopping_bag_outlined,
+                                size: 40,
+                                color: Color(0xFF9AA5B4),
+                              ),
+                            ),
+                          )
+                        : Container(
+                            color: const Color(0xFFF8F9FB),
+                            child: const Icon(
+                              Icons.shopping_bag_outlined,
+                              size: 40,
+                              color: Color(0xFF9AA5B4),
+                            ),
+                          ),
+                    if (isOutOfStock ||
+                        isLowStock ||
+                        product.status == 'discontinued')
+                      Positioned(
+                        top: 8,
+                        right: 8,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 3,
+                          ),
+                          decoration: BoxDecoration(
+                            color:
+                                isOutOfStock || product.status == 'discontinued'
+                                ? const Color(0xFFFEF2F2)
+                                : const Color(0xFFFFFBEB),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Text(
+                            isOutOfStock
+                                ? 'OUT OF STOCK'
+                                : product.status == 'discontinued'
+                                ? 'DISCONTINUED'
+                                : 'LOW STOCK',
+                            style: GoogleFonts.beVietnamPro(
+                              fontSize: 8,
+                              fontWeight: FontWeight.w700,
+                              color:
+                                  isOutOfStock ||
+                                      product.status == 'discontinued'
+                                  ? const Color(0xFFDC2626)
+                                  : const Color(0xFFFB923C),
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                        ),
+                      ),
+                    Positioned(
+                      bottom: 8,
+                      right: 8,
+                      child: Row(
+                        children: [
+                          _CardActionButton(
+                            icon: Icons.edit_outlined,
+                            tooltip: 'Edit',
+                            onTap: onEdit,
+                          ),
+                          const SizedBox(width: 4),
+                          _CardActionButton(
+                            icon: Icons.archive_outlined,
+                            tooltip: 'Archive',
+                            onTap: onArchive,
+                            color: UpriseColors.warning,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            // Info Section
+            Expanded(
+              flex: 2,
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          product.name,
+                          style: GoogleFonts.beVietnamPro(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: const Color(0xFF1A202C),
+                            height: 1.2,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 4),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: UpriseColors.primaryDark.withAlpha(18),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            product.category,
+                            style: GoogleFonts.beVietnamPro(
+                              fontSize: 9,
+                              fontWeight: FontWeight.w600,
+                              color: UpriseColors.primaryDark,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '₱${NumberFormat('#,###').format(product.price)}',
+                              style: GoogleFonts.beVietnamPro(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w700,
+                                color: UpriseColors.primaryDark,
+                              ),
+                            ),
+                            Text(
+                              '$totalStock in stock',
+                              style: GoogleFonts.beVietnamPro(
+                                fontSize: 10,
+                                color: const Color(0xFF64748B),
+                              ),
+                            ),
+                          ],
+                        ),
+                        if (product.sold > 0)
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFECFDF5),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Text(
+                              '${product.sold} sold',
+                              style: GoogleFonts.beVietnamPro(
+                                fontSize: 9,
+                                fontWeight: FontWeight.w600,
+                                color: const Color(0xFF059669),
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
 }
 
 // ============================================================
-// PRODUCT MODAL (unchanged)
+// CARD ACTION BUTTON
+// ============================================================
+class _CardActionButton extends StatelessWidget {
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback onTap;
+  final Color? color;
+
+  const _CardActionButton({
+    required this.icon,
+    required this.tooltip,
+    required this.onTap,
+    this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.black.withAlpha(140),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: IconButton(
+        onPressed: onTap,
+        icon: Icon(icon, size: 14, color: Colors.white),
+        padding: const EdgeInsets.all(4),
+        constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+        tooltip: tooltip,
+      ),
+    );
+  }
+}
+
+// ============================================================
+// PRODUCT MODAL (FIXED - Image Upload & Auto-close)
 // ============================================================
 class _ProductModal extends StatefulWidget {
   final String orgId;
@@ -1737,6 +1335,7 @@ class _ProductModalState extends State<_ProductModal> {
   String? _pickedImageName;
   bool _uploadingImage = false;
   bool _submitting = false;
+  String? _uploadError;
 
   bool get _isEdit => widget.existingProduct != null;
 
@@ -1807,7 +1406,10 @@ class _ProductModalState extends State<_ProductModal> {
         ? 'discontinued'
         : (stock == 0 ? 'out_of_stock' : 'available');
 
-    setState(() => _submitting = true);
+    setState(() {
+      _submitting = true;
+      _uploadError = null;
+    });
 
     try {
       final user = FirebaseAuth.instance.currentUser;
@@ -1825,37 +1427,35 @@ class _ProductModalState extends State<_ProductModal> {
         'updatedAt': FieldValue.serverTimestamp(),
       };
 
-      // ── Critical: main product write ────────────────────────
-      String productId;
+      final productRef = _isEdit
+          ? FirebaseFirestore.instance
+                .collection('products')
+                .doc(widget.existingProduct!.id)
+          : FirebaseFirestore.instance.collection('products').doc();
+      final productId = productRef.id;
+
+      if (_imageBytes != null) {
+        if (mounted) setState(() => _uploadingImage = true);
+        data['imageUrl'] = await _uploadProductImage(productId);
+      }
+
       if (_isEdit) {
-        productId = widget.existingProduct!.id;
-        await FirebaseFirestore.instance.collection('products').doc(productId).update(data);
+        await productRef.update(data);
       } else {
         data['sold'] = 0;
         data['isArchived'] = false;
-        data['imageUrl'] = '';
+        data['imageUrl'] ??= '';
         data['createdAt'] = FieldValue.serverTimestamp();
         data['createdBy'] = user?.uid ?? '';
-        final docRef = await FirebaseFirestore.instance.collection('products').add(data);
-        productId = docRef.id;
+        await productRef.set(data);
       }
 
-      // ── Image upload ─────────────────────────────────────────
-      if (_imageBytes != null) {
-        if (mounted) setState(() => _uploadingImage = true);
-        final ext = (_pickedImageName?.split('.').last ?? 'jpg').toLowerCase();
-        final contentType = ext == 'png' ? 'image/png' : 'image/jpeg';
-        final path = 'products/${widget.orgId}/$productId/${DateTime.now().millisecondsSinceEpoch}.$ext';
-        final storageRef = FirebaseStorage.instance.ref().child(path);
-        await storageRef.putData(_imageBytes!, SettableMetadata(contentType: contentType));
-        final imageUrl = await storageRef.getDownloadURL();
-        await FirebaseFirestore.instance.collection('products').doc(productId).update({'imageUrl': imageUrl});
-      }
-
-      // ── Non-critical: log writes (failures don't block close) ─
+      // ── Log writes ──────────────────────────────────────────────
       try {
         if (stock != oldStock || !_isEdit) {
-          final reason = !_isEdit ? 'initial' : (stock > oldStock ? 'restocked' : 'adjusted');
+          final reason = !_isEdit
+              ? 'initial'
+              : (stock > oldStock ? 'restocked' : 'adjusted');
           await FirebaseFirestore.instance.collection('stock_logs').add({
             'productId': productId,
             'oldStock': oldStock,
@@ -1865,26 +1465,6 @@ class _ProductModalState extends State<_ProductModal> {
             'timestamp': FieldValue.serverTimestamp(),
           });
         }
-        final oldVariantStocks = <String, int>{
-          for (final v in (widget.existingProduct?.variants ?? [])) v.id: v.stock,
-        };
-        for (final v in _variants) {
-          final isNew = !oldVariantStocks.containsKey(v.id);
-          final oldVarStock = isNew ? 0 : oldVariantStocks[v.id]!;
-          if (isNew ? v.stock > 0 : v.stock != oldVarStock) {
-            final varReason = isNew ? 'initial' : (v.stock > oldVarStock ? 'restocked' : 'adjusted');
-            await FirebaseFirestore.instance.collection('stock_logs').add({
-              'productId': productId,
-              'variantId': v.id,
-              'variantLabel': [if (v.size.isNotEmpty) v.size, if (v.color.isNotEmpty) v.color].join(' / '),
-              'oldStock': oldVarStock,
-              'newStock': v.stock,
-              'reason': varReason,
-              'changedBy': user?.email ?? '',
-              'timestamp': FieldValue.serverTimestamp(),
-            });
-          }
-        }
         await activity_log.ActivityLogger.log(
           action: _isEdit ? 'edit_product' : 'create_product',
           module: 'merchandise',
@@ -1892,24 +1472,83 @@ class _ProductModalState extends State<_ProductModal> {
               ? {'orgId': widget.orgId, 'productId': productId}
               : {'orgId': widget.orgId, 'name': data['name']},
         );
-      } catch (_) {
-        // Log failures are non-critical; product is already saved
-      }
+      } catch (_) {}
 
-      if (mounted) Navigator.pop(context);
+      if (mounted) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              _isEdit
+                  ? 'Product updated successfully!'
+                  : 'Product added successfully!',
+            ),
+            backgroundColor: const Color(0xFF059669),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
+          ),
+        );
+      }
     } catch (e) {
-      if (mounted) _showError('Error saving product: $e');
+      if (mounted) {
+        setState(() {
+          _submitting = false;
+          _uploadingImage = false;
+          if (_imageBytes != null) _uploadError = 'Image upload failed';
+        });
+        _showError('Error saving product: $e');
+      }
     } finally {
-      if (mounted) setState(() {
-        _submitting = false;
-        _uploadingImage = false;
-      });
+      if (mounted) {
+        setState(() {
+          _submitting = false;
+          _uploadingImage = false;
+        });
+      }
     }
   }
 
+  Future<String> _uploadProductImage(String productId) async {
+    final originalExt = (_pickedImageName?.split('.').last ?? 'jpg')
+        .toLowerCase();
+    final ext = <String>{'jpg', 'jpeg', 'png', 'webp'}.contains(originalExt)
+        ? originalExt
+        : 'jpg';
+    final contentType = switch (ext) {
+      'png' => 'image/png',
+      'webp' => 'image/webp',
+      _ => 'image/jpeg',
+    };
+    final fileName = '${DateTime.now().millisecondsSinceEpoch}.$ext';
+    final path = 'products/${widget.orgId}/$productId/$fileName';
+    final storageRef = FirebaseStorage.instance.ref().child(path);
+
+    final snapshot = await storageRef.putData(
+      _imageBytes!,
+      SettableMetadata(
+        contentType: contentType,
+        customMetadata: {
+          'orgId': widget.orgId,
+          'productId': productId,
+          if (_pickedImageName != null) 'originalName': _pickedImageName!,
+        },
+      ),
+    );
+
+    return snapshot.ref.getDownloadURL();
+  }
+
   void _showError(String msg) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg, style: GoogleFonts.beVietnamPro()), backgroundColor: UpriseColors.error,
-        behavior: SnackBarBehavior.floating, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(msg, style: GoogleFonts.beVietnamPro()),
+        backgroundColor: UpriseColors.error,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      ),
+    );
   }
 
   @override
@@ -1919,7 +1558,9 @@ class _ProductModalState extends State<_ProductModal> {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
       child: Container(
         width: 520,
-        constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.85),
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(context).size.height * 0.85,
+        ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -1928,28 +1569,61 @@ class _ProductModalState extends State<_ProductModal> {
               padding: const EdgeInsets.fromLTRB(24, 20, 20, 20),
               decoration: BoxDecoration(
                 color: UpriseColors.primaryDark,
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(18)),
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(18),
+                ),
               ),
-              child: Row(children: [
-                Container(width: 38, height: 38, decoration: BoxDecoration(color: Colors.white.withAlpha(38), borderRadius: BorderRadius.circular(10)),
-                    child: const Icon(Icons.shopping_bag_outlined, color: Colors.white, size: 18)),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(_isEdit ? 'Edit Product' : 'Add Product', style: GoogleFonts.beVietnamPro(fontSize: 17, fontWeight: FontWeight.w700, color: Colors.white)),
-                      if (_isEdit && widget.existingProduct != null)
-                        Text('PRODUCT ID: #${widget.existingProduct!.id.substring(0, 8).toUpperCase()}',
-                            style: GoogleFonts.beVietnamPro(fontSize: 10, color: Colors.white70)),
-                    ],
+              child: Row(
+                children: [
+                  Container(
+                    width: 38,
+                    height: 38,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withAlpha(38),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(
+                      Icons.shopping_bag_outlined,
+                      color: Colors.white,
+                      size: 18,
+                    ),
                   ),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.close_rounded, color: Colors.white, size: 20),
-                  onPressed: _submitting ? null : () => Navigator.pop(context),
-                ),
-              ]),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          _isEdit ? 'Edit Product' : 'Add Product',
+                          style: GoogleFonts.beVietnamPro(
+                            fontSize: 17,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.white,
+                          ),
+                        ),
+                        if (_isEdit && widget.existingProduct != null)
+                          Text(
+                            'PRODUCT ID: #${widget.existingProduct!.id.substring(0, 8).toUpperCase()}',
+                            style: GoogleFonts.beVietnamPro(
+                              fontSize: 10,
+                              color: Colors.white70,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(
+                      Icons.close_rounded,
+                      color: Colors.white,
+                      size: 20,
+                    ),
+                    onPressed: _submitting
+                        ? null
+                        : () => Navigator.pop(context),
+                  ),
+                ],
+              ),
             ),
             // Body
             Expanded(
@@ -1960,16 +1634,28 @@ class _ProductModalState extends State<_ProductModal> {
                   children: [
                     _buildImagePicker(),
                     const SizedBox(height: 16),
-                    _sectionLabel('Product Information', icon: Icons.info_outline_rounded),
-                    // Product Name
+                    _sectionLabel(
+                      'Product Information',
+                      icon: Icons.info_outline_rounded,
+                    ),
                     TextFormField(
                       controller: _nameCtrl,
-                      decoration: _DS.inputDecoration('Product Name', hint: 'e.g., Premium Shirt 2026', icon: Icons.label_outline_rounded),
+                      decoration: _DS.inputDecoration(
+                        'Product Name',
+                        hint: 'e.g., Premium Shirt 2026',
+                        icon: Icons.label_outline_rounded,
+                      ),
                       style: GoogleFonts.beVietnamPro(fontSize: 13),
                     ),
                     const SizedBox(height: 12),
-                    // Category
-                    Text('Category', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600, color: const Color(0xFF374151))),
+                    Text(
+                      'Category',
+                      style: GoogleFonts.beVietnamPro(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: const Color(0xFF374151),
+                      ),
+                    ),
                     const SizedBox(height: 6),
                     Container(
                       height: 44,
@@ -1983,10 +1669,27 @@ class _ProductModalState extends State<_ProductModal> {
                         child: DropdownButton<String>(
                           value: _category,
                           isExpanded: true,
-                          icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 18, color: Color(0xFF9AA5B4)),
-                          items: _merchandiseCategories.map((c) => DropdownMenuItem(value: c, child: Text(c, style: GoogleFonts.beVietnamPro(fontSize: 13)))).toList(),
+                          icon: const Icon(
+                            Icons.keyboard_arrow_down_rounded,
+                            size: 18,
+                            color: Color(0xFF9AA5B4),
+                          ),
+                          items: _merchandiseCategories
+                              .map(
+                                (c) => DropdownMenuItem(
+                                  value: c,
+                                  child: Text(
+                                    c,
+                                    style: GoogleFonts.beVietnamPro(
+                                      fontSize: 13,
+                                    ),
+                                  ),
+                                ),
+                              )
+                              .toList(),
                           onChanged: (value) {
-                            if (value != null) setState(() => _category = value);
+                            if (value != null)
+                              setState(() => _category = value);
                           },
                         ),
                       ),
@@ -1995,50 +1698,72 @@ class _ProductModalState extends State<_ProductModal> {
                       const SizedBox(height: 8),
                       TextFormField(
                         controller: _customCategoryCtrl,
-                        decoration: _DS.inputDecoration('Custom Category', hint: 'Type category name…', icon: Icons.edit_outlined),
+                        decoration: _DS.inputDecoration(
+                          'Custom Category',
+                          hint: 'Type category name…',
+                          icon: Icons.edit_outlined,
+                        ),
                         style: GoogleFonts.beVietnamPro(fontSize: 13),
                       ),
                     ],
                     const SizedBox(height: 12),
-                    // Description
                     TextFormField(
                       controller: _descCtrl,
                       maxLines: 3,
-                      decoration: _DS.inputDecoration('Description', hint: 'Product details...', icon: Icons.description_outlined),
+                      decoration: _DS.inputDecoration(
+                        'Description',
+                        hint: 'Product details...',
+                        icon: Icons.description_outlined,
+                      ),
                       style: GoogleFonts.beVietnamPro(fontSize: 13),
                     ),
                     const SizedBox(height: 12),
-                    // Cost Price | Price (2 columns — base price shown on mobile)
-                    Row(children: [
-                      Expanded(
-                        child: TextFormField(
-                          controller: _costPriceCtrl,
-                          keyboardType: TextInputType.numberWithOptions(decimal: true),
-                          decoration: _DS.inputDecoration('Cost Price', hint: '0.00', icon: Icons.money_off_outlined),
-                          style: GoogleFonts.beVietnamPro(fontSize: 13),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextFormField(
+                            controller: _costPriceCtrl,
+                            keyboardType: TextInputType.numberWithOptions(
+                              decimal: true,
+                            ),
+                            decoration: _DS.inputDecoration(
+                              'Cost Price',
+                              hint: '0.00',
+                              icon: Icons.money_off_outlined,
+                            ),
+                            style: GoogleFonts.beVietnamPro(fontSize: 13),
+                          ),
                         ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: TextFormField(
-                          controller: _priceCtrl,
-                          keyboardType: TextInputType.numberWithOptions(decimal: true),
-                          decoration: _DS.inputDecoration('Base Price', hint: '0.00', icon: Icons.attach_money_outlined),
-                          style: GoogleFonts.beVietnamPro(fontSize: 13),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: TextFormField(
+                            controller: _priceCtrl,
+                            keyboardType: TextInputType.numberWithOptions(
+                              decimal: true,
+                            ),
+                            decoration: _DS.inputDecoration(
+                              'Base Price',
+                              hint: '0.00',
+                              icon: Icons.attach_money_outlined,
+                            ),
+                            style: GoogleFonts.beVietnamPro(fontSize: 13),
+                          ),
                         ),
-                      ),
-                    ]),
-                    // Stock field — only shown when no variants exist
+                      ],
+                    ),
                     if (_variants.isEmpty) ...[
                       const SizedBox(height: 12),
                       TextFormField(
                         controller: _stockCtrl,
                         keyboardType: TextInputType.number,
-                        decoration: _DS.inputDecoration('Stock Quantity', hint: '0', icon: Icons.inventory_2_outlined),
+                        decoration: _DS.inputDecoration(
+                          'Stock Quantity',
+                          hint: '0',
+                          icon: Icons.inventory_2_outlined,
+                        ),
                         style: GoogleFonts.beVietnamPro(fontSize: 13),
                       ),
                     ],
-                    // Discontinued toggle — edit mode only
                     if (_isEdit) ...[
                       const SizedBox(height: 10),
                       Row(
@@ -2049,8 +1774,13 @@ class _ProductModalState extends State<_ProductModal> {
                             child: Checkbox(
                               value: _isDiscontinued,
                               activeColor: const Color(0xFF6B7280),
-                              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                              onChanged: _submitting ? null : (v) => setState(() => _isDiscontinued = v ?? false),
+                              materialTapTargetSize:
+                                  MaterialTapTargetSize.shrinkWrap,
+                              onChanged: _submitting
+                                  ? null
+                                  : (v) => setState(
+                                      () => _isDiscontinued = v ?? false,
+                                    ),
                             ),
                           ),
                           const SizedBox(width: 8),
@@ -2058,7 +1788,9 @@ class _ProductModalState extends State<_ProductModal> {
                             'Mark as Discontinued',
                             style: GoogleFonts.beVietnamPro(
                               fontSize: 13,
-                              color: _isDiscontinued ? const Color(0xFF6B7280) : const Color(0xFF374151),
+                              color: _isDiscontinued
+                                  ? const Color(0xFF6B7280)
+                                  : const Color(0xFF374151),
                               fontWeight: FontWeight.w500,
                             ),
                           ),
@@ -2072,12 +1804,23 @@ class _ProductModalState extends State<_ProductModal> {
                     OutlinedButton.icon(
                       onPressed: _submitting ? null : _openAddVariantDialog,
                       icon: const Icon(Icons.add, size: 14),
-                      label: Text('Add Variant', style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.w600)),
+                      label: Text(
+                        'Add Variant',
+                        style: GoogleFonts.beVietnamPro(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
                       style: OutlinedButton.styleFrom(
                         foregroundColor: UpriseColors.primaryDark,
                         side: BorderSide(color: UpriseColors.primaryDark),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 8,
+                        ),
                       ),
                     ),
                   ],
@@ -2090,31 +1833,70 @@ class _ProductModalState extends State<_ProductModal> {
               decoration: const BoxDecoration(
                 border: Border(top: BorderSide(color: Color(0xFFE8ECF0))),
                 color: Color(0xFFF8F9FB),
-                borderRadius: BorderRadius.vertical(bottom: Radius.circular(18)),
+                borderRadius: BorderRadius.vertical(
+                  bottom: Radius.circular(18),
+                ),
               ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
                   OutlinedButton(
-                    onPressed: _submitting ? null : () => Navigator.pop(context),
+                    onPressed: _submitting
+                        ? null
+                        : () => Navigator.pop(context),
                     style: OutlinedButton.styleFrom(
                       side: const BorderSide(color: Color(0xFFE2E6EA)),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 11),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 18,
+                        vertical: 11,
+                      ),
                     ),
-                    child: Text('Cancel', style: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF374151))),
+                    child: Text(
+                      'Cancel',
+                      style: GoogleFonts.beVietnamPro(
+                        fontSize: 13,
+                        color: const Color(0xFF374151),
+                      ),
+                    ),
                   ),
                   const SizedBox(width: 12),
                   ElevatedButton.icon(
-                    onPressed: _submitting ? null : _submit,
-                    icon: _submitting ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : const Icon(Icons.save_rounded, size: 16),
-                    label: Text(_isEdit ? 'Save Changes' : 'Add Product', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600)),
+                    onPressed: (_submitting || _uploadingImage)
+                        ? null
+                        : _submit,
+                    icon: (_submitting || _uploadingImage)
+                        ? const SizedBox(
+                            width: 14,
+                            height: 14,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : const Icon(Icons.save_rounded, size: 16),
+                    label: Text(
+                      _uploadingImage
+                          ? 'Uploading Image...'
+                          : (_isEdit ? 'Save Changes' : 'Add Product'),
+                      style: GoogleFonts.beVietnamPro(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: UpriseColors.primaryDark,
                       foregroundColor: Colors.white,
                       elevation: 0,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 11),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 20,
+                        vertical: 11,
+                      ),
                     ),
                   ),
                 ],
@@ -2130,14 +1912,16 @@ class _ProductModalState extends State<_ProductModal> {
     final existingUrl = widget.existingProduct?.imageUrl ?? '';
     final hasImage = _imageBytes != null || existingUrl.isNotEmpty;
     return GestureDetector(
-      onTap: _submitting || _uploadingImage ? null : _pickImage,
+      onTap: (_submitting || _uploadingImage) ? null : _pickImage,
       child: Container(
         height: 110,
         decoration: BoxDecoration(
           color: const Color(0xFFF8F9FB),
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
-            color: hasImage ? UpriseColors.primaryDark.withAlpha(77) : const Color(0xFFE2E6EA),
+            color: hasImage
+                ? UpriseColors.primaryDark.withAlpha(77)
+                : const Color(0xFFE2E6EA),
           ),
         ),
         child: ClipRRect(
@@ -2146,31 +1930,114 @@ class _ProductModalState extends State<_ProductModal> {
             alignment: Alignment.center,
             children: [
               if (_imageBytes != null)
-                Image.memory(_imageBytes!, fit: BoxFit.cover, width: double.infinity, height: 110)
+                Image.memory(
+                  _imageBytes!,
+                  fit: BoxFit.cover,
+                  width: double.infinity,
+                  height: 110,
+                )
               else if (existingUrl.isNotEmpty)
-                Image.network(existingUrl, fit: BoxFit.cover, width: double.infinity, height: 110,
-                    errorBuilder: (_, __, ___) => const SizedBox())
+                Image.network(
+                  existingUrl,
+                  fit: BoxFit.cover,
+                  width: double.infinity,
+                  height: 110,
+                  errorBuilder: (_, __, ___) => const SizedBox(),
+                )
               else
-                Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-                  const Icon(Icons.add_photo_alternate_outlined, size: 32, color: Color(0xFF9AA5B4)),
-                  const SizedBox(height: 6),
-                  Text('Upload Product Image', style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF9AA5B4))),
-                ]),
+                Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(
+                      Icons.add_photo_alternate_outlined,
+                      size: 32,
+                      color: Color(0xFF9AA5B4),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'Upload Product Image',
+                      style: GoogleFonts.beVietnamPro(
+                        fontSize: 12,
+                        color: const Color(0xFF9AA5B4),
+                      ),
+                    ),
+                  ],
+                ),
               Positioned(
-                bottom: 8, right: 8,
+                bottom: 8,
+                right: 8,
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                  decoration: BoxDecoration(color: UpriseColors.primaryDark, borderRadius: BorderRadius.circular(6)),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 5,
+                  ),
+                  decoration: BoxDecoration(
+                    color: UpriseColors.primaryDark,
+                    borderRadius: BorderRadius.circular(6),
+                  ),
                   child: _uploadingImage
-                      ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                      : Row(mainAxisSize: MainAxisSize.min, children: [
-                          const Icon(Icons.upload_rounded, size: 13, color: Colors.white),
-                          const SizedBox(width: 4),
-                          Text(hasImage ? 'Change' : 'Upload',
-                              style: GoogleFonts.beVietnamPro(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.white)),
-                        ]),
+                      ? const SizedBox(
+                          width: 14,
+                          height: 14,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(
+                              Icons.upload_rounded,
+                              size: 13,
+                              color: Colors.white,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              hasImage ? 'Change' : 'Upload',
+                              style: GoogleFonts.beVietnamPro(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ],
+                        ),
                 ),
               ),
+              if (_uploadError != null)
+                Positioned(
+                  bottom: 8,
+                  left: 8,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFEF2F2),
+                      borderRadius: BorderRadius.circular(4),
+                      border: Border.all(color: const Color(0xFFFCA5A5)),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(
+                          Icons.error_outline,
+                          size: 12,
+                          color: Color(0xFFDC2626),
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          'Upload failed',
+                          style: GoogleFonts.beVietnamPro(
+                            fontSize: 10,
+                            color: const Color(0xFF991B1B),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
             ],
           ),
         ),
@@ -2179,7 +2046,10 @@ class _ProductModalState extends State<_ProductModal> {
   }
 
   Future<void> _pickImage() async {
-    final result = await FilePicker.platform.pickFiles(type: FileType.image, allowMultiple: false);
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.image,
+      allowMultiple: false,
+    );
     if (result == null || result.files.isEmpty) return;
     final file = result.files.first;
     final bytes = file.bytes;
@@ -2187,6 +2057,7 @@ class _ProductModalState extends State<_ProductModal> {
     setState(() {
       _imageBytes = bytes;
       _pickedImageName = file.name;
+      _uploadError = null;
     });
   }
 
@@ -2201,7 +2072,10 @@ class _ProductModalState extends State<_ProductModal> {
   }
 
   Widget _buildVariantChip(ProductVariant v) {
-    final label = [if (v.size.isNotEmpty) v.size, if (v.color.isNotEmpty) v.color].join(' / ');
+    final label = [
+      if (v.size.isNotEmpty) v.size,
+      if (v.color.isNotEmpty) v.color,
+    ].join(' / ');
     return Container(
       margin: const EdgeInsets.only(bottom: 6),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
@@ -2210,36 +2084,89 @@ class _ProductModalState extends State<_ProductModal> {
         borderRadius: BorderRadius.circular(8),
         border: Border.all(color: const Color(0xFFE2E6EA)),
       ),
-      child: Row(children: [
-        Container(width: 28, height: 28, decoration: BoxDecoration(color: UpriseColors.primaryDark.withAlpha(18), borderRadius: BorderRadius.circular(6)),
-            child: const Icon(Icons.tune_rounded, size: 14, color: UpriseColors.primaryDark)),
-        const SizedBox(width: 10),
-        Expanded(child: Text(label.isEmpty ? 'Variant' : label,
-            style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600, color: const Color(0xFF1A202C)))),
-        Text('Stock: ${v.stock}', style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF64748B))),
-        if (v.priceOffset != null) ...[
+      child: Row(
+        children: [
+          Container(
+            width: 28,
+            height: 28,
+            decoration: BoxDecoration(
+              color: UpriseColors.primaryDark.withAlpha(18),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: const Icon(
+              Icons.tune_rounded,
+              size: 14,
+              color: UpriseColors.primaryDark,
+            ),
+          ),
           const SizedBox(width: 10),
-          Text('${v.priceOffset! >= 0 ? '+' : ''}₱${NumberFormat('#,###.##').format(v.priceOffset)}',
-              style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.w600, color: UpriseColors.primaryDark)),
+          Expanded(
+            child: Text(
+              label.isEmpty ? 'Variant' : label,
+              style: GoogleFonts.beVietnamPro(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: const Color(0xFF1A202C),
+              ),
+            ),
+          ),
+          Text(
+            'Stock: ${v.stock}',
+            style: GoogleFonts.beVietnamPro(
+              fontSize: 12,
+              color: const Color(0xFF64748B),
+            ),
+          ),
+          if (v.priceOffset != null) ...[
+            const SizedBox(width: 10),
+            Text(
+              '${v.priceOffset! >= 0 ? '+' : ''}₱${NumberFormat('#,###.##').format(v.priceOffset)}',
+              style: GoogleFonts.beVietnamPro(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: UpriseColors.primaryDark,
+              ),
+            ),
+          ],
+          const SizedBox(width: 8),
+          GestureDetector(
+            onTap: () =>
+                setState(() => _variants.removeWhere((x) => x.id == v.id)),
+            child: const Icon(
+              Icons.close_rounded,
+              size: 16,
+              color: Color(0xFF9AA5B4),
+            ),
+          ),
         ],
-        const SizedBox(width: 8),
-        GestureDetector(
-          onTap: () => setState(() => _variants.removeWhere((x) => x.id == v.id)),
-          child: const Icon(Icons.close_rounded, size: 16, color: Color(0xFF9AA5B4)),
-        ),
-      ]),
+      ),
     );
   }
 
   Widget _sectionLabel(String text, {IconData? icon}) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
-      child: Row(children: [
-        if (icon != null) ...[Icon(icon, size: 16, color: UpriseColors.primaryDark), const SizedBox(width: 8)],
-        Text(text, style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w700, color: UpriseColors.primaryDark, letterSpacing: 0.3)),
-        const SizedBox(width: 12),
-        Expanded(child: Divider(color: const Color(0xFFE2E6EA), thickness: 1)),
-      ]),
+      child: Row(
+        children: [
+          if (icon != null) ...[
+            Icon(icon, size: 16, color: UpriseColors.primaryDark),
+            const SizedBox(width: 8),
+          ],
+          Text(
+            text,
+            style: GoogleFonts.beVietnamPro(
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+              color: UpriseColors.primaryDark,
+              letterSpacing: 0.3,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Divider(color: const Color(0xFFE2E6EA), thickness: 1),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -2271,25 +2198,33 @@ class _VariantDialogState extends State<_VariantDialog> {
 
   void _save() {
     if (_sizeCtrl.text.trim().isEmpty && _colorCtrl.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('Enter at least a size or color.', style: GoogleFonts.beVietnamPro()),
-        backgroundColor: UpriseColors.error,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-      ));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Enter at least a size or color.',
+            style: GoogleFonts.beVietnamPro(),
+          ),
+          backgroundColor: UpriseColors.error,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        ),
+      );
       return;
     }
     final stock = int.tryParse(_stockCtrl.text.trim()) ?? 0;
     final priceOffset = _priceOffsetCtrl.text.trim().isEmpty
         ? null
         : double.tryParse(_priceOffsetCtrl.text.trim());
-    Navigator.pop(context, ProductVariant(
-      id: DateTime.now().millisecondsSinceEpoch.toString(),
-      size: _sizeCtrl.text.trim(),
-      color: _colorCtrl.text.trim(),
-      stock: stock,
-      priceOffset: priceOffset,
-    ));
+    Navigator.pop(
+      context,
+      ProductVariant(
+        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        size: _sizeCtrl.text.trim(),
+        color: _colorCtrl.text.trim(),
+        stock: stock,
+        priceOffset: priceOffset,
+      ),
+    );
   }
 
   @override
@@ -2303,51 +2238,102 @@ class _VariantDialogState extends State<_VariantDialog> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(children: [
-              Container(width: 36, height: 36, decoration: BoxDecoration(color: UpriseColors.primaryDark.withAlpha(18), borderRadius: BorderRadius.circular(8)),
-                  child: const Icon(Icons.tune_rounded, size: 18, color: UpriseColors.primaryDark)),
-              const SizedBox(width: 12),
-              Expanded(child: Text('Add Variant', style: GoogleFonts.beVietnamPro(fontSize: 15, fontWeight: FontWeight.w700))),
-              IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.close_rounded, size: 18, color: Color(0xFF64748B))),
-            ]),
+            Row(
+              children: [
+                Container(
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    color: UpriseColors.primaryDark.withAlpha(18),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(
+                    Icons.tune_rounded,
+                    size: 18,
+                    color: UpriseColors.primaryDark,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    'Add Variant',
+                    style: GoogleFonts.beVietnamPro(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                IconButton(
+                  onPressed: () => Navigator.pop(context),
+                  icon: const Icon(
+                    Icons.close_rounded,
+                    size: 18,
+                    color: Color(0xFF64748B),
+                  ),
+                ),
+              ],
+            ),
             const SizedBox(height: 20),
-            Row(children: [
-              Expanded(
-                child: TextFormField(
-                  controller: _sizeCtrl,
-                  decoration: _DS.inputDecoration('Size', hint: 'e.g., M, L, XL', icon: Icons.straighten_outlined),
-                  style: GoogleFonts.beVietnamPro(fontSize: 13),
+            Row(
+              children: [
+                Expanded(
+                  child: TextFormField(
+                    controller: _sizeCtrl,
+                    decoration: _DS.inputDecoration(
+                      'Size',
+                      hint: 'e.g., M, L, XL',
+                      icon: Icons.straighten_outlined,
+                    ),
+                    style: GoogleFonts.beVietnamPro(fontSize: 13),
+                  ),
                 ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: TextFormField(
-                  controller: _colorCtrl,
-                  decoration: _DS.inputDecoration('Color', hint: 'e.g., Red, Blue', icon: Icons.color_lens_outlined),
-                  style: GoogleFonts.beVietnamPro(fontSize: 13),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: TextFormField(
+                    controller: _colorCtrl,
+                    decoration: _DS.inputDecoration(
+                      'Color',
+                      hint: 'e.g., Red, Blue',
+                      icon: Icons.color_lens_outlined,
+                    ),
+                    style: GoogleFonts.beVietnamPro(fontSize: 13),
+                  ),
                 ),
-              ),
-            ]),
+              ],
+            ),
             const SizedBox(height: 12),
-            Row(children: [
-              Expanded(
-                child: TextFormField(
-                  controller: _stockCtrl,
-                  keyboardType: TextInputType.number,
-                  decoration: _DS.inputDecoration('Stock', hint: '0', icon: Icons.inventory_2_outlined),
-                  style: GoogleFonts.beVietnamPro(fontSize: 13),
+            Row(
+              children: [
+                Expanded(
+                  child: TextFormField(
+                    controller: _stockCtrl,
+                    keyboardType: TextInputType.number,
+                    decoration: _DS.inputDecoration(
+                      'Stock',
+                      hint: '0',
+                      icon: Icons.inventory_2_outlined,
+                    ),
+                    style: GoogleFonts.beVietnamPro(fontSize: 13),
+                  ),
                 ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: TextFormField(
-                  controller: _priceOffsetCtrl,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true, signed: true),
-                  decoration: _DS.inputDecoration('Price Offset', hint: '+0.00 (optional)', icon: Icons.add_circle_outline_rounded),
-                  style: GoogleFonts.beVietnamPro(fontSize: 13),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: TextFormField(
+                    controller: _priceOffsetCtrl,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                      signed: true,
+                    ),
+                    decoration: _DS.inputDecoration(
+                      'Price Offset',
+                      hint: '+0.00 (optional)',
+                      icon: Icons.add_circle_outline_rounded,
+                    ),
+                    style: GoogleFonts.beVietnamPro(fontSize: 13),
+                  ),
                 ),
-              ),
-            ]),
+              ],
+            ),
             const SizedBox(height: 24),
             Row(
               mainAxisAlignment: MainAxisAlignment.end,
@@ -2356,10 +2342,18 @@ class _VariantDialogState extends State<_VariantDialog> {
                   onPressed: () => Navigator.pop(context),
                   style: OutlinedButton.styleFrom(
                     side: const BorderSide(color: Color(0xFFE2E6EA)),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 10,
+                    ),
                   ),
-                  child: Text('Cancel', style: GoogleFonts.beVietnamPro(fontSize: 13)),
+                  child: Text(
+                    'Cancel',
+                    style: GoogleFonts.beVietnamPro(fontSize: 13),
+                  ),
                 ),
                 const SizedBox(width: 10),
                 ElevatedButton(
@@ -2368,10 +2362,21 @@ class _VariantDialogState extends State<_VariantDialog> {
                     backgroundColor: UpriseColors.primaryDark,
                     foregroundColor: Colors.white,
                     elevation: 0,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 10,
+                    ),
                   ),
-                  child: Text('Add Variant', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600)),
+                  child: Text(
+                    'Add Variant',
+                    style: GoogleFonts.beVietnamPro(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
                 ),
               ],
             ),
@@ -2383,7 +2388,7 @@ class _VariantDialogState extends State<_VariantDialog> {
 }
 
 // ============================================================
-// PRODUCT DETAILS MODAL
+// PRODUCT DETAILS MODAL - REDESIGNED (Professional UPRISE Theme)
 // ============================================================
 class _ProductDetailsModal extends StatelessWidget {
   final ProductModel product;
@@ -2391,29 +2396,82 @@ class _ProductDetailsModal extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final totalStock = product.variants.isNotEmpty
+        ? product.variants.fold<int>(0, (sum, v) => sum + v.stock)
+        : product.stock;
+
+    final productId = 'PRD-${product.id.substring(0, 4).toUpperCase()}';
+
     return Dialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
       child: Container(
-        width: 500,
-        constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.82),
+        width: 520,
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(context).size.height * 0.85,
+        ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // Header
+            // Header - UPRISE themed with primary color
             Container(
-              padding: const EdgeInsets.fromLTRB(24, 20, 16, 20),
+              padding: const EdgeInsets.fromLTRB(24, 20, 20, 20),
               decoration: BoxDecoration(
-                color: UpriseColors.primaryDark.withAlpha(18),
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(18)),
-                border: const Border(bottom: BorderSide(color: Color(0xFFE8ECF0))),
+                color: UpriseColors.primaryDark,
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(18),
+                ),
               ),
-              child: Row(children: [
-                Container(width: 42, height: 42, decoration: BoxDecoration(color: UpriseColors.primaryDark.withAlpha(26), borderRadius: BorderRadius.circular(10)),
-                    child: const Icon(Icons.shopping_bag_outlined, size: 20, color: UpriseColors.primaryDark)),
-                const SizedBox(width: 14),
-                Expanded(child: Text(product.name, style: GoogleFonts.beVietnamPro(fontSize: 16, fontWeight: FontWeight.w700))),
-                IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.close_rounded, size: 20, color: Color(0xFF64748B))),
-              ]),
+              child: Row(
+                children: [
+                  Container(
+                    width: 38,
+                    height: 38,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(
+                      Icons.shopping_bag_outlined,
+                      color: Colors.white,
+                      size: 18,
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          product.name,
+                          style: GoogleFonts.beVietnamPro(
+                            fontSize: 17,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.white,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          productId,
+                          style: GoogleFonts.beVietnamPro(
+                            fontSize: 12,
+                            color: Colors.white.withOpacity(0.7),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  _statusBadge(product.status),
+                  const SizedBox(width: 8),
+                  IconButton(
+                    icon: const Icon(
+                      Icons.close_rounded,
+                      color: Colors.white,
+                      size: 20,
+                    ),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ],
+              ),
             ),
             // Body
             Expanded(
@@ -2422,92 +2480,203 @@ class _ProductDetailsModal extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    // Product Image
                     if (product.imageUrl.isNotEmpty) ...[
                       ClipRRect(
-                        borderRadius: BorderRadius.circular(10),
+                        borderRadius: BorderRadius.circular(12),
                         child: Image.network(
                           product.imageUrl,
                           width: double.infinity,
-                          height: 160,
+                          height: 200,
                           fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => const SizedBox(),
+                          errorBuilder: (_, __, ___) => Container(
+                            height: 200,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF8F9FB),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: const Icon(
+                              Icons.image_not_supported_outlined,
+                              size: 48,
+                              color: Color(0xFF9AA5B4),
+                            ),
+                          ),
                         ),
                       ),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 20),
                     ],
-                    _detailItem('Category', product.category),
-                    _detailItem('Price', '₱${NumberFormat('#,###').format(product.price)}'),
-                    _detailItem('Stock', '${product.variants.isNotEmpty ? product.variants.fold<int>(0, (sum, v) => sum + v.stock) : product.stock} units'),
-                    _detailItem('Sold', '${product.sold} units'),
-                    _detailItem('Status', product.status.replaceAll('_', ' ').toUpperCase()),
-                    if (product.description.isNotEmpty) _detailItem('Description', product.description),
+                    // Product Info Grid
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: _detailItem(
+                            'Category',
+                            product.category,
+                            Icons.category_outlined,
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: _detailItem(
+                            'Price',
+                            '₱${NumberFormat('#,###').format(product.price)}',
+                            Icons.attach_money_outlined,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 14),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: _detailItem(
+                            'Stock',
+                            '$totalStock units',
+                            Icons.inventory_2_outlined,
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: _detailItem(
+                            'Sold',
+                            '${product.sold} units',
+                            Icons.shopping_cart_outlined,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 14),
+                    if (product.description.isNotEmpty) ...[
+                      _detailItem(
+                        'Description',
+                        product.description,
+                        Icons.notes_rounded,
+                      ),
+                      const SizedBox(height: 14),
+                    ],
+                    // Variants Section
                     if (product.variants.isNotEmpty) ...[
-                      const SizedBox(height: 8),
-                      Row(children: [
-                        const Icon(Icons.tune_rounded, size: 15, color: UpriseColors.primaryDark),
-                        const SizedBox(width: 6),
-                        Text('Variants', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w700, color: UpriseColors.primaryDark)),
-                        const SizedBox(width: 12),
-                        Expanded(child: Divider(color: const Color(0xFFE2E6EA), thickness: 1)),
-                      ]),
+                      _sectionTitle('Variants', Icons.tune_rounded),
                       const SizedBox(height: 8),
                       Container(
                         decoration: BoxDecoration(
                           border: Border.all(color: const Color(0xFFE8ECF0)),
-                          borderRadius: BorderRadius.circular(8),
+                          borderRadius: BorderRadius.circular(10),
                         ),
-                        child: Column(children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-                            decoration: const BoxDecoration(
-                              color: Color(0xFFFFF7ED),
-                              borderRadius: BorderRadius.vertical(top: Radius.circular(8)),
-                              border: Border(bottom: BorderSide(color: Color(0xFFFB923C))),
-                            ),
-                            child: Row(children: [
-                              Expanded(flex: 2, child: Text('SIZE', style: GoogleFonts.beVietnamPro(fontSize: 10, fontWeight: FontWeight.w700, color: const Color(0xFF64748B), letterSpacing: 0.5))),
-                              Expanded(flex: 2, child: Text('COLOR', style: GoogleFonts.beVietnamPro(fontSize: 10, fontWeight: FontWeight.w700, color: const Color(0xFF64748B), letterSpacing: 0.5))),
-                              Expanded(flex: 1, child: Text('STOCK', style: GoogleFonts.beVietnamPro(fontSize: 10, fontWeight: FontWeight.w700, color: const Color(0xFF64748B), letterSpacing: 0.5))),
-                              Expanded(flex: 2, child: Text('PRICE', style: GoogleFonts.beVietnamPro(fontSize: 10, fontWeight: FontWeight.w700, color: const Color(0xFF64748B), letterSpacing: 0.5))),
-                            ]),
-                          ),
-                          ...product.variants.asMap().entries.map((entry) {
-                            final v = entry.value;
-                            final isLast = entry.key == product.variants.length - 1;
-                            final effectivePrice = product.price + (v.priceOffset ?? 0);
-                            return Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
-                              decoration: BoxDecoration(
-                                border: isLast ? null : const Border(bottom: BorderSide(color: Color(0xFFF1F5F9))),
+                        child: Column(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 8,
                               ),
-                              child: Row(children: [
-                                Expanded(flex: 2, child: Text(v.size.isEmpty ? '—' : v.size, style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.w500))),
-                                Expanded(flex: 2, child: Text(v.color.isEmpty ? '—' : v.color, style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.w500))),
-                                Expanded(flex: 1, child: Text('${v.stock}', style: GoogleFonts.beVietnamPro(fontSize: 12))),
-                                Expanded(flex: 2, child: Row(children: [
-                                  Text('₱${NumberFormat('#,###.##').format(effectivePrice)}',
-                                      style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.w700, color: UpriseColors.primaryDark)),
-                                  if (v.priceOffset != null && v.priceOffset != 0) ...[
-                                    const SizedBox(width: 4),
-                                    Text('(${v.priceOffset! >= 0 ? '+' : ''}${NumberFormat('#,###.##').format(v.priceOffset!)})',
-                                        style: GoogleFonts.beVietnamPro(fontSize: 10, color: const Color(0xFF64748B))),
+                              decoration: const BoxDecoration(
+                                color: Color(0xFFFFF7ED),
+                                borderRadius: BorderRadius.vertical(
+                                  top: Radius.circular(10),
+                                ),
+                                border: Border(
+                                  bottom: BorderSide(color: Color(0xFFFB923C)),
+                                ),
+                              ),
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    flex: 2,
+                                    child: _variantHeader('SIZE'),
+                                  ),
+                                  Expanded(
+                                    flex: 2,
+                                    child: _variantHeader('COLOR'),
+                                  ),
+                                  Expanded(
+                                    flex: 1,
+                                    child: _variantHeader('STOCK'),
+                                  ),
+                                  Expanded(
+                                    flex: 2,
+                                    child: _variantHeader('PRICE'),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            ...product.variants.asMap().entries.map((entry) {
+                              final v = entry.value;
+                              final isLast =
+                                  entry.key == product.variants.length - 1;
+                              final effectivePrice =
+                                  product.price + (v.priceOffset ?? 0);
+                              return Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 10,
+                                ),
+                                decoration: BoxDecoration(
+                                  border: isLast
+                                      ? null
+                                      : const Border(
+                                          bottom: BorderSide(
+                                            color: Color(0xFFF1F5F9),
+                                          ),
+                                        ),
+                                ),
+                                child: Row(
+                                  children: [
+                                    Expanded(
+                                      flex: 2,
+                                      child: _variantValue(
+                                        v.size.isEmpty ? '—' : v.size,
+                                      ),
+                                    ),
+                                    Expanded(
+                                      flex: 2,
+                                      child: _variantValue(
+                                        v.color.isEmpty ? '—' : v.color,
+                                      ),
+                                    ),
+                                    Expanded(
+                                      flex: 1,
+                                      child: _variantValue('${v.stock}'),
+                                    ),
+                                    Expanded(
+                                      flex: 2,
+                                      child: Row(
+                                        children: [
+                                          Text(
+                                            '₱${NumberFormat('#,###.##').format(effectivePrice)}',
+                                            style: GoogleFonts.beVietnamPro(
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.w700,
+                                              color: UpriseColors.primaryDark,
+                                            ),
+                                          ),
+                                          if (v.priceOffset != null &&
+                                              v.priceOffset != 0) ...[
+                                            const SizedBox(width: 4),
+                                            Text(
+                                              '(${v.priceOffset! >= 0 ? '+' : ''}${NumberFormat('#,###.##').format(v.priceOffset!)})',
+                                              style: GoogleFonts.beVietnamPro(
+                                                fontSize: 10,
+                                                color: const Color(0xFF64748B),
+                                              ),
+                                            ),
+                                          ],
+                                        ],
+                                      ),
+                                    ),
                                   ],
-                                ])),
-                              ]),
-                            );
-                          }),
-                        ]),
+                                ),
+                              );
+                            }),
+                          ],
+                        ),
                       ),
+                      const SizedBox(height: 16),
                     ],
-                    const SizedBox(height: 8),
-                    // Stock History section
-                    Row(children: [
-                      const Icon(Icons.history_rounded, size: 15, color: UpriseColors.primaryDark),
-                      const SizedBox(width: 6),
-                      Text('Stock History', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w700, color: UpriseColors.primaryDark)),
-                      const SizedBox(width: 12),
-                      Expanded(child: Divider(color: const Color(0xFFE2E6EA), thickness: 1)),
-                    ]),
+                    // Stock History
+                    _sectionTitle('Stock History', Icons.history_rounded),
                     const SizedBox(height: 10),
                     StreamBuilder<QuerySnapshot>(
                       stream: FirebaseFirestore.instance
@@ -2518,17 +2687,30 @@ class _ProductDetailsModal extends StatelessWidget {
                           .snapshots(),
                       builder: (context, snap) {
                         if (snap.connectionState == ConnectionState.waiting) {
-                          return const Center(child: Padding(
+                          return const Padding(
                             padding: EdgeInsets.all(16),
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          ));
+                            child: Center(
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            ),
+                          );
                         }
                         final logs = snap.data?.docs ?? [];
                         if (logs.isEmpty) {
-                          return Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                            child: Text('No stock changes recorded yet.',
-                                style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF9AA5B4))),
+                          return Container(
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF8F9FB),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Center(
+                              child: Text(
+                                'No stock changes recorded yet.',
+                                style: GoogleFonts.beVietnamPro(
+                                  fontSize: 12,
+                                  color: const Color(0xFF9AA5B4),
+                                ),
+                              ),
+                            ),
                           );
                         }
                         return Column(
@@ -2536,7 +2718,9 @@ class _ProductDetailsModal extends StatelessWidget {
                             final d = doc.data() as Map<String, dynamic>;
                             final ts = d['timestamp'] as Timestamp?;
                             final date = ts != null
-                                ? DateFormat('MMM d, yyyy h:mm a').format(ts.toDate())
+                                ? DateFormat(
+                                    'MMM d, yyyy h:mm a',
+                                  ).format(ts.toDate())
                                 : '—';
                             final oldS = d['oldStock'] ?? 0;
                             final newS = d['newStock'] ?? 0;
@@ -2549,44 +2733,81 @@ class _ProductDetailsModal extends StatelessWidget {
                               decoration: BoxDecoration(
                                 color: const Color(0xFFF8F9FB),
                                 borderRadius: BorderRadius.circular(8),
-                                border: Border.all(color: const Color(0xFFE8ECF0)),
+                                border: Border.all(
+                                  color: const Color(0xFFE8ECF0),
+                                ),
                               ),
                               child: Row(
                                 children: [
                                   Container(
-                                    width: 32, height: 32,
+                                    width: 32,
+                                    height: 32,
                                     decoration: BoxDecoration(
-                                      color: isIncrease ? const Color(0xFFECFDF5) : const Color(0xFFFEF2F2),
+                                      color: isIncrease
+                                          ? const Color(0xFFECFDF5)
+                                          : const Color(0xFFFEF2F2),
                                       borderRadius: BorderRadius.circular(8),
                                     ),
                                     child: Icon(
-                                      isIncrease ? Icons.arrow_upward_rounded : Icons.arrow_downward_rounded,
+                                      isIncrease
+                                          ? Icons.arrow_upward_rounded
+                                          : Icons.arrow_downward_rounded,
                                       size: 16,
-                                      color: isIncrease ? const Color(0xFF059669) : const Color(0xFFDC2626),
+                                      color: isIncrease
+                                          ? const Color(0xFF059669)
+                                          : const Color(0xFFDC2626),
                                     ),
                                   ),
                                   const SizedBox(width: 10),
                                   Expanded(
                                     child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
                                       children: [
-                                        Row(children: [
-                                          Text('$oldS → $newS units',
-                                              style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600, color: const Color(0xFF1A202C))),
-                                          const SizedBox(width: 8),
-                                          Container(
-                                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                            decoration: BoxDecoration(
-                                              color: UpriseColors.primaryDark.withAlpha(18),
-                                              borderRadius: BorderRadius.circular(4),
+                                        Row(
+                                          children: [
+                                            Text(
+                                              '$oldS → $newS units',
+                                              style: GoogleFonts.beVietnamPro(
+                                                fontSize: 13,
+                                                fontWeight: FontWeight.w600,
+                                                color: const Color(0xFF1A202C),
+                                              ),
                                             ),
-                                            child: Text(reason.toUpperCase(),
-                                                style: GoogleFonts.beVietnamPro(fontSize: 9, fontWeight: FontWeight.w700, color: UpriseColors.primaryDark, letterSpacing: 0.5)),
-                                          ),
-                                        ]),
+                                            const SizedBox(width: 8),
+                                            Container(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                    horizontal: 6,
+                                                    vertical: 2,
+                                                  ),
+                                              decoration: BoxDecoration(
+                                                color: UpriseColors.primaryDark
+                                                    .withAlpha(18),
+                                                borderRadius:
+                                                    BorderRadius.circular(4),
+                                              ),
+                                              child: Text(
+                                                reason.toUpperCase(),
+                                                style: GoogleFonts.beVietnamPro(
+                                                  fontSize: 9,
+                                                  fontWeight: FontWeight.w700,
+                                                  color:
+                                                      UpriseColors.primaryDark,
+                                                  letterSpacing: 0.5,
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
                                         const SizedBox(height: 2),
-                                        Text('$date · $by',
-                                            style: GoogleFonts.beVietnamPro(fontSize: 11, color: const Color(0xFF64748B))),
+                                        Text(
+                                          '$date · $by',
+                                          style: GoogleFonts.beVietnamPro(
+                                            fontSize: 11,
+                                            color: const Color(0xFF64748B),
+                                          ),
+                                        ),
                                       ],
                                     ),
                                   ),
@@ -2603,23 +2824,36 @@ class _ProductDetailsModal extends StatelessWidget {
             ),
             // Footer
             Container(
-              padding: const EdgeInsets.fromLTRB(24, 12, 24, 18),
+              padding: const EdgeInsets.fromLTRB(24, 12, 24, 20),
               decoration: const BoxDecoration(
                 border: Border(top: BorderSide(color: Color(0xFFE8ECF0))),
                 color: Color(0xFFF8F9FB),
-                borderRadius: BorderRadius.vertical(bottom: Radius.circular(18)),
-              ),
-              child: Row(mainAxisAlignment: MainAxisAlignment.end, children: [
-                OutlinedButton(
-                  onPressed: () => Navigator.pop(context),
-                  style: OutlinedButton.styleFrom(
-                    side: const BorderSide(color: Color(0xFFE2E6EA)),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
-                  ),
-                  child: Text('Close', style: GoogleFonts.beVietnamPro(fontSize: 13)),
+                borderRadius: BorderRadius.vertical(
+                  bottom: Radius.circular(18),
                 ),
-              ]),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  OutlinedButton(
+                    onPressed: () => Navigator.pop(context),
+                    style: OutlinedButton.styleFrom(
+                      side: const BorderSide(color: Color(0xFFE2E6EA)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 18,
+                        vertical: 11,
+                      ),
+                    ),
+                    child: Text(
+                      'Close',
+                      style: GoogleFonts.beVietnamPro(fontSize: 13),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ],
         ),
@@ -2627,23 +2861,1315 @@ class _ProductDetailsModal extends StatelessWidget {
     );
   }
 
-  Widget _detailItem(String label, String value) {
+  Widget _detailItem(String label, String value, IconData icon) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(icon, size: 14, color: const Color(0xFF9AA5B4)),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: GoogleFonts.beVietnamPro(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: const Color(0xFF64748B),
+                letterSpacing: 0.4,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        Text(
+          value,
+          style: GoogleFonts.beVietnamPro(
+            fontSize: 14,
+            fontWeight: FontWeight.w500,
+            color: const Color(0xFF1A202C),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _sectionTitle(String text, IconData icon) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
         children: [
-          Text(label, style: GoogleFonts.beVietnamPro(fontSize: 11, fontWeight: FontWeight.w600, color: const Color(0xFF64748B), letterSpacing: 0.5)),
-          const SizedBox(height: 4),
-          Text(value, style: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF1A202C))),
+          Icon(icon, size: 15, color: UpriseColors.primaryDark),
+          const SizedBox(width: 6),
+          Text(
+            text,
+            style: GoogleFonts.beVietnamPro(
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+              color: UpriseColors.primaryDark,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Divider(color: const Color(0xFFE2E6EA), thickness: 1),
+          ),
         ],
+      ),
+    );
+  }
+
+  Widget _variantHeader(String text) {
+    return Text(
+      text,
+      style: GoogleFonts.beVietnamPro(
+        fontSize: 10,
+        fontWeight: FontWeight.w700,
+        color: const Color(0xFF64748B),
+        letterSpacing: 0.5,
+      ),
+    );
+  }
+
+  Widget _variantValue(String text) {
+    return Text(
+      text,
+      style: GoogleFonts.beVietnamPro(
+        fontSize: 12,
+        fontWeight: FontWeight.w500,
+        color: const Color(0xFF1A202C),
       ),
     );
   }
 }
 
 // ============================================================
-// ORDER DETAILS MODAL (unchanged)
+// ORDERS TAB
+// ============================================================
+class _OrdersTab extends StatefulWidget {
+  final String orgId;
+  const _OrdersTab({required this.orgId});
+
+  @override
+  State<_OrdersTab> createState() => _OrdersTabState();
+}
+
+class _OrdersTabState extends State<_OrdersTab> {
+  final TextEditingController _searchController = TextEditingController();
+  String _searchQuery = '';
+  String _statusFilter = 'All';
+  String _bundleIdFilter = 'All';
+  String _sectionFilter = 'All';
+  String _pickupStatusFilter = 'All';
+  int _currentPage = 1;
+  static const int _pageSize = 10;
+  bool _isBulkUpdating = false;
+
+  final List<String> _statusFilters = [
+    'All',
+    'Pending',
+    'Processing',
+    'Completed',
+  ];
+  List<String> _availableBundleIds = ['All'];
+  List<String> _availableSections = ['All'];
+
+  List<OrderModel> _applyFilters(List<OrderModel> orders) {
+    return orders.where((o) {
+      final matchSearch =
+          _searchQuery.isEmpty ||
+          o.customerName.toLowerCase().contains(_searchQuery.toLowerCase()) ||
+          o.orderId.toLowerCase().contains(_searchQuery.toLowerCase());
+      final matchStatus =
+          _statusFilter == 'All' ||
+          o.status.toLowerCase() == _statusFilter.toLowerCase();
+      final matchBundle =
+          _bundleIdFilter == 'All' || o.bundleId == _bundleIdFilter;
+      final matchSection =
+          _sectionFilter == 'All' || o.section == _sectionFilter;
+      final matchPickup =
+          _pickupStatusFilter == 'All' || o.pickupStatus == _pickupStatusFilter;
+      return matchSearch &&
+          matchStatus &&
+          matchBundle &&
+          matchSection &&
+          matchPickup;
+    }).toList();
+  }
+
+  void _updateBundleIds(List<OrderModel> orders) {
+    final ids = orders
+        .map((o) => o.bundleId)
+        .where((id) => id.isNotEmpty)
+        .toSet()
+        .toList();
+    ids.sort();
+    final newBundleIds = ['All', ...ids];
+    if (listEquals(_availableBundleIds, newBundleIds) &&
+        (_bundleIdFilter == 'All' || ids.contains(_bundleIdFilter))) {
+      return;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      setState(() {
+        _availableBundleIds = newBundleIds;
+        if (_bundleIdFilter != 'All' && !ids.contains(_bundleIdFilter)) {
+          _bundleIdFilter = 'All';
+        }
+      });
+    });
+  }
+
+  void _updateSections(List<OrderModel> orders) {
+    final sections = orders
+        .map((o) => o.section)
+        .where((s) => s.isNotEmpty)
+        .toSet()
+        .toList();
+    sections.sort();
+    final newSections = ['All', ...sections];
+    if (listEquals(_availableSections, newSections) &&
+        (_sectionFilter == 'All' || sections.contains(_sectionFilter))) {
+      return;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      setState(() {
+        _availableSections = newSections;
+        if (_sectionFilter != 'All' && !sections.contains(_sectionFilter)) {
+          _sectionFilter = 'All';
+        }
+      });
+    });
+  }
+
+  Future<void> _updateOrderPickupStatus(
+    String orderId,
+    String pickupStatus,
+  ) async {
+    try {
+      await FirebaseFirestore.instance.collection('orders').doc(orderId).update(
+        {'pickupStatus': pickupStatus},
+      );
+      if (mounted)
+        _showSnack('Updated to "$pickupStatus"', UpriseColors.success);
+    } catch (e) {
+      if (mounted) _showSnack('Error: $e', UpriseColors.error);
+    }
+  }
+
+  Future<void> _bulkUpdateSection(
+    String section,
+    String pickupStatus,
+    List<OrderModel> sectionOrders,
+  ) async {
+    final count = sectionOrders.length;
+    final confirmed = await _showBulkConfirmDialog(
+      title: 'Update Section $section',
+      message:
+          'Mark $count order${count == 1 ? '' : 's'} in section $section as "$pickupStatus"?',
+    );
+    if (!confirmed) return;
+    setState(() => _isBulkUpdating = true);
+    try {
+      final db = FirebaseFirestore.instance;
+      WriteBatch current = db.batch();
+      int opCount = 0;
+      final List<WriteBatch> batches = [];
+      for (final order in sectionOrders) {
+        current.update(db.collection('orders').doc(order.id), {
+          'pickupStatus': pickupStatus,
+        });
+        opCount++;
+        if (opCount >= 500) {
+          batches.add(current);
+          current = db.batch();
+          opCount = 0;
+        }
+      }
+      if (opCount > 0) batches.add(current);
+      for (final b in batches) {
+        await b.commit();
+      }
+      if (mounted)
+        _showSnack(
+          'Updated $count orders to "$pickupStatus"',
+          UpriseColors.success,
+        );
+    } catch (e) {
+      if (mounted) _showSnack('Error: $e', UpriseColors.error);
+    } finally {
+      if (mounted) setState(() => _isBulkUpdating = false);
+    }
+  }
+
+  Future<void> _bulkUpdateAll(
+    String pickupStatus,
+    List<OrderModel> allOrders,
+  ) async {
+    final count = allOrders.length;
+    final confirmed = await _showBulkConfirmDialog(
+      title: 'Mark ALL as "$pickupStatus"',
+      message:
+          'This will update $count order${count == 1 ? '' : 's'} across all sections to "$pickupStatus".',
+    );
+    if (!confirmed) return;
+    setState(() => _isBulkUpdating = true);
+    try {
+      final db = FirebaseFirestore.instance;
+      WriteBatch current = db.batch();
+      int opCount = 0;
+      final List<WriteBatch> batches = [];
+      for (final order in allOrders) {
+        current.update(db.collection('orders').doc(order.id), {
+          'pickupStatus': pickupStatus,
+        });
+        opCount++;
+        if (opCount >= 500) {
+          batches.add(current);
+          current = db.batch();
+          opCount = 0;
+        }
+      }
+      if (opCount > 0) batches.add(current);
+      for (final b in batches) {
+        await b.commit();
+      }
+      if (mounted)
+        _showSnack(
+          'Updated $count orders to "$pickupStatus"',
+          UpriseColors.success,
+        );
+    } catch (e) {
+      if (mounted) _showSnack('Error: $e', UpriseColors.error);
+    } finally {
+      if (mounted) setState(() => _isBulkUpdating = false);
+    }
+  }
+
+  Future<bool> _showBulkConfirmDialog({
+    required String title,
+    required String message,
+  }) async {
+    return await showDialog<bool>(
+          context: context,
+          builder: (ctx) => Dialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Container(
+              width: 400,
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        width: 40,
+                        height: 40,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFFF7ED),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: const Icon(
+                          Icons.update_rounded,
+                          color: Color(0xFFEA580C),
+                          size: 20,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          title,
+                          style: GoogleFonts.beVietnamPro(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close_rounded, size: 18),
+                        onPressed: () => Navigator.pop(ctx, false),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    message,
+                    style: GoogleFonts.beVietnamPro(
+                      fontSize: 13,
+                      color: const Color(0xFF64748B),
+                      height: 1.5,
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      OutlinedButton(
+                        onPressed: () => Navigator.pop(ctx, false),
+                        style: OutlinedButton.styleFrom(
+                          side: const BorderSide(color: Color(0xFFE2E6EA)),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 10,
+                          ),
+                        ),
+                        child: Text(
+                          'Cancel',
+                          style: GoogleFonts.beVietnamPro(fontSize: 13),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      ElevatedButton(
+                        onPressed: () => Navigator.pop(ctx, true),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: UpriseColors.primaryDark,
+                          foregroundColor: Colors.white,
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 10,
+                          ),
+                        ),
+                        child: Text(
+                          'Confirm',
+                          style: GoogleFonts.beVietnamPro(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ) ??
+        false;
+  }
+
+  void _showSnack(String msg, Color color) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(msg, style: GoogleFonts.beVietnamPro()),
+        backgroundColor: color,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        _buildToolbar(),
+        const SizedBox(height: 16),
+        Expanded(child: _buildTable()),
+        const SizedBox(height: 24),
+      ],
+    );
+  }
+
+  Widget _buildToolbar() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 28),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 200,
+            height: 40,
+            child: TextField(
+              controller: _searchController,
+              onChanged: (value) => setState(() {
+                _searchQuery = value;
+                _currentPage = 1;
+              }),
+              style: GoogleFonts.beVietnamPro(fontSize: 13),
+              decoration: InputDecoration(
+                hintText: 'Search orders...',
+                hintStyle: GoogleFonts.beVietnamPro(
+                  fontSize: 13,
+                  color: const Color(0xFF9AA5B4),
+                ),
+                prefixIcon: const Icon(
+                  Icons.search_rounded,
+                  size: 18,
+                  color: Color(0xFF9AA5B4),
+                ),
+                filled: true,
+                fillColor: Colors.white,
+                contentPadding: const EdgeInsets.symmetric(
+                  vertical: 0,
+                  horizontal: 16,
+                ),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: const BorderSide(color: Color(0xFFE2E6EA)),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: const BorderSide(color: Color(0xFFE2E6EA)),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: BorderSide(
+                    color: UpriseColors.primaryDark,
+                    width: 1.5,
+                  ),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          _FilterDropdown(
+            value: _statusFilter,
+            items: _statusFilters,
+            hint: 'Status',
+            icon: Icons.tune_rounded,
+            onChanged: (v) => setState(() {
+              _statusFilter = v!;
+              _currentPage = 1;
+            }),
+          ),
+          const SizedBox(width: 10),
+          if (_availableSections.length > 1) ...[
+            _FilterDropdown(
+              value: _sectionFilter,
+              items: _availableSections,
+              hint: 'Section',
+              icon: Icons.groups_outlined,
+              onChanged: (v) => setState(() {
+                _sectionFilter = v!;
+                _currentPage = 1;
+              }),
+            ),
+            const SizedBox(width: 10),
+          ],
+          _FilterDropdown(
+            value: _pickupStatusFilter,
+            items: const ['All', 'Pending', 'Ready for Pickup', 'Claimed'],
+            hint: 'Pickup',
+            icon: Icons.local_shipping_outlined,
+            onChanged: (v) => setState(() {
+              _pickupStatusFilter = v!;
+              _currentPage = 1;
+            }),
+          ),
+          const SizedBox(width: 10),
+          if (_availableBundleIds.length > 1)
+            _FilterDropdown(
+              value: _bundleIdFilter,
+              items: _availableBundleIds,
+              hint: 'Bundle',
+              icon: Icons.local_offer_outlined,
+              onChanged: (v) => setState(() {
+                _bundleIdFilter = v!;
+                _currentPage = 1;
+              }),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTable() {
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('orders')
+          .where('orgId', isEqualTo: widget.orgId)
+          .orderBy('createdAt', descending: true)
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (snapshot.hasError) {
+          return Center(child: Text('Error: ${snapshot.error}'));
+        }
+        final rawOrders = snapshot.data!.docs
+            .map((d) => OrderModel.fromFirestore(d))
+            .toList();
+        _updateBundleIds(rawOrders);
+        _updateSections(rawOrders);
+
+        final Map<String, List<OrderModel>> sectionGroups = {};
+        for (final o in rawOrders) {
+          if (o.section.isNotEmpty) {
+            sectionGroups.putIfAbsent(o.section, () => []).add(o);
+          }
+        }
+        final sortedSections = sectionGroups.keys.toList()..sort();
+
+        var allOrders = _applyFilters(rawOrders);
+
+        final totalPages = allOrders.isEmpty
+            ? 1
+            : (allOrders.length / _pageSize).ceil();
+        final safePage = _currentPage.clamp(1, totalPages);
+        final start = (safePage - 1) * _pageSize;
+        final end = (start + _pageSize).clamp(0, allOrders.length);
+        final pageOrders = allOrders.sublist(start, end);
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (rawOrders.isNotEmpty) _buildGlobalBulkButtons(rawOrders),
+            if (sectionGroups.isNotEmpty)
+              _buildSectionBanner(sortedSections, sectionGroups),
+            if (rawOrders.isNotEmpty || sectionGroups.isNotEmpty)
+              const SizedBox(height: 8),
+            Expanded(
+              child: Container(
+                margin: const EdgeInsets.symmetric(horizontal: 28),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: const Color(0xFFE8ECF0)),
+                  boxShadow: _DS.cardShadow,
+                ),
+                child: Column(
+                  children: [
+                    _buildTableHeader(),
+                    Expanded(
+                      child: allOrders.isEmpty
+                          ? _buildEmptyState(
+                              Icons.shopping_cart_outlined,
+                              'No orders yet',
+                              'Orders will appear here after checkout.',
+                            )
+                          : ListView.builder(
+                              itemCount: pageOrders.length,
+                              itemBuilder: (_, i) => _buildOrderRow(
+                                pageOrders[i],
+                                isLast: i == pageOrders.length - 1,
+                              ),
+                            ),
+                    ),
+                    _buildFooter(allOrders.length, totalPages, start, end),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildGlobalBulkButtons(List<OrderModel> allOrders) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(28, 0, 28, 8),
+      child: Row(
+        children: [
+          Text(
+            'Bulk Actions:',
+            style: GoogleFonts.beVietnamPro(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: const Color(0xFF64748B),
+            ),
+          ),
+          const SizedBox(width: 10),
+          OutlinedButton.icon(
+            onPressed: _isBulkUpdating
+                ? null
+                : () => _bulkUpdateAll('Ready for Pickup', allOrders),
+            icon: const Icon(Icons.check_circle_outline, size: 14),
+            label: Text(
+              'Mark ALL as Ready',
+              style: GoogleFonts.beVietnamPro(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: const Color(0xFF2563EB),
+              side: const BorderSide(color: Color(0xFF93C5FD)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            ),
+          ),
+          const SizedBox(width: 8),
+          OutlinedButton.icon(
+            onPressed: _isBulkUpdating
+                ? null
+                : () => _bulkUpdateAll('Claimed', allOrders),
+            icon: const Icon(Icons.done_all_rounded, size: 14),
+            label: Text(
+              'Mark ALL as Claimed',
+              style: GoogleFonts.beVietnamPro(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: const Color(0xFF059669),
+              side: const BorderSide(color: Color(0xFF6EE7B7)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            ),
+          ),
+          if (_isBulkUpdating) ...[
+            const SizedBox(width: 12),
+            const SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              'Updating…',
+              style: GoogleFonts.beVietnamPro(
+                fontSize: 12,
+                color: const Color(0xFF64748B),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSectionBanner(
+    List<String> sortedSections,
+    Map<String, List<OrderModel>> sectionGroups,
+  ) {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(28, 0, 28, 0),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFFBEB),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: const Color(0xFFFEF3C7)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(
+                Icons.groups_outlined,
+                size: 15,
+                color: Color(0xFFFB923C),
+              ),
+              const SizedBox(width: 6),
+              Text(
+                'Section Summary',
+                style: GoogleFonts.beVietnamPro(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: const Color(0xFFFB923C),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          ...sortedSections.map((section) {
+            final orders = sectionGroups[section]!;
+            final itemCount = orders.fold<int>(
+              0,
+              (sum, o) => sum + o.items.fold<int>(0, (s, i) => s + i.quantity),
+            );
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 3,
+                    ),
+                    decoration: BoxDecoration(
+                      color: UpriseColors.primaryDark.withAlpha(18),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(
+                      section,
+                      style: GoogleFonts.beVietnamPro(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: UpriseColors.primaryDark,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    '${orders.length} order${orders.length == 1 ? '' : 's'} / $itemCount item${itemCount == 1 ? '' : 's'}',
+                    style: GoogleFonts.beVietnamPro(
+                      fontSize: 12,
+                      color: const Color(0xFF64748B),
+                    ),
+                  ),
+                  const Spacer(),
+                  TextButton(
+                    onPressed: _isBulkUpdating
+                        ? null
+                        : () => _bulkUpdateSection(
+                            section,
+                            'Ready for Pickup',
+                            orders,
+                          ),
+                    style: TextButton.styleFrom(
+                      foregroundColor: const Color(0xFF2563EB),
+                      backgroundColor: const Color(0xFFEFF6FF),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 6,
+                      ),
+                      minimumSize: Size.zero,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                    ),
+                    child: Text(
+                      'Ready',
+                      style: GoogleFonts.beVietnamPro(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  TextButton(
+                    onPressed: _isBulkUpdating
+                        ? null
+                        : () => _bulkUpdateSection(section, 'Claimed', orders),
+                    style: TextButton.styleFrom(
+                      foregroundColor: const Color(0xFF059669),
+                      backgroundColor: const Color(0xFFECFDF5),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 6,
+                      ),
+                      minimumSize: Size.zero,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                    ),
+                    child: Text(
+                      'Claimed',
+                      style: GoogleFonts.beVietnamPro(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTableHeader() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 13),
+      decoration: const BoxDecoration(
+        color: Color(0xFFFFF7ED),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(14)),
+        border: Border(bottom: BorderSide(color: Color(0xFFFB923C))),
+      ),
+      child: Row(
+        children: [
+          Expanded(flex: 2, child: _headerCell('ORDER ID')),
+          Expanded(flex: 2, child: _headerCell('CUSTOMER')),
+          Expanded(flex: 1, child: _headerCell('SECTION')),
+          Expanded(flex: 1, child: _headerCell('DATE')),
+          Expanded(flex: 1, child: _headerCell('TOTAL')),
+          Expanded(flex: 2, child: _headerCell('PICKUP STATUS')),
+          Expanded(
+            flex: 1,
+            child: Align(
+              alignment: Alignment.centerRight,
+              child: _headerCell('ACTIONS'),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _headerCell(String text) => Text(
+    text,
+    style: GoogleFonts.beVietnamPro(
+      fontSize: 11,
+      fontWeight: FontWeight.w700,
+      color: const Color(0xFF64748B),
+      letterSpacing: 0.7,
+    ),
+  );
+
+  Widget _buildOrderRow(OrderModel order, {required bool isLast}) {
+    final date = DateFormat('MMM d, yyyy').format(order.createdAt.toDate());
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+      decoration: BoxDecoration(
+        border: isLast
+            ? null
+            : const Border(bottom: BorderSide(color: Color(0xFFF1F5F9))),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            flex: 2,
+            child: Text(
+              order.orderId,
+              style: GoogleFonts.beVietnamPro(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: UpriseColors.primaryDark,
+              ),
+            ),
+          ),
+          Expanded(
+            flex: 2,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  order.customerName,
+                  style: GoogleFonts.beVietnamPro(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                    color: const Color(0xFF1A202C),
+                  ),
+                ),
+                Text(
+                  order.customerEmail,
+                  style: GoogleFonts.beVietnamPro(
+                    fontSize: 11,
+                    color: const Color(0xFF64748B),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            flex: 1,
+            child: order.section.isEmpty
+                ? Text(
+                    '—',
+                    style: GoogleFonts.beVietnamPro(
+                      fontSize: 12,
+                      color: const Color(0xFF9AA5B4),
+                    ),
+                  )
+                : Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 6,
+                      vertical: 2,
+                    ),
+                    decoration: BoxDecoration(
+                      color: UpriseColors.primaryDark.withAlpha(18),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      order.section,
+                      style: GoogleFonts.beVietnamPro(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600,
+                        color: UpriseColors.primaryDark,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+          ),
+          Expanded(
+            flex: 1,
+            child: Text(
+              date,
+              style: GoogleFonts.beVietnamPro(
+                fontSize: 12,
+                color: const Color(0xFF64748B),
+              ),
+            ),
+          ),
+          Expanded(
+            flex: 1,
+            child: Text(
+              '₱${NumberFormat('#,###.00').format(order.total)}',
+              style: GoogleFonts.beVietnamPro(
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                color: UpriseColors.primaryDark,
+              ),
+            ),
+          ),
+          Expanded(flex: 2, child: _pickupStatusBadge(order.pickupStatus)),
+          Expanded(
+            flex: 1,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                _ActionIconButton(
+                  icon: Icons.visibility_outlined,
+                  tooltip: 'View Details',
+                  onTap: () => showDialog(
+                    context: context,
+                    builder: (_) => _OrderDetailsModal(order: order),
+                  ),
+                ),
+                PopupMenuButton<String>(
+                  icon: const Icon(
+                    Icons.more_vert,
+                    size: 16,
+                    color: Color(0xFF64748B),
+                  ),
+                  tooltip: 'Update Pickup Status',
+                  onSelected: (value) =>
+                      _updateOrderPickupStatus(order.id, value),
+                  itemBuilder: (_) => [
+                    PopupMenuItem(
+                      value: 'Pending',
+                      child: Text(
+                        'Pending',
+                        style: GoogleFonts.beVietnamPro(fontSize: 13),
+                      ),
+                    ),
+                    PopupMenuItem(
+                      value: 'Ready for Pickup',
+                      child: Text(
+                        'Ready for Pickup',
+                        style: GoogleFonts.beVietnamPro(fontSize: 13),
+                      ),
+                    ),
+                    PopupMenuItem(
+                      value: 'Claimed',
+                      child: Text(
+                        'Claimed',
+                        style: GoogleFonts.beVietnamPro(fontSize: 13),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _pickupStatusBadge(String status) {
+    final Color bg, fg;
+    final String label;
+    switch (status) {
+      case 'Ready for Pickup':
+        bg = const Color(0xFFEFF6FF);
+        fg = const Color(0xFF2563EB);
+        label = 'READY';
+        break;
+      case 'Claimed':
+        bg = const Color(0xFFECFDF5);
+        fg = const Color(0xFF059669);
+        label = 'CLAIMED';
+        break;
+      default:
+        bg = const Color(0xFFFFFBEB);
+        fg = const Color(0xFFFB923C);
+        label = 'PENDING';
+    }
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(_DS.radiusPill),
+      ),
+      child: Text(
+        label,
+        style: GoogleFonts.beVietnamPro(
+          fontSize: 10,
+          fontWeight: FontWeight.w700,
+          color: fg,
+          letterSpacing: 0.6,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFooter(int total, int totalPages, int start, int end) {
+    const int maxVisible = 5;
+    int firstPage = (_currentPage - maxVisible ~/ 2).clamp(1, totalPages);
+    int lastPage = (firstPage + maxVisible - 1).clamp(1, totalPages);
+    if (lastPage - firstPage + 1 < maxVisible && firstPage > 1) {
+      firstPage = (lastPage - maxVisible + 1).clamp(1, totalPages);
+    }
+    final pages = List.generate(lastPage - firstPage + 1, (i) => firstPage + i);
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+      decoration: const BoxDecoration(
+        border: Border(top: BorderSide(color: Color(0xFFE8ECF0))),
+        color: Color(0xFFF8F9FB),
+        borderRadius: BorderRadius.vertical(bottom: Radius.circular(14)),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            'Showing ${total == 0 ? 0 : start + 1}–$end of $total orders',
+            style: GoogleFonts.beVietnamPro(
+              fontSize: 12,
+              color: const Color(0xFF64748B),
+            ),
+          ),
+          Row(
+            children: [
+              _PageButton(
+                icon: Icons.chevron_left_rounded,
+                enabled: _currentPage > 1,
+                onTap: () => setState(() => _currentPage--),
+              ),
+              const SizedBox(width: 4),
+              ...pages.map(
+                (p) => _PageNumButton(
+                  page: p,
+                  isActive: p == _currentPage,
+                  onTap: () => setState(() => _currentPage = p),
+                ),
+              ),
+              if (lastPage < totalPages) ...[
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  child: Text(
+                    '…',
+                    style: GoogleFonts.beVietnamPro(
+                      color: const Color(0xFF64748B),
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
+                _PageNumButton(
+                  page: totalPages,
+                  isActive: _currentPage == totalPages,
+                  onTap: () => setState(() => _currentPage = totalPages),
+                ),
+              ],
+              const SizedBox(width: 4),
+              _PageButton(
+                icon: Icons.chevron_right_rounded,
+                enabled: _currentPage < totalPages,
+                onTap: () => setState(() => _currentPage++),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEmptyState(IconData icon, String message, String subtitle) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            width: 80,
+            height: 80,
+            decoration: BoxDecoration(
+              color: const Color(0xFFF1F5F9),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Icon(icon, size: 40, color: const Color(0xFF9AA5B4)),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            message,
+            style: GoogleFonts.beVietnamPro(
+              fontSize: 15,
+              fontWeight: FontWeight.w600,
+              color: const Color(0xFF374151),
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            subtitle,
+            style: GoogleFonts.beVietnamPro(
+              fontSize: 13,
+              color: const Color(0xFF64748B),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Reusable widgets
+// ─────────────────────────────────────────────────────────────────────────────
+class _FilterDropdown extends StatelessWidget {
+  final String value;
+  final List<String> items;
+  final String hint;
+  final IconData icon;
+  final ValueChanged<String?> onChanged;
+
+  const _FilterDropdown({
+    required this.value,
+    required this.items,
+    required this.hint,
+    required this.icon,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 40,
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: const Color(0xFFE2E6EA)),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String>(
+          value: value,
+          icon: const Icon(
+            Icons.keyboard_arrow_down_rounded,
+            size: 18,
+            color: Color(0xFF9AA5B4),
+          ),
+          style: GoogleFonts.beVietnamPro(
+            fontSize: 13,
+            color: const Color(0xFF374151),
+          ),
+          items: items
+              .map(
+                (s) => DropdownMenuItem(
+                  value: s,
+                  child: Text(s, style: GoogleFonts.beVietnamPro(fontSize: 13)),
+                ),
+              )
+              .toList(),
+          onChanged: onChanged,
+        ),
+      ),
+    );
+  }
+}
+
+class _ActionIconButton extends StatelessWidget {
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback? onTap;
+  final Color? color;
+  const _ActionIconButton({
+    required this.icon,
+    required this.tooltip,
+    required this.onTap,
+    this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(6),
+        child: Padding(
+          padding: const EdgeInsets.all(5),
+          child: Icon(
+            icon,
+            size: 16,
+            color: onTap == null
+                ? const Color(0xFFD1D5DB)
+                : (color ?? const Color(0xFF64748B)),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PageButton extends StatelessWidget {
+  final IconData icon;
+  final bool enabled;
+  final VoidCallback onTap;
+  const _PageButton({
+    required this.icon,
+    required this.enabled,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: enabled ? onTap : null,
+      borderRadius: BorderRadius.circular(6),
+      child: Padding(
+        padding: const EdgeInsets.all(4),
+        child: Icon(
+          icon,
+          size: 20,
+          color: enabled ? const Color(0xFF374151) : const Color(0xFFD1D5DB),
+        ),
+      ),
+    );
+  }
+}
+
+class _PageNumButton extends StatelessWidget {
+  final int page;
+  final bool isActive;
+  final VoidCallback onTap;
+  const _PageNumButton({
+    required this.page,
+    required this.isActive,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 2),
+        width: 28,
+        height: 28,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: isActive ? UpriseColors.primaryDark : Colors.transparent,
+          borderRadius: BorderRadius.circular(6),
+        ),
+        child: Text(
+          '$page',
+          style: GoogleFonts.beVietnamPro(
+            fontSize: 12,
+            fontWeight: isActive ? FontWeight.w700 : FontWeight.normal,
+            color: isActive ? Colors.white : const Color(0xFF374151),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ============================================================
+// ORDER DETAILS MODAL
 // ============================================================
 class _OrderDetailsModal extends StatelessWidget {
   final OrderModel order;
@@ -2655,106 +4181,211 @@ class _OrderDetailsModal extends StatelessWidget {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
       child: Container(
         width: 520,
-        constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.85),
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(context).size.height * 0.85,
+        ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // Header
             Container(
               padding: const EdgeInsets.fromLTRB(24, 20, 20, 20),
               decoration: const BoxDecoration(
                 color: Color(0xFFF8F9FB),
                 borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
               ),
-              child: Row(children: [
-                Container(width: 38, height: 38, decoration: BoxDecoration(color: UpriseColors.primaryDark.withAlpha(26), borderRadius: BorderRadius.circular(10)),
-                    child: const Icon(Icons.receipt_outlined, size: 18, color: UpriseColors.primaryDark)),
-                const SizedBox(width: 14),
-                Expanded(child: Text('Order Details', style: GoogleFonts.beVietnamPro(fontSize: 16, fontWeight: FontWeight.w700))),
-                IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.close_rounded, size: 20, color: Color(0xFF64748B))),
-              ]),
+              child: Row(
+                children: [
+                  Container(
+                    width: 38,
+                    height: 38,
+                    decoration: BoxDecoration(
+                      color: UpriseColors.primaryDark.withAlpha(26),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(
+                      Icons.receipt_outlined,
+                      size: 18,
+                      color: UpriseColors.primaryDark,
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Text(
+                      'Order Details',
+                      style: GoogleFonts.beVietnamPro(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () => Navigator.pop(context),
+                    icon: const Icon(
+                      Icons.close_rounded,
+                      size: 20,
+                      color: Color(0xFF64748B),
+                    ),
+                  ),
+                ],
+              ),
             ),
-            // Body
             Expanded(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.all(24),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Order ID: ${order.orderId}', style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF64748B))),
+                    Text(
+                      'Order ID: ${order.orderId}',
+                      style: GoogleFonts.beVietnamPro(
+                        fontSize: 12,
+                        color: const Color(0xFF64748B),
+                      ),
+                    ),
                     const SizedBox(height: 16),
                     _sectionTitle('Customer Information'),
                     const SizedBox(height: 8),
                     _infoRow(Icons.person_outline, order.customerName),
                     _infoRow(Icons.email_outlined, order.customerEmail),
                     _infoRow(Icons.phone_outlined, order.customerPhone),
-                    if (order.customerAddress.isNotEmpty) _infoRow(Icons.location_on_outlined, order.customerAddress),
+                    if (order.customerAddress.isNotEmpty)
+                      _infoRow(
+                        Icons.location_on_outlined,
+                        order.customerAddress,
+                      ),
                     const SizedBox(height: 16),
                     _sectionTitle('Order Items'),
                     const SizedBox(height: 8),
-                    ...order.items.map((item) => Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 6),
-                          child: Row(
-                            children: [
-                              Container(width: 40, height: 40, decoration: BoxDecoration(color: UpriseColors.primaryDark.withAlpha(20), borderRadius: BorderRadius.circular(8)),
-                                  child: const Icon(Icons.shopping_bag_outlined, size: 20, color: UpriseColors.primaryDark)),
-                              const SizedBox(width: 10),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(item.name, style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600)),
-                                    Text('₱${NumberFormat('#,###').format(item.price)} each', style: GoogleFonts.beVietnamPro(fontSize: 11, color: const Color(0xFF64748B))),
-                                  ],
-                                ),
+                    ...order.items.map(
+                      (item) => Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 6),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 40,
+                              height: 40,
+                              decoration: BoxDecoration(
+                                color: UpriseColors.primaryDark.withAlpha(20),
+                                borderRadius: BorderRadius.circular(8),
                               ),
-                              Column(
-                                crossAxisAlignment: CrossAxisAlignment.end,
+                              child: const Icon(
+                                Icons.shopping_bag_outlined,
+                                size: 20,
+                                color: UpriseColors.primaryDark,
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text('Qty: ${item.quantity}', style: GoogleFonts.beVietnamPro(fontSize: 11, color: const Color(0xFF64748B))),
-                                  Text('₱${NumberFormat('#,###.00').format(item.totalPrice)}',
-                                      style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w700, color: UpriseColors.primaryDark)),
+                                  Text(
+                                    item.name,
+                                    style: GoogleFonts.beVietnamPro(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                  Text(
+                                    '₱${NumberFormat('#,###').format(item.price)} each',
+                                    style: GoogleFonts.beVietnamPro(
+                                      fontSize: 11,
+                                      color: const Color(0xFF64748B),
+                                    ),
+                                  ),
                                 ],
                               ),
-                            ],
-                          ),
-                        )),
+                            ),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                Text(
+                                  'Qty: ${item.quantity}',
+                                  style: GoogleFonts.beVietnamPro(
+                                    fontSize: 11,
+                                    color: const Color(0xFF64748B),
+                                  ),
+                                ),
+                                Text(
+                                  '₱${NumberFormat('#,###.00').format(item.totalPrice)}',
+                                  style: GoogleFonts.beVietnamPro(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w700,
+                                    color: UpriseColors.primaryDark,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
                     const SizedBox(height: 16),
                     _sectionTitle('Order Summary'),
                     const SizedBox(height: 8),
                     Container(
                       padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(color: const Color(0xFFF8F9FB), borderRadius: BorderRadius.circular(8), border: Border.all(color: const Color(0xFFE2E6EA))),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF8F9FB),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: const Color(0xFFE2E6EA)),
+                      ),
                       child: Column(
                         children: [
-                          _summaryLine('Subtotal', '₱${NumberFormat('#,###.00').format(order.total)}'),
+                          _summaryLine(
+                            'Subtotal',
+                            '₱${NumberFormat('#,###.00').format(order.total)}',
+                          ),
                           const SizedBox(height: 4),
                           _summaryLine('Payment Method', order.paymentMethod),
-                          Padding(padding: const EdgeInsets.symmetric(vertical: 8), child: Divider(color: const Color(0xFFE2E6EA), height: 1)),
-                          _summaryLine('Total Amount', '₱${NumberFormat('#,###.00').format(order.total)}', bold: true, valueColor: UpriseColors.primaryDark),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 8),
+                            child: Divider(
+                              color: const Color(0xFFE2E6EA),
+                              height: 1,
+                            ),
+                          ),
+                          _summaryLine(
+                            'Total Amount',
+                            '₱${NumberFormat('#,###.00').format(order.total)}',
+                            bold: true,
+                            valueColor: UpriseColors.primaryDark,
+                          ),
                         ],
                       ),
                     ),
                     const SizedBox(height: 12),
                     _sectionTitle('Order Timeline'),
                     const SizedBox(height: 8),
-                    Row(children: [
-                      const Icon(Icons.schedule, size: 14, color: Color(0xFF64748B)),
-                      const SizedBox(width: 6),
-                      Text('Order placed: ${DateFormat('MMM d, yyyy h:mm a').format(order.createdAt.toDate())}',
-                          style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF64748B))),
-                    ]),
+                    Row(
+                      children: [
+                        const Icon(
+                          Icons.schedule,
+                          size: 14,
+                          color: Color(0xFF64748B),
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          'Order placed: ${DateFormat('MMM d, yyyy h:mm a').format(order.createdAt.toDate())}',
+                          style: GoogleFonts.beVietnamPro(
+                            fontSize: 12,
+                            color: const Color(0xFF64748B),
+                          ),
+                        ),
+                      ],
+                    ),
                   ],
                 ),
               ),
             ),
-            // Footer
             Container(
               padding: const EdgeInsets.fromLTRB(24, 12, 24, 20),
               decoration: const BoxDecoration(
                 border: Border(top: BorderSide(color: Color(0xFFE8ECF0))),
                 color: Color(0xFFF8F9FB),
-                borderRadius: BorderRadius.vertical(bottom: Radius.circular(18)),
+                borderRadius: BorderRadius.vertical(
+                  bottom: Radius.circular(18),
+                ),
               ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.end,
@@ -2763,10 +4394,18 @@ class _OrderDetailsModal extends StatelessWidget {
                     onPressed: () => Navigator.pop(context),
                     style: OutlinedButton.styleFrom(
                       side: const BorderSide(color: Color(0xFFE2E6EA)),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 11),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 18,
+                        vertical: 11,
+                      ),
                     ),
-                    child: Text('Close', style: GoogleFonts.beVietnamPro(fontSize: 13)),
+                    child: Text(
+                      'Close',
+                      style: GoogleFonts.beVietnamPro(fontSize: 13),
+                    ),
                   ),
                 ],
               ),
@@ -2777,22 +4416,55 @@ class _OrderDetailsModal extends StatelessWidget {
     );
   }
 
-  Widget _sectionTitle(String text) => Text(text, style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w700, color: const Color(0xFF1A202C)));
+  Widget _sectionTitle(String text) => Text(
+    text,
+    style: GoogleFonts.beVietnamPro(
+      fontSize: 13,
+      fontWeight: FontWeight.w700,
+      color: const Color(0xFF1A202C),
+    ),
+  );
   Widget _infoRow(IconData icon, String text) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 3),
-        child: Row(children: [Icon(icon, size: 14, color: const Color(0xFF64748B)), const SizedBox(width: 6), Expanded(child: Text(text, style: GoogleFonts.beVietnamPro(fontSize: 12)))]),
-      );
-  Widget _summaryLine(String label, String value, {bool bold = false, Color? valueColor}) => Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(label, style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: bold ? FontWeight.w700 : FontWeight.normal)),
-          Text(value, style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: bold ? FontWeight.w700 : FontWeight.w500, color: valueColor)),
-        ],
-      );
+    padding: const EdgeInsets.symmetric(vertical: 3),
+    child: Row(
+      children: [
+        Icon(icon, size: 14, color: const Color(0xFF64748B)),
+        const SizedBox(width: 6),
+        Expanded(
+          child: Text(text, style: GoogleFonts.beVietnamPro(fontSize: 12)),
+        ),
+      ],
+    ),
+  );
+  Widget _summaryLine(
+    String label,
+    String value, {
+    bool bold = false,
+    Color? valueColor,
+  }) => Row(
+    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    children: [
+      Text(
+        label,
+        style: GoogleFonts.beVietnamPro(
+          fontSize: 12,
+          fontWeight: bold ? FontWeight.w700 : FontWeight.normal,
+        ),
+      ),
+      Text(
+        value,
+        style: GoogleFonts.beVietnamPro(
+          fontSize: 12,
+          fontWeight: bold ? FontWeight.w700 : FontWeight.w500,
+          color: valueColor,
+        ),
+      ),
+    ],
+  );
 }
 
 // ============================================================
-// SALES REPORT MODAL (unchanged)
+// SALES REPORT MODAL
 // ============================================================
 class _SalesReportModal extends StatelessWidget {
   final String orgId;
@@ -2801,17 +4473,24 @@ class _SalesReportModal extends StatelessWidget {
   void _exportReport(BuildContext context, List<OrderModel> orders) {
     final buf = StringBuffer();
     buf.writeln('MERCHANDISE SALES REPORT');
-    buf.writeln('Generated: ${DateFormat('MMM dd, yyyy HH:mm').format(DateTime.now())}\n');
+    buf.writeln(
+      'Generated: ${DateFormat('MMM dd, yyyy HH:mm').format(DateTime.now())}\n',
+    );
     buf.writeln('Order ID,Customer,Total,Status,Date,Bundle ID');
     for (final o in orders) {
       final date = DateFormat('MM/dd/yyyy').format(o.createdAt.toDate());
-      buf.writeln('"${o.orderId}","${o.customerName}","${o.total.toStringAsFixed(2)}","${o.status}","$date","${o.bundleId}"');
+      buf.writeln(
+        '"${o.orderId}","${o.customerName}","${o.total.toStringAsFixed(2)}","${o.status}","$date","${o.bundleId}"',
+      );
     }
     final bytes = utf8.encode(buf.toString());
     final blob = html.Blob([bytes], 'text/csv');
     final url = html.Url.createObjectUrlFromBlob(blob);
     html.AnchorElement(href: url)
-      ..setAttribute('download', 'sales_report_${DateFormat('yyyyMMdd').format(DateTime.now())}.csv')
+      ..setAttribute(
+        'download',
+        'sales_report_${DateFormat('yyyyMMdd').format(DateTime.now())}.csv',
+      )
       ..click();
     html.Url.revokeObjectUrl(url);
   }
@@ -2822,9 +4501,14 @@ class _SalesReportModal extends StatelessWidget {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
       child: Container(
         width: 720,
-        constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.85),
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(context).size.height * 0.85,
+        ),
         child: StreamBuilder<QuerySnapshot>(
-          stream: FirebaseFirestore.instance.collection('products').where('orgId', isEqualTo: orgId).snapshots(),
+          stream: FirebaseFirestore.instance
+              .collection('products')
+              .where('orgId', isEqualTo: orgId)
+              .snapshots(),
           builder: (context, productSnap) {
             final Map<String, double> costByProductId = {};
             for (final doc in productSnap.data?.docs ?? []) {
@@ -2832,9 +4516,17 @@ class _SalesReportModal extends StatelessWidget {
               costByProductId[doc.id] = (d['costPrice'] ?? 0).toDouble();
             }
             return StreamBuilder<QuerySnapshot>(
-              stream: FirebaseFirestore.instance.collection('orders').where('orgId', isEqualTo: orgId).orderBy('createdAt', descending: true).snapshots(),
+              stream: FirebaseFirestore.instance
+                  .collection('orders')
+                  .where('orgId', isEqualTo: orgId)
+                  .orderBy('createdAt', descending: true)
+                  .snapshots(),
               builder: (context, snapshot) {
-                final orders = snapshot.hasData ? snapshot.data!.docs.map((d) => OrderModel.fromFirestore(d)).toList() : <OrderModel>[];
+                final orders = snapshot.hasData
+                    ? snapshot.data!.docs
+                          .map((d) => OrderModel.fromFirestore(d))
+                          .toList()
+                    : <OrderModel>[];
 
                 double totalRevenue = 0;
                 int completed = 0, processing = 0;
@@ -2857,47 +4549,88 @@ class _SalesReportModal extends StatelessWidget {
                 double totalProfit = 0;
                 for (final o in orders) {
                   for (final item in o.items) {
-                    unitsSold[item.name] = (unitsSold[item.name] ?? 0) + item.quantity;
-                    revByProduct[item.name] = (revByProduct[item.name] ?? 0) + item.totalPrice;
+                    unitsSold[item.name] =
+                        (unitsSold[item.name] ?? 0) + item.quantity;
+                    revByProduct[item.name] =
+                        (revByProduct[item.name] ?? 0) + item.totalPrice;
                     final cost = costByProductId[item.productId] ?? 0;
                     final itemProfit = (item.price - cost) * item.quantity;
-                    profitByProduct[item.name] = (profitByProduct[item.name] ?? 0) + itemProfit;
+                    profitByProduct[item.name] =
+                        (profitByProduct[item.name] ?? 0) + itemProfit;
                     totalProfit += itemProfit;
                   }
                 }
-                final top5 = (unitsSold.entries.toList()..sort((a, b) => b.value.compareTo(a.value))).take(5).toList();
+                final top5 =
+                    (unitsSold.entries.toList()
+                          ..sort((a, b) => b.value.compareTo(a.value)))
+                        .take(5)
+                        .toList();
 
                 return Column(
                   children: [
-                    // Header
                     Container(
                       padding: const EdgeInsets.fromLTRB(24, 20, 20, 20),
                       decoration: const BoxDecoration(
                         color: Color(0xFFF8F9FB),
-                        borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
-                      ),
-                      child: Row(children: [
-                        Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                          Text('Sales Report', style: GoogleFonts.beVietnamPro(fontSize: 16, fontWeight: FontWeight.w700)),
-                          Text('Merchandise Performance', style: GoogleFonts.beVietnamPro(fontSize: 11, color: const Color(0xFF64748B))),
-                        ]),
-                        const Spacer(),
-                        OutlinedButton.icon(
-                          onPressed: orders.isEmpty ? null : () => _exportReport(context, orders),
-                          icon: const Icon(Icons.download_outlined, size: 15),
-                          label: Text('Export CSV', style: GoogleFonts.beVietnamPro(fontSize: 12)),
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: UpriseColors.primaryDark,
-                            side: BorderSide(color: UpriseColors.primaryDark),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                          ),
+                        borderRadius: BorderRadius.vertical(
+                          top: Radius.circular(18),
                         ),
-                        const SizedBox(width: 8),
-                        IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.close_rounded, size: 20, color: Color(0xFF64748B))),
-                      ]),
+                      ),
+                      child: Row(
+                        children: [
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Sales Report',
+                                style: GoogleFonts.beVietnamPro(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              Text(
+                                'Merchandise Performance',
+                                style: GoogleFonts.beVietnamPro(
+                                  fontSize: 11,
+                                  color: const Color(0xFF64748B),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const Spacer(),
+                          OutlinedButton.icon(
+                            onPressed: orders.isEmpty
+                                ? null
+                                : () => _exportReport(context, orders),
+                            icon: const Icon(Icons.download_outlined, size: 15),
+                            label: Text(
+                              'Export CSV',
+                              style: GoogleFonts.beVietnamPro(fontSize: 12),
+                            ),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: UpriseColors.primaryDark,
+                              side: BorderSide(color: UpriseColors.primaryDark),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 8,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          IconButton(
+                            onPressed: () => Navigator.pop(context),
+                            icon: const Icon(
+                              Icons.close_rounded,
+                              size: 20,
+                              color: Color(0xFF64748B),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                    // Body
                     Expanded(
                       child: SingleChildScrollView(
                         padding: const EdgeInsets.all(24),
@@ -2906,96 +4639,252 @@ class _SalesReportModal extends StatelessWidget {
                           children: [
                             _sectionTitle('Overview'),
                             const SizedBox(height: 10),
-                            Row(children: [
-                              _miniStatCard('Total Sales', orders.length.toString(), UpriseColors.info),
-                              const SizedBox(width: 10),
-                              _miniStatCard('Total Revenue', '₱${NumberFormat('#,###').format(totalRevenue)}', UpriseColors.primaryDark, highlight: true),
-                              const SizedBox(width: 10),
-                              _miniStatCard('Total Profit', '₱${NumberFormat('#,###').format(totalProfit)}', UpriseColors.success, highlight: true),
-                              const SizedBox(width: 10),
-                              _miniStatCard('Completed', completed.toString(), UpriseColors.success),
-                              const SizedBox(width: 10),
-                              _miniStatCard('Processing', processing.toString(), UpriseColors.warning),
-                            ]),
-                        const SizedBox(height: 20),
-                        _sectionTitle('Monthly Revenue'),
-                        const SizedBox(height: 12),
-                        SizedBox(
-                          height: 180,
-                          child: months.isEmpty
-                              ? Center(child: Text('No data yet', style: GoogleFonts.beVietnamPro(color: const Color(0xFF64748B))))
-                              : BarChart(BarChartData(
-                                  alignment: BarChartAlignment.spaceAround,
-                                  maxY: monthly.values.reduce((a, b) => a > b ? a : b) * 1.2,
-                                  barGroups: months.asMap().entries.map((e) => BarChartGroupData(
-                                        x: e.key,
-                                        barRods: [BarChartRodData(toY: monthly[e.value] ?? 0, color: UpriseColors.primaryDark, width: 20, borderRadius: const BorderRadius.vertical(top: Radius.circular(4)))],
-                                      )).toList(),
-                                  titlesData: FlTitlesData(
-                                    bottomTitles: AxisTitles(
-                                      sideTitles: SideTitles(
-                                        showTitles: true,
-                                        getTitlesWidget: (v, m) {
-                                          final i = v.toInt();
-                                          if (i >= 0 && i < months.length) return Text(DateFormat('MMM').format(DateTime.parse('${months[i]}-01')), style: GoogleFonts.beVietnamPro(fontSize: 10));
-                                          return const Text('');
-                                        },
+                            Row(
+                              children: [
+                                _miniStatCard(
+                                  'Total Sales',
+                                  orders.length.toString(),
+                                  UpriseColors.info,
+                                ),
+                                const SizedBox(width: 10),
+                                _miniStatCard(
+                                  'Total Revenue',
+                                  '₱${NumberFormat('#,###').format(totalRevenue)}',
+                                  UpriseColors.primaryDark,
+                                  highlight: true,
+                                ),
+                                const SizedBox(width: 10),
+                                _miniStatCard(
+                                  'Total Profit',
+                                  '₱${NumberFormat('#,###').format(totalProfit)}',
+                                  UpriseColors.success,
+                                  highlight: true,
+                                ),
+                                const SizedBox(width: 10),
+                                _miniStatCard(
+                                  'Completed',
+                                  completed.toString(),
+                                  UpriseColors.success,
+                                ),
+                                const SizedBox(width: 10),
+                                _miniStatCard(
+                                  'Processing',
+                                  processing.toString(),
+                                  UpriseColors.warning,
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 20),
+                            _sectionTitle('Monthly Revenue'),
+                            const SizedBox(height: 12),
+                            SizedBox(
+                              height: 180,
+                              child: months.isEmpty
+                                  ? Center(
+                                      child: Text(
+                                        'No data yet',
+                                        style: GoogleFonts.beVietnamPro(
+                                          color: const Color(0xFF64748B),
+                                        ),
+                                      ),
+                                    )
+                                  : BarChart(
+                                      BarChartData(
+                                        alignment:
+                                            BarChartAlignment.spaceAround,
+                                        maxY:
+                                            monthly.values.reduce(
+                                              (a, b) => a > b ? a : b,
+                                            ) *
+                                            1.2,
+                                        barGroups: months
+                                            .asMap()
+                                            .entries
+                                            .map(
+                                              (e) => BarChartGroupData(
+                                                x: e.key,
+                                                barRods: [
+                                                  BarChartRodData(
+                                                    toY: monthly[e.value] ?? 0,
+                                                    color: UpriseColors
+                                                        .primaryDark,
+                                                    width: 20,
+                                                    borderRadius:
+                                                        const BorderRadius.vertical(
+                                                          top: Radius.circular(
+                                                            4,
+                                                          ),
+                                                        ),
+                                                  ),
+                                                ],
+                                              ),
+                                            )
+                                            .toList(),
+                                        titlesData: FlTitlesData(
+                                          bottomTitles: AxisTitles(
+                                            sideTitles: SideTitles(
+                                              showTitles: true,
+                                              getTitlesWidget: (v, m) {
+                                                final i = v.toInt();
+                                                if (i >= 0 && i < months.length)
+                                                  return Text(
+                                                    DateFormat('MMM').format(
+                                                      DateTime.parse(
+                                                        '${months[i]}-01',
+                                                      ),
+                                                    ),
+                                                    style:
+                                                        GoogleFonts.beVietnamPro(
+                                                          fontSize: 10,
+                                                        ),
+                                                  );
+                                                return const Text('');
+                                              },
+                                            ),
+                                          ),
+                                          leftTitles: AxisTitles(
+                                            sideTitles: SideTitles(
+                                              showTitles: true,
+                                              reservedSize: 48,
+                                              getTitlesWidget: (v, m) => Text(
+                                                '₱${NumberFormat.compact().format(v)}',
+                                                style: GoogleFonts.beVietnamPro(
+                                                  fontSize: 9,
+                                                  color: const Color(
+                                                    0xFF64748B,
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                          topTitles: const AxisTitles(
+                                            sideTitles: SideTitles(
+                                              showTitles: false,
+                                            ),
+                                          ),
+                                          rightTitles: const AxisTitles(
+                                            sideTitles: SideTitles(
+                                              showTitles: false,
+                                            ),
+                                          ),
+                                        ),
+                                        gridData: FlGridData(
+                                          show: true,
+                                          drawVerticalLine: false,
+                                          getDrawingHorizontalLine: (v) =>
+                                              FlLine(
+                                                color: const Color(0xFFE2E6EA),
+                                                strokeWidth: 0.8,
+                                              ),
+                                        ),
+                                        borderData: FlBorderData(show: false),
                                       ),
                                     ),
-                                    leftTitles: AxisTitles(
-                                      sideTitles: SideTitles(
-                                        showTitles: true,
-                                        reservedSize: 48,
-                                        getTitlesWidget: (v, m) => Text('₱${NumberFormat.compact().format(v)}', style: GoogleFonts.beVietnamPro(fontSize: 9, color: const Color(0xFF64748B))),
-                                      ),
-                                    ),
-                                    topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                                    rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                                  ),
-                                  gridData: FlGridData(show: true, drawVerticalLine: false, getDrawingHorizontalLine: (v) => FlLine(color: const Color(0xFFE2E6EA), strokeWidth: 0.8)),
-                                  borderData: FlBorderData(show: false),
-                                )),
-                        ),
-                        const SizedBox(height: 20),
-                        _sectionTitle('Popular Items'),
-                        const SizedBox(height: 10),
+                            ),
+                            const SizedBox(height: 20),
+                            _sectionTitle('Popular Items'),
+                            const SizedBox(height: 10),
                             if (top5.isEmpty)
-                              Text('No product sales yet', style: GoogleFonts.beVietnamPro(color: const Color(0xFF64748B), fontSize: 12))
+                              Text(
+                                'No product sales yet',
+                                style: GoogleFonts.beVietnamPro(
+                                  color: const Color(0xFF64748B),
+                                  fontSize: 12,
+                                ),
+                              )
                             else
                               ...top5.map((entry) {
                                 final rev = revByProduct[entry.key] ?? 0;
                                 final profit = profitByProduct[entry.key] ?? 0;
                                 return Padding(
-                                  padding: const EdgeInsets.symmetric(vertical: 6),
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 6,
+                                  ),
                                   child: Row(
                                     children: [
-                                      Container(width: 36, height: 36, decoration: BoxDecoration(color: UpriseColors.primaryDark.withAlpha(20), borderRadius: BorderRadius.circular(8)),
-                                          child: const Icon(Icons.shopping_bag_outlined, size: 18, color: UpriseColors.primaryDark)),
+                                      Container(
+                                        width: 36,
+                                        height: 36,
+                                        decoration: BoxDecoration(
+                                          color: UpriseColors.primaryDark
+                                              .withAlpha(20),
+                                          borderRadius: BorderRadius.circular(
+                                            8,
+                                          ),
+                                        ),
+                                        child: const Icon(
+                                          Icons.shopping_bag_outlined,
+                                          size: 18,
+                                          color: UpriseColors.primaryDark,
+                                        ),
+                                      ),
                                       const SizedBox(width: 10),
                                       Expanded(
                                         child: Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
                                           children: [
-                                            Text(entry.key, style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600)),
-                                            Text('${entry.value} units sold', style: GoogleFonts.beVietnamPro(fontSize: 11, color: const Color(0xFF64748B))),
+                                            Text(
+                                              entry.key,
+                                              style: GoogleFonts.beVietnamPro(
+                                                fontSize: 13,
+                                                fontWeight: FontWeight.w600,
+                                              ),
+                                            ),
+                                            Text(
+                                              '${entry.value} units sold',
+                                              style: GoogleFonts.beVietnamPro(
+                                                fontSize: 11,
+                                                color: const Color(0xFF64748B),
+                                              ),
+                                            ),
                                           ],
                                         ),
                                       ),
                                       Column(
-                                        crossAxisAlignment: CrossAxisAlignment.end,
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.end,
                                         children: [
                                           Container(
-                                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-                                            decoration: BoxDecoration(color: UpriseColors.primaryDark.withAlpha(20), borderRadius: BorderRadius.circular(20)),
-                                            child: Text('₱${NumberFormat('#,###').format(rev)}',
-                                                style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.w700, color: UpriseColors.primaryDark)),
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 10,
+                                              vertical: 3,
+                                            ),
+                                            decoration: BoxDecoration(
+                                              color: UpriseColors.primaryDark
+                                                  .withAlpha(20),
+                                              borderRadius:
+                                                  BorderRadius.circular(20),
+                                            ),
+                                            child: Text(
+                                              '₱${NumberFormat('#,###').format(rev)}',
+                                              style: GoogleFonts.beVietnamPro(
+                                                fontSize: 12,
+                                                fontWeight: FontWeight.w700,
+                                                color: UpriseColors.primaryDark,
+                                              ),
+                                            ),
                                           ),
                                           const SizedBox(height: 3),
                                           Container(
-                                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-                                            decoration: BoxDecoration(color: UpriseColors.success.withAlpha(26), borderRadius: BorderRadius.circular(20)),
-                                            child: Text('Profit ₱${NumberFormat('#,###').format(profit)}',
-                                                style: GoogleFonts.beVietnamPro(fontSize: 11, fontWeight: FontWeight.w700, color: UpriseColors.success)),
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 10,
+                                              vertical: 3,
+                                            ),
+                                            decoration: BoxDecoration(
+                                              color: UpriseColors.success
+                                                  .withAlpha(26),
+                                              borderRadius:
+                                                  BorderRadius.circular(20),
+                                            ),
+                                            child: Text(
+                                              'Profit ₱${NumberFormat('#,###').format(profit)}',
+                                              style: GoogleFonts.beVietnamPro(
+                                                fontSize: 11,
+                                                fontWeight: FontWeight.w700,
+                                                color: UpriseColors.success,
+                                              ),
+                                            ),
                                           ),
                                         ],
                                       ),
@@ -3007,27 +4896,44 @@ class _SalesReportModal extends StatelessWidget {
                         ),
                       ),
                     ),
-                    // Footer
                     Container(
                       padding: const EdgeInsets.fromLTRB(24, 12, 24, 20),
                       decoration: const BoxDecoration(
-                        border: Border(top: BorderSide(color: Color(0xFFE8ECF0))),
-                        color: Color(0xFFF8F9FB),
-                        borderRadius: BorderRadius.vertical(bottom: Radius.circular(18)),
-                      ),
-                      child: Row(mainAxisAlignment: MainAxisAlignment.end, children: [
-                        ElevatedButton(
-                          onPressed: () => Navigator.pop(context),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: UpriseColors.primaryDark,
-                            foregroundColor: Colors.white,
-                            elevation: 0,
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                          ),
-                          child: Text('Done', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600)),
+                        border: Border(
+                          top: BorderSide(color: Color(0xFFE8ECF0)),
                         ),
-                      ]),
+                        color: Color(0xFFF8F9FB),
+                        borderRadius: BorderRadius.vertical(
+                          bottom: Radius.circular(18),
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          ElevatedButton(
+                            onPressed: () => Navigator.pop(context),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: UpriseColors.primaryDark,
+                              foregroundColor: Colors.white,
+                              elevation: 0,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 20,
+                                vertical: 10,
+                              ),
+                            ),
+                            child: Text(
+                              'Done',
+                              style: GoogleFonts.beVietnamPro(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ],
                 );
@@ -3039,22 +4945,53 @@ class _SalesReportModal extends StatelessWidget {
     );
   }
 
-  Widget _sectionTitle(String text) => Text(text, style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w700, color: const Color(0xFF1A202C)));
-  Widget _miniStatCard(String label, String value, Color color, {bool highlight = false}) => Expanded(
-        child: Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: highlight ? color.withAlpha(20) : const Color(0xFFF8F9FB),
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: highlight ? color.withAlpha(77) : const Color(0xFFE2E6EA)),
-          ),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(label, style: GoogleFonts.beVietnamPro(fontSize: 10, color: const Color(0xFF64748B), fontWeight: FontWeight.w500)),
-            const SizedBox(height: 4),
-            Text(value, style: GoogleFonts.beVietnamPro(fontSize: 18, fontWeight: FontWeight.bold, color: highlight ? color : const Color(0xFF1A202C))),
-          ]),
+  Widget _sectionTitle(String text) => Text(
+    text,
+    style: GoogleFonts.beVietnamPro(
+      fontSize: 13,
+      fontWeight: FontWeight.w700,
+      color: const Color(0xFF1A202C),
+    ),
+  );
+  Widget _miniStatCard(
+    String label,
+    String value,
+    Color color, {
+    bool highlight = false,
+  }) => Expanded(
+    child: Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: highlight ? color.withAlpha(20) : const Color(0xFFF8F9FB),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: highlight ? color.withAlpha(77) : const Color(0xFFE2E6EA),
         ),
-      );
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: GoogleFonts.beVietnamPro(
+              fontSize: 10,
+              color: const Color(0xFF64748B),
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            value,
+            style: GoogleFonts.beVietnamPro(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: highlight ? color : const Color(0xFF1A202C),
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
 }
 
 // ============================================================
@@ -3067,14 +5004,22 @@ class ProductVariant {
   final int stock;
   final double? priceOffset;
 
-  ProductVariant({required this.id, required this.size, required this.color, required this.stock, this.priceOffset});
+  ProductVariant({
+    required this.id,
+    required this.size,
+    required this.color,
+    required this.stock,
+    this.priceOffset,
+  });
 
   factory ProductVariant.fromMap(Map<String, dynamic> map) => ProductVariant(
     id: map['id'] ?? '',
     size: map['size'] ?? '',
     color: map['color'] ?? '',
     stock: ((map['stock'] ?? 0) as num).toInt(),
-    priceOffset: map['priceOffset'] != null ? (map['priceOffset'] as num).toDouble() : null,
+    priceOffset: map['priceOffset'] != null
+        ? (map['priceOffset'] as num).toDouble()
+        : null,
   );
 
   Map<String, dynamic> toMap() => {
@@ -3099,7 +5044,19 @@ class ProductModel {
   final String status;
   final List<ProductVariant> variants;
 
-  ProductModel({required this.id, required this.name, required this.description, required this.category, required this.price, this.costPrice = 0, required this.stock, required this.sold, this.imageUrl = '', this.status = 'available', this.variants = const []});
+  ProductModel({
+    required this.id,
+    required this.name,
+    required this.description,
+    required this.category,
+    required this.price,
+    this.costPrice = 0,
+    required this.stock,
+    required this.sold,
+    this.imageUrl = '',
+    this.status = 'available',
+    this.variants = const [],
+  });
 
   factory ProductModel.fromFirestore(DocumentSnapshot doc) {
     final d = doc.data() as Map<String, dynamic>;
@@ -3128,15 +5085,21 @@ class OrderItem {
   final double price;
   final double totalPrice;
 
-  OrderItem({required this.productId, required this.name, required this.quantity, required this.price, required this.totalPrice});
+  OrderItem({
+    required this.productId,
+    required this.name,
+    required this.quantity,
+    required this.price,
+    required this.totalPrice,
+  });
 
   factory OrderItem.fromMap(Map<String, dynamic> map) => OrderItem(
-        productId: map['productId'] ?? '',
-        name: map['name'] ?? '',
-        quantity: map['quantity'] ?? 0,
-        price: (map['price'] ?? 0).toDouble(),
-        totalPrice: (map['totalPrice'] ?? 0).toDouble(),
-      );
+    productId: map['productId'] ?? '',
+    name: map['name'] ?? '',
+    quantity: map['quantity'] ?? 0,
+    price: (map['price'] ?? 0).toDouble(),
+    totalPrice: (map['totalPrice'] ?? 0).toDouble(),
+  );
 }
 
 class OrderModel {
@@ -3153,8 +5116,8 @@ class OrderModel {
   final String status;
   final Timestamp createdAt;
   final String bundleId;
-  final String section;      // NEW
-  final String pickupStatus; // NEW: "Pending", "Ready for Pickup", "Claimed"
+  final String section;
+  final String pickupStatus;
 
   OrderModel({
     required this.id,
@@ -3170,8 +5133,8 @@ class OrderModel {
     required this.status,
     required this.createdAt,
     required this.bundleId,
-    this.section = '',              // NEW
-    this.pickupStatus = 'Pending',  // NEW
+    this.section = '',
+    this.pickupStatus = 'Pending',
   });
 
   factory OrderModel.fromFirestore(DocumentSnapshot doc) {
@@ -3185,14 +5148,16 @@ class OrderModel {
       customerEmail: d['customerEmail'] ?? '',
       customerPhone: d['customerPhone'] ?? '',
       customerAddress: d['customerAddress'] ?? '',
-      items: rawItems.map((i) => OrderItem.fromMap(i as Map<String, dynamic>)).toList(),
+      items: rawItems
+          .map((i) => OrderItem.fromMap(i as Map<String, dynamic>))
+          .toList(),
       total: (d['total'] ?? 0).toDouble(),
       paymentMethod: d['paymentMethod'] ?? '',
       status: d['status'] ?? 'pending',
       createdAt: d['createdAt'] as Timestamp,
       bundleId: d['bundleId'] ?? '',
-      section: d['section'] ?? '',                    // NEW
-      pickupStatus: d['pickupStatus'] ?? 'Pending',   // NEW
+      section: d['section'] ?? '',
+      pickupStatus: d['pickupStatus'] ?? 'Pending',
     );
   }
 }
