@@ -6,7 +6,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_storage/firebase_storage.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
@@ -496,10 +495,13 @@ class _OrgMerchandiseScreenState extends State<OrgMerchandiseScreen>
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (_) => _ProductModal(orgId: widget.orgId),
-    ).then((_) {
-      setState(() {});
-    });
+      builder: (_) => _ProductModal(
+        orgId: widget.orgId,
+        onProductSaved: () {
+          setState(() {});
+        },
+      ),
+    );
   }
 
   void _openSalesReport(BuildContext context) {
@@ -991,8 +993,11 @@ class _ProductsTabState extends State<_ProductsTab> {
             builder: (_) => _ProductModal(
               orgId: widget.orgId,
               existingProduct: _products[index],
+              onProductSaved: () {
+                _loadProducts(reset: true);
+              },
             ),
-          ).then((_) => _loadProducts(reset: true)),
+          ),
         );
       },
     );
@@ -1048,7 +1053,7 @@ class _ProductsTabState extends State<_ProductsTab> {
 }
 
 // ============================================================
-// PRODUCT CARD WIDGET
+// PRODUCT CARD WIDGET (with Base64 image support)
 // ============================================================
 class _ProductCard extends StatelessWidget {
   final ProductModel product;
@@ -1083,7 +1088,7 @@ class _ProductCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Image Section
+            // Image Section with Base64 support
             Expanded(
               flex: 3,
               child: ClipRRect(
@@ -1093,27 +1098,7 @@ class _ProductCard extends StatelessWidget {
                 child: Stack(
                   fit: StackFit.expand,
                   children: [
-                    product.imageUrl.isNotEmpty
-                        ? Image.network(
-                            product.imageUrl,
-                            fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) => Container(
-                              color: const Color(0xFFF8F9FB),
-                              child: const Icon(
-                                Icons.shopping_bag_outlined,
-                                size: 40,
-                                color: Color(0xFF9AA5B4),
-                              ),
-                            ),
-                          )
-                        : Container(
-                            color: const Color(0xFFF8F9FB),
-                            child: const Icon(
-                              Icons.shopping_bag_outlined,
-                              size: 40,
-                              color: Color(0xFF9AA5B4),
-                            ),
-                          ),
+                    _buildProductImage(),
                     if (isOutOfStock ||
                         isLowStock ||
                         product.status == 'discontinued')
@@ -1273,6 +1258,68 @@ class _ProductCard extends StatelessWidget {
       ),
     );
   }
+
+  Widget _buildProductImage() {
+    // Check if we have a base64 image
+    if (product.imageBase64 != null && product.imageBase64!.isNotEmpty) {
+      try {
+        return Image.memory(
+          base64Decode(product.imageBase64!),
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) => Container(
+            color: const Color(0xFFF8F9FB),
+            child: const Icon(
+              Icons.shopping_bag_outlined,
+              size: 40,
+              color: Color(0xFF9AA5B4),
+            ),
+          ),
+        );
+      } catch (_) {
+        // If base64 decode fails, fallback to network image
+        return _buildNetworkImage();
+      }
+    }
+    return _buildNetworkImage();
+  }
+
+  Widget _buildNetworkImage() {
+    if (product.imageUrl.isNotEmpty) {
+      return Image.network(
+        product.imageUrl,
+        fit: BoxFit.cover,
+        loadingBuilder: (context, child, progress) {
+          if (progress == null) return child;
+          return Container(
+            color: const Color(0xFFF8F9FB),
+            child: const Center(
+              child: SizedBox(
+                width: 24,
+                height: 24,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            ),
+          );
+        },
+        errorBuilder: (_, __, ___) => Container(
+          color: const Color(0xFFF8F9FB),
+          child: const Icon(
+            Icons.shopping_bag_outlined,
+            size: 40,
+            color: Color(0xFF9AA5B4),
+          ),
+        ),
+      );
+    }
+    return Container(
+      color: const Color(0xFFF8F9FB),
+      child: const Icon(
+        Icons.shopping_bag_outlined,
+        size: 40,
+        color: Color(0xFF9AA5B4),
+      ),
+    );
+  }
 }
 
 // ============================================================
@@ -1310,12 +1357,18 @@ class _CardActionButton extends StatelessWidget {
 }
 
 // ============================================================
-// PRODUCT MODAL (FIXED - Image Upload & Auto-close)
+// PRODUCT MODAL (with Base64 image support & auto-refresh)
 // ============================================================
 class _ProductModal extends StatefulWidget {
   final String orgId;
   final ProductModel? existingProduct;
-  const _ProductModal({required this.orgId, this.existingProduct});
+  final VoidCallback? onProductSaved;
+
+  const _ProductModal({
+    required this.orgId,
+    this.existingProduct,
+    this.onProductSaved,
+  });
 
   @override
   State<_ProductModal> createState() => _ProductModalState();
@@ -1357,6 +1410,15 @@ class _ProductModalState extends State<_ProductModal> {
       }
       _isDiscontinued = p.status == 'discontinued';
       _variants = List.from(p.variants);
+      
+      // ── LOAD EXISTING BASE64 IMAGE ──
+      if (p.imageBase64 != null && p.imageBase64!.isNotEmpty) {
+        try {
+          _imageBytes = base64Decode(p.imageBase64!);
+        } catch (_) {
+          _imageBytes = null;
+        }
+      }
     }
   }
 
@@ -1414,6 +1476,7 @@ class _ProductModalState extends State<_ProductModal> {
     try {
       final user = FirebaseAuth.instance.currentUser;
       final oldStock = _isEdit ? widget.existingProduct!.stock : 0;
+      
       final data = <String, dynamic>{
         'orgId': widget.orgId,
         'name': _nameCtrl.text.trim(),
@@ -1428,23 +1491,41 @@ class _ProductModalState extends State<_ProductModal> {
       };
 
       final productRef = _isEdit
-          ? FirebaseFirestore.instance
-                .collection('products')
-                .doc(widget.existingProduct!.id)
+          ? FirebaseFirestore.instance.collection('products').doc(widget.existingProduct!.id)
           : FirebaseFirestore.instance.collection('products').doc();
       final productId = productRef.id;
 
+      // ── SAVE IMAGE AS BASE64 (with existing image preservation) ──
       if (_imageBytes != null) {
-        if (mounted) setState(() => _uploadingImage = true);
-        data['imageUrl'] = await _uploadProductImage(productId);
+        try {
+          if (mounted) setState(() => _uploadingImage = true);
+          final base64Image = base64Encode(_imageBytes!);
+          data['imageBase64'] = base64Image;
+          data['imageFormat'] = _pickedImageName?.split('.').last ?? 'jpg';
+          if (mounted) setState(() => _uploadingImage = false);
+        } catch (e) {
+          if (mounted) {
+            setState(() {
+              _uploadingImage = false;
+              _uploadError = 'Image encoding failed: $e';
+            });
+          }
+          data['imageBase64'] = '';
+        }
+      } else if (_isEdit && widget.existingProduct?.imageBase64 != null) {
+        // Keep existing image if no new image uploaded
+        data['imageBase64'] = widget.existingProduct!.imageBase64;
+        data['imageFormat'] = widget.existingProduct!.imageFormat ?? 'jpg';
+      } else {
+        data['imageBase64'] = '';
       }
 
+      // ── SAVE PRODUCT ──
       if (_isEdit) {
         await productRef.update(data);
       } else {
         data['sold'] = 0;
         data['isArchived'] = false;
-        data['imageUrl'] ??= '';
         data['createdAt'] = FieldValue.serverTimestamp();
         data['createdBy'] = user?.uid ?? '';
         await productRef.set(data);
@@ -1453,9 +1534,7 @@ class _ProductModalState extends State<_ProductModal> {
       // ── Log writes ──────────────────────────────────────────────
       try {
         if (stock != oldStock || !_isEdit) {
-          final reason = !_isEdit
-              ? 'initial'
-              : (stock > oldStock ? 'restocked' : 'adjusted');
+          final reason = !_isEdit ? 'initial' : (stock > oldStock ? 'restocked' : 'adjusted');
           await FirebaseFirestore.instance.collection('stock_logs').add({
             'productId': productId,
             'oldStock': oldStock,
@@ -1474,14 +1553,14 @@ class _ProductModalState extends State<_ProductModal> {
         );
       } catch (_) {}
 
+      // ── CALLBACK PARA MAG-REFRESH ──
       if (mounted) {
+        widget.onProductSaved?.call();
         Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              _isEdit
-                  ? 'Product updated successfully!'
-                  : 'Product added successfully!',
+              _isEdit ? 'Product updated successfully!' : 'Product added successfully!',
             ),
             backgroundColor: const Color(0xFF059669),
             behavior: SnackBarBehavior.floating,
@@ -1496,7 +1575,6 @@ class _ProductModalState extends State<_ProductModal> {
         setState(() {
           _submitting = false;
           _uploadingImage = false;
-          if (_imageBytes != null) _uploadError = 'Image upload failed';
         });
         _showError('Error saving product: $e');
       }
@@ -1508,36 +1586,6 @@ class _ProductModalState extends State<_ProductModal> {
         });
       }
     }
-  }
-
-  Future<String> _uploadProductImage(String productId) async {
-    final originalExt = (_pickedImageName?.split('.').last ?? 'jpg')
-        .toLowerCase();
-    final ext = <String>{'jpg', 'jpeg', 'png', 'webp'}.contains(originalExt)
-        ? originalExt
-        : 'jpg';
-    final contentType = switch (ext) {
-      'png' => 'image/png',
-      'webp' => 'image/webp',
-      _ => 'image/jpeg',
-    };
-    final fileName = '${DateTime.now().millisecondsSinceEpoch}.$ext';
-    final path = 'products/${widget.orgId}/$productId/$fileName';
-    final storageRef = FirebaseStorage.instance.ref().child(path);
-
-    final snapshot = await storageRef.putData(
-      _imageBytes!,
-      SettableMetadata(
-        contentType: contentType,
-        customMetadata: {
-          'orgId': widget.orgId,
-          'productId': productId,
-          if (_pickedImageName != null) 'originalName': _pickedImageName!,
-        },
-      ),
-    );
-
-    return snapshot.ref.getDownloadURL();
   }
 
   void _showError(String msg) {
@@ -1879,7 +1927,7 @@ class _ProductModalState extends State<_ProductModal> {
                         : const Icon(Icons.save_rounded, size: 16),
                     label: Text(
                       _uploadingImage
-                          ? 'Uploading Image...'
+                          ? 'Encoding Image...'
                           : (_isEdit ? 'Save Changes' : 'Add Product'),
                       style: GoogleFonts.beVietnamPro(
                         fontSize: 13,
@@ -1909,8 +1957,10 @@ class _ProductModalState extends State<_ProductModal> {
   }
 
   Widget _buildImagePicker() {
-    final existingUrl = widget.existingProduct?.imageUrl ?? '';
-    final hasImage = _imageBytes != null || existingUrl.isNotEmpty;
+    // Check if there's an existing base64 image
+    final existingBase64 = widget.existingProduct?.imageBase64 ?? '';
+    final hasImage = _imageBytes != null || existingBase64.isNotEmpty;
+    
     return GestureDetector(
       onTap: (_submitting || _uploadingImage) ? null : _pickImage,
       child: Container(
@@ -1935,10 +1985,11 @@ class _ProductModalState extends State<_ProductModal> {
                   fit: BoxFit.cover,
                   width: double.infinity,
                   height: 110,
+                  errorBuilder: (_, __, ___) => const SizedBox(),
                 )
-              else if (existingUrl.isNotEmpty)
-                Image.network(
-                  existingUrl,
+              else if (existingBase64.isNotEmpty)
+                Image.memory(
+                  base64Decode(existingBase64),
                   fit: BoxFit.cover,
                   width: double.infinity,
                   height: 110,
@@ -2388,7 +2439,7 @@ class _VariantDialogState extends State<_VariantDialog> {
 }
 
 // ============================================================
-// PRODUCT DETAILS MODAL - REDESIGNED (Professional UPRISE Theme)
+// PRODUCT DETAILS MODAL (with Base64 image support)
 // ============================================================
 class _ProductDetailsModal extends StatelessWidget {
   final ProductModel product;
@@ -2412,7 +2463,7 @@ class _ProductDetailsModal extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // Header - UPRISE themed with primary color
+            // Header
             Container(
               padding: const EdgeInsets.fromLTRB(24, 20, 20, 20),
               decoration: BoxDecoration(
@@ -2480,31 +2531,9 @@ class _ProductDetailsModal extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Product Image
-                    if (product.imageUrl.isNotEmpty) ...[
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(12),
-                        child: Image.network(
-                          product.imageUrl,
-                          width: double.infinity,
-                          height: 200,
-                          fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => Container(
-                            height: 200,
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFF8F9FB),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: const Icon(
-                              Icons.image_not_supported_outlined,
-                              size: 48,
-                              color: Color(0xFF9AA5B4),
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 20),
-                    ],
+                    // Product Image with Base64 support
+                    _buildProductImage(),
+                    const SizedBox(height: 20),
                     // Product Info Grid
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -2861,6 +2890,94 @@ class _ProductDetailsModal extends StatelessWidget {
     );
   }
 
+  Widget _buildProductImage() {
+    // Check for base64 image first
+    if (product.imageBase64 != null && product.imageBase64!.isNotEmpty) {
+      try {
+        return ClipRRect(
+          borderRadius: BorderRadius.circular(12),
+          child: Image.memory(
+            base64Decode(product.imageBase64!),
+            width: double.infinity,
+            height: 200,
+            fit: BoxFit.cover,
+            errorBuilder: (_, __, ___) => Container(
+              height: 200,
+              decoration: BoxDecoration(
+                color: const Color(0xFFF8F9FB),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Icon(
+                Icons.image_not_supported_outlined,
+                size: 48,
+                color: Color(0xFF9AA5B4),
+              ),
+            ),
+          ),
+        );
+      } catch (_) {
+        // Fallback to network image
+        return _buildNetworkImage();
+      }
+    }
+    return _buildNetworkImage();
+  }
+
+  Widget _buildNetworkImage() {
+    if (product.imageUrl.isNotEmpty) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(12),
+        child: Image.network(
+          product.imageUrl,
+          width: double.infinity,
+          height: 200,
+          fit: BoxFit.cover,
+          loadingBuilder: (context, child, progress) {
+            if (progress == null) return child;
+            return Container(
+              height: 200,
+              decoration: BoxDecoration(
+                color: const Color(0xFFF8F9FB),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Center(
+                child: SizedBox(
+                  width: 24,
+                  height: 24,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              ),
+            );
+          },
+          errorBuilder: (_, __, ___) => Container(
+            height: 200,
+            decoration: BoxDecoration(
+              color: const Color(0xFFF8F9FB),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: const Icon(
+              Icons.image_not_supported_outlined,
+              size: 48,
+              color: Color(0xFF9AA5B4),
+            ),
+          ),
+        ),
+      );
+    }
+    return Container(
+      height: 200,
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8F9FB),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: const Icon(
+        Icons.image_not_supported_outlined,
+        size: 48,
+        color: Color(0xFF9AA5B4),
+      ),
+    );
+  }
+
   Widget _detailItem(String label, String value, IconData icon) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -2942,7 +3059,7 @@ class _ProductDetailsModal extends StatelessWidget {
 }
 
 // ============================================================
-// ORDERS TAB
+// ORDERS TAB (unchanged)
 // ============================================================
 class _OrdersTab extends StatefulWidget {
   final String orgId;
@@ -4995,7 +5112,7 @@ class _SalesReportModal extends StatelessWidget {
 }
 
 // ============================================================
-// MODEL CLASSES
+// MODEL CLASSES (updated with Base64 support)
 // ============================================================
 class ProductVariant {
   final String id;
@@ -5041,6 +5158,8 @@ class ProductModel {
   final int stock;
   final int sold;
   final String imageUrl;
+  final String? imageBase64;
+  final String? imageFormat;
   final String status;
   final List<ProductVariant> variants;
 
@@ -5054,6 +5173,8 @@ class ProductModel {
     required this.stock,
     required this.sold,
     this.imageUrl = '',
+    this.imageBase64,
+    this.imageFormat,
     this.status = 'available',
     this.variants = const [],
   });
@@ -5070,6 +5191,8 @@ class ProductModel {
       stock: d['stock'] ?? 0,
       sold: d['sold'] ?? 0,
       imageUrl: d['imageUrl'] ?? '',
+      imageBase64: d['imageBase64'] as String?,
+      imageFormat: d['imageFormat'] as String?,
       status: d['status'] ?? 'available',
       variants: ((d['variants'] as List?) ?? [])
           .map((v) => ProductVariant.fromMap(v as Map<String, dynamic>))
