@@ -349,48 +349,51 @@ class _OrgEventsScheduleScreenState extends State<OrgEventsScheduleScreen> {
             ),
           );
 
+          final todayButton = OutlinedButton.icon(
+            onPressed: () => setState(() => _currentMonth = DateTime.now()),
+            icon: const Icon(Icons.today_rounded, size: 15),
+            label: Text('Today', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600)),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: UpriseColors.primaryDark,
+              side: BorderSide(color: UpriseColors.primaryDark),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            ),
+          );
+
+          final toggleContainer = Container(
+            height: 40,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: const Color(0xFFE2E6EA)),
+              boxShadow: _DS.cardShadow,
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _ToggleTab(
+                  label: 'Org Events',
+                  active: _showOrgEventsOnly,
+                  onTap: () => setState(() {
+                    _showOrgEventsOnly = true;
+                  }),
+                ),
+                _ToggleTab(
+                  label: 'All Events',
+                  active: !_showOrgEventsOnly,
+                  onTap: () => setState(() {
+                    _showOrgEventsOnly = false;
+                  }),
+                ),
+              ],
+            ),
+          );
+
           final controls = [
             dateControl,
-            OutlinedButton.icon(
-              onPressed: () => setState(() => _currentMonth = DateTime.now()),
-              icon: const Icon(Icons.today_rounded, size: 15),
-              label: Text('Today', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600)),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: UpriseColors.primaryDark,
-                side: BorderSide(color: UpriseColors.primaryDark),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              ),
-            ),
-            Container(
-              height: 40,
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: const Color(0xFFE2E6EA)),
-                boxShadow: _DS.cardShadow,
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  _ToggleTab(
-                    label: 'Org Events',
-                    active: _showOrgEventsOnly,
-                    onTap: () => setState(() {
-                      _showOrgEventsOnly = true;
-                    }),
-                  ),
-                  _ToggleTab(
-                    label: 'All Events',
-                    active: !_showOrgEventsOnly,
-                    onTap: () => setState(() {
-                      _showOrgEventsOnly = false;
-                    }),
-                  ),
-                ],
-              ),
-            ),
-            AdminExportButton(onSelected: _exportEvents),
+            todayButton,
+            toggleContainer,
           ];
 
           if (canUseRow) {
@@ -398,8 +401,10 @@ class _OrgEventsScheduleScreenState extends State<OrgEventsScheduleScreen> {
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 Flexible(child: dateControl),
+                const Spacer(),
+                todayButton,
                 const SizedBox(width: 10),
-                ...controls.sublist(1).expand((widget) => [widget, const SizedBox(width: 10)]).toList()..removeLast(),
+                toggleContainer,
               ],
             );
           }
