@@ -11,7 +11,6 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:file_picker/file_picker.dart';
 import '../../../services/activity_logger.dart' as activity_log;
-import '../../../widgets/admin_export_button.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Design Tokens — mirrors StudentAccounts exactly
@@ -110,55 +109,6 @@ class _DS {
 // ─────────────────────────────────────────────────────────────────────────────
 // Reusable micro-widgets
 // ─────────────────────────────────────────────────────────────────────────────
-
-class _StatCard extends StatelessWidget {
-  final String label, value;
-  final IconData icon;
-  final Color color;
-  const _StatCard({
-    required this.label,
-    required this.value,
-    required this.icon,
-    required this.color,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.all(18),
-        decoration: BoxDecoration(
-          color: _C.white,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: _C.border),
-          boxShadow: _DS.cardShadow,
-        ),
-        child: Row(children: [
-          Container(
-            width: 44, height: 44,
-            decoration: BoxDecoration(
-              color: color.withOpacity(0.10),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Icon(icon, color: color, size: 22),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(label,
-                  style: GoogleFonts.beVietnamPro(
-                      fontSize: 11, color: _C.darkGray, fontWeight: FontWeight.w500)),
-              const SizedBox(height: 2),
-              Text(value,
-                  style: GoogleFonts.beVietnamPro(
-                      fontSize: 28, fontWeight: FontWeight.w700, color: _C.charcoal)),
-            ]),
-          ),
-        ]),
-      ),
-    );
-  }
-}
 
 class _FilterDropdown extends StatelessWidget {
   final String value;
@@ -402,63 +352,12 @@ class _OrgAnnouncementsScreenState extends State<OrgAnnouncementsScreen> {
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildStatsRow(isMobile, isTablet),
           _buildToolbar(isMobile, isTablet),
           const SizedBox(height: 0),
           Expanded(child: _buildFeed()),
           const SizedBox(height: 24),
         ],
       ),
-    );
-  }
-
-  // ── Stats row (identical pattern to StudentAccounts) ──────────────────────
-  Widget _buildStatsRow(bool isMobile, bool isTablet) {
-    return StreamBuilder<QuerySnapshot>(
-      stream: _stream,
-      builder: (context, snap) {
-        int total = 0, pinned = 0, withAttachments = 0;
-        if (snap.hasData) {
-          for (final doc in snap.data!.docs) {
-            final d = doc.data() as Map<String, dynamic>;
-            total++;
-            if (d['pinned'] == true) pinned++;
-            final atts = d['attachmentsBase64'] as List?;
-            if (atts != null && atts.isNotEmpty) withAttachments++;
-          }
-        }
-
-        final cards = [
-          _StatCard(label: 'Total Posts', value: '$total', icon: Icons.campaign_rounded, color: _C.primaryDark),
-          _StatCard(label: 'Pinned', value: '$pinned', icon: Icons.push_pin_rounded, color: _C.warning),
-          _StatCard(label: 'With Files', value: '$withAttachments', icon: Icons.attach_file_rounded, color: _C.info),
-        ];
-
-        return Padding(
-          padding: EdgeInsets.fromLTRB(MediaQuery.of(context).size.width < 720 ? 16.0 : 28.0, 24, MediaQuery.of(context).size.width < 720 ? 16.0 : 28.0, 0),
-          child: isMobile
-              ? Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    cards[0],
-                    const SizedBox(height: 14),
-                    cards[1],
-                    const SizedBox(height: 14),
-                    cards[2],
-                  ],
-                )
-              : Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    cards[0],
-                    const SizedBox(width: 14),
-                    cards[1],
-                    const SizedBox(width: 14),
-                    cards[2],
-                  ],
-                ),
-        );
-      },
     );
   }
 
@@ -494,37 +393,6 @@ class _OrgAnnouncementsScreenState extends State<OrgAnnouncementsScreen> {
       ),
     );
 
-    final filterAndExport = Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        _FilterDropdown(
-          value: _filterMode,
-          items: const ['All', 'Pinned', 'With Attachments'],
-          onChanged: (v) => setState(() {
-            _filterMode = v!;
-            _currentPage = 1;
-          }),
-        ),
-        const SizedBox(width: 10),
-        AdminExportButton(
-          label: 'Export',
-          onSelected: (choice) async {
-            try {
-              final snap = await FirebaseFirestore.instance
-                  .collection('announcements')
-                  .where('orgId', isEqualTo: widget.orgId)
-                  .get();
-              final all = snap.docs.map((d) => AnnouncementModel.fromFirestore(d)).toList();
-              final filtered = _filtered(all);
-              _snack('Exported ${filtered.length} records');
-            } catch (e) {
-              _snack('Export failed: $e', isError: true);
-            }
-          },
-        ),
-      ],
-    );
-
     return Padding(
       padding: EdgeInsets.fromLTRB(MediaQuery.of(context).size.width < 720 ? 16.0 : 28.0, 20, MediaQuery.of(context).size.width < 720 ? 16.0 : 28.0, 0),
       child: LayoutBuilder(
@@ -535,16 +403,6 @@ class _OrgAnnouncementsScreenState extends State<OrgAnnouncementsScreen> {
               children: [
                 Expanded(child: searchField),
                 const SizedBox(width: 12),
-                filterAndExport,
-              ],
-            );
-          }
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              searchField,
-              const SizedBox(height: 10),
-              Wrap(spacing: 10, runSpacing: 10, children: [
                 _FilterDropdown(
                   value: _filterMode,
                   items: const ['All', 'Pinned', 'With Attachments'],
@@ -553,23 +411,22 @@ class _OrgAnnouncementsScreenState extends State<OrgAnnouncementsScreen> {
                     _currentPage = 1;
                   }),
                 ),
-                AdminExportButton(
-                  label: 'Export',
-                  onSelected: (choice) async {
-                    try {
-                      final snap = await FirebaseFirestore.instance
-                          .collection('announcements')
-                          .where('orgId', isEqualTo: widget.orgId)
-                          .get();
-                      final all = snap.docs.map((d) => AnnouncementModel.fromFirestore(d)).toList();
-                      final filtered = _filtered(all);
-                      _snack('Exported ${filtered.length} records');
-                    } catch (e) {
-                      _snack('Export failed: $e', isError: true);
-                    }
-                  },
-                ),
-              ]),
+              ],
+            );
+          }
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              searchField,
+              const SizedBox(height: 10),
+              _FilterDropdown(
+                value: _filterMode,
+                items: const ['All', 'Pinned', 'With Attachments'],
+                onChanged: (v) => setState(() {
+                  _filterMode = v!;
+                  _currentPage = 1;
+                }),
+              ),
             ],
           );
         },
@@ -635,7 +492,7 @@ class _OrgAnnouncementsScreenState extends State<OrgAnnouncementsScreen> {
   Widget _buildFeedContent(List<AnnouncementModel> items) {
     return CustomScrollView(
       slivers: [
-        // Composer teaser (like Facebook's "What's on your mind?")
+        // Composer teaser (Facebook-style "What's on your mind?")
         SliverToBoxAdapter(child: _buildComposerTeaser()),
         SliverPadding(
           padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
@@ -656,71 +513,57 @@ class _OrgAnnouncementsScreenState extends State<OrgAnnouncementsScreen> {
   }
 
   Widget _buildComposerTeaser() {
-    return Container(
-      margin: const EdgeInsets.fromLTRB(20, 16, 20, 12),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      decoration: BoxDecoration(
-        color: _C.surface,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: _C.borderSoft),
-      ),
-      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        // Org avatar
-        Container(
-          width: 38, height: 38,
-          decoration: BoxDecoration(
-            color: _C.primaryDark.withOpacity(0.12),
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: const Icon(Icons.campaign_rounded, size: 20, color: _C.primaryDark),
+    return GestureDetector(
+      onTap: () => _showAnnouncementDialog(),
+      child: Container(
+        margin: const EdgeInsets.fromLTRB(20, 16, 20, 12),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: _C.surface,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: _C.borderSoft),
         ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            // Org avatar
             Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              width: 38, height: 38,
               decoration: BoxDecoration(
-                color: _C.white,
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: _C.border),
+                color: _C.primaryDark.withOpacity(0.12),
+                borderRadius: BorderRadius.circular(10),
               ),
-              child: Text(
-                'What’s on your mind? Create an announcement for your members…',
-                style: GoogleFonts.beVietnamPro(fontSize: 13, color: _C.textFaint),
+              child: const Icon(Icons.campaign_rounded, size: 20, color: _C.primaryDark),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                decoration: BoxDecoration(
+                  color: _C.white,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: _C.border),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        "What's on your mind? Create an announcement…",
+                        style: GoogleFonts.beVietnamPro(
+                          fontSize: 13,
+                          color: _C.textFaint,
+                        ),
+                      ),
+                    ),
+                    const Icon(Icons.edit_note_rounded,
+                        size: 16, color: _C.textFaint),
+                  ],
+                ),
               ),
             ),
-            const SizedBox(height: 12),
-            Row(children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                decoration: BoxDecoration(
-                  color: _C.primaryDark.withOpacity(0.08),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Row(children: [
-                  const Icon(Icons.image_outlined, size: 16, color: _C.primaryDark),
-                  const SizedBox(width: 6),
-                  Text('Add photo', style: GoogleFonts.beVietnamPro(fontSize: 12, color: _C.primaryDark, fontWeight: FontWeight.w600)),
-                ]),
-              ),
-              const SizedBox(width: 12),
-              ElevatedButton(
-                onPressed: () => _showAnnouncementDialog(),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: _C.primaryDark,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                  elevation: 0,
-                ),
-                child: Text('Create announcement',
-                    style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600)),
-              ),
-            ]),
-          ]),
+          ],
         ),
-      ]),
+      ),
     );
   }
 
@@ -747,21 +590,27 @@ class _OrgAnnouncementsScreenState extends State<OrgAnnouncementsScreen> {
               style: GoogleFonts.beVietnamPro(
                   fontSize: 16, fontWeight: FontWeight.w700, color: _C.charcoal)),
           const SizedBox(height: 6),
-          Text('Click "Create Announcement" to create your first post.',
+          Text('Tap "What\'s on your mind?" to create your first post.',
               style: GoogleFonts.beVietnamPro(fontSize: 13, color: _C.darkGray)),
           const SizedBox(height: 20),
-          ElevatedButton.icon(
-            onPressed: () => _showAnnouncementDialog(),
-            icon: const Icon(Icons.add_rounded, size: 16),
-            label: Text('Create Announcement',
-                style: GoogleFonts.beVietnamPro(
-                    fontSize: 13, fontWeight: FontWeight.w600)),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: _C.primaryDark,
-              foregroundColor: Colors.white,
-              elevation: 0,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10)),
+          GestureDetector(
+            onTap: () => _showAnnouncementDialog(),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+              decoration: BoxDecoration(
+                color: _C.primaryDark,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.add_rounded, size: 16, color: Colors.white),
+                  const SizedBox(width: 8),
+                  Text('Create Announcement',
+                      style: GoogleFonts.beVietnamPro(
+                          fontSize: 13, fontWeight: FontWeight.w600, color: Colors.white)),
+                ],
+              ),
             ),
           ),
         ]),
