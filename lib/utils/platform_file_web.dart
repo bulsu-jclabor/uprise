@@ -7,23 +7,24 @@ Future<String> saveBytesToTemp(Uint8List bytes, String filename) async {
   return url;
 }
 
-Future<void> saveBytesToTempAndOpen(Uint8List bytes, String filename) async {
-  final url = await saveBytesToTemp(bytes, filename);
+Future<void> saveBytesToTempAndOpen(Uint8List bytes, String filename, {String mimeType = 'application/octet-stream'}) async {
+  final blob = html.Blob([bytes], mimeType);
+  final url = html.Url.createObjectUrlFromBlob(blob);
   try {
     html.window.open(url, '_blank');
   } catch (_) {
-    final anchor = html.AnchorElement(href: url)
+    (html.AnchorElement(href: url)
       ..setAttribute('download', filename)
-      ..click();
+      ..click());
   }
 }
 
 Future<void> downloadBytes(Uint8List bytes, String filename) async {
   final blob = html.Blob([bytes]);
   final url = html.Url.createObjectUrlFromBlob(blob);
-  final anchor = html.AnchorElement(href: url)
+  (html.AnchorElement(href: url)
     ..setAttribute('download', filename)
-    ..click();
+    ..click());
   html.Url.revokeObjectUrl(url);
 }
 

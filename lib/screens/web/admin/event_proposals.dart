@@ -1245,6 +1245,115 @@ class _EventProposalsState extends State<EventProposals> {
     }
   }
 
+  Future<void> _requestRevision(String docId, String title, String feedback) async {
+    try {
+      await FirebaseFirestore.instance.collection('event_proposals').doc(docId).update({
+        'status': 'for_review',
+        'adminFeedback': feedback,
+        'reviewedAt': FieldValue.serverTimestamp(),
+        'reviewedBy': FirebaseAuth.instance.currentUser?.uid ?? '',
+      });
+      await activity_log.ActivityLogger.log(
+        action: 'Requested revision for proposal: $title',
+        module: 'Event Management',
+        severity: 'info',
+        details: {'proposalId': docId},
+      );
+      if (_isMounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: const Text('Revision request sent to organization'),
+          backgroundColor: const Color(0xFF7C3AED),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        ));
+      }
+    } catch (e) {
+      if (_isMounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Error: $e'),
+          backgroundColor: UpriseColors.error,
+          behavior: SnackBarBehavior.floating,
+        ));
+      }
+    }
+  }
+
+  void _showRevisionDialog(BuildContext parentCtx, String docId, String title) {
+    final ctrl = TextEditingController();
+    showDialog(
+      context: parentCtx,
+      builder: (ctx) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        child: Container(
+          width: 420,
+          padding: const EdgeInsets.all(24),
+          child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Row(children: [
+              Container(
+                width: 38, height: 38,
+                decoration: BoxDecoration(color: const Color(0xFFF3E8FF), borderRadius: BorderRadius.circular(10)),
+                child: const Icon(Icons.rate_review_rounded, color: Color(0xFF7C3AED), size: 18),
+              ),
+              const SizedBox(width: 12),
+              Expanded(child: Text('Request Revision',
+                  style: GoogleFonts.beVietnamPro(fontSize: 16, fontWeight: FontWeight.w700, color: const Color(0xFF1A202C)))),
+            ]),
+            const SizedBox(height: 6),
+            Text('Your feedback will be visible to the organization.',
+                style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF64748B))),
+            const SizedBox(height: 16),
+            TextField(
+              controller: ctrl,
+              maxLines: 4,
+              style: GoogleFonts.beVietnamPro(fontSize: 13),
+              decoration: InputDecoration(
+                hintText: 'e.g. Please update the venue details and resubmit...',
+                hintStyle: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF9AA5B4)),
+                filled: true,
+                fillColor: const Color(0xFFF8F9FB),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFFE2E6EA))),
+                enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFFE2E6EA))),
+                focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFF7C3AED), width: 1.5)),
+                contentPadding: const EdgeInsets.all(12),
+              ),
+            ),
+            const SizedBox(height: 20),
+            Row(mainAxisAlignment: MainAxisAlignment.end, children: [
+              OutlinedButton(
+                onPressed: () => Navigator.pop(ctx),
+                style: OutlinedButton.styleFrom(
+                  side: const BorderSide(color: Color(0xFFE2E6EA)),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                ),
+                child: Text('Cancel', style: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF374151))),
+              ),
+              const SizedBox(width: 10),
+              ElevatedButton.icon(
+                onPressed: () async {
+                  final feedback = ctrl.text.trim();
+                  if (feedback.isEmpty) return;
+                  Navigator.pop(ctx);
+                  Navigator.pop(parentCtx);
+                  await _requestRevision(docId, title, feedback);
+                },
+                icon: const Icon(Icons.send_rounded, size: 14),
+                label: Text('Send Feedback', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF7C3AED),
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                ),
+              ),
+            ]),
+          ]),
+        ),
+      ),
+    );
+  }
+
   void _showProposalDetailDialog(String docId, Map<String, dynamic> data) {
     final status         = (data['status'] ?? 'pending') as String;
     final hasAttachment  = data['attachmentBase64'] != null &&
@@ -1366,6 +1475,28 @@ class _EventProposalsState extends State<EventProposals> {
                         _detailItem('Reviewed', _formatTimestamp(data['reviewedAt']),
                             Icons.rate_review_outlined),
                       ],
+                      if (data['adminFeedback'] != null && data['adminFeedback'].toString().isNotEmpty) ...[
+                        const SizedBox(height: 14),
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF3E8FF),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: const Color(0xFF7C3AED).withAlpha(60)),
+                          ),
+                          child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                            const Icon(Icons.rate_review_rounded, size: 14, color: Color(0xFF7C3AED)),
+                            const SizedBox(width: 8),
+                            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                              Text('Revision Feedback Sent',
+                                  style: GoogleFonts.beVietnamPro(fontSize: 11, fontWeight: FontWeight.w700, color: const Color(0xFF7C3AED), letterSpacing: 0.3)),
+                              const SizedBox(height: 3),
+                              Text(data['adminFeedback'].toString(),
+                                  style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF4C1D95))),
+                            ])),
+                          ]),
+                        ),
+                      ],
                       if (hasAttachment) ...[
                         const SizedBox(height: 20),
                         _sectionLabel('Attachment', icon: Icons.attach_file_rounded),
@@ -1466,6 +1597,21 @@ class _EventProposalsState extends State<EventProposals> {
                         style: OutlinedButton.styleFrom(
                           foregroundColor: const Color(0xFFDC2626),
                           side: const BorderSide(color: Color(0xFFDC2626)),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          padding: const EdgeInsets.symmetric(vertical: 11),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: () => _showRevisionDialog(ctx, docId, data['title'] ?? 'this event'),
+                        icon: const Icon(Icons.rate_review_rounded, size: 15),
+                        label: Text('Request Revision',
+                            style: GoogleFonts.beVietnamPro(fontSize: 13)),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: const Color(0xFF7C3AED),
+                          side: const BorderSide(color: Color(0xFF7C3AED)),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                           padding: const EdgeInsets.symmetric(vertical: 11),
                         ),

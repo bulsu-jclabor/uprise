@@ -10,7 +10,7 @@ Future<String> saveBytesToTemp(Uint8List bytes, String filename) async {
   return file.path;
 }
 
-Future<void> saveBytesToTempAndOpen(Uint8List bytes, String filename) async {
+Future<void> saveBytesToTempAndOpen(Uint8List bytes, String filename, {String mimeType = 'application/octet-stream'}) async {
   final path = await saveBytesToTemp(bytes, filename);
   await OpenFile.open(path);
 }

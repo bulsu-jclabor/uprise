@@ -171,9 +171,17 @@ class _AdminDashboardState extends State<AdminDashboard> {
                 'isRead': d.data()['isRead'] ?? false,
               })
           .toList();
+      all.sort((a, b) {
+        final ta = a['timestamp'];
+        final tb = b['timestamp'];
+        if (ta == null && tb == null) return 0;
+        if (ta == null) return 1;
+        if (tb == null) return -1;
+        return (tb as Timestamp).compareTo(ta as Timestamp);
+      });
       setState(() {
-        _notifications = all.where((n) => n['isRead'] == false).toList();
-        _unreadNotifications = _notifications.length;
+        _notifications = all;
+        _unreadNotifications = all.where((n) => n['isRead'] == false).length;
       });
     } catch (_) {}
   }
@@ -184,15 +192,28 @@ class _AdminDashboardState extends State<AdminDashboard> {
           .collection('notifications')
           .doc(id)
           .update({'isRead': true});
-      _fetchUnreadNotifications();
+      if (mounted) {
+        setState(() {
+          final idx = _notifications.indexWhere((n) => n['id'] == id);
+          if (idx != -1) {
+            _notifications[idx] =
+                Map<String, dynamic>.from(_notifications[idx])
+                  ..['isRead'] = true;
+            _unreadNotifications =
+                _notifications.where((n) => n['isRead'] == false).length;
+          }
+        });
+      }
     } catch (_) {}
   }
 
   Future<void> _markAllNotificationsAsRead() async {
-    if (_notifications.isEmpty) return;
+    final unread =
+        _notifications.where((n) => n['isRead'] == false).toList();
+    if (unread.isEmpty) return;
     try {
       final batch = FirebaseFirestore.instance.batch();
-      for (final n in _notifications) {
+      for (final n in unread) {
         batch.update(
           FirebaseFirestore.instance
               .collection('notifications')
@@ -201,6 +222,14 @@ class _AdminDashboardState extends State<AdminDashboard> {
         );
       }
       await batch.commit();
+      if (mounted) {
+        setState(() {
+          _notifications = _notifications
+              .map((n) => Map<String, dynamic>.from(n)..['isRead'] = true)
+              .toList();
+          _unreadNotifications = 0;
+        });
+      }
     } catch (_) {}
   }
 
@@ -583,40 +612,59 @@ class _AdminDashboardState extends State<AdminDashboard> {
   // ── Top bar ────────────────────────────────────────────────────────────────
   Widget _buildTopBar() {
     return Container(
-      height: 64,
+      height: 68,
       padding: const EdgeInsets.symmetric(horizontal: 28),
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: Colors.white,
-        border: Border(bottom: BorderSide(color: Color(0xFFF97316), width: 2)),
+        border: const Border(bottom: BorderSide(color: Color(0xFFE8ECF0), width: 1)),
         boxShadow: [
           BoxShadow(
-            color: Color(0x06000000),
-            blurRadius: 8,
-            offset: Offset(0, 2),
+            color: Colors.black.withAlpha(8),
+            blurRadius: 12,
+            offset: const Offset(0, 2),
           ),
         ],
       ),
       child: Row(
         children: [
-          // Page title
-          Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.start,
+          // Page title with accent bar
+          Row(
             children: [
-              Text(
-                _getCurrentTitle(),
-                style: GoogleFonts.beVietnamPro(
-                  fontSize: 17,
-                  fontWeight: FontWeight.w700,
-                  color: UpriseColors.accent,
+              Container(
+                width: 3,
+                height: 28,
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [UpriseColors.primaryDark, Color(0xFFFB923C)],
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                  ),
+                  borderRadius: BorderRadius.circular(2),
                 ),
               ),
-              Text(
-                'CICT Organization Management',
-                style: GoogleFonts.beVietnamPro(
-                  fontSize: 11,
-                  color: const Color(0xFF9AA5B4),
-                ),
+              const SizedBox(width: 10),
+              Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    _getCurrentTitle(),
+                    style: GoogleFonts.beVietnamPro(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800,
+                      color: UpriseColors.charcoal,
+                      letterSpacing: -0.2,
+                    ),
+                  ),
+                  Text(
+                    'CICT Organization Management',
+                    style: GoogleFonts.beVietnamPro(
+                      fontSize: 10.5,
+                      color: const Color(0xFF9AA5B4),
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
@@ -625,36 +673,45 @@ class _AdminDashboardState extends State<AdminDashboard> {
 
           // Datetime chip
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
             decoration: BoxDecoration(
-              color: const Color(0xFFFFF7ED),
+              gradient: const LinearGradient(
+                colors: [Color(0xFFFFF7ED), Color(0xFFFEF3C7)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
               borderRadius: BorderRadius.circular(_DS.radiusPill),
-              border: Border.all(color: const Color(0xFFFB923C)),
+              border: Border.all(color: UpriseColors.primaryDark.withAlpha(60)),
             ),
             child: Row(
               children: [
-                Icon(
-                  Icons.access_time_rounded,
-                  size: 13,
-                  color: UpriseColors.primaryDark,
-                ),
+                const Icon(Icons.access_time_rounded, size: 12, color: UpriseColors.primaryDark),
                 const SizedBox(width: 6),
                 Text(
                   _currentDateTime,
                   style: GoogleFonts.beVietnamPro(
                     fontSize: 11,
-                    color: const Color(0xFF64748B),
-                    fontWeight: FontWeight.w500,
+                    color: UpriseColors.primaryDark,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Container(
+                  width: 5,
+                  height: 5,
+                  decoration: const BoxDecoration(
+                    color: Color(0xFF4ADE80),
+                    shape: BoxShape.circle,
                   ),
                 ),
               ],
             ),
           ),
-          const SizedBox(width: 16),
+          const SizedBox(width: 12),
 
           // Notification bell
           PopupMenuButton<String>(
-            offset: const Offset(-318, 50),
+            offset: const Offset(-318, 54),
             onOpened: _fetchUnreadNotifications,
             constraints: const BoxConstraints(maxWidth: 360, minWidth: 360),
             color: Colors.white,
@@ -673,12 +730,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                 height: 0,
                 child: _AdminNotificationPanel(
                   notifications: List.from(_notifications),
-                  onMarkRead: (id) async {
-                    await FirebaseFirestore.instance
-                        .collection('notifications')
-                        .doc(id)
-                        .update({'isRead': true});
-                  },
+                  onMarkRead: _markNotificationAsRead,
                   onMarkAllRead: _markAllNotificationsAsRead,
                 ),
               ),
@@ -691,12 +743,12 @@ class _AdminDashboardState extends State<AdminDashboard> {
                   height: 38,
                   decoration: BoxDecoration(
                     color: _unreadNotifications > 0
-                        ? UpriseColors.primaryDark.withAlpha(18)
+                        ? UpriseColors.primaryDark.withAlpha(12)
                         : const Color(0xFFF8F9FB),
                     borderRadius: BorderRadius.circular(10),
                     border: Border.all(
                       color: _unreadNotifications > 0
-                          ? UpriseColors.primaryDark.withAlpha(70)
+                          ? UpriseColors.primaryDark.withAlpha(60)
                           : const Color(0xFFE8ECF0),
                     ),
                   ),
@@ -723,9 +775,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                         shape: BoxShape.circle,
                       ),
                       child: Text(
-                        _unreadNotifications > 9
-                            ? '9+'
-                            : '$_unreadNotifications',
+                        _unreadNotifications > 9 ? '9+' : '$_unreadNotifications',
                         style: GoogleFonts.beVietnamPro(
                           color: Colors.white,
                           fontSize: 9,
@@ -737,7 +787,11 @@ class _AdminDashboardState extends State<AdminDashboard> {
               ],
             ),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 10),
+
+          // Divider
+          Container(width: 1, height: 28, color: const Color(0xFFE8ECF0)),
+          const SizedBox(width: 10),
 
           // Admin avatar
           Row(
@@ -746,9 +800,16 @@ class _AdminDashboardState extends State<AdminDashboard> {
                 width: 36,
                 height: 36,
                 decoration: BoxDecoration(
-                  color: UpriseColors.primaryDark.withAlpha(26),
+                  gradient: LinearGradient(
+                    colors: [
+                      UpriseColors.primaryDark.withAlpha(30),
+                      const Color(0xFFFB923C).withAlpha(20),
+                    ],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
                   borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: UpriseColors.primaryDark.withAlpha(40)),
+                  border: Border.all(color: UpriseColors.primaryDark.withAlpha(50)),
                 ),
                 clipBehavior: Clip.antiAlias,
                 child: _adminPhotoUrl != null
@@ -824,7 +885,7 @@ class DashboardHome extends StatefulWidget {
 class _DashboardHomeState extends State<DashboardHome> {
   String _selectedSemester = '';
   String _selectedMonth = '';
-  List<int> _chartData = [0, 0, 0, 0, 0, 0];
+  List<int> _chartData = List.filled(12, 0);
   bool _chartLoading = true;
   int? _hoveredChartIndex;
 
@@ -835,29 +896,25 @@ class _DashboardHomeState extends State<DashboardHome> {
   late final Stream<QuerySnapshot>
   _allEventsStream; // For upcoming events - no date filter in query
 
-  // ── Semester helpers ──────────────────────────────────────────────
-  int get _semesterStartMonth => _selectedSemester.startsWith('1st') ? 8 : 1;
-  int get _semesterStartYear =>
-      int.parse(_selectedSemester.split(' ').last.split('-')[0]);
+  // ── AY helpers (Jul year1 → Jun year2) ───────────────────────────
+  int get _ayFirstYear {
+    final parts = _selectedSemester.split(' ').last.split('-');
+    return int.tryParse(parts.first) ?? DateTime.now().year;
+  }
 
-  String _getCurrentSemester() {
+  String _getCurrentAY() {
     final now = DateTime.now();
-    if (now.month >= 8) return '1st Semester AY ${now.year}-${now.year + 1}';
-    if (now.month <= 5) return '2nd Semester AY ${now.year - 1}-${now.year}';
-    return '2nd Semester AY ${now.year - 1}-${now.year}';
+    if (now.month >= 7) return 'AY ${now.year}-${now.year + 1}';
+    return 'AY ${now.year - 1}-${now.year}';
   }
 
   List<String> get _semesterOptions {
-    final ay = _selectedSemester.split(' ').last;
-    return ['1st Semester AY $ay', '2nd Semester AY $ay'];
+    final y = _ayFirstYear;
+    return ['AY ${y - 1}-$y', 'AY $y-${y + 1}', 'AY ${y + 1}-${y + 2}'];
   }
 
   String _monthLabel(int index) {
-    if (_semesterStartMonth == 8) {
-      const m = ['AUG', 'SEP', 'OCT', 'NOV', 'DEC', 'JAN'];
-      return m[index];
-    }
-    const m = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN'];
+    const m = ['JUL','AUG','SEP','OCT','NOV','DEC','JAN','FEB','MAR','APR','MAY','JUN'];
     return m[index];
   }
 
@@ -865,8 +922,9 @@ class _DashboardHomeState extends State<DashboardHome> {
   @override
   void initState() {
     super.initState();
-    _selectedSemester = _getCurrentSemester();
-    _selectedMonth = '';
+    _selectedSemester = _getCurrentAY();
+    final currentMonthIdx = (DateTime.now().month - 7 + 12) % 12;
+    _selectedMonth = _monthLabel(currentMonthIdx);
 
     _organizationsStream = FirebaseFirestore.instance
         .collection('organizations')
@@ -899,41 +957,22 @@ class _DashboardHomeState extends State<DashboardHome> {
       _chartLoading = true;
       _hoveredChartIndex = null;
     });
-    final startYear = _semesterStartYear;
-    final startMonth = _semesterStartMonth;
-    final endMonth = startMonth == 8 ? 12 : 5;
-    final endYear = startMonth == 8 ? startYear : startYear + 1;
+    final y = _ayFirstYear;
+    final startDate = DateTime(y, 7, 1);
+    final endDate = DateTime(y + 1, 7, 1);
 
     FirebaseFirestore.instance
         .collection('event_proposals')
-        .where(
-          'date',
-          isGreaterThanOrEqualTo: Timestamp.fromDate(
-            DateTime(startYear, startMonth, 1),
-          ),
-        )
-        .where(
-          'date',
-          isLessThan: Timestamp.fromDate(DateTime(endYear, endMonth + 1, 1)),
-        )
+        .where('date', isGreaterThanOrEqualTo: Timestamp.fromDate(startDate))
+        .where('date', isLessThan: Timestamp.fromDate(endDate))
         .get()
         .then((snap) {
-          final counts = List.filled(6, 0);
+          final counts = List.filled(12, 0);
           for (final doc in snap.docs) {
             final ts = doc.data()['date'] as Timestamp?;
             if (ts == null) continue;
-            final m = ts.toDate().month;
-            int idx;
-            if (startMonth == 8) {
-              idx = m >= 8
-                  ? m - 8
-                  : m == 1
-                  ? 5
-                  : -1;
-            } else {
-              idx = m - 1;
-            }
-            if (idx >= 0 && idx < 6) counts[idx]++;
+            final idx = (ts.toDate().month - 7 + 12) % 12;
+            counts[idx]++;
           }
           if (mounted) {
             setState(() {
@@ -1047,9 +1086,9 @@ class _DashboardHomeState extends State<DashboardHome> {
         children: [
           _buildWelcomeHeader(isMobile),
           const SizedBox(height: 20),
-          _buildStatCards(isMobile, isTablet),
-          const SizedBox(height: 20),
           if (isMobile) ...[
+            _buildStatCards(isMobile, isTablet),
+            const SizedBox(height: 20),
             _buildChartCard(isMobile),
             const SizedBox(height: 20),
             _buildUpcomingEvents(),
@@ -1058,6 +1097,8 @@ class _DashboardHomeState extends State<DashboardHome> {
             const SizedBox(height: 20),
             _buildTopOrgsCard(isMobile),
           ] else ...[
+            _buildStatCards(isMobile, isTablet),
+            const SizedBox(height: 20),
             _buildChartCard(isMobile),
             const SizedBox(height: 20),
             Row(
@@ -1075,99 +1116,192 @@ class _DashboardHomeState extends State<DashboardHome> {
   }
 
   Widget _buildWelcomeHeader(bool isMobile) {
-    return Container(
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFFEA580C), Color(0xFFFB923C)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            colors: [Color(0xFF92400E), Color(0xFFEA580C), Color(0xFFFB923C)],
+            begin: Alignment.centerLeft,
+            end: Alignment.centerRight,
+            stops: [0.0, 0.5, 1.0],
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Color(0x40EA580C),
+              blurRadius: 24,
+              offset: Offset(0, 8),
+            ),
+          ],
         ),
-        borderRadius: BorderRadius.circular(_DS.radiusLg),
-        boxShadow: [
-          BoxShadow(
-            color: UpriseColors.primaryDark.withOpacity(0.25),
-            blurRadius: 20,
-            offset: const Offset(0, 6),
+        child: Stack(
+          children: [
+            Positioned(
+              right: -24,
+              top: -24,
+              child: Container(
+                width: 160,
+                height: 160,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Colors.white.withAlpha(12),
+                ),
+              ),
+            ),
+            Positioned(
+              right: 70,
+              bottom: -28,
+              child: Container(
+                width: 100,
+                height: 100,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Colors.white.withAlpha(8),
+                ),
+              ),
+            ),
+            Positioned(
+              left: -10,
+              bottom: -16,
+              child: Container(
+                width: 70,
+                height: 70,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Colors.white.withAlpha(7),
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 22, 24, 22),
+              child: isMobile
+                  ? Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _buildLivePill(),
+                        const SizedBox(height: 10),
+                        Text(
+                          'Administrator Dashboard',
+                          style: GoogleFonts.beVietnamPro(
+                            fontSize: 22,
+                            fontWeight: FontWeight.w800,
+                            color: Colors.white,
+                            height: 1.1,
+                          ),
+                        ),
+                        const SizedBox(height: 5),
+                        Text(
+                          'CICT Organization Management  •  Welcome back.',
+                          style: GoogleFonts.beVietnamPro(
+                            fontSize: 12.5,
+                            color: Colors.white.withAlpha(180),
+                            height: 1.5,
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        Container(
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withAlpha(20),
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(
+                              color: Colors.white.withAlpha(35),
+                            ),
+                          ),
+                          child: const Icon(
+                            Icons.admin_panel_settings_rounded,
+                            color: Colors.white,
+                            size: 36,
+                          ),
+                        ),
+                      ],
+                    )
+                  : Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              _buildLivePill(),
+                              const SizedBox(height: 10),
+                              Text(
+                                'Administrator Dashboard',
+                                style: GoogleFonts.beVietnamPro(
+                                  fontSize: 24,
+                                  fontWeight: FontWeight.w800,
+                                  color: Colors.white,
+                                  height: 1.1,
+                                ),
+                              ),
+                              const SizedBox(height: 5),
+                              Text(
+                                'CICT Organization Management  •  Welcome back.',
+                                style: GoogleFonts.beVietnamPro(
+                                  fontSize: 12.5,
+                                  color: Colors.white.withAlpha(180),
+                                  height: 1.5,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 20),
+                        Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withAlpha(20),
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(
+                              color: Colors.white.withAlpha(35),
+                            ),
+                          ),
+                          child: const Icon(
+                            Icons.admin_panel_settings_rounded,
+                            color: Colors.white,
+                            size: 34,
+                          ),
+                        ),
+                      ],
+                    ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLivePill() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: Colors.white.withAlpha(22),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.white.withAlpha(45)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 6,
+            height: 6,
+            decoration: const BoxDecoration(
+              color: Color(0xFF4ADE80),
+              shape: BoxShape.circle,
+            ),
+          ),
+          const SizedBox(width: 6),
+          Text(
+            'Live Dashboard',
+            style: GoogleFonts.beVietnamPro(
+              color: Colors.white.withAlpha(220),
+              fontSize: 10,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 0.5,
+            ),
           ),
         ],
       ),
-      child: isMobile
-          ? Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Administrator Dashboard',
-                  style: GoogleFonts.beVietnamPro(
-                    fontSize: 22,
-                    fontWeight: FontWeight.w800,
-                    color: Colors.white,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  "Welcome back. Here's what's happening in the CICT community today.",
-                  style: GoogleFonts.beVietnamPro(
-                    fontSize: 13,
-                    color: Colors.white.withOpacity(0.80),
-                    height: 1.5,
-                  ),
-                ),
-                const SizedBox(height: 20),
-                Container(
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.15),
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: const Icon(
-                    Icons.admin_panel_settings_rounded,
-                    color: Colors.white,
-                    size: 36,
-                  ),
-                ),
-              ],
-            )
-          : Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Administrator Dashboard',
-                        style: GoogleFonts.beVietnamPro(
-                          fontSize: 22,
-                          fontWeight: FontWeight.w800,
-                          color: Colors.white,
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        "Welcome back. Here's what's happening in the CICT community today.",
-                        style: GoogleFonts.beVietnamPro(
-                          fontSize: 13,
-                          color: Colors.white.withOpacity(0.80),
-                          height: 1.5,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                Container(
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.15),
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: const Icon(
-                    Icons.admin_panel_settings_rounded,
-                    color: Colors.white,
-                    size: 36,
-                  ),
-                ),
-              ],
-            ),
     );
   }
 
@@ -1635,7 +1769,7 @@ class _DashboardHomeState extends State<DashboardHome> {
                       child: DropdownButton<String>(
                         value: _semesterOptions.contains(_selectedSemester)
                             ? _selectedSemester
-                            : null,
+                            : _semesterOptions[1],
                         style: GoogleFonts.beVietnamPro(
                           fontSize: 12,
                           color: const Color(0xFF374151),
@@ -1700,7 +1834,7 @@ class _DashboardHomeState extends State<DashboardHome> {
                                   data: _chartData
                                       .map((e) => e.toDouble())
                                       .toList(),
-                                  months: List.generate(6, _monthLabel),
+                                  months: List.generate(12, _monthLabel),
                                   selectedMonth: _selectedMonth,
                                   hoveredIndex: _hoveredChartIndex,
                                 ),
@@ -2194,89 +2328,91 @@ class _DashboardHomeState extends State<DashboardHome> {
       ),
       child: Padding(
         padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        child: StreamBuilder<QuerySnapshot>(
+          stream: _allEventsStream,
+          builder: (ctx, snap) {
+            final upcomingEvents =
+                snap.hasData ? _getUpcomingEvents(snap.data!) : <QueryDocumentSnapshot>[];
+            final displayEvents = upcomingEvents.take(4).toList();
+            final showViewAll = upcomingEvents.length >= 4;
+
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  'Upcoming CICT Events',
-                  style: GoogleFonts.beVietnamPro(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w700,
-                    color: UpriseColors.accent,
-                  ),
-                ),
-                GestureDetector(
-                  onTap: widget.onNavigateToCalendar,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 5,
-                    ),
-                    decoration: BoxDecoration(
-                      color: UpriseColors.primaryDark.withOpacity(0.08),
-                      borderRadius: BorderRadius.circular(_DS.radiusPill),
-                    ),
-                    child: Text(
-                      'View All',
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Upcoming CICT Events',
                       style: GoogleFonts.beVietnamPro(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                        color: UpriseColors.primaryDark,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                        color: UpriseColors.accent,
                       ),
                     ),
-                  ),
+                    if (showViewAll)
+                      MouseRegion(
+                        cursor: SystemMouseCursors.click,
+                        child: GestureDetector(
+                          onTap: widget.onNavigateToCalendar,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 5,
+                            ),
+                            decoration: BoxDecoration(
+                              color: UpriseColors.primaryDark.withAlpha(20),
+                              borderRadius: BorderRadius.circular(_DS.radiusPill),
+                            ),
+                            child: Text(
+                              'View All',
+                              style: GoogleFonts.beVietnamPro(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: UpriseColors.primaryDark,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            StreamBuilder<QuerySnapshot>(
-              stream: _allEventsStream,
-              builder: (ctx, snap) {
-                if (snap.connectionState == ConnectionState.waiting) {
-                  return const Center(
+                const SizedBox(height: 16),
+                if (snap.connectionState == ConnectionState.waiting)
+                  const Center(
                     child: Padding(
                       padding: EdgeInsets.all(24),
                       child: CircularProgressIndicator(),
                     ),
-                  );
-                }
-                if (snap.hasError) {
-                  return _emptyPlaceholder(
+                  )
+                else if (snap.hasError)
+                  _emptyPlaceholder(
                     Icons.error_outline_rounded,
                     'Error loading events',
-                  );
-                }
-
-                final upcomingEvents = _getUpcomingEvents(snap.data!);
-                final displayEvents = upcomingEvents.take(4).toList();
-
-                if (displayEvents.isEmpty) {
-                  return _emptyPlaceholder(
+                  )
+                else if (displayEvents.isEmpty)
+                  _emptyPlaceholder(
                     Icons.calendar_today_outlined,
                     'No upcoming events',
-                  );
-                }
-
-                return Column(
-                  children: displayEvents.map((doc) {
-                    final d = doc.data() as Map<String, dynamic>;
-                    final eventDate = d['date'] is Timestamp
-                        ? (d['date'] as Timestamp).toDate()
-                        : DateTime.now();
-                    return _EventRow(
-                      date: eventDate.toIso8601String(),
-                      title: d['title'] ?? 'Untitled',
-                      location: d['location'] ?? 'TBA',
-                      time: d['time'] ?? 'TBA',
-                    );
-                  }).toList(),
-                );
-              },
-            ),
-          ],
+                  )
+                else
+                  Column(
+                    children: displayEvents.map((doc) {
+                      final d = doc.data() as Map<String, dynamic>;
+                      final eventDate = d['date'] is Timestamp
+                          ? (d['date'] as Timestamp).toDate()
+                          : DateTime.now();
+                      return _EventRow(
+                        date: eventDate.toIso8601String(),
+                        title: d['title'] ?? 'Untitled',
+                        location: d['location'] ?? 'TBA',
+                        time: d['time'] ?? 'TBA',
+                      );
+                    }).toList(),
+                  ),
+              ],
+            );
+          },
         ),
       ),
     );
@@ -2437,12 +2573,21 @@ class _AdminNotificationPanelState extends State<_AdminNotificationPanel> {
   }
 
   Future<void> _markRead(String id) async {
-    setState(() => _notifs.removeWhere((n) => n['id'] == id));
+    setState(() {
+      final idx = _notifs.indexWhere((n) => n['id'] == id);
+      if (idx != -1) {
+        _notifs[idx] = Map<String, dynamic>.from(_notifs[idx])..['isRead'] = true;
+      }
+    });
     await widget.onMarkRead(id);
   }
 
   Future<void> _markAll() async {
-    setState(() => _notifs.clear());
+    setState(() {
+      _notifs = _notifs
+          .map((n) => Map<String, dynamic>.from(n)..['isRead'] = true)
+          .toList();
+    });
     await widget.onMarkAllRead();
   }
 
@@ -2461,8 +2606,191 @@ class _AdminNotificationPanelState extends State<_AdminNotificationPanel> {
     }
   }
 
+  String _dateGroup(dynamic ts) {
+    if (ts == null) return 'Older';
+    try {
+      final dt = (ts as Timestamp).toDate();
+      final now = DateTime.now();
+      final today = DateTime(now.year, now.month, now.day);
+      final nDay = DateTime(dt.year, dt.month, dt.day);
+      final diff = today.difference(nDay).inDays;
+      if (diff == 0) return 'Today';
+      if (diff == 1) return 'Yesterday';
+      if (diff < 7) return 'This Week';
+      return 'Older';
+    } catch (_) {
+      return 'Older';
+    }
+  }
+
+  Widget _buildNotifItem(Map<String, dynamic> n) {
+    final isRead = n['isRead'] as bool? ?? false;
+    return MouseRegion(
+      cursor: isRead ? SystemMouseCursors.basic : SystemMouseCursors.click,
+      child: GestureDetector(
+        onTap: isRead ? null : () => _markRead(n['id'] as String),
+        child: Container(
+          margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: isRead ? Colors.white : const Color(0xFFFFF7ED),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: isRead
+                  ? const Color(0xFFE8ECF0)
+                  : UpriseColors.primaryDark.withAlpha(80),
+            ),
+            boxShadow: isRead
+                ? []
+                : [
+                    BoxShadow(
+                      color: const Color(0xFFEA580C).withAlpha(8),
+                      blurRadius: 4,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: isRead
+                      ? const Color(0xFFF1F5F9)
+                      : UpriseColors.primaryDark.withAlpha(20),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color: UpriseColors.primaryDark.withAlpha(isRead ? 15 : 30),
+                  ),
+                ),
+                child: Icon(
+                  isRead
+                      ? Icons.notifications_outlined
+                      : Icons.notifications_active_rounded,
+                  size: 17,
+                  color: isRead
+                      ? const Color(0xFF9AA5B4)
+                      : UpriseColors.primaryDark,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        if (!isRead)
+                          Container(
+                            width: 6,
+                            height: 6,
+                            margin: const EdgeInsets.only(right: 6, top: 1),
+                            decoration: const BoxDecoration(
+                              color: UpriseColors.primaryDark,
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                        Expanded(
+                          child: Text(
+                            n['title']?.toString() ?? 'Notification',
+                            style: GoogleFonts.beVietnamPro(
+                              fontSize: 12.5,
+                              fontWeight:
+                                  isRead ? FontWeight.w500 : FontWeight.w700,
+                              color: isRead
+                                  ? const Color(0xFF6B7280)
+                                  : const Color(0xFF1A202C),
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        if (_timeAgo(n['timestamp']).isNotEmpty) ...[
+                          const SizedBox(width: 6),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color: isRead
+                                  ? const Color(0xFFF1F5F9)
+                                  : UpriseColors.primaryDark.withAlpha(15),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Text(
+                              _timeAgo(n['timestamp']),
+                              style: GoogleFonts.beVietnamPro(
+                                fontSize: 9,
+                                color: isRead
+                                    ? const Color(0xFF9AA5B4)
+                                    : UpriseColors.primaryDark,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      n['message']?.toString() ?? '',
+                      style: GoogleFonts.beVietnamPro(
+                        fontSize: 11.5,
+                        color: isRead
+                            ? const Color(0xFF9AA5B4)
+                            : const Color(0xFF64748B),
+                        height: 1.5,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  List<Widget> _buildGroupedItems() {
+    const groupOrder = ['Today', 'Yesterday', 'This Week', 'Older'];
+    final groups = <String, List<Map<String, dynamic>>>{};
+    for (final n in _notifs) {
+      final key = _dateGroup(n['timestamp']);
+      groups.putIfAbsent(key, () => []).add(n);
+    }
+    final widgets = <Widget>[];
+    for (final groupKey in groupOrder) {
+      final items = groups[groupKey];
+      if (items == null || items.isEmpty) continue;
+      widgets.add(Padding(
+        padding: const EdgeInsets.fromLTRB(14, 10, 14, 4),
+        child: Text(
+          groupKey,
+          style: GoogleFonts.beVietnamPro(
+            fontSize: 10,
+            fontWeight: FontWeight.w700,
+            color: const Color(0xFF9AA5B4),
+            letterSpacing: 0.8,
+          ),
+        ),
+      ));
+      for (final n in items) {
+        widgets.add(_buildNotifItem(n));
+      }
+    }
+    return widgets;
+  }
+
   @override
   Widget build(BuildContext context) {
+    final unreadCount = _notifs.where((n) => n['isRead'] == false).length;
+
     return SizedBox(
       width: 380,
       child: Column(
@@ -2503,8 +2831,8 @@ class _AdminNotificationPanelState extends State<_AdminNotificationPanel> {
                     letterSpacing: 0.2,
                   ),
                 ),
-                if (_notifs.isNotEmpty) ...[
-                  const SizedBox(width: 12),
+                if (unreadCount > 0) ...[
+                  const SizedBox(width: 10),
                   Container(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 10,
@@ -2515,11 +2843,10 @@ class _AdminNotificationPanelState extends State<_AdminNotificationPanel> {
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(
                         color: Colors.white.withAlpha(60),
-                        width: 1,
                       ),
                     ),
                     child: Text(
-                      '${_notifs.length} new',
+                      '$unreadCount new',
                       style: GoogleFonts.beVietnamPro(
                         color: Colors.white,
                         fontSize: 10,
@@ -2530,7 +2857,7 @@ class _AdminNotificationPanelState extends State<_AdminNotificationPanel> {
                   ),
                 ],
                 const Spacer(),
-                if (_notifs.isNotEmpty)
+                if (unreadCount > 0)
                   MouseRegion(
                     cursor: SystemMouseCursors.click,
                     child: GestureDetector(
@@ -2545,7 +2872,7 @@ class _AdminNotificationPanelState extends State<_AdminNotificationPanel> {
                           borderRadius: BorderRadius.circular(6),
                         ),
                         child: Text(
-                          'Clear all',
+                          'Mark all read',
                           style: GoogleFonts.beVietnamPro(
                             color: Colors.white.withAlpha(220),
                             fontSize: 10,
@@ -2562,8 +2889,7 @@ class _AdminNotificationPanelState extends State<_AdminNotificationPanel> {
           // Body
           if (_notifs.isEmpty)
             Padding(
-              padding:
-                  const EdgeInsets.symmetric(vertical: 36, horizontal: 24),
+              padding: const EdgeInsets.symmetric(vertical: 36, horizontal: 24),
               child: Column(
                 children: [
                   Container(
@@ -2582,7 +2908,7 @@ class _AdminNotificationPanelState extends State<_AdminNotificationPanel> {
                   ),
                   const SizedBox(height: 12),
                   Text(
-                    'All caught up!',
+                    'No notifications yet',
                     style: GoogleFonts.beVietnamPro(
                       fontSize: 14,
                       fontWeight: FontWeight.w600,
@@ -2591,7 +2917,7 @@ class _AdminNotificationPanelState extends State<_AdminNotificationPanel> {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    'No new notifications right now.',
+                    "You're all caught up!",
                     style: GoogleFonts.beVietnamPro(
                       fontSize: 12,
                       color: const Color(0xFF9AA5B4),
@@ -2602,134 +2928,16 @@ class _AdminNotificationPanelState extends State<_AdminNotificationPanel> {
             )
           else
             ConstrainedBox(
-              constraints: const BoxConstraints(maxHeight: 380),
-              child: ListView.builder(
-                shrinkWrap: true,
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                itemCount: _notifs.length,
-                itemBuilder: (ctx, i) {
-                  final n = _notifs[i];
-                  return MouseRegion(
-                    cursor: SystemMouseCursors.click,
-                    child: GestureDetector(
-                      onTap: () => _markRead(n['id'] as String),
-                      child: Container(
-                        margin: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 6,
-                        ),
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFFAFBFC),
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(
-                            color: const Color(0xFFE8ECF0),
-                            width: 1,
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: const Color(0xFFEA580C).withAlpha(8),
-                              blurRadius: 4,
-                              offset: const Offset(0, 2),
-                            ),
-                          ],
-                        ),
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Container(
-                              width: 40,
-                              height: 40,
-                              decoration: BoxDecoration(
-                                gradient: LinearGradient(
-                                  colors: [
-                                    UpriseColors.primaryDark.withAlpha(20),
-                                    UpriseColors.primaryDark.withAlpha(12),
-                                  ],
-                                ),
-                                borderRadius: BorderRadius.circular(10),
-                                border: Border.all(
-                                  color: UpriseColors.primaryDark.withAlpha(30),
-                                  width: 1,
-                                ),
-                              ),
-                              child: const Icon(
-                                Icons.notifications_active_rounded,
-                                size: 18,
-                                color: UpriseColors.primaryDark,
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Row(
-                                    children: [
-                                      Expanded(
-                                        child: Text(
-                                          n['title']?.toString() ?? 'Notification',
-                                          style: GoogleFonts.beVietnamPro(
-                                            fontSize: 13,
-                                            fontWeight: FontWeight.w700,
-                                            color: const Color(0xFF1A202C),
-                                            letterSpacing: 0.1,
-                                          ),
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
-                                      ),
-                                      const SizedBox(width: 8),
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 6,
-                                          vertical: 2,
-                                        ),
-                                        decoration: BoxDecoration(
-                                          color: UpriseColors.primaryDark
-                                              .withAlpha(15),
-                                          borderRadius:
-                                              BorderRadius.circular(4),
-                                        ),
-                                        child: Text(
-                                          _timeAgo(n['timestamp']),
-                                          style: GoogleFonts.beVietnamPro(
-                                            fontSize: 9,
-                                            color: UpriseColors.primaryDark,
-                                            fontWeight: FontWeight.w600,
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 6),
-                                  Text(
-                                    n['message']?.toString() ?? '',
-                                    style: GoogleFonts.beVietnamPro(
-                                      fontSize: 12,
-                                      color: const Color(0xFF64748B),
-                                      height: 1.5,
-                                      letterSpacing: 0.1,
-                                    ),
-                                    maxLines: 2,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  );
-                },
+              constraints: const BoxConstraints(maxHeight: 400),
+              child: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: _buildGroupedItems(),
+                ),
               ),
             ),
           // Footer
-          Container(
-            height: 1,
-            color: const Color(0xFFF1F5F9),
-          ),
+          Container(height: 1, color: const Color(0xFFF1F5F9)),
           Container(
             padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
             decoration: const BoxDecoration(
@@ -2741,8 +2949,8 @@ class _AdminNotificationPanelState extends State<_AdminNotificationPanel> {
             ),
             child: Text(
               _notifs.isEmpty
-                  ? 'All notifications cleared'  
-                  : 'Showing ${_notifs.length} unread',
+                  ? 'No notifications'
+                  : '$unreadCount unread • ${_notifs.length} total',
               style: GoogleFonts.beVietnamPro(
                 fontSize: 10,
                 color: const Color(0xFF9AA5B4),

@@ -14,6 +14,7 @@ import '../../../widgets/admin_export_button.dart';
 import 'export_util.dart';
 import 'export_pdf.dart';
 import '../../theme/app_theme.dart';
+import 'org_form_builder.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Design tokens
@@ -26,7 +27,7 @@ class _DS {
 
   static final cardShadow = [
     BoxShadow(
-      color: Colors.black.withOpacity(0.06),
+      color: Colors.black.withAlpha(15),
       blurRadius: 12,
       offset: const Offset(0, 4),
     ),
@@ -189,7 +190,10 @@ class _OrgEventProposalsScreenState extends State<OrgEventProposalsScreen> {
   List<QueryDocumentSnapshot<Map<String, dynamic>>> _applyFilters(
       List<QueryDocumentSnapshot<Map<String, dynamic>>> docs) {
     var filtered = docs;
-    if (_filterStatus != 'All') {
+    if (_filterStatus == 'All') {
+      filtered = filtered.where((d) =>
+          ((d.data())['status']?.toString().toLowerCase() ?? '') != 'archived').toList();
+    } else {
       final key = _filterStatus.toLowerCase().replaceAll(' ', '_');
       filtered = filtered.where((d) =>
           ((d.data())['status']?.toString().toLowerCase() ?? '') == key).toList();
@@ -218,12 +222,11 @@ class _OrgEventProposalsScreenState extends State<OrgEventProposalsScreen> {
 
   void _openEditModal(String docId, Map<String, dynamic> data) {
   final status = data['status'] ?? 'pending';
-  
-  // Only pending proposals can be edited
-  if (status != 'pending') {
+
+  if (status != 'pending' && status != 'for_review') {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
-        content: Text('Only pending proposals can be edited'),
+        content: Text('Only pending or revision-requested proposals can be edited'),
         backgroundColor: Colors.orange,
         behavior: SnackBarBehavior.floating,
       ),
@@ -238,6 +241,23 @@ class _OrgEventProposalsScreenState extends State<OrgEventProposalsScreen> {
     builder: (_) => _SubmitProposalModal(orgId: widget.orgId, editDocId: docId, existing: data),
   ).then((_) => setState(() {}));
 }
+
+  void _openFormBuilder(String docId, Map<String, dynamic> data) {
+    final eventDate = data['date'];
+    final isPast = eventDate is Timestamp &&
+        !eventDate.toDate().isAfter(DateTime.now());
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      barrierColor: Colors.black54,
+      builder: (_) => OrgFormBuilderModal(
+        proposalId: docId,
+        proposalTitle: data['title'] ?? 'Event',
+        orgId: widget.orgId,
+        isLocked: isPast,
+      ),
+    );
+  }
 
   void _openViewModal(String docId, Map<String, dynamic> data) {
     showDialog(
@@ -697,23 +717,24 @@ Future<void> _archiveProposal(String docId, String title) async {
     );
   }
 
-  // ============ UPDATED TABLE HEADER - REMOVED PROPOSAL # COLUMN ============
   Widget _buildTableHeader() {
   return Container(
     padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 13),
-    decoration: const BoxDecoration(
-      color: Color(0xFFFFF7ED),
-      borderRadius: BorderRadius.vertical(top: Radius.circular(14)),
-      border: Border(bottom: BorderSide(color: Color(0xFFFB923C))),
+    decoration: BoxDecoration(
+      gradient: const LinearGradient(
+        colors: [Color(0xFFFFF7ED), Color(0xFFFFFBF5)],
+        begin: Alignment.centerLeft,
+        end: Alignment.centerRight,
+      ),
+      borderRadius: const BorderRadius.vertical(top: Radius.circular(14)),
+      border: Border(bottom: BorderSide(color: UpriseColors.primaryDark.withAlpha(60))),
     ),
     child: Row(children: [
-      Expanded(flex: 4, child: _headerCell('EVENT TITLE')),  // <-- EVENT TITLE na agad
+      Expanded(flex: 4, child: _headerCell('EVENT TITLE')),
       Expanded(flex: 2, child: _headerCell('CATEGORY')),
-      Expanded(flex: 2, child: _headerCell('AUDIENCE')),
-      Expanded(flex: 2, child: _headerCell('DATE')),
-      Expanded(flex: 2, child: _headerCell('TIME')),
-      Expanded(flex: 2, child: _headerCell('LOCATION')),
+      Expanded(flex: 2, child: _headerCell('EVENT DATE')),
       Expanded(flex: 2, child: _headerCell('STATUS')),
+      Expanded(flex: 2, child: _headerCell('SIGNING DATE')),
       Expanded(flex: 2, child: _headerCell('SUBMITTED')),
       Expanded(flex: 2, child: Align(
         alignment: Alignment.centerRight,
@@ -739,20 +760,21 @@ Future<void> _archiveProposal(String docId, String title) async {
   required bool isLast,
 }) {
   final status = (data['status'] ?? 'pending').toString().toLowerCase();
-  // TANGGALIN mo na si proposalNum variable - hindi na kailangan
   final date = data['date'];
   final dateStr = date is Timestamp
       ? DateFormat('MMM dd, yyyy').format(date.toDate())
       : '—';
-  final startTime = data['startTime'] ?? '';
-  final endTime = data['endTime'] ?? '';
-  final timeStr = (startTime.isNotEmpty && endTime.isNotEmpty) 
-      ? '$startTime - $endTime' 
-      : (startTime.isNotEmpty ? startTime : '—');
   final submittedAt = data['submittedAt'];
   final submittedStr = submittedAt is Timestamp
       ? DateFormat('MMM dd, yyyy').format(submittedAt.toDate())
       : '—';
+
+  final wetSign = data['wetSignSchedule'] as Map<String, dynamic>?;
+  final signingTs = wetSign?['startDateTime'] as Timestamp?;
+  final signingStr = signingTs != null
+      ? DateFormat('MMM dd, yyyy').format(signingTs.toDate())
+      : '—';
+  final hasSigningDate = signingTs != null;
 
   return InkWell(
     hoverColor: const Color(0xFFF8F9FB),
@@ -763,136 +785,114 @@ Future<void> _archiveProposal(String docId, String title) async {
         border: isLast ? null : const Border(bottom: BorderSide(color: Color(0xFFF1F5F9))),
       ),
       child: Row(children: [
-        // ITO NA ANG UNA - EVENT TITLE (walang proposal #)
+        // TITLE
         Expanded(
-          flex: 4,  // GINAWA KONG 4 (dating 2 + 2)
-          child: Text(
-            data['title'] ?? '—',
-            style: GoogleFonts.beVietnamPro(
-              fontSize: 13,
-              fontWeight: FontWeight.w500,
-              color: const Color(0xFF1A202C),
-            ),
-            overflow: TextOverflow.ellipsis,
+          flex: 4,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                data['title'] ?? '—',
+                style: GoogleFonts.beVietnamPro(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: const Color(0xFF1A202C),
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
+              if ((data['location'] ?? '').toString().isNotEmpty)
+                Text(
+                  data['location'] ?? '',
+                  style: GoogleFonts.beVietnamPro(fontSize: 11, color: const Color(0xFF9AA5B4)),
+                  overflow: TextOverflow.ellipsis,
+                ),
+            ],
           ),
         ),
         // CATEGORY
         Expanded(
           flex: 2,
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-            decoration: BoxDecoration(
-              color: UpriseColors.primaryDark.withOpacity(0.07),
-              borderRadius: BorderRadius.circular(6),
-            ),
-            child: Text(
-              data['category'] ?? '—',
-              style: GoogleFonts.beVietnamPro(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: UpriseColors.primaryDark,
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: UpriseColors.primaryDark.withAlpha(18),
+                borderRadius: BorderRadius.circular(6),
               ),
-              overflow: TextOverflow.ellipsis,
+              child: Text(
+                data['category'] ?? '—',
+                style: GoogleFonts.beVietnamPro(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  color: UpriseColors.primaryDark,
+                  letterSpacing: 0.2,
+                ),
+              ),
             ),
           ),
         ),
-        // AUDIENCE
+        // EVENT DATE
         Expanded(
           flex: 2,
-          child: _audienceChip(data['audience'] ?? 'Public'),
-        ),
-        // DATE
-        Expanded(
-          flex: 2,
-          child: Text(dateStr,
-              style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF64748B))),
-        ),
-        // TIME
-        Expanded(
-          flex: 2,
-          child: Text(
-            timeStr,
-            style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF374151)),
-            overflow: TextOverflow.ellipsis,
-          ),
-        ),
-        // LOCATION
-        Expanded(
-          flex: 2,
-          child: Text(
-            data['location'] ?? '—',
-            style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF374151)),
-            overflow: TextOverflow.ellipsis,
-          ),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            const Icon(Icons.calendar_today_outlined, size: 12, color: Color(0xFF9AA5B4)),
+            const SizedBox(width: 5),
+            Flexible(child: Text(dateStr,
+                style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF64748B)))),
+          ]),
         ),
         // STATUS
-        Expanded(flex: 2, child: _statusBadge(status)),
+        Expanded(
+          flex: 2,
+          child: Align(alignment: Alignment.centerLeft, child: _statusBadge(status)),
+        ),
+        // SIGNING DATE
+        Expanded(
+          flex: 2,
+          child: hasSigningDate
+              ? Row(mainAxisSize: MainAxisSize.min, children: [
+                  Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF059669).withAlpha(20),
+                      borderRadius: BorderRadius.circular(5),
+                    ),
+                    child: const Icon(Icons.edit_calendar_rounded, size: 11, color: Color(0xFF059669)),
+                  ),
+                  const SizedBox(width: 5),
+                  Flexible(child: Text(signingStr,
+                      style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF059669), fontWeight: FontWeight.w500))),
+                ])
+              : Text('—', style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFFD1D5DB))),
+        ),
         // SUBMITTED
         Expanded(
           flex: 2,
           child: Text(submittedStr,
               style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF64748B))),
         ),
-        // ACTIONS (same pa rin)
+        // ACTIONS
         Expanded(
           flex: 2,
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: [
-              _ActionIconButton(
-                icon: Icons.visibility_outlined,
-                tooltip: 'View Details',
-                onTap: () => _openViewModal(docId, data),
-              ),
-              if (status == 'pending') ...[
-                const SizedBox(width: 4),
-                _ActionIconButton(
-                  icon: Icons.edit_outlined,
-                  tooltip: 'Edit Proposal',
-                  color: UpriseColors.primaryDark,
-                  onTap: () => _openEditModal(docId, data),
-                ),
-              ],
-              if (status == 'approved' || status == 'rejected') ...[
-                const SizedBox(width: 4),
-                _ActionIconButton(
-                  icon: Icons.archive_outlined,
-                  tooltip: 'Archive Proposal',
-                  color: const Color(0xFF6B7280),
-                  onTap: () => _confirmArchive(docId, data['title'] ?? 'Proposal'),
-                ),
-              ],
-            ],
+          child: Align(
+            alignment: Alignment.centerRight,
+            child: _ActionPopupButton(
+              onView: () => _openViewModal(docId, data),
+              onEdit: status == 'pending' ? () => _openEditModal(docId, data) : null,
+              onRevise: status == 'for_review' ? () => _openEditModal(docId, data) : null,
+              onFormBuilder: status == 'approved' ? () => _openFormBuilder(docId, data) : null,
+              onArchive: (status == 'approved' || status == 'rejected')
+                  ? () => _confirmArchive(docId, data['title'] ?? 'Proposal')
+                  : null,
+            ),
           ),
         ),
       ]),
     ),
   );
 }
-
-  Widget _audienceChip(String audience) {
-    Color bg;
-    Color fg;
-    if (audience == 'Public') {
-      bg = const Color(0xFFECFDF5);
-      fg = const Color(0xFF059669);
-    } else if (audience == 'CICT Only') {
-      bg = const Color(0xFFEFF6FF);
-      fg = const Color(0xFF2563EB);
-    } else {
-      bg = const Color(0xFFFFFBEB);
-      fg = const Color(0xFFFB923C);
-    }
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(12)),
-      child: Text(
-        audience,
-        style: GoogleFonts.beVietnamPro(fontSize: 11, fontWeight: FontWeight.w600, color: fg),
-        overflow: TextOverflow.ellipsis,
-      ),
-    );
-  }
 
   Widget _buildEmptyState() {
     return Center(
@@ -1012,7 +1012,7 @@ class _StatCard extends StatelessWidget {
             Container(
               width: 44, height: 44,
               decoration: BoxDecoration(
-                color: color.withOpacity(0.10),
+                color: color.withAlpha(26),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Icon(icon, color: color, size: 22),
@@ -1109,24 +1109,94 @@ class _ToolbarButton extends StatelessWidget {
   }
 }
 
-class _ActionIconButton extends StatelessWidget {
+class _ActionPopupButton extends StatelessWidget {
+  final VoidCallback onView;
+  final VoidCallback? onEdit;
+  final VoidCallback? onRevise;
+  final VoidCallback? onFormBuilder;
+  final VoidCallback? onArchive;
+  const _ActionPopupButton({required this.onView, this.onEdit, this.onRevise, this.onFormBuilder, this.onArchive});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _IconChip(
+          icon: Icons.remove_red_eye_rounded,
+          bg: const Color(0xFFEFF6FF),
+          fg: const Color(0xFF3B82F6),
+          tooltip: 'View Details',
+          onTap: onView,
+        ),
+        if (onEdit != null) ...[
+          const SizedBox(width: 6),
+          _IconChip(
+            icon: Icons.edit_rounded,
+            bg: const Color(0xFFFFF7ED),
+            fg: UpriseColors.primaryDark,
+            tooltip: 'Edit Proposal',
+            onTap: onEdit!,
+          ),
+        ],
+        if (onRevise != null) ...[
+          const SizedBox(width: 6),
+          _IconChip(
+            icon: Icons.rate_review_rounded,
+            bg: const Color(0xFFF3E8FF),
+            fg: const Color(0xFF7C3AED),
+            tooltip: 'Revise & Resubmit',
+            onTap: onRevise!,
+          ),
+        ],
+        if (onFormBuilder != null) ...[
+          const SizedBox(width: 6),
+          _IconChip(
+            icon: Icons.dynamic_form_rounded,
+            bg: const Color(0xFFECFDF5),
+            fg: const Color(0xFF0D9488),
+            tooltip: 'Registration Form',
+            onTap: onFormBuilder!,
+          ),
+        ],
+        if (onArchive != null) ...[
+          const SizedBox(width: 6),
+          _IconChip(
+            icon: Icons.inventory_2_rounded,
+            bg: const Color(0xFFF3F4F6),
+            fg: const Color(0xFF6B7280),
+            tooltip: 'Archive',
+            onTap: onArchive!,
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _IconChip extends StatelessWidget {
   final IconData icon;
+  final Color bg;
+  final Color fg;
   final String tooltip;
-  final VoidCallback? onTap;
-  final Color? color;
-  const _ActionIconButton({required this.icon, required this.tooltip, required this.onTap, this.color});
+  final VoidCallback onTap;
+  const _IconChip({required this.icon, required this.bg, required this.fg, required this.tooltip, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
     return Tooltip(
       message: tooltip,
+      waitDuration: const Duration(milliseconds: 400),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(6),
-        child: Padding(
-          padding: const EdgeInsets.all(5),
-          child: Icon(icon, size: 16,
-              color: onTap == null ? const Color(0xFFD1D5DB) : (color ?? const Color(0xFF64748B))),
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+          padding: const EdgeInsets.all(7),
+          decoration: BoxDecoration(
+            color: bg,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Icon(icon, size: 14, color: fg),
         ),
       ),
     );
@@ -1339,14 +1409,35 @@ class _SubmitProposalModalState extends State<_SubmitProposalModal> {
 
       try {
         final parsed = DateFormat('MM/dd/yyyy').parse(_dateCtrl.text.trim());
+        final today = DateTime.now();
+        final todayMidnight = DateTime(today.year, today.month, today.day);
+        if (!parsed.isAfter(todayMidnight)) {
+          setState(() {
+            _errorMsg = 'Event date must be a future date. Today\'s date is not allowed.';
+            _isSubmitting = false;
+          });
+          return;
+        }
         payload['date'] = Timestamp.fromDate(parsed);
-      } catch (_) {}
+      } catch (_) {
+        setState(() {
+          _errorMsg = 'Please enter a valid event date.';
+          _isSubmitting = false;
+        });
+        return;
+      }
 
       final col = FirebaseFirestore.instance.collection('event_proposals');
       if (widget.editDocId != null) {
+        final wasForReview = (widget.existing?['status'] ?? '') == 'for_review';
+        if (wasForReview) {
+          payload['status'] = 'pending';
+          payload['adminFeedback'] = FieldValue.delete();
+        }
         await col.doc(widget.editDocId).update(payload);
         await activity_log.ActivityLogger.log(
-          action: 'edit_proposal', module: 'event_proposals',
+          action: wasForReview ? 'resubmit_proposal' : 'edit_proposal',
+          module: 'event_proposals',
           details: {'orgId': widget.orgId, 'proposalId': widget.editDocId},
         );
       } else {
@@ -1393,7 +1484,7 @@ class _SubmitProposalModalState extends State<_SubmitProposalModal> {
             child: Row(children: [
               Container(
                 width: 38, height: 38,
-                decoration: BoxDecoration(color: Colors.white.withOpacity(0.15), borderRadius: BorderRadius.circular(10)),
+                decoration: BoxDecoration(color: Colors.white.withAlpha(38), borderRadius: BorderRadius.circular(10)),
                 child: Icon(isEdit ? Icons.edit_rounded : Icons.description_outlined, color: Colors.white, size: 18),
               ),
               const SizedBox(width: 14),
@@ -1459,10 +1550,11 @@ class _SubmitProposalModalState extends State<_SubmitProposalModal> {
                         controller: _dateCtrl,
                         readOnly: true,
                         onTap: () async {
+                          final tomorrow = DateTime.now().add(const Duration(days: 1));
                           final picked = await showDatePicker(
                             context: context,
-                            initialDate: DateTime.now(),
-                            firstDate: DateTime.now(),
+                            initialDate: tomorrow,
+                            firstDate: tomorrow,
                             lastDate: DateTime(2030),
                           );
                           if (picked != null) _dateCtrl.text = DateFormat('MM/dd/yyyy').format(picked);
@@ -1593,7 +1685,7 @@ class _SubmitProposalModalState extends State<_SubmitProposalModal> {
         borderRadius: BorderRadius.circular(10),
         border: Border.all(
           color: _isUploading
-              ? UpriseColors.primaryDark.withOpacity(0.4)
+              ? UpriseColors.primaryDark.withAlpha(102)
               : hasFile ? const Color(0xFF059669) : const Color(0xFFE2E6EA),
           width: (_isUploading || hasFile) ? 1.5 : 1,
         ),
@@ -1611,7 +1703,7 @@ class _SubmitProposalModalState extends State<_SubmitProposalModal> {
       Container(
         padding: const EdgeInsets.all(10),
         decoration: BoxDecoration(
-          color: UpriseColors.primaryDark.withOpacity(0.08),
+          color: UpriseColors.primaryDark.withAlpha(20),
           borderRadius: BorderRadius.circular(10),
         ),
         child: Icon(Icons.cloud_upload_outlined, size: 24, color: UpriseColors.primaryDark),
@@ -1734,7 +1826,7 @@ class _ViewProposalModal extends StatelessWidget {
             child: Row(children: [
               Container(
                 width: 38, height: 38,
-                decoration: BoxDecoration(color: Colors.white.withOpacity(0.15), borderRadius: BorderRadius.circular(10)),
+                decoration: BoxDecoration(color: Colors.white.withAlpha(38), borderRadius: BorderRadius.circular(10)),
                 child: const Icon(Icons.description_outlined, color: Colors.white, size: 18),
               ),
               const SizedBox(width: 14),
@@ -1744,7 +1836,7 @@ class _ViewProposalModal extends StatelessWidget {
                     style: GoogleFonts.beVietnamPro(fontSize: 17, fontWeight: FontWeight.w700, color: Colors.white)),
                 const SizedBox(height: 2),
                 Text(propNum,  // <-- Proposal ID now visible here
-                    style: GoogleFonts.beVietnamPro(fontSize: 12, color: Colors.white.withOpacity(0.7))),
+                    style: GoogleFonts.beVietnamPro(fontSize: 12, color: Colors.white.withAlpha(179))),
               ])),
               _statusBadge(status),
               const SizedBox(width: 8),
@@ -1775,7 +1867,31 @@ class _ViewProposalModal extends StatelessWidget {
                 _detailItem('Location', data['location'] ?? '—', Icons.location_on_outlined),
                 const SizedBox(height: 14),
                 _detailItem('Submitted', _fmt(data['submittedAt']), Icons.send_outlined),
-                
+
+                // Admin revision feedback banner
+                if (data['adminFeedback'] != null && data['adminFeedback'].toString().isNotEmpty) ...[
+                  const SizedBox(height: 16),
+                  Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF3E8FF),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: const Color(0xFF7C3AED).withAlpha(60)),
+                    ),
+                    child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      const Icon(Icons.rate_review_rounded, size: 16, color: Color(0xFF7C3AED)),
+                      const SizedBox(width: 10),
+                      Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        Text('Revision Requested by Admin',
+                            style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.w700, color: const Color(0xFF7C3AED))),
+                        const SizedBox(height: 4),
+                        Text(data['adminFeedback'].toString(),
+                            style: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF4C1D95), height: 1.4)),
+                      ])),
+                    ]),
+                  ),
+                ],
+
                 // Wet Sign Schedule
                 if (data['wetSignSchedule'] != null) ...[
                   const SizedBox(height: 20),
@@ -1795,7 +1911,7 @@ class _ViewProposalModal extends StatelessWidget {
                       Container(
                         padding: const EdgeInsets.all(8),
                         decoration: BoxDecoration(
-                          color: UpriseColors.primaryDark.withOpacity(0.1),
+                          color: UpriseColors.primaryDark.withAlpha(26),
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: Icon(Icons.insert_drive_file_rounded, size: 20, color: UpriseColors.primaryDark),
@@ -1874,12 +1990,12 @@ class _ViewProposalModal extends StatelessWidget {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: [const Color(0xFF059669).withOpacity(0.08), const Color(0xFF059669).withOpacity(0.02)],
+          colors: [const Color(0xFF059669).withAlpha(20), const Color(0xFF059669).withAlpha(5)],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFF059669).withOpacity(0.3)),
+        border: Border.all(color: const Color(0xFF059669).withAlpha(77)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1889,7 +2005,7 @@ class _ViewProposalModal extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF059669).withOpacity(0.1),
+                  color: const Color(0xFF059669).withAlpha(26),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: const Icon(Icons.edit_calendar_rounded, color: Color(0xFF059669), size: 18),
@@ -1917,7 +2033,7 @@ class _ViewProposalModal extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: const Color(0xFF059669).withOpacity(0.05),
+              color: const Color(0xFF059669).withAlpha(13),
               borderRadius: BorderRadius.circular(8),
             ),
             child: Row(
@@ -1996,7 +2112,7 @@ class _ViewProposalModal extends StatelessWidget {
           ),
         );
       } else {
-        await platform_file_utils.saveBytesToTempAndOpen(bytes, name);
+        await platform_file_utils.saveBytesToTempAndOpen(bytes, name, mimeType: mime);
       }
     } catch (e) {
       if (context.mounted) {
