@@ -13,6 +13,8 @@ import 'package:firebase_storage/firebase_storage.dart';
 import '../../../services/activity_logger.dart' as activity_log;
 import 'export_util.dart';
 import 'export_pdf.dart';
+import 'dart:io';
+import 'package:path_provider/path_provider.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Design tokens — mirrors student_accounts.dart / org_letter_request.dart
