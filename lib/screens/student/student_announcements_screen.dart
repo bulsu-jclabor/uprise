@@ -8,13 +8,13 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../../widgets/student/event_registration_form_dialog.dart';
 
 // ─────────────────────────────────────────────────────────────
-// Custom Colors - UNIFORM
+// Custom Colors - UNIFORM (Colors.orange)
 // ─────────────────────────────────────────────────────────────
 class AppColors {
-  static const Color primaryDark = Color(0xFFBE4700);
-  static const Color primaryLight = Color(0xFFD47A00);
-  static const Color accent = Color(0xFFDA6937);
-  static const Color background = Color(0xFFF8F9FA);
+  static const Color primaryDark = Colors.orange;
+  static const Color primaryLight = Color(0xFFFFCC80);
+  static const Color accent = Color(0xFFFF9800);
+  static const Color background = Color(0xFFF5F5F5);
 }
 
 ImageProvider _studentImageProvider(String url) {
@@ -366,7 +366,7 @@ class _AnnouncementCardState extends State<_AnnouncementCard> {
       const SnackBar(
         content: Text('Shared successfully!'),
         duration: Duration(seconds: 2),
-        backgroundColor: AppColors.primaryDark,
+        backgroundColor: Colors.orange,
       ),
     );
   }
@@ -410,12 +410,12 @@ class _AnnouncementCardState extends State<_AnnouncementCard> {
                     fit: BoxFit.cover,
                     errorBuilder: (_, __, ___) => Container(
                       height: 160,
-                      color: AppColors.primaryDark.withOpacity(0.1),
+                      color: Colors.orange.withOpacity(0.1),
                       child: Center(
                         child: Icon(
                           Icons.image_outlined,
                           size: 40,
-                          color: AppColors.primaryDark.withOpacity(0.3),
+                          color: Colors.orange.withOpacity(0.3),
                         ),
                       ),
                     ),
@@ -423,12 +423,12 @@ class _AnnouncementCardState extends State<_AnnouncementCard> {
                 : Container(
                     height: 160,
                     width: double.infinity,
-                    color: AppColors.primaryDark.withOpacity(0.1),
+                    color: Colors.orange.withOpacity(0.1),
                     child: Center(
                       child: Icon(
                         Icons.image_outlined,
                         size: 40,
-                        color: AppColors.primaryDark.withOpacity(0.3),
+                        color: Colors.orange.withOpacity(0.3),
                       ),
                     ),
                   ),
@@ -447,7 +447,7 @@ class _AnnouncementCardState extends State<_AnnouncementCard> {
                         height: 36,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          color: AppColors.primaryDark.withOpacity(0.1),
+                          color: Colors.orange.withOpacity(0.1),
                         ),
                         child: ClipOval(
                           child: widget.ann.logoUrl.isNotEmpty
@@ -457,13 +457,13 @@ class _AnnouncementCardState extends State<_AnnouncementCard> {
                                   errorBuilder: (_, __, ___) => Icon(
                                     Icons.business_center_outlined,
                                     size: 18,
-                                    color: AppColors.primaryDark,
+                                    color: Colors.orange,
                                   ),
                                 )
                               : Icon(
                                   Icons.business_center_outlined,
                                   size: 18,
-                                  color: AppColors.primaryDark,
+                                  color: Colors.orange,
                                 ),
                         ),
                       ),
@@ -522,7 +522,7 @@ class _AnnouncementCardState extends State<_AnnouncementCard> {
                       vertical: 3,
                     ),
                     decoration: BoxDecoration(
-                      color: AppColors.primaryDark.withOpacity(0.1),
+                      color: Colors.orange.withOpacity(0.1),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Text(
@@ -530,7 +530,7 @@ class _AnnouncementCardState extends State<_AnnouncementCard> {
                       style: TextStyle(
                         fontSize: 9,
                         fontWeight: FontWeight.w700,
-                        color: AppColors.primaryDark,
+                        color: Colors.orange,
                         letterSpacing: 0.5,
                       ),
                     ),
@@ -582,8 +582,8 @@ class _AnnouncementCardState extends State<_AnnouncementCard> {
                         label: Text('Register for ${widget.ann.linkedEventTitle}',
                             overflow: TextOverflow.ellipsis),
                         style: OutlinedButton.styleFrom(
-                          foregroundColor: AppColors.primaryDark,
-                          side: const BorderSide(color: AppColors.primaryDark),
+                          foregroundColor: Colors.orange,
+                          side: const BorderSide(color: Colors.orange),
                           padding: const EdgeInsets.symmetric(vertical: 10),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                         ),
@@ -599,7 +599,7 @@ class _AnnouncementCardState extends State<_AnnouncementCard> {
                         icon: _isLiked ? Icons.thumb_up_alt : Icons.thumb_up_alt_outlined,
                         count: _likes,
                         isActive: _isLiked,
-                        color: _isLiked ? AppColors.primaryDark : Colors.grey[500]!,
+                        color: _isLiked ? Colors.orange : Colors.grey[500]!,
                         onTap: _handleLike,
                       ),
                       const SizedBox(width: 14),
@@ -623,7 +623,7 @@ class _AnnouncementCardState extends State<_AnnouncementCard> {
                         icon: Icons.share_outlined,
                         count: _shares,
                         isActive: _isShared,
-                        color: _isShared ? AppColors.primaryDark : Colors.grey[500]!,
+                        color: _isShared ? Colors.orange : Colors.grey[500]!,
                         onTap: _handleShare,
                       ),
                     ],
@@ -709,7 +709,7 @@ class _CommentSheetState extends State<_CommentSheet> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Please login to comment.'),
-            backgroundColor: AppColors.primaryDark,
+            backgroundColor: Colors.orange,
           ),
         );
         setState(() => _isSubmitting = false);
@@ -742,7 +742,7 @@ class _CommentSheetState extends State<_CommentSheet> {
         const SnackBar(
           content: Text('Comment added!'),
           duration: Duration(seconds: 2),
-          backgroundColor: AppColors.primaryDark,
+          backgroundColor: Colors.orange,
         ),
       );
     } catch (e) {
@@ -828,7 +828,7 @@ class _CommentSheetState extends State<_CommentSheet> {
                 child: ElevatedButton(
                   onPressed: _isSubmitting ? null : _submitComment,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primaryDark,
+                    backgroundColor: Colors.orange,
                     foregroundColor: Colors.white,
                     elevation: 0,
                     padding: const EdgeInsets.symmetric(vertical: 14),
@@ -1017,7 +1017,7 @@ class _AnnouncementDetailScreenState extends State<AnnouncementDetailScreen> {
       const SnackBar(
         content: Text('Shared successfully!'),
         duration: Duration(seconds: 2),
-        backgroundColor: AppColors.primaryDark,
+        backgroundColor: Colors.orange,
       ),
     );
   }
@@ -1117,7 +1117,7 @@ class _AnnouncementDetailScreenState extends State<AnnouncementDetailScreen> {
                           vertical: 4,
                         ),
                         decoration: BoxDecoration(
-                          color: AppColors.primaryDark.withOpacity(0.1),
+                          color: Colors.orange.withOpacity(0.1),
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Text(
@@ -1125,7 +1125,7 @@ class _AnnouncementDetailScreenState extends State<AnnouncementDetailScreen> {
                           style: TextStyle(
                             fontSize: 11,
                             fontWeight: FontWeight.w700,
-                            color: AppColors.primaryDark,
+                            color: Colors.orange,
                           ),
                         ),
                       ),
@@ -1163,13 +1163,13 @@ class _AnnouncementDetailScreenState extends State<AnnouncementDetailScreen> {
                                       errorBuilder: (_, __, ___) => Icon(
                                         Icons.business_center_outlined,
                                         size: 22,
-                                        color: AppColors.primaryDark,
+                                        color: Colors.orange,
                                       ),
                                     )
                                   : Icon(
                                       Icons.business_center_outlined,
                                       size: 22,
-                                      color: AppColors.primaryDark,
+                                      color: Colors.orange,
                                     ),
                             ),
                           ),
@@ -1250,7 +1250,7 @@ class _AnnouncementDetailScreenState extends State<AnnouncementDetailScreen> {
                             label: Text('Register for ${ann.linkedEventTitle}',
                                 overflow: TextOverflow.ellipsis),
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: AppColors.primaryDark,
+                              backgroundColor: Colors.orange,
                               foregroundColor: Colors.white,
                               elevation: 0,
                               padding: const EdgeInsets.symmetric(vertical: 14),
@@ -1392,7 +1392,7 @@ class _AnnouncementDetailScreenState extends State<AnnouncementDetailScreen> {
                     onPressed: _dismissed ? null : _handleDismiss,
                     style: ElevatedButton.styleFrom(
                       backgroundColor:
-                          _dismissed ? Colors.grey[400] : AppColors.primaryDark,
+                          _dismissed ? Colors.grey[400] : Colors.orange,
                       foregroundColor: Colors.white,
                       elevation: 0,
                       shape: RoundedRectangleBorder(
@@ -1445,9 +1445,9 @@ class _PostActionButton extends StatelessWidget {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
           ),
-          foregroundColor: isActive ? AppColors.primaryDark : const Color(0xFF37474F),
+          foregroundColor: isActive ? Colors.orange : const Color(0xFF37474F),
           backgroundColor: isActive
-              ? AppColors.primaryDark.withOpacity(0.08)
+              ? Colors.orange.withOpacity(0.08)
               : const Color(0xFFF7F9FB),
         ),
         child: Row(
@@ -1620,7 +1620,7 @@ class _DismissConfirmSheet extends StatelessWidget {
                 child: ElevatedButton(
                   onPressed: onConfirm,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primaryDark,
+                    backgroundColor: Colors.orange,
                     foregroundColor: Colors.white,
                     elevation: 0,
                     padding: const EdgeInsets.symmetric(vertical: 14),

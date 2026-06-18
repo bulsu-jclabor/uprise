@@ -5,13 +5,13 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
 
 // ─────────────────────────────────────────────
-//  CUSTOM COLORS - UNIFORM
+//  CUSTOM COLORS - UNIFORM (Colors.orange)
 // ─────────────────────────────────────────────
 class AppColors {
-  static const Color primaryDark = Color(0xFFBE4700);
-  static const Color primaryLight = Color(0xFFD47A00);
-  static const Color accent = Color(0xFFDA6937);
-  static const Color background = Color(0xFFF8F9FA);
+  static const Color primaryDark = Colors.orange;
+  static const Color primaryLight = Color(0xFFFFCC80);
+  static const Color accent = Color(0xFFFF9800);
+  static const Color background = Color(0xFFF5F5F5);
 }
 
 // ─────────────────────────────────────────────
@@ -212,7 +212,7 @@ class _StudentEventsScreenState extends State<StudentEventsScreen>
             if (selectedRating == 0) {
               ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
                 content: Text('Please select a star rating.'),
-                backgroundColor: AppColors.primaryDark,
+                backgroundColor: Colors.orange,
               ));
               return;
             }
@@ -280,7 +280,7 @@ class _StudentEventsScreenState extends State<StudentEventsScreen>
                         onPressed: () => setSheet(() => selectedRating = star),
                         icon: Icon(
                           star <= selectedRating ? Icons.star_rounded : Icons.star_border_rounded,
-                          color: star <= selectedRating ? AppColors.primaryDark : Colors.grey.shade400,
+                          color: star <= selectedRating ? Colors.orange : Colors.grey.shade400,
                           size: 32,
                         ),
                       );
@@ -303,7 +303,7 @@ class _StudentEventsScreenState extends State<StudentEventsScreen>
                   child: ElevatedButton(
                     onPressed: submitting ? null : submit,
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.primaryDark,
+                      backgroundColor: Colors.orange,
                       foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(vertical: 14),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -350,8 +350,8 @@ class _StudentEventsScreenState extends State<StudentEventsScreen>
         centerTitle: true,
         bottom: TabBar(
           controller: _tabController,
-          indicatorColor: AppColors.primaryDark,
-          labelColor: AppColors.primaryDark,
+          indicatorColor: Colors.orange,
+          labelColor: Colors.orange,
           unselectedLabelColor: Colors.black45,
           indicatorWeight: 3,
           tabs: const [
@@ -389,7 +389,7 @@ class _StudentEventsScreenState extends State<StudentEventsScreen>
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               IconButton(
-                icon: const Icon(Icons.chevron_left, color: AppColors.primaryDark),
+                icon: const Icon(Icons.chevron_left, color: Colors.orange),
                 onPressed: _previousMonth,
               ),
               Text(
@@ -400,7 +400,7 @@ class _StudentEventsScreenState extends State<StudentEventsScreen>
                 ),
               ),
               IconButton(
-                icon: const Icon(Icons.chevron_right, color: AppColors.primaryDark),
+                icon: const Icon(Icons.chevron_right, color: Colors.orange),
                 onPressed: _nextMonth,
               ),
             ],
@@ -486,7 +486,7 @@ class _StudentEventsScreenState extends State<StudentEventsScreen>
                   if (!snapshot.hasData) {
                     return const Center(
                         child: CircularProgressIndicator(
-                            color: AppColors.primaryDark));
+                            color: Colors.orange));
                   }
                   final todayEvents = snapshot.data!.docs
                       .map((doc) => EventData.fromFirestore(doc,
@@ -554,7 +554,7 @@ class _StudentEventsScreenState extends State<StudentEventsScreen>
           builder: (context, snapshot) {
             if (!snapshot.hasData) {
               return const Center(
-                  child: CircularProgressIndicator(color: AppColors.primaryDark));
+                  child: CircularProgressIndicator(color: Colors.orange));
             }
             
             final allEvents = snapshot.data!.docs
@@ -605,13 +605,13 @@ class _StudentEventsScreenState extends State<StudentEventsScreen>
   // ── TAB 2: Feedback ──
   Widget _buildFeedbackTab() {
     return RefreshIndicator(
-      color: AppColors.primaryDark,
+      color: Colors.orange,
       onRefresh: () async => _refreshFeedbackTab(),
       child: FutureBuilder<List<Map<String, dynamic>>>(
         future: _attendedEventsFuture,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator(color: AppColors.primaryDark));
+            return const Center(child: CircularProgressIndicator(color: Colors.orange));
           }
           final events = snapshot.data ?? [];
           if (events.isEmpty) {
@@ -678,7 +678,7 @@ class _StudentEventsScreenState extends State<StudentEventsScreen>
                       : ElevatedButton(
                           onPressed: () => _showEventFeedbackDialog(ev),
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: AppColors.primaryDark,
+                            backgroundColor: Colors.orange,
                             foregroundColor: Colors.white,
                             elevation: 0,
                             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
@@ -755,7 +755,7 @@ class _CalendarGrid extends StatelessWidget {
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               color: isSelected
-                  ? AppColors.primaryDark
+                  ? Colors.orange
                   : isToday
                       ? Colors.grey.shade200
                       : Colors.transparent,
@@ -769,7 +769,7 @@ class _CalendarGrid extends StatelessWidget {
                   color: isSelected
                       ? Colors.white
                       : isToday
-                          ? AppColors.primaryDark
+                          ? Colors.orange
                           : Colors.black87,
                 ),
               ),
@@ -820,7 +820,7 @@ class _CompactEventCard extends StatelessWidget {
               width: 70,
               padding: const EdgeInsets.symmetric(vertical: 12),
               decoration: BoxDecoration(
-                color: AppColors.primaryDark.withOpacity(0.1),
+                color: Colors.orange.withOpacity(0.1),
                 borderRadius: const BorderRadius.only(
                   topLeft: Radius.circular(12),
                   bottomLeft: Radius.circular(12),
@@ -833,7 +833,7 @@ class _CompactEventCard extends StatelessWidget {
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w700,
-                      color: AppColors.primaryDark,
+                      color: Colors.orange,
                     ),
                   ),
                   Text(
@@ -841,7 +841,7 @@ class _CompactEventCard extends StatelessWidget {
                     style: TextStyle(
                       fontSize: 20,
                       fontWeight: FontWeight.w800,
-                      color: AppColors.primaryDark,
+                      color: Colors.orange,
                     ),
                   ),
                 ],
@@ -903,7 +903,7 @@ class _CompactEventCard extends StatelessWidget {
                 style: TextButton.styleFrom(
                   padding: const EdgeInsets.symmetric(
                       horizontal: 12, vertical: 8),
-                  backgroundColor: AppColors.primaryDark,
+                  backgroundColor: Colors.orange,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(20),
                   ),
@@ -1043,7 +1043,7 @@ class _UpcomingEventCard extends StatelessWidget {
                       style: ElevatedButton.styleFrom(
                         backgroundColor: event.isRegistered
                             ? Colors.green
-                            : AppColors.primaryDark,
+                            : Colors.orange,
                         padding: const EdgeInsets.symmetric(vertical: 10),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(25),
@@ -1079,7 +1079,7 @@ class _CategoryBadge extends StatelessWidget {
   Color get _color {
     switch (category.toLowerCase()) {
       case 'competition':
-        return AppColors.primaryDark;
+        return Colors.orange;
       case 'workshop':
         return const Color(0xFF1565C0);
       case 'seminar':
@@ -1189,7 +1189,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
               content: Text('Successfully registered for event!'),
-              backgroundColor: AppColors.primaryDark,
+              backgroundColor: Colors.orange,
           ),
         );
         Navigator.pop(context);
@@ -1303,7 +1303,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                       child: ElevatedButton(
                         onPressed: _isLoading ? null : _registerForEvent,
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.primaryDark,
+                          backgroundColor: Colors.orange,
                           padding: const EdgeInsets.symmetric(vertical: 14),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12),

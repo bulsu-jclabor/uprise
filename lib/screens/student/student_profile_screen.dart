@@ -7,13 +7,10 @@ import '../auth/role_router.dart';
 import '../student/student_login.dart';
 import '../../models/profile_model.dart';
 
-
-
-
 // ─────────────────────────────────────────────────────────────
-// Shared constants
+// Shared constants - UNIFORM ORANGE
 // ─────────────────────────────────────────────────────────────
-const kOrange = Color(0xFFFF6B00);
+const kOrange = Colors.orange;
 const kOrangeLight = Color(0xFFFFEDD5);
 const kBg = Color(0xFFF5F5F5);
 
@@ -335,7 +332,7 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
                           padding: const EdgeInsets.all(14),
                           decoration: BoxDecoration(
                             gradient: const LinearGradient(
-                              colors: [Color(0xFFFF6B00), Color(0xFFFF8C42)],
+                              colors: [Colors.orange, Color(0xFFFFA726)],
                               begin: Alignment.topLeft,
                               end: Alignment.bottomRight,
                             ),
@@ -431,7 +428,7 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
 
                 const SizedBox(height: 12),
 
-                // ── Events Registered (DYNAMIC FROM FIRESTORE) ──
+                // ── Events Registered ──
                 Container(
                   color: Colors.white,
                   padding: const EdgeInsets.all(16),
@@ -447,7 +444,6 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
                                   fontSize: 15)),
                           GestureDetector(
                             onTap: () {
-                              // Navigate to My Events tab
                               ScaffoldMessenger.of(context).showSnackBar(
                                 const SnackBar(
                                   content: Text('View all events - Coming Soon'),
@@ -587,23 +583,41 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
                 // ── RED LOG OUT BUTTON ──
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  child: TextButton.icon(
-                    onPressed: () async {
-                      await FirebaseAuth.instance.signOut();
-                      if (context.mounted) {
-                        Navigator.of(context).pushAndRemoveUntil(
-                          MaterialPageRoute(builder: (_) => const StudentLogin()),
-                          (route) => false,
-                        );
-                      }
-                    },
-                    icon: const Icon(Icons.logout, color: Colors.red),
-                    label: const Text(
-                      'Log Out',
-                      style: TextStyle(
-                        color: Colors.red,
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600,
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: () async {
+                        await FirebaseAuth.instance.signOut();
+                        if (context.mounted) {
+                          Navigator.of(context).pushAndRemoveUntil(
+                            MaterialPageRoute(builder: (_) => const StudentLogin()),
+                            (route) => false,
+                          );
+                        }
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.red,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        elevation: 2,
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: const [
+                          Icon(Icons.logout, color: Colors.white, size: 20),
+                          SizedBox(width: 10),
+                          Text(
+                            'Log Out',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ),
@@ -835,7 +849,6 @@ class _IdCard1 extends StatelessWidget {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // ── CHANGED: use profile.photoUrl instead of hardcoded URL ──
               ClipRRect(
                 borderRadius: BorderRadius.circular(8),
                 child: profile.photoUrl.isNotEmpty
@@ -1300,7 +1313,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 }
 
 // ─────────────────────────────────────────────────────────────
-// Settings Screen — SIMPLER DESIGN
+// Settings Screen
 // ─────────────────────────────────────────────────────────────
 class SettingsScreen extends StatefulWidget {
   final ProfileModel profile;
@@ -1626,24 +1639,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
 // Reusable small widgets
 // ─────────────────────────────────────────────────────────────
 
-class _SectionHeader extends StatelessWidget {
-  final String text;
-  const _SectionHeader(this.text);
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-      child: Text(text.toUpperCase(),
-          style: const TextStyle(
-              fontSize: 11,
-              color: Colors.grey,
-              fontWeight: FontWeight.w600,
-              letterSpacing: 0.8)),
-    );
-  }
-}
-
 class _EditField extends StatelessWidget {
   final String label;
   final TextEditingController controller;
@@ -1721,54 +1716,6 @@ class _EditField extends StatelessWidget {
   }
 }
 
-class _PasswordField extends StatelessWidget {
-  final TextEditingController controller;
-  final bool show;
-  final IconData icon;
-  final VoidCallback onToggle;
-
-  const _PasswordField({
-    required this.controller,
-    required this.show,
-    required this.icon,
-    required this.onToggle,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return TextFormField(
-      controller: controller,
-      obscureText: !show,
-      style: const TextStyle(fontSize: 14),
-      decoration: InputDecoration(
-        suffixIcon: IconButton(
-          icon: Icon(
-              show ? Icons.visibility_off_outlined : icon,
-              size: 18,
-              color: Colors.grey),
-          onPressed: onToggle,
-        ),
-        filled: true,
-        fillColor: Colors.white,
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-          borderSide: BorderSide(color: Colors.grey.shade200),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-          borderSide: BorderSide(color: Colors.grey.shade200),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-          borderSide: const BorderSide(color: kOrange),
-        ),
-      ),
-    );
-  }
-}
-
 class _IdFieldWidget extends StatelessWidget {
   final String label;
   final String value;
@@ -1795,7 +1742,6 @@ class _IdFieldWidget extends StatelessWidget {
     );
   }
 }
-
 
 class _ContactRow extends StatelessWidget {
   final IconData icon;
@@ -1895,57 +1841,6 @@ class _EventCard extends StatelessWidget {
       ),
       trailing: const Icon(Icons.chevron_right, color: Colors.grey),
       onTap: () {},
-    );
-  }
-}
-
-class _SectionLabel extends StatelessWidget {
-  final String text;
-  const _SectionLabel(this.text);
-
-  @override
-  Widget build(BuildContext context) {
-    return Text(text,
-        style: const TextStyle(
-            fontSize: 11,
-            color: Colors.grey,
-            fontWeight: FontWeight.w600,
-            letterSpacing: 0.8));
-  }
-}
-
-class _ControlPanelItem extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  final VoidCallback onTap;
-
-  const _ControlPanelItem({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return ListTile(
-      onTap: onTap,
-      leading: Container(
-        width: 36,
-        height: 36,
-        decoration: BoxDecoration(
-            color: kOrangeLight,
-            borderRadius: BorderRadius.circular(8)),
-        child: Icon(icon, color: kOrange, size: 20),
-      ),
-      title: Text(title,
-          style: const TextStyle(
-              fontSize: 14, fontWeight: FontWeight.w600)),
-      subtitle: Text(subtitle,
-          style:
-              const TextStyle(fontSize: 12, color: Colors.grey)),
-      trailing: const Icon(Icons.chevron_right, color: Colors.grey),
     );
   }
 }

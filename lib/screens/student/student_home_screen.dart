@@ -17,12 +17,12 @@ import 'student_notifications_screen.dart';
 import 'student_merchandise_screen.dart';
 
 // ─────────────────────────────────────────────────────────────
-// Custom Colors - UNIFORM
+// Custom Colors - UNIFORM (using default Colors.orange)
 // ─────────────────────────────────────────────────────────────
 class AppColors {
-  static const Color primaryDark = Color(0xFFBE4700);
-  static const Color primaryLight = Color(0xFFD47A00);
-  static const Color accent = Color(0xFFDA6937);
+  static const Color primaryDark = Colors.orange;
+  static const Color primaryLight = Color(0xFFFFCC80);
+  static const Color accent = Color(0xFFFF9800);
   static const Color background = Color(0xFFF8F9FA);
 }
 
@@ -165,7 +165,7 @@ class _HomeContentState extends State<_HomeContent> {
                   fit: BoxFit.contain,
                   errorBuilder: (_, __, ___) => const Icon(
                     Icons.school,
-                    color: AppColors.primaryDark,
+                    color: Colors.orange,
                     size: 32,
                   ),
                 ),
@@ -175,7 +175,7 @@ class _HomeContentState extends State<_HomeContent> {
                   style: TextStyle(
                     fontSize: 22,
                     fontWeight: FontWeight.bold,
-                    color: AppColors.primaryDark,
+                    color: Color(0xFFBE4700),
                   ),
                 ),
               ],
@@ -184,7 +184,7 @@ class _HomeContentState extends State<_HomeContent> {
               IconButton(
                 icon: Icon(
                   Icons.shopping_cart_outlined,
-                  color: AppColors.primaryDark,
+                  color: Colors.orange,
                 ),
                 onPressed: () {
                   Navigator.push(
@@ -198,7 +198,7 @@ class _HomeContentState extends State<_HomeContent> {
               IconButton(
                 icon: Icon(
                   Icons.notifications_outlined,
-                  color: AppColors.primaryDark,
+                  color: Colors.orange,
                 ),
                 onPressed: () {
                   Navigator.push(
@@ -288,7 +288,7 @@ class _HomeContentState extends State<_HomeContent> {
             ),
           ),
 
-          // Quick Access Icons (Uniform color)
+          // Quick Access Icons (Uniform color - Colors.orange)
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -373,7 +373,7 @@ class _HomeContentState extends State<_HomeContent> {
                       );
                     },
                     style: TextButton.styleFrom(
-                      foregroundColor: AppColors.primaryDark,
+                      foregroundColor: Colors.orange,
                     ),
                     child: const Text(
                       'View all',
@@ -477,14 +477,14 @@ class _HomeContentState extends State<_HomeContent> {
                                       fit: BoxFit.cover,
                                       errorBuilder: (_, __, ___) => Container(
                                         height: 100,
-                                        color: AppColors.primaryDark.withOpacity(0.1),
-                                        child: const Icon(Icons.event, color: AppColors.primaryDark),
+                                        color: Colors.orange.withOpacity(0.1),
+                                        child: const Icon(Icons.event, color: Colors.orange),
                                       ),
                                     )
                                   : Container(
                                       height: 100,
-                                      color: AppColors.primaryDark.withOpacity(0.1),
-                                      child: const Icon(Icons.event, color: AppColors.primaryDark),
+                                      color: Colors.orange.withOpacity(0.1),
+                                      child: const Icon(Icons.event, color: Colors.orange),
                                     ),
                             ),
                             
@@ -496,7 +496,7 @@ class _HomeContentState extends State<_HomeContent> {
                                   Container(
                                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                                     decoration: BoxDecoration(
-                                      color: AppColors.primaryDark.withOpacity(0.1),
+                                      color: Colors.orange.withOpacity(0.1),
                                       borderRadius: BorderRadius.circular(12),
                                     ),
                                     child: Text(
@@ -504,7 +504,7 @@ class _HomeContentState extends State<_HomeContent> {
                                       style: TextStyle(
                                         fontSize: 10,
                                         fontWeight: FontWeight.w600,
-                                        color: AppColors.primaryDark,
+                                        color: Colors.orange,
                                       ),
                                     ),
                                   ),
@@ -572,7 +572,7 @@ class _HomeContentState extends State<_HomeContent> {
                       );
                     },
                     style: TextButton.styleFrom(
-                      foregroundColor: AppColors.primaryDark,
+                      foregroundColor: Colors.orange,
                     ),
                     child: const Text(
                       'See all',
@@ -602,7 +602,7 @@ class _HomeContentState extends State<_HomeContent> {
 }
 
 // ─────────────────────────────────────────────────────────────
-// Quick Access Item (Uniform color - All same primaryDark)
+// Quick Access Item (Uniform color - Colors.orange)
 // ─────────────────────────────────────────────────────────────
 class _QuickAccessItem extends StatelessWidget {
   final IconData icon;
@@ -625,11 +625,11 @@ class _QuickAccessItem extends StatelessWidget {
             width: 64,
             height: 64,
             decoration: BoxDecoration(
-              color: AppColors.primaryDark,
+              color: Colors.orange,
               borderRadius: BorderRadius.circular(16),
               boxShadow: [
                 BoxShadow(
-                  color: AppColors.primaryDark.withOpacity(0.25),
+                  color: Colors.orange.withOpacity(0.25),
                   blurRadius: 6,
                   offset: const Offset(0, 3),
                 ),

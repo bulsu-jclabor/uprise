@@ -1,7 +1,18 @@
+// lib/screens/student/student_notifications_screen.dart
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../../widgets/common/loading_widget.dart';
+
+// ─────────────────────────────────────────────────────────────
+// Custom Colors - UNIFORM (Colors.orange)
+// ─────────────────────────────────────────────────────────────
+class AppColors {
+  static const Color primaryDark = Colors.orange;
+  static const Color primaryLight = Color(0xFFFFCC80);
+  static const Color accent = Color(0xFFFF9800);
+  static const Color background = Color(0xFFF5F5F5);
+}
 
 // ── Notification model ────────────────────────────────────────
 class AppNotification {
@@ -48,32 +59,32 @@ class _StudentNotificationsScreenState extends State<StudentNotificationsScreen>
       case 'event':
         return (
           icon: Icons.calendar_today_rounded,
-          bg: const Color(0xFFE6F1FB),
-          fg: const Color(0xFF185FA5),
+          bg: Colors.orange.withOpacity(0.1),
+          fg: Colors.orange,
         );
       case 'org':
         return (
           icon: Icons.check_circle_rounded,
-          bg: const Color(0xFFEAF3DE),
-          fg: const Color(0xFF3B6D11),
+          bg: Colors.orange.withOpacity(0.1),
+          fg: Colors.orange,
         );
       case 'schedule':
         return (
           icon: Icons.access_time_rounded,
-          bg: const Color(0xFFF1EFE8),
-          fg: const Color(0xFF5F5E5A),
+          bg: Colors.orange.withOpacity(0.1),
+          fg: Colors.orange,
         );
       case 'booth':
         return (
           icon: Icons.cancel_rounded,
-          bg: const Color(0xFFFCEBEB),
-          fg: const Color(0xFFA32D2D),
+          bg: Colors.orange.withOpacity(0.1),
+          fg: Colors.orange,
         );
       default: // 'announcement'
         return (
           icon: Icons.campaign_rounded,
-          bg: const Color(0xFFFAEEDA),
-          fg: const Color(0xFF854F0B),
+          bg: Colors.orange.withOpacity(0.1),
+          fg: Colors.orange,
         );
     }
   }
@@ -139,6 +150,9 @@ class _StudentNotificationsScreenState extends State<StudentNotificationsScreen>
                       .toList();
                   _markAllAsRead(notifs);
                 },
+                style: TextButton.styleFrom(
+                  foregroundColor: Colors.orange,
+                ),
                 child: const Text('Mark all read'),
               );
             },
@@ -146,7 +160,19 @@ class _StudentNotificationsScreenState extends State<StudentNotificationsScreen>
         ],
       ),
       body: uid == null
-          ? const UpriseEmptyState(icon: Icons.person_off_outlined, title: 'Not logged in')
+          ? Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.person_off_outlined, size: 48, color: Colors.grey),
+                  const SizedBox(height: 12),
+                  Text(
+                    'Not logged in',
+                    style: TextStyle(color: Colors.grey[600]),
+                  ),
+                ],
+              ),
+            )
           : StreamBuilder<QuerySnapshot>(
               stream: FirebaseFirestore.instance
                   .collection('notifications')
@@ -162,9 +188,27 @@ class _StudentNotificationsScreenState extends State<StudentNotificationsScreen>
                   );
                 }
                 if (snapshot.hasError) {
-                  return UpriseErrorState(
-                    message: 'Could not load notifications.',
-                    onRetry: () => setState(() {}),
+                  return Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.error_outline, size: 48, color: Colors.grey),
+                        const SizedBox(height: 12),
+                        Text(
+                          'Could not load notifications.',
+                          style: TextStyle(color: Colors.grey[600]),
+                        ),
+                        const SizedBox(height: 12),
+                        ElevatedButton(
+                          onPressed: () => setState(() {}),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.orange,
+                            foregroundColor: Colors.white,
+                          ),
+                          child: const Text('Retry'),
+                        ),
+                      ],
+                    ),
                   );
                 }
                 if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
@@ -268,7 +312,7 @@ class _NotifTile extends StatelessWidget {
     return InkWell(
       onTap: onTap,
       child: Container(
-        color: notif.isRead ? Colors.white : const Color(0xFFEFF6FF),
+        color: notif.isRead ? Colors.white : Colors.orange.withOpacity(0.05),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -323,7 +367,7 @@ class _NotifTile extends StatelessWidget {
                           width: 6,
                           height: 6,
                           decoration: const BoxDecoration(
-                            color: Color(0xFFE24B4A),
+                            color: Colors.orange,
                             shape: BoxShape.circle,
                           ),
                         ),

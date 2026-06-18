@@ -8,12 +8,12 @@ import 'package:intl/intl.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Custom Colors - UNIFORM
+// Custom Colors - UNIFORM (MATCHING ORANGE TABS)
 // ─────────────────────────────────────────────────────────────────────────────
 class AppColors {
-  static const Color primaryDark = Color(0xFFBE4700);
-  static const Color primaryLight = Color(0xFFD47A00);
-  static const Color accent = Color(0xFFDA6937);
+  static const Color primaryDark = Colors.orange;
+  static const Color primaryLight = Color(0xFFFFA726);
+  static const Color accent = Color(0xFFFF9800);
   static const Color background = Color(0xFFF8F9FA);
 }
 
@@ -22,9 +22,9 @@ class AppColors {
 // ─────────────────────────────────────────────────────────────────────────────
 class _C {
   static const Color white = Color(0xFFFFFFFF);
-  static const Color surface = Color(0xFFF8F9FB);
-  static const Color pageBg = Color(0xFFFBFCFE);
-  static const Color feedBg = Color(0xFFF0F2F5);
+  static const Color surface = Color(0xFFF5F7FA);
+  static const Color pageBg = Color(0xFFF0F2F5);
+  static const Color feedBg = Color(0xFFE8ECF0);
   static const Color border = Color(0xFFE8ECF0);
   static const Color borderSoft = Color(0xFFE2E6EA);
   static const Color charcoal = Color(0xFF1A202C);
@@ -40,8 +40,8 @@ class _DS {
 
   static final List<BoxShadow> cardShadow = [
     BoxShadow(
-      color: Color.fromRGBO(0, 0, 0, 0.06),
-      blurRadius: 12,
+      color: Color.fromRGBO(0, 0, 0, 0.08),
+      blurRadius: 16,
       offset: Offset(0, 4),
     ),
   ];
@@ -90,13 +90,13 @@ class _StudentBroadcastScreenState extends State<StudentBroadcastScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: _C.pageBg,
+      backgroundColor: const Color(0xFFE8ECF0), // Mas dark na grey background
       appBar: AppBar(
         title: Text(
           widget.orgName,
           style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
         ),
-        backgroundColor: _C.white,
+        backgroundColor: Colors.white,
         foregroundColor: _C.charcoal,
         elevation: 0,
         centerTitle: true,
@@ -128,7 +128,7 @@ class _StudentBroadcastScreenState extends State<StudentBroadcastScreen> {
     return Container(
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
       decoration: BoxDecoration(
-        color: _C.white,
+        color: Colors.white,
         border: const Border(bottom: BorderSide(color: _C.border)),
         boxShadow: _DS.cardShadow,
       ),
@@ -138,12 +138,12 @@ class _StudentBroadcastScreenState extends State<StudentBroadcastScreen> {
             width: 46,
             height: 46,
             decoration: BoxDecoration(
-              color: AppColors.primaryDark.withOpacity(0.10),
+              color: Colors.orange.withOpacity(0.10),
               borderRadius: BorderRadius.circular(13),
             ),
             child: Icon(
               Icons.campaign_rounded,
-              color: AppColors.primaryDark,
+              color: Colors.orange,
               size: 24,
             ),
           ),
@@ -176,21 +176,21 @@ class _StudentBroadcastScreenState extends State<StudentBroadcastScreen> {
                 padding:
                     const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 decoration: BoxDecoration(
-                  color: AppColors.primaryDark.withOpacity(0.08),
+                  color: Colors.orange.withOpacity(0.08),
                   borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: AppColors.primaryDark.withOpacity(0.2)),
+                  border: Border.all(color: Colors.orange.withOpacity(0.2)),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     const Icon(Icons.forum_outlined,
-                        size: 13, color: AppColors.primaryDark),
+                        size: 13, color: Colors.orange),
                     const SizedBox(width: 6),
                     Text('$count',
                         style: GoogleFonts.beVietnamPro(
                             fontSize: 12,
                             fontWeight: FontWeight.w600,
-                            color: AppColors.primaryDark)),
+                            color: Colors.orange)),
                   ],
                 ),
               );
@@ -203,18 +203,23 @@ class _StudentBroadcastScreenState extends State<StudentBroadcastScreen> {
 
   Widget _buildFeed() {
     return Container(
-      margin: const EdgeInsets.all(16),
+      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
       decoration: BoxDecoration(
-        color: _C.feedBg,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: _C.border),
-        boxShadow: _DS.cardShadow,
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 20,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: StreamBuilder<QuerySnapshot>(
         stream: FirebaseFirestore.instance
             .collection('broadcasts')
             .where('orgId', isEqualTo: widget.orgId)
-            .orderBy('timestamp', descending: false)  // ← LATEST AT THE BOTTOM
+            .orderBy('timestamp', descending: false)
             .snapshots(),
         builder: (context, snapshot) {
           if (snapshot.hasError) {
@@ -223,7 +228,10 @@ class _StudentBroadcastScreenState extends State<StudentBroadcastScreen> {
 
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(
-                child: CircularProgressIndicator(color: AppColors.primaryDark));
+                child: Padding(
+                  padding: EdgeInsets.all(40),
+                  child: CircularProgressIndicator(color: Colors.orange),
+                ));
           }
 
           if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
@@ -272,11 +280,10 @@ class _StudentBroadcastScreenState extends State<StudentBroadcastScreen> {
           return ListView.builder(
             reverse: true,
             controller: _scrollController,
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
             itemCount: reversedBroadcasts.length,
             itemBuilder: (context, index) {
               final broadcast = reversedBroadcasts[index];
-              // Get the original index for date separator
               final originalIndex = broadcasts.length - 1 - index;
               final showDateSeparator = originalIndex == 0 ||
                   !_isSameDay(broadcasts[originalIndex - 1].timestamp,
@@ -286,6 +293,7 @@ class _StudentBroadcastScreenState extends State<StudentBroadcastScreen> {
                 children: [
                   if (showDateSeparator)
                     _DateSeparator(timestamp: broadcast.timestamp),
+                  const SizedBox(height: 8),
                   _BroadcastCard(
                     broadcast: broadcast,
                     orgId: widget.orgId,
@@ -308,14 +316,14 @@ class _StudentBroadcastScreenState extends State<StudentBroadcastScreen> {
             width: 80,
             height: 80,
             decoration: BoxDecoration(
-              color: _C.white,
+              color: Colors.orange.withOpacity(0.05),
               borderRadius: BorderRadius.circular(20),
-              boxShadow: _DS.cardShadow,
+              border: Border.all(color: Colors.orange.withOpacity(0.1)),
             ),
             child: Icon(
               Icons.campaign_outlined,
               size: 40,
-              color: AppColors.primaryDark.withOpacity(0.4),
+              color: Colors.orange.withOpacity(0.4),
             ),
           ),
           const SizedBox(height: 16),
@@ -342,13 +350,13 @@ class _StudentBroadcastScreenState extends State<StudentBroadcastScreen> {
             width: 56,
             height: 56,
             decoration: BoxDecoration(
-              color: _C.white,
+              color: Colors.white,
               borderRadius: BorderRadius.circular(16),
               boxShadow: _DS.cardShadow,
             ),
             child: Icon(
               Icons.error_outline_rounded,
-              color: AppColors.primaryDark,
+              color: Colors.orange,
               size: 28,
             ),
           ),
@@ -548,17 +556,22 @@ class _DateSeparator extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 16),
+      padding: const EdgeInsets.symmetric(vertical: 12),
       child: Row(
         children: [
-          const Expanded(child: Divider(color: _C.border, thickness: 1)),
+          const Expanded(child: Divider(color: Color(0xFFE8ECF0), thickness: 1)),
           Container(
             margin: const EdgeInsets.symmetric(horizontal: 12),
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
             decoration: BoxDecoration(
-              color: _C.white,
+              color: Colors.white,
               borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: _C.border),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.04),
+                  blurRadius: 8,
+                ),
+              ],
             ),
             child: Text(_label(),
                 style: GoogleFonts.beVietnamPro(
@@ -566,7 +579,7 @@ class _DateSeparator extends StatelessWidget {
                     fontWeight: FontWeight.w600,
                     color: _C.darkGray)),
           ),
-          const Expanded(child: Divider(color: _C.border, thickness: 1)),
+          const Expanded(child: Divider(color: Color(0xFFE8ECF0), thickness: 1)),
         ],
       ),
     );
@@ -574,7 +587,7 @@ class _DateSeparator extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Broadcast Card with Replies
+// Broadcast Card with Replies - IMPROVED WITH BETTER VISIBILITY
 // ─────────────────────────────────────────────────────────────────────────────
 class _BroadcastCard extends StatefulWidget {
   final BroadcastModel broadcast;
@@ -620,7 +633,7 @@ class _BroadcastCardState extends State<_BroadcastCard> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Please login to like'),
-          backgroundColor: AppColors.primaryDark,
+          backgroundColor: Colors.orange,
         ),
       );
       return;
@@ -723,7 +736,7 @@ class _BroadcastCardState extends State<_BroadcastCard> {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
                     content: Text('Reply added!'),
-                    backgroundColor: AppColors.primaryDark,
+                    backgroundColor: Colors.orange,
                   ),
                 );
               }
@@ -777,7 +790,7 @@ class _BroadcastCardState extends State<_BroadcastCard> {
                   decoration: InputDecoration(
                     hintText: 'Write your reply here...',
                     filled: true,
-                    fillColor: _C.surface,
+                    fillColor: const Color(0xFFF5F7FA),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
                       borderSide: BorderSide.none,
@@ -812,7 +825,7 @@ class _BroadcastCardState extends State<_BroadcastCard> {
                       child: ElevatedButton(
                         onPressed: isSubmitting ? null : submitReply,
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.primaryDark,
+                          backgroundColor: Colors.orange,
                           foregroundColor: Colors.white,
                           elevation: 0,
                           padding: const EdgeInsets.symmetric(vertical: 14),
@@ -855,31 +868,60 @@ class _BroadcastCardState extends State<_BroadcastCard> {
     final b = widget.broadcast;
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 16),
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 12,
+            offset: const Offset(0, 2),
+          ),
+        ],
+        border: Border.all(color: const Color(0xFFF0F2F5)),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Header: Author and time
           Row(
             children: [
-              Text(b.authorName,
-                  style: GoogleFonts.beVietnamPro(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                      color: _C.charcoal)),
-              const SizedBox(width: 8),
-              const Icon(Icons.circle, size: 3, color: _C.textFaint),
-              const SizedBox(width: 8),
-              Text(_timeLabel(b.timestamp),
-                  style: GoogleFonts.beVietnamPro(
-                      fontSize: 11, color: _C.textFaint)),
+              CircleAvatar(
+                radius: 16,
+                backgroundColor: Colors.orange.withOpacity(0.1),
+                child: Text(
+                  b.authorName.isNotEmpty ? b.authorName[0].toUpperCase() : '?',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.orange,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(b.authorName,
+                        style: GoogleFonts.beVietnamPro(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                            color: _C.charcoal)),
+                    Text(_timeLabel(b.timestamp),
+                        style: GoogleFonts.beVietnamPro(
+                            fontSize: 11, color: _C.textFaint)),
+                  ],
+                ),
+              ),
               if (b.pinned) ...[
-                const SizedBox(width: 8),
                 Container(
                   padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
-                    color: AppColors.primaryDark.withOpacity(0.1),
+                    color: Colors.orange.withOpacity(0.1),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Row(
@@ -887,45 +929,41 @@ class _BroadcastCardState extends State<_BroadcastCard> {
                     children: [
                       Icon(
                         Icons.push_pin_rounded,
-                        size: 10,
-                        color: AppColors.primaryDark,
+                        size: 12,
+                        color: Colors.orange,
                       ),
                       const SizedBox(width: 4),
                       Text('Pinned',
                           style: GoogleFonts.beVietnamPro(
-                              fontSize: 9,
+                              fontSize: 10,
                               fontWeight: FontWeight.w600,
-                              color: AppColors.primaryDark)),
+                              color: Colors.orange)),
                     ],
                   ),
                 ),
               ],
             ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 12),
 
-          // Message Bubble
+          // Message Bubble - IMPROVED WITH BETTER VISIBILITY
           Container(
+            width: double.infinity,
             decoration: BoxDecoration(
               gradient: const LinearGradient(
                 colors: [
-                  Color(0xFFBE4700),
-                  Color(0xFFD47A00),
+                  Colors.orange,
+                  Color(0xFFFFA726),
                 ],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
-              borderRadius: const BorderRadius.only(
-                topLeft: Radius.circular(4),
-                topRight: Radius.circular(14),
-                bottomLeft: Radius.circular(14),
-                bottomRight: Radius.circular(14),
-              ),
+              borderRadius: BorderRadius.circular(16),
               boxShadow: [
                 BoxShadow(
-                  color: AppColors.primaryDark.withOpacity(0.14),
-                  blurRadius: 8,
-                  offset: const Offset(0, 3),
+                  color: Colors.orange.withOpacity(0.2),
+                  blurRadius: 12,
+                  offset: const Offset(0, 4),
                 ),
               ],
             ),
@@ -935,8 +973,8 @@ class _BroadcastCardState extends State<_BroadcastCard> {
                 if (b.imageUrl != null && b.imageUrl!.isNotEmpty)
                   ClipRRect(
                     borderRadius: const BorderRadius.only(
-                      topLeft: Radius.circular(4),
-                      topRight: Radius.circular(14),
+                      topLeft: Radius.circular(16),
+                      topRight: Radius.circular(16),
                     ),
                     child: Image(
                       image: _imageProviderFromUrl(b.imageUrl!),
@@ -947,16 +985,17 @@ class _BroadcastCardState extends State<_BroadcastCard> {
                     ),
                   ),
                 Padding(
-                  padding: const EdgeInsets.all(14),
+                  padding: const EdgeInsets.all(16),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       if (b.content.isNotEmpty)
                         Text(b.content,
                             style: GoogleFonts.beVietnamPro(
-                                fontSize: 14,
+                                fontSize: 15,
                                 color: Colors.white,
-                                height: 1.5)),
+                                height: 1.6,
+                                fontWeight: FontWeight.w400)),
                       if (b.attachments.isNotEmpty) ...[
                         if (b.content.isNotEmpty) const SizedBox(height: 12),
                         ...b.attachments.map((att) =>
@@ -968,24 +1007,25 @@ class _BroadcastCardState extends State<_BroadcastCard> {
               ],
             ),
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 12),
 
-          // Like and Reply buttons
+          // Like and Reply buttons - IMPROVED
           Row(
             children: [
               GestureDetector(
                 onTap: _toggleLike,
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                   decoration: BoxDecoration(
                     color: _isLiked
-                        ? AppColors.primaryDark.withOpacity(0.1)
-                        : _C.surface,
-                    borderRadius: BorderRadius.circular(18),
+                        ? Colors.orange.withOpacity(0.1)
+                        : const Color(0xFFF5F7FA),
+                    borderRadius: BorderRadius.circular(20),
                     border: Border.all(
                       color: _isLiked
-                          ? AppColors.primaryDark
-                          : _C.borderSoft,
+                          ? Colors.orange
+                          : const Color(0xFFE8ECF0),
+                      width: _isLiked ? 1.5 : 1,
                     ),
                   ),
                   child: Row(
@@ -993,16 +1033,16 @@ class _BroadcastCardState extends State<_BroadcastCard> {
                     children: [
                       Icon(
                         _isLiked ? Icons.favorite : Icons.favorite_border,
-                        size: 16,
-                        color: _isLiked ? AppColors.primaryDark : _C.darkGray,
+                        size: 18,
+                        color: _isLiked ? Colors.orange : _C.darkGray,
                       ),
-                      const SizedBox(width: 6),
+                      const SizedBox(width: 8),
                       Text(
                         '$_likes',
                         style: GoogleFonts.beVietnamPro(
-                          fontSize: 12,
+                          fontSize: 13,
                           fontWeight: FontWeight.w600,
-                          color: _isLiked ? AppColors.primaryDark : _C.darkGray,
+                          color: _isLiked ? Colors.orange : _C.darkGray,
                         ),
                       ),
                     ],
@@ -1013,25 +1053,25 @@ class _BroadcastCardState extends State<_BroadcastCard> {
               GestureDetector(
                 onTap: _showReplyDialog,
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                   decoration: BoxDecoration(
-                    color: _C.surface,
-                    borderRadius: BorderRadius.circular(18),
-                    border: Border.all(color: _C.borderSoft),
+                    color: const Color(0xFFF5F7FA),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: const Color(0xFFE8ECF0)),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       const Icon(
                         Icons.mode_comment_outlined,
-                        size: 16,
+                        size: 18,
                         color: _C.darkGray,
                       ),
-                      const SizedBox(width: 6),
+                      const SizedBox(width: 8),
                       Text(
                         '${b.replyCount}',
                         style: GoogleFonts.beVietnamPro(
-                          fontSize: 12,
+                          fontSize: 13,
                           fontWeight: FontWeight.w600,
                           color: _C.darkGray,
                         ),
@@ -1043,7 +1083,7 @@ class _BroadcastCardState extends State<_BroadcastCard> {
             ],
           ),
 
-          // ── REPLIES SECTION (latest at the bottom) ──
+          // ── REPLIES SECTION (IMPROVED) ──
           const SizedBox(height: 12),
           StreamBuilder<QuerySnapshot>(
             stream: FirebaseFirestore.instance
@@ -1064,46 +1104,66 @@ class _BroadcastCardState extends State<_BroadcastCard> {
               final replies = replySnapshot.data!.docs;
               final currentUser = FirebaseAuth.instance.currentUser;
 
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.only(left: 20),
-                    child: Column(
-                      children: replies.map((replyDoc) {
-                        final replyData = replyDoc.data() as Map<String, dynamic>;
-                        final replyAuthor = replyData['authorName'] ?? 'Anonymous';
-                        final replyContent = replyData['content'] ?? '';
-                        final replyTime = replyData['timestamp'] as Timestamp?;
-                        final isOwnReply = currentUser?.uid == replyData['authorId'];
+              return Container(
+                padding: const EdgeInsets.only(top: 12),
+                decoration: BoxDecoration(
+                  border: Border(
+                    top: BorderSide(color: const Color(0xFFF0F2F5), width: 1),
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Replies',
+                      style: GoogleFonts.beVietnamPro(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: _C.darkGray,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    ...replies.map((replyDoc) {
+                      final replyData = replyDoc.data() as Map<String, dynamic>;
+                      final replyAuthor = replyData['authorName'] ?? 'Anonymous';
+                      final replyContent = replyData['content'] ?? '';
+                      final replyTime = replyData['timestamp'] as Timestamp?;
+                      final isOwnReply = currentUser?.uid == replyData['authorId'];
 
-                        return Padding(
-                          padding: const EdgeInsets.only(bottom: 8),
-                          child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Container(
-                                width: 28,
-                                height: 28,
-                                decoration: BoxDecoration(
-                                  color: isOwnReply
-                                      ? AppColors.primaryDark.withOpacity(0.1)
-                                      : Colors.grey.shade200,
-                                  shape: BoxShape.circle,
-                                ),
-                                child: Center(
-                                  child: Text(
-                                    replyAuthor.isNotEmpty ? replyAuthor[0].toUpperCase() : '?',
-                                    style: TextStyle(
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.bold,
-                                      color: isOwnReply ? AppColors.primaryDark : Colors.grey.shade600,
-                                    ),
-                                  ),
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 10),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            CircleAvatar(
+                              radius: 14,
+                              backgroundColor: isOwnReply
+                                  ? Colors.orange.withOpacity(0.1)
+                                  : const Color(0xFFF5F7FA),
+                              child: Text(
+                                replyAuthor.isNotEmpty ? replyAuthor[0].toUpperCase() : '?',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                  color: isOwnReply ? Colors.orange : _C.darkGray,
                                 ),
                               ),
-                              const SizedBox(width: 10),
-                              Expanded(
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Container(
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: isOwnReply
+                                      ? Colors.orange.withOpacity(0.05)
+                                      : const Color(0xFFF5F7FA),
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(
+                                    color: isOwnReply
+                                        ? Colors.orange.withOpacity(0.2)
+                                        : const Color(0xFFE8ECF0),
+                                  ),
+                                ),
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
@@ -1114,15 +1174,15 @@ class _BroadcastCardState extends State<_BroadcastCard> {
                                           style: TextStyle(
                                             fontSize: 12,
                                             fontWeight: FontWeight.w600,
-                                            color: isOwnReply ? AppColors.primaryDark : _C.charcoal,
+                                            color: isOwnReply ? Colors.orange : _C.charcoal,
                                           ),
                                         ),
                                         if (isOwnReply) ...[
                                           const SizedBox(width: 6),
                                           Container(
-                                            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
                                             decoration: BoxDecoration(
-                                              color: AppColors.primaryDark.withOpacity(0.1),
+                                              color: Colors.orange.withOpacity(0.1),
                                               borderRadius: BorderRadius.circular(4),
                                             ),
                                             child: Text(
@@ -1130,41 +1190,41 @@ class _BroadcastCardState extends State<_BroadcastCard> {
                                               style: TextStyle(
                                                 fontSize: 8,
                                                 fontWeight: FontWeight.w600,
-                                                color: AppColors.primaryDark,
+                                                color: Colors.orange,
                                               ),
                                             ),
                                           ),
                                         ],
-                                        const SizedBox(width: 8),
+                                        const Spacer(),
                                         if (replyTime != null)
                                           Text(
                                             DateFormat('h:mm a').format(replyTime.toDate()),
                                             style: const TextStyle(
-                                              fontSize: 9,
+                                              fontSize: 10,
                                               color: _C.textFaint,
                                             ),
                                           ),
                                       ],
                                     ),
-                                    const SizedBox(height: 2),
+                                    const SizedBox(height: 4),
                                     Text(
                                       replyContent,
                                       style: const TextStyle(
                                         fontSize: 13,
                                         color: _C.charcoal,
+                                        height: 1.4,
                                       ),
                                     ),
                                   ],
                                 ),
                               ),
-                            ],
-                          ),
-                        );
-                      }).toList(),
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                ],
+                            ),
+                          ],
+                        ),
+                      );
+                    }).toList(),
+                  ],
+                ),
               );
             },
           ),

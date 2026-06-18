@@ -6,12 +6,12 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'student_broadcast_screen.dart';
 
 // ─────────────────────────────────────────────────────────────
-//  CUSTOM COLORS - UNIFORM
+//  CUSTOM COLORS - UNIFORM (MATCHING ORANGE TABS)
 // ─────────────────────────────────────────────────────────────
 class AppColors {
-  static const Color primaryDark = Color(0xFFBE4700);
-  static const Color primaryLight = Color(0xFFD47A00);
-  static const Color accent = Color(0xFFDA6937);
+  static const Color primaryDark = Colors.orange;
+  static const Color primaryLight = Color(0xFFFFA726);
+  static const Color accent = Color(0xFFFF9800);
   static const Color background = Color(0xFFF8F9FA);
 }
 
@@ -140,7 +140,7 @@ class _StudentOrganizationsDetailsScreenState
                         height: 200,
                         width: double.infinity,
                         decoration: BoxDecoration(
-                          color: AppColors.primaryDark.withOpacity(0.1),
+                          color: Colors.orange.withOpacity(0.1),
                           image: _buildCoverImage(org['coverUrl']),
                         ),
                         child: (org['coverUrl'] == null ||
@@ -149,7 +149,7 @@ class _StudentOrganizationsDetailsScreenState
                                 child: Icon(
                                   Icons.business,
                                   size: 60,
-                                  color: AppColors.primaryDark.withOpacity(0.3),
+                                  color: Colors.orange.withOpacity(0.3),
                                 ),
                               )
                             : null,
@@ -179,7 +179,7 @@ class _StudentOrganizationsDetailsScreenState
                                     style: TextStyle(
                                       fontSize: 32,
                                       fontWeight: FontWeight.bold,
-                                      color: AppColors.primaryDark,
+                                      color: Colors.orange,
                                     ),
                                   )
                                 : null,
@@ -262,12 +262,12 @@ class _StudentOrganizationsDetailsScreenState
                               Container(
                                 padding: const EdgeInsets.all(10),
                                 decoration: BoxDecoration(
-                                  color: AppColors.primaryDark.withOpacity(0.1),
+                                  color: Colors.orange.withOpacity(0.1),
                                   borderRadius: BorderRadius.circular(10),
                                 ),
                                 child: Icon(
                                   Icons.person_outline,
-                                  color: AppColors.primaryDark,
+                                  color: Colors.orange,
                                 ),
                               ),
                               const SizedBox(width: 12),
@@ -331,7 +331,7 @@ class _StudentOrganizationsDetailsScreenState
                               return ListTile(
                                 contentPadding: EdgeInsets.zero,
                                 leading: CircleAvatar(
-                                  backgroundColor: AppColors.primaryDark.withOpacity(0.1),
+                                  backgroundColor: Colors.orange.withOpacity(0.1),
                                   backgroundImage: _buildLogoImage(
                                       officer['photoUrl']),
                                   child: (officer['photoUrl'] == null ||
@@ -341,7 +341,7 @@ class _StudentOrganizationsDetailsScreenState
                                       ? Text(
                                           (officer['name'] ?? '')[0].toUpperCase(),
                                           style: TextStyle(
-                                            color: AppColors.primaryDark,
+                                            color: Colors.orange,
                                             fontWeight: FontWeight.bold,
                                           ),
                                         )
@@ -400,7 +400,7 @@ class _StudentOrganizationsDetailsScreenState
                                       height: 60,
                                       alignment: Alignment.center,
                                       decoration: BoxDecoration(
-                                        color: AppColors.primaryDark.withOpacity(0.1),
+                                        color: Colors.orange.withOpacity(0.1),
                                         borderRadius: BorderRadius.circular(10),
                                       ),
                                       child: Column(
@@ -414,7 +414,7 @@ class _StudentOrganizationsDetailsScreenState
                                             style: TextStyle(
                                               fontSize: 16,
                                               fontWeight: FontWeight.bold,
-                                              color: AppColors.primaryDark,
+                                              color: Colors.orange,
                                             ),
                                           ),
                                           Text(
@@ -424,7 +424,7 @@ class _StudentOrganizationsDetailsScreenState
                                                 .last,
                                             style: TextStyle(
                                               fontSize: 10,
-                                              color: AppColors.primaryDark.withOpacity(0.7),
+                                              color: Colors.orange.withOpacity(0.7),
                                             ),
                                           ),
                                         ],
@@ -529,7 +529,7 @@ class _StudentOrganizationsDetailsScreenState
                                       decoration: BoxDecoration(
                                         color: isUrgent
                                             ? Colors.red[100]
-                                            : AppColors.primaryDark.withOpacity(0.1),
+                                            : Colors.orange.withOpacity(0.1),
                                         borderRadius: BorderRadius.circular(8),
                                       ),
                                       child: Icon(
@@ -539,7 +539,7 @@ class _StudentOrganizationsDetailsScreenState
                                         size: 18,
                                         color: isUrgent
                                             ? Colors.red
-                                            : AppColors.primaryDark,
+                                            : Colors.orange,
                                       ),
                                     ),
                                     const SizedBox(width: 12),

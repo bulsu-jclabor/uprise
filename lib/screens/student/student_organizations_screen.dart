@@ -5,13 +5,13 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'student_organization_details_screen.dart';
 
 // ─────────────────────────────────────────────────────────────
-//  CUSTOM COLORS - UNIFORM
+//  CUSTOM COLORS - UNIFORM (Colors.orange)
 // ─────────────────────────────────────────────────────────────
 class AppColors {
-  static const Color primaryDark = Color(0xFFBE4700);
-  static const Color primaryLight = Color(0xFFD47A00);
-  static const Color accent = Color(0xFFDA6937);
-  static const Color background = Color(0xFFF8F9FA);
+  static const Color primaryDark = Colors.orange;
+  static const Color primaryLight = Color(0xFFFFCC80);
+  static const Color accent = Color(0xFFFF9800);
+  static const Color background = Color(0xFFF5F5F5);
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -78,9 +78,9 @@ class _StudentOrganizationsScreenState extends State<StudentOrganizationsScreen>
         centerTitle: true,
         bottom: TabBar(
           controller: _tabController,
-          labelColor: AppColors.primaryDark,
+          labelColor: Colors.orange,
           unselectedLabelColor: Colors.grey,
-          indicatorColor: AppColors.primaryDark,
+          indicatorColor: Colors.orange,
           indicatorWeight: 3,
           labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
           unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w500, fontSize: 13),
@@ -137,7 +137,7 @@ class _StudentOrganizationsScreenState extends State<StudentOrganizationsScreen>
               _tabController.animateTo(1);
             },
             style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primaryDark,
+              backgroundColor: Colors.orange,
               foregroundColor: Colors.white,
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
               shape: RoundedRectangleBorder(
@@ -304,7 +304,7 @@ class _StudentOrganizationsScreenState extends State<StudentOrganizationsScreen>
                               width: 56,
                               height: 56,
                               decoration: BoxDecoration(
-                                color: AppColors.primaryDark.withOpacity(0.1),
+                                color: Colors.orange.withOpacity(0.1),
                                 borderRadius: BorderRadius.circular(14),
                               ),
                               child: ClipRRect(
@@ -319,7 +319,7 @@ class _StudentOrganizationsScreenState extends State<StudentOrganizationsScreen>
                                             style: TextStyle(
                                               fontSize: 20,
                                               fontWeight: FontWeight.bold,
-                                              color: AppColors.primaryDark,
+                                              color: Colors.orange,
                                             ),
                                           ),
                                         ),
@@ -330,7 +330,7 @@ class _StudentOrganizationsScreenState extends State<StudentOrganizationsScreen>
                                           style: TextStyle(
                                             fontSize: 20,
                                             fontWeight: FontWeight.bold,
-                                            color: AppColors.primaryDark,
+                                            color: Colors.orange,
                                           ),
                                         ),
                                       ),

@@ -7,13 +7,13 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 
 // ─────────────────────────────────────────────────────────────
-// Custom Colors - UNIFORM (same as home page)
+// Custom Colors - UNIFORM (Colors.orange)
 // ─────────────────────────────────────────────────────────────
 class AppColors {
-  static const Color primaryDark = Color(0xFFBE4700);
-  static const Color primaryLight = Color(0xFFD47A00);
-  static const Color accent = Color(0xFFDA6937);
-  static const Color background = Color(0xFFF8F9FA);
+  static const Color primaryDark = Colors.orange;
+  static const Color primaryLight = Color(0xFFFFCC80);
+  static const Color accent = Color(0xFFFF9800);
+  static const Color background = Color(0xFFF5F5F5);
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -270,17 +270,13 @@ class _StudentMerchandiseScreenState
           icon: const Icon(Icons.arrow_back, color: Colors.black),
           onPressed: () => Navigator.pop(context),
         ),
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(2),
-          child: Container(height: 2, color: AppColors.primaryDark),
-        ),
         actions: [
           Stack(
             alignment: Alignment.center,
             children: [
               IconButton(
                 icon: Icon(Icons.shopping_cart_outlined,
-                    color: AppColors.primaryDark),
+                    color: Colors.orange),
                 onPressed: _cart.isEmpty
                     ? null
                     : () => _openCart(context),
@@ -293,7 +289,7 @@ class _StudentMerchandiseScreenState
                     width: 16,
                     height: 16,
                     decoration: BoxDecoration(
-                        color: AppColors.primaryDark, shape: BoxShape.circle),
+                        color: Colors.orange, shape: BoxShape.circle),
                     child: Center(
                       child: Text(
                         _cartCount().toString(),
@@ -310,7 +306,7 @@ class _StudentMerchandiseScreenState
         ],
       ),
       body: _loadingOrgId
-          ? const Center(child: CircularProgressIndicator(color: AppColors.primaryDark))
+          ? const Center(child: CircularProgressIndicator(color: Colors.orange))
           : Column(
               children: [
                 _TabRow(
@@ -368,7 +364,7 @@ class _StudentMerchandiseScreenState
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
                 content: Text('Order placed successfully!'),
-                backgroundColor: AppColors.primaryDark,
+                backgroundColor: Colors.orange,
               ),
             );
             _tabController.animateTo(1);
@@ -427,7 +423,7 @@ class _TabPill extends StatelessWidget {
         duration: const Duration(milliseconds: 180),
         padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
         decoration: BoxDecoration(
-          color: selected ? AppColors.primaryDark : Colors.transparent,
+          color: selected ? Colors.orange : Colors.transparent,
           borderRadius: BorderRadius.circular(20),
         ),
         child: Text(
@@ -492,7 +488,7 @@ class _ProductsTabState extends State<_ProductsTab> {
             builder: (ctx, snap) {
               if (snap.connectionState == ConnectionState.waiting) {
                 return const Center(
-                    child: CircularProgressIndicator(color: AppColors.primaryDark));
+                    child: CircularProgressIndicator(color: Colors.orange));
               }
               if (snap.hasError) {
                 return _EmptyHint(
@@ -646,10 +642,10 @@ class _CategoryRow extends StatelessWidget {
               padding:
                   const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
               decoration: BoxDecoration(
-                color: sel ? AppColors.primaryDark : Colors.transparent,
+                color: sel ? Colors.orange : Colors.transparent,
                 borderRadius: BorderRadius.circular(16),
                 border: Border.all(
-                    color: sel ? AppColors.primaryDark : Colors.black12, width: 1),
+                    color: sel ? Colors.orange : Colors.black12, width: 1),
               ),
               child: Text(
                 cat,
@@ -733,7 +729,7 @@ class _ProductCard extends StatelessWidget {
                         padding: const EdgeInsets.symmetric(
                             horizontal: 6, vertical: 2),
                         decoration: BoxDecoration(
-                          color: AppColors.primaryDark,
+                          color: Colors.orange,
                           borderRadius: BorderRadius.circular(10),
                         ),
                         child: Text(
@@ -776,7 +772,7 @@ class _ProductCard extends StatelessWidget {
                         style: const TextStyle(
                             fontSize: 13,
                             fontWeight: FontWeight.w700,
-                            color: AppColors.primaryDark),
+                            color: Colors.orange),
                       ),
                       if (product.inStock && product.status != 'discontinued')
                         GestureDetector(
@@ -784,7 +780,7 @@ class _ProductCard extends StatelessWidget {
                           child: Container(
                             padding: const EdgeInsets.all(6),
                             decoration: const BoxDecoration(
-                              color: AppColors.primaryDark,
+                              color: Colors.orange,
                               shape: BoxShape.circle,
                             ),
                             child: const Icon(Icons.add,
@@ -850,13 +846,13 @@ class _ProductCard extends StatelessWidget {
   Widget _imgPlaceholder(String name) => Container(
         height: 120,
         width: double.infinity,
-        color: AppColors.primaryDark.withOpacity(0.1),
+        color: Colors.orange.withOpacity(0.1),
         child: Center(
           child: Text(
             name.isNotEmpty ? name[0].toUpperCase() : '?',
             style: const TextStyle(
                 fontSize: 36,
-                color: AppColors.primaryDark,
+                color: Colors.orange,
                 fontWeight: FontWeight.bold),
           ),
         ),
@@ -938,7 +934,7 @@ class _ProductCard extends StatelessWidget {
                   style: const TextStyle(
                       fontSize: 22,
                       fontWeight: FontWeight.w800,
-                      color: AppColors.primaryDark),
+                      color: Colors.orange),
                 ),
                 const SizedBox(height: 12),
                 Text(
@@ -988,7 +984,7 @@ class _ProductCard extends StatelessWidget {
                               : 'Out of Stock',
                     ),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.primaryDark,
+                      backgroundColor: Colors.orange,
                       foregroundColor: Colors.white,
                       disabledBackgroundColor: Colors.grey.shade300,
                       padding: const EdgeInsets.symmetric(vertical: 14),
@@ -1021,7 +1017,7 @@ class _ProductCard extends StatelessWidget {
             errorBuilder: (_, __, ___) => Container(
               height: 200,
               decoration: BoxDecoration(
-                color: AppColors.primaryDark.withOpacity(0.1),
+                color: Colors.orange.withOpacity(0.1),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: const Icon(
@@ -1051,7 +1047,7 @@ class _ProductCard extends StatelessWidget {
           errorBuilder: (_, __, ___) => Container(
             height: 200,
             decoration: BoxDecoration(
-              color: AppColors.primaryDark.withOpacity(0.1),
+              color: Colors.orange.withOpacity(0.1),
               borderRadius: BorderRadius.circular(12),
             ),
             child: const Icon(
@@ -1066,7 +1062,7 @@ class _ProductCard extends StatelessWidget {
     return Container(
       height: 200,
       decoration: BoxDecoration(
-        color: AppColors.primaryDark.withOpacity(0.1),
+        color: Colors.orange.withOpacity(0.1),
         borderRadius: BorderRadius.circular(12),
       ),
       child: const Icon(
@@ -1148,10 +1144,10 @@ class _VariantPickerSheetState extends State<_VariantPickerSheet> {
                   padding: const EdgeInsets.symmetric(
                       horizontal: 14, vertical: 12),
                   decoration: BoxDecoration(
-                    color: selected ? AppColors.primaryDark.withOpacity(0.1) : AppColors.background,
+                    color: selected ? Colors.orange.withOpacity(0.1) : AppColors.background,
                     borderRadius: BorderRadius.circular(10),
                     border: Border.all(
-                      color: selected ? AppColors.primaryDark : Colors.transparent,
+                      color: selected ? Colors.orange : Colors.transparent,
                       width: 1.5,
                     ),
                   ),
@@ -1202,14 +1198,14 @@ class _VariantPickerSheetState extends State<_VariantPickerSheet> {
                         style: TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.w700,
-                          color: inStock ? AppColors.primaryDark : Colors.black38,
+                          color: inStock ? Colors.orange : Colors.black38,
                         ),
                       ),
                       if (selected)
                         const Padding(
                           padding: EdgeInsets.only(left: 8),
                           child: Icon(Icons.check_circle,
-                              color: AppColors.primaryDark, size: 18),
+                              color: Colors.orange, size: 18),
                         ),
                     ],
                   ),
@@ -1225,7 +1221,7 @@ class _VariantPickerSheetState extends State<_VariantPickerSheet> {
                   ? null
                   : () => widget.onSelect(variants[_selectedIndex!]),
               style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primaryDark,
+                backgroundColor: Colors.orange,
                 foregroundColor: Colors.white,
                 disabledBackgroundColor: Colors.grey.shade300,
                 padding: const EdgeInsets.symmetric(vertical: 14),
@@ -1397,7 +1393,7 @@ class _MyOrdersTab extends StatelessWidget {
       builder: (ctx, snap) {
         if (snap.connectionState == ConnectionState.waiting) {
           return const Center(
-              child: CircularProgressIndicator(color: AppColors.primaryDark));
+              child: CircularProgressIndicator(color: Colors.orange));
         }
         if (snap.hasError) {
           return _EmptyHint(
@@ -1519,7 +1515,7 @@ class _OrderTile extends StatelessWidget {
                 style: const TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.bold,
-                    color: AppColors.primaryDark),
+                    color: Colors.orange),
               ),
             ],
           ),
@@ -1578,7 +1574,7 @@ class _CartSheet extends StatelessWidget {
             padding: EdgeInsets.symmetric(horizontal: 20),
             child: Row(
               children: [
-                Icon(Icons.shopping_cart_outlined, color: AppColors.primaryDark),
+                Icon(Icons.shopping_cart_outlined, color: Colors.orange),
                 SizedBox(width: 8),
                 Text(
                   'Your Cart',
@@ -1630,7 +1626,7 @@ class _CartSheet extends StatelessWidget {
                   style: const TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w800,
-                      color: AppColors.primaryDark),
+                      color: Colors.orange),
                 ),
               ],
             ),
@@ -1645,7 +1641,7 @@ class _CartSheet extends StatelessWidget {
                     ? null
                     : () => _placeOrder(context),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primaryDark,
+                  backgroundColor: Colors.orange,
                   foregroundColor: Colors.white,
                   disabledBackgroundColor: Colors.grey.shade300,
                   padding: const EdgeInsets.symmetric(vertical: 14),
@@ -1845,14 +1841,14 @@ class _CartItemRow extends StatelessWidget {
                 : Container(
                     width: 44,
                     height: 44,
-                    color: AppColors.primaryDark.withOpacity(0.1),
+                    color: Colors.orange.withOpacity(0.1),
                     child: Center(
                       child: Text(
                         item.product.name.isNotEmpty
                             ? item.product.name[0]
                             : '?',
                         style: const TextStyle(
-                            color: AppColors.primaryDark, fontWeight: FontWeight.bold),
+                            color: Colors.orange, fontWeight: FontWeight.bold),
                       ),
                     ),
                   ),
@@ -1907,7 +1903,7 @@ class _CartItemRow extends StatelessWidget {
             style: const TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w700,
-                color: AppColors.primaryDark),
+                color: Colors.orange),
           ),
           const SizedBox(width: 4),
           IconButton(
@@ -1961,7 +1957,7 @@ class _PickupBadge extends StatelessWidget {
         bg = const Color(0xFFECFDF5); fg = const Color(0xFF059669); label = 'CLAIMED';
         break;
       default:
-        bg = const Color(0xFFFFF3E0); fg = AppColors.primaryDark; label = 'PENDING';
+        bg = const Color(0xFFFFF3E0); fg = Colors.orange; label = 'PENDING';
     }
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
