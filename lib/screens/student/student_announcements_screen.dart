@@ -5,6 +5,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import '../../widgets/student/event_registration_form_dialog.dart';
 
 // ─────────────────────────────────────────────────────────────
 // Custom Colors - UNIFORM
@@ -46,6 +47,9 @@ class AnnouncementData {
   final String body;
   final List<String> hashtags;
   final List<Map<String, String>> attachments;
+  final String linkedEventId;
+  final String linkedProposalId;
+  final String linkedEventTitle;
 
   AnnouncementData({
     required this.id,
@@ -61,6 +65,9 @@ class AnnouncementData {
     required this.body,
     required this.hashtags,
     required this.attachments,
+    this.linkedEventId = '',
+    this.linkedProposalId = '',
+    this.linkedEventTitle = '',
   });
 
   factory AnnouncementData.fromFirestore(DocumentSnapshot doc) {
@@ -95,6 +102,9 @@ class AnnouncementData {
                 'type': _guessType(att['name'] as String? ?? ''),
               })
           .toList(),
+      linkedEventId: d['linkedEventId'] as String? ?? '',
+      linkedProposalId: d['linkedProposalId'] as String? ?? '',
+      linkedEventTitle: d['linkedEventTitle'] as String? ?? '',
     );
   }
 
@@ -556,6 +566,31 @@ class _AnnouncementCardState extends State<_AnnouncementCard> {
                   ),
 
                   const SizedBox(height: 12),
+
+                  // ── Register for Event ──
+                  if (widget.ann.linkedProposalId.isNotEmpty) ...[
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        onPressed: () => DynamicRegistrationDialog.show(
+                          context,
+                          proposalId: widget.ann.linkedProposalId,
+                          eventId: widget.ann.linkedEventId,
+                          eventTitle: widget.ann.linkedEventTitle,
+                        ),
+                        icon: const Icon(Icons.event_available_rounded, size: 16),
+                        label: Text('Register for ${widget.ann.linkedEventTitle}',
+                            overflow: TextOverflow.ellipsis),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: AppColors.primaryDark,
+                          side: const BorderSide(color: AppColors.primaryDark),
+                          padding: const EdgeInsets.symmetric(vertical: 10),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                  ],
 
                   // ── Engagement Icons ──
                   Row(
@@ -1199,6 +1234,32 @@ class _AnnouncementDetailScreenState extends State<AnnouncementDetailScreen> {
                       ),
 
                       const SizedBox(height: 20),
+
+                      // ── Register for Event ──
+                      if (ann.linkedProposalId.isNotEmpty) ...[
+                        SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton.icon(
+                            onPressed: () => DynamicRegistrationDialog.show(
+                              context,
+                              proposalId: ann.linkedProposalId,
+                              eventId: ann.linkedEventId,
+                              eventTitle: ann.linkedEventTitle,
+                            ),
+                            icon: const Icon(Icons.event_available_rounded, size: 18),
+                            label: Text('Register for ${ann.linkedEventTitle}',
+                                overflow: TextOverflow.ellipsis),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppColors.primaryDark,
+                              foregroundColor: Colors.white,
+                              elevation: 0,
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+                      ],
 
                       // ── Hashtags ──
                       if (ann.hashtags.isNotEmpty) ...[

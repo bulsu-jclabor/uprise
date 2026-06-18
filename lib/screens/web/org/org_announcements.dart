@@ -234,6 +234,41 @@ class _BadgeTheme {
   const _BadgeTheme(this.bg, this.fg, this.icon);
 }
 
+// ── Linkable events (approved events with a published registration form) ──────
+class _LinkableEvent {
+  final String eventId;
+  final String proposalId;
+  final String title;
+  const _LinkableEvent({required this.eventId, required this.proposalId, required this.title});
+}
+
+Future<List<_LinkableEvent>> _fetchLinkableEvents(String orgId) async {
+  final eventsSnap = await FirebaseFirestore.instance
+      .collection('events')
+      .where('orgId', isEqualTo: orgId)
+      .where('status', isEqualTo: 'approved')
+      .get();
+
+  final results = <_LinkableEvent>[];
+  for (final doc in eventsSnap.docs) {
+    final data = doc.data();
+    final proposalId = (data['createdFromProposalId'] ?? '').toString();
+    if (proposalId.isEmpty) continue;
+    final formDoc = await FirebaseFirestore.instance
+        .collection('registration_forms')
+        .doc(proposalId)
+        .get();
+    if (!formDoc.exists) continue;
+    if (formDoc.data()?['isPublished'] != true) continue;
+    results.add(_LinkableEvent(
+      eventId: doc.id,
+      proposalId: proposalId,
+      title: (data['title'] ?? 'Event').toString(),
+    ));
+  }
+  return results;
+}
+
 // ── Categories ───────────────────────────────────────────────────────────────
 const List<String> kDefaultAnnouncementCategories = [
   'General', 'New Hire', 'SOP Updates', 'Policy Updates',
@@ -1078,6 +1113,10 @@ class _OrgAnnouncementsScreenState extends State<OrgAnnouncementsScreen> {
     bool isScheduled  = existing?.scheduledPublishDate != null;
     DateTime? scheduledDate;
     TimeOfDay? scheduledTime;
+    String? linkedEventId = (existing?.linkedEventId.isNotEmpty ?? false) ? existing!.linkedEventId : null;
+    String? linkedProposalId = (existing?.linkedProposalId.isNotEmpty ?? false) ? existing!.linkedProposalId : null;
+    String? linkedEventTitle = (existing?.linkedEventTitle.isNotEmpty ?? false) ? existing!.linkedEventTitle : null;
+    final linkableEventsFuture = _fetchLinkableEvents(widget.orgId);
 
     if (existing != null && existing.scheduledPublishDate != null) {
       scheduledDate = existing.scheduledPublishDate!.toDate();
@@ -1193,6 +1232,71 @@ class _OrgAnnouncementsScreenState extends State<OrgAnnouncementsScreen> {
                           _sectionLabel('Attachments', icon: Icons.attach_file_rounded),
                           _buildAttachmentsPicker(
                               attachments, (v) => setDlg(() => attachments = v)),
+                          const SizedBox(height: 20),
+
+                          _sectionLabel('Link to Event', icon: Icons.event_available_rounded),
+                          FutureBuilder<List<_LinkableEvent>>(
+                            future: linkableEventsFuture,
+                            builder: (ctx2, snap) {
+                              final events = snap.data ?? const <_LinkableEvent>[];
+                              if (snap.connectionState != ConnectionState.done) {
+                                return const Padding(
+                                  padding: EdgeInsets.symmetric(vertical: 8),
+                                  child: SizedBox(
+                                    height: 18, width: 18,
+                                    child: CircularProgressIndicator(strokeWidth: 2),
+                                  ),
+                                );
+                              }
+                              if (events.isEmpty) {
+                                return Text(
+                                  'No approved events with a published registration form yet.',
+                                  style: GoogleFonts.beVietnamPro(fontSize: 11.5, color: _C.textFaint),
+                                );
+                              }
+                              return Container(
+                                decoration: BoxDecoration(
+                                  color: _C.surface,
+                                  borderRadius: BorderRadius.circular(_DS.radiusSm),
+                                  border: Border.all(color: _C.borderSoft),
+                                ),
+                                child: DropdownButtonFormField<String>(
+                                  value: linkedProposalId,
+                                  decoration: InputDecoration(
+                                    labelText: 'Registration form (optional)',
+                                    labelStyle: GoogleFonts.beVietnamPro(fontSize: 13, color: _C.darkGray),
+                                    prefixIcon: const Icon(Icons.link_rounded, size: 18, color: _C.textFaint),
+                                    border: InputBorder.none,
+                                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                                  ),
+                                  items: [
+                                    DropdownMenuItem(
+                                      value: null,
+                                      child: Text('None', style: GoogleFonts.beVietnamPro(fontSize: 13)),
+                                    ),
+                                    ...events.map((e) => DropdownMenuItem(
+                                          value: e.proposalId,
+                                          child: Text(e.title,
+                                              style: GoogleFonts.beVietnamPro(fontSize: 13),
+                                              overflow: TextOverflow.ellipsis),
+                                        )),
+                                  ],
+                                  onChanged: (v) => setDlg(() {
+                                    if (v == null) {
+                                      linkedEventId = null;
+                                      linkedProposalId = null;
+                                      linkedEventTitle = null;
+                                    } else {
+                                      final ev = events.firstWhere((e) => e.proposalId == v);
+                                      linkedEventId = ev.eventId;
+                                      linkedProposalId = ev.proposalId;
+                                      linkedEventTitle = ev.title;
+                                    }
+                                  }),
+                                ),
+                              );
+                            },
+                          ),
                           const SizedBox(height: 20),
 
                           _sectionLabel('Settings', icon: Icons.tune_rounded),
@@ -1461,6 +1565,9 @@ class _OrgAnnouncementsScreenState extends State<OrgAnnouncementsScreen> {
                                     'isScheduled': isScheduled,
                                     'scheduledPublishDate': scheduledTs,
                                     'isPublished': !isScheduled,
+                                    'linkedEventId': linkedEventId ?? '',
+                                    'linkedProposalId': linkedProposalId ?? '',
+                                    'linkedEventTitle': linkedEventTitle ?? '',
                                     'updatedAt': FieldValue.serverTimestamp(),
                                   };
 
@@ -1925,6 +2032,27 @@ class _PostCardState extends State<_PostCard> {
           ]),
         ),
 
+        // ── Linked event badge ─────────────────────────────────────────────
+        if (a.linkedProposalId.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: _C.infoBg,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: _C.info.withOpacity(0.25)),
+              ),
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                const Icon(Icons.event_available_rounded, size: 14, color: _C.info),
+                const SizedBox(width: 6),
+                Text('Registration linked: ${a.linkedEventTitle}',
+                    style: GoogleFonts.beVietnamPro(
+                        fontSize: 11.5, fontWeight: FontWeight.w600, color: _C.info)),
+              ]),
+            ),
+          ),
+
         // ── Banner image ─────────────────────────────────────────────────────
         if (hasImage) ...[
           const SizedBox(height: 12),
@@ -2084,6 +2212,9 @@ class AnnouncementModel {
   final bool isScheduled;
   final Timestamp? scheduledPublishDate;
   final bool isPublished;
+  final String linkedEventId;
+  final String linkedProposalId;
+  final String linkedEventTitle;
 
   const AnnouncementModel({
     required this.id,
@@ -2100,6 +2231,9 @@ class AnnouncementModel {
     this.isScheduled = false,
     this.scheduledPublishDate,
     this.isPublished = true,
+    this.linkedEventId = '',
+    this.linkedProposalId = '',
+    this.linkedEventTitle = '',
   });
 
   factory AnnouncementModel.fromFirestore(DocumentSnapshot doc) {
@@ -2130,6 +2264,9 @@ class AnnouncementModel {
       isScheduled: d['isScheduled'] as bool? ?? false,
       scheduledPublishDate: d['scheduledPublishDate'] as Timestamp?,
       isPublished: d['isPublished'] as bool? ?? true,
+      linkedEventId: d['linkedEventId'] as String? ?? '',
+      linkedProposalId: d['linkedProposalId'] as String? ?? '',
+      linkedEventTitle: d['linkedEventTitle'] as String? ?? '',
     );
   }
 }
