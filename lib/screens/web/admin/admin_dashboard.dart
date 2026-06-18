@@ -23,9 +23,9 @@ import 'settings.dart';
 // Design tokens — mirrors student_accounts.dart exactly
 // ─────────────────────────────────────────────────────────────────────────────
 class UpriseColors {
-  static const Color primaryDark = Color(0xFFEA580C);
-  static const Color primaryLight = Color(0xFFFB923C);
-  static const Color accent = Color(0xFFF97316);
+  static const Color primaryDark = Color(0xFFBE4700);
+  static const Color primaryLight = Color(0xFFD47A00);
+  static const Color accent = Color(0xFFDA6937);
   static const Color white = Color(0xFFFFFFFF);
   static const Color lightGray = Color(0xFFF9FAFB);
   static const Color mediumGray = Color(0xFFE5E7EB);
@@ -45,7 +45,7 @@ class _DS {
 
   static final List<BoxShadow> cardShadow = [
     BoxShadow(
-      color: Colors.black.withOpacity(0.06),
+      color: Colors.black.withAlpha(15),
       blurRadius: 12,
       offset: const Offset(0, 4),
     ),
@@ -398,11 +398,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
     return Container(
       width: 256,
       decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          colors: [Color(0xFFEA580C), Color(0xFFFB923C)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
+        color: UpriseColors.primaryDark,
         boxShadow: [
           BoxShadow(
             color: Color(0x22000000),
@@ -422,7 +418,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                   width: 44,
                   height: 44,
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.18),
+                    color: Colors.white.withAlpha(46),
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: ClipRRect(
@@ -454,7 +450,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                     Text(
                       'Admin Panel',
                       style: GoogleFonts.beVietnamPro(
-                        color: Colors.white.withOpacity(0.65),
+                        color: Colors.white.withAlpha(166),
                         fontSize: 10,
                         fontWeight: FontWeight.w500,
                         letterSpacing: 0.4,
@@ -467,7 +463,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
           ),
 
           Divider(
-            color: Colors.white.withOpacity(0.15),
+            color: Colors.white.withAlpha(38),
             thickness: 1,
             indent: 20,
             endIndent: 20,
@@ -482,7 +478,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
               child: Text(
                 'NAVIGATION',
                 style: GoogleFonts.beVietnamPro(
-                  color: Colors.white.withOpacity(0.45),
+                  color: Colors.white.withAlpha(115),
                   fontSize: 10,
                   fontWeight: FontWeight.w700,
                   letterSpacing: 1.2,
@@ -515,12 +511,12 @@ class _AdminDashboardState extends State<AdminDashboard> {
                     ),
                     decoration: BoxDecoration(
                       color: isSelected
-                          ? Colors.white.withOpacity(0.18)
+                          ? Colors.white.withAlpha(46)
                           : Colors.transparent,
                       borderRadius: BorderRadius.circular(10),
                       border: isSelected
                           ? Border.all(
-                              color: Colors.white.withOpacity(0.25),
+                              color: Colors.white.withAlpha(64),
                               width: 1,
                             )
                           : null,
@@ -531,7 +527,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                           item['icon'] as IconData,
                           color: isSelected
                               ? Colors.white
-                              : Colors.white.withOpacity(0.65),
+                              : Colors.white.withAlpha(166),
                           size: 17,
                         ),
                         const SizedBox(width: 12),
@@ -542,7 +538,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                             style: GoogleFonts.beVietnamPro(
                               color: isSelected
                                   ? Colors.white
-                                  : Colors.white.withOpacity(0.75),
+                                  : Colors.white.withAlpha(191),
                               fontSize: 13,
                               fontWeight: isSelected
                                   ? FontWeight.w700
@@ -569,7 +565,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
 
           // Divider + logout
           Divider(
-            color: Colors.white.withOpacity(0.15),
+            color: Colors.white.withAlpha(38),
             thickness: 1,
             indent: 20,
             endIndent: 20,
@@ -580,21 +576,21 @@ class _AdminDashboardState extends State<AdminDashboard> {
               margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
               padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 14),
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.08),
+                color: Colors.white.withAlpha(20),
                 borderRadius: BorderRadius.circular(10),
               ),
               child: Row(
                 children: [
                   Icon(
                     Icons.logout_rounded,
-                    color: Colors.white.withOpacity(0.75),
+                    color: Colors.white.withAlpha(191),
                     size: 17,
                   ),
                   const SizedBox(width: 12),
                   Text(
                     'Logout',
                     style: GoogleFonts.beVietnamPro(
-                      color: Colors.white.withOpacity(0.75),
+                      color: Colors.white.withAlpha(191),
                       fontSize: 13,
                       fontWeight: FontWeight.w500,
                     ),
@@ -634,11 +630,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                 width: 3,
                 height: 28,
                 decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [UpriseColors.primaryDark, Color(0xFFFB923C)],
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                  ),
+                  color: UpriseColors.primaryDark,
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
@@ -675,11 +667,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
             decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [Color(0xFFFFF7ED), Color(0xFFFEF3C7)],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
+              color: const Color(0xFFFFF7ED),
               borderRadius: BorderRadius.circular(_DS.radiusPill),
               border: Border.all(color: UpriseColors.primaryDark.withAlpha(60)),
             ),
@@ -800,14 +788,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                 width: 36,
                 height: 36,
                 decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [
-                      UpriseColors.primaryDark.withAlpha(30),
-                      const Color(0xFFFB923C).withAlpha(20),
-                    ],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
+                  color: UpriseColors.primaryDark.withAlpha(25),
                   borderRadius: BorderRadius.circular(10),
                   border: Border.all(color: UpriseColors.primaryDark.withAlpha(50)),
                 ),
@@ -1120,15 +1101,10 @@ class _DashboardHomeState extends State<DashboardHome> {
       borderRadius: BorderRadius.circular(16),
       child: Container(
         decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            colors: [Color(0xFF92400E), Color(0xFFEA580C), Color(0xFFFB923C)],
-            begin: Alignment.centerLeft,
-            end: Alignment.centerRight,
-            stops: [0.0, 0.5, 1.0],
-          ),
+          color: UpriseColors.primaryDark,
           boxShadow: [
             BoxShadow(
-              color: Color(0x40EA580C),
+              color: Color(0x40BE4700),
               blurRadius: 24,
               offset: Offset(0, 8),
             ),
@@ -1406,7 +1382,7 @@ class _DashboardHomeState extends State<DashboardHome> {
                     width: 40,
                     height: 40,
                     decoration: BoxDecoration(
-                      color: color.withOpacity(0.10),
+                      color: color.withAlpha(26),
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: Icon(icon, color: color, size: 20),
@@ -1474,7 +1450,7 @@ class _DashboardHomeState extends State<DashboardHome> {
                     width: 40,
                     height: 40,
                     decoration: BoxDecoration(
-                      color: UpriseColors.info.withOpacity(0.10),
+                      color: UpriseColors.info.withAlpha(26),
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: Icon(
@@ -1543,7 +1519,7 @@ class _DashboardHomeState extends State<DashboardHome> {
               Container(
                 width: 36, height: 36,
                 decoration: BoxDecoration(
-                  color: UpriseColors.primaryDark.withOpacity(0.10),
+                  color: UpriseColors.primaryDark.withAlpha(26),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: const Icon(Icons.leaderboard_rounded,
@@ -1643,7 +1619,7 @@ class _DashboardHomeState extends State<DashboardHome> {
                           width: 28, height: 28,
                           child: CircleAvatar(
                             backgroundColor:
-                                UpriseColors.primaryDark.withOpacity(0.10),
+                                UpriseColors.primaryDark.withAlpha(26),
                             child: Text(
                               name.isNotEmpty ? name[0].toUpperCase() : '?',
                               style: GoogleFonts.beVietnamPro(
@@ -1680,7 +1656,7 @@ class _DashboardHomeState extends State<DashboardHome> {
                           padding: const EdgeInsets.symmetric(
                               horizontal: 10, vertical: 4),
                           decoration: BoxDecoration(
-                            color: UpriseColors.primaryDark.withOpacity(0.08),
+                            color: UpriseColors.primaryDark.withAlpha(20),
                             borderRadius: BorderRadius.circular(20),
                           ),
                           child: Text('$count event${count > 1 ? 's' : ''}',
@@ -1863,7 +1839,7 @@ class _DashboardHomeState extends State<DashboardHome> {
                                 borderRadius: BorderRadius.circular(10),
                                 boxShadow: [
                                   BoxShadow(
-                                    color: Colors.black.withOpacity(0.08),
+                                    color: Colors.black.withAlpha(20),
                                     blurRadius: 16,
                                     offset: const Offset(0, 6),
                                   ),
@@ -2263,7 +2239,7 @@ class _DashboardHomeState extends State<DashboardHome> {
                   width: 36,
                   height: 36,
                   decoration: BoxDecoration(
-                    color: color.withOpacity(0.10),
+                    color: color.withAlpha(26),
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: Icon(
@@ -3042,8 +3018,8 @@ class _LineChartPainter extends CustomPainter {
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
           colors: [
-            UpriseColors.primaryDark.withOpacity(0.28),
-            UpriseColors.primaryDark.withOpacity(0.02),
+            UpriseColors.primaryDark.withAlpha(71),
+            UpriseColors.primaryDark.withAlpha(5),
           ],
         ).createShader(Rect.fromLTWH(0, tp, size.width, ch)),
     );
@@ -3076,13 +3052,13 @@ class _LineChartPainter extends CustomPainter {
           Offset(points[i].dx, points[i].dy),
           Offset(points[i].dx, tp + ch),
           Paint()
-            ..color = UpriseColors.primaryDark.withOpacity(0.16)
+            ..color = UpriseColors.primaryDark.withAlpha(41)
             ..strokeWidth = 1.5,
         );
         canvas.drawCircle(
           points[i],
           10,
-          Paint()..color = UpriseColors.primaryDark.withOpacity(0.12),
+          Paint()..color = UpriseColors.primaryDark.withAlpha(31),
         );
       }
       canvas.drawCircle(
@@ -3201,7 +3177,7 @@ class _EventRow extends StatelessWidget {
             width: 48,
             height: 52,
             decoration: BoxDecoration(
-              color: UpriseColors.primaryDark.withOpacity(0.08),
+              color: UpriseColors.primaryDark.withAlpha(20),
               borderRadius: BorderRadius.circular(10),
             ),
             child: Column(

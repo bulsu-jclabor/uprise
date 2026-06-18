@@ -36,9 +36,9 @@ import 'org_settings.dart';
 // Design tokens
 // ─────────────────────────────────────────────────────────────────────────────
 class OrgColors {
-  static const Color primaryDark = Color(0xFFEA580C);
-  static const Color primaryLight = Color(0xFFFB923C);
-  static const Color accent = Color(0xFFF97316);
+  static const Color primaryDark = Color(0xFFBE4700);
+  static const Color primaryLight = Color(0xFFD47A00);
+  static const Color accent = Color(0xFFDA6937);
   static const Color white = Color(0xFFFFFFFF);
   static const Color surface = Color(0xFFF8F9FB);
   static const Color lightGray = Color(0xFFF8F9FB);
@@ -63,7 +63,7 @@ class _DS {
 
   static final List<BoxShadow> cardShadow = [
     BoxShadow(
-      color: Colors.black.withOpacity(0.06),
+      color: Colors.black.withAlpha(15),
       blurRadius: 12,
       offset: const Offset(0, 4),
     ),
@@ -490,7 +490,7 @@ class _OrgDashboardState extends State<OrgDashboard> {
                 width: 56,
                 height: 56,
                 decoration: BoxDecoration(
-                  color: OrgColors.primaryDark.withOpacity(0.10),
+                  color: OrgColors.primaryDark.withAlpha(26),
                   borderRadius: BorderRadius.circular(16),
                 ),
                 child: const Icon(
@@ -665,11 +665,7 @@ class _OrgDashboardState extends State<OrgDashboard> {
     return Container(
       width: 256,
       decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          colors: [Color(0xFFEA580C), Color(0xFFFB923C)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
+        color: OrgColors.primaryDark,
         boxShadow: [
           BoxShadow(
             color: Color(0x22000000),
@@ -689,7 +685,7 @@ class _OrgDashboardState extends State<OrgDashboard> {
                   width: 44,
                   height: 44,
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.18),
+                    color: Colors.white.withAlpha(46),
                     borderRadius: BorderRadius.circular(10),
                   ),
                   clipBehavior: Clip.antiAlias,
@@ -722,7 +718,7 @@ class _OrgDashboardState extends State<OrgDashboard> {
                     Text(
                       'Organization Portal',
                       style: GoogleFonts.beVietnamPro(
-                        color: Colors.white.withOpacity(0.65),
+                        color: Colors.white.withAlpha(166),
                         fontSize: 10,
                         fontWeight: FontWeight.w500,
                         letterSpacing: 0.4,
@@ -735,7 +731,7 @@ class _OrgDashboardState extends State<OrgDashboard> {
           ),
 
           Divider(
-            color: Colors.white.withOpacity(0.15),
+            color: Colors.white.withAlpha(38),
             thickness: 1,
             indent: 20,
             endIndent: 20,
@@ -750,7 +746,7 @@ class _OrgDashboardState extends State<OrgDashboard> {
               child: Text(
                 'NAVIGATION',
                 style: GoogleFonts.beVietnamPro(
-                  color: Colors.white.withOpacity(0.45),
+                  color: Colors.white.withAlpha(115),
                   fontSize: 10,
                   fontWeight: FontWeight.w700,
                   letterSpacing: 1.2,
@@ -783,12 +779,12 @@ class _OrgDashboardState extends State<OrgDashboard> {
                     ),
                     decoration: BoxDecoration(
                       color: isSelected
-                          ? Colors.white.withOpacity(0.18)
+                          ? Colors.white.withAlpha(46)
                           : Colors.transparent,
                       borderRadius: BorderRadius.circular(10),
                       border: isSelected
                           ? Border.all(
-                              color: Colors.white.withOpacity(0.25),
+                              color: Colors.white.withAlpha(64),
                               width: 1,
                             )
                           : null,
@@ -799,7 +795,7 @@ class _OrgDashboardState extends State<OrgDashboard> {
                           item['icon'] as IconData,
                           color: isSelected
                               ? Colors.white
-                              : Colors.white.withOpacity(0.65),
+                              : Colors.white.withAlpha(166),
                           size: 17,
                         ),
                         const SizedBox(width: 12),
@@ -810,7 +806,7 @@ class _OrgDashboardState extends State<OrgDashboard> {
                             style: GoogleFonts.beVietnamPro(
                               color: isSelected
                                   ? Colors.white
-                                  : Colors.white.withOpacity(0.75),
+                                  : Colors.white.withAlpha(191),
                               fontSize: 13,
                               fontWeight: isSelected
                                   ? FontWeight.w700
@@ -837,7 +833,7 @@ class _OrgDashboardState extends State<OrgDashboard> {
 
           // Logout
           Divider(
-            color: Colors.white.withOpacity(0.15),
+            color: Colors.white.withAlpha(38),
             thickness: 1,
             indent: 20,
             endIndent: 20,
@@ -848,21 +844,21 @@ class _OrgDashboardState extends State<OrgDashboard> {
               margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
               padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 14),
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.08),
+                color: Colors.white.withAlpha(20),
                 borderRadius: BorderRadius.circular(10),
               ),
               child: Row(
                 children: [
                   Icon(
                     Icons.logout_rounded,
-                    color: Colors.white.withOpacity(0.75),
+                    color: Colors.white.withAlpha(191),
                     size: 17,
                   ),
                   const SizedBox(width: 12),
                   Text(
                     'Sign Out',
                     style: GoogleFonts.beVietnamPro(
-                      color: Colors.white.withOpacity(0.75),
+                      color: Colors.white.withAlpha(191),
                       fontSize: 13,
                       fontWeight: FontWeight.w500,
                     ),
@@ -925,11 +921,7 @@ class _OrgDashboardState extends State<OrgDashboard> {
                 width: 3,
                 height: 28,
                 decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [OrgColors.primaryDark, OrgColors.primaryLight],
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                  ),
+                  color: OrgColors.primaryDark,
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
@@ -968,11 +960,7 @@ class _OrgDashboardState extends State<OrgDashboard> {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
               decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [Color(0xFFFFF7ED), Color(0xFFFEF3C7)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
+                color: const Color(0xFFFFF7ED),
                 borderRadius: BorderRadius.circular(_DS.radiusPill),
                 border: Border.all(color: OrgColors.primaryDark.withAlpha(60)),
               ),
@@ -1158,14 +1146,7 @@ class _OrgDashboardState extends State<OrgDashboard> {
                   width: 36,
                   height: 36,
                   decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [
-                        OrgColors.primaryDark.withAlpha(30),
-                        OrgColors.primaryLight.withAlpha(20),
-                      ],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
+                    color: OrgColors.primaryDark.withAlpha(25),
                     borderRadius: BorderRadius.circular(10),
                     border: Border.all(color: OrgColors.primaryDark.withAlpha(50)),
                   ),
@@ -1461,15 +1442,10 @@ class _OrgDashboardHomeState extends State<_OrgDashboardHome> {
       borderRadius: BorderRadius.circular(16),
       child: Container(
         decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            colors: [Color(0xFF92400E), Color(0xFFEA580C), Color(0xFFFB923C)],
-            begin: Alignment.centerLeft,
-            end: Alignment.centerRight,
-            stops: [0.0, 0.5, 1.0],
-          ),
+          color: OrgColors.primaryDark,
           boxShadow: [
             BoxShadow(
-              color: Color(0x40EA580C),
+              color: Color(0x40BE4700),
               blurRadius: 24,
               offset: Offset(0, 8),
             ),
@@ -2135,7 +2111,7 @@ class _OrgDashboardHomeState extends State<_OrgDashboardHome> {
                     vertical: 5,
                   ),
                   decoration: BoxDecoration(
-                    color: OrgColors.primaryDark.withOpacity(0.08),
+                    color: OrgColors.primaryDark.withAlpha(20),
                     borderRadius: BorderRadius.circular(_DS.radiusPill),
                   ),
                   child: Text(
@@ -2267,7 +2243,7 @@ class _StatCardWidget extends StatelessWidget {
                 width: 40,
                 height: 40,
                 decoration: BoxDecoration(
-                  color: color.withOpacity(0.10),
+                  color: color.withAlpha(26),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Icon(icon, color: color, size: 20),
@@ -2355,7 +2331,7 @@ class _MerchSalesStatCard extends StatelessWidget {
                     width: 40,
                     height: 40,
                     decoration: BoxDecoration(
-                      color: OrgColors.primaryDark.withOpacity(0.10),
+                      color: OrgColors.primaryDark.withAlpha(26),
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: const Icon(
@@ -2474,8 +2450,8 @@ class _LineChartPainter extends CustomPainter {
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
           colors: [
-            OrgColors.primaryDark.withOpacity(0.28),
-            OrgColors.primaryDark.withOpacity(0.02),
+            OrgColors.primaryDark.withAlpha(71),
+            OrgColors.primaryDark.withAlpha(5),
           ],
         ).createShader(Rect.fromLTWH(0, tp, size.width, ch)),
     );
@@ -2626,7 +2602,7 @@ class _EventRow extends StatelessWidget {
             width: 48,
             height: 52,
             decoration: BoxDecoration(
-              color: OrgColors.primaryDark.withOpacity(0.08),
+              color: OrgColors.primaryDark.withAlpha(20),
               borderRadius: BorderRadius.circular(10),
             ),
             child: Column(
@@ -2871,7 +2847,7 @@ class _ProposalRow extends StatelessWidget {
                         vertical: 3,
                       ),
                       decoration: BoxDecoration(
-                        color: _statusColor().withOpacity(0.12),
+                        color: _statusColor().withAlpha(31),
                         borderRadius: BorderRadius.circular(6),
                       ),
                       child: Text(

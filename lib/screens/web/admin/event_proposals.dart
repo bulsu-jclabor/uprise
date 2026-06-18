@@ -1104,16 +1104,14 @@ class _EventProposalsState extends State<EventProposals> {
       final orgName = data['orgName'] ?? 'Unknown Organization';
       final proposalDate = data['date'] as Timestamp?;
       final date = proposalDate?.toDate() ?? DateTime.now();
-      final timeStr = data['time'] ?? '09:00 AM';
-      
-      String startTime = timeStr;
-      String endTime = _addOneHourToTimeString(timeStr);
-      
-      final int capacity = 100;
-      final String guestSpeaker = 'TBA';
-      final List<String> resources = [];
-      final List<String> labPreparation = [];
-      final List<String> tags = [];
+      final String startTime = (data['startTime'] ?? data['time'] ?? '').toString();
+      final String endTime = (data['endTime'] ?? (startTime.isNotEmpty ? _addOneHourToTimeString(startTime) : '')).toString();
+
+      final int capacity = (data['capacity'] is num) ? (data['capacity'] as num).toInt() : 0;
+      final String guestSpeaker = (data['guestSpeaker'] ?? '').toString();
+      final List<String> resources = (data['resources'] is List) ? List<String>.from(data['resources']) : [];
+      final List<String> labPreparation = (data['labPreparation'] is List) ? List<String>.from(data['labPreparation']) : [];
+      final List<String> tags = (data['tags'] is List) ? List<String>.from(data['tags']) : [];
       
       final eventData = {
         'orgId': orgId,

@@ -96,8 +96,8 @@ class _OrgFormBuilderModalState extends State<OrgFormBuilderModal> {
   final _descCtrl  = TextEditingController();
   List<Map<String, dynamic>> _fields = [];
 
-  static const _kCol = Color(0xFF0D9488);
-  static const _kColLight = Color(0xFFECFDF5);
+  static const _kCol = UpriseColors.primaryDark;
+  static final _kColLight = UpriseColors.primaryDark.withAlpha(18);
 
   @override
   void initState() {
@@ -280,13 +280,9 @@ class _OrgFormBuilderModalState extends State<OrgFormBuilderModal> {
   Widget _buildHeader() {
     return Container(
       padding: const EdgeInsets.fromLTRB(24, 20, 16, 20),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFF0D9488), Color(0xFF14B8A6), Color(0xFF2DD4BF)],
-          begin: Alignment.centerLeft,
-          end: Alignment.centerRight,
-        ),
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(18)),
+      decoration: const BoxDecoration(
+        color: _kCol,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
       ),
       child: Row(children: [
         Container(
@@ -513,9 +509,9 @@ class _AddQuestionButton extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
         decoration: BoxDecoration(
-          color: const Color(0xFF0D9488),
+          color: UpriseColors.primaryDark,
           borderRadius: BorderRadius.circular(8),
-          boxShadow: [BoxShadow(color: const Color(0xFF0D9488).withAlpha(60), blurRadius: 8, offset: const Offset(0, 3))],
+          boxShadow: [BoxShadow(color: UpriseColors.primaryDark.withAlpha(60), blurRadius: 8, offset: const Offset(0, 3))],
         ),
         child: Row(mainAxisSize: MainAxisSize.min, children: [
           const Icon(Icons.add_rounded, size: 16, color: Colors.white),
@@ -611,7 +607,7 @@ class _FieldCardState extends State<_FieldCard> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: widget.isExpanded ? const Color(0xFF0D9488) : const Color(0xFFE8ECF0),
+        border: Border.all(color: widget.isExpanded ? UpriseColors.primaryDark : const Color(0xFFE8ECF0),
             width: widget.isExpanded ? 1.5 : 1),
         boxShadow: [BoxShadow(color: Colors.black.withAlpha(8), blurRadius: 6, offset: const Offset(0, 2))],
       ),
@@ -790,7 +786,7 @@ class _FieldCardState extends State<_FieldCard> {
         contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFFE2E6EA))),
         enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFFE2E6EA))),
-        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFF0D9488), width: 1.5)),
+        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: UpriseColors.primaryDark, width: 1.5)),
       ),
     );
   }
@@ -827,7 +823,7 @@ class _FieldCardState extends State<_FieldCard> {
                 contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(7), borderSide: const BorderSide(color: Color(0xFFE2E6EA))),
                 enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(7), borderSide: const BorderSide(color: Color(0xFFE2E6EA))),
-                focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(7), borderSide: const BorderSide(color: Color(0xFF0D9488))),
+                focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(7), borderSide: const BorderSide(color: UpriseColors.primaryDark)),
               ),
             ),
           ),
@@ -848,7 +844,7 @@ class _FieldCardState extends State<_FieldCard> {
         icon: const Icon(Icons.add_rounded, size: 15),
         label: Text('Add Option', style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.w600)),
         style: TextButton.styleFrom(
-          foregroundColor: const Color(0xFF0D9488),
+          foregroundColor: UpriseColors.primaryDark,
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
           minimumSize: Size.zero,
           tapTargetSize: MaterialTapTargetSize.shrinkWrap,

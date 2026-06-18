@@ -12,7 +12,6 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 import '../../theme/app_theme.dart';
 import '../../../widgets/admin_export_button.dart';
 import 'export_pdf.dart';
-import 'dart:math' as math;
 import '../../../services/activity_logger.dart' as activity_log;
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -22,7 +21,6 @@ class _DS {
   static const double radiusSm   = 8;
   static const double radiusMd   = 12;
   static const double radiusLg   = 16;
-  static const double radiusXl   = 20;
   static const double radiusPill = 100;
 
   // Refined card shadow — softer, more layered
@@ -123,10 +121,10 @@ Widget _sectionLabel(String text, {IconData? icon}) => Padding(
 
 Widget _headerCell(String text) => Text(text,
     style: GoogleFonts.beVietnamPro(
-        fontSize: 10.5,
+        fontSize: 11,
         fontWeight: FontWeight.w700,
-        color: const Color(0xFF94A3B8),
-        letterSpacing: 0.8));
+        color: const Color(0xFF64748B),
+        letterSpacing: 0.7));
 
 Widget _attBadge(String status) {
   final Map<String, (Color, Color, Color, String)> s = {
@@ -260,83 +258,72 @@ class _EventManagementScreenState extends State<EventManagementScreen> {
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // ── Header control panel ──
+          // ── Event switcher (only shown when there's more than one live/upcoming event) ──
           Padding(
             padding: EdgeInsets.fromLTRB(horizontalPadding, 24, horizontalPadding, 0),
-            child: Container(
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(_DS.radiusXl),
-                border: Border.all(color: const Color(0xFFEBEEF3)),
-                boxShadow: _DS.cardShadow,
-              ),
-              child: Column(children: [
-                // Event selector row
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
-                  child: StreamBuilder<QuerySnapshot>(
-                    stream: _eventsStream,
-                    builder: (ctx, snap) {
-                      final events = (snap.data?.docs ?? []).map((d) => EventModel.fromDoc(d)).toList();
-                      final activeEvents = events.where((e) => _eventState(e) != _EState.ended).toList();
-                      if (activeEvents.isNotEmpty && _event == null) {
-                        WidgetsBinding.instance.addPostFrameCallback(
-                            (_) { if (mounted) _selectEvent(activeEvents.first); });
-                      }
-                      final eventSelector = Row(children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                          decoration: BoxDecoration(
-                            color: UpriseColors.primaryDark.withOpacity(0.07),
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: Row(children: [
-                            Icon(Icons.event_rounded, size: 13, color: UpriseColors.primaryDark),
-                            const SizedBox(width: 5),
-                            Text('EVENT',
-                                style: GoogleFonts.beVietnamPro(
-                                    fontSize: 10.5,
-                                    fontWeight: FontWeight.w800,
-                                    color: UpriseColors.primaryDark,
-                                    letterSpacing: 0.7)),
-                          ]),
-                        ),
-                        const SizedBox(width: 14),
-                        Expanded(
-                          child: activeEvents.isEmpty
-                              ? Text('No upcoming or active events available',
-                                  style: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFFB0BAC8)))
-                              : DropdownButtonHideUnderline(
-                                  child: DropdownButton<String>(
-                                    value: _event?.id,
-                                    isExpanded: true,
-                                    icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 18, color: Color(0xFFB0BAC8)),
-                                    style: GoogleFonts.beVietnamPro(fontSize: 14, fontWeight: FontWeight.w600, color: const Color(0xFF1A202C)),
-                                    items: activeEvents.map((e) => DropdownMenuItem(value: e.id, child: Text(e.title))).toList(),
-                                    onChanged: (v) { if (v != null) _selectEvent(activeEvents.firstWhere((e) => e.id == v)); },
-                                  ),
-                                ),
-                        ),
-                        if (_event != null) ...[
-                          const SizedBox(width: 12),
-                          _StatePill(_event!),
-                        ],
-                      ]);
+            child: StreamBuilder<QuerySnapshot>(
+              stream: _eventsStream,
+              builder: (ctx, snap) {
+                final events = (snap.data?.docs ?? []).map((d) => EventModel.fromDoc(d)).toList();
+                final activeEvents = events.where((e) => _eventState(e) != _EState.ended).toList();
+                if (activeEvents.isNotEmpty && _event == null) {
+                  WidgetsBinding.instance.addPostFrameCallback(
+                      (_) { if (mounted) _selectEvent(activeEvents.first); });
+                }
 
-                      return isMobile
-                          ? Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [eventSelector],
-                            )
-                          : eventSelector;
-                    },
+                if (activeEvents.isEmpty) {
+                  return Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(_DS.radiusMd),
+                      border: Border.all(color: const Color(0xFFEBEEF3)),
+                    ),
+                    child: Row(children: [
+                      Icon(Icons.info_outline_rounded, size: 15, color: const Color(0xFFB0BAC8)),
+                      const SizedBox(width: 8),
+                      Text('No upcoming or active events available',
+                          style: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFFB0BAC8))),
+                    ]),
+                  );
+                }
+
+                // A single event is already fully described by the banner below —
+                // no need for a second card just to name it again.
+                if (activeEvents.length == 1) return const SizedBox.shrink();
+
+                return Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(_DS.radiusMd),
+                    border: Border.all(color: const Color(0xFFEBEEF3)),
                   ),
-                ),
-                const SizedBox(height: 12),
-              ]),
+                  child: Row(children: [
+                    Icon(Icons.event_rounded, size: 14, color: UpriseColors.primaryDark),
+                    const SizedBox(width: 8),
+                    Text('Switch event',
+                        style: GoogleFonts.beVietnamPro(
+                            fontSize: 12.5, fontWeight: FontWeight.w600, color: const Color(0xFF64748B))),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<String>(
+                          value: _event?.id,
+                          isExpanded: true,
+                          icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 18, color: Color(0xFFB0BAC8)),
+                          style: GoogleFonts.beVietnamPro(fontSize: 13.5, fontWeight: FontWeight.w600, color: const Color(0xFF1A202C)),
+                          items: activeEvents.map((e) => DropdownMenuItem(value: e.id, child: Text(e.title))).toList(),
+                          onChanged: (v) { if (v != null) _selectEvent(activeEvents.firstWhere((e) => e.id == v)); },
+                        ),
+                      ),
+                    ),
+                  ]),
+                );
+              },
             ),
           ),
-          SizedBox(height: isMobile ? 16 : 20),
+          SizedBox(height: isMobile ? 12 : 14),
           Expanded(
             child: AttendanceTab(key: const PageStorageKey('att'), orgId: widget.orgId, event: _event, eventDocId: _eventDocId),
           ),
@@ -422,8 +409,11 @@ class _AttendanceTabState extends State<AttendanceTab> with AutomaticKeepAliveCl
       : FirebaseFirestore.instance.collection('events').doc(widget.eventDocId).snapshots();
 
   bool _isActive(DocumentSnapshot? doc) {
-    if (doc == null) return false;
-    if ((doc.data() as Map?)?['isActive'] == true) return true;
+    // An explicit isActive flag (set via the Open/Close button) always wins —
+    // otherwise closing attendance mid-event would be silently overridden by
+    // the time-based auto-active check below.
+    final flag = doc == null ? null : (doc.data() as Map?)?['isActive'];
+    if (flag is bool) return flag;
     if (widget.event == null) return false;
     return _eventState(widget.event!) == _EState.active;
   }
@@ -476,29 +466,8 @@ class _AttendanceTabState extends State<AttendanceTab> with AutomaticKeepAliveCl
         'status': status, 'method': isManual ? 'manual' : 'qr',
       });
 
-      // Auto-generate participation certificate (fire-and-forget)
-      () async {
-        try {
-          final evData = evDoc.data() as Map<String, dynamic>;
-          final orgName = evData['orgName']?.toString() ?? '';
-          final verificationCode = _generateVerificationCode();
-          await FirebaseFirestore.instance.collection('certificates').add({
-            'eventName': widget.event!.title,
-            'organization': orgName,
-            'orgId': widget.orgId,
-            'type': 'Participation',
-            'status': 'distributed',
-            'issuedAt': FieldValue.serverTimestamp(),
-            'recipientId': userDoc?.id,
-            'recipientUid': userDoc?.id,
-            'recipientName': data['name'] ?? data['email'] ?? 'Unknown',
-            'eventId': widget.eventDocId,
-            'verificationCode': verificationCode,
-            'autoGenerated': true,
-          });
-        } catch (_) {}
-      }();
-
+      // Certificates are no longer auto-generated here — they're created on the
+      // Certificates page after the event, once each attendee submits their evaluation.
       await activity_log.ActivityLogger.log(
         action: 'mark_attendance', module: 'attendance',
         details: { 'orgId': widget.orgId, 'eventId': widget.eventDocId,
@@ -513,12 +482,6 @@ class _AttendanceTabState extends State<AttendanceTab> with AutomaticKeepAliveCl
         _toast(context, e.toString().replaceFirst('Exception: ', ''), error: true);
       }
     }
-  }
-
-  String _generateVerificationCode() {
-    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-    final rng = math.Random.secure();
-    return List.generate(12, (_) => chars[rng.nextInt(chars.length)]).join();
   }
 
   Future<void> _onScan(BarcodeCapture cap) async {
@@ -768,9 +731,14 @@ class _AttendanceTabState extends State<AttendanceTab> with AutomaticKeepAliveCl
         ),
         const SizedBox(width: 14),
         Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(e.title,
-              style: GoogleFonts.beVietnamPro(fontSize: 14.5, fontWeight: FontWeight.w700, color: const Color(0xFF1A202C))),
-          const SizedBox(height: 3),
+          Row(children: [
+            Flexible(child: Text(e.title,
+                style: GoogleFonts.beVietnamPro(fontSize: 14.5, fontWeight: FontWeight.w700, color: const Color(0xFF1A202C)),
+                overflow: TextOverflow.ellipsis)),
+            const SizedBox(width: 10),
+            _StatePill(e),
+          ]),
+          const SizedBox(height: 5),
           Row(children: [
             Icon(Icons.location_on_outlined, size: 12, color: const Color(0xFFB0BAC8)),
             const SizedBox(width: 3),
@@ -813,10 +781,11 @@ class _AttendanceTabState extends State<AttendanceTab> with AutomaticKeepAliveCl
 
   Widget _buildQRPanel(bool active, QuerySnapshot? attSnap) {
     final recent = (attSnap?.docs ?? []).reversed.take(3).toList();
-    return SizedBox(
-      height: 216,
-      child: Row(children: [
-        Expanded(child: Container(
+    return LayoutBuilder(builder: (context, constraints) {
+      final isNarrow = constraints.maxWidth < 640;
+      final scanSize = isNarrow ? constraints.maxWidth : 300.0;
+
+      final scannerBox = SizedBox(width: scanSize, height: scanSize, child: Container(
           clipBehavior: Clip.antiAlias,
           decoration: BoxDecoration(
             color: Colors.white,
@@ -831,41 +800,48 @@ class _AttendanceTabState extends State<AttendanceTab> with AutomaticKeepAliveCl
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
                         begin: Alignment.topLeft, end: Alignment.bottomRight,
-                        colors: [const Color(0xFF0F172A), const Color(0xFF1E293B)],
+                        colors: [const Color(0xFFFFF7ED), const Color(0xFFFFFBEB)],
                       ),
                     ),
                     child: Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
                       Container(
                         width: 64, height: 64,
                         decoration: BoxDecoration(
-                            color: UpriseColors.primaryDark.withOpacity(0.15),
+                            color: UpriseColors.primaryDark.withOpacity(0.12),
                             borderRadius: BorderRadius.circular(16)),
                         child: Icon(Icons.qr_code_scanner_rounded, size: 32,
-                            color: UpriseColors.primaryDark.withOpacity(0.6)),
+                            color: UpriseColors.primaryDark),
                       ),
                       const SizedBox(height: 12),
                       Text('Open attendance to enable scanning',
-                          style: GoogleFonts.beVietnamPro(fontSize: 12.5, color: const Color(0xFF64748B)),
+                          style: GoogleFonts.beVietnamPro(fontSize: 12.5, color: const Color(0xFF8A6D3B), fontWeight: FontWeight.w500),
                           textAlign: TextAlign.center),
                     ])))),
             Positioned(bottom: 0, left: 0, right: 0,
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
                 decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter, end: Alignment.bottomCenter,
-                    colors: [Colors.transparent, Colors.black.withOpacity(0.65)],
-                  ),
+                  gradient: active
+                      ? LinearGradient(
+                          begin: Alignment.topCenter, end: Alignment.bottomCenter,
+                          colors: [Colors.transparent, Colors.black.withOpacity(0.65)],
+                        )
+                      : null,
+                  color: active ? null : const Color(0xFFFFF7ED),
+                  border: active ? null : const Border(top: BorderSide(color: Color(0xFFFDE9CC))),
                 ),
                 child: Row(children: [
                   Container(width: 7, height: 7,
                       decoration: BoxDecoration(
-                          color: active ? const Color(0xFF059669) : const Color(0xFF6B7280),
+                          color: active ? const Color(0xFF059669) : const Color(0xFF9AA5B4),
                           shape: BoxShape.circle,
                           boxShadow: active ? [BoxShadow(color: const Color(0xFF059669).withOpacity(0.5), blurRadius: 4)] : [])),
                   const SizedBox(width: 7),
                   Text(active ? (_scanning ? 'Scanning…' : 'Processing…') : 'Scanner offline',
-                      style: GoogleFonts.beVietnamPro(fontSize: 11.5, color: Colors.white70, fontWeight: FontWeight.w500)),
+                      style: GoogleFonts.beVietnamPro(
+                          fontSize: 11.5,
+                          color: active ? Colors.white70 : const Color(0xFF8A6D3B),
+                          fontWeight: FontWeight.w500)),
                   if (active) ...[
                     const Spacer(),
                     GestureDetector(
@@ -884,9 +860,8 @@ class _AttendanceTabState extends State<AttendanceTab> with AutomaticKeepAliveCl
                 ]),
               )),
           ]),
-        )),
-        const SizedBox(width: 14),
-        SizedBox(width: 248, child: Container(
+        ));
+      final recentPanel = Container(
           padding: const EdgeInsets.all(18),
           decoration: BoxDecoration(
             color: Colors.white,
@@ -934,9 +909,21 @@ class _AttendanceTabState extends State<AttendanceTab> with AutomaticKeepAliveCl
                 },
               )),
           ]),
-        )),
-      ]),
-    );
+      );
+
+      if (isNarrow) {
+        return Column(children: [
+          scannerBox,
+          const SizedBox(height: 14),
+          SizedBox(height: 220, width: double.infinity, child: recentPanel),
+        ]);
+      }
+      return SizedBox(height: scanSize, child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        scannerBox,
+        const SizedBox(width: 14),
+        Expanded(child: recentPanel),
+      ]));
+    });
   }
 
   Widget _buildManualPanel(bool active) {
@@ -1247,18 +1234,18 @@ class _DataTable extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(_DS.radiusMd),
-        border: Border.all(color: const Color(0xFFEBEEF3)),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFE8ECF0)),
         boxShadow: _DS.cardShadow,
       ),
-      child: Column(children: [
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         // Header
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 13),
-          decoration: const BoxDecoration(
-            color: Color(0xFFF7F8FA),
-            borderRadius: BorderRadius.vertical(top: Radius.circular(_DS.radiusMd)),
-            border: Border(bottom: BorderSide(color: Color(0xFFEBEEF3))),
+          decoration: BoxDecoration(
+            color: const Color(0xFFFFF7ED),
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(14)),
+            border: Border(bottom: BorderSide(color: UpriseColors.primaryDark.withAlpha(60))),
           ),
           child: Row(children: [
             for (final col in columns)
@@ -1390,10 +1377,10 @@ class _TableRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) => InkWell(
     onTap: onTap,
-    hoverColor: const Color(0xFFF7F8FA),
+    hoverColor: const Color(0xFFF8F9FB),
     child: Container(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
-      decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: Color(0xFFF3F4F8)))),
+      decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: Color(0xFFF1F5F9)))),
       child: Row(children: [
         for (var i = 0; i < cells.length; i++) Expanded(flex: flex[i], child: cells[i]),
       ]),
@@ -1408,9 +1395,9 @@ class _TableFooter extends StatelessWidget {
   Widget build(BuildContext context) => Container(
     padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 13),
     decoration: const BoxDecoration(
-      border: Border(top: BorderSide(color: Color(0xFFEBEEF3))),
-      color: Color(0xFFF7F8FA),
-      borderRadius: BorderRadius.vertical(bottom: Radius.circular(_DS.radiusMd)),
+      border: Border(top: BorderSide(color: Color(0xFFE8ECF0))),
+      color: Color(0xFFF8F9FB),
+      borderRadius: BorderRadius.vertical(bottom: Radius.circular(14)),
     ),
     child: Text(text, style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF94A3B8))),
   );

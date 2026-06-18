@@ -721,11 +721,7 @@ Future<void> _archiveProposal(String docId, String title) async {
   return Container(
     padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 13),
     decoration: BoxDecoration(
-      gradient: const LinearGradient(
-        colors: [Color(0xFFFFF7ED), Color(0xFFFFFBF5)],
-        begin: Alignment.centerLeft,
-        end: Alignment.centerRight,
-      ),
+      color: const Color(0xFFFFF7ED),
       borderRadius: const BorderRadius.vertical(top: Radius.circular(14)),
       border: Border(bottom: BorderSide(color: UpriseColors.primaryDark.withAlpha(60))),
     ),
@@ -1989,11 +1985,7 @@ class _ViewProposalModal extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [const Color(0xFF059669).withAlpha(20), const Color(0xFF059669).withAlpha(5)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
+        color: const Color(0xFF059669).withAlpha(13),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: const Color(0xFF059669).withAlpha(77)),
       ),
