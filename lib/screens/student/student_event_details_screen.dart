@@ -1,10 +1,21 @@
+// lib/screens/student/student_events_screen.dart
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
 
 // ─────────────────────────────────────────────────────────────
-//  CUSTOM EVENT IMAGE WIDGET WITH BETTER HANDLING
+//  CUSTOM COLORS - UNIFORM
+// ─────────────────────────────────────────────────────────────
+class AppColors {
+  static const Color primaryDark = Color(0xFFBE4700);
+  static const Color primaryLight = Color(0xFFD47A00);
+  static const Color accent = Color(0xFFDA6937);
+  static const Color background = Color(0xFFF8F9FA);
+}
+
+// ─────────────────────────────────────────────────────────────
+//  CUSTOM EVENT IMAGE WIDGET
 // ─────────────────────────────────────────────────────────────
 class EventImage extends StatelessWidget {
   final String imageUrl;
@@ -24,11 +35,7 @@ class EventImage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (imageUrl.isEmpty) {
-      return _buildFallbackImage();
-    }
-
-    if (!_isValidImageUrl(imageUrl)) {
+    if (imageUrl.isEmpty || !_isValidImageUrl(imageUrl)) {
       return _buildFallbackImage();
     }
 
@@ -38,41 +45,28 @@ class EventImage extends StatelessWidget {
       width: width,
       fit: fit,
       loadingBuilder: (context, child, loadingProgress) {
-        if (loadingProgress == null) {
-          return child;
-        }
-
-        if (showLoadingIndicator) {
-          return Container(
-            height: height,
-            width: width,
-            color: Colors.grey[200],
-            child: Center(
-              child: SizedBox(
-                width: 30,
-                height: 30,
-                child: CircularProgressIndicator(
-                  value: loadingProgress.expectedTotalBytes != null
-                      ? loadingProgress.cumulativeBytesLoaded /
-                          loadingProgress.expectedTotalBytes!
-                      : null,
-                  strokeWidth: 2,
-                  color: const Color(0xFFE53935),
-                ),
-              ),
-            ),
-          );
-        }
-
+        if (loadingProgress == null) return child;
         return Container(
           height: height,
           width: width,
           color: Colors.grey[200],
+          child: Center(
+            child: SizedBox(
+              width: 30,
+              height: 30,
+              child: CircularProgressIndicator(
+                value: loadingProgress.expectedTotalBytes != null
+                    ? loadingProgress.cumulativeBytesLoaded /
+                        loadingProgress.expectedTotalBytes!
+                    : null,
+                strokeWidth: 2,
+                color: AppColors.primaryDark,
+              ),
+            ),
+          ),
         );
       },
-      errorBuilder: (context, error, stackTrace) {
-        return _buildFallbackImage();
-      },
+      errorBuilder: (_, __, ___) => _buildFallbackImage(),
     );
   }
 
@@ -204,11 +198,13 @@ class _StudentEventsScreenState extends State<StudentEventsScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
   DateTime _selectedDate = DateTime.now();
+  Future<List<Map<String, dynamic>>>? _attendedEventsFuture;
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
+    _attendedEventsFuture = _loadAttendedEvents();
   }
 
   @override
@@ -242,6 +238,178 @@ class _StudentEventsScreenState extends State<StudentEventsScreen>
     );
   }
 
+  Future<List<Map<String, dynamic>>> _loadAttendedEvents() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return [];
+
+    final attSnap = await FirebaseFirestore.instance
+        .collectionGroup('attendances')
+        .where('studentId', isEqualTo: user.uid)
+        .get();
+
+    final feedbackSnap = await FirebaseFirestore.instance
+        .collection('event_feedback')
+        .where('userId', isEqualTo: user.uid)
+        .get();
+    final ratedEventIds = feedbackSnap.docs
+        .map((d) => d.data()['eventId']?.toString())
+        .whereType<String>()
+        .toSet();
+
+    final results = <Map<String, dynamic>>[];
+    for (final doc in attSnap.docs) {
+      final status = (doc.data()['status'] ?? '').toString();
+      if (status != 'present' && status != 'late') continue;
+      final eventRef = doc.reference.parent.parent;
+      if (eventRef == null) continue;
+      final eventDoc = await eventRef.get();
+      if (!eventDoc.exists) continue;
+      final ed = eventDoc.data() as Map<String, dynamic>;
+      results.add({
+        'eventId': eventRef.id,
+        'eventName': ed['title'] ?? 'Event',
+        'organization': ed['orgName'] ?? '',
+        'orgId': ed['orgId'] ?? '',
+        'rated': ratedEventIds.contains(eventRef.id),
+      });
+    }
+    results.sort((a, b) => (a['rated'] as bool ? 1 : 0).compareTo(b['rated'] as bool ? 1 : 0));
+    return results;
+  }
+
+  void _refreshFeedbackTab() {
+    setState(() => _attendedEventsFuture = _loadAttendedEvents());
+  }
+
+  Future<void> _showEventFeedbackDialog(Map<String, dynamic> ev) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+    int selectedRating = 0;
+    final commentCtrl = TextEditingController();
+    bool submitting = false;
+
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSheet) {
+          Future<void> submit() async {
+            if (selectedRating == 0) {
+              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                content: Text('Please select a star rating.'),
+                backgroundColor: AppColors.primaryDark,
+              ));
+              return;
+            }
+            setSheet(() => submitting = true);
+            try {
+              await FirebaseFirestore.instance.collection('event_feedback').add({
+                'eventId': ev['eventId'],
+                'eventName': ev['eventName'],
+                'organization': ev['organization'],
+                'orgId': ev['orgId'],
+                'rating': selectedRating,
+                'comment': commentCtrl.text.trim(),
+                'userId': user.uid,
+                'submittedAt': FieldValue.serverTimestamp(),
+              });
+              if (ctx.mounted) Navigator.pop(ctx);
+              if (mounted) {
+                _refreshFeedbackTab();
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                  content: Text('Evaluation submitted. Thank you!'),
+                  backgroundColor: Colors.green,
+                ));
+              }
+            } catch (e) {
+              setSheet(() => submitting = false);
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                  content: Text('Failed to submit: $e'),
+                  backgroundColor: Colors.red,
+                ));
+              }
+            }
+          }
+
+          return Padding(
+            padding: EdgeInsets.only(
+              left: 20, right: 20, top: 20,
+              bottom: 20 + MediaQuery.of(ctx).viewInsets.bottom,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 40, height: 4,
+                    margin: const EdgeInsets.only(bottom: 16),
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade300,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                Text('Evaluate Event',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: Colors.black87)),
+                const SizedBox(height: 4),
+                Text(ev['eventName'] ?? '', style: TextStyle(fontSize: 13, color: Colors.grey.shade600)),
+                const SizedBox(height: 20),
+                Center(
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: List.generate(5, (i) {
+                      final star = i + 1;
+                      return IconButton(
+                        onPressed: () => setSheet(() => selectedRating = star),
+                        icon: Icon(
+                          star <= selectedRating ? Icons.star_rounded : Icons.star_border_rounded,
+                          color: star <= selectedRating ? AppColors.primaryDark : Colors.grey.shade400,
+                          size: 32,
+                        ),
+                      );
+                    }),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: commentCtrl,
+                  maxLines: 3,
+                  decoration: InputDecoration(
+                    hintText: 'Share your thoughts about this event (optional)',
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    contentPadding: const EdgeInsets.all(14),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: submitting ? null : submit,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.primaryDark,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    child: submitting
+                        ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                        : const Text('Submit Evaluation', style: TextStyle(fontWeight: FontWeight.w600)),
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+
   Future<Set<String>> _getRegisteredEventIds() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return {};
@@ -255,26 +423,28 @@ class _StudentEventsScreenState extends State<StudentEventsScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF2F2F2),
+      backgroundColor: AppColors.background,
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
         title: const Text(
-          'Calendar',
+          'Events',
           style: TextStyle(
             fontSize: 18,
             fontWeight: FontWeight.w700,
             color: Colors.black87,
           ),
         ),
+        centerTitle: true,
         bottom: TabBar(
           controller: _tabController,
-          indicatorColor: const Color(0xFFE53935),
-          labelColor: const Color(0xFFE53935),
+          indicatorColor: AppColors.primaryDark,
+          labelColor: AppColors.primaryDark,
           unselectedLabelColor: Colors.black45,
+          indicatorWeight: 3,
           tabs: const [
-            Tab(text: 'All CICT Events'),
-            Tab(text: 'Event'),
+            Tab(text: 'Calendar'),
+            Tab(text: 'Upcoming'),
             Tab(text: 'Feedback'),
           ],
         ),
@@ -295,12 +465,12 @@ class _StudentEventsScreenState extends State<StudentEventsScreen>
       children: [
         Container(
           color: Colors.white,
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               IconButton(
-                icon: const Icon(Icons.chevron_left),
+                icon: const Icon(Icons.chevron_left, color: AppColors.primaryDark),
                 onPressed: _previousMonth,
               ),
               Text(
@@ -311,7 +481,7 @@ class _StudentEventsScreenState extends State<StudentEventsScreen>
                 ),
               ),
               IconButton(
-                icon: const Icon(Icons.chevron_right),
+                icon: const Icon(Icons.chevron_right, color: AppColors.primaryDark),
                 onPressed: _nextMonth,
               ),
             ],
@@ -329,7 +499,7 @@ class _StudentEventsScreenState extends State<StudentEventsScreen>
             },
           ),
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 12),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
           child: Row(
@@ -337,7 +507,7 @@ class _StudentEventsScreenState extends State<StudentEventsScreen>
               Text(
                 'Events for ${DateFormat('MMM dd, yyyy').format(_selectedDate)}',
                 style: TextStyle(
-                  fontSize: 18,
+                  fontSize: 16,
                   fontWeight: FontWeight.w700,
                   color: Colors.black87,
                 ),
@@ -365,9 +535,9 @@ class _StudentEventsScreenState extends State<StudentEventsScreen>
                               e.rawDate.day == _selectedDate.day)
                           .toList();
                       return Text(
-                        '${todayEvents.length} Events',
+                        '${todayEvents.length} events',
                         style: TextStyle(
-                          fontSize: 14,
+                          fontSize: 13,
                           fontWeight: FontWeight.w500,
                           color: Colors.grey.shade600,
                         ),
@@ -379,7 +549,7 @@ class _StudentEventsScreenState extends State<StudentEventsScreen>
             ],
           ),
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 8),
         Expanded(
           child: FutureBuilder<Set<String>>(
             future: _getRegisteredEventIds(),
@@ -394,7 +564,7 @@ class _StudentEventsScreenState extends State<StudentEventsScreen>
                   if (!snapshot.hasData) {
                     return const Center(
                         child: CircularProgressIndicator(
-                            color: Color(0xFFE53935)));
+                            color: AppColors.primaryDark));
                   }
                   final todayEvents = snapshot.data!.docs
                       .map((doc) => EventData.fromFirestore(doc,
@@ -431,7 +601,7 @@ class _StudentEventsScreenState extends State<StudentEventsScreen>
                     itemCount: todayEvents.length,
                     itemBuilder: (context, index) {
                       return Padding(
-                        padding: const EdgeInsets.only(bottom: 16),
+                        padding: const EdgeInsets.only(bottom: 12),
                         child: _CompactEventCard(
                           event: todayEvents[index],
                           onTap: () => _openDetail(todayEvents[index]),
@@ -461,7 +631,7 @@ class _StudentEventsScreenState extends State<StudentEventsScreen>
           builder: (context, snapshot) {
             if (!snapshot.hasData) {
               return const Center(
-                  child: CircularProgressIndicator(color: Color(0xFFE53935)));
+                  child: CircularProgressIndicator(color: AppColors.primaryDark));
             }
 
             final allEvents = snapshot.data!.docs
@@ -510,54 +680,93 @@ class _StudentEventsScreenState extends State<StudentEventsScreen>
   }
 
   Widget _buildFeedbackTab() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            Icons.feedback_outlined,
-            size: 80,
-            color: Colors.grey.shade400,
-          ),
-          const SizedBox(height: 16),
-          Text(
-            'Feedback',
-            style: TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.w700,
-              color: Colors.grey.shade600,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Share your thoughts about events',
-            style: TextStyle(
-              fontSize: 14,
-              color: Colors.grey.shade500,
-            ),
-          ),
-          const SizedBox(height: 24),
-          ElevatedButton.icon(
-            onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Feedback feature coming soon!'),
-                  backgroundColor: Color(0xFFE53935),
+    return RefreshIndicator(
+      color: AppColors.primaryDark,
+      onRefresh: () async => _refreshFeedbackTab(),
+      child: FutureBuilder<List<Map<String, dynamic>>>(
+        future: _attendedEventsFuture,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator(color: AppColors.primaryDark));
+          }
+          final events = snapshot.data ?? [];
+          if (events.isEmpty) {
+            return ListView(
+              children: const [
+                SizedBox(height: 120),
+                Icon(Icons.feedback_outlined, size: 80, color: Colors.grey),
+                SizedBox(height: 16),
+                Center(
+                  child: Text('No events to evaluate yet',
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: Colors.grey)),
                 ),
+                SizedBox(height: 8),
+                Center(
+                  child: Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 40),
+                    child: Text(
+                      'Once you attend an event, it will show up here for you to evaluate.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(fontSize: 13, color: Colors.grey),
+                    ),
+                  ),
+                ),
+              ],
+            );
+          }
+          return ListView.builder(
+            padding: const EdgeInsets.all(16),
+            itemCount: events.length,
+            itemBuilder: (context, i) {
+              final ev = events[i];
+              final rated = ev['rated'] == true;
+              return Container(
+                margin: const EdgeInsets.only(bottom: 12),
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: const Color(0xFFE8ECF0)),
+                  boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8, offset: const Offset(0, 2))],
+                ),
+                child: Row(children: [
+                  Expanded(
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Text(ev['eventName'] ?? 'Event',
+                          style: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.w700, color: Colors.black87)),
+                      if ((ev['organization'] ?? '').toString().isNotEmpty) ...[
+                        const SizedBox(height: 3),
+                        Text(ev['organization'], style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
+                      ],
+                    ]),
+                  ),
+                  const SizedBox(width: 12),
+                  rated
+                      ? Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFECFDF5),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Text('Submitted',
+                              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF059669))),
+                        )
+                      : ElevatedButton(
+                          onPressed: () => _showEventFeedbackDialog(ev),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.primaryDark,
+                            foregroundColor: Colors.white,
+                            elevation: 0,
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          ),
+                          child: const Text('Evaluate', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600)),
+                        ),
+                ]),
               );
             },
-            icon: const Icon(Icons.rate_review),
-            label: const Text('Give Feedback'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFE53935),
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(30),
-              ),
-            ),
-          ),
-        ],
+          );
+        },
       ),
     );
   }
@@ -619,7 +828,7 @@ class _CalendarGrid extends StatelessWidget {
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               color: isSelected
-                  ? const Color(0xFFE53935)
+                  ? AppColors.primaryDark
                   : isToday
                       ? Colors.grey.shade200
                       : Colors.transparent,
@@ -633,7 +842,7 @@ class _CalendarGrid extends StatelessWidget {
                   color: isSelected
                       ? Colors.white
                       : isToday
-                          ? const Color(0xFFE53935)
+                          ? AppColors.primaryDark
                           : Colors.black87,
                 ),
               ),
@@ -672,7 +881,7 @@ class _CompactEventCard extends StatelessWidget {
           borderRadius: BorderRadius.circular(12),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.05),
+              color: Colors.black.withOpacity(0.05),
               blurRadius: 8,
               offset: const Offset(0, 2),
             ),
@@ -684,7 +893,7 @@ class _CompactEventCard extends StatelessWidget {
               width: 70,
               height: 70,
               decoration: BoxDecoration(
-                color: const Color(0xFFE53935).withValues(alpha: 0.1),
+                color: AppColors.primaryDark.withOpacity(0.1),
                 borderRadius: const BorderRadius.only(
                   topLeft: Radius.circular(12),
                   bottomLeft: Radius.circular(12),
@@ -760,13 +969,13 @@ class _CompactEventCard extends StatelessWidget {
                 style: TextButton.styleFrom(
                   padding: const EdgeInsets.symmetric(
                       horizontal: 12, vertical: 8),
-                  backgroundColor: const Color(0xFFE53935),
+                  backgroundColor: AppColors.primaryDark,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(20),
                   ),
                 ),
                 child: const Text(
-                  'View Details',
+                  'View',
                   style: TextStyle(
                     color: Colors.white,
                     fontSize: 11,
@@ -801,7 +1010,7 @@ class _UpcomingEventCard extends StatelessWidget {
           borderRadius: BorderRadius.circular(16),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.08),
+              color: Colors.black.withOpacity(0.08),
               blurRadius: 10,
               offset: const Offset(0, 4),
             ),
@@ -830,7 +1039,7 @@ class _UpcomingEventCard extends StatelessWidget {
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                           decoration: BoxDecoration(
-                            color: Colors.green.withValues(alpha: 0.1),
+                            color: Colors.green.withOpacity(0.1),
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: const Row(
@@ -907,7 +1116,7 @@ class _UpcomingEventCard extends StatelessWidget {
                       style: ElevatedButton.styleFrom(
                         backgroundColor: event.isRegistered
                             ? Colors.green
-                            : const Color(0xFFE53935),
+                            : AppColors.primaryDark,
                         padding: const EdgeInsets.symmetric(vertical: 10),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(25),
@@ -943,13 +1152,13 @@ class _CategoryBadge extends StatelessWidget {
   Color get _color {
     switch (category.toLowerCase()) {
       case 'competition':
-        return const Color(0xFFFF6F00);
+        return AppColors.primaryDark;
       case 'workshop':
         return const Color(0xFF1565C0);
       case 'seminar':
         return const Color(0xFF6A1B9A);
       default:
-        return const Color(0xFF37474F);
+        return Colors.grey.shade700;
     }
   }
 
@@ -977,7 +1186,7 @@ class _CategoryBadge extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────
-//  EVENT DETAIL SCREEN
+//  EVENT DETAIL SCREEN (WITH REGISTRATION FORM)
 // ─────────────────────────────────────────────
 class EventDetailScreen extends StatefulWidget {
   final EventData event;
@@ -997,25 +1206,80 @@ class EventDetailScreen extends StatefulWidget {
 
 class _EventDetailScreenState extends State<EventDetailScreen> {
   bool _isLoading = false;
+  bool _showRegistrationForm = false;
+
+  final _formKey = GlobalKey<FormState>();
+  final _fullNameCtrl = TextEditingController();
+  final _studentIdCtrl = TextEditingController();
+  final _emailCtrl = TextEditingController();
+  final _contactCtrl = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUserData();
+  }
+
+  @override
+  void dispose() {
+    _fullNameCtrl.dispose();
+    _studentIdCtrl.dispose();
+    _emailCtrl.dispose();
+    _contactCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadUserData() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    try {
+      final userDoc = await FirebaseFirestore.instance
+          .collection('students')
+          .where('uid', isEqualTo: user.uid)
+          .limit(1)
+          .get();
+
+      if (userDoc.docs.isNotEmpty) {
+        final data = userDoc.docs.first.data();
+        _fullNameCtrl.text = data['fullName'] ?? '';
+        _studentIdCtrl.text = data['studentId'] ?? '';
+        _emailCtrl.text = data['email'] ?? user.email ?? '';
+        _contactCtrl.text = data['mobile'] ?? '';
+      } else {
+        _emailCtrl.text = user.email ?? '';
+      }
+    } catch (_) {}
+  }
 
   Future<void> _registerForEvent() async {
     if (widget.isPastEvent) return;
-    if (widget.event.slotsLeft <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Event is full!')),
-      );
-      return;
-    }
-
-    setState(() => _isLoading = true);
+    
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please login to register')),
       );
-      setState(() => _isLoading = false);
       return;
     }
+
+    // Check if already registered
+    final existingReg = await FirebaseFirestore.instance
+        .collection('registrations')
+        .where('userId', isEqualTo: user.uid)
+        .where('eventId', isEqualTo: widget.event.id)
+        .get();
+
+    if (existingReg.docs.isNotEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('You are already registered!')),
+      );
+      return;
+    }
+
+    if (!_formKey.currentState!.validate()) return;
+
+    setState(() => _isLoading = true);
 
     try {
       final registrationRef = FirebaseFirestore.instance
@@ -1023,27 +1287,38 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
           .doc('${user.uid}_${widget.event.id}');
 
       await FirebaseFirestore.instance.runTransaction((transaction) async {
-        final registrationDoc = await transaction.get(registrationRef);
-        if (registrationDoc.exists) {
+        final regDoc = await transaction.get(registrationRef);
+        if (regDoc.exists) {
           throw Exception('Already registered');
         }
 
-        final eventRef =
-            FirebaseFirestore.instance.collection('events').doc(widget.event.id);
+        final eventRef = FirebaseFirestore.instance
+            .collection('events')
+            .doc(widget.event.id);
         final eventDoc = await transaction.get(eventRef);
+        
         if (!eventDoc.exists) {
           throw Exception('Event not found');
         }
 
-        final currentSlotsLeft = eventDoc.data()?['slotsLeft'] ?? 0;
+        final eventData = eventDoc.data()!;
+        final currentSlotsLeft = (eventData['slotsLeft'] ?? 0) as int;
+        
         if (currentSlotsLeft <= 0) {
           throw Exception('No slots available');
         }
 
-        transaction.update(eventRef, {'slotsLeft': currentSlotsLeft - 1});
+        transaction.update(eventRef, {
+          'slotsLeft': currentSlotsLeft - 1,
+        });
+
         transaction.set(registrationRef, {
           'userId': user.uid,
           'eventId': widget.event.id,
+          'fullName': _fullNameCtrl.text.trim(),
+          'studentId': _studentIdCtrl.text.trim(),
+          'email': _emailCtrl.text.trim(),
+          'contact': _contactCtrl.text.trim(),
           'registeredAt': FieldValue.serverTimestamp(),
         });
       });
@@ -1052,14 +1327,20 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-              content: Text('Successfully registered for event!')),
+            content: Text('Successfully registered for event!'),
+            backgroundColor: AppColors.primaryDark,
+          ),
         );
+        setState(() => _showRegistrationForm = false);
         Navigator.pop(context);
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.toString())),
+          SnackBar(
+            content: Text(e.toString().replaceAll('Exception: ', '')),
+            backgroundColor: Colors.red,
+          ),
         );
       }
     } finally {
@@ -1082,6 +1363,23 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
           'Event Details',
           style: TextStyle(color: Colors.black87),
         ),
+        centerTitle: true,
+        actions: [
+          if (!widget.isPastEvent && !widget.event.isRegistered)
+            TextButton.icon(
+              onPressed: () {
+                setState(() => _showRegistrationForm = !_showRegistrationForm);
+              },
+              icon: Icon(
+                _showRegistrationForm ? Icons.close : Icons.edit_note,
+                color: AppColors.primaryDark,
+              ),
+              label: Text(
+                _showRegistrationForm ? 'Close' : 'Register',
+                style: TextStyle(color: AppColors.primaryDark),
+              ),
+            ),
+        ],
       ),
       body: SingleChildScrollView(
         child: Column(
@@ -1153,76 +1451,331 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                     ),
                   ),
                   const SizedBox(height: 30),
-                  if (!widget.isPastEvent && !widget.event.isRegistered)
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton(
-                        onPressed: _isLoading ? null : _registerForEvent,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFFE53935),
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
+
+                  // ── REGISTRATION FORM ──
+                  if (_showRegistrationForm && !widget.isPastEvent && !widget.event.isRegistered)
+                    _buildRegistrationForm(),
+
+                  // ── STATUS BUTTONS ──
+                  if (!_showRegistrationForm) ...[
+                    if (!widget.isPastEvent && !widget.event.isRegistered)
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton(
+                          onPressed: () {
+                            setState(() => _showRegistrationForm = true);
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.primaryDark,
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
                           ),
-                        ),
-                        child: _isLoading
-                            ? const SizedBox(
-                                height: 20,
-                                width: 20,
-                                child: CircularProgressIndicator(
-                                  color: Colors.white,
-                                  strokeWidth: 2,
-                                ),
-                              )
-                            : const Text(
-                                'Register Now',
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                      ),
-                    ),
-                  if (widget.event.isRegistered && !widget.isPastEvent)
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      decoration: BoxDecoration(
-                        color: Colors.green.shade50,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Colors.green.shade200),
-                      ),
-                      child: const Center(
-                        child: Text(
-                          '✓ You are registered',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w700,
-                            color: Colors.green,
+                          child: const Text(
+                            'Register Now',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w700,
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                  if (widget.isPastEvent)
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      decoration: BoxDecoration(
-                        color: Colors.grey.shade100,
-                        borderRadius: BorderRadius.circular(12),
+                    if (widget.event.isRegistered && !widget.isPastEvent)
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        decoration: BoxDecoration(
+                          color: Colors.green.shade50,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.green.shade200),
+                        ),
+                        child: const Center(
+                          child: Text(
+                            '✓ You are registered',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w700,
+                              color: Colors.green,
+                            ),
+                          ),
+                        ),
                       ),
-                      child: const Center(
-                        child: Text(
-                          'Past Event',
+                    if (widget.isPastEvent)
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade100,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Center(
+                          child: Text(
+                            'Past Event',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w700,
+                              color: Colors.grey,
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                  const SizedBox(height: 30),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRegistrationForm() {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8F9FA),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: Form(
+        key: _formKey,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'EVENT REGISTRATION',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+                color: Colors.black87,
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // Full Name
+            const Text(
+              'Full Name',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: Colors.black87,
+              ),
+            ),
+            const SizedBox(height: 6),
+            TextFormField(
+              controller: _fullNameCtrl,
+              decoration: InputDecoration(
+                hintText: 'Full Name',
+                filled: true,
+                fillColor: Colors.white,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: BorderSide.none,
+                ),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 12,
+                ),
+              ),
+              validator: (value) =>
+                  value?.trim().isEmpty ?? true ? 'Full Name is required' : null,
+            ),
+            const SizedBox(height: 14),
+
+            // Student Number
+            const Text(
+              'Student Number',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: Colors.black87,
+              ),
+            ),
+            const SizedBox(height: 6),
+            TextFormField(
+              controller: _studentIdCtrl,
+              decoration: InputDecoration(
+                hintText: 'e.g. 2023-12345',
+                filled: true,
+                fillColor: Colors.white,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: BorderSide.none,
+                ),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 12,
+                ),
+              ),
+              validator: (value) =>
+                  value?.trim().isEmpty ?? true ? 'Student Number is required' : null,
+            ),
+            const SizedBox(height: 14),
+
+            // Email Address
+            const Text(
+              'Email Address',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: Colors.black87,
+              ),
+            ),
+            const SizedBox(height: 6),
+            TextFormField(
+              controller: _emailCtrl,
+              keyboardType: TextInputType.emailAddress,
+              decoration: InputDecoration(
+                hintText: 'john.doe@cict.edu.ph',
+                filled: true,
+                fillColor: Colors.white,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: BorderSide.none,
+                ),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 12,
+                ),
+              ),
+              validator: (value) {
+                if (value?.trim().isEmpty ?? true) return 'Email is required';
+                if (!value!.contains('@')) return 'Enter a valid email';
+                return null;
+              },
+            ),
+            const SizedBox(height: 14),
+
+            // Contact Number
+            const Text(
+              'Contact Number',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: Colors.black87,
+              ),
+            ),
+            const SizedBox(height: 6),
+            TextFormField(
+              controller: _contactCtrl,
+              keyboardType: TextInputType.phone,
+              decoration: InputDecoration(
+                hintText: '09xx xxx xxxx',
+                filled: true,
+                fillColor: Colors.white,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: BorderSide.none,
+                ),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 12,
+                ),
+              ),
+              validator: (value) {
+                if (value?.trim().isEmpty ?? true) return 'Contact number is required';
+                if (value!.length < 11) return 'Enter a valid contact number';
+                return null;
+              },
+            ),
+            const SizedBox(height: 20),
+
+            // Upload ID
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: Colors.grey.shade200),
+              ),
+              child: Column(
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.upload_file, color: AppColors.primaryDark),
+                      const SizedBox(width: 8),
+                      const Text(
+                        'Upload ID (School or Government)',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(vertical: 20),
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade50,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: Colors.grey.shade300,
+                        width: 1,
+                      ),
+                    ),
+                    child: Column(
+                      children: [
+                        Icon(
+                          Icons.cloud_upload_outlined,
+                          size: 32,
+                          color: Colors.grey.shade400,
+                        ),
+                        const SizedBox(height: 8),
+                        const Text(
+                          'Click to upload or drag and drop',
                           style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w700,
+                            fontSize: 13,
                             color: Colors.grey,
                           ),
                         ),
-                      ),
+                        const Text(
+                          'PNG, JPG or PDF (MAX. 5MB)',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: Colors.grey,
+                          ),
+                        ),
+                      ],
                     ),
+                  ),
                 ],
+              ),
+            ),
+            const SizedBox(height: 20),
+
+            // Submit Button
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: _isLoading ? null : _registerForEvent,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primaryDark,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                child: _isLoading
+                    ? const SizedBox(
+                        height: 20,
+                        width: 20,
+                        child: CircularProgressIndicator(
+                          color: Colors.white,
+                          strokeWidth: 2,
+                        ),
+                      )
+                    : const Text(
+                        'Complete Registration',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
               ),
             ),
           ],

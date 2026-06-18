@@ -1,17 +1,26 @@
+// lib/screens/student/student_broadcast_screen.dart
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
 import 'package:google_fonts/google_fonts.dart';
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Custom Colors - UNIFORM
+// ─────────────────────────────────────────────────────────────────────────────
+class AppColors {
+  static const Color primaryDark = Color(0xFFBE4700);
+  static const Color primaryLight = Color(0xFFD47A00);
+  static const Color accent = Color(0xFFDA6937);
+  static const Color background = Color(0xFFF8F9FA);
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Design Tokens
 // ─────────────────────────────────────────────────────────────────────────────
 class _C {
-  static const Color primaryDark = Color(0xFFB45309);
-  static const Color primaryLight = Color(0xFFD97706);
-  static const Color accent = Color(0xFFF59E0B);
   static const Color white = Color(0xFFFFFFFF);
   static const Color surface = Color(0xFFF8F9FB);
   static const Color pageBg = Color(0xFFFBFCFE);
@@ -22,7 +31,6 @@ class _C {
   static const Color textMid = Color(0xFF374151);
   static const Color darkGray = Color(0xFF64748B);
   static const Color textFaint = Color(0xFF9AA5B4);
-  static const Color info = Color(0xFF2563EB);
 }
 
 class _DS {
@@ -51,9 +59,9 @@ ImageProvider _imageProviderFromUrl(String url) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Main Screen - Student Broadcast (Read Only)
+// Main Screen - Student Broadcast
 // ─────────────────────────────────────────────────────────────────────────────
-class StudentBroadcastScreen extends StatelessWidget {
+class StudentBroadcastScreen extends StatefulWidget {
   final String orgId;
   final String orgName;
 
@@ -64,22 +72,44 @@ class StudentBroadcastScreen extends StatelessWidget {
   });
 
   @override
+  State<StudentBroadcastScreen> createState() => _StudentBroadcastScreenState();
+}
+
+class _StudentBroadcastScreenState extends State<StudentBroadcastScreen> {
+  String _searchQuery = '';
+  final TextEditingController _searchController = TextEditingController();
+  final ScrollController _scrollController = ScrollController();
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: _C.pageBg,
       appBar: AppBar(
         title: Text(
-          orgName,
+          widget.orgName,
           style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
         ),
         backgroundColor: _C.white,
         foregroundColor: _C.charcoal,
         elevation: 0,
-        centerTitle: false,
+        centerTitle: true,
         actions: [
           IconButton(
             onPressed: () {
-              // TODO: Search functionality
+              showSearch(
+                context: context,
+                delegate: _BroadcastSearchDelegate(
+                  orgId: widget.orgId,
+                  orgName: widget.orgName,
+                ),
+              );
             },
             icon: const Icon(Icons.search, color: _C.darkGray),
           ),
@@ -108,11 +138,14 @@ class StudentBroadcastScreen extends StatelessWidget {
             width: 46,
             height: 46,
             decoration: BoxDecoration(
-              color: _C.primaryDark.withOpacity(0.10),
+              color: AppColors.primaryDark.withOpacity(0.10),
               borderRadius: BorderRadius.circular(13),
             ),
-            child: const Icon(Icons.campaign_rounded,
-                color: _C.primaryDark, size: 24),
+            child: Icon(
+              Icons.campaign_rounded,
+              color: AppColors.primaryDark,
+              size: 24,
+            ),
           ),
           const SizedBox(width: 14),
           Expanded(
@@ -125,7 +158,7 @@ class StudentBroadcastScreen extends StatelessWidget {
                         fontWeight: FontWeight.w800,
                         color: _C.charcoal)),
                 const SizedBox(height: 2),
-                Text(orgName,
+                Text(widget.orgName,
                     style: GoogleFonts.beVietnamPro(
                         fontSize: 12, color: _C.darkGray)),
               ],
@@ -135,7 +168,7 @@ class StudentBroadcastScreen extends StatelessWidget {
           StreamBuilder<QuerySnapshot>(
             stream: FirebaseFirestore.instance
                 .collection('broadcasts')
-                .where('orgId', isEqualTo: orgId)
+                .where('orgId', isEqualTo: widget.orgId)
                 .snapshots(),
             builder: (_, snap) {
               final count = snap.data?.docs.length ?? 0;
@@ -143,21 +176,21 @@ class StudentBroadcastScreen extends StatelessWidget {
                 padding:
                     const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 decoration: BoxDecoration(
-                  color: _C.info.withOpacity(0.08),
+                  color: AppColors.primaryDark.withOpacity(0.08),
                   borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: _C.info.withOpacity(0.2)),
+                  border: Border.all(color: AppColors.primaryDark.withOpacity(0.2)),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     const Icon(Icons.forum_outlined,
-                        size: 13, color: _C.info),
+                        size: 13, color: AppColors.primaryDark),
                     const SizedBox(width: 6),
                     Text('$count',
                         style: GoogleFonts.beVietnamPro(
                             fontSize: 12,
                             fontWeight: FontWeight.w600,
-                            color: _C.info)),
+                            color: AppColors.primaryDark)),
                   ],
                 ),
               );
@@ -180,8 +213,8 @@ class StudentBroadcastScreen extends StatelessWidget {
       child: StreamBuilder<QuerySnapshot>(
         stream: FirebaseFirestore.instance
             .collection('broadcasts')
-            .where('orgId', isEqualTo: orgId)
-            .orderBy('timestamp', descending: true)
+            .where('orgId', isEqualTo: widget.orgId)
+            .orderBy('timestamp', descending: false)  // ← LATEST AT THE BOTTOM
             .snapshots(),
         builder: (context, snapshot) {
           if (snapshot.hasError) {
@@ -190,31 +223,73 @@ class StudentBroadcastScreen extends StatelessWidget {
 
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(
-                child: CircularProgressIndicator(color: _C.primaryDark));
+                child: CircularProgressIndicator(color: AppColors.primaryDark));
           }
 
           if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
             return _buildEmptyState();
           }
 
-          final broadcasts = snapshot.data!.docs
+          var broadcasts = snapshot.data!.docs
               .map((doc) => BroadcastModel.fromFirestore(doc))
               .toList();
 
+          if (_searchQuery.isNotEmpty) {
+            broadcasts = broadcasts.where((b) =>
+                b.content.toLowerCase().contains(_searchQuery.toLowerCase()) ||
+                b.authorName.toLowerCase().contains(_searchQuery.toLowerCase())
+            ).toList();
+          }
+
+          if (broadcasts.isEmpty) {
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.search_off,
+                    size: 48,
+                    color: _C.textFaint,
+                  ),
+                  const SizedBox(height: 12),
+                  Text('No results found',
+                      style: GoogleFonts.beVietnamPro(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                          color: _C.charcoal)),
+                  const SizedBox(height: 4),
+                  Text('Try a different search term',
+                      style: GoogleFonts.beVietnamPro(
+                          fontSize: 12, color: _C.darkGray)),
+                ],
+              ),
+            );
+          }
+
+          // Reverse: latest messages at the bottom
+          final reversedBroadcasts = broadcasts.reversed.toList();
+
           return ListView.builder(
+            reverse: true,
+            controller: _scrollController,
             padding: const EdgeInsets.all(16),
-            itemCount: broadcasts.length,
+            itemCount: reversedBroadcasts.length,
             itemBuilder: (context, index) {
-              final broadcast = broadcasts[index];
-              final showDateSeparator = index == 0 ||
-                  !_isSameDay(broadcasts[index - 1].timestamp,
+              final broadcast = reversedBroadcasts[index];
+              // Get the original index for date separator
+              final originalIndex = broadcasts.length - 1 - index;
+              final showDateSeparator = originalIndex == 0 ||
+                  !_isSameDay(broadcasts[originalIndex - 1].timestamp,
                       broadcast.timestamp);
 
               return Column(
                 children: [
                   if (showDateSeparator)
                     _DateSeparator(timestamp: broadcast.timestamp),
-                  _BroadcastCard(broadcast: broadcast),
+                  _BroadcastCard(
+                    broadcast: broadcast,
+                    orgId: widget.orgId,
+                  ),
                 ],
               );
             },
@@ -237,8 +312,11 @@ class StudentBroadcastScreen extends StatelessWidget {
               borderRadius: BorderRadius.circular(20),
               boxShadow: _DS.cardShadow,
             ),
-            child: const Icon(Icons.campaign_outlined,
-                size: 40, color: _C.textFaint),
+            child: Icon(
+              Icons.campaign_outlined,
+              size: 40,
+              color: AppColors.primaryDark.withOpacity(0.4),
+            ),
           ),
           const SizedBox(height: 16),
           Text('No announcements yet',
@@ -268,8 +346,11 @@ class StudentBroadcastScreen extends StatelessWidget {
               borderRadius: BorderRadius.circular(16),
               boxShadow: _DS.cardShadow,
             ),
-            child: const Icon(Icons.error_outline_rounded,
-                color: _C.primaryDark, size: 28),
+            child: Icon(
+              Icons.error_outline_rounded,
+              color: AppColors.primaryDark,
+              size: 28,
+            ),
           ),
           const SizedBox(height: 14),
           Text('Failed to load announcements',
@@ -290,6 +371,153 @@ class StudentBroadcastScreen extends StatelessWidget {
     final da = a.toDate();
     final db = b.toDate();
     return da.year == db.year && da.month == db.month && da.day == db.day;
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Broadcast Search Delegate
+// ─────────────────────────────────────────────────────────────────────────────
+class _BroadcastSearchDelegate extends SearchDelegate {
+  final String orgId;
+  final String orgName;
+
+  _BroadcastSearchDelegate({
+    required this.orgId,
+    required this.orgName,
+  });
+
+  @override
+  String get searchFieldLabel => 'Search broadcasts...';
+
+  @override
+  List<Widget> buildActions(BuildContext context) {
+    return [
+      IconButton(
+        icon: const Icon(Icons.clear),
+        onPressed: () {
+          query = '';
+          showSuggestions(context);
+        },
+      ),
+    ];
+  }
+
+  @override
+  Widget buildLeading(BuildContext context) {
+    return IconButton(
+      icon: const Icon(Icons.arrow_back),
+      onPressed: () {
+        close(context, null);
+      },
+    );
+  }
+
+  @override
+  Widget buildResults(BuildContext context) {
+    return _buildSearchResults(context);
+  }
+
+  @override
+  Widget buildSuggestions(BuildContext context) {
+    return _buildSearchResults(context);
+  }
+
+  Widget _buildSearchResults(BuildContext context) {
+    if (query.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.search_rounded,
+              size: 64,
+              color: _C.textFaint,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'Search for broadcasts',
+              style: GoogleFonts.beVietnamPro(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: _C.charcoal,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Type a keyword to find messages',
+              style: GoogleFonts.beVietnamPro(
+                fontSize: 13,
+                color: _C.darkGray,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('broadcasts')
+          .where('orgId', isEqualTo: orgId)
+          .orderBy('timestamp', descending: true)
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        var broadcasts = snapshot.data!.docs
+            .map((doc) => BroadcastModel.fromFirestore(doc))
+            .where((b) =>
+                b.content.toLowerCase().contains(query.toLowerCase()) ||
+                b.authorName.toLowerCase().contains(query.toLowerCase()))
+            .toList();
+
+        if (broadcasts.isEmpty) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.search_off,
+                  size: 48,
+                  color: _C.textFaint,
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'No results found',
+                  style: GoogleFonts.beVietnamPro(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: _C.charcoal,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Try a different keyword',
+                  style: GoogleFonts.beVietnamPro(
+                    fontSize: 12,
+                    color: _C.darkGray,
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+
+        return ListView.builder(
+          padding: const EdgeInsets.all(16),
+          itemCount: broadcasts.length,
+          itemBuilder: (context, index) {
+            final broadcast = broadcasts[index];
+            return _BroadcastCard(
+              broadcast: broadcast,
+              orgId: orgId,
+            );
+          },
+        );
+      },
+    );
   }
 }
 
@@ -346,19 +574,285 @@ class _DateSeparator extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Broadcast Card - Student View (Read Only)
+// Broadcast Card with Replies
 // ─────────────────────────────────────────────────────────────────────────────
-class _BroadcastCard extends StatelessWidget {
+class _BroadcastCard extends StatefulWidget {
   final BroadcastModel broadcast;
+  final String orgId;
 
-  const _BroadcastCard({required this.broadcast});
+  const _BroadcastCard({
+    required this.broadcast,
+    required this.orgId,
+  });
+
+  @override
+  State<_BroadcastCard> createState() => _BroadcastCardState();
+}
+
+class _BroadcastCardState extends State<_BroadcastCard> {
+  late int _likes;
+  bool _isLiked = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _likes = widget.broadcast.likes;
+    _checkIfLiked();
+  }
+
+  Future<void> _checkIfLiked() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    final doc = await FirebaseFirestore.instance
+        .collection('broadcast_likes')
+        .doc('${widget.broadcast.id}_${user.uid}')
+        .get();
+
+    if (doc.exists) {
+      setState(() => _isLiked = true);
+    }
+  }
+
+  Future<void> _toggleLike() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please login to like'),
+          backgroundColor: AppColors.primaryDark,
+        ),
+      );
+      return;
+    }
+
+    setState(() {
+      if (_isLiked) {
+        _likes--;
+        _isLiked = false;
+      } else {
+        _likes++;
+        _isLiked = true;
+      }
+    });
+
+    try {
+      final docRef = FirebaseFirestore.instance
+          .collection('broadcast_likes')
+          .doc('${widget.broadcast.id}_${user.uid}');
+
+      if (_isLiked) {
+        await docRef.set({
+          'broadcastId': widget.broadcast.id,
+          'userId': user.uid,
+          'likedAt': FieldValue.serverTimestamp(),
+        });
+        await FirebaseFirestore.instance
+            .collection('broadcasts')
+            .doc(widget.broadcast.id)
+            .update({
+          'likes': FieldValue.increment(1),
+        });
+      } else {
+        await docRef.delete();
+        await FirebaseFirestore.instance
+            .collection('broadcasts')
+            .doc(widget.broadcast.id)
+            .update({
+          'likes': FieldValue.increment(-1),
+        });
+      }
+    } catch (e) {
+      setState(() {
+        if (_isLiked) {
+          _likes--;
+          _isLiked = false;
+        } else {
+          _likes++;
+          _isLiked = true;
+        }
+      });
+    }
+  }
+
+  Future<void> _addReply(String content) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    try {
+      await FirebaseFirestore.instance
+          .collection('broadcasts')
+          .doc(widget.broadcast.id)
+          .collection('replies')
+          .add({
+        'content': content,
+        'authorId': user.uid,
+        'authorName': user.displayName ?? user.email?.split('@').first ?? 'Anonymous',
+        'timestamp': FieldValue.serverTimestamp(),
+      });
+
+      await FirebaseFirestore.instance
+          .collection('broadcasts')
+          .doc(widget.broadcast.id)
+          .update({
+        'replyCount': FieldValue.increment(1),
+      });
+    } catch (e) {
+      throw Exception('Failed to add reply: $e');
+    }
+  }
+
+  void _showReplyDialog() {
+    final replyController = TextEditingController();
+    bool isSubmitting = false;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSheetState) {
+          Future<void> submitReply() async {
+            if (replyController.text.trim().isEmpty) return;
+            setSheetState(() => isSubmitting = true);
+            try {
+              await _addReply(replyController.text.trim());
+              if (ctx.mounted) Navigator.pop(ctx);
+              if (mounted) {
+                setState(() {});
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Reply added!'),
+                    backgroundColor: AppColors.primaryDark,
+                  ),
+                );
+              }
+            } catch (e) {
+              setSheetState(() => isSubmitting = false);
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Failed to add reply: $e'),
+                  backgroundColor: Colors.red,
+                ),
+              );
+            }
+          }
+
+          return Container(
+            margin: const EdgeInsets.all(16),
+            padding: EdgeInsets.only(
+              left: 20,
+              right: 20,
+              top: 20,
+              bottom: 20 + MediaQuery.of(ctx).viewInsets.bottom,
+            ),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 40,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 16),
+                  decoration: BoxDecoration(
+                    color: Colors.grey[300],
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                const Text(
+                  'Add Reply',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.black87,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: replyController,
+                  maxLines: 4,
+                  decoration: InputDecoration(
+                    hintText: 'Write your reply here...',
+                    filled: true,
+                    fillColor: _C.surface,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none,
+                    ),
+                    contentPadding: const EdgeInsets.all(16),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () => Navigator.pop(ctx),
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          side: const BorderSide(color: _C.border),
+                        ),
+                        child: const Text(
+                          'Cancel',
+                          style: TextStyle(
+                            color: _C.darkGray,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: isSubmitting ? null : submitReply,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.primaryDark,
+                          foregroundColor: Colors.white,
+                          elevation: 0,
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: isSubmitting
+                            ? const SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
+                              )
+                            : const Text(
+                                'Post Reply',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
 
   String _timeLabel(Timestamp ts) =>
       DateFormat('h:mm a').format(ts.toDate());
 
   @override
   Widget build(BuildContext context) {
-    final b = broadcast;
+    final b = widget.broadcast;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
@@ -385,20 +879,23 @@ class _BroadcastCard extends StatelessWidget {
                   padding:
                       const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                   decoration: BoxDecoration(
-                    color: _C.primaryDark.withOpacity(0.1),
+                    color: AppColors.primaryDark.withOpacity(0.1),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(Icons.push_pin_rounded,
-                          size: 10, color: _C.primaryDark),
+                      Icon(
+                        Icons.push_pin_rounded,
+                        size: 10,
+                        color: AppColors.primaryDark,
+                      ),
                       const SizedBox(width: 4),
                       Text('Pinned',
                           style: GoogleFonts.beVietnamPro(
                               fontSize: 9,
                               fontWeight: FontWeight.w600,
-                              color: _C.primaryDark)),
+                              color: AppColors.primaryDark)),
                     ],
                   ),
                 ),
@@ -412,8 +909,8 @@ class _BroadcastCard extends StatelessWidget {
             decoration: BoxDecoration(
               gradient: const LinearGradient(
                 colors: [
-                  Color(0xFFB45309),
-                  Color(0xFFD97706),
+                  Color(0xFFBE4700),
+                  Color(0xFFD47A00),
                 ],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
@@ -426,7 +923,7 @@ class _BroadcastCard extends StatelessWidget {
               ),
               boxShadow: [
                 BoxShadow(
-                  color: _C.primaryDark.withOpacity(0.14),
+                  color: AppColors.primaryDark.withOpacity(0.14),
                   blurRadius: 8,
                   offset: const Offset(0, 3),
                 ),
@@ -435,7 +932,6 @@ class _BroadcastCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Image if present
                 if (b.imageUrl != null && b.imageUrl!.isNotEmpty)
                   ClipRRect(
                     borderRadius: const BorderRadius.only(
@@ -450,7 +946,6 @@ class _BroadcastCard extends StatelessWidget {
                       errorBuilder: (_, __, ___) => const SizedBox(),
                     ),
                   ),
-                // Content
                 Padding(
                   padding: const EdgeInsets.all(14),
                   child: Column(
@@ -462,7 +957,6 @@ class _BroadcastCard extends StatelessWidget {
                                 fontSize: 14,
                                 color: Colors.white,
                                 height: 1.5)),
-                      // Attachments
                       if (b.attachments.isNotEmpty) ...[
                         if (b.content.isNotEmpty) const SizedBox(height: 12),
                         ...b.attachments.map((att) =>
@@ -476,55 +970,203 @@ class _BroadcastCard extends StatelessWidget {
           ),
           const SizedBox(height: 10),
 
-          // Like and Reply counts
+          // Like and Reply buttons
           Row(
             children: [
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                decoration: BoxDecoration(
-                  color: _C.surface,
-                  borderRadius: BorderRadius.circular(18),
-                  border: Border.all(color: _C.borderSoft),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.favorite_border,
-                        size: 14, color: _C.darkGray),
-                    const SizedBox(width: 6),
-                    Text('${b.likes}',
+              GestureDetector(
+                onTap: _toggleLike,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: _isLiked
+                        ? AppColors.primaryDark.withOpacity(0.1)
+                        : _C.surface,
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(
+                      color: _isLiked
+                          ? AppColors.primaryDark
+                          : _C.borderSoft,
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        _isLiked ? Icons.favorite : Icons.favorite_border,
+                        size: 16,
+                        color: _isLiked ? AppColors.primaryDark : _C.darkGray,
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        '$_likes',
                         style: GoogleFonts.beVietnamPro(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: _C.darkGray)),
-                  ],
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: _isLiked ? AppColors.primaryDark : _C.darkGray,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
               const SizedBox(width: 10),
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                decoration: BoxDecoration(
-                  color: _C.surface,
-                  borderRadius: BorderRadius.circular(18),
-                  border: Border.all(color: _C.borderSoft),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.mode_comment_outlined,
-                        size: 14, color: _C.darkGray),
-                    const SizedBox(width: 6),
-                    Text('${b.replyCount}',
+              GestureDetector(
+                onTap: _showReplyDialog,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: _C.surface,
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(color: _C.borderSoft),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(
+                        Icons.mode_comment_outlined,
+                        size: 16,
+                        color: _C.darkGray,
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        '${b.replyCount}',
                         style: GoogleFonts.beVietnamPro(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: _C.darkGray)),
-                  ],
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: _C.darkGray,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ],
+          ),
+
+          // ── REPLIES SECTION (latest at the bottom) ──
+          const SizedBox(height: 12),
+          StreamBuilder<QuerySnapshot>(
+            stream: FirebaseFirestore.instance
+                .collection('broadcasts')
+                .doc(b.id)
+                .collection('replies')
+                .orderBy('timestamp', descending: false)
+                .snapshots(),
+            builder: (context, replySnapshot) {
+              if (replySnapshot.connectionState == ConnectionState.waiting) {
+                return const SizedBox.shrink();
+              }
+
+              if (!replySnapshot.hasData || replySnapshot.data!.docs.isEmpty) {
+                return const SizedBox.shrink();
+              }
+
+              final replies = replySnapshot.data!.docs;
+              final currentUser = FirebaseAuth.instance.currentUser;
+
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.only(left: 20),
+                    child: Column(
+                      children: replies.map((replyDoc) {
+                        final replyData = replyDoc.data() as Map<String, dynamic>;
+                        final replyAuthor = replyData['authorName'] ?? 'Anonymous';
+                        final replyContent = replyData['content'] ?? '';
+                        final replyTime = replyData['timestamp'] as Timestamp?;
+                        final isOwnReply = currentUser?.uid == replyData['authorId'];
+
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Container(
+                                width: 28,
+                                height: 28,
+                                decoration: BoxDecoration(
+                                  color: isOwnReply
+                                      ? AppColors.primaryDark.withOpacity(0.1)
+                                      : Colors.grey.shade200,
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Center(
+                                  child: Text(
+                                    replyAuthor.isNotEmpty ? replyAuthor[0].toUpperCase() : '?',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.bold,
+                                      color: isOwnReply ? AppColors.primaryDark : Colors.grey.shade600,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        Text(
+                                          replyAuthor,
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w600,
+                                            color: isOwnReply ? AppColors.primaryDark : _C.charcoal,
+                                          ),
+                                        ),
+                                        if (isOwnReply) ...[
+                                          const SizedBox(width: 6),
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                                            decoration: BoxDecoration(
+                                              color: AppColors.primaryDark.withOpacity(0.1),
+                                              borderRadius: BorderRadius.circular(4),
+                                            ),
+                                            child: Text(
+                                              'You',
+                                              style: TextStyle(
+                                                fontSize: 8,
+                                                fontWeight: FontWeight.w600,
+                                                color: AppColors.primaryDark,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                        const SizedBox(width: 8),
+                                        if (replyTime != null)
+                                          Text(
+                                            DateFormat('h:mm a').format(replyTime.toDate()),
+                                            style: const TextStyle(
+                                              fontSize: 9,
+                                              color: _C.textFaint,
+                                            ),
+                                          ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      replyContent,
+                                      style: const TextStyle(
+                                        fontSize: 13,
+                                        color: _C.charcoal,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                ],
+              );
+            },
           ),
         ],
       ),
@@ -533,7 +1175,7 @@ class _BroadcastCard extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Attachment Link (copies URL when tapped)
+// Attachment Link
 // ─────────────────────────────────────────────────────────────────────────────
 class _AttachmentLink extends StatelessWidget {
   final Attachment attachment;
@@ -544,7 +1186,6 @@ class _AttachmentLink extends StatelessWidget {
   Widget build(BuildContext context) {
     return InkWell(
       onTap: () {
-        // Copy link to clipboard
         Clipboard.setData(ClipboardData(text: attachment.url));
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(

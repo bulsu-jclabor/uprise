@@ -1,9 +1,23 @@
+// lib/screens/student/student_organization_details_screen.dart
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'student_broadcast_screen.dart';
 
+// ─────────────────────────────────────────────────────────────
+//  CUSTOM COLORS - UNIFORM
+// ─────────────────────────────────────────────────────────────
+class AppColors {
+  static const Color primaryDark = Color(0xFFBE4700);
+  static const Color primaryLight = Color(0xFFD47A00);
+  static const Color accent = Color(0xFFDA6937);
+  static const Color background = Color(0xFFF8F9FA);
+}
+
+// ─────────────────────────────────────────────────────────────
+//  ORGANIZATION DETAILS SCREEN
+// ─────────────────────────────────────────────────────────────
 class StudentOrganizationsDetailsScreen extends StatefulWidget {
   final String orgId;
   const StudentOrganizationsDetailsScreen({super.key, required this.orgId});
@@ -16,7 +30,6 @@ class StudentOrganizationsDetailsScreen extends StatefulWidget {
 class _StudentOrganizationsDetailsScreenState
     extends State<StudentOrganizationsDetailsScreen> {
 
-  /// Handles both base64 data URIs (data:image/...;base64,...) and regular network URLs
   ImageProvider? _buildLogoImage(String? logoUrl) {
     if (logoUrl == null || logoUrl.isEmpty) return null;
 
@@ -32,7 +45,6 @@ class _StudentOrganizationsDetailsScreenState
     return NetworkImage(logoUrl);
   }
 
-  /// Handles both base64 data URIs and regular network URLs for cover image
   DecorationImage? _buildCoverImage(String? coverUrl) {
     if (coverUrl == null || coverUrl.isEmpty) return null;
 
@@ -76,11 +88,18 @@ class _StudentOrganizationsDetailsScreenState
           return Scaffold(
             backgroundColor: Colors.white,
             appBar: AppBar(
-              title: const Text('Organization'),
+              title: const Text(
+                'Organization',
+                style: TextStyle(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 18,
+                  color: Colors.black,
+                ),
+              ),
               backgroundColor: Colors.white,
               foregroundColor: Colors.black,
               elevation: 0,
-              centerTitle: false,
+              centerTitle: true,
               actions: [
                 IconButton(
                   onPressed: () {
@@ -94,40 +113,44 @@ class _StudentOrganizationsDetailsScreenState
                       ),
                     );
                   },
-                  icon: const Icon(Icons.radio, color: Colors.orange),
+                  icon: Icon(Icons.radio, color: AppColors.primaryDark),
                 ),
-                const SizedBox(width: 8),
+                const SizedBox(width: 4),
                 IconButton(
                   onPressed: () {
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(
-                          content: Text('Event Gallery - Coming Soon')),
+                        content: Text('Event Gallery - Coming Soon'),
+                      ),
                     );
                   },
-                  icon: const Icon(Icons.grid_view_rounded,
-                      color: Colors.orange),
+                  icon: Icon(Icons.grid_view_rounded, color: AppColors.primaryDark),
                 ),
-                const SizedBox(width: 16),
+                const SizedBox(width: 8),
               ],
             ),
             body: SingleChildScrollView(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  // ── Cover Image ──
                   Stack(
                     children: [
                       Container(
                         height: 200,
                         width: double.infinity,
                         decoration: BoxDecoration(
-                          color: Colors.orange[50],
+                          color: AppColors.primaryDark.withOpacity(0.1),
                           image: _buildCoverImage(org['coverUrl']),
                         ),
                         child: (org['coverUrl'] == null ||
                                 (org['coverUrl'] as String).isEmpty)
                             ? Center(
-                                child: Icon(Icons.business,
-                                    size: 60, color: Colors.orange[200]),
+                                child: Icon(
+                                  Icons.business,
+                                  size: 60,
+                                  color: AppColors.primaryDark.withOpacity(0.3),
+                                ),
                               )
                             : null,
                       ),
@@ -152,11 +175,11 @@ class _StudentOrganizationsDetailsScreenState
                             child: (org['logoUrl'] == null ||
                                     (org['logoUrl'] as String).isEmpty)
                                 ? Text(
-                                    (org['name'] ?? 'O')[0],
-                                    style: const TextStyle(
+                                    (org['name'] ?? 'O')[0].toUpperCase(),
+                                    style: TextStyle(
                                       fontSize: 32,
                                       fontWeight: FontWeight.bold,
-                                      color: Colors.orange,
+                                      color: AppColors.primaryDark,
                                     ),
                                   )
                                 : null,
@@ -167,6 +190,7 @@ class _StudentOrganizationsDetailsScreenState
                   ),
                   const SizedBox(height: 40),
 
+                  // ── Organization Info ──
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     child: Column(
@@ -206,6 +230,8 @@ class _StudentOrganizationsDetailsScreenState
                           ),
                         ),
                         const SizedBox(height: 20),
+
+                        // ── ABOUT ──
                         const Text(
                           'ABOUT',
                           style: TextStyle(
@@ -223,10 +249,12 @@ class _StudentOrganizationsDetailsScreenState
                           ),
                         ),
                         const SizedBox(height: 24),
+
+                        // ── Organization Adviser ──
                         Container(
                           padding: const EdgeInsets.all(16),
                           decoration: BoxDecoration(
-                            color: Colors.grey[50],
+                            color: AppColors.background,
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: Row(
@@ -234,11 +262,13 @@ class _StudentOrganizationsDetailsScreenState
                               Container(
                                 padding: const EdgeInsets.all(10),
                                 decoration: BoxDecoration(
-                                  color: Colors.orange[100],
+                                  color: AppColors.primaryDark.withOpacity(0.1),
                                   borderRadius: BorderRadius.circular(10),
                                 ),
-                                child: const Icon(Icons.person_outline,
-                                    color: Colors.orange),
+                                child: Icon(
+                                  Icons.person_outline,
+                                  color: AppColors.primaryDark,
+                                ),
                               ),
                               const SizedBox(width: 12),
                               Expanded(
@@ -275,6 +305,8 @@ class _StudentOrganizationsDetailsScreenState
                           ),
                         ),
                         const SizedBox(height: 24),
+
+                        // ── Executive Officers ──
                         const Text(
                           'Executive Officers',
                           style: TextStyle(
@@ -299,7 +331,7 @@ class _StudentOrganizationsDetailsScreenState
                               return ListTile(
                                 contentPadding: EdgeInsets.zero,
                                 leading: CircleAvatar(
-                                  backgroundColor: Colors.orange[100],
+                                  backgroundColor: AppColors.primaryDark.withOpacity(0.1),
                                   backgroundImage: _buildLogoImage(
                                       officer['photoUrl']),
                                   child: (officer['photoUrl'] == null ||
@@ -307,9 +339,9 @@ class _StudentOrganizationsDetailsScreenState
                                                   ?.isEmpty ==
                                               true)
                                       ? Text(
-                                          (officer['name'] ?? '')[0],
-                                          style: const TextStyle(
-                                            color: Colors.orange,
+                                          (officer['name'] ?? '')[0].toUpperCase(),
+                                          style: TextStyle(
+                                            color: AppColors.primaryDark,
                                             fontWeight: FontWeight.bold,
                                           ),
                                         )
@@ -332,6 +364,8 @@ class _StudentOrganizationsDetailsScreenState
                             },
                           ),
                         const SizedBox(height: 24),
+
+                        // ── Upcoming Events ──
                         const Text(
                           'Upcoming Events',
                           style: TextStyle(
@@ -356,7 +390,7 @@ class _StudentOrganizationsDetailsScreenState
                               return Container(
                                 padding: const EdgeInsets.all(12),
                                 decoration: BoxDecoration(
-                                  color: Colors.grey[50],
+                                  color: AppColors.background,
                                   borderRadius: BorderRadius.circular(12),
                                 ),
                                 child: Row(
@@ -366,7 +400,7 @@ class _StudentOrganizationsDetailsScreenState
                                       height: 60,
                                       alignment: Alignment.center,
                                       decoration: BoxDecoration(
-                                        color: Colors.orange[100],
+                                        color: AppColors.primaryDark.withOpacity(0.1),
                                         borderRadius: BorderRadius.circular(10),
                                       ),
                                       child: Column(
@@ -377,10 +411,10 @@ class _StudentOrganizationsDetailsScreenState
                                                 .toString()
                                                 .split(' ')
                                                 .first,
-                                            style: const TextStyle(
+                                            style: TextStyle(
                                               fontSize: 16,
                                               fontWeight: FontWeight.bold,
-                                              color: Colors.orange,
+                                              color: AppColors.primaryDark,
                                             ),
                                           ),
                                           Text(
@@ -390,7 +424,7 @@ class _StudentOrganizationsDetailsScreenState
                                                 .last,
                                             style: TextStyle(
                                               fontSize: 10,
-                                              color: Colors.orange[700],
+                                              color: AppColors.primaryDark.withOpacity(0.7),
                                             ),
                                           ),
                                         ],
@@ -411,9 +445,11 @@ class _StudentOrganizationsDetailsScreenState
                                           const SizedBox(height: 4),
                                           Row(
                                             children: [
-                                              Icon(Icons.location_on,
-                                                  size: 12,
-                                                  color: Colors.grey[500]),
+                                              Icon(
+                                                Icons.location_on,
+                                                size: 12,
+                                                color: Colors.grey[500],
+                                              ),
                                               const SizedBox(width: 4),
                                               Text(
                                                 event['location'] ?? '',
@@ -423,9 +459,11 @@ class _StudentOrganizationsDetailsScreenState
                                                 ),
                                               ),
                                               const SizedBox(width: 12),
-                                              Icon(Icons.access_time,
-                                                  size: 12,
-                                                  color: Colors.grey[500]),
+                                              Icon(
+                                                Icons.access_time,
+                                                size: 12,
+                                                color: Colors.grey[500],
+                                              ),
                                               const SizedBox(width: 4),
                                               Text(
                                                 event['time'] ?? '',
@@ -445,6 +483,8 @@ class _StudentOrganizationsDetailsScreenState
                             },
                           ),
                         const SizedBox(height: 24),
+
+                        // ── Recent Announcements ──
                         const Text(
                           'Recent Announcements',
                           style: TextStyle(
@@ -475,7 +515,7 @@ class _StudentOrganizationsDetailsScreenState
                                 decoration: BoxDecoration(
                                   color: isUrgent
                                       ? Colors.red[50]
-                                      : Colors.grey[50],
+                                      : AppColors.background,
                                   borderRadius: BorderRadius.circular(12),
                                   border: isUrgent
                                       ? Border.all(color: Colors.red[200]!)
@@ -489,7 +529,7 @@ class _StudentOrganizationsDetailsScreenState
                                       decoration: BoxDecoration(
                                         color: isUrgent
                                             ? Colors.red[100]
-                                            : Colors.orange[100],
+                                            : AppColors.primaryDark.withOpacity(0.1),
                                         borderRadius: BorderRadius.circular(8),
                                       ),
                                       child: Icon(
@@ -499,7 +539,7 @@ class _StudentOrganizationsDetailsScreenState
                                         size: 18,
                                         color: isUrgent
                                             ? Colors.red
-                                            : Colors.orange,
+                                            : AppColors.primaryDark,
                                       ),
                                     ),
                                     const SizedBox(width: 12),

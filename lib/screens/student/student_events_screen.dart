@@ -1,7 +1,18 @@
+// lib/screens/student/student_events_screen.dart
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
+
+// ─────────────────────────────────────────────
+//  CUSTOM COLORS - UNIFORM
+// ─────────────────────────────────────────────
+class AppColors {
+  static const Color primaryDark = Color(0xFFBE4700);
+  static const Color primaryLight = Color(0xFFD47A00);
+  static const Color accent = Color(0xFFDA6937);
+  static const Color background = Color(0xFFF8F9FA);
+}
 
 // ─────────────────────────────────────────────
 //  DATA MODEL
@@ -94,8 +105,6 @@ class StudentEventsScreen extends StatefulWidget {
 class _StudentEventsScreenState extends State<StudentEventsScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
-  // Remove the unused field or use it - we'll keep it for potential future use
-  // int _selectedTabIndex = 0; // REMOVED - not needed when using TabBar
 
   DateTime _selectedDate = DateTime.now();
   Future<List<Map<String, dynamic>>>? _attendedEventsFuture;
@@ -139,9 +148,7 @@ class _StudentEventsScreenState extends State<StudentEventsScreen>
     );
   }
 
-  // Events the student attended (present/late), with whether they've already
-  // submitted their evaluation for it. Evaluation is required for every
-  // attended event, regardless of whether the org issues a certificate for it.
+  // Events the student attended
   Future<List<Map<String, dynamic>>> _loadAttendedEvents() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return [];
@@ -205,7 +212,7 @@ class _StudentEventsScreenState extends State<StudentEventsScreen>
             if (selectedRating == 0) {
               ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
                 content: Text('Please select a star rating.'),
-                backgroundColor: Color(0xFFE53935),
+                backgroundColor: AppColors.primaryDark,
               ));
               return;
             }
@@ -273,7 +280,7 @@ class _StudentEventsScreenState extends State<StudentEventsScreen>
                         onPressed: () => setSheet(() => selectedRating = star),
                         icon: Icon(
                           star <= selectedRating ? Icons.star_rounded : Icons.star_border_rounded,
-                          color: star <= selectedRating ? const Color(0xFFE53935) : Colors.grey.shade400,
+                          color: star <= selectedRating ? AppColors.primaryDark : Colors.grey.shade400,
                           size: 32,
                         ),
                       );
@@ -296,7 +303,7 @@ class _StudentEventsScreenState extends State<StudentEventsScreen>
                   child: ElevatedButton(
                     onPressed: submitting ? null : submit,
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFFE53935),
+                      backgroundColor: AppColors.primaryDark,
                       foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(vertical: 14),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -328,26 +335,28 @@ class _StudentEventsScreenState extends State<StudentEventsScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF2F2F2),
+      backgroundColor: AppColors.background,
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
         title: const Text(
-          'Calendar',
+          'Events',
           style: TextStyle(
             fontSize: 18,
             fontWeight: FontWeight.w700,
             color: Colors.black87,
           ),
         ),
+        centerTitle: true,
         bottom: TabBar(
           controller: _tabController,
-          indicatorColor: const Color(0xFFE53935),
-          labelColor: const Color(0xFFE53935),
+          indicatorColor: AppColors.primaryDark,
+          labelColor: AppColors.primaryDark,
           unselectedLabelColor: Colors.black45,
+          indicatorWeight: 3,
           tabs: const [
-            Tab(text: 'All CICT Events'),
-            Tab(text: 'Event'),
+            Tab(text: 'Calendar'),
+            Tab(text: 'Upcoming'),
             Tab(text: 'Feedback'),
           ],
         ),
@@ -355,32 +364,32 @@ class _StudentEventsScreenState extends State<StudentEventsScreen>
       body: TabBarView(
         controller: _tabController,
         children: [
-          // Tab 0: All CICT Events (Calendar + Events)
-          _buildCalendarAndEventsTab(),
+          // Tab 0: Calendar
+          _buildCalendarTab(),
           
-          // Tab 1: Event Tab (Upcoming Events List)
-          _buildEventTab(),
+          // Tab 1: Upcoming Events
+          _buildUpcomingTab(),
           
-          // Tab 2: Feedback Tab
+          // Tab 2: Feedback
           _buildFeedbackTab(),
         ],
       ),
     );
   }
 
-  // TAB 0: All CICT Events (Calendar + Events for selected date)
-  Widget _buildCalendarAndEventsTab() {
+  // ── TAB 0: Calendar ──
+  Widget _buildCalendarTab() {
     return Column(
       children: [
         // Calendar Header
         Container(
           color: Colors.white,
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               IconButton(
-                icon: const Icon(Icons.chevron_left),
+                icon: const Icon(Icons.chevron_left, color: AppColors.primaryDark),
                 onPressed: _previousMonth,
               ),
               Text(
@@ -391,7 +400,7 @@ class _StudentEventsScreenState extends State<StudentEventsScreen>
                 ),
               ),
               IconButton(
-                icon: const Icon(Icons.chevron_right),
+                icon: const Icon(Icons.chevron_right, color: AppColors.primaryDark),
                 onPressed: _nextMonth,
               ),
             ],
@@ -410,8 +419,8 @@ class _StudentEventsScreenState extends State<StudentEventsScreen>
             },
           ),
         ),
-        const SizedBox(height: 16),
-        // Events for Today Header
+        const SizedBox(height: 12),
+        // Events for Selected Day Header
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
           child: Row(
@@ -419,7 +428,7 @@ class _StudentEventsScreenState extends State<StudentEventsScreen>
               Text(
                 'Events for ${DateFormat('MMM dd, yyyy').format(_selectedDate)}',
                 style: TextStyle(
-                  fontSize: 18,
+                  fontSize: 16,
                   fontWeight: FontWeight.w700,
                   color: Colors.black87,
                 ),
@@ -447,9 +456,9 @@ class _StudentEventsScreenState extends State<StudentEventsScreen>
                               e.rawDate.day == _selectedDate.day)
                           .toList();
                       return Text(
-                        '${todayEvents.length} Events',
+                        '${todayEvents.length} events',
                         style: TextStyle(
-                          fontSize: 14,
+                          fontSize: 13,
                           fontWeight: FontWeight.w500,
                           color: Colors.grey.shade600,
                         ),
@@ -461,7 +470,7 @@ class _StudentEventsScreenState extends State<StudentEventsScreen>
             ],
           ),
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 8),
         // Events List
         Expanded(
           child: FutureBuilder<Set<String>>(
@@ -477,7 +486,7 @@ class _StudentEventsScreenState extends State<StudentEventsScreen>
                   if (!snapshot.hasData) {
                     return const Center(
                         child: CircularProgressIndicator(
-                            color: Color(0xFFE53935)));
+                            color: AppColors.primaryDark));
                   }
                   final todayEvents = snapshot.data!.docs
                       .map((doc) => EventData.fromFirestore(doc,
@@ -514,7 +523,7 @@ class _StudentEventsScreenState extends State<StudentEventsScreen>
                     itemCount: todayEvents.length,
                     itemBuilder: (context, index) {
                       return Padding(
-                        padding: const EdgeInsets.only(bottom: 16),
+                        padding: const EdgeInsets.only(bottom: 12),
                         child: _CompactEventCard(
                           event: todayEvents[index],
                           onTap: () => _openDetail(todayEvents[index]),
@@ -531,8 +540,8 @@ class _StudentEventsScreenState extends State<StudentEventsScreen>
     );
   }
 
-  // TAB 1: Event Tab (Upcoming Events List)
-  Widget _buildEventTab() {
+  // ── TAB 1: Upcoming Events ──
+  Widget _buildUpcomingTab() {
     return FutureBuilder<Set<String>>(
       future: _getRegisteredEventIds(),
       builder: (context, regSnap) {
@@ -545,13 +554,13 @@ class _StudentEventsScreenState extends State<StudentEventsScreen>
           builder: (context, snapshot) {
             if (!snapshot.hasData) {
               return const Center(
-                  child: CircularProgressIndicator(color: Color(0xFFE53935)));
+                  child: CircularProgressIndicator(color: AppColors.primaryDark));
             }
             
             final allEvents = snapshot.data!.docs
                 .map((doc) => EventData.fromFirestore(doc,
                     isRegistered: registeredIds.contains(doc.id)))
-                .where((e) => !e.isPast) // Only show upcoming events
+                .where((e) => !e.isPast)
                 .toList();
 
             if (allEvents.isEmpty) {
@@ -593,16 +602,16 @@ class _StudentEventsScreenState extends State<StudentEventsScreen>
     );
   }
 
-  // TAB 2: Feedback Tab — events the student attended, awaiting evaluation
+  // ── TAB 2: Feedback ──
   Widget _buildFeedbackTab() {
     return RefreshIndicator(
-      color: const Color(0xFFE53935),
+      color: AppColors.primaryDark,
       onRefresh: () async => _refreshFeedbackTab(),
       child: FutureBuilder<List<Map<String, dynamic>>>(
         future: _attendedEventsFuture,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator(color: Color(0xFFE53935)));
+            return const Center(child: CircularProgressIndicator(color: AppColors.primaryDark));
           }
           final events = snapshot.data ?? [];
           if (events.isEmpty) {
@@ -669,7 +678,7 @@ class _StudentEventsScreenState extends State<StudentEventsScreen>
                       : ElevatedButton(
                           onPressed: () => _showEventFeedbackDialog(ev),
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFFE53935),
+                            backgroundColor: AppColors.primaryDark,
                             foregroundColor: Colors.white,
                             elevation: 0,
                             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
@@ -746,7 +755,7 @@ class _CalendarGrid extends StatelessWidget {
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               color: isSelected
-                  ? const Color(0xFFE53935)
+                  ? AppColors.primaryDark
                   : isToday
                       ? Colors.grey.shade200
                       : Colors.transparent,
@@ -760,7 +769,7 @@ class _CalendarGrid extends StatelessWidget {
                   color: isSelected
                       ? Colors.white
                       : isToday
-                          ? const Color(0xFFE53935)
+                          ? AppColors.primaryDark
                           : Colors.black87,
                 ),
               ),
@@ -799,7 +808,7 @@ class _CompactEventCard extends StatelessWidget {
           borderRadius: BorderRadius.circular(12),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.05), // Fixed: replaced withOpacity
+              color: Colors.black.withOpacity(0.05),
               blurRadius: 8,
               offset: const Offset(0, 2),
             ),
@@ -811,7 +820,7 @@ class _CompactEventCard extends StatelessWidget {
               width: 70,
               padding: const EdgeInsets.symmetric(vertical: 12),
               decoration: BoxDecoration(
-                color: const Color(0xFFE53935).withValues(alpha: 0.1), // Fixed: replaced withOpacity
+                color: AppColors.primaryDark.withOpacity(0.1),
                 borderRadius: const BorderRadius.only(
                   topLeft: Radius.circular(12),
                   bottomLeft: Radius.circular(12),
@@ -821,18 +830,18 @@ class _CompactEventCard extends StatelessWidget {
                 children: [
                   Text(
                     DateFormat('MMM').format(event.rawDate),
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w700,
-                      color: Color(0xFFE53935),
+                      color: AppColors.primaryDark,
                     ),
                   ),
                   Text(
                     DateFormat('dd').format(event.rawDate),
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 20,
                       fontWeight: FontWeight.w800,
-                      color: Color(0xFFE53935),
+                      color: AppColors.primaryDark,
                     ),
                   ),
                 ],
@@ -894,13 +903,13 @@ class _CompactEventCard extends StatelessWidget {
                 style: TextButton.styleFrom(
                   padding: const EdgeInsets.symmetric(
                       horizontal: 12, vertical: 8),
-                  backgroundColor: const Color(0xFFE53935),
+                  backgroundColor: AppColors.primaryDark,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(20),
                   ),
                 ),
                 child: const Text(
-                  'View Details',
+                  'View',
                   style: TextStyle(
                     color: Colors.white,
                     fontSize: 11,
@@ -917,7 +926,7 @@ class _CompactEventCard extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────
-//  UPCOMING EVENT CARD (for Event Tab)
+//  UPCOMING EVENT CARD (for Upcoming Tab)
 // ─────────────────────────────────────────────
 class _UpcomingEventCard extends StatelessWidget {
   final EventData event;
@@ -935,7 +944,7 @@ class _UpcomingEventCard extends StatelessWidget {
           borderRadius: BorderRadius.circular(16),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.08), // Fixed: replaced withOpacity
+              color: Colors.black.withOpacity(0.08),
               blurRadius: 10,
               offset: const Offset(0, 4),
             ),
@@ -1034,7 +1043,7 @@ class _UpcomingEventCard extends StatelessWidget {
                       style: ElevatedButton.styleFrom(
                         backgroundColor: event.isRegistered
                             ? Colors.green
-                            : const Color(0xFFE53935),
+                            : AppColors.primaryDark,
                         padding: const EdgeInsets.symmetric(vertical: 10),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(25),
@@ -1061,7 +1070,7 @@ class _UpcomingEventCard extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────
-//  CATEGORY BADGE
+//  CATEGORY BADGE (Uniform Colors)
 // ─────────────────────────────────────────────
 class _CategoryBadge extends StatelessWidget {
   final String category;
@@ -1070,13 +1079,13 @@ class _CategoryBadge extends StatelessWidget {
   Color get _color {
     switch (category.toLowerCase()) {
       case 'competition':
-        return const Color(0xFFFF6F00);
+        return AppColors.primaryDark;
       case 'workshop':
         return const Color(0xFF1565C0);
       case 'seminar':
         return const Color(0xFF6A1B9A);
       default:
-        return const Color(0xFF37474F);
+        return Colors.grey.shade700;
     }
   }
 
@@ -1179,7 +1188,9 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-              content: Text('Successfully registered for event!')),
+              content: Text('Successfully registered for event!'),
+              backgroundColor: AppColors.primaryDark,
+          ),
         );
         Navigator.pop(context);
       }
@@ -1209,6 +1220,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
           'Event Details',
           style: TextStyle(color: Colors.black87),
         ),
+        centerTitle: true,
       ),
       body: SingleChildScrollView(
         child: Column(
@@ -1291,7 +1303,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                       child: ElevatedButton(
                         onPressed: _isLoading ? null : _registerForEvent,
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFFE53935),
+                          backgroundColor: AppColors.primaryDark,
                           padding: const EdgeInsets.symmetric(vertical: 14),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12),
