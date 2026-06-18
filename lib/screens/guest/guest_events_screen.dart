@@ -13,7 +13,7 @@ const _kBg        = Color(0xFFF5F5F5);
 // ─────────────────────────────────────────────────────────────
 // Firestore event model
 // ─────────────────────────────────────────────────────────────
-class _FirestoreEvent {
+class FirestoreEvent {
   final String id;
   final String title;
   final String description;
@@ -29,7 +29,7 @@ class _FirestoreEvent {
   // enriched after fetch — initialized to empty string to avoid null errors
   String orgLogoUrl = '';
 
-  _FirestoreEvent({
+  FirestoreEvent({
     required this.id,
     required this.title,
     required this.description,
@@ -44,13 +44,13 @@ class _FirestoreEvent {
     required this.date,
   });
 
-  factory _FirestoreEvent.fromDoc(DocumentSnapshot doc) {
+  factory FirestoreEvent.fromDoc(DocumentSnapshot doc) {
     final d = doc.data() as Map<String, dynamic>;
     final dateField = d['date'];
     final DateTime parsedDate = dateField is Timestamp
         ? dateField.toDate()
         : DateTime.now();
-    return _FirestoreEvent(
+    return FirestoreEvent(
       id          : doc.id,
       title       : d['title']       as String? ?? 'Untitled',
       description : d['description'] as String? ?? '',
@@ -97,7 +97,7 @@ class _GuestEventsScreenState extends State<GuestEventsScreen> {
   StreamSubscription<QuerySnapshot>? _eventsSubscription;
   StreamSubscription<QuerySnapshot>? _proposalsSubscription;
 
-  final Map<String, _FirestoreEvent> _eventMap = {};
+  final Map<String, FirestoreEvent> _eventMap = {};
   bool _loading = true;
   String? _error;
   String _search    = '';
@@ -134,7 +134,7 @@ class _GuestEventsScreenState extends State<GuestEventsScreen> {
           _eventMap.remove(doc.id);
           continue;
         }
-        final event = _FirestoreEvent.fromDoc(doc);
+        final event = FirestoreEvent.fromDoc(doc);
         await _enrichLogo(event);
         _eventMap[doc.id] = event;
       }
@@ -167,7 +167,7 @@ class _GuestEventsScreenState extends State<GuestEventsScreen> {
         final DateTime parsedDate = dateField is Timestamp
             ? dateField.toDate()
             : DateTime.now();
-        final event = _FirestoreEvent(
+        final event = FirestoreEvent(
           id          : 'proposal_${doc.id}',
           title       : d['title']       as String? ?? 'Untitled',
           description : d['description'] as String? ?? '',
@@ -195,7 +195,7 @@ class _GuestEventsScreenState extends State<GuestEventsScreen> {
     });
   }
 
-  Future<void> _enrichLogo(_FirestoreEvent event) async {
+  Future<void> _enrichLogo(FirestoreEvent event) async {
     if (event.orgId.isEmpty) return;
     if (_orgLogoCache.containsKey(event.orgId)) {
       event.orgLogoUrl = _orgLogoCache[event.orgId]!;
@@ -214,7 +214,7 @@ class _GuestEventsScreenState extends State<GuestEventsScreen> {
     } catch (_) {}
   }
 
-  List<_FirestoreEvent> get _filtered {
+  List<FirestoreEvent> get _filtered {
     var list = _eventMap.values.toList()
       ..sort((a, b) => a.date.compareTo(b.date));
 
@@ -313,7 +313,7 @@ class _GuestEventsScreenState extends State<GuestEventsScreen> {
     );
   }
 
-  void _openDetail(_FirestoreEvent event) {
+  void _openDetail(FirestoreEvent event) {
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -424,8 +424,8 @@ class _SearchAndFilter extends StatelessWidget {
 // Event list
 // ─────────────────────────────────────────────────────────────
 class _EventList extends StatelessWidget {
-  final List<_FirestoreEvent> events;
-  final void Function(_FirestoreEvent) onTap;
+  final List<FirestoreEvent> events;
+  final void Function(FirestoreEvent) onTap;
   const _EventList({required this.events, required this.onTap});
 
   @override
@@ -481,7 +481,7 @@ class _EventList extends StatelessWidget {
 // Featured card
 // ─────────────────────────────────────────────────────────────
 class _FeaturedCard extends StatelessWidget {
-  final _FirestoreEvent event;
+  final FirestoreEvent event;
   final VoidCallback    onTap;
   const _FeaturedCard({required this.event, required this.onTap});
 
@@ -631,7 +631,7 @@ class _FeaturedCard extends StatelessWidget {
 // Compact card
 // ─────────────────────────────────────────────────────────────
 class _CompactCard extends StatelessWidget {
-  final _FirestoreEvent event;
+  final FirestoreEvent event;
   final VoidCallback    onTap;
   const _CompactCard({required this.event, required this.onTap});
 
@@ -767,7 +767,7 @@ class _EventBanner extends StatelessWidget {
 // Detail Screen
 // ─────────────────────────────────────────────────────────────
 class GuestEventDetailScreen extends StatefulWidget {
-  final _FirestoreEvent event;
+  final FirestoreEvent event;
   const GuestEventDetailScreen({super.key, required this.event});
 
   @override
@@ -1163,7 +1163,7 @@ class _GuestEventDetailScreenState extends State<GuestEventDetailScreen> {
 // Guest Registration Screen (writes to Firestore)
 // ─────────────────────────────────────────────────────────────
 class GuestEventRegistrationScreen extends StatefulWidget {
-  final _FirestoreEvent event;
+  final FirestoreEvent event;
   final VoidCallback    onRegistered;
 
   const GuestEventRegistrationScreen({
@@ -1438,7 +1438,7 @@ class _GuestEventRegistrationScreenState
 // Success View
 // ─────────────────────────────────────────────────────────────
 class _GuestSuccessView extends StatelessWidget {
-  final _FirestoreEvent event;
+  final FirestoreEvent event;
   const _GuestSuccessView({required this.event});
 
   @override
@@ -1507,7 +1507,7 @@ class _GuestSuccessView extends StatelessWidget {
 // Shared widgets
 // ─────────────────────────────────────────────────────────────
 class _EventSummaryCard extends StatelessWidget {
-  final _FirestoreEvent event;
+  final FirestoreEvent event;
   const _EventSummaryCard({required this.event});
 
   @override

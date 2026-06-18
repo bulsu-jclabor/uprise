@@ -1,0 +1,967 @@
+// lib/screens/guest/guest_feedback_screen.dart
+//
+// GUEST FEEDBACK SCREEN — Only visible to authenticated guests.
+//
+// Shows all events the guest attended (via the `registrations` + `attendance`
+// collections) and allows submitting feedback for each.
+//
+// Firestore reads:
+//   - registrations   where email == guestEmail && isGuest == true
+//   - attendance      where email == guestEmail
+//   - feedback        where guestEmail == guestEmail  (to detect already-submitted)
+//
+// Firestore writes:
+//   - feedback        (on submit)
+//
+// UI states per event:
+//   • not_attended   → grey, "Not Attended"
+//   • pending        → orange "Leave Feedback" button
+//   • submitted      → green "Feedback Submitted" badge
+//
+
+import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:intl/intl.dart';
+
+import 'guest_auth_service.dart';
+
+// ─────────────────────────────────────────────────────────────
+//  THEME
+// ─────────────────────────────────────────────────────────────
+const _kOrange      = Color(0xFFFF6B00);
+const _kOrangeLight = Color(0xFFFFEDD5);
+const _kBg          = Color(0xFFF5F5F5);
+const _kSuccess     = Color(0xFF059669);
+const _kSuccessBg   = Color(0xFFECFDF5);
+const _kGrey        = Color(0xFF9CA3AF);
+
+// ─────────────────────────────────────────────────────────────
+//  MODEL
+// ─────────────────────────────────────────────────────────────
+class _AttendedEvent {
+  final String   eventId;
+  final String   title;
+  final String   orgName;
+  final String   location;
+  final DateTime date;
+  bool   attended     = false;
+  bool   feedbackDone = false;
+  String feedbackId   = '';
+
+  _AttendedEvent({
+    required this.eventId,
+    required this.title,
+    required this.orgName,
+    required this.location,
+    required this.date,
+  });
+}
+
+// ─────────────────────────────────────────────────────────────
+//  SCREEN
+// ─────────────────────────────────────────────────────────────
+class GuestFeedbackScreen extends StatefulWidget {
+  const GuestFeedbackScreen({super.key});
+
+  @override
+  State<GuestFeedbackScreen> createState() => _GuestFeedbackScreenState();
+}
+
+class _GuestFeedbackScreenState extends State<GuestFeedbackScreen> {
+  final List<_AttendedEvent> _events = [];
+  bool _loading = true;
+  String? _error;
+
+  String get _email => GuestAuthService().email ?? '';
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    if (_email.isEmpty) {
+      setState(() { _loading = false; _error = 'Not logged in.'; });
+      return;
+    }
+
+    try {
+      // 1. Get all events this guest registered for
+      final regSnap = await FirebaseFirestore.instance
+          .collection('registrations')
+          .where('email', isEqualTo: _email)
+          .where('isGuest', isEqualTo: true)
+          .get();
+
+      final eventIds = regSnap.docs
+          .map((d) => (d.data())['eventId'] as String? ?? '')
+          .where((id) => id.isNotEmpty)
+          .toSet()
+          .toList();
+
+      if (eventIds.isEmpty) {
+        if (mounted) setState(() => _loading = false);
+        return;
+      }
+
+      // 2. Fetch event details
+      final eventDocs = await Future.wait(eventIds.map((id) =>
+          FirebaseFirestore.instance.collection('events').doc(id).get()));
+
+      // 3. Check attendance records
+      final attendSnap = await FirebaseFirestore.instance
+          .collection('attendance')
+          .where('email', isEqualTo: _email)
+          .get();
+      final attendedIds =
+          attendSnap.docs.map((d) => (d.data())['eventId'] as String? ?? '').toSet();
+
+      // 4. Check existing feedback
+      final feedbackSnap = await FirebaseFirestore.instance
+          .collection('feedback')
+          .where('guestEmail', isEqualTo: _email)
+          .get();
+      final feedbackMap = <String, String>{
+        for (final d in feedbackSnap.docs)
+          ((d.data())['eventId'] as String? ?? ''): d.id
+      };
+
+      final list = <_AttendedEvent>[];
+      for (final doc in eventDocs) {
+        if (!doc.exists) continue;
+        final d    = doc.data() as Map<String, dynamic>;
+        final ev   = _AttendedEvent(
+          eventId : doc.id,
+          title   : d['title']    as String? ?? 'Untitled',
+          orgName : d['orgName']  as String? ?? '',
+          location: d['location'] as String? ?? 'TBA',
+          date    : d['date'] is Timestamp
+              ? (d['date'] as Timestamp).toDate()
+              : DateTime.now(),
+        );
+        ev.attended     = attendedIds.contains(doc.id);
+        ev.feedbackDone = feedbackMap.containsKey(doc.id);
+        ev.feedbackId   = feedbackMap[doc.id] ?? '';
+        list.add(ev);
+      }
+
+      list.sort((a, b) => b.date.compareTo(a.date));
+
+      if (mounted) setState(() { _events
+        ..clear()
+        ..addAll(list);
+        _loading = false;
+      });
+    } catch (e) {
+      if (mounted) setState(() { _error = e.toString(); _loading = false; });
+    }
+  }
+
+  void _openFeedbackForm(_AttendedEvent ev) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _FeedbackFormSheet(
+        event:    ev,
+        email:    _email,
+        onSubmit: () {
+          setState(() => ev.feedbackDone = true);
+        },
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: _kBg,
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        elevation: 0,
+        centerTitle: false,
+        title: Text('Event Feedback',
+            style: GoogleFonts.beVietnamPro(
+                fontSize: 18,
+                fontWeight: FontWeight.w800,
+                color: Colors.black87)),
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(1),
+          child: Container(height: 1, color: const Color(0xFFF0F0F0)),
+        ),
+      ),
+      body: _loading
+          ? const Center(
+              child: CircularProgressIndicator(color: _kOrange))
+          : _error != null
+              ? _ErrorView(message: _error!, onRetry: _load)
+              : _events.isEmpty
+                  ? _EmptyView()
+                  : RefreshIndicator(
+                      onRefresh: _load,
+                      color: _kOrange,
+                      child: ListView(
+                        padding: const EdgeInsets.fromLTRB(16, 16, 16, 40),
+                        children: [
+                          _InfoBanner(),
+                          const SizedBox(height: 16),
+                          ..._events.map((e) => Padding(
+                            padding: const EdgeInsets.only(bottom: 12),
+                            child: _FeedbackEventCard(
+                              event:  e,
+                              onTap:  e.attended && !e.feedbackDone
+                                  ? () => _openFeedbackForm(e)
+                                  : null,
+                            ),
+                          )),
+                        ],
+                      ),
+                    ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+//  INFO BANNER
+// ─────────────────────────────────────────────────────────────
+class _InfoBanner extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: _kOrangeLight,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: _kOrange.withOpacity(0.25)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.info_outline_rounded,
+              size: 16, color: _kOrange),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              'You can only leave feedback for events you attended. Events you registered for but did not attend are shown in grey.',
+              style: GoogleFonts.beVietnamPro(
+                  fontSize: 12,
+                  color: const Color(0xFF7A3300),
+                  height: 1.5),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+//  EVENT FEEDBACK CARD
+// ─────────────────────────────────────────────────────────────
+class _FeedbackEventCard extends StatelessWidget {
+  final _AttendedEvent event;
+  final VoidCallback?  onTap;
+
+  const _FeedbackEventCard({required this.event, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final canFeedback = event.attended && !event.feedbackDone;
+    final isDone      = event.feedbackDone;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFF0F0F0)),
+        boxShadow: [
+          BoxShadow(
+              color: Colors.black.withOpacity(0.04),
+              blurRadius: 8,
+              offset: const Offset(0, 2)),
+        ],
+      ),
+      child: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Date badge
+                Container(
+                  width: 48, height: 54,
+                  decoration: BoxDecoration(
+                    color: event.attended
+                        ? _kOrangeLight
+                        : const Color(0xFFF3F4F6),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        DateFormat('MMM').format(event.date).toUpperCase(),
+                        style: GoogleFonts.beVietnamPro(
+                            fontSize: 9,
+                            fontWeight: FontWeight.w700,
+                            color: event.attended ? _kOrange : _kGrey,
+                            letterSpacing: 0.5),
+                      ),
+                      Text(
+                        DateFormat('dd').format(event.date),
+                        style: GoogleFonts.beVietnamPro(
+                            fontSize: 22,
+                            fontWeight: FontWeight.w900,
+                            color: event.attended ? _kOrange : _kGrey),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(event.title,
+                          style: GoogleFonts.beVietnamPro(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w800,
+                              color: Colors.black87),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis),
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          Icon(Icons.business_outlined,
+                              size: 12, color: Colors.grey),
+                          const SizedBox(width: 4),
+                          Expanded(
+                            child: Text(event.orgName,
+                                style: GoogleFonts.beVietnamPro(
+                                    fontSize: 11, color: Colors.grey),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 2),
+                      Row(
+                        children: [
+                          Icon(Icons.location_on_outlined,
+                              size: 12, color: Colors.grey),
+                          const SizedBox(width: 4),
+                          Expanded(
+                            child: Text(event.location,
+                                style: GoogleFonts.beVietnamPro(
+                                    fontSize: 11, color: Colors.grey),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      // Status chip
+                      if (!event.attended)
+                        _StatusChip(
+                          label: 'Not Attended',
+                          color: _kGrey,
+                          icon: Icons.event_busy_outlined,
+                        )
+                      else if (isDone)
+                        _StatusChip(
+                          label: 'Feedback Submitted',
+                          color: _kSuccess,
+                          icon: Icons.check_circle_outline_rounded,
+                        )
+                      else
+                        _StatusChip(
+                          label: 'Pending Feedback',
+                          color: _kOrange,
+                          icon: Icons.hourglass_top_rounded,
+                        ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // Action row
+          if (canFeedback)
+            _ActionBar(onTap: onTap!),
+          if (isDone)
+            _SubmittedBar(),
+        ],
+      ),
+    );
+  }
+}
+
+class _StatusChip extends StatelessWidget {
+  final String   label;
+  final Color    color;
+  final IconData icon;
+  const _StatusChip({required this.label, required this.color, required this.icon});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: color.withOpacity(0.25)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 11, color: color),
+          const SizedBox(width: 4),
+          Text(label,
+              style: GoogleFonts.beVietnamPro(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                  color: color,
+                  letterSpacing: 0.3)),
+        ],
+      ),
+    );
+  }
+}
+
+class _ActionBar extends StatelessWidget {
+  final VoidCallback onTap;
+  const _ActionBar({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        decoration: const BoxDecoration(
+          color: _kOrange,
+          borderRadius:
+              BorderRadius.vertical(bottom: Radius.circular(16)),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.rate_review_outlined,
+                color: Colors.white, size: 16),
+            const SizedBox(width: 8),
+            Text('Leave Feedback',
+                style: GoogleFonts.beVietnamPro(
+                    color: Colors.white,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700)),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SubmittedBar extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      decoration: const BoxDecoration(
+        color: _kSuccessBg,
+        borderRadius:
+            BorderRadius.vertical(bottom: Radius.circular(16)),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(Icons.check_circle_rounded,
+              color: _kSuccess, size: 16),
+          const SizedBox(width: 8),
+          Text('Feedback Submitted — Thank you!',
+              style: GoogleFonts.beVietnamPro(
+                  color: _kSuccess,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700)),
+        ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+//  FEEDBACK FORM SHEET
+// ─────────────────────────────────────────────────────────────
+class _FeedbackFormSheet extends StatefulWidget {
+  final _AttendedEvent event;
+  final String         email;
+  final VoidCallback   onSubmit;
+
+  const _FeedbackFormSheet({
+    required this.event,
+    required this.email,
+    required this.onSubmit,
+  });
+
+  @override
+  State<_FeedbackFormSheet> createState() => _FeedbackFormSheetState();
+}
+
+class _FeedbackFormSheetState extends State<_FeedbackFormSheet> {
+  int    _rating       = 0;
+  final  _commentCtrl  = TextEditingController();
+  bool   _isLoading    = false;
+  bool   _submitted    = false;
+
+  static const _questions = [
+    'How would you rate the overall event?',
+    'How was the venue and facilities?',
+    'How relevant was the content to you?',
+    'How would you rate the organizers?',
+  ];
+  final _questionRatings = <int>[0, 0, 0, 0];
+
+  @override
+  void dispose() {
+    _commentCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    if (_rating == 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Please select an overall rating.',
+              style: GoogleFonts.beVietnamPro(fontSize: 13)),
+          backgroundColor: Colors.redAccent,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10)),
+        ),
+      );
+      return;
+    }
+
+    setState(() => _isLoading = true);
+
+    try {
+      // Duplicate guard
+      final dup = await FirebaseFirestore.instance
+          .collection('feedback')
+          .where('guestEmail', isEqualTo: widget.email)
+          .where('eventId', isEqualTo: widget.event.eventId)
+          .limit(1)
+          .get();
+
+      if (dup.docs.isNotEmpty) {
+        widget.onSubmit();
+        if (mounted) Navigator.pop(context);
+        return;
+      }
+
+      await FirebaseFirestore.instance.collection('feedback').add({
+        'guestEmail'      : widget.email,
+        'eventId'         : widget.event.eventId,
+        'eventTitle'      : widget.event.title,
+        'overallRating'   : _rating,
+        'questionRatings' : _questionRatings,
+        'comment'         : _commentCtrl.text.trim(),
+        'submittedAt'     : FieldValue.serverTimestamp(),
+        'type'            : 'guest',
+      });
+
+      widget.onSubmit();
+      if (mounted) setState(() { _isLoading = false; _submitted = true; });
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Failed to submit: $e',
+              style: GoogleFonts.beVietnamPro(fontSize: 13)),
+          backgroundColor: Colors.redAccent,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10)),
+        ));
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return DraggableScrollableSheet(
+      initialChildSize: 0.75,
+      maxChildSize: 0.96,
+      minChildSize: 0.5,
+      builder: (_, ctrl) => Container(
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius:
+              BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: _submitted
+            ? _SuccessView(onClose: () => Navigator.pop(context))
+            : Column(
+                children: [
+                  // Handle
+                  Container(
+                    width: 40, height: 4,
+                    margin: const EdgeInsets.only(top: 12),
+                    decoration: BoxDecoration(
+                        color: Colors.grey[300],
+                        borderRadius: BorderRadius.circular(2)),
+                  ),
+                  // Header
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 14, 20, 0),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: _kOrangeLight,
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: const Icon(Icons.rate_review_outlined,
+                              color: _kOrange, size: 18),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('Event Feedback',
+                                  style: GoogleFonts.beVietnamPro(
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.w800,
+                                      color: Colors.black87)),
+                              Text(widget.event.title,
+                                  style: GoogleFonts.beVietnamPro(
+                                      fontSize: 11,
+                                      color: Colors.grey),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis),
+                            ],
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.close_rounded,
+                              color: Colors.black45),
+                          onPressed: () => Navigator.pop(context),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Divider(height: 24),
+                  // Form
+                  Expanded(
+                    child: ListView(
+                      controller: ctrl,
+                      padding: const EdgeInsets.fromLTRB(20, 0, 20, 30),
+                      children: [
+                        // Overall star rating
+                        Text('Overall Rating',
+                            style: GoogleFonts.beVietnamPro(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w700,
+                                color: Colors.black87)),
+                        const SizedBox(height: 10),
+                        _StarRating(
+                          value:    _rating,
+                          size:     36,
+                          onChanged: (v) => setState(() => _rating = v),
+                        ),
+
+                        const SizedBox(height: 24),
+
+                        // Per-question ratings
+                        Text('Detailed Feedback',
+                            style: GoogleFonts.beVietnamPro(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w700,
+                                color: Colors.black87)),
+                        const SizedBox(height: 12),
+                        ...List.generate(_questions.length, (i) =>
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 14),
+                            child: Column(
+                              crossAxisAlignment:
+                                  CrossAxisAlignment.start,
+                              children: [
+                                Text(_questions[i],
+                                    style: GoogleFonts.beVietnamPro(
+                                        fontSize: 12,
+                                        color: Colors.black54)),
+                                const SizedBox(height: 6),
+                                _StarRating(
+                                  value:    _questionRatings[i],
+                                  size:     26,
+                                  onChanged: (v) => setState(
+                                      () => _questionRatings[i] = v),
+                                ),
+                              ],
+                            ),
+                          )),
+
+                        const SizedBox(height: 4),
+
+                        // Comment
+                        Text('Additional Comments (optional)',
+                            style: GoogleFonts.beVietnamPro(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w700,
+                                color: Colors.black87)),
+                        const SizedBox(height: 8),
+                        TextFormField(
+                          controller: _commentCtrl,
+                          maxLines:   4,
+                          style: GoogleFonts.beVietnamPro(
+                              fontSize: 13, color: Colors.black87),
+                          decoration: InputDecoration(
+                            hintText:
+                                'Share your thoughts about the event…',
+                            hintStyle: GoogleFonts.beVietnamPro(
+                                fontSize: 12,
+                                color: const Color(0xFFBBBBBB)),
+                            filled:      true,
+                            fillColor:   const Color(0xFFF8F9FB),
+                            contentPadding: const EdgeInsets.all(14),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: const BorderSide(
+                                  color: Color(0xFFE2E8F0)),
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: const BorderSide(
+                                  color: Color(0xFFE2E8F0)),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: const BorderSide(
+                                  color: _kOrange, width: 1.5),
+                            ),
+                          ),
+                        ),
+
+                        const SizedBox(height: 24),
+
+                        SizedBox(
+                          width: double.infinity,
+                          height: 52,
+                          child: ElevatedButton(
+                            onPressed: _isLoading ? null : _submit,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: _kOrange,
+                              foregroundColor: Colors.white,
+                              elevation: 0,
+                              shape: RoundedRectangleBorder(
+                                  borderRadius:
+                                      BorderRadius.circular(14)),
+                            ),
+                            child: _isLoading
+                                ? const SizedBox(
+                                    width: 22, height: 22,
+                                    child: CircularProgressIndicator(
+                                        strokeWidth: 2.5,
+                                        color: Colors.white))
+                                : Text('Submit Feedback',
+                                    style: GoogleFonts.beVietnamPro(
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.w700)),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+//  STAR RATING WIDGET
+// ─────────────────────────────────────────────────────────────
+class _StarRating extends StatelessWidget {
+  final int               value;
+  final double            size;
+  final ValueChanged<int> onChanged;
+
+  const _StarRating({
+    required this.value,
+    required this.onChanged,
+    this.size = 32,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: List.generate(5, (i) {
+        final filled = i < value;
+        return GestureDetector(
+          onTap: () => onChanged(i + 1),
+          child: Padding(
+            padding: const EdgeInsets.only(right: 4),
+            child: Icon(
+              filled ? Icons.star_rounded : Icons.star_outline_rounded,
+              color: filled ? const Color(0xFFFBBF24) : Colors.grey[300],
+              size: size,
+            ),
+          ),
+        );
+      }),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+//  SUCCESS VIEW
+// ─────────────────────────────────────────────────────────────
+class _SuccessView extends StatelessWidget {
+  final VoidCallback onClose;
+  const _SuccessView({required this.onClose});
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 88, height: 88,
+              decoration: const BoxDecoration(
+                  color: _kSuccessBg, shape: BoxShape.circle),
+              child: const Icon(Icons.check_circle_rounded,
+                  color: _kSuccess, size: 48),
+            ),
+            const SizedBox(height: 20),
+            Text('Thank You!',
+                style: GoogleFonts.beVietnamPro(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w900,
+                    color: Colors.black87)),
+            const SizedBox(height: 8),
+            Text(
+                'Your feedback has been submitted successfully.\nIt helps us improve future events.',
+                textAlign: TextAlign.center,
+                style: GoogleFonts.beVietnamPro(
+                    fontSize: 13, color: Colors.grey, height: 1.5)),
+            const SizedBox(height: 28),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: onClose,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: _kOrange,
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14)),
+                ),
+                child: Text('Done',
+                    style: GoogleFonts.beVietnamPro(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700)),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+//  EMPTY / ERROR STATES
+// ─────────────────────────────────────────────────────────────
+class _EmptyView extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 88, height: 88,
+              decoration: BoxDecoration(
+                  color: _kOrangeLight, shape: BoxShape.circle),
+              child: const Icon(Icons.rate_review_outlined,
+                  color: _kOrange, size: 44),
+            ),
+            const SizedBox(height: 20),
+            Text('No Events Yet',
+                style: GoogleFonts.beVietnamPro(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                    color: Colors.black87)),
+            const SizedBox(height: 8),
+            Text(
+                'You haven\'t registered for any events yet.\nRegister and attend events to leave feedback.',
+                textAlign: TextAlign.center,
+                style: GoogleFonts.beVietnamPro(
+                    fontSize: 13, color: Colors.grey, height: 1.5)),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ErrorView extends StatelessWidget {
+  final String       message;
+  final VoidCallback onRetry;
+  const _ErrorView({required this.message, required this.onRetry});
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.cloud_off_outlined,
+                size: 48, color: Colors.black26),
+            const SizedBox(height: 12),
+            Text('Could not load feedback',
+                style: GoogleFonts.beVietnamPro(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.black54)),
+            const SizedBox(height: 6),
+            Text(message,
+                textAlign: TextAlign.center,
+                style: GoogleFonts.beVietnamPro(
+                    fontSize: 11, color: Colors.black38)),
+            const SizedBox(height: 20),
+            ElevatedButton.icon(
+              onPressed: onRetry,
+              icon: const Icon(Icons.refresh, size: 16),
+              label: Text('Retry',
+                  style: GoogleFonts.beVietnamPro(
+                      fontWeight: FontWeight.w600)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _kOrange,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10)),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}

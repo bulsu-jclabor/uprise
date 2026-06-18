@@ -102,7 +102,7 @@ class _GuestProfileScreenState extends State<GuestProfileScreen> {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => _RegistrationScreen(onSubmitted: _onSubmitted),
+        builder: (_) => RegistrationScreen(onSubmitted: _onSubmitted),
       ),
     );
   }
@@ -1880,15 +1880,15 @@ class _GuestSettingsScreen extends StatelessWidget {
 // ─────────────────────────────────────────────────────────────
 //  REGISTRATION SCREEN (3-step form — unchanged logic)
 // ─────────────────────────────────────────────────────────────
-class _RegistrationScreen extends StatefulWidget {
+class RegistrationScreen extends StatefulWidget {
   final Future<void> Function(String docId) onSubmitted;
-  const _RegistrationScreen({required this.onSubmitted});
+  const RegistrationScreen({required this.onSubmitted});
 
   @override
-  State<_RegistrationScreen> createState() => _RegistrationScreenState();
+  State<RegistrationScreen> createState() => RegistrationScreenState();
 }
 
-class _RegistrationScreenState extends State<_RegistrationScreen>
+class RegistrationScreenState extends State<RegistrationScreen>
     with SingleTickerProviderStateMixin {
   final _firstNameCtrl = TextEditingController();
   final _lastNameCtrl  = TextEditingController();
