@@ -13,6 +13,7 @@ import '../../theme/app_theme.dart';
 import '../../../widgets/admin_export_button.dart';
 import 'export_pdf.dart';
 import '../../../services/activity_logger.dart' as activity_log;
+import '../../../services/notification_service.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // DESIGN TOKENS
@@ -393,6 +394,7 @@ class _AttendanceTabState extends State<AttendanceTab> with AutomaticKeepAliveCl
   String _statusFilter = 'All';
   int    _inputMode    = 0;
   int    _subTab       = 0;
+  bool   _sendingEvaluations = false;
 
   @override
   void dispose() { _scanner.dispose(); _search.dispose(); _manualCtrl.dispose(); super.dispose(); }
@@ -506,6 +508,57 @@ class _AttendanceTabState extends State<AttendanceTab> with AutomaticKeepAliveCl
       if (currentlyActive) 'endedAt': FieldValue.serverTimestamp(),
     });
     if (mounted) _toast(context, currentlyActive ? 'Attendance closed' : 'Attendance opened — scanning enabled');
+  }
+
+  // Notifies every present/late attendee who hasn't evaluated yet — they need
+  // to evaluate before a certificate can be generated for them.
+  Future<void> _sendEvaluationRequests(List<QueryDocumentSnapshot> attDocs) async {
+    if (widget.eventDocId == null || attDocs.isEmpty) return;
+    setState(() => _sendingEvaluations = true);
+    try {
+      final feedbackSnap = await FirebaseFirestore.instance
+          .collection('event_feedback')
+          .where('eventId', isEqualTo: widget.eventDocId)
+          .get();
+      final alreadyEvaluated = feedbackSnap.docs
+          .map((d) => d.data()['userId']?.toString())
+          .whereType<String>()
+          .toSet();
+
+      final toNotify = attDocs.where((d) {
+        final m = d.data() as Map<String, dynamic>;
+        final sid = (m['studentId'] ?? '').toString();
+        return sid.isNotEmpty && !alreadyEvaluated.contains(sid);
+      }).toList();
+
+      if (toNotify.isEmpty) {
+        if (mounted) _toast(context, 'Everyone who attended has already evaluated this event.');
+        return;
+      }
+
+      for (final d in toNotify) {
+        final m = d.data() as Map<String, dynamic>;
+        await NotificationService.sendToUser(
+          userId: (m['studentId'] ?? '').toString(),
+          title: 'Evaluate "${widget.event?.title ?? 'the event'}"',
+          body: 'You attended this event — share your feedback to receive your certificate.',
+          type: 'evaluation',
+          orgId: widget.orgId,
+          data: {'eventId': widget.eventDocId},
+        );
+      }
+
+      await activity_log.ActivityLogger.log(
+        action: 'send_evaluation_requests', module: 'attendance',
+        details: {'orgId': widget.orgId, 'eventId': widget.eventDocId, 'count': toNotify.length},
+      );
+
+      if (mounted) _toast(context, 'Evaluation request sent to ${toNotify.length} participant${toNotify.length == 1 ? '' : 's'}.');
+    } catch (e) {
+      if (mounted) _toast(context, 'Failed to send evaluation requests: $e', error: true);
+    } finally {
+      if (mounted) setState(() => _sendingEvaluations = false);
+    }
   }
 
   List<QueryDocumentSnapshot> _filterAttendanceDocs(List<QueryDocumentSnapshot> docs) {
@@ -677,7 +730,7 @@ class _AttendanceTabState extends State<AttendanceTab> with AutomaticKeepAliveCl
                 _buildStatsRow(attDocs.length, present, late),
                 const SizedBox(height: 20),
                 if (widget.event != null) ...[
-                  _buildEventBanner(active, evSnap.data),
+                  _buildEventBanner(active, evSnap.data, attDocs.cast()),
                   const SizedBox(height: 16),
                 ],
                 _buildInputModeRow(active, attSnap.data),
@@ -711,7 +764,7 @@ class _AttendanceTabState extends State<AttendanceTab> with AutomaticKeepAliveCl
     ]);
   }
 
-  Widget _buildEventBanner(bool active, DocumentSnapshot? evDoc) {
+  Widget _buildEventBanner(bool active, DocumentSnapshot? evDoc, List<QueryDocumentSnapshot> attDocs) {
     final e = widget.event!;
     return Container(
       padding: const EdgeInsets.all(18),
@@ -754,12 +807,30 @@ class _AttendanceTabState extends State<AttendanceTab> with AutomaticKeepAliveCl
           ]),
         ])),
         const SizedBox(width: 14),
-        _PrimaryButton(
-          label: active ? 'Close Attendance' : widget.eventDocId == null ? 'Sync Pending' : _isEventDay ? 'Open Attendance' : 'Open on Event Day',
-          icon: active ? Icons.stop_circle_outlined : Icons.play_circle_outline_rounded,
-          color: active ? const Color(0xFFDC2626) : UpriseColors.primaryDark,
-          onPressed: active ? () => _toggleActive(active) : widget.eventDocId == null || !_isEventDay ? null : () => _toggleActive(active),
-        ),
+        Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+          _PrimaryButton(
+            label: active ? 'Close Attendance' : widget.eventDocId == null ? 'Sync Pending' : _isEventDay ? 'Open Attendance' : 'Open on Event Day',
+            icon: active ? Icons.stop_circle_outlined : Icons.play_circle_outline_rounded,
+            color: active ? const Color(0xFFDC2626) : UpriseColors.primaryDark,
+            onPressed: active ? () => _toggleActive(active) : widget.eventDocId == null || !_isEventDay ? null : () => _toggleActive(active),
+          ),
+          const SizedBox(height: 8),
+          OutlinedButton.icon(
+            onPressed: (widget.eventDocId == null || attDocs.isEmpty || _sendingEvaluations)
+                ? null
+                : () => _sendEvaluationRequests(attDocs),
+            icon: _sendingEvaluations
+                ? SizedBox(width: 13, height: 13, child: CircularProgressIndicator(strokeWidth: 2, color: UpriseColors.primaryDark))
+                : const Icon(Icons.forward_to_inbox_outlined, size: 14),
+            label: Text('Send Evaluation', style: GoogleFonts.beVietnamPro(fontSize: 12.5, fontWeight: FontWeight.w600)),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: UpriseColors.primaryDark,
+              side: BorderSide(color: UpriseColors.primaryDark.withOpacity(0.4)),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+          ),
+        ]),
       ]),
     );
   }

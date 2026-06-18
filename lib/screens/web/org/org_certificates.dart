@@ -3,6 +3,7 @@
 import 'dart:ui' show ImageByteFormat;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show compute;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/rendering.dart' show RenderRepaintBoundary;
 import 'package:google_fonts/google_fonts.dart';
@@ -14,6 +15,7 @@ import 'dart:typed_data';
 import 'dart:convert';
 import 'dart:math' as math;
 import 'package:image/image.dart' as img;
+import 'package:qr_flutter/qr_flutter.dart';
 import '../../theme/app_theme.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -133,6 +135,31 @@ InputDecoration _fieldDecoration({String? label, String? hint, IconData? icon}) 
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Signature background removal — runs on a background isolate via compute()
+// so the UI doesn't freeze, and downscales first since the embedded result
+// only needs to be a few hundred px wide (a full-resolution photo has far
+// more pixels than necessary and is the main cause of the lag).
+// ─────────────────────────────────────────────────────────────────────────────
+Uint8List removeSignatureBackground(Uint8List bytes) {
+  var decoded = img.decodeImage(bytes);
+  if (decoded == null) throw Exception('Unsupported image format');
+  if (decoded.width > 800) {
+    decoded = img.copyResize(decoded, width: 800);
+  }
+  const threshold = 235; // pixels lighter than this (near-white) become transparent
+  for (final pixel in decoded) {
+    final luminance = (pixel.r + pixel.g + pixel.b) / 3;
+    if (luminance >= threshold) {
+      pixel.a = 0;
+    } else if (luminance > threshold - 40) {
+      // Soft edge: fade the anti-aliased pixels around the ink instead of a hard halo.
+      pixel.a = (255 * (threshold - luminance) / 40).clamp(0, 255).toInt();
+    }
+  }
+  return img.encodePng(decoded);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Models
 // ─────────────────────────────────────────────────────────────────────────────
 class CertificateRecord {
@@ -146,7 +173,10 @@ class CertificateRecord {
   final String status;
   final String templateType;
   final String? templateFileUrl;
-  final String? signatureImage;
+  final String? signatureImage; // legacy single-signature certs, pre-multi-signatory
+  final List<Map<String, dynamic>> signatories;
+  final String? verificationCode;
+  final String? recipientName;
 
   const CertificateRecord({
     required this.id,
@@ -160,6 +190,9 @@ class CertificateRecord {
     required this.templateType,
     this.templateFileUrl,
     this.signatureImage,
+    this.signatories = const [],
+    this.verificationCode,
+    this.recipientName,
   });
 
   factory CertificateRecord.fromFirestore(DocumentSnapshot doc) {
@@ -176,6 +209,11 @@ class CertificateRecord {
       templateType:  d['templateType'] as String? ?? 'Formal Academic',
       templateFileUrl: d['templateFileUrl'] as String?,
       signatureImage: d['signatureImage'] as String?,
+      signatories: d['signatories'] is List
+          ? (d['signatories'] as List).whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList()
+          : const [],
+      verificationCode: d['verificationCode'] as String?,
+      recipientName: d['recipientName'] as String?,
     );
   }
 }
@@ -612,8 +650,8 @@ class _OrgCertificatesScreenState extends State<OrgCertificatesScreen> {
                     style: GoogleFonts.beVietnamPro(fontSize: 17, fontWeight: FontWeight.w700, color: const Color(0xFF1A202C))),
                 const Spacer(),
                 IconButton(
-                  icon: const Icon(Icons.arrow_back_rounded, color: Color(0xFF1A202C), size: 20),
-                  tooltip: 'Back',
+                  icon: const Icon(Icons.close_rounded, color: Color(0xFF1A202C), size: 20),
+                  tooltip: 'Close',
                   onPressed: () => Navigator.pop(ctx),
                 ),
               ]),
@@ -1226,8 +1264,8 @@ class _CanvaTemplateEditorState extends State<_CanvaTemplateEditor> {
               ],
               const Spacer(),
               IconButton(
-                icon: const Icon(Icons.arrow_back_rounded, color: UpriseColors.white, size: 20),
-                tooltip: 'Back',
+                icon: const Icon(Icons.close_rounded, color: UpriseColors.white, size: 20),
+                tooltip: 'Close',
                 onPressed: () => Navigator.pop(context),
               ),
               const SizedBox(width: 8),
@@ -1938,15 +1976,23 @@ class _EditorTopBtn extends StatelessWidget {
   }
 }
 
+// A certificate can have more than one signatory (e.g. org president +
+// adviser). Each one gets its own name, title, and optional signature image.
+class _SignatoryEntry {
+  final nameCtrl = TextEditingController();
+  final titleCtrl = TextEditingController();
+  String? signatureImageBase64;
+  bool processing = false;
+
+  void dispose() {
+    nameCtrl.dispose();
+    titleCtrl.dispose();
+  }
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
-// CHANGED: Step 2 — Generate Certificate Modal
-// Gate added: the event dropdown now only lists proposals where
-//   issuesCertificate == true.
-// After selecting an event a second check confirms evaluated == true
-//   before enabling "Generate & Distribute".  If the event has not been
-//   evaluated yet, an inline warning is shown and the distribute button
-//   stays disabled.  "Save as Draft" remains always available.
-// Everything else (form fields, Firestore writes, ActivityLogger) is unchanged.
+// Generate Certificate Modal — event comes first, certificates are only
+// distributed for attendees who attended and evaluated the event.
 // ─────────────────────────────────────────────────────────────────────────────
 class _GenerateCertificateModal extends StatefulWidget {
   final String orgId;
@@ -1964,7 +2010,7 @@ class _GenerateCertificateModalState extends State<_GenerateCertificateModal> {
   final _titleCtrl     = TextEditingController();
   final _orgCtrl       = TextEditingController();
   final _dateCtrl      = TextEditingController();
-  final _sigCtrl       = TextEditingController();
+  final List<_SignatoryEntry> _signatories = [_SignatoryEntry()];
 
   String? _selectedEventId;
   String? _selectedEventName;
@@ -1981,11 +2027,7 @@ class _GenerateCertificateModalState extends State<_GenerateCertificateModal> {
   String  _certType    = 'Formal Academic';
   bool    _isSubmitting = false;
 
-  // Imported signatory signature, background-removed and stored as a PNG data URI.
-  String? _signatureImageBase64;
-  bool    _processingSignature = false;
-
-  // CHANGED: stream now pre-filters to only approved proposals that issue certificates
+  // Stream pre-filters to only approved proposals that issue certificates
   Stream<QuerySnapshot> get _eventsStream => FirebaseFirestore.instance
       .collection('event_proposals')
       .where('orgId', isEqualTo: widget.orgId)
@@ -2005,6 +2047,17 @@ class _GenerateCertificateModalState extends State<_GenerateCertificateModal> {
       _titleCtrl.text = widget.existingRecord!.eventName;
       _orgCtrl.text   = widget.existingRecord!.organization;
       _dateCtrl.text  = DateFormat('MM/dd/yyyy').format(widget.existingRecord!.date);
+      final existingSignatories = widget.existingRecord!.signatories;
+      if (existingSignatories.isNotEmpty) {
+        _signatories.clear();
+        for (final s in existingSignatories) {
+          final entry = _SignatoryEntry();
+          entry.nameCtrl.text = (s['name'] ?? '').toString();
+          entry.titleCtrl.text = (s['title'] ?? '').toString();
+          entry.signatureImageBase64 = s['signatureImage'] as String?;
+          _signatories.add(entry);
+        }
+      }
     }
   }
 
@@ -2013,8 +2066,41 @@ class _GenerateCertificateModalState extends State<_GenerateCertificateModal> {
     _titleCtrl.dispose();
     _orgCtrl.dispose();
     _dateCtrl.dispose();
-    _sigCtrl.dispose();
+    for (final s in _signatories) {
+      s.dispose();
+    }
     super.dispose();
+  }
+
+  void _addSignatory() => setState(() => _signatories.add(_SignatoryEntry()));
+
+  void _removeSignatory(_SignatoryEntry entry) {
+    setState(() {
+      _signatories.remove(entry);
+      entry.dispose();
+    });
+  }
+
+  Future<void> _importSignature(_SignatoryEntry entry) async {
+    final res = await FilePicker.platform.pickFiles(withData: true, type: FileType.image);
+    if (res == null || res.files.isEmpty) return;
+    final bytes = res.files.first.bytes;
+    if (bytes == null) return;
+
+    setState(() => entry.processing = true);
+    try {
+      // Runs on a background isolate so the UI doesn't freeze while processing.
+      final pngBytes = await compute(removeSignatureBackground, bytes);
+      if (mounted) setState(() => entry.signatureImageBase64 = base64Encode(pngBytes));
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not process signature: $e'), backgroundColor: UpriseColors.error),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => entry.processing = false);
+    }
   }
 
   Map<String, dynamic> get _previewTheme {
@@ -2066,45 +2152,6 @@ class _GenerateCertificateModalState extends State<_GenerateCertificateModal> {
     }
   }
 
-  // Picks a signature photo and strips its background: any pixel close to
-  // white/light gray (typical paper background) becomes transparent, leaving
-  // just the ink. This is a fast threshold-based cutout, not ML segmentation —
-  // good enough for a signature photographed or scanned on plain paper.
-  Future<void> _importSignature() async {
-    final res = await FilePicker.platform.pickFiles(withData: true, type: FileType.image);
-    if (res == null || res.files.isEmpty) return;
-    final bytes = res.files.first.bytes;
-    if (bytes == null) return;
-
-    setState(() => _processingSignature = true);
-    try {
-      final decoded = img.decodeImage(bytes);
-      if (decoded == null) throw Exception('Unsupported image format');
-
-      const threshold = 235; // pixels lighter than this (near-white) become transparent
-      for (final pixel in decoded) {
-        final luminance = (pixel.r + pixel.g + pixel.b) / 3;
-        if (luminance >= threshold) {
-          pixel.a = 0;
-        } else if (luminance > threshold - 40) {
-          // Soft edge: fade out the anti-aliased pixels around the ink instead
-          // of leaving a hard halo.
-          pixel.a = (255 * (threshold - luminance) / 40).clamp(0, 255).toInt();
-        }
-      }
-      final pngBytes = img.encodePng(decoded);
-      if (mounted) setState(() => _signatureImageBase64 = base64Encode(pngBytes));
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Could not process signature: $e'), backgroundColor: UpriseColors.error),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _processingSignature = false);
-    }
-  }
-
   Future<void> _submit({required bool distribute}) async {
     if (_formKey.currentState?.validate() != true) return;
     if (distribute && !_hasEligibleRecipients) {
@@ -2119,6 +2166,14 @@ class _GenerateCertificateModalState extends State<_GenerateCertificateModal> {
     setState(() => _isSubmitting = true);
 
     final eventName = _titleCtrl.text.trim().isNotEmpty ? _titleCtrl.text.trim() : (_selectedEventName ?? 'Untitled');
+    final signatoriesPayload = _signatories
+        .where((s) => s.nameCtrl.text.trim().isNotEmpty)
+        .map((s) => {
+              'name': s.nameCtrl.text.trim(),
+              'title': s.titleCtrl.text.trim(),
+              if (s.signatureImageBase64 != null) 'signatureImage': s.signatureImageBase64,
+            })
+        .toList();
 
     try {
       if (distribute) {
@@ -2140,11 +2195,10 @@ class _GenerateCertificateModalState extends State<_GenerateCertificateModal> {
             'recipientId':      r['studentId'],
             'recipientUid':     r['studentId'],
             'recipientName':    r['studentName'],
-            'signatories':      _sigCtrl.text.trim(),
+            'signatories':      signatoriesPayload,
             'verificationCode': _generateVerificationCode(),
             'autoGenerated':    false,
             if (_selectedTemplateUrl != null) 'templateFileUrl': _selectedTemplateUrl,
-            if (_signatureImageBase64 != null) 'signatureImage': _signatureImageBase64,
           }, SetOptions(merge: true));
         }
         await batch.commit();
@@ -2159,10 +2213,9 @@ class _GenerateCertificateModalState extends State<_GenerateCertificateModal> {
           'issuedAt':     FieldValue.serverTimestamp(),
           'status':       'draft',
           'recipients':   _eligibleRecipients.length,
-          'signatories':  _sigCtrl.text.trim(),
+          'signatories':  signatoriesPayload,
           if (_selectedTemplateUrl != null) 'templateFileUrl': _selectedTemplateUrl,
           if (_selectedEventDocId != null) 'eventId': _selectedEventDocId,
-          if (_signatureImageBase64 != null) 'signatureImage': _signatureImageBase64,
         };
         if (widget.existingRecord != null) {
           await FirebaseFirestore.instance.collection('certificates').doc(widget.existingRecord!.id).update(payload);
@@ -2281,8 +2334,8 @@ class _GenerateCertificateModalState extends State<_GenerateCertificateModal> {
                   ),
                 ])),
                 IconButton(
-                  icon: const Icon(Icons.arrow_back_rounded, color: Colors.white, size: 20),
-                  tooltip: 'Back',
+                  icon: const Icon(Icons.close_rounded, color: Colors.white, size: 20),
+                  tooltip: 'Close',
                   onPressed: _isSubmitting ? null : () => Navigator.pop(context),
                 ),
               ]),
@@ -2377,9 +2430,10 @@ class _GenerateCertificateModalState extends State<_GenerateCertificateModal> {
                             label: 'Template Type *',
                             child: DropdownButtonFormField<String>(
                               value: _certType,
+                              isExpanded: true,
                               decoration: _fieldDecoration(),
                               style: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF1A202C)),
-                              items: templateOptions.map((t) => DropdownMenuItem(value: t, child: Text(t))).toList(),
+                              items: templateOptions.map((t) => DropdownMenuItem(value: t, child: Text(t, overflow: TextOverflow.ellipsis))).toList(),
                               onChanged: (v) { if (v != null) setState(() => _certType = v); },
                             ),
                           ),
@@ -2468,52 +2522,27 @@ class _GenerateCertificateModalState extends State<_GenerateCertificateModal> {
                         ),
                       ]),
                       const SizedBox(height: 12),
-                      _FieldWrapper(
-                        label: 'Signatories (Authorized Personnel) *',
-                        child: TextFormField(
-                          controller: _sigCtrl,
-                          onChanged: (_) => setState(() {}),
-                          decoration: _fieldDecoration(hint: 'Name and Title, comma separated', icon: Icons.draw_outlined),
-                          style: GoogleFonts.beVietnamPro(fontSize: 13),
-                          validator: (v) => v?.trim().isEmpty == true ? 'Required' : null,
+                      Text('Signatories (Authorized Personnel) *',
+                          style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.w600, color: const Color(0xFF374151))),
+                      const SizedBox(height: 6),
+                      for (int i = 0; i < _signatories.length; i++) ...[
+                        if (i > 0) const SizedBox(height: 10),
+                        _SignatoryRow(
+                          entry: _signatories[i],
+                          isFirst: i == 0,
+                          canRemove: _signatories.length > 1,
+                          onChanged: () => setState(() {}),
+                          onImport: () => _importSignature(_signatories[i]),
+                          onRemove: () => _removeSignatory(_signatories[i]),
                         ),
+                      ],
+                      const SizedBox(height: 8),
+                      TextButton.icon(
+                        onPressed: _addSignatory,
+                        icon: const Icon(Icons.add_rounded, size: 16),
+                        label: Text('Add another signatory', style: GoogleFonts.beVietnamPro(fontSize: 12.5, fontWeight: FontWeight.w600)),
+                        style: TextButton.styleFrom(foregroundColor: UpriseColors.primaryDark, padding: const EdgeInsets.symmetric(horizontal: 4)),
                       ),
-                      const SizedBox(height: 10),
-                      Row(children: [
-                        OutlinedButton.icon(
-                          onPressed: _processingSignature ? null : _importSignature,
-                          icon: _processingSignature
-                              ? SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: UpriseColors.primaryDark))
-                              : const Icon(Icons.draw_outlined, size: 14),
-                          label: Text(_signatureImageBase64 == null ? 'Import Signature' : 'Replace Signature',
-                              style: GoogleFonts.beVietnamPro(fontSize: 12.5, fontWeight: FontWeight.w600)),
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: UpriseColors.primaryDark,
-                            side: BorderSide(color: UpriseColors.primaryDark.withOpacity(0.4)),
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                          ),
-                        ),
-                        if (_signatureImageBase64 != null) ...[
-                          const SizedBox(width: 10),
-                          // Checkerboard-style backdrop so a transparent cutout is visible.
-                          Container(
-                            width: 64, height: 36,
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFF1F4F8),
-                              borderRadius: BorderRadius.circular(6),
-                              border: Border.all(color: const Color(0xFFE4E8EF)),
-                            ),
-                            padding: const EdgeInsets.all(2),
-                            child: Image.memory(base64Decode(_signatureImageBase64!), fit: BoxFit.contain),
-                          ),
-                          const SizedBox(width: 8),
-                          InkWell(
-                            onTap: () => setState(() => _signatureImageBase64 = null),
-                            child: Icon(Icons.close_rounded, size: 16, color: const Color(0xFF9AA5B4)),
-                          ),
-                        ],
-                      ]),
                       const SizedBox(height: 16),
 
                       // Single recipient-status banner — replaces the recipient
@@ -2563,17 +2592,55 @@ class _GenerateCertificateModalState extends State<_GenerateCertificateModal> {
                   Expanded(
                     flex: 2,
                     child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      _sectionLabel('Live Preview', icon: Icons.preview_outlined),
-                      _CertPreview(
-                        bg:        theme['bg'] as Color,
-                        accent:    theme['accent'] as Color,
-                        textColor: theme['text'] as Color,
-                        orgName:   _orgCtrl.text.isNotEmpty  ? _orgCtrl.text  : 'Your Organization',
-                        eventTitle: _titleCtrl.text.isNotEmpty ? _titleCtrl.text : 'Certificate of Participation',
-                        eventDate:  _dateCtrl.text.isNotEmpty  ? _dateCtrl.text  : DateFormat('MMMM dd, yyyy').format(DateTime.now()),
-                        recipient: '[Recipient Name]',
-                        signatureImageBase64: _signatureImageBase64,
-                      ),
+                      Row(children: [
+                        Expanded(child: _sectionLabel('Live Preview', icon: Icons.preview_outlined)),
+                        if (_selectedTemplateUrl != null)
+                          TextButton(
+                            onPressed: () => setState(() => _selectedTemplateUrl = null),
+                            style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 6), minimumSize: Size.zero),
+                            child: Text('Use preset instead', style: GoogleFonts.beVietnamPro(fontSize: 11.5, color: UpriseColors.primaryDark)),
+                          ),
+                      ]),
+                      // Once a template has been customized or imported, the preview
+                      // shows that actual design — not the generic preset layout —
+                      // since that image is exactly what gets issued.
+                      _selectedTemplateUrl != null
+                          ? ClipRRect(
+                              borderRadius: BorderRadius.circular(12),
+                              child: AspectRatio(
+                                aspectRatio: 600 / 424,
+                                child: Image.network(
+                                  _selectedTemplateUrl!,
+                                  fit: BoxFit.cover,
+                                  loadingBuilder: (context, child, progress) => progress == null
+                                      ? child
+                                      : Container(color: const Color(0xFFF1F4F8), child: const Center(child: CircularProgressIndicator())),
+                                  errorBuilder: (_, __, ___) => Container(
+                                    color: const Color(0xFFF1F4F8),
+                                    padding: const EdgeInsets.all(16),
+                                    child: Text('Could not load the custom template image.',
+                                        style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF94A3B8)), textAlign: TextAlign.center),
+                                  ),
+                                ),
+                              ),
+                            )
+                          : _CertPreview(
+                              bg:        theme['bg'] as Color,
+                              accent:    theme['accent'] as Color,
+                              textColor: theme['text'] as Color,
+                              orgName:   _orgCtrl.text.isNotEmpty  ? _orgCtrl.text  : 'Your Organization',
+                              eventTitle: _titleCtrl.text.isNotEmpty ? _titleCtrl.text : 'Certificate of Participation',
+                              eventDate:  _dateCtrl.text.isNotEmpty  ? _dateCtrl.text  : DateFormat('MMMM dd, yyyy').format(DateTime.now()),
+                              recipient: '[Recipient Name]',
+                              signatories: _signatories
+                                  .where((s) => s.nameCtrl.text.trim().isNotEmpty)
+                                  .map((s) => _SignatoryPreviewData(
+                                        name: s.nameCtrl.text.trim(),
+                                        title: s.titleCtrl.text.trim(),
+                                        signatureImageBase64: s.signatureImageBase64,
+                                      ))
+                                  .toList(),
+                            ),
                     ]),
                   ),
                 ]),
@@ -2640,76 +2707,240 @@ class _FieldWrapper extends StatelessWidget {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Certificate Live Preview Widget — unchanged
-// ─────────────────────────────────────────────────────────────────────────────
-class _CertPreview extends StatelessWidget {
-  final Color bg, accent, textColor;
-  final String orgName, eventTitle, eventDate, recipient;
-  final String? signatureImageBase64;
-  const _CertPreview({
-    required this.bg, required this.accent, required this.textColor,
-    required this.orgName, required this.eventTitle, required this.eventDate, required this.recipient,
-    this.signatureImageBase64,
+// One row in the repeatable signatories list: name, title, signature import.
+class _SignatoryRow extends StatelessWidget {
+  final _SignatoryEntry entry;
+  final bool isFirst;
+  final bool canRemove;
+  final VoidCallback onChanged;
+  final VoidCallback onImport;
+  final VoidCallback onRemove;
+  const _SignatoryRow({
+    required this.entry, required this.isFirst, required this.canRemove,
+    required this.onChanged, required this.onImport, required this.onRemove,
   });
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(22),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8F9FB),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: const Color(0xFFE4E8EF)),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Expanded(
+            child: TextFormField(
+              controller: entry.nameCtrl,
+              onChanged: (_) => onChanged(),
+              decoration: _fieldDecoration(hint: 'Full name', icon: Icons.person_outline_rounded),
+              style: GoogleFonts.beVietnamPro(fontSize: 13),
+              validator: (v) => isFirst && v?.trim().isEmpty == true ? 'Required' : null,
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: TextFormField(
+              controller: entry.titleCtrl,
+              onChanged: (_) => onChanged(),
+              decoration: _fieldDecoration(hint: 'Title / Position', icon: Icons.badge_outlined),
+              style: GoogleFonts.beVietnamPro(fontSize: 13),
+            ),
+          ),
+          if (canRemove) ...[
+            const SizedBox(width: 8),
+            IconButton(
+              icon: Icon(Icons.delete_outline_rounded, size: 18, color: const Color(0xFF9AA5B4)),
+              tooltip: 'Remove signatory',
+              onPressed: onRemove,
+            ),
+          ],
+        ]),
+        const SizedBox(height: 10),
+        Row(children: [
+          OutlinedButton.icon(
+            onPressed: entry.processing ? null : onImport,
+            icon: entry.processing
+                ? SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: UpriseColors.primaryDark))
+                : const Icon(Icons.draw_outlined, size: 14),
+            label: Text(entry.signatureImageBase64 == null ? 'Import Signature' : 'Replace Signature',
+                style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.w600)),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: UpriseColors.primaryDark,
+              side: BorderSide(color: UpriseColors.primaryDark.withOpacity(0.4)),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+          ),
+          if (entry.signatureImageBase64 != null) ...[
+            const SizedBox(width: 10),
+            // Checkerboard-style backdrop so a transparent cutout is visible.
+            Container(
+              width: 64, height: 36,
+              decoration: BoxDecoration(
+                color: const Color(0xFFF1F4F8),
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(color: const Color(0xFFE4E8EF)),
+              ),
+              padding: const EdgeInsets.all(2),
+              child: Image.memory(base64Decode(entry.signatureImageBase64!), fit: BoxFit.contain),
+            ),
+            const SizedBox(width: 8),
+            InkWell(
+              onTap: () { entry.signatureImageBase64 = null; onChanged(); },
+              child: Icon(Icons.close_rounded, size: 16, color: const Color(0xFF9AA5B4)),
+            ),
+          ],
+        ]),
+      ]),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Certificate Live Preview Widget — unchanged
+// ─────────────────────────────────────────────────────────────────────────────
+class _SignatoryPreviewData {
+  final String name;
+  final String title;
+  final String? signatureImageBase64;
+  const _SignatoryPreviewData({required this.name, this.title = '', this.signatureImageBase64});
+}
+
+class _CertPreview extends StatelessWidget {
+  final Color bg, accent, textColor;
+  final String orgName, eventTitle, eventDate, recipient;
+  final List<_SignatoryPreviewData> signatories;
+  final String? verificationCode;
+  const _CertPreview({
+    required this.bg, required this.accent, required this.textColor,
+    required this.orgName, required this.eventTitle, required this.eventDate, required this.recipient,
+    this.signatories = const [],
+    this.verificationCode,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         color: bg,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: accent.withOpacity(0.3), width: 1.5),
         boxShadow: [BoxShadow(color: accent.withOpacity(0.08), blurRadius: 12, offset: const Offset(0, 4))],
       ),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.center, children: [
-        Text(
-          orgName.toUpperCase(),
-          style: GoogleFonts.beVietnamPro(fontSize: 11, fontWeight: FontWeight.w800, color: accent, letterSpacing: 2.5),
-          textAlign: TextAlign.center,
-        ),
-        const SizedBox(height: 10),
-        Row(children: [
-          Expanded(child: Divider(color: accent.withOpacity(0.35), thickness: 1)),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 10),
-            child: Icon(Icons.workspace_premium_rounded, size: 20, color: accent),
+      child: Stack(children: [
+        // Decorative corner ribbon, like a real institutional certificate.
+        Positioned(
+          top: 27, right: -29,
+          child: Transform.rotate(
+            angle: 0.7853981634, // 45°
+            alignment: Alignment.center,
+            child: Container(
+              width: 56, height: 56,
+              color: accent.withOpacity(0.85),
+            ),
           ),
-          Expanded(child: Divider(color: accent.withOpacity(0.35), thickness: 1)),
-        ]),
-        const SizedBox(height: 12),
-        Text('Certificate of', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w300, color: textColor)),
-        Text('Participation', style: GoogleFonts.beVietnamPro(fontSize: 22, fontWeight: FontWeight.w800, color: accent)),
-        const SizedBox(height: 10),
-        Text('This is to certify that',
-            style: GoogleFonts.beVietnamPro(fontSize: 10, color: textColor.withOpacity(0.65))),
-        const SizedBox(height: 6),
-        Text(recipient,
-            style: GoogleFonts.beVietnamPro(fontSize: 17, fontWeight: FontWeight.w700, color: textColor, fontStyle: FontStyle.italic),
-            textAlign: TextAlign.center),
-        const SizedBox(height: 8),
-        Divider(color: accent.withOpacity(0.25), thickness: 0.8),
-        const SizedBox(height: 6),
-        Text('has successfully participated in',
-            style: GoogleFonts.beVietnamPro(fontSize: 10, color: textColor.withOpacity(0.6)),
-            textAlign: TextAlign.center),
-        const SizedBox(height: 4),
-        Text(eventTitle,
-            style: GoogleFonts.beVietnamPro(fontSize: 11, fontWeight: FontWeight.w700, color: textColor),
-            textAlign: TextAlign.center),
-        const SizedBox(height: 2),
-        Text('held on $eventDate',
-            style: GoogleFonts.beVietnamPro(fontSize: 10, color: textColor.withOpacity(0.6))),
-        const SizedBox(height: 14),
-        if (signatureImageBase64 != null) ...[
-          SizedBox(height: 32, child: Image.memory(base64Decode(signatureImageBase64!), fit: BoxFit.contain)),
-          const SizedBox(height: 2),
-        ],
-        Divider(color: accent.withOpacity(0.4), thickness: 0.8, indent: 40, endIndent: 40),
-        const SizedBox(height: 2),
-        Text('Authorized Signatory',
-            style: GoogleFonts.beVietnamPro(fontSize: 9, color: textColor.withOpacity(0.45))),
+        ),
+        Positioned(
+          top: 12, right: 12,
+          // Sits on the ribbon, so contrast against accent, not the card background.
+          child: Icon(Icons.workspace_premium_rounded, size: 18, color: accent.computeLuminance() > 0.5 ? UpriseColors.charcoal : Colors.white),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(22, 22, 38, 18),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.center, children: [
+            Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+              Container(
+                width: 26, height: 26,
+                decoration: BoxDecoration(color: accent, borderRadius: BorderRadius.circular(7)),
+                alignment: Alignment.center,
+                child: Text(orgName.isNotEmpty ? orgName[0].toUpperCase() : '?',
+                    style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w800, color: Colors.white)),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                orgName.toUpperCase(),
+                style: GoogleFonts.beVietnamPro(fontSize: 11, fontWeight: FontWeight.w800, color: accent, letterSpacing: 2),
+                textAlign: TextAlign.center,
+              ),
+            ]),
+            const SizedBox(height: 14),
+            Text('CERTIFICATE', style: GoogleFonts.beVietnamPro(fontSize: 24, fontWeight: FontWeight.w900, color: textColor, letterSpacing: 1)),
+            Text('OF PARTICIPATION', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w700, color: accent, letterSpacing: 3)),
+            const SizedBox(height: 14),
+            Text('This certificate is proudly presented to',
+                style: GoogleFonts.beVietnamPro(fontSize: 10, color: textColor.withOpacity(0.65))),
+            const SizedBox(height: 6),
+            Text(recipient,
+                style: GoogleFonts.beVietnamPro(fontSize: 19, fontWeight: FontWeight.w700, color: textColor, fontStyle: FontStyle.italic),
+                textAlign: TextAlign.center),
+            const SizedBox(height: 4),
+            SizedBox(width: 140, child: Divider(color: accent.withOpacity(0.4), thickness: 0.8)),
+            const SizedBox(height: 10),
+            Text('for successfully participating in',
+                style: GoogleFonts.beVietnamPro(fontSize: 10, color: textColor.withOpacity(0.6)),
+                textAlign: TextAlign.center),
+            const SizedBox(height: 4),
+            Text(eventTitle,
+                style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.w700, color: textColor),
+                textAlign: TextAlign.center),
+            const SizedBox(height: 2),
+            Text('held on $eventDate',
+                style: GoogleFonts.beVietnamPro(fontSize: 10, color: textColor.withOpacity(0.6))),
+            const SizedBox(height: 18),
+            Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
+              Expanded(
+                child: signatories.isEmpty
+                    ? Column(children: [
+                        Divider(color: accent.withOpacity(0.4), thickness: 0.8, indent: 30, endIndent: 30),
+                        const SizedBox(height: 2),
+                        Text('Authorized Signatory',
+                            style: GoogleFonts.beVietnamPro(fontSize: 9, color: textColor.withOpacity(0.45), fontStyle: FontStyle.italic)),
+                      ])
+                    : Wrap(
+                        alignment: WrapAlignment.center,
+                        spacing: 14,
+                        runSpacing: 10,
+                        children: signatories.map((s) => SizedBox(
+                          width: 92,
+                          child: Column(children: [
+                            SizedBox(
+                              height: 26,
+                              child: s.signatureImageBase64 != null
+                                  ? Image.memory(base64Decode(s.signatureImageBase64!), fit: BoxFit.contain)
+                                  : null,
+                            ),
+                            Divider(color: accent.withOpacity(0.4), thickness: 0.8),
+                            const SizedBox(height: 2),
+                            Text(s.name,
+                                style: GoogleFonts.beVietnamPro(fontSize: 9, fontWeight: FontWeight.w700, color: textColor),
+                                textAlign: TextAlign.center, overflow: TextOverflow.ellipsis),
+                            if (s.title.isNotEmpty)
+                              Text(s.title,
+                                  style: GoogleFonts.beVietnamPro(fontSize: 8, color: textColor.withOpacity(0.55)),
+                                  textAlign: TextAlign.center, overflow: TextOverflow.ellipsis),
+                          ]),
+                        )).toList(),
+                      ),
+              ),
+              if (verificationCode != null) ...[
+                const SizedBox(width: 10),
+                Column(children: [
+                  Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(4)),
+                    child: QrImageView(data: verificationCode!, version: QrVersions.auto, size: 44, backgroundColor: Colors.white),
+                  ),
+                  const SizedBox(height: 2),
+                  Text('Verify', style: GoogleFonts.beVietnamPro(fontSize: 7.5, color: textColor.withOpacity(0.5))),
+                ]),
+              ],
+            ]),
+          ]),
+        ),
       ]),
     );
   }
@@ -2752,8 +2983,8 @@ class _CertPreviewDialog extends StatelessWidget {
               _certBadge(record.status),
               const SizedBox(width: 8),
               IconButton(
-                icon: const Icon(Icons.arrow_back_rounded, color: Colors.white, size: 20),
-                tooltip: 'Back',
+                icon: const Icon(Icons.close_rounded, color: Colors.white, size: 20),
+                tooltip: 'Close',
                 onPressed: () => Navigator.pop(context),
               ),
             ]),
@@ -2767,8 +2998,17 @@ class _CertPreviewDialog extends StatelessWidget {
               orgName:   record.organization,
               eventTitle: record.eventName,
               eventDate:  DateFormat('MMMM dd, yyyy').format(record.date),
-              recipient:  '[Recipient Name]',
-              signatureImageBase64: record.signatureImage,
+              recipient:  record.recipientName ?? '[Recipient Name]',
+              signatories: record.signatories.isNotEmpty
+                  ? record.signatories.map((s) => _SignatoryPreviewData(
+                        name: (s['name'] ?? '').toString(),
+                        title: (s['title'] ?? '').toString(),
+                        signatureImageBase64: s['signatureImage'] as String?,
+                      )).toList()
+                  : (record.signatureImage != null
+                      ? [_SignatoryPreviewData(name: 'Authorized Signatory', signatureImageBase64: record.signatureImage)]
+                      : const []),
+              verificationCode: record.verificationCode,
             ),
           ),
           Container(
@@ -2809,9 +3049,25 @@ class _ImportTemplateModalState extends State<_ImportTemplateModal> {
   PlatformFile? _file;
   bool _isUploading = false;
 
+  static const int _maxBytes = 5 * 1024 * 1024; // 5 MB
+
   Future<void> _pickFile() async {
     final res = await FilePicker.platform.pickFiles(withData: true, type: FileType.custom, allowedExtensions: ['png', 'jpg', 'jpeg', 'pdf']);
-    if (res != null && res.files.isNotEmpty) setState(() => _file = res.files.first);
+    if (res == null || res.files.isEmpty) return;
+    final picked = res.files.first;
+    // Caught here, before attempting the upload — otherwise an oversized file
+    // uploads fully (slow) before Storage's size rule rejects it, which looks
+    // like the picker is just hanging and then mysteriously failing.
+    if ((picked.size) > _maxBytes) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('${picked.name} is ${(picked.size / (1024 * 1024)).toStringAsFixed(1)} MB — max size is 5 MB.'),
+          backgroundColor: UpriseColors.error,
+        ));
+      }
+      return;
+    }
+    setState(() => _file = picked);
   }
 
   Future<void> _upload() async {
@@ -2821,8 +3077,9 @@ class _ImportTemplateModalState extends State<_ImportTemplateModal> {
       final path = 'certificate_templates/${widget.orgId}/${DateTime.now().millisecondsSinceEpoch}_${_file!.name}';
       final ref = FirebaseStorage.instance.ref().child(path);
       final data = _file!.bytes as Uint8List?;
-      if (data == null) throw Exception('Failed to read file bytes');
-      await ref.putData(data, SettableMetadata(contentType: _file!.extension == 'pdf' ? 'application/pdf' : 'image/${_file!.extension}'));
+      if (data == null) throw Exception('Failed to read file bytes — try picking the file again.');
+      final ext = (_file!.extension ?? '').toLowerCase();
+      await ref.putData(data, SettableMetadata(contentType: ext == 'pdf' ? 'application/pdf' : 'image/$ext'));
       final url = await ref.getDownloadURL();
       await FirebaseFirestore.instance.collection('certificate_templates').add({
         'orgId': widget.orgId,
@@ -2832,6 +3089,13 @@ class _ImportTemplateModalState extends State<_ImportTemplateModal> {
         'createdAt': FieldValue.serverTimestamp(),
       });
       if (mounted) Navigator.pop(context, {'name': _name!.trim(), 'url': url});
+    } on FirebaseException catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Upload failed (${e.code}): ${e.message ?? 'Storage rejected the upload — check Storage rules/CORS for this project.'}'),
+          backgroundColor: UpriseColors.error,
+        ));
+      }
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Upload failed: $e'), backgroundColor: UpriseColors.error));
     } finally {
@@ -2866,8 +3130,8 @@ class _ImportTemplateModalState extends State<_ImportTemplateModal> {
                     style: GoogleFonts.beVietnamPro(fontSize: 11, color: Colors.white.withOpacity(0.7))),
               ])),
               IconButton(
-                icon: const Icon(Icons.arrow_back_rounded, color: Colors.white, size: 20),
-                tooltip: 'Back',
+                icon: const Icon(Icons.close_rounded, color: Colors.white, size: 20),
+                tooltip: 'Close',
                 onPressed: () => Navigator.pop(context),
               ),
             ]),

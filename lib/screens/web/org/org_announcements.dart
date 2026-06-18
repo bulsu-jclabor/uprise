@@ -110,6 +110,69 @@ class _DS {
 // Reusable micro-widgets
 // ─────────────────────────────────────────────────────────────────────────────
 
+class _PinnedItem extends StatelessWidget {
+  final AnnouncementModel announcement;
+  final VoidCallback onView;
+  const _PinnedItem({required this.announcement, required this.onView});
+
+  @override
+  Widget build(BuildContext context) {
+    final a = announcement;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 14),
+      padding: const EdgeInsets.only(bottom: 14),
+      decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: _C.border))),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Container(
+            width: 30, height: 30,
+            decoration: BoxDecoration(
+              color: _C.primaryDark.withOpacity(0.12),
+              borderRadius: BorderRadius.circular(9),
+            ),
+            child: Center(
+              child: Text(a.authorName.isNotEmpty ? a.authorName[0].toUpperCase() : '?',
+                  style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.w800, color: _C.primaryDark)),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(a.authorName,
+                style: GoogleFonts.beVietnamPro(fontSize: 12.5, fontWeight: FontWeight.w700, color: _C.charcoal),
+                overflow: TextOverflow.ellipsis),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+            decoration: BoxDecoration(color: _C.warningBg, borderRadius: BorderRadius.circular(99)),
+            child: Text('Pinned',
+                style: GoogleFonts.beVietnamPro(fontSize: 9, fontWeight: FontWeight.w700, color: _C.warning)),
+          ),
+        ]),
+        const SizedBox(height: 8),
+        _categoryBadge(a.category),
+        const SizedBox(height: 6),
+        Text(a.title,
+            style: GoogleFonts.beVietnamPro(fontSize: 12.5, fontWeight: FontWeight.w700, color: _C.charcoal),
+            maxLines: 1, overflow: TextOverflow.ellipsis),
+        const SizedBox(height: 3),
+        Text(a.content,
+            style: GoogleFonts.beVietnamPro(fontSize: 11.5, color: _C.darkGray, height: 1.4),
+            maxLines: 2, overflow: TextOverflow.ellipsis),
+        const SizedBox(height: 6),
+        GestureDetector(
+          onTap: onView,
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            Text('View post',
+                style: GoogleFonts.beVietnamPro(fontSize: 11.5, fontWeight: FontWeight.w700, color: _C.primaryDark)),
+            const SizedBox(width: 3),
+            Icon(Icons.arrow_forward_rounded, size: 12, color: _C.primaryDark),
+          ]),
+        ),
+      ]),
+    );
+  }
+}
+
 class _FilterDropdown extends StatelessWidget {
   final String value;
   final List<String> items;
@@ -171,6 +234,42 @@ class _BadgeTheme {
   const _BadgeTheme(this.bg, this.fg, this.icon);
 }
 
+// ── Categories ───────────────────────────────────────────────────────────────
+const List<String> kDefaultAnnouncementCategories = [
+  'General', 'New Hire', 'SOP Updates', 'Policy Updates',
+  'Promotion', 'Transfer', 'Training', 'Special',
+];
+
+const Map<String, _BadgeTheme> _categoryThemes = {
+  'General':        _BadgeTheme(Color(0xFFF1F5F9), Color(0xFF475569), Icons.campaign_outlined),
+  'New Hire':       _BadgeTheme(Color(0xFFECFDF5), Color(0xFF059669), Icons.person_add_alt_1_rounded),
+  'SOP Updates':    _BadgeTheme(Color(0xFFEFF6FF), Color(0xFF2563EB), Icons.fact_check_outlined),
+  'Policy Updates': _BadgeTheme(Color(0xFFF3E8FF), Color(0xFF7C3AED), Icons.policy_outlined),
+  'Promotion':      _BadgeTheme(Color(0xFFFFFBEB), Color(0xFFFB923C), Icons.trending_up_rounded),
+  'Transfer':       _BadgeTheme(Color(0xFFFFE4E6), Color(0xFFE11D48), Icons.swap_horiz_rounded),
+  'Training':       _BadgeTheme(Color(0xFFE0F2FE), Color(0xFF0284C7), Icons.school_outlined),
+  'Special':        _BadgeTheme(Color(0xFFFCE7F3), Color(0xFFDB2777), Icons.star_outline_rounded),
+};
+
+_BadgeTheme _categoryTheme(String category) =>
+    _categoryThemes[category] ??
+    const _BadgeTheme(Color(0xFFF1F5F9), Color(0xFF475569), Icons.label_outline_rounded);
+
+Widget _categoryBadge(String category) {
+  final t = _categoryTheme(category);
+  return Container(
+    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+    decoration: BoxDecoration(color: t.bg, borderRadius: BorderRadius.circular(_DS.radiusPill)),
+    child: Row(mainAxisSize: MainAxisSize.min, children: [
+      Icon(t.icon, size: 11, color: t.fg),
+      const SizedBox(width: 5),
+      Text(category,
+          style: GoogleFonts.beVietnamPro(
+              fontSize: 10, fontWeight: FontWeight.w700, color: t.fg, letterSpacing: 0.3)),
+    ]),
+  );
+}
+
 // Section label — same as StudentAccounts
 Widget _sectionLabel(String text, {IconData? icon}) {
   return Padding(
@@ -208,6 +307,11 @@ class _OrgAnnouncementsScreenState extends State<OrgAnnouncementsScreen> {
   int _currentPage    = 1;
   static const int _pageSize = 5;
 
+  // Category sidebar selection + any custom categories added this session.
+  String _selectedCategory = 'All Announcement';
+  final List<String> _customCategories = [];
+  List<String> get _allCategories => {...kDefaultAnnouncementCategories, ..._customCategories}.toList();
+
   @override
   void dispose() {
     _searchController.dispose();
@@ -231,6 +335,9 @@ class _OrgAnnouncementsScreenState extends State<OrgAnnouncementsScreen> {
       out = out.where((a) => a.isPinned).toList();
     } else if (_filterMode == 'With Attachments') {
       out = out.where((a) => a.attachmentsBase64.isNotEmpty).toList();
+    }
+    if (_selectedCategory != 'All Announcement') {
+      out = out.where((a) => a.category == _selectedCategory).toList();
     }
     return out;
   }
@@ -346,17 +453,326 @@ class _OrgAnnouncementsScreenState extends State<OrgAnnouncementsScreen> {
     final width = MediaQuery.of(context).size.width;
     final isMobile = width < 720;
     final isTablet = width >= 720 && width < 1200;
+    final isWide = width >= 1300;
+    final horizontalPadding = isMobile ? 16.0 : 24.0;
 
     return Scaffold(
       backgroundColor: _C.pageBg,
-      body: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _buildToolbar(isMobile, isTablet),
-          const SizedBox(height: 0),
-          Expanded(child: _buildFeed()),
-          const SizedBox(height: 24),
-        ],
+      body: StreamBuilder<QuerySnapshot>(
+        stream: _stream,
+        builder: (context, snap) {
+          if (snap.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator(color: _C.primaryDark));
+          }
+          if (snap.hasError) {
+            return Center(child: Text('Error: ${snap.error}', style: GoogleFonts.beVietnamPro()));
+          }
+
+          final all = (snap.data?.docs ?? [])
+              .map((d) => AnnouncementModel.fromFirestore(d))
+              .toList();
+          all.sort((a, b) {
+            // Pinned always first
+            if (a.isPinned && !b.isPinned) return -1;
+            if (!a.isPinned && b.isPinned) return 1;
+            return b.timestamp.toDate().compareTo(a.timestamp.toDate());
+          });
+
+          return Padding(
+            padding: EdgeInsets.fromLTRB(horizontalPadding, 20, horizontalPadding, 0),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('Announcement',
+                  style: GoogleFonts.beVietnamPro(fontSize: 22, fontWeight: FontWeight.w800, color: _C.charcoal)),
+              const SizedBox(height: 16),
+              Expanded(
+                child: isWide
+                    ? Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        SizedBox(width: 220, child: _buildCategorySidebar(all)),
+                        const SizedBox(width: 20),
+                        Expanded(child: _buildCenterColumn(all, isMobile, isTablet)),
+                        const SizedBox(width: 20),
+                        SizedBox(width: 280, child: _buildPinnedPanel(all)),
+                      ])
+                    : Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        _buildCategoryChipsRow(all),
+                        const SizedBox(height: 12),
+                        Expanded(child: _buildCenterColumn(all, isMobile, isTablet)),
+                      ]),
+              ),
+              const SizedBox(height: 20),
+            ]),
+          );
+        },
+      ),
+    );
+  }
+
+  // ── Center column: toolbar + feed (shared by wide and narrow layouts) ─────
+  Widget _buildCenterColumn(List<AnnouncementModel> all, bool isMobile, bool isTablet) {
+    final filtered = _filtered(all);
+    final totalPages = filtered.isEmpty ? 1 : (filtered.length / _pageSize).ceil();
+    final safePage = _currentPage.clamp(1, totalPages);
+    final start = (safePage - 1) * _pageSize;
+    final end = (start + _pageSize).clamp(0, filtered.length);
+    final pageItems = filtered.isEmpty ? <AnnouncementModel>[] : filtered.sublist(start, end);
+
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      _buildToolbar(isMobile, isTablet),
+      const SizedBox(height: 16),
+      Expanded(
+        child: all.isEmpty
+            ? _buildEmptyState()
+            : Container(
+                decoration: BoxDecoration(
+                  color: _C.white,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: _C.border),
+                  boxShadow: _DS.cardShadow,
+                ),
+                child: Column(children: [
+                  Expanded(
+                    child: pageItems.isEmpty ? _buildEmptySearchState() : _buildFeedContent(pageItems),
+                  ),
+                  _buildPaginationFooter(filtered.length, totalPages, start, end),
+                ]),
+              ),
+      ),
+    ]);
+  }
+
+  // ── Category sidebar (wide layout) ─────────────────────────────────────────
+  Widget _buildCategorySidebar(List<AnnouncementModel> all) {
+    final counts = <String, int>{};
+    for (final a in all) {
+      counts[a.category] = (counts[a.category] ?? 0) + 1;
+    }
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: _C.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: _C.border),
+        boxShadow: _DS.cardShadow,
+      ),
+      child: SingleChildScrollView(
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            Text('Category',
+                style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w700, color: _C.charcoal)),
+            const Spacer(),
+            TextButton.icon(
+              onPressed: _promptAddCategory,
+              icon: const Icon(Icons.add_rounded, size: 14),
+              label: Text('Add New', style: GoogleFonts.beVietnamPro(fontSize: 11.5, fontWeight: FontWeight.w600)),
+              style: TextButton.styleFrom(
+                foregroundColor: _C.primaryDark,
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                minimumSize: Size.zero,
+              ),
+            ),
+          ]),
+          const SizedBox(height: 6),
+          _categorySidebarItem('All Announcement', all.length,
+              _selectedCategory == 'All Announcement', () => setState(() => _selectedCategory = 'All Announcement')),
+          const Divider(height: 16, color: _C.border),
+          ..._allCategories.map((c) => _categorySidebarItem(
+                c, counts[c] ?? 0, _selectedCategory == c, () => setState(() => _selectedCategory = c),
+              )),
+        ]),
+      ),
+    );
+  }
+
+  Widget _categorySidebarItem(String label, int count, bool selected, VoidCallback onTap) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 4),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+        decoration: BoxDecoration(
+          color: selected ? _C.primaryDark.withOpacity(0.08) : Colors.transparent,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Row(children: [
+          Expanded(
+            child: Text(label,
+                style: GoogleFonts.beVietnamPro(
+                    fontSize: 13,
+                    fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                    color: selected ? _C.primaryDark : _C.textMid),
+                overflow: TextOverflow.ellipsis),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+            decoration: BoxDecoration(
+              color: selected ? _C.primaryDark : _C.surface,
+              borderRadius: BorderRadius.circular(99),
+            ),
+            child: Text('$count',
+                style: GoogleFonts.beVietnamPro(
+                    fontSize: 11, fontWeight: FontWeight.w700, color: selected ? Colors.white : _C.darkGray)),
+          ),
+        ]),
+      ),
+    );
+  }
+
+  Future<void> _promptAddCategory() async {
+    final ctrl = TextEditingController();
+    final result = await showDialog<String>(
+      context: context,
+      builder: (ctx) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(_DS.radiusLg)),
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('New Category',
+                style: GoogleFonts.beVietnamPro(fontSize: 16, fontWeight: FontWeight.w700, color: _C.charcoal)),
+            const SizedBox(height: 14),
+            TextField(
+              controller: ctrl,
+              autofocus: true,
+              style: GoogleFonts.beVietnamPro(fontSize: 13),
+              decoration: _DS.inputDecoration('Category name', hint: 'e.g. Reminders', icon: Icons.label_outline_rounded),
+            ),
+            const SizedBox(height: 20),
+            Row(mainAxisAlignment: MainAxisAlignment.end, children: [
+              OutlinedButton(
+                onPressed: () => Navigator.pop(ctx),
+                style: OutlinedButton.styleFrom(side: const BorderSide(color: _C.borderSoft)),
+                child: Text('Cancel', style: GoogleFonts.beVietnamPro(fontSize: 13, color: _C.textMid)),
+              ),
+              const SizedBox(width: 10),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(ctx, ctrl.text.trim()),
+                style: ElevatedButton.styleFrom(backgroundColor: _C.primaryDark, foregroundColor: Colors.white, elevation: 0),
+                child: Text('Add', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600)),
+              ),
+            ]),
+          ]),
+        ),
+      ),
+    );
+    if (result != null && result.isNotEmpty && !_allCategories.contains(result)) {
+      setState(() => _customCategories.add(result));
+    }
+  }
+
+  // ── Category chips row (narrow layouts) ─────────────────────────────────────
+  Widget _buildCategoryChipsRow(List<AnnouncementModel> all) {
+    final categories = ['All Announcement', ..._allCategories];
+    return SizedBox(
+      height: 36,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: categories.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 8),
+        itemBuilder: (_, i) {
+          final c = categories[i];
+          final selected = _selectedCategory == c;
+          return ChoiceChip(
+            label: Text(c,
+                style: GoogleFonts.beVietnamPro(
+                    fontSize: 12, fontWeight: FontWeight.w600, color: selected ? Colors.white : _C.textMid)),
+            selected: selected,
+            onSelected: (_) => setState(() => _selectedCategory = c),
+            selectedColor: _C.primaryDark,
+            backgroundColor: _C.white,
+            shape: StadiumBorder(side: BorderSide(color: selected ? _C.primaryDark : _C.borderSoft)),
+            showCheckmark: false,
+          );
+        },
+      ),
+    );
+  }
+
+  // ── Pinned panel (wide layout) ──────────────────────────────────────────────
+  Widget _buildPinnedPanel(List<AnnouncementModel> all) {
+    final pinned = all.where((a) => a.isPinned).take(5).toList();
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: _C.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: _C.border),
+        boxShadow: _DS.cardShadow,
+      ),
+      child: SingleChildScrollView(
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            const Icon(Icons.push_pin_rounded, size: 15, color: _C.warning),
+            const SizedBox(width: 6),
+            Text('Pinned Announcement',
+                style: GoogleFonts.beVietnamPro(fontSize: 14, fontWeight: FontWeight.w700, color: _C.charcoal)),
+          ]),
+          const SizedBox(height: 14),
+          if (pinned.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              child: Text('No pinned announcements yet.',
+                  style: GoogleFonts.beVietnamPro(fontSize: 12, color: _C.textFaint)),
+            )
+          else
+            ...pinned.map((a) => _PinnedItem(announcement: a, onView: () => _showViewPostDialog(a))),
+        ]),
+      ),
+    );
+  }
+
+  void _showViewPostDialog(AnnouncementModel a) {
+    showDialog(
+      context: context,
+      builder: (ctx) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(_DS.radiusLg)),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxWidth: 480, maxHeight: MediaQuery.of(context).size.height * 0.8),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            Container(
+              padding: const EdgeInsets.fromLTRB(20, 16, 16, 16),
+              decoration: const BoxDecoration(
+                color: _C.primaryDark,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(_DS.radiusLg)),
+              ),
+              child: Row(children: [
+                Expanded(
+                  child: Text(a.title,
+                      style: GoogleFonts.beVietnamPro(fontSize: 15, fontWeight: FontWeight.w700, color: Colors.white),
+                      overflow: TextOverflow.ellipsis),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.close_rounded, color: Colors.white, size: 20),
+                  onPressed: () => Navigator.pop(ctx),
+                ),
+              ]),
+            ),
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(20),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Wrap(spacing: 8, runSpacing: 8, children: [
+                    _categoryBadge(a.category),
+                    _audienceBadge(a.targetAudience),
+                  ]),
+                  const SizedBox(height: 12),
+                  Text(
+                    DateFormat('MMMM dd, yyyy • h:mm a').format(a.timestamp.toDate()),
+                    style: GoogleFonts.beVietnamPro(fontSize: 11, color: _C.textFaint),
+                  ),
+                  const SizedBox(height: 12),
+                  if (a.imageBase64 != null && a.imageBase64!.isNotEmpty) ...[
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(_DS.radiusSm),
+                      child: Image.memory(base64Decode(a.imageBase64!), width: double.infinity, fit: BoxFit.cover),
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+                  Text(a.content, style: GoogleFonts.beVietnamPro(fontSize: 13.5, height: 1.6, color: _C.textMid)),
+                ]),
+              ),
+            ),
+          ]),
+        ),
       ),
     );
   }
@@ -393,32 +809,14 @@ class _OrgAnnouncementsScreenState extends State<OrgAnnouncementsScreen> {
       ),
     );
 
-    return Padding(
-      padding: EdgeInsets.fromLTRB(MediaQuery.of(context).size.width < 720 ? 16.0 : 28.0, 20, MediaQuery.of(context).size.width < 720 ? 16.0 : 28.0, 0),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          if (constraints.maxWidth > 980) {
-            return Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                Expanded(child: searchField),
-                const SizedBox(width: 12),
-                _FilterDropdown(
-                  value: _filterMode,
-                  items: const ['All', 'Pinned', 'With Attachments'],
-                  onChanged: (v) => setState(() {
-                    _filterMode = v!;
-                    _currentPage = 1;
-                  }),
-                ),
-              ],
-            );
-          }
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth > 680) {
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              searchField,
-              const SizedBox(height: 10),
+              Expanded(child: searchField),
+              const SizedBox(width: 12),
               _FilterDropdown(
                 value: _filterMode,
                 items: const ['All', 'Pinned', 'With Attachments'],
@@ -429,65 +827,27 @@ class _OrgAnnouncementsScreenState extends State<OrgAnnouncementsScreen> {
               ),
             ],
           );
-        },
-      ),
-    );
-  }
-
-  // ── Feed shell (same card container as StudentAccounts table) ─────────────
-  Widget _buildFeed() {
-    return StreamBuilder<QuerySnapshot>(
-      stream: _stream,
-      builder: (context, snap) {
-        if (snap.connectionState == ConnectionState.waiting) {
-          return const Center(
-              child: CircularProgressIndicator(color: _C.primaryDark));
         }
-        if (snap.hasError) {
-          return Center(
-              child: Text('Error: ${snap.error}',
-                  style: GoogleFonts.beVietnamPro()));
-        }
-
-        if (snap.data!.docs.isEmpty) return _buildEmptyState();
-
-        var all = snap.data!.docs
-            .map((d) => AnnouncementModel.fromFirestore(d))
-            .toList();
-        all.sort((a, b) {
-          // Pinned always first
-          if (a.isPinned && !b.isPinned) return -1;
-          if (!a.isPinned && b.isPinned) return 1;
-          return b.timestamp.toDate().compareTo(a.timestamp.toDate());
-        });
-        final filtered = _filtered(all);
-        final totalPages = filtered.isEmpty ? 1 : (filtered.length / _pageSize).ceil();
-        final safePage = _currentPage.clamp(1, totalPages);
-        final start = (safePage - 1) * _pageSize;
-        final end = (start + _pageSize).clamp(0, filtered.length);
-        final pageItems = filtered.isEmpty ? <AnnouncementModel>[] : filtered.sublist(start, end);
-
-        final horizontalPadding = MediaQuery.of(context).size.width < 720 ? 16.0 : 28.0;
-        return Container(
-          margin: EdgeInsets.fromLTRB(horizontalPadding, 20, horizontalPadding, 0),
-          decoration: BoxDecoration(
-            color: _C.white,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: _C.border),
-            boxShadow: _DS.cardShadow,
-          ),
-          child: Column(children: [
-            Expanded(
-              child: pageItems.isEmpty
-                  ? _buildEmptySearchState()
-                  : _buildFeedContent(pageItems),
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            searchField,
+            const SizedBox(height: 10),
+            _FilterDropdown(
+              value: _filterMode,
+              items: const ['All', 'Pinned', 'With Attachments'],
+              onChanged: (v) => setState(() {
+                _filterMode = v!;
+                _currentPage = 1;
+              }),
             ),
-            _buildPaginationFooter(filtered.length, totalPages, start, end),
-          ]),
+          ],
         );
       },
     );
   }
+
+  // ── Feed shell (same card container as StudentAccounts table) ─────────────
 
   Widget _buildFeedContent(List<AnnouncementModel> items) {
     return CustomScrollView(
@@ -513,64 +873,92 @@ class _OrgAnnouncementsScreenState extends State<OrgAnnouncementsScreen> {
   }
 
   Widget _buildComposerTeaser() {
-    return GestureDetector(
-      onTap: () => _showAnnouncementDialog(),
-      child: Container(
-        margin: const EdgeInsets.fromLTRB(20, 16, 20, 12),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        decoration: BoxDecoration(
-          color: _C.surface,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: _C.borderSoft),
-        ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            // Org avatar
-            Container(
-              width: 38, height: 38,
-              decoration: BoxDecoration(
-                color: _C.primaryDark.withOpacity(0.12),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: const Icon(Icons.campaign_rounded, size: 20, color: _C.primaryDark),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+    return Container(
+      margin: const EdgeInsets.fromLTRB(20, 16, 20, 12),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: _C.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: _C.borderSoft),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        GestureDetector(
+          onTap: () => _showAnnouncementDialog(),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              // Org avatar
+              Container(
+                width: 38, height: 38,
                 decoration: BoxDecoration(
-                  color: _C.white,
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: _C.border),
+                  color: _C.primaryDark.withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(10),
                 ),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        "What's on your mind? Create an announcement…",
-                        style: GoogleFonts.beVietnamPro(
-                          fontSize: 13,
-                          color: _C.textFaint,
+                child: const Icon(Icons.campaign_rounded, size: 20, color: _C.primaryDark),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: _C.white,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: _C.border),
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          "What's on your mind? Create an announcement…",
+                          style: GoogleFonts.beVietnamPro(
+                            fontSize: 13,
+                            color: _C.textFaint,
+                          ),
                         ),
                       ),
-                    ),
-                    const Icon(Icons.edit_note_rounded,
-                        size: 16, color: _C.textFaint),
-                  ],
+                      const Icon(Icons.edit_note_rounded,
+                          size: 16, color: _C.textFaint),
+                    ],
+                  ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+        const Divider(height: 1, color: _C.borderSoft),
+        const SizedBox(height: 10),
+        Row(children: [
+          _composerQuickAction(Icons.image_outlined, 'Photo', _C.success),
+          const SizedBox(width: 8),
+          _composerQuickAction(Icons.videocam_outlined, 'Video', _C.error),
+          const SizedBox(width: 8),
+          _composerQuickAction(Icons.event_outlined, 'Event', _C.warning),
+        ]),
+      ]),
+    );
+  }
+
+  Widget _composerQuickAction(IconData icon, String label, Color color) {
+    return Expanded(
+      child: InkWell(
+        onTap: () => _showAnnouncementDialog(),
+        borderRadius: BorderRadius.circular(8),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+            Icon(icon, size: 17, color: color),
+            const SizedBox(width: 6),
+            Text(label, style: GoogleFonts.beVietnamPro(fontSize: 12.5, fontWeight: FontWeight.w600, color: _C.textMid)),
+          ]),
         ),
       ),
     );
   }
 
   Widget _buildEmptyState() {
-    final horizontalPadding = MediaQuery.of(context).size.width < 720 ? 16.0 : 28.0;
     return Container(
-      margin: EdgeInsets.fromLTRB(horizontalPadding, 20, horizontalPadding, 0),
+      width: double.infinity,
       decoration: BoxDecoration(
         color: _C.white,
         borderRadius: BorderRadius.circular(14),
@@ -685,6 +1073,7 @@ class _OrgAnnouncementsScreenState extends State<OrgAnnouncementsScreen> {
     String? imageBase64 = existing?.imageBase64;
     List<AttachmentBase64> attachments = List.from(existing?.attachmentsBase64 ?? []);
     String targetAudience = existing?.targetAudience ?? 'Members Only';
+    String category = existing?.category ?? 'General';
     bool isSubmitting = false;
     bool isScheduled  = existing?.scheduledPublishDate != null;
     DateTime? scheduledDate;
@@ -758,6 +1147,28 @@ class _OrgAnnouncementsScreenState extends State<OrgAnnouncementsScreen> {
                             style: GoogleFonts.beVietnamPro(fontSize: 13),
                             validator: (v) =>
                                 v?.trim().isEmpty == true ? 'Title is required' : null,
+                          ),
+                          const SizedBox(height: 14),
+                          Container(
+                            decoration: BoxDecoration(
+                              color: _C.surface,
+                              borderRadius: BorderRadius.circular(_DS.radiusSm),
+                              border: Border.all(color: _C.borderSoft),
+                            ),
+                            child: DropdownButtonFormField<String>(
+                              value: _allCategories.contains(category) ? category : _allCategories.first,
+                              decoration: InputDecoration(
+                                labelText: 'Category',
+                                labelStyle: GoogleFonts.beVietnamPro(fontSize: 13, color: _C.darkGray),
+                                prefixIcon: Icon(_categoryTheme(category).icon, size: 18, color: _C.textFaint),
+                                border: InputBorder.none,
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                              ),
+                              items: _allCategories
+                                  .map((c) => DropdownMenuItem(value: c, child: Text(c, style: GoogleFonts.beVietnamPro(fontSize: 13))))
+                                  .toList(),
+                              onChanged: (v) => setDlg(() => category = v!),
+                            ),
                           ),
                           const SizedBox(height: 14),
                           TextFormField(
@@ -1046,6 +1457,7 @@ class _OrgAnnouncementsScreenState extends State<OrgAnnouncementsScreen> {
                                     'imageBase64': imageBase64 ?? '',
                                     'pinned': isPinned,
                                     'targetAudience': targetAudience,
+                                    'category': category,
                                     'isScheduled': isScheduled,
                                     'scheduledPublishDate': scheduledTs,
                                     'isPublished': !isScheduled,
@@ -1381,17 +1793,18 @@ class _PostCardState extends State<_PostCard> {
                         fontWeight: FontWeight.w700,
                         color: _C.charcoal)),
                 const SizedBox(height: 2),
-                Row(children: [
-                  const Icon(Icons.access_time_rounded,
-                      size: 12, color: _C.textFaint),
-                  const SizedBox(width: 4),
-                  Text(_timeAgo(a.timestamp),
-                      style: GoogleFonts.beVietnamPro(
-                          fontSize: 11, color: _C.textFaint)),
-                  const SizedBox(width: 8),
+                Wrap(crossAxisAlignment: WrapCrossAlignment.center, spacing: 8, runSpacing: 4, children: [
+                  Row(mainAxisSize: MainAxisSize.min, children: [
+                    const Icon(Icons.access_time_rounded,
+                        size: 12, color: _C.textFaint),
+                    const SizedBox(width: 4),
+                    Text(_timeAgo(a.timestamp),
+                        style: GoogleFonts.beVietnamPro(
+                            fontSize: 11, color: _C.textFaint)),
+                  ]),
+                  _categoryBadge(a.category),
                   _audienceBadge(a.targetAudience),
-                  if (a.isScheduled && !a.isPublished) ...[
-                    const SizedBox(width: 6),
+                  if (a.isScheduled && !a.isPublished)
                     Container(
                       padding: const EdgeInsets.symmetric(
                           horizontal: 8, vertical: 2),
@@ -1410,7 +1823,6 @@ class _PostCardState extends State<_PostCard> {
                                 color: _C.info)),
                       ]),
                     ),
-                  ],
                 ]),
               ]),
             ),
@@ -1668,6 +2080,7 @@ class AnnouncementModel {
   final String? imageBase64;
   final bool isPinned;
   final String targetAudience;
+  final String category;
   final bool isScheduled;
   final Timestamp? scheduledPublishDate;
   final bool isPublished;
@@ -1683,6 +2096,7 @@ class AnnouncementModel {
     this.imageBase64,
     this.isPinned = false,
     this.targetAudience = 'Members Only',
+    this.category = 'General',
     this.isScheduled = false,
     this.scheduledPublishDate,
     this.isPublished = true,
@@ -1712,6 +2126,7 @@ class AnnouncementModel {
       imageBase64: d['imageBase64'] as String?,
       isPinned: d['pinned'] as bool? ?? false,
       targetAudience: d['targetAudience'] as String? ?? 'Members Only',
+      category: d['category'] as String? ?? 'General',
       isScheduled: d['isScheduled'] as bool? ?? false,
       scheduledPublishDate: d['scheduledPublishDate'] as Timestamp?,
       isPublished: d['isPublished'] as bool? ?? true,

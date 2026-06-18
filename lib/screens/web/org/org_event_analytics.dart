@@ -257,7 +257,7 @@ class _OrgEventAnalyticsScreenState extends State<OrgEventAnalyticsScreen>
     final db = FirebaseFirestore.instance;
     final results = await Future.wait([
       db
-          .collection('event_feedbacks')
+          .collection('event_feedback')
           .where('orgId', isEqualTo: widget.orgId)
           .get(),
       db.collection('events').where('orgId', isEqualTo: widget.orgId).get(),
@@ -270,11 +270,11 @@ class _OrgEventAnalyticsScreenState extends State<OrgEventAnalyticsScreen>
 
     final events = results[1].docs.map((d) {
       final data = d.data();
+      final capacity = data['capacity'] as num? ?? data['expectedAttendees'] as num? ?? 1;
       return {
         'id': d.id,
         'title': data['title'] as String? ?? 'Untitled',
-        'capacity': (data['capacity'] ?? data['expectedAttendees'] ?? 1) as int,
-        'evaluated': data['evaluated'] == true,
+        'capacity': capacity.toInt(),
       };
     }).toList();
 
@@ -332,8 +332,8 @@ class _OrgEventAnalyticsScreenState extends State<OrgEventAnalyticsScreen>
   Future<void> _exportAnalytics(String choice, _AnalyticsData data) async {
     final filtered = _applyFilters([...data.feedbacks], data)
       ..sort((a, b) {
-        final ta = (a['createdAt'] as Timestamp?)?.millisecondsSinceEpoch ?? 0;
-        final tb = (b['createdAt'] as Timestamp?)?.millisecondsSinceEpoch ?? 0;
+        final ta = (a['submittedAt'] as Timestamp?)?.millisecondsSinceEpoch ?? 0;
+        final tb = (b['submittedAt'] as Timestamp?)?.millisecondsSinceEpoch ?? 0;
         return tb.compareTo(ta);
       });
 
@@ -345,7 +345,7 @@ class _OrgEventAnalyticsScreenState extends State<OrgEventAnalyticsScreen>
     final rows = filtered.asMap().entries.map((e) {
       final f = e.value;
       final title = data.eventTitle(f['eventId'] as String? ?? '');
-      final date = (f['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now();
+      final date = (f['submittedAt'] as Timestamp?)?.toDate() ?? DateTime.now();
       return [
         '${e.key + 1}',
         title,
@@ -1026,8 +1026,8 @@ class _OrgEventAnalyticsScreenState extends State<OrgEventAnalyticsScreen>
   ) {
     final sorted = [...filtered]
       ..sort((a, b) {
-        final ta = (a['createdAt'] as Timestamp?)?.millisecondsSinceEpoch ?? 0;
-        final tb = (b['createdAt'] as Timestamp?)?.millisecondsSinceEpoch ?? 0;
+        final ta = (a['submittedAt'] as Timestamp?)?.millisecondsSinceEpoch ?? 0;
+        final tb = (b['submittedAt'] as Timestamp?)?.millisecondsSinceEpoch ?? 0;
         return tb.compareTo(ta);
       });
     final items = sorted.take(50).toList();
@@ -1070,9 +1070,8 @@ class _OrgEventAnalyticsScreenState extends State<OrgEventAnalyticsScreen>
           child: Row(
             children: [
               Expanded(flex: 3, child: _hCell('EVENT')),
-              Expanded(flex: 4, child: _hCell('COMMENT')),
+              Expanded(flex: 5, child: _hCell('COMMENT')),
               Expanded(flex: 2, child: _hCell('RATING')),
-              Expanded(flex: 2, child: _hCell('STATUS')),
               Expanded(flex: 2, child: _hCell('DATE')),
             ],
           ),
@@ -1107,8 +1106,7 @@ class _OrgEventAnalyticsScreenState extends State<OrgEventAnalyticsScreen>
             final eventId = f['eventId'] as String? ?? '';
             final eventTitle = data.eventTitle(eventId);
             final createdAt =
-                (f['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now();
-            final evaluated = f['evaluated'] == true;
+                (f['submittedAt'] as Timestamp?)?.toDate() ?? DateTime.now();
             final isLast = e.key == items.length - 1;
 
             return Container(
@@ -1135,7 +1133,7 @@ class _OrgEventAnalyticsScreenState extends State<OrgEventAnalyticsScreen>
                     ),
                   ),
                   Expanded(
-                    flex: 4,
+                    flex: 5,
                     child: Text(
                       comment.isEmpty ? '—' : comment,
                       style: GoogleFonts.beVietnamPro(
@@ -1156,16 +1154,6 @@ class _OrgEventAnalyticsScreenState extends State<OrgEventAnalyticsScreen>
                           color: const Color(0xFFF97316),
                         ),
                       ),
-                    ),
-                  ),
-                  Expanded(
-                    flex: 2,
-                    child: _Badge(
-                      label: evaluated ? 'EVALUATED' : 'PENDING',
-                      bg: evaluated
-                          ? const Color(0xFFECFDF5)
-                          : const Color(0xFFFFFBEB),
-                      fg: evaluated ? _C.green : _C.amber,
                     ),
                   ),
                   Expanded(
@@ -1203,15 +1191,13 @@ class _OrgEventAnalyticsScreenState extends State<OrgEventAnalyticsScreen>
               _FooterBtn(
                 icon: Icons.download_outlined,
                 label: 'CSV',
-                onTap: () =>
-                    _exportAnalytics('csv', snapDataFromContext(context)!),
+                onTap: () => _exportAnalytics('csv', data),
               ),
               const SizedBox(width: 8),
               _FooterBtn(
                 icon: Icons.picture_as_pdf_outlined,
                 label: 'PDF',
-                onTap: () =>
-                    _exportAnalytics('pdf', snapDataFromContext(context)!),
+                onTap: () => _exportAnalytics('pdf', data),
               ),
             ],
           ),
@@ -1789,11 +1775,6 @@ class _OrgEventAnalyticsScreenState extends State<OrgEventAnalyticsScreen>
       borderSide: BorderSide(color: UpriseColors.primaryDark, width: 1.5),
     ),
   );
-
-  // Workaround to pass data into footer export buttons without refactoring
-  // the entire widget tree.  Real implementation should pass data via
-  // a captured variable in the enclosing FutureBuilder.
-  _AnalyticsData? snapDataFromContext(BuildContext ctx) => null;
 }
 
 // ════════════════════════════════════════════════════════════════════════════
