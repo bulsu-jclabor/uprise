@@ -1,17 +1,20 @@
 // lib/screens/student/student_merchandise_screen.dart
 
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 
 // ─────────────────────────────────────────────────────────────
-// Theme
+// Custom Colors - UNIFORM (same as home page)
 // ─────────────────────────────────────────────────────────────
-const _kOrange      = Color(0xFFFF6B00);
-const _kOrangeLight = Color(0xFFFFF3E0);
-const _kBg          = Color(0xFFF5F5F5);
-const _kCard        = Colors.white;
+class AppColors {
+  static const Color primaryDark = Color(0xFFBE4700);
+  static const Color primaryLight = Color(0xFFD47A00);
+  static const Color accent = Color(0xFFDA6937);
+  static const Color background = Color(0xFFF8F9FA);
+}
 
 // ─────────────────────────────────────────────────────────────
 // Models (mirrors org_merchandise.dart)
@@ -253,7 +256,7 @@ class _StudentMerchandiseScreenState
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: _kBg,
+      backgroundColor: AppColors.background,
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
@@ -269,15 +272,15 @@ class _StudentMerchandiseScreenState
         ),
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(2),
-          child: Container(height: 2, color: _kOrange),
+          child: Container(height: 2, color: AppColors.primaryDark),
         ),
         actions: [
           Stack(
             alignment: Alignment.center,
             children: [
               IconButton(
-                icon: const Icon(Icons.shopping_cart_outlined,
-                    color: Colors.black),
+                icon: Icon(Icons.shopping_cart_outlined,
+                    color: AppColors.primaryDark),
                 onPressed: _cart.isEmpty
                     ? null
                     : () => _openCart(context),
@@ -289,8 +292,8 @@ class _StudentMerchandiseScreenState
                   child: Container(
                     width: 16,
                     height: 16,
-                    decoration: const BoxDecoration(
-                        color: _kOrange, shape: BoxShape.circle),
+                    decoration: BoxDecoration(
+                        color: AppColors.primaryDark, shape: BoxShape.circle),
                     child: Center(
                       child: Text(
                         _cartCount().toString(),
@@ -307,7 +310,7 @@ class _StudentMerchandiseScreenState
         ],
       ),
       body: _loadingOrgId
-          ? const Center(child: CircularProgressIndicator(color: _kOrange))
+          ? const Center(child: CircularProgressIndicator(color: AppColors.primaryDark))
           : Column(
               children: [
                 _TabRow(
@@ -365,7 +368,7 @@ class _StudentMerchandiseScreenState
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
                 content: Text('Order placed successfully!'),
-                backgroundColor: _kOrange,
+                backgroundColor: AppColors.primaryDark,
               ),
             );
             _tabController.animateTo(1);
@@ -424,7 +427,7 @@ class _TabPill extends StatelessWidget {
         duration: const Duration(milliseconds: 180),
         padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
         decoration: BoxDecoration(
-          color: selected ? _kOrange : Colors.transparent,
+          color: selected ? AppColors.primaryDark : Colors.transparent,
           borderRadius: BorderRadius.circular(20),
         ),
         child: Text(
@@ -489,7 +492,7 @@ class _ProductsTabState extends State<_ProductsTab> {
             builder: (ctx, snap) {
               if (snap.connectionState == ConnectionState.waiting) {
                 return const Center(
-                    child: CircularProgressIndicator(color: _kOrange));
+                    child: CircularProgressIndicator(color: AppColors.primaryDark));
               }
               if (snap.hasError) {
                 return _EmptyHint(
@@ -601,7 +604,7 @@ class _SearchBar extends StatelessWidget {
                 )
               : null,
           filled: true,
-          fillColor: _kBg,
+          fillColor: AppColors.background,
           contentPadding:
               const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           border: OutlineInputBorder(
@@ -643,10 +646,10 @@ class _CategoryRow extends StatelessWidget {
               padding:
                   const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
               decoration: BoxDecoration(
-                color: sel ? _kOrange : Colors.transparent,
+                color: sel ? AppColors.primaryDark : Colors.transparent,
                 borderRadius: BorderRadius.circular(16),
                 border: Border.all(
-                    color: sel ? _kOrange : Colors.black12, width: 1),
+                    color: sel ? AppColors.primaryDark : Colors.black12, width: 1),
               ),
               child: Text(
                 cat,
@@ -665,7 +668,7 @@ class _CategoryRow extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────
-// Product Card
+// Product Card (with Base64 image support)
 // ─────────────────────────────────────────────────────────────
 class _ProductCard extends StatelessWidget {
   final _Product product;
@@ -681,7 +684,7 @@ class _ProductCard extends StatelessWidget {
       onTap: () => _showDetails(context),
       child: Container(
         decoration: BoxDecoration(
-          color: _kCard,
+          color: Colors.white,
           borderRadius: BorderRadius.circular(14),
           boxShadow: [
             BoxShadow(
@@ -699,16 +702,7 @@ class _ProductCard extends StatelessWidget {
                   const BorderRadius.vertical(top: Radius.circular(14)),
               child: Stack(
                 children: [
-                  product.imageUrl.isNotEmpty
-                      ? Image.network(
-                          product.imageUrl,
-                          height: 120,
-                          width: double.infinity,
-                          fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) =>
-                              _imgPlaceholder(product.name),
-                        )
-                      : _imgPlaceholder(product.name),
+                  _buildProductImage(),
                   if (product.status == 'discontinued' || !product.inStock)
                     Positioned.fill(
                       child: Container(
@@ -739,7 +733,7 @@ class _ProductCard extends StatelessWidget {
                         padding: const EdgeInsets.symmetric(
                             horizontal: 6, vertical: 2),
                         decoration: BoxDecoration(
-                          color: _kOrange,
+                          color: AppColors.primaryDark,
                           borderRadius: BorderRadius.circular(10),
                         ),
                         child: Text(
@@ -782,7 +776,7 @@ class _ProductCard extends StatelessWidget {
                         style: const TextStyle(
                             fontSize: 13,
                             fontWeight: FontWeight.w700,
-                            color: _kOrange),
+                            color: AppColors.primaryDark),
                       ),
                       if (product.inStock && product.status != 'discontinued')
                         GestureDetector(
@@ -790,7 +784,7 @@ class _ProductCard extends StatelessWidget {
                           child: Container(
                             padding: const EdgeInsets.all(6),
                             decoration: const BoxDecoration(
-                              color: _kOrange,
+                              color: AppColors.primaryDark,
                               shape: BoxShape.circle,
                             ),
                             child: const Icon(Icons.add,
@@ -820,16 +814,49 @@ class _ProductCard extends StatelessWidget {
     );
   }
 
+  // ── Build product image with base64 support ──
+  Widget _buildProductImage() {
+    // Check if imageUrl is base64 data URL
+    if (product.imageUrl.startsWith('data:image')) {
+      try {
+        final base64String = product.imageUrl.split(',').last;
+        final bytes = base64Decode(base64String);
+        return Image.memory(
+          bytes,
+          height: 120,
+          width: double.infinity,
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) => _imgPlaceholder(product.name),
+        );
+      } catch (_) {
+        return _imgPlaceholder(product.name);
+      }
+    }
+    
+    // Regular network image
+    if (product.imageUrl.isNotEmpty) {
+      return Image.network(
+        product.imageUrl,
+        height: 120,
+        width: double.infinity,
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => _imgPlaceholder(product.name),
+      );
+    }
+    
+    return _imgPlaceholder(product.name);
+  }
+
   Widget _imgPlaceholder(String name) => Container(
         height: 120,
         width: double.infinity,
-        color: _kOrangeLight,
+        color: AppColors.primaryDark.withOpacity(0.1),
         child: Center(
           child: Text(
             name.isNotEmpty ? name[0].toUpperCase() : '?',
             style: const TextStyle(
                 fontSize: 36,
-                color: _kOrange,
+                color: AppColors.primaryDark,
                 fontWeight: FontWeight.bold),
           ),
         ),
@@ -887,16 +914,7 @@ class _ProductCard extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 16),
-                if (product.imageUrl.isNotEmpty)
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(12),
-                    child: Image.network(
-                      product.imageUrl,
-                      height: 200,
-                      width: double.infinity,
-                      fit: BoxFit.cover,
-                    ),
-                  ),
+                _buildDetailImage(),
                 const SizedBox(height: 16),
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -920,7 +938,7 @@ class _ProductCard extends StatelessWidget {
                   style: const TextStyle(
                       fontSize: 22,
                       fontWeight: FontWeight.w800,
-                      color: _kOrange),
+                      color: AppColors.primaryDark),
                 ),
                 const SizedBox(height: 12),
                 Text(
@@ -970,7 +988,7 @@ class _ProductCard extends StatelessWidget {
                               : 'Out of Stock',
                     ),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: _kOrange,
+                      backgroundColor: AppColors.primaryDark,
                       foregroundColor: Colors.white,
                       disabledBackgroundColor: Colors.grey.shade300,
                       padding: const EdgeInsets.symmetric(vertical: 14),
@@ -983,6 +1001,78 @@ class _ProductCard extends StatelessWidget {
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  // ── Detail image with base64 support ──
+  Widget _buildDetailImage() {
+    if (product.imageUrl.startsWith('data:image')) {
+      try {
+        final base64String = product.imageUrl.split(',').last;
+        final bytes = base64Decode(base64String);
+        return ClipRRect(
+          borderRadius: BorderRadius.circular(12),
+          child: Image.memory(
+            bytes,
+            height: 200,
+            width: double.infinity,
+            fit: BoxFit.cover,
+            errorBuilder: (_, __, ___) => Container(
+              height: 200,
+              decoration: BoxDecoration(
+                color: AppColors.primaryDark.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Icon(
+                Icons.image_not_supported_outlined,
+                size: 48,
+                color: Colors.grey,
+              ),
+            ),
+          ),
+        );
+      } catch (_) {
+        return _buildNetworkImage();
+      }
+    }
+    return _buildNetworkImage();
+  }
+
+  Widget _buildNetworkImage() {
+    if (product.imageUrl.isNotEmpty) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(12),
+        child: Image.network(
+          product.imageUrl,
+          height: 200,
+          width: double.infinity,
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) => Container(
+            height: 200,
+            decoration: BoxDecoration(
+              color: AppColors.primaryDark.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: const Icon(
+              Icons.image_not_supported_outlined,
+              size: 48,
+              color: Colors.grey,
+            ),
+          ),
+        ),
+      );
+    }
+    return Container(
+      height: 200,
+      decoration: BoxDecoration(
+        color: AppColors.primaryDark.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: const Icon(
+        Icons.image_not_supported_outlined,
+        size: 48,
+        color: Colors.grey,
       ),
     );
   }
@@ -1058,10 +1148,10 @@ class _VariantPickerSheetState extends State<_VariantPickerSheet> {
                   padding: const EdgeInsets.symmetric(
                       horizontal: 14, vertical: 12),
                   decoration: BoxDecoration(
-                    color: selected ? _kOrangeLight : _kBg,
+                    color: selected ? AppColors.primaryDark.withOpacity(0.1) : AppColors.background,
                     borderRadius: BorderRadius.circular(10),
                     border: Border.all(
-                      color: selected ? _kOrange : Colors.transparent,
+                      color: selected ? AppColors.primaryDark : Colors.transparent,
                       width: 1.5,
                     ),
                   ),
@@ -1112,14 +1202,14 @@ class _VariantPickerSheetState extends State<_VariantPickerSheet> {
                         style: TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.w700,
-                          color: inStock ? _kOrange : Colors.black38,
+                          color: inStock ? AppColors.primaryDark : Colors.black38,
                         ),
                       ),
                       if (selected)
                         const Padding(
                           padding: EdgeInsets.only(left: 8),
                           child: Icon(Icons.check_circle,
-                              color: _kOrange, size: 18),
+                              color: AppColors.primaryDark, size: 18),
                         ),
                     ],
                   ),
@@ -1135,7 +1225,7 @@ class _VariantPickerSheetState extends State<_VariantPickerSheet> {
                   ? null
                   : () => widget.onSelect(variants[_selectedIndex!]),
               style: ElevatedButton.styleFrom(
-                backgroundColor: _kOrange,
+                backgroundColor: AppColors.primaryDark,
                 foregroundColor: Colors.white,
                 disabledBackgroundColor: Colors.grey.shade300,
                 padding: const EdgeInsets.symmetric(vertical: 14),
@@ -1164,7 +1254,7 @@ class _DetailChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: _kBg,
+        color: AppColors.background,
         borderRadius: BorderRadius.circular(8),
       ),
       child: Row(
@@ -1237,7 +1327,7 @@ class _VariantsTable extends StatelessWidget {
         },
         children: [
           TableRow(
-            decoration: const BoxDecoration(color: _kBg),
+            decoration: const BoxDecoration(color: AppColors.background),
             children: [
               _cell('SIZE', header: true),
               _cell('COLOR', header: true),
@@ -1283,7 +1373,7 @@ class _VariantsTable extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────
-// My Orders Tab - FIXED (no orgId filter)
+// My Orders Tab - FIXED (Pickup Status only)
 // ─────────────────────────────────────────────────────────────
 class _MyOrdersTab extends StatelessWidget {
   const _MyOrdersTab();
@@ -1307,7 +1397,7 @@ class _MyOrdersTab extends StatelessWidget {
       builder: (ctx, snap) {
         if (snap.connectionState == ConnectionState.waiting) {
           return const Center(
-              child: CircularProgressIndicator(color: _kOrange));
+              child: CircularProgressIndicator(color: AppColors.primaryDark));
         }
         if (snap.hasError) {
           return _EmptyHint(
@@ -1343,8 +1433,6 @@ class _OrderTile extends StatelessWidget {
     final d           = doc.data() as Map<String, dynamic>;
     final orderId     = d['orderId'] as String?
         ?? 'ORD-${doc.id.substring(0, 6).toUpperCase()}';
-    final status      = (d['status']       as String?) ?? 'pending';
-    final pickupStatus = (d['pickupStatus'] as String?) ?? 'Pending';
     final total       = (d['total']        ?? 0).toDouble();
     final ts          = d['createdAt'] as Timestamp?;
     final dateStr     = ts != null
@@ -1352,32 +1440,13 @@ class _OrderTile extends StatelessWidget {
         : '—';
     final items = (d['items'] as List?) ?? [];
     final fmt   = NumberFormat('#,##0.00');
-
-    final Color statusColor;
-    final IconData statusIcon;
-    switch (status.toLowerCase()) {
-      case 'completed':
-        statusColor = Colors.green.shade600;
-        statusIcon  = Icons.check_circle_outline;
-        break;
-      case 'cancelled':
-        statusColor = Colors.redAccent;
-        statusIcon  = Icons.cancel_outlined;
-        break;
-      case 'processing':
-        statusColor = Colors.blue.shade600;
-        statusIcon  = Icons.autorenew;
-        break;
-      default:
-        statusColor = Colors.orange.shade700;
-        statusIcon  = Icons.hourglass_empty_outlined;
-    }
+    final pickupStatus = (d['pickupStatus'] as String?) ?? 'Pending';
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: _kCard,
+        color: Colors.white,
         borderRadius: BorderRadius.circular(14),
         boxShadow: [
           BoxShadow(
@@ -1400,30 +1469,8 @@ class _OrderTile extends StatelessWidget {
                     color: Colors.black87),
               ),
               const Spacer(),
+              // Pickup Status only
               _PickupBadge(status: pickupStatus),
-              const SizedBox(width: 6),
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: statusColor.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(statusIcon, size: 11, color: statusColor),
-                    const SizedBox(width: 4),
-                    Text(
-                      _capitalize(status),
-                      style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                          color: statusColor),
-                    ),
-                  ],
-                ),
-              ),
             ],
           ),
           const SizedBox(height: 6),
@@ -1472,7 +1519,7 @@ class _OrderTile extends StatelessWidget {
                 style: const TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.bold,
-                    color: _kOrange),
+                    color: AppColors.primaryDark),
               ),
             ],
           ),
@@ -1480,9 +1527,6 @@ class _OrderTile extends StatelessWidget {
       ),
     );
   }
-
-  String _capitalize(String s) =>
-      s.isEmpty ? s : s[0].toUpperCase() + s.substring(1);
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -1534,7 +1578,7 @@ class _CartSheet extends StatelessWidget {
             padding: EdgeInsets.symmetric(horizontal: 20),
             child: Row(
               children: [
-                Icon(Icons.shopping_cart_outlined, color: _kOrange),
+                Icon(Icons.shopping_cart_outlined, color: AppColors.primaryDark),
                 SizedBox(width: 8),
                 Text(
                   'Your Cart',
@@ -1586,7 +1630,7 @@ class _CartSheet extends StatelessWidget {
                   style: const TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w800,
-                      color: _kOrange),
+                      color: AppColors.primaryDark),
                 ),
               ],
             ),
@@ -1601,7 +1645,7 @@ class _CartSheet extends StatelessWidget {
                     ? null
                     : () => _placeOrder(context),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: _kOrange,
+                  backgroundColor: AppColors.primaryDark,
                   foregroundColor: Colors.white,
                   disabledBackgroundColor: Colors.grey.shade300,
                   padding: const EdgeInsets.symmetric(vertical: 14),
@@ -1801,14 +1845,14 @@ class _CartItemRow extends StatelessWidget {
                 : Container(
                     width: 44,
                     height: 44,
-                    color: _kOrangeLight,
+                    color: AppColors.primaryDark.withOpacity(0.1),
                     child: Center(
                       child: Text(
                         item.product.name.isNotEmpty
                             ? item.product.name[0]
                             : '?',
                         style: const TextStyle(
-                            color: _kOrange, fontWeight: FontWeight.bold),
+                            color: AppColors.primaryDark, fontWeight: FontWeight.bold),
                       ),
                     ),
                   ),
@@ -1863,7 +1907,7 @@ class _CartItemRow extends StatelessWidget {
             style: const TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w700,
-                color: _kOrange),
+                color: AppColors.primaryDark),
           ),
           const SizedBox(width: 4),
           IconButton(
@@ -1892,7 +1936,7 @@ class _QtyBtn extends StatelessWidget {
         width: 24,
         height: 24,
         decoration: BoxDecoration(
-          color: _kBg,
+          color: AppColors.background,
           borderRadius: BorderRadius.circular(6),
         ),
         child: Icon(icon, size: 14, color: Colors.black54),
@@ -1917,7 +1961,7 @@ class _PickupBadge extends StatelessWidget {
         bg = const Color(0xFFECFDF5); fg = const Color(0xFF059669); label = 'CLAIMED';
         break;
       default:
-        bg = const Color(0xFFFFF3E0); fg = _kOrange; label = 'PENDING';
+        bg = const Color(0xFFFFF3E0); fg = AppColors.primaryDark; label = 'PENDING';
     }
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),

@@ -16,6 +16,16 @@ import 'student_announcements_screen.dart';
 import 'student_notifications_screen.dart';
 import 'student_merchandise_screen.dart';
 
+// ─────────────────────────────────────────────────────────────
+// Custom Colors - UNIFORM
+// ─────────────────────────────────────────────────────────────
+class AppColors {
+  static const Color primaryDark = Color(0xFFBE4700);
+  static const Color primaryLight = Color(0xFFD47A00);
+  static const Color accent = Color(0xFFDA6937);
+  static const Color background = Color(0xFFF8F9FA);
+}
+
 class StudentHomeScreen extends StatefulWidget {
   const StudentHomeScreen({super.key});
 
@@ -38,6 +48,7 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: AppColors.background,
       body: _screens[_currentIndex],
       bottomNavigationBar: BottomNavBar(
         currentIndex: _currentIndex,
@@ -131,403 +142,516 @@ class _HomeContentState extends State<_HomeContent> {
     }
   }
 
-  Widget _buildOrgCard() {
-    if (_orgLoading) {
-      return const Padding(
-        padding: EdgeInsets.fromLTRB(16, 8, 16, 0),
-        child: SizedBox(
-          height: 72,
-          child: Center(child: LinearProgressIndicator(color: Color(0xFFFF6B00))),
-        ),
-      );
-    }
-    if (_orgData == null) return const SizedBox.shrink();
-
-    final orgName = _orgData!['orgName'] ?? _orgData!['name'] ?? 'Your Organization';
-    final logoUrl = (_orgData!['logoUrl'] ?? '') as String;
-
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            colors: [Color(0xFFFF6B00), Color(0xFFFF8C42)],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color: const Color(0xFFFF6B00).withOpacity(0.3),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 48,
-              height: 48,
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.25),
-                shape: BoxShape.circle,
-              ),
-              child: ClipOval(
-                child: logoUrl.isNotEmpty
-                    ? Image.network(
-                        logoUrl,
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) =>
-                            const Icon(Icons.groups, color: Colors.white, size: 26),
-                      )
-                    : const Icon(Icons.groups, color: Colors.white, size: 26),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'YOUR ORGANIZATION',
-                    style: TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w700,
-                      color: Colors.white70,
-                      letterSpacing: 0.8,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    orgName,
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w800,
-                      color: Colors.white,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const Icon(Icons.chevron_right, color: Colors.white70),
-          ],
-        ),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final user = FirebaseAuth.instance.currentUser;
+    final userName = user?.displayName ?? user?.email?.split('@').first ?? 'Student';
 
-    return CustomScrollView(
-      slivers: [
-        // App Bar
-        SliverAppBar(
-          floating: true,
-          backgroundColor: Colors.white,
-          title: const Text('UPRISE'),
-          actions: [
-            IconButton(
-              icon: const Icon(Icons.shopping_cart_outlined),
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const StudentMerchandiseScreen(),
-                  ),
-                );
-              },
-            ),
-            IconButton(
-              icon: const Icon(Icons.notifications_outlined),
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const StudentNotificationsScreen(),
-                  ),
-                );
-              },
-            ),
-          ],
-        ),
-        
-        // Offline indicator
-        if (_isOffline)
-          SliverToBoxAdapter(
-            child: Container(
-              color: const Color(0xFFFFF3CD),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-              child: const Row(
-                children: [
-                  Icon(Icons.wifi_off_rounded, size: 14, color: Color(0xFF856404)),
-                  SizedBox(width: 6),
-                  Text(
-                    'Offline — showing cached data',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Color(0xFF856404),
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-
-        // Profile Summary
-        SliverToBoxAdapter(
-          child: ProfileSummary(userEmail: user?.email ?? 'student@cict.bulsu.edu.ph'),
-        ),
-
-        // Organization Card
-        SliverToBoxAdapter(child: _buildOrgCard()),
-
-        // Upcoming Events Section Header
-        SliverToBoxAdapter(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    return Container(
+      color: AppColors.background,
+      child: CustomScrollView(
+        slivers: [
+          // App Bar with Logo
+          SliverAppBar(
+            floating: true,
+            backgroundColor: Colors.white,
+            elevation: 0,
+            title: Row(
               children: [
-                const Text(
-                  'Upcoming Events',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.black87,
+                Image.asset(
+                  'assets/images/logo.png',
+                  height: 36,
+                  width: 36,
+                  fit: BoxFit.contain,
+                  errorBuilder: (_, __, ___) => const Icon(
+                    Icons.school,
+                    color: AppColors.primaryDark,
+                    size: 32,
                   ),
                 ),
-                TextButton(
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => const StudentEventsScreen(),
-                      ),
-                    );
-                  },
-                  style: TextButton.styleFrom(
-                    foregroundColor: const Color(0xFFFF6B00),
-                  ),
-                  child: const Text(
-                    'View all',
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w500,
-                    ),
+                const SizedBox(width: 10),
+                Text(
+                  'UPRISE',
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.primaryDark,
                   ),
                 ),
               ],
             ),
-          ),
-        ),
-        
-        // Upcoming Events - Horizontal Scroll Cards (gaya ng design)
-        SliverToBoxAdapter(
-          child: StreamBuilder<QuerySnapshot>(
-            stream: FirebaseFirestore.instance
-                .collection('events')
-                .where('date', isGreaterThanOrEqualTo: Timestamp.now())
-                .orderBy('date', descending: false)
-                .limit(5)
-                .snapshots(),
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                return const Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  child: SkeletonLoader(count: 2, height: 110),
-                );
-              }
-
-              if (snapshot.hasError) {
-                return const Padding(
-                  padding: EdgeInsets.all(16),
-                  child: UpriseErrorState(message: 'Could not load events.'),
-                );
-              }
-
-              if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                return const Padding(
-                  padding: EdgeInsets.all(16),
-                  child: UpriseEmptyState(
-                    icon: Icons.calendar_today_outlined,
-                    title: 'No upcoming events',
-                    subtitle: 'Check back later for new events from your organizations.',
-                  ),
-                );
-              }
-
-              final events = snapshot.data!.docs;
-              
-              return SizedBox(
-                height: 250,
-                child: ListView.builder(
-                  scrollDirection: Axis.horizontal,
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  itemCount: events.length,
-                  itemBuilder: (context, index) {
-                    final doc = events[index];
-                    final data = doc.data() as Map<String, dynamic>;
-                    
-                    // Get event date
-                    Timestamp? timestamp = data['date'];
-                    DateTime eventDate;
-                    
-                    if (timestamp != null) {
-                      eventDate = timestamp.toDate();
-                    } else {
-                      eventDate = DateTime.now();
-                    }
-                    
-                    final monthName = DateFormat('MMM').format(eventDate);
-                    final dayNumber = DateFormat('dd').format(eventDate);
-                    final formattedTime = data['startTime'] ?? 'TBA';
-                    final location = data['location'] ?? 'TBA';
-                    final title = data['title'] ?? 'Untitled Event';
-                    
-                    return Container(
-                      width: 260,
-                      margin: const EdgeInsets.only(right: 12),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(16),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.grey.withOpacity(0.1),
-                            blurRadius: 8,
-                            offset: const Offset(0, 2),
-                          ),
-                        ],
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          // Banner/Image
-                          ClipRRect(
-                            borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-                            child: data['bannerUrl'] != null && (data['bannerUrl'] as String).isNotEmpty
-                                ? Image.network(
-                                    data['bannerUrl'],
-                                    height: 120,
-                                    width: double.infinity,
-                                    fit: BoxFit.cover,
-                                    errorBuilder: (_, __, ___) => Container(
-                                      height: 120,
-                                      color: const Color(0xFFFF6B00).withOpacity(0.1),
-                                      child: const Icon(Icons.event, color: Color(0xFFFF6B00)),
-                                    ),
-                                  )
-                                : Container(
-                                    height: 120,
-                                    color: const Color(0xFFFF6B00).withOpacity(0.1),
-                                    child: const Icon(Icons.event, color: Color(0xFFFF6B00)),
-                                  ),
-                          ),
-                          
-                          Padding(
-                            padding: const EdgeInsets.all(12),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                // Date
-                                Row(
-                                  children: [
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                      decoration: BoxDecoration(
-                                        color: const Color(0xFFFF6B00).withOpacity(0.1),
-                                        borderRadius: BorderRadius.circular(8),
-                                      ),
-                                      child: Text(
-                                        '$monthName $dayNumber',
-                                        style: const TextStyle(
-                                          fontSize: 11,
-                                          fontWeight: FontWeight.w600,
-                                          color: Color(0xFFFF6B00),
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 8),
-                                // Title
-                                Text(
-                                  title,
-                                  style: const TextStyle(
-                                    fontSize: 15,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.black87,
-                                  ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                                const SizedBox(height: 4),
-                                // Time
-                                Row(
-                                  children: [
-                                    const Icon(Icons.access_time, size: 12, color: Colors.grey),
-                                    const SizedBox(width: 4),
-                                    Text(
-                                      formattedTime,
-                                      style: const TextStyle(fontSize: 11, color: Colors.grey),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 2),
-                                // Location
-                                Row(
-                                  children: [
-                                    const Icon(Icons.location_on, size: 12, color: Colors.grey),
-                                    const SizedBox(width: 4),
-                                    Expanded(
-                                      child: Text(
-                                        location,
-                                        style: const TextStyle(fontSize: 11, color: Colors.grey),
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    );
-                  },
+            actions: [
+              IconButton(
+                icon: Icon(
+                  Icons.shopping_cart_outlined,
+                  color: AppColors.primaryDark,
                 ),
-              );
-            },
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const StudentMerchandiseScreen(),
+                    ),
+                  );
+                },
+              ),
+              IconButton(
+                icon: Icon(
+                  Icons.notifications_outlined,
+                  color: AppColors.primaryDark,
+                ),
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const StudentNotificationsScreen(),
+                    ),
+                  );
+                },
+              ),
+            ],
           ),
-        ),
-        
-        // Announcements Section
-        SliverToBoxAdapter(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 24, 16, 8),
-            child: Text(
-              'Announcements',
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.bold,
+          
+          // Offline indicator
+          if (_isOffline)
+            SliverToBoxAdapter(
+              child: Container(
+                color: const Color(0xFFFFF3CD),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                child: const Row(
+                  children: [
+                    Icon(Icons.wifi_off_rounded, size: 14, color: Color(0xFF856404)),
+                    SizedBox(width: 6),
+                    Text(
+                      'Offline — showing cached data',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Color(0xFF856404),
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+          // Welcome Section
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'GOOD DAY,',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Colors.grey[600],
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 1.2,
+                    ),
                   ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'Hello, $userName',
+                    style: const TextStyle(
+                      fontSize: 28,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.black87,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Ready to explore today\'s campus activities?',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Colors.grey[500],
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
-        ),
-        
-        // Announcements Feed
-        const SliverToBoxAdapter(
-          child: AnnouncementsFeed(),
-        ),
 
-        const SliverToBoxAdapter(
-          child: SizedBox(height: 80),
-        ),
-      ],
+          // Quick Access Section with Label
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 4),
+              child: Text(
+                'Quick Access',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.grey[700],
+                ),
+              ),
+            ),
+          ),
+
+          // Quick Access Icons (Uniform color)
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  _QuickAccessItem(
+                    icon: Icons.calendar_today,
+                    label: 'Calendar',
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const StudentEventsScreen(),
+                        ),
+                      );
+                    },
+                  ),
+                  _QuickAccessItem(
+                    icon: Icons.event_note,
+                    label: 'My Events',
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const StudentEventsScreen(),
+                        ),
+                      );
+                    },
+                  ),
+                  _QuickAccessItem(
+                    icon: Icons.card_membership,
+                    label: 'Certs',
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const StudentCertificatesScreen(),
+                        ),
+                      );
+                    },
+                  ),
+                  _QuickAccessItem(
+                    icon: Icons.groups,
+                    label: 'Orgs',
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const StudentOrganizationsScreen(),
+                        ),
+                      );
+                    },
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          // Upcoming Events Section Header
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'Upcoming Events',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.black87,
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const StudentEventsScreen(),
+                        ),
+                      );
+                    },
+                    style: TextButton.styleFrom(
+                      foregroundColor: AppColors.primaryDark,
+                    ),
+                    child: const Text(
+                      'View all',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          
+          // Upcoming Events - Horizontal Scroll Cards
+          SliverToBoxAdapter(
+            child: StreamBuilder<QuerySnapshot>(
+              stream: FirebaseFirestore.instance
+                  .collection('events')
+                  .where('date', isGreaterThanOrEqualTo: Timestamp.now())
+                  .orderBy('date', descending: false)
+                  .limit(5)
+                  .snapshots(),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    child: SkeletonLoader(count: 2, height: 110),
+                  );
+                }
+
+                if (snapshot.hasError) {
+                  return const Padding(
+                    padding: EdgeInsets.all(16),
+                    child: UpriseErrorState(message: 'Could not load events.'),
+                  );
+                }
+
+                if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                  return const Padding(
+                    padding: EdgeInsets.all(16),
+                    child: UpriseEmptyState(
+                      icon: Icons.calendar_today_outlined,
+                      title: 'No upcoming events',
+                      subtitle: 'Check back later for new events from your organizations.',
+                    ),
+                  );
+                }
+
+                final events = snapshot.data!.docs;
+                
+                return SizedBox(
+                  height: 210,
+                  child: ListView.builder(
+                    scrollDirection: Axis.horizontal,
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    itemCount: events.length,
+                    itemBuilder: (context, index) {
+                      final doc = events[index];
+                      final data = doc.data() as Map<String, dynamic>;
+                      
+                      Timestamp? timestamp = data['date'];
+                      DateTime eventDate;
+                      
+                      if (timestamp != null) {
+                        eventDate = timestamp.toDate();
+                      } else {
+                        eventDate = DateTime.now();
+                      }
+                      
+                      final monthName = DateFormat('MMM').format(eventDate);
+                      final dayNumber = DateFormat('dd').format(eventDate);
+                      final formattedTime = data['startTime'] ?? 'TBA';
+                      final location = data['location'] ?? 'TBA';
+                      final title = data['title'] ?? 'Untitled Event';
+                      
+                      return Container(
+                        width: 220,
+                        margin: const EdgeInsets.only(right: 12),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(16),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.grey.withOpacity(0.1),
+                              blurRadius: 8,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            ClipRRect(
+                              borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+                              child: data['bannerUrl'] != null && (data['bannerUrl'] as String).isNotEmpty
+                                  ? Image.network(
+                                      data['bannerUrl'],
+                                      height: 100,
+                                      width: double.infinity,
+                                      fit: BoxFit.cover,
+                                      errorBuilder: (_, __, ___) => Container(
+                                        height: 100,
+                                        color: AppColors.primaryDark.withOpacity(0.1),
+                                        child: const Icon(Icons.event, color: AppColors.primaryDark),
+                                      ),
+                                    )
+                                  : Container(
+                                      height: 100,
+                                      color: AppColors.primaryDark.withOpacity(0.1),
+                                      child: const Icon(Icons.event, color: AppColors.primaryDark),
+                                    ),
+                            ),
+                            
+                            Padding(
+                              padding: const EdgeInsets.all(12),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                    decoration: BoxDecoration(
+                                      color: AppColors.primaryDark.withOpacity(0.1),
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    child: Text(
+                                      '$monthName $dayNumber',
+                                      style: TextStyle(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w600,
+                                        color: AppColors.primaryDark,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 6),
+                                  Text(
+                                    title,
+                                    style: const TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.black87,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Row(
+                                    children: [
+                                      const Icon(Icons.access_time, size: 11, color: Colors.grey),
+                                      const SizedBox(width: 3),
+                                      Expanded(
+                                        child: Text(
+                                          formattedTime,
+                                          style: const TextStyle(fontSize: 10, color: Colors.grey),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+                );
+              },
+            ),
+          ),
+          
+          // Announcements Section
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 24, 20, 8),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'Announcements',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.black87,
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const StudentAnnouncementsScreen(),
+                        ),
+                      );
+                    },
+                    style: TextButton.styleFrom(
+                      foregroundColor: AppColors.primaryDark,
+                    ),
+                    child: const Text(
+                      'See all',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          
+          // Announcements Feed
+          const SliverToBoxAdapter(
+            child: AnnouncementsFeed(),
+          ),
+
+          const SliverToBoxAdapter(
+            child: SizedBox(height: 80),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+// Quick Access Item (Uniform color - All same primaryDark)
+// ─────────────────────────────────────────────────────────────
+class _QuickAccessItem extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  const _QuickAccessItem({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Column(
+        children: [
+          Container(
+            width: 64,
+            height: 64,
+            decoration: BoxDecoration(
+              color: AppColors.primaryDark,
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: AppColors.primaryDark.withOpacity(0.25),
+                  blurRadius: 6,
+                  offset: const Offset(0, 3),
+                ),
+              ],
+            ),
+            child: Icon(
+              icon,
+              color: Colors.white,
+              size: 28,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: Colors.grey[700],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
