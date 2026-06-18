@@ -264,13 +264,19 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
                         children: [
                           Expanded(
                             child: ElevatedButton(
-                              onPressed: () => Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) =>
-                                      EditProfileScreen(profile: _profile),
-                                ),
-                              ),
+                              onPressed: () async {
+                                final result = await Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) =>
+                                        EditProfileScreen(profile: _profile),
+                                  ),
+                                );
+                                // If a new name was returned, refresh the profile
+                                if (result != null && result is String) {
+                                  _profile._loadUserData();
+                                }
+                              },
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: kOrange,
                                 foregroundColor: Colors.white,
@@ -996,7 +1002,7 @@ class _IdCard2 extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────
-// Edit Profile Screen
+// Edit Profile Screen - UPDATED with return value
 // ─────────────────────────────────────────────────────────────
 class EditProfileScreen extends StatefulWidget {
   final ProfileModel profile;
@@ -1059,8 +1065,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   }
 
   void _save() {
+    final newName = _fullNameCtrl.text.trim();
+    
     widget.profile.update(
-      fullName: _fullNameCtrl.text.trim(),
+      fullName: newName,
       email: _emailCtrl.text.trim(),
       mobile: _mobileCtrl.text.trim(),
       address: _addressCtrl.text.trim(),
@@ -1071,13 +1079,22 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       maritalStatus: _maritalStatusCtrl.text.trim(),
       placeOfBirth: _placeOfBirthCtrl.text.trim(),
     );
+    
+    // Update Firebase Auth display name
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      user.updateDisplayName(newName);
+    }
+    
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
         content: Text('Profile updated successfully!'),
         backgroundColor: kOrange,
       ),
     );
-    Navigator.pop(context);
+    
+    // Return the new name when popping
+    Navigator.pop(context, newName);
   }
 
   @override

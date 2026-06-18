@@ -4,7 +4,9 @@ const nodemailer = require("nodemailer");
 
 admin.initializeApp();
 
-// I-setup ang Gmail transporter using functions.config()
+// ─────────────────────────────────────────────
+//  EMAIL CONFIGURATION
+// ─────────────────────────────────────────────
 const transporter = nodemailer.createTransport({
   service: "gmail",
   auth: {
@@ -12,6 +14,129 @@ const transporter = nodemailer.createTransport({
     pass: functions.config().gmail.pass,
   },
 });
+
+// ─────────────────────────────────────────────
+//  🚀 AUTO-ADD slotsLeft TO ANY NEW EVENT
+//  This runs automatically when ANY event is created
+//  (Even from Firebase Console!)
+// ─────────────────────────────────────────────
+exports.autoAddSlotsLeft = functions.firestore
+    .document('events/{eventId}')
+    .onCreate(async (snap, context) => {
+        const data = snap.data();
+        const eventId = context.params.eventId;
+        
+        console.log(`📝 New event created: ${eventId}`);
+        console.log(`📊 Data:`, data);
+        
+        // Check if slotsLeft is missing
+        if (data.slotsLeft === undefined || data.slotsLeft === null) {
+            // Use capacity, default to 0 if not set
+            const capacity = data.capacity || 0;
+            
+            // Update the document with slotsLeft
+            await snap.ref.update({
+                slotsLeft: capacity
+            });
+            
+            console.log(`✅ Added slotsLeft: ${capacity} to event ${eventId}`);
+            console.log(`📊 Now showing: ${capacity}/${capacity} slots`);
+        } else {
+            console.log(`ℹ️ Event ${eventId} already has slotsLeft: ${data.slotsLeft}`);
+        }
+    });
+
+// ─────────────────────────────────────────────
+//  🔄 FIX EXISTING EVENTS (Callable Function)
+//  Call this from your app to fix all existing events
+// ─────────────────────────────────────────────
+exports.fixExistingEvents = functions.https.onCall(async (data, context) => {
+    // Security check - must be logged in
+    if (!context.auth) {
+        throw new functions.https.HttpsError("unauthenticated", "Must be logged in.");
+    }
+    
+    try {
+        const events = await admin.firestore().collection('events').get();
+        const batch = admin.firestore().batch();
+        let fixedCount = 0;
+        let skippedCount = 0;
+        
+        events.docs.forEach(doc => {
+            const d = doc.data();
+            // If slotsLeft is missing, add it
+            if (d.slotsLeft === undefined || d.slotsLeft === null) {
+                const capacity = d.capacity || 0;
+                batch.update(doc.ref, { slotsLeft: capacity });
+                fixedCount++;
+            } else {
+                skippedCount++;
+            }
+        });
+        
+        if (fixedCount > 0) {
+            await batch.commit();
+        }
+        
+        return {
+            success: true,
+            message: `Fixed ${fixedCount} events, ${skippedCount} already had slotsLeft`
+        };
+    } catch (error) {
+        console.error('❌ Error fixing events:', error);
+        return {
+            success: false,
+            error: error.message
+        };
+    }
+});
+
+// ─────────────────────────────────────────────
+//  📊 GET EVENT STATS (Callable Function)
+//  Call this to check how many events need fixing
+// ─────────────────────────────────────────────
+exports.getEventStats = functions.https.onCall(async (data, context) => {
+    if (!context.auth) {
+        throw new functions.https.HttpsError("unauthenticated", "Must be logged in.");
+    }
+    
+    try {
+        const events = await admin.firestore().collection('events').get();
+        let total = 0;
+        let missingSlotsLeft = 0;
+        let hasSlotsLeft = 0;
+        let totalCapacity = 0;
+        
+        events.docs.forEach(doc => {
+            const d = doc.data();
+            total++;
+            totalCapacity += (d.capacity || 0);
+            
+            if (d.slotsLeft === undefined || d.slotsLeft === null) {
+                missingSlotsLeft++;
+            } else {
+                hasSlotsLeft++;
+            }
+        });
+        
+        return {
+            success: true,
+            totalEvents: total,
+            eventsMissingSlotsLeft: missingSlotsLeft,
+            eventsWithSlotsLeft: hasSlotsLeft,
+            totalCapacity: totalCapacity
+        };
+    } catch (error) {
+        return {
+            success: false,
+            error: error.message
+        };
+    }
+});
+
+// ─────────────────────────────────────────────
+//  EXISTING EMAIL FUNCTIONS (Your original code)
+// ─────────────────────────────────────────────
 
 // Function for sending org credentials (for your existing admin screen)
 exports.sendOrgCredentials = functions.https.onCall(async (data, context) => {
@@ -70,7 +195,7 @@ exports.testEmail = functions.https.onCall(async (data, context) => {
   };
   
   await transporter.sendMail(mailOptions);
-  return { success: true, message: "Test email sent to $testEmail" };
+  return { success: true, message: `Test email sent to ${testEmail}` };
 });
 
 // Callable function to process a single queued email

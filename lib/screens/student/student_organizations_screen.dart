@@ -25,21 +25,12 @@ class StudentOrganizationsScreen extends StatefulWidget {
       _StudentOrganizationsScreenState();
 }
 
-class _StudentOrganizationsScreenState extends State<StudentOrganizationsScreen>
-    with SingleTickerProviderStateMixin {
-  late TabController _tabController;
+class _StudentOrganizationsScreenState extends State<StudentOrganizationsScreen> {
   String _searchQuery = '';
   final TextEditingController _searchController = TextEditingController();
 
   @override
-  void initState() {
-    super.initState();
-    _tabController = TabController(length: 2, vsync: this, initialIndex: 1);
-  }
-
-  @override
   void dispose() {
-    _tabController.dispose();
     _searchController.dispose();
     super.dispose();
   }
@@ -76,83 +67,8 @@ class _StudentOrganizationsScreenState extends State<StudentOrganizationsScreen>
         foregroundColor: Colors.black,
         elevation: 0,
         centerTitle: true,
-        bottom: TabBar(
-          controller: _tabController,
-          labelColor: Colors.orange,
-          unselectedLabelColor: Colors.grey,
-          indicatorColor: Colors.orange,
-          indicatorWeight: 3,
-          labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-          unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w500, fontSize: 13),
-          tabs: const [
-            Tab(text: 'My Orgs'),
-            Tab(text: 'Discover'),
-          ],
-        ),
       ),
-      body: TabBarView(
-        controller: _tabController,
-        children: [
-          // ── MY ORG TAB ──
-          _buildMyOrgsTab(),
-
-          // ── DISCOVER TAB ──
-          _buildDiscoverTab(),
-        ],
-      ),
-    );
-  }
-
-  // ── MY ORG TAB ──
-  Widget _buildMyOrgsTab() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            Icons.groups_outlined,
-            size: 80,
-            color: Colors.grey.shade400,
-          ),
-          const SizedBox(height: 16),
-          Text(
-            'No organizations yet',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w700,
-              color: Colors.grey.shade600,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Join organizations to see them here.',
-            style: TextStyle(
-              fontSize: 14,
-              color: Colors.grey.shade500,
-            ),
-          ),
-          const SizedBox(height: 24),
-          ElevatedButton(
-            onPressed: () {
-              _tabController.animateTo(1);
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.orange,
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(30),
-              ),
-            ),
-            child: const Text(
-              'Discover Organizations',
-              style: TextStyle(
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-        ],
-      ),
+      body: _buildDiscoverTab(),
     );
   }
 

@@ -35,15 +35,47 @@ class StudentHomeScreen extends StatefulWidget {
 
 class _StudentHomeScreenState extends State<StudentHomeScreen> {
   int _currentIndex = 0;
+  String _userName = '';
   
-  final List<Widget> _screens = [
-    const _HomeContent(),
-    const StudentAnnouncementsScreen(),
-    const StudentEventsScreen(),
-    const StudentOrganizationsScreen(),
-    const StudentCertificatesScreen(),
-    const StudentProfileScreen(),
-  ];
+  // Key for the home content to refresh it
+  final GlobalKey<_HomeContentState> _homeKey = GlobalKey<_HomeContentState>();
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUserName();
+  }
+
+  Future<void> _loadUserName() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      try {
+        final snapshot = await FirebaseFirestore.instance
+            .collection('students')
+            .where('uid', isEqualTo: user.uid)
+            .limit(1)
+            .get();
+
+        if (snapshot.docs.isNotEmpty) {
+          final data = snapshot.docs.first.data();
+          setState(() {
+            _userName = data['fullName'] ?? user.displayName ?? user.email?.split('@').first ?? 'Student';
+          });
+        }
+      } catch (_) {
+        // Keep default name
+      }
+    }
+  }
+
+  // Method to refresh user name when home tab is tapped
+  void _refreshUserName() async {
+    await _loadUserName();
+    // Also refresh the home content if it's mounted
+    if (_homeKey.currentState != null) {
+      _homeKey.currentState!.refreshData();
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -56,6 +88,11 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
           setState(() {
             _currentIndex = index;
           });
+          
+          // If home tab is tapped (index 0), refresh the name
+          if (index == 0) {
+            _refreshUserName();
+          }
         },
         items: const [
           BottomNavItem(Icons.home_outlined, Icons.home, 'Home'),
@@ -68,10 +105,21 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
       ),
     );
   }
+
+  List<Widget> get _screens => [
+    _HomeContent(key: _homeKey, userName: _userName),
+    const StudentAnnouncementsScreen(),
+    const StudentEventsScreen(),
+    const StudentOrganizationsScreen(),
+    const StudentCertificatesScreen(),
+    const StudentProfileScreen(),
+  ];
 }
 
 class _HomeContent extends StatefulWidget {
-  const _HomeContent();
+  final String userName;
+  
+  const _HomeContent({super.key, required this.userName});
 
   @override
   State<_HomeContent> createState() => _HomeContentState();
@@ -102,6 +150,13 @@ class _HomeContentState extends State<_HomeContent> {
   void dispose() {
     _cacheMonitor?.cancel();
     super.dispose();
+  }
+
+  // Method to refresh data when home tab is tapped
+  void refreshData() {
+    setState(() {
+      // This will trigger a rebuild with the new userName from parent
+    });
   }
 
   Future<void> _loadOrgData() async {
@@ -145,7 +200,10 @@ class _HomeContentState extends State<_HomeContent> {
   @override
   Widget build(BuildContext context) {
     final user = FirebaseAuth.instance.currentUser;
-    final userName = user?.displayName ?? user?.email?.split('@').first ?? 'Student';
+    // Use the userName passed from parent, or fallback
+    final userName = widget.userName.isNotEmpty 
+        ? widget.userName 
+        : user?.displayName ?? user?.email?.split('@').first ?? 'Student';
 
     return Container(
       color: AppColors.background,
@@ -235,7 +293,7 @@ class _HomeContentState extends State<_HomeContent> {
               ),
             ),
 
-          // Welcome Section
+          // Welcome Section - Uses updated userName
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
