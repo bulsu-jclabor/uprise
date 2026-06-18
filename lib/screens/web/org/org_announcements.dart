@@ -210,6 +210,7 @@ class _FilterDropdown extends StatelessWidget {
 Widget _audienceBadge(String audience) {
   final Map<String, _BadgeTheme> map = {
     'Public':       _BadgeTheme(_C.successBg, _C.success, Icons.public_rounded),
+    'Bulsuan':      _BadgeTheme(const Color(0xFFF3E8FF), const Color(0xFF7C3AED), Icons.account_balance_rounded),
     'CICT Only':    _BadgeTheme(_C.infoBg, _C.info, Icons.school_rounded),
     'Members Only': _BadgeTheme(_C.warningBg, _C.warning, Icons.group_rounded),
   };
@@ -234,12 +235,31 @@ class _BadgeTheme {
   const _BadgeTheme(this.bg, this.fg, this.icon);
 }
 
+IconData _audienceIcon(String audience) {
+  switch (audience) {
+    case 'Public':
+      return Icons.public_rounded;
+    case 'Bulsuan':
+      return Icons.account_balance_rounded;
+    case 'CICT Only':
+      return Icons.school_rounded;
+    default:
+      return Icons.group_rounded;
+  }
+}
+
 // ── Linkable events (approved events with a published registration form) ──────
 class _LinkableEvent {
   final String eventId;
   final String proposalId;
   final String title;
-  const _LinkableEvent({required this.eventId, required this.proposalId, required this.title});
+  final String audience;
+  const _LinkableEvent({
+    required this.eventId,
+    required this.proposalId,
+    required this.title,
+    required this.audience,
+  });
 }
 
 Future<List<_LinkableEvent>> _fetchLinkableEvents(String orgId) async {
@@ -260,20 +280,31 @@ Future<List<_LinkableEvent>> _fetchLinkableEvents(String orgId) async {
         .get();
     if (!formDoc.exists) continue;
     if (formDoc.data()?['isPublished'] != true) continue;
+
+    // Audience is sourced from the event itself (carried over from the
+    // proposal on approval) so it stays in sync with what was approved.
+    String audience = (data['audience'] ?? '').toString();
+    if (audience.isEmpty) {
+      final proposalDoc = await FirebaseFirestore.instance
+          .collection('event_proposals')
+          .doc(proposalId)
+          .get();
+      audience = (proposalDoc.data()?['audience'] ?? 'Public').toString();
+    }
+
     results.add(_LinkableEvent(
       eventId: doc.id,
       proposalId: proposalId,
       title: (data['title'] ?? 'Event').toString(),
+      audience: audience,
     ));
   }
   return results;
 }
 
 // ── Categories ───────────────────────────────────────────────────────────────
-const List<String> kDefaultAnnouncementCategories = [
-  'General', 'New Hire', 'SOP Updates', 'Policy Updates',
-  'Promotion', 'Transfer', 'Training', 'Special',
-];
+// No fixed defaults — orgs create and manage their own categories.
+const List<String> kDefaultAnnouncementCategories = [];
 
 const Map<String, _BadgeTheme> _categoryThemes = {
   'General':        _BadgeTheme(Color(0xFFF1F5F9), Color(0xFF475569), Icons.campaign_outlined),
@@ -516,9 +547,6 @@ class _OrgAnnouncementsScreenState extends State<OrgAnnouncementsScreen> {
           return Padding(
             padding: EdgeInsets.fromLTRB(horizontalPadding, 20, horizontalPadding, 0),
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text('Announcement',
-                  style: GoogleFonts.beVietnamPro(fontSize: 22, fontWeight: FontWeight.w800, color: _C.charcoal)),
-              const SizedBox(height: 16),
               Expanded(
                 child: isWide
                     ? Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -653,7 +681,7 @@ class _OrgAnnouncementsScreenState extends State<OrgAnnouncementsScreen> {
     );
   }
 
-  Future<void> _promptAddCategory() async {
+  Future<String?> _promptAddCategory() async {
     final ctrl = TextEditingController();
     final result = await showDialog<String>(
       context: context,
@@ -692,6 +720,7 @@ class _OrgAnnouncementsScreenState extends State<OrgAnnouncementsScreen> {
     if (result != null && result.isNotEmpty && !_allCategories.contains(result)) {
       setState(() => _customCategories.add(result));
     }
+    return (result != null && result.isNotEmpty) ? result : null;
   }
 
   // ── Category chips row (narrow layouts) ─────────────────────────────────────
@@ -1108,7 +1137,7 @@ class _OrgAnnouncementsScreenState extends State<OrgAnnouncementsScreen> {
     String? imageBase64 = existing?.imageBase64;
     List<AttachmentBase64> attachments = List.from(existing?.attachmentsBase64 ?? []);
     String targetAudience = existing?.targetAudience ?? 'Members Only';
-    String category = existing?.category ?? 'General';
+    String category = existing?.category ?? '';
     bool isSubmitting = false;
     bool isScheduled  = existing?.scheduledPublishDate != null;
     DateTime? scheduledDate;
@@ -1195,18 +1224,46 @@ class _OrgAnnouncementsScreenState extends State<OrgAnnouncementsScreen> {
                               border: Border.all(color: _C.borderSoft),
                             ),
                             child: DropdownButtonFormField<String>(
-                              value: _allCategories.contains(category) ? category : _allCategories.first,
+                              value: _allCategories.contains(category) ? category : null,
                               decoration: InputDecoration(
                                 labelText: 'Category',
+                                hintText: _allCategories.isEmpty
+                                    ? 'No categories yet — add one'
+                                    : 'Select a category',
+                                hintStyle: GoogleFonts.beVietnamPro(fontSize: 13, color: _C.textFaint),
                                 labelStyle: GoogleFonts.beVietnamPro(fontSize: 13, color: _C.darkGray),
-                                prefixIcon: Icon(_categoryTheme(category).icon, size: 18, color: _C.textFaint),
+                                prefixIcon: Icon(
+                                    category.isNotEmpty ? _categoryTheme(category).icon : Icons.label_outline_rounded,
+                                    size: 18, color: _C.textFaint),
                                 border: InputBorder.none,
                                 contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                               ),
-                              items: _allCategories
-                                  .map((c) => DropdownMenuItem(value: c, child: Text(c, style: GoogleFonts.beVietnamPro(fontSize: 13))))
-                                  .toList(),
-                              onChanged: (v) => setDlg(() => category = v!),
+                              items: [
+                                ..._allCategories.map((c) => DropdownMenuItem(
+                                      value: c,
+                                      child: Text(c, style: GoogleFonts.beVietnamPro(fontSize: 13)),
+                                    )),
+                                DropdownMenuItem(
+                                  value: '__add_new__',
+                                  child: Row(mainAxisSize: MainAxisSize.min, children: [
+                                    const Icon(Icons.add_rounded, size: 16, color: _C.primaryDark),
+                                    const SizedBox(width: 6),
+                                    Text('Add new category',
+                                        style: GoogleFonts.beVietnamPro(
+                                            fontSize: 13, fontWeight: FontWeight.w600, color: _C.primaryDark)),
+                                  ]),
+                                ),
+                              ],
+                              onChanged: (v) async {
+                                if (v == '__add_new__') {
+                                  final added = await _promptAddCategory();
+                                  if (added != null) setDlg(() => category = added);
+                                } else if (v != null) {
+                                  setDlg(() => category = v);
+                                }
+                              },
+                              validator: (_) =>
+                                  category.trim().isEmpty ? 'Please select or add a category' : null,
                             ),
                           ),
                           const SizedBox(height: 14),
@@ -1291,6 +1348,8 @@ class _OrgAnnouncementsScreenState extends State<OrgAnnouncementsScreen> {
                                       linkedEventId = ev.eventId;
                                       linkedProposalId = ev.proposalId;
                                       linkedEventTitle = ev.title;
+                                      // Audience is auto-determined from the linked event.
+                                      targetAudience = ev.audience;
                                     }
                                   }),
                                 ),
@@ -1300,49 +1359,62 @@ class _OrgAnnouncementsScreenState extends State<OrgAnnouncementsScreen> {
                           const SizedBox(height: 20),
 
                           _sectionLabel('Settings', icon: Icons.tune_rounded),
-                          // Audience dropdown
-                          Container(
-                            decoration: BoxDecoration(
-                              color: _C.surface,
-                              borderRadius: BorderRadius.circular(_DS.radiusSm),
-                              border: Border.all(color: _C.borderSoft),
-                            ),
-                            child: DropdownButtonFormField<String>(
-                              value: targetAudience,
-                              decoration: InputDecoration(
-                                labelText: 'Target Audience',
-                                labelStyle: GoogleFonts.beVietnamPro(
-                                    fontSize: 13, color: _C.darkGray),
-                                prefixIcon: const Icon(Icons.people_outline,
-                                    size: 18, color: _C.textFaint),
-                                border: InputBorder.none,
-                                contentPadding: const EdgeInsets.symmetric(
-                                    horizontal: 16, vertical: 14),
+                          // Audience — auto-determined when linked to an event,
+                          // otherwise the org picks it manually.
+                          if (linkedProposalId != null)
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                              decoration: BoxDecoration(
+                                color: _C.infoBg,
+                                borderRadius: BorderRadius.circular(_DS.radiusSm),
+                                border: Border.all(color: _C.info.withAlpha(64)),
                               ),
-                              items: ['Public', 'CICT Only', 'Members Only']
-                                  .map((o) => DropdownMenuItem(
-                                        value: o,
-                                        child: Row(children: [
-                                          Icon(
-                                            o == 'Public'
-                                                ? Icons.public_rounded
-                                                : o == 'CICT Only'
-                                                    ? Icons.school_rounded
-                                                    : Icons.group_rounded,
-                                            size: 15,
-                                            color: _C.primaryDark,
-                                          ),
-                                          const SizedBox(width: 8),
-                                          Text(o,
-                                              style: GoogleFonts.beVietnamPro(
-                                                  fontSize: 13)),
-                                        ]),
-                                      ))
-                                  .toList(),
-                              onChanged: (v) =>
-                                  setDlg(() => targetAudience = v!),
+                              child: Row(children: [
+                                _audienceBadge(targetAudience),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Text(
+                                    'Automatically determined by the linked event',
+                                    style: GoogleFonts.beVietnamPro(fontSize: 11.5, color: _C.info),
+                                  ),
+                                ),
+                              ]),
+                            )
+                          else
+                            Container(
+                              decoration: BoxDecoration(
+                                color: _C.surface,
+                                borderRadius: BorderRadius.circular(_DS.radiusSm),
+                                border: Border.all(color: _C.borderSoft),
+                              ),
+                              child: DropdownButtonFormField<String>(
+                                value: targetAudience,
+                                decoration: InputDecoration(
+                                  labelText: 'Target Audience',
+                                  labelStyle: GoogleFonts.beVietnamPro(
+                                      fontSize: 13, color: _C.darkGray),
+                                  prefixIcon: const Icon(Icons.people_outline,
+                                      size: 18, color: _C.textFaint),
+                                  border: InputBorder.none,
+                                  contentPadding: const EdgeInsets.symmetric(
+                                      horizontal: 16, vertical: 14),
+                                ),
+                                items: ['Public', 'Bulsuan', 'CICT Only', 'Members Only']
+                                    .map((o) => DropdownMenuItem(
+                                          value: o,
+                                          child: Row(children: [
+                                            Icon(_audienceIcon(o), size: 15, color: _C.primaryDark),
+                                            const SizedBox(width: 8),
+                                            Text(o,
+                                                style: GoogleFonts.beVietnamPro(
+                                                    fontSize: 13)),
+                                          ]),
+                                        ))
+                                    .toList(),
+                                onChanged: (v) =>
+                                    setDlg(() => targetAudience = v!),
+                              ),
                             ),
-                          ),
                           const SizedBox(height: 14),
 
                           // Schedule
@@ -2053,17 +2125,21 @@ class _PostCardState extends State<_PostCard> {
             ),
           ),
 
-        // ── Banner image ─────────────────────────────────────────────────────
+        // ── Banner image (shown in full, never cropped) ───────────────────────
         if (hasImage) ...[
           const SizedBox(height: 12),
-          Image.memory(
-            base64Decode(a.imageBase64!),
+          Container(
             width: double.infinity,
-            height: 280,
-            fit: BoxFit.cover,
-            errorBuilder: (_, __, ___) => Container(
-              height: 280, color: _C.surface,
-              child: const Icon(Icons.broken_image, color: _C.textFaint),
+            constraints: const BoxConstraints(maxHeight: 480),
+            color: _C.surface,
+            child: Image.memory(
+              base64Decode(a.imageBase64!),
+              width: double.infinity,
+              fit: BoxFit.contain,
+              errorBuilder: (_, __, ___) => Container(
+                height: 280, color: _C.surface,
+                child: const Icon(Icons.broken_image, color: _C.textFaint),
+              ),
             ),
           ),
         ],

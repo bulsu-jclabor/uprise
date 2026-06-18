@@ -1285,7 +1285,7 @@ class _SubmitProposalModalState extends State<_SubmitProposalModal> {
     'Workshop', 'Seminar', 'Competition', 'General Assembly',
     'Social', 'Outreach', 'Sports', 'Academic', 'Technical', 'Cultural', 'Other',
   ];
-  static const _audiences = ['Public', 'CICT Only', 'Members Only'];
+  static const _audiences = ['Public', 'CICT Only', 'Members Only', 'Bulsuan'];
 
   @override
   void initState() {

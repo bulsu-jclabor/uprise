@@ -10,6 +10,8 @@ import 'package:file_picker/file_picker.dart';
 import '../../../services/activity_logger.dart' as activity_log;
 import '../../../services/firestore_collections.dart';
 import '../../../utils/platform_file_utils.dart' as platform_file_utils;
+import '../../../widgets/admin_export_button.dart';
+import '../../theme/app_theme.dart';
 import 'export_util.dart';
 import 'export_pdf.dart';
 
@@ -20,11 +22,12 @@ class _DS {
   static const double radiusSm   = 8;
   static const double radiusPill = 100;
 
-  static const Color primary     = Color(0xFFEA580C);
+  // Same brand color org_event_proposals.dart uses, so both screens are on-themed.
+  static const Color primary     = UpriseColors.primaryDark;
 
   static final cardShadow = [
     BoxShadow(
-      color: Colors.black.withOpacity(0.06),
+      color: Colors.black.withAlpha(15),
       blurRadius: 12,
       offset: const Offset(0, 4),
     ),
@@ -205,31 +208,28 @@ class _OrgLetterRequestScreenState extends State<OrgLetterRequestScreen> {
   // ── Build ─────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
-    final width = MediaQuery.of(context).size.width;
-    final isMobile = width < 720;
-    final isTablet = width >= 720 && width < 1200;
-    final horizontalPadding = isMobile ? 16.0 : (isTablet ? 22.0 : 28.0);
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isMobile = screenWidth < 768;
+    final isTablet = screenWidth < 1200;
 
     return Scaffold(
       backgroundColor: const Color(0xFFFBFCFE),
-      body: Padding(
-        padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildStatsRow(isMobile, horizontalPadding),
-            _buildToolbar(isMobile, isTablet, horizontalPadding),
-            const SizedBox(height: 16),
-            Expanded(child: _buildTable(horizontalPadding)),
-            const SizedBox(height: 24),
-          ],
-        ),
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildStatsRow(isMobile, isTablet),
+          _buildToolbar(isMobile, isTablet),
+          SizedBox(height: isMobile ? 12 : 16),
+          Expanded(child: _buildTable(isMobile, isTablet)),
+          SizedBox(height: isMobile ? 16 : 24),
+        ],
       ),
     );
   }
 
   // ── Stats Row ─────────────────────────────────────────────────────
-  Widget _buildStatsRow(bool isMobile, double horizontalPadding) {
+  Widget _buildStatsRow(bool isMobile, bool isTablet) {
+    final horizontalPadding = isMobile ? 16.0 : (isTablet ? 20.0 : 28.0);
     return StreamBuilder<QuerySnapshot>(
       stream: _requestsStream,
       builder: (context, snapshot) {
@@ -329,7 +329,8 @@ class _OrgLetterRequestScreenState extends State<OrgLetterRequestScreen> {
   }
 
   // ── Toolbar ───────────────────────────────────────────────────────
-  Widget _buildToolbar(bool isMobile, bool isTablet, double horizontalPadding) {
+  Widget _buildToolbar(bool isMobile, bool isTablet) {
+    final horizontalPadding = isMobile ? 16.0 : (isTablet ? 20.0 : 28.0);
     final fieldWidth = isMobile ? double.infinity : (isTablet ? 260.0 : 340.0);
     final searchField = SizedBox(
       width: fieldWidth,
@@ -382,10 +383,9 @@ class _OrgLetterRequestScreenState extends State<OrgLetterRequestScreen> {
           _currentPage = 1;
         }),
       ),
-      _ExportButton(
-        orgId: widget.orgId,
-        statusFilter: _statusFilter,
-        searchTerm: _searchController.text.trim(),
+      AdminExportButton(
+        label: 'Export',
+        onSelected: (format) => _exportRequests(format),
       ),
       _ToolbarButton(
         label: 'New Request',
@@ -430,7 +430,8 @@ class _OrgLetterRequestScreenState extends State<OrgLetterRequestScreen> {
   }
 
   // ── Table ─────────────────────────────────────────────────────────
-  Widget _buildTable(double horizontalPadding) {
+  Widget _buildTable(bool isMobile, bool isTablet) {
+    final horizontalPadding = isMobile ? 16.0 : (isTablet ? 20.0 : 28.0);
     return StreamBuilder<QuerySnapshot>(
       stream: _requestsStream,
       builder: (context, snapshot) {
@@ -482,8 +483,8 @@ class _OrgLetterRequestScreenState extends State<OrgLetterRequestScreen> {
             ? <LetterRequestModel>[]
             : requests.sublist(start, end);
 
-        return Container(
-          margin: EdgeInsets.zero,
+        final tableContent = Container(
+          margin: EdgeInsets.symmetric(horizontal: horizontalPadding),
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(14),
@@ -508,6 +509,13 @@ class _OrgLetterRequestScreenState extends State<OrgLetterRequestScreen> {
             ],
           ),
         );
+
+        return isMobile
+            ? SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: tableContent,
+              )
+            : tableContent;
       },
     );
   }
@@ -515,10 +523,10 @@ class _OrgLetterRequestScreenState extends State<OrgLetterRequestScreen> {
   Widget _buildTableHeader() {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 13),
-      decoration: const BoxDecoration(
-        color: Color(0xFFFFF7ED),
-        borderRadius: BorderRadius.vertical(top: Radius.circular(14)),
-        border: Border(bottom: BorderSide(color: Color(0xFFFB923C))),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF7ED),
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(14)),
+        border: Border(bottom: BorderSide(color: _DS.primary.withAlpha(60))),
       ),
       child: Row(children: [
         Expanded(flex: 2, child: _headerCell('LETTER ID')),
@@ -830,6 +838,76 @@ class _OrgLetterRequestScreenState extends State<OrgLetterRequestScreen> {
       _showSnack('Request archived successfully');
     } catch (e) {
       _showSnack('Error: $e', isError: true);
+    }
+  }
+
+  Future<void> _exportRequests(String format) async {
+    final searchTerm = _searchController.text.trim().toLowerCase();
+    try {
+      var snap = await FirestoreCollections.letterRequests
+          .where('orgId', isEqualTo: widget.orgId)
+          .where('isArchived', isEqualTo: false)
+          .orderBy('timestamp', descending: true)
+          .get();
+      var docs = snap.docs;
+
+      if (_statusFilter != 'All') {
+        final fv = _statusFilter == 'Needs Revision'
+            ? 'revision'
+            : _statusFilter.toLowerCase();
+        docs = docs.where((d) => (d.data() as Map)['status'] == fv).toList();
+      }
+      if (searchTerm.isNotEmpty) {
+        docs = docs.where((d) {
+          final data = d.data() as Map;
+          return (data['letterId'] ?? '').toString().toLowerCase().contains(searchTerm) ||
+              (data['subject'] ?? '').toString().toLowerCase().contains(searchTerm) ||
+              (data['message'] ?? '').toString().toLowerCase().contains(searchTerm);
+        }).toList();
+      }
+
+      if (docs.isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('No data to export'),
+            behavior: SnackBarBehavior.floating,
+          ));
+        }
+        return;
+      }
+
+      final requests = docs.map((d) => LetterRequestModel.fromFirestore(d)).toList();
+      final headers = [
+        'Letter ID', 'Type', 'Subject', 'Message',
+        'Date Submitted', 'Status', 'Revision Notes',
+      ];
+      final rows = requests.map((r) => [
+        r.letterId,
+        r.letterType,
+        r.subject,
+        r.message ?? '',
+        DateFormat('yyyy-MM-dd').format(r.timestamp.toDate()),
+        r.status,
+        r.revisionNote ?? '',
+      ]).toList();
+
+      final now = DateTime.now().toString().substring(0, 10);
+
+      if (format == 'csv') {
+        final csv = [headers, ...rows]
+            .map((row) => row.map((c) => '"${c.replaceAll('"', '""')}"').join(','))
+            .join('\n');
+        await OrgExportUtil.saveText(csv, 'letter_requests_$now.csv', mimeType: 'text/csv');
+      } else if (format == 'pdf') {
+        final pdfBytes = await OrgExportPdf.generateTablePdf(
+          title: 'Letter Requests',
+          headers: headers,
+          rows: rows,
+        );
+        await OrgExportUtil.saveBytes(pdfBytes, 'letter_requests_$now.pdf', mimeType: 'application/pdf');
+      }
+    } catch (e) {
+      _showSnack('Export failed: $e', isError: true);
     }
   }
 
@@ -1984,168 +2062,6 @@ class _LetterRequestModalState
         ),
       ),
     );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Export Button
-// ─────────────────────────────────────────────────────────────────────────────
-class _ExportButton extends StatelessWidget {
-  final String orgId, statusFilter, searchTerm;
-  const _ExportButton({
-    required this.orgId,
-    required this.statusFilter,
-    required this.searchTerm,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return PopupMenuButton<String>(
-      tooltip: 'Export',
-      offset: const Offset(0, 44),
-      shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(10)),
-      itemBuilder: (_) => [
-        PopupMenuItem(
-          value: 'csv',
-          child: Row(children: [
-            const Icon(Icons.table_chart_outlined,
-                size: 16, color: Color(0xFF374151)),
-            const SizedBox(width: 10),
-            Text('Export CSV',
-                style: GoogleFonts.beVietnamPro(fontSize: 13)),
-          ]),
-        ),
-        PopupMenuItem(
-          value: 'pdf',
-          child: Row(children: [
-            const Icon(Icons.picture_as_pdf_outlined,
-                size: 16, color: Color(0xFF374151)),
-            const SizedBox(width: 10),
-            Text('Export PDF',
-                style: GoogleFonts.beVietnamPro(fontSize: 13)),
-          ]),
-        ),
-      ],
-      onSelected: (choice) => _doExport(context, choice),
-      child: Container(
-        height: 40,
-        padding: const EdgeInsets.symmetric(horizontal: 14),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: _DS.primary),
-        ),
-        child: Row(children: [
-          Icon(Icons.download_outlined,
-              size: 16, color: _DS.primary),
-          const SizedBox(width: 6),
-          Text('Export',
-              style: GoogleFonts.beVietnamPro(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  color: _DS.primary)),
-          const SizedBox(width: 4),
-          Icon(Icons.keyboard_arrow_down_rounded,
-              size: 16, color: _DS.primary),
-        ]),
-      ),
-    );
-  }
-
-  Future<void> _doExport(
-      BuildContext context, String format) async {
-    try {
-      var snap = await FirestoreCollections.letterRequests
-          .where('orgId', isEqualTo: orgId)
-          .where('isArchived', isEqualTo: false)
-          .orderBy('timestamp', descending: true)
-          .get();
-      var docs = snap.docs;
-
-      if (statusFilter != 'All') {
-        final fv = statusFilter == 'Needs Revision'
-            ? 'revision'
-            : statusFilter.toLowerCase();
-        docs = docs
-            .where((d) => (d.data() as Map)['status'] == fv)
-            .toList();
-      }
-      if (searchTerm.isNotEmpty) {
-        docs = docs.where((d) {
-          final data = d.data() as Map;
-          return (data['letterId'] ?? '')
-                  .toString()
-                  .toLowerCase()
-                  .contains(searchTerm) ||
-              (data['subject'] ?? '')
-                  .toString()
-                  .toLowerCase()
-                  .contains(searchTerm) ||
-              (data['message'] ?? '')
-                  .toString()
-                  .toLowerCase()
-                  .contains(searchTerm);
-        }).toList();
-      }
-
-      if (docs.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('No data to export.',
-              style: GoogleFonts.beVietnamPro()),
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(8)),
-        ));
-        return;
-      }
-
-      final requests =
-          docs.map((d) => LetterRequestModel.fromFirestore(d)).toList();
-      final headers = [
-        'Letter ID', 'Type', 'Subject', 'Message',
-        'Date Submitted', 'Status', 'Revision Notes',
-      ];
-      final rows = requests.map((r) => [
-        r.letterId,
-        r.letterType,
-        r.subject,
-        r.message ?? '',
-        DateFormat('yyyy-MM-dd').format(r.timestamp.toDate()),
-        r.status,
-        r.revisionNote ?? '',
-      ]).toList();
-
-      final now = DateTime.now().toString().substring(0, 10);
-
-      if (format == 'csv') {
-        final csv = [headers, ...rows]
-            .map((row) =>
-                row.map((c) => '"${c.replaceAll('"', '""')}"').join(','))
-            .join('\n');
-        await OrgExportUtil.saveText(csv,
-            'letter_requests_$now.csv',
-            mimeType: 'text/csv');
-      } else if (format == 'pdf') {
-        final pdfBytes = await OrgExportPdf.generateTablePdf(
-          title: 'Letter Requests',
-          headers: headers,
-          rows: rows,
-        );
-        await OrgExportUtil.saveBytes(pdfBytes,
-            'letter_requests_$now.pdf',
-            mimeType: 'application/pdf');
-      }
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('Export failed: $e',
-            style: GoogleFonts.beVietnamPro(color: Colors.white)),
-        backgroundColor: const Color(0xFFDC2626),
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(8)),
-      ));
-    }
   }
 }
 

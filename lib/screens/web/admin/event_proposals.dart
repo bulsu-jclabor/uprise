@@ -1112,7 +1112,8 @@ class _EventProposalsState extends State<EventProposals> {
       final List<String> resources = (data['resources'] is List) ? List<String>.from(data['resources']) : [];
       final List<String> labPreparation = (data['labPreparation'] is List) ? List<String>.from(data['labPreparation']) : [];
       final List<String> tags = (data['tags'] is List) ? List<String>.from(data['tags']) : [];
-      
+      final audience = (data['audience'] ?? 'Public').toString();
+
       final eventData = {
         'orgId': orgId,
         'orgName': orgName,
@@ -1120,6 +1121,7 @@ class _EventProposalsState extends State<EventProposals> {
         'description': description,
         'location': location,
         'category': category,
+        'audience': audience,
         'date': Timestamp.fromDate(date),
         'startTime': startTime,
         'endTime': endTime,

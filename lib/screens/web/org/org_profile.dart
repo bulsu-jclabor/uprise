@@ -39,6 +39,29 @@ Widget _buildImageWidget(String url, {BoxFit fit = BoxFit.cover, Widget? errorWi
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Adviser model — mirrors the `Adviser` shape admin's organization_management
+// screen already writes/reads (name/title/email/phone), capped at 2 per org.
+// ─────────────────────────────────────────────────────────────────────────────
+class AdviserInfo {
+  final String name;
+  final String title;
+  final String email;
+  final String phone;
+  const AdviserInfo({this.name = '', this.title = '', this.email = '', this.phone = ''});
+
+  factory AdviserInfo.fromMap(Map<String, dynamic> map) => AdviserInfo(
+        name: map['name'] ?? '',
+        title: map['title'] ?? '',
+        email: map['email'] ?? '',
+        phone: map['phone'] ?? '',
+      );
+
+  Map<String, dynamic> toMap() => {'name': name, 'title': title, 'email': email, 'phone': phone};
+
+  bool get isEmpty => name.trim().isEmpty;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Design Tokens — identical to StudentAccounts / OrgAnnouncements
 // ─────────────────────────────────────────────────────────────────────────────
 class _C {
@@ -173,11 +196,11 @@ class _OrgProfileScreenState extends State<OrgProfileScreen> {
   String _instagram = '';
   String _twitter = '';
   String _gmail = '';
-  String _adviserName = '';
-  String _adviserEmail = '';
-  String _adviserPhone = '';
+  // Orgs can have up to 2 advisers (same cap admin enforces on its side).
+  // The photo is only kept for the primary (first) adviser, matching the
+  // existing org-doc schema admin already writes to.
+  List<AdviserInfo> _advisers = [];
   String _adviserPhotoUrl = '';
-  String _adviserTitle = '';
   bool _loading = true;
 
   @override
@@ -199,6 +222,28 @@ class _OrgProfileScreenState extends State<OrgProfileScreen> {
       if (doc.exists) {
         final data = doc.data()!;
         _syncOrganizationOfficersIfNeeded(data);
+
+        // `advisers` is the array admin's organization_management screen
+        // already reads/writes (max 2). Fall back to the legacy singular
+        // fields for orgs that only ever had one adviser set.
+        final rawAdvisers = (data['advisers'] as List?) ?? [];
+        List<AdviserInfo> advisers = rawAdvisers
+            .whereType<Map>()
+            .map((a) => AdviserInfo.fromMap(Map<String, dynamic>.from(a)))
+            .where((a) => !a.isEmpty)
+            .toList();
+        if (advisers.isEmpty && (data['adviserName'] ?? '').toString().isNotEmpty) {
+          advisers = [
+            AdviserInfo(
+              name: data['adviserName'] ?? '',
+              title: data['adviserTitle'] ?? '',
+              email: data['adviserEmail'] ?? '',
+              phone: data['adviserPhone'] ?? '',
+            ),
+          ];
+        }
+        if (advisers.length > 2) advisers = advisers.sublist(0, 2);
+
         setState(() {
           _orgName         = data['name']            ?? widget.orgName;
           _orgShortName    = data['shortName']        ?? widget.orgShortName;
@@ -209,11 +254,8 @@ class _OrgProfileScreenState extends State<OrgProfileScreen> {
           _instagram       = data['instagram']        ?? '';
           _twitter         = data['twitter']          ?? '';
           _gmail           = data['gmail']            ?? '';
-          _adviserName     = data['adviserName']      ?? '';
-          _adviserEmail    = data['adviserEmail']     ?? '';
-          _adviserPhone    = data['adviserPhone']     ?? '';
+          _advisers        = advisers;
           _adviserPhotoUrl = data['adviserPhotoUrl']  ?? '';
-          _adviserTitle    = data['adviserTitle']     ?? '';
           _loading = false;
         });
       } else {
@@ -336,11 +378,8 @@ class _OrgProfileScreenState extends State<OrgProfileScreen> {
           email: _orgEmail,
           description: _orgDescription,
           logoUrl: _orgLogoUrl,
-          adviserName: _adviserName,
-          adviserEmail: _adviserEmail,
-          adviserPhone: _adviserPhone,
+          advisers: _advisers,
           adviserPhotoUrl: _adviserPhotoUrl,
-          adviserTitle: _adviserTitle,
           facebook: _facebook,
           instagram: _instagram,
           twitter: _twitter,
@@ -461,23 +500,6 @@ class _OrgProfileScreenState extends State<OrgProfileScreen> {
     final isMobile = width < 720;
     final horizontalPadding = isMobile ? 16.0 : 28.0;
 
-    final editButton = ElevatedButton.icon(
-      onPressed: _openEditProfile,
-      icon: const Icon(Icons.edit_outlined, size: 15, color: Colors.white),
-      label: Text('Edit Profile',
-          style: GoogleFonts.beVietnamPro(
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-              color: Colors.white)),
-      style: ElevatedButton.styleFrom(
-        backgroundColor: _C.primaryDark,
-        foregroundColor: Colors.white,
-        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 11),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        elevation: 0,
-      ),
-    );
-
     return Scaffold(
       backgroundColor: _C.pageBg,
       body: SingleChildScrollView(
@@ -486,46 +508,11 @@ class _OrgProfileScreenState extends State<OrgProfileScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // ── Page header ────────────────────────────────────────────────
-            if (isMobile) ...[
-              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text('Organization Profile',
-                    style: GoogleFonts.beVietnamPro(
-                        fontSize: 22,
-                        fontWeight: FontWeight.w800,
-                        color: _C.accent)),
-                const SizedBox(height: 3),
-                Text(
-                    'Manage your organization\'s information and structure',
-                    style: GoogleFonts.beVietnamPro(
-                        fontSize: 13, color: _C.darkGray)),
-              ]),
-              const SizedBox(height: 16),
-              editButton,
-            ] else ...[
-              Row(children: [
-                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text('Organization Profile',
-                      style: GoogleFonts.beVietnamPro(
-                          fontSize: 22,
-                          fontWeight: FontWeight.w800,
-                          color: _C.charcoal)),
-                  const SizedBox(height: 3),
-                  Text(
-                      'Manage your organization\'s information and structure',
-                      style: GoogleFonts.beVietnamPro(
-                          fontSize: 13, color: _C.darkGray)),
-                ]),
-                const Spacer(),
-                editButton,
-              ]),
-            ],
-            const SizedBox(height: 24),
+            _buildProfileHero(isMobile),
+            const SizedBox(height: 20),
 
             // ── Two-column layout ──────────────────────────────────────────
             if (isMobile) ...[
-              _buildOrgInfoCard(),
-              const SizedBox(height: 20),
               _buildAdviserCard(),
               const SizedBox(height: 20),
               _buildOfficersCard(),
@@ -544,8 +531,6 @@ class _OrgProfileScreenState extends State<OrgProfileScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      _buildOrgInfoCard(),
-                      const SizedBox(height: 20),
                       _buildAdviserCard(),
                       const SizedBox(height: 20),
                       _buildOfficersCard(),
@@ -572,179 +557,218 @@ class _OrgProfileScreenState extends State<OrgProfileScreen> {
     );
   }
 
-  // ── Org Info Card ─────────────────────────────────────────────────────────
-  Widget _buildOrgInfoCard() {
-    return _card(
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        _sectionLabel('Organization Information',
-            icon: Icons.business_outlined),
-        const SizedBox(height: 18),
-        Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          // Logo
-          Container(
-            width: 70, height: 70,
-            decoration: BoxDecoration(
-              color: _C.surface,
-              borderRadius: BorderRadius.circular(_DS.radiusMd),
-              border: Border.all(color: _C.border),
-            ),
-            clipBehavior: Clip.antiAlias,
-            child: _orgLogoUrl.isNotEmpty
-                ? _buildImageWidget(_orgLogoUrl,
-                    fit: BoxFit.cover,
-                    errorWidget: const Icon(Icons.business,
-                        color: _C.textFaint))
-                : const Icon(Icons.business,
-                    color: _C.textFaint, size: 32),
-          ),
-          const SizedBox(width: 18),
-          Expanded(
-            child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-              Text(_orgName,
-                  style: GoogleFonts.beVietnamPro(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w800,
-                      color: _C.charcoal)),
-              const SizedBox(height: 4),
-              Row(children: [
-                const Icon(Icons.email_outlined,
-                    size: 13, color: _C.textFaint),
-                const SizedBox(width: 5),
-                Text(_orgEmail,
-                    style: GoogleFonts.beVietnamPro(
-                        fontSize: 12, color: _C.darkGray)),
-              ]),
-              if (_orgShortName.isNotEmpty) ...[
-                const SizedBox(height: 4),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: _C.primaryDark.withOpacity(0.08),
-                    borderRadius: BorderRadius.circular(6),
+  // ── Profile Hero — cover banner + overlapping logo + quick stats ──────────
+  Widget _buildProfileHero(bool isMobile) {
+    final logoSize = isMobile ? 76.0 : 92.0;
+    final coverHeight = isMobile ? 72.0 : 90.0;
+    final sidePad = isMobile ? 16.0 : 26.0;
+
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: _C.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: _C.border),
+        boxShadow: _DS.cardShadow,
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Container(
+                height: coverHeight,
+                width: double.infinity,
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [_C.primaryDark, _C.accent],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
                   ),
-                  child: Text(_orgShortName,
-                      style: GoogleFonts.beVietnamPro(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
-                          color: _C.primaryDark)),
                 ),
-              ],
-              if (_orgDescription.isNotEmpty) ...[
-                const SizedBox(height: 10),
-                Text(_orgDescription,
-                    style: GoogleFonts.beVietnamPro(
-                        fontSize: 13,
-                        color: _C.textMid,
-                        height: 1.6)),
-              ],
-            ]),
+                child: Stack(
+                  children: [
+                    Positioned.fill(
+                      child: Opacity(
+                        opacity: 0.10,
+                        child: Icon(Icons.business_rounded,
+                            size: coverHeight * 1.6, color: Colors.white),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Positioned(
+                top: 12, right: 14,
+                child: Material(
+                  color: Colors.white.withOpacity(0.20),
+                  borderRadius: BorderRadius.circular(10),
+                  child: InkWell(
+                    onTap: _openEditProfile,
+                    borderRadius: BorderRadius.circular(10),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 14, vertical: 9),
+                      child: Row(mainAxisSize: MainAxisSize.min, children: [
+                        const Icon(Icons.edit_outlined,
+                            size: 14, color: Colors.white),
+                        const SizedBox(width: 6),
+                        Text('Edit Profile',
+                            style: GoogleFonts.beVietnamPro(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                                color: Colors.white)),
+                      ]),
+                    ),
+                  ),
+                ),
+              ),
+              Positioned(
+                left: sidePad,
+                top: coverHeight - logoSize / 2,
+                child: Container(
+                  width: logoSize, height: logoSize,
+                  padding: const EdgeInsets.all(4),
+                  decoration: BoxDecoration(
+                    color: _C.white,
+                    shape: BoxShape.circle,
+                    boxShadow: _DS.cardShadow,
+                  ),
+                  clipBehavior: Clip.antiAlias,
+                  child: ClipOval(
+                    child: Container(
+                      color: _C.surface,
+                      child: _orgLogoUrl.isNotEmpty
+                          ? _buildImageWidget(_orgLogoUrl,
+                              fit: BoxFit.cover,
+                              errorWidget: const Icon(Icons.business,
+                                  color: _C.textFaint, size: 30))
+                          : const Icon(Icons.business,
+                              color: _C.textFaint, size: 30),
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
-        ]),
+          Padding(
+            padding: EdgeInsets.fromLTRB(
+                sidePad, logoSize / 2 + 12, sidePad, 22),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Wrap(
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  spacing: 10, runSpacing: 6,
+                  children: [
+                    Text(_orgName,
+                        style: GoogleFonts.beVietnamPro(
+                            fontSize: 19,
+                            fontWeight: FontWeight.w800,
+                            color: _C.charcoal)),
+                    if (_orgShortName.isNotEmpty)
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 9, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: _C.primaryDark.withOpacity(0.08),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(_orgShortName,
+                            style: GoogleFonts.beVietnamPro(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                                color: _C.primaryDark)),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Row(children: [
+                  const Icon(Icons.email_outlined,
+                      size: 13, color: _C.textFaint),
+                  const SizedBox(width: 5),
+                  Expanded(
+                    child: Text(_orgEmail,
+                        style: GoogleFonts.beVietnamPro(
+                            fontSize: 12.5, color: _C.darkGray),
+                        overflow: TextOverflow.ellipsis),
+                  ),
+                ]),
+                if (_orgDescription.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  Text(_orgDescription,
+                      style: GoogleFonts.beVietnamPro(
+                          fontSize: 13, color: _C.textMid, height: 1.6)),
+                ],
+                const SizedBox(height: 16),
+                Wrap(spacing: 10, runSpacing: 10, children: [
+                  StreamBuilder<QuerySnapshot>(
+                    stream: _officersStream,
+                    builder: (ctx, snap) => _heroStatChip(
+                        Icons.badge_outlined,
+                        '${snap.data?.docs.length ?? 0} Officers',
+                        _C.primaryDark),
+                  ),
+                  FutureBuilder<int>(
+                    future: _getMemberCount(),
+                    builder: (ctx, snap) => _heroStatChip(
+                        Icons.people_outline_rounded,
+                        '${snap.data ?? 0} Members',
+                        _C.success),
+                  ),
+                  if (_advisers.isNotEmpty)
+                    _heroStatChip(Icons.person_outline_rounded,
+                        _advisers.length > 1
+                            ? 'Advised by ${_advisers.first.name} +1'
+                            : 'Advised by ${_advisers.first.name}',
+                        _C.info),
+                ]),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _heroStatChip(IconData icon, String label, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(_DS.radiusPill),
+        border: Border.all(color: color.withOpacity(0.18)),
+      ),
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        Icon(icon, size: 13, color: color),
+        const SizedBox(width: 6),
+        Text(label,
+            style: GoogleFonts.beVietnamPro(
+                fontSize: 12, fontWeight: FontWeight.w600, color: color)),
       ]),
     );
   }
 
   // ── Adviser Card ──────────────────────────────────────────────────────────
+  // Orgs can list up to 2 advisers — mirrors admin's organization_management cap.
   Widget _buildAdviserCard() {
     return _card(
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        _sectionLabel('Adviser', icon: Icons.person_outline_rounded),
-        const SizedBox(height: 16),
-        if (_adviserName.isNotEmpty)
-          Row(children: [
-            // Photo
-            Container(
-              width: 52, height: 52,
-              decoration: BoxDecoration(
-                color: _C.primaryDark.withOpacity(0.10),
-                shape: BoxShape.circle,
-                border: Border.all(color: _C.border, width: 2),
-              ),
-              clipBehavior: Clip.antiAlias,
-              child: _adviserPhotoUrl.isNotEmpty
-                  ? Image(
-                      image: _imageProviderFromUrl(_adviserPhotoUrl),
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => Center(
-                        child: Text(
-                          _adviserName[0].toUpperCase(),
-                          style: GoogleFonts.beVietnamPro(
-                              fontSize: 18,
-                              fontWeight: FontWeight.w800,
-                              color: _C.primaryDark),
-                        ),
-                      ),
-                    )
-                  : Center(
-                      child: Text(
-                        _adviserName[0].toUpperCase(),
-                        style: GoogleFonts.beVietnamPro(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w800,
-                            color: _C.primaryDark),
-                      ),
-                    ),
+        Row(children: [
+          Expanded(child: _sectionLabel('Advisers', icon: Icons.person_outline_rounded)),
+          if (_advisers.length < 2)
+            TextButton.icon(
+              onPressed: _openEditProfile,
+              icon: const Icon(Icons.add_rounded, size: 15, color: _C.primaryDark),
+              label: Text('Add Adviser',
+                  style: GoogleFonts.beVietnamPro(
+                      fontSize: 12, fontWeight: FontWeight.w600, color: _C.primaryDark)),
             ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                Text(_adviserName,
-                    style: GoogleFonts.beVietnamPro(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                        color: _C.charcoal)),
-                const SizedBox(height: 2),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 8, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: _C.successBg,
-                    borderRadius:
-                        BorderRadius.circular(_DS.radiusPill),
-                  ),
-                  child: Text('Adviser',
-                      style: GoogleFonts.beVietnamPro(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w700,
-                          color: _C.success,
-                          letterSpacing: 0.4)),
-                ),
-                if (_adviserTitle.isNotEmpty) ...[
-                  const SizedBox(height: 6),
-                  Text(_adviserTitle,
-                      style: GoogleFonts.beVietnamPro(
-                          fontSize: 12, color: _C.textMid)),
-                ],
-                const SizedBox(height: 6),
-                if (_adviserEmail.isNotEmpty)
-                  Row(children: [
-                    const Icon(Icons.email_outlined,
-                        size: 12, color: _C.textFaint),
-                    const SizedBox(width: 5),
-                    Text(_adviserEmail,
-                        style: GoogleFonts.beVietnamPro(
-                            fontSize: 12, color: _C.darkGray)),
-                  ]),
-                if (_adviserPhone.isNotEmpty) ...[
-                  const SizedBox(height: 2),
-                  Row(children: [
-                    const Icon(Icons.phone_outlined,
-                        size: 12, color: _C.textFaint),
-                    const SizedBox(width: 5),
-                    Text(_adviserPhone,
-                        style: GoogleFonts.beVietnamPro(
-                            fontSize: 12, color: _C.darkGray)),
-                  ]),
-                ],
-              ]),
-            ),
-          ])
-        else
+        ]),
+        const SizedBox(height: 12),
+        if (_advisers.isEmpty)
           Container(
             padding: const EdgeInsets.symmetric(
                 vertical: 14, horizontal: 16),
@@ -783,9 +807,112 @@ class _OrgProfileScreenState extends State<OrgProfileScreen> {
                 ),
               ),
             ]),
-          ),
+          )
+        else
+          Column(children: [
+            for (var i = 0; i < _advisers.length; i++) ...[
+              _adviserTile(_advisers[i], isPrimary: i == 0),
+              if (i != _advisers.length - 1) const SizedBox(height: 12),
+            ],
+          ]),
       ]),
     );
+  }
+
+  Widget _adviserTile(AdviserInfo a, {required bool isPrimary}) {
+    final photo = isPrimary ? _adviserPhotoUrl : '';
+    return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      // Photo (only the primary adviser has one, matching admin's schema)
+      Container(
+        width: 52, height: 52,
+        decoration: BoxDecoration(
+          color: _C.primaryDark.withOpacity(0.10),
+          shape: BoxShape.circle,
+          border: Border.all(color: _C.border, width: 2),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: photo.isNotEmpty
+            ? Image(
+                image: _imageProviderFromUrl(photo),
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => Center(
+                  child: Text(
+                    a.name.isNotEmpty ? a.name[0].toUpperCase() : '?',
+                    style: GoogleFonts.beVietnamPro(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800,
+                        color: _C.primaryDark),
+                  ),
+                ),
+              )
+            : Center(
+                child: Text(
+                  a.name.isNotEmpty ? a.name[0].toUpperCase() : '?',
+                  style: GoogleFonts.beVietnamPro(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w800,
+                      color: _C.primaryDark),
+                ),
+              ),
+      ),
+      const SizedBox(width: 14),
+      Expanded(
+        child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+          Row(children: [
+            Text(a.name,
+                style: GoogleFonts.beVietnamPro(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: _C.charcoal)),
+            const SizedBox(width: 6),
+            Container(
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 8, vertical: 2),
+              decoration: BoxDecoration(
+                color: _C.successBg,
+                borderRadius:
+                    BorderRadius.circular(_DS.radiusPill),
+              ),
+              child: Text(isPrimary ? 'Primary Adviser' : 'Co-Adviser',
+                  style: GoogleFonts.beVietnamPro(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                      color: _C.success,
+                      letterSpacing: 0.4)),
+            ),
+          ]),
+          if (a.title.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Text(a.title,
+                style: GoogleFonts.beVietnamPro(
+                    fontSize: 12, color: _C.textMid)),
+          ],
+          const SizedBox(height: 6),
+          if (a.email.isNotEmpty)
+            Row(children: [
+              const Icon(Icons.email_outlined,
+                  size: 12, color: _C.textFaint),
+              const SizedBox(width: 5),
+              Text(a.email,
+                  style: GoogleFonts.beVietnamPro(
+                      fontSize: 12, color: _C.darkGray)),
+            ]),
+          if (a.phone.isNotEmpty) ...[
+            const SizedBox(height: 2),
+            Row(children: [
+              const Icon(Icons.phone_outlined,
+                  size: 12, color: _C.textFaint),
+              const SizedBox(width: 5),
+              Text(a.phone,
+                  style: GoogleFonts.beVietnamPro(
+                      fontSize: 12, color: _C.darkGray)),
+            ]),
+          ],
+        ]),
+      ),
+    ]);
   }
 
   // ── Officers Card ─────────────────────────────────────────────────────────
@@ -1473,7 +1600,8 @@ class _MembersRow extends StatelessWidget {
 class _EditOrgProfileSheet extends StatefulWidget {
   final String orgId;
   final String orgName, shortName, email, description, logoUrl;
-  final String adviserName, adviserTitle, adviserEmail, adviserPhone, adviserPhotoUrl;
+  final List<AdviserInfo> advisers;
+  final String adviserPhotoUrl;
   final String facebook, instagram, twitter, gmail;
   final VoidCallback onSaved;
 
@@ -1484,10 +1612,7 @@ class _EditOrgProfileSheet extends StatefulWidget {
     required this.email,
     required this.description,
     required this.logoUrl,
-    required this.adviserName,
-    required this.adviserTitle,
-    required this.adviserEmail,
-    required this.adviserPhone,
+    required this.advisers,
     required this.adviserPhotoUrl,
     required this.facebook,
     required this.instagram,
@@ -1502,10 +1627,17 @@ class _EditOrgProfileSheet extends StatefulWidget {
 
 class _EditOrgProfileSheetState extends State<_EditOrgProfileSheet> {
   final _descCtrl   = TextEditingController();
-  final _aNameCtrl  = TextEditingController();
-  final _aTitleCtrl = TextEditingController();
-  final _aEmailCtrl = TextEditingController();
-  final _aPhoneCtrl = TextEditingController();
+  // Primary adviser (slot 1 — the only one with a photo, matching the
+  // existing org-doc schema admin already writes to).
+  final _a1NameCtrl  = TextEditingController();
+  final _a1TitleCtrl = TextEditingController();
+  final _a1EmailCtrl = TextEditingController();
+  final _a1PhoneCtrl = TextEditingController();
+  // Co-adviser (slot 2 — optional, capped at 2 total advisers per org).
+  final _a2NameCtrl  = TextEditingController();
+  final _a2TitleCtrl = TextEditingController();
+  final _a2EmailCtrl = TextEditingController();
+  final _a2PhoneCtrl = TextEditingController();
   final _fbCtrl     = TextEditingController();
   final _igCtrl     = TextEditingController();
   final _twCtrl     = TextEditingController();
@@ -1513,6 +1645,7 @@ class _EditOrgProfileSheetState extends State<_EditOrgProfileSheet> {
 
   String? _logoUrl;
   String? _adviserPhotoUrl;
+  bool _hasSecondAdviser = false;
   bool _isUploadingLogo   = false;
   bool _isUploadingPhoto  = false;
   bool _isSaving          = false;
@@ -1521,10 +1654,19 @@ class _EditOrgProfileSheetState extends State<_EditOrgProfileSheet> {
   void initState() {
     super.initState();
     _descCtrl.text   = widget.description;
-    _aNameCtrl.text  = widget.adviserName;
-    _aTitleCtrl.text = widget.adviserTitle;
-    _aEmailCtrl.text = widget.adviserEmail;
-    _aPhoneCtrl.text = widget.adviserPhone;
+    if (widget.advisers.isNotEmpty) {
+      _a1NameCtrl.text  = widget.advisers[0].name;
+      _a1TitleCtrl.text = widget.advisers[0].title;
+      _a1EmailCtrl.text = widget.advisers[0].email;
+      _a1PhoneCtrl.text = widget.advisers[0].phone;
+    }
+    if (widget.advisers.length > 1) {
+      _hasSecondAdviser = true;
+      _a2NameCtrl.text  = widget.advisers[1].name;
+      _a2TitleCtrl.text = widget.advisers[1].title;
+      _a2EmailCtrl.text = widget.advisers[1].email;
+      _a2PhoneCtrl.text = widget.advisers[1].phone;
+    }
     _fbCtrl.text     = widget.facebook;
     _igCtrl.text     = widget.instagram;
     _twCtrl.text     = widget.twitter;
@@ -1537,7 +1679,8 @@ class _EditOrgProfileSheetState extends State<_EditOrgProfileSheet> {
   @override
   void dispose() {
     for (final c in [
-      _descCtrl, _aNameCtrl, _aTitleCtrl, _aEmailCtrl, _aPhoneCtrl,
+      _descCtrl, _a1NameCtrl, _a1TitleCtrl, _a1EmailCtrl, _a1PhoneCtrl,
+      _a2NameCtrl, _a2TitleCtrl, _a2EmailCtrl, _a2PhoneCtrl,
       _fbCtrl, _igCtrl, _twCtrl, _gmCtrl
     ]) c.dispose();
     super.dispose();
@@ -1577,12 +1720,34 @@ class _EditOrgProfileSheetState extends State<_EditOrgProfileSheet> {
 
   Future<void> _save() async {
     setState(() => _isSaving = true);
+
+    final advisers = <AdviserInfo>[
+      AdviserInfo(
+        name: _a1NameCtrl.text.trim(),
+        title: _a1TitleCtrl.text.trim(),
+        email: _a1EmailCtrl.text.trim(),
+        phone: _a1PhoneCtrl.text.trim(),
+      ),
+      if (_hasSecondAdviser && _a2NameCtrl.text.trim().isNotEmpty)
+        AdviserInfo(
+          name: _a2NameCtrl.text.trim(),
+          title: _a2TitleCtrl.text.trim(),
+          email: _a2EmailCtrl.text.trim(),
+          phone: _a2PhoneCtrl.text.trim(),
+        ),
+    ].where((a) => !a.isEmpty).toList();
+    final primary = advisers.isNotEmpty ? advisers.first : const AdviserInfo();
+
     final payload = {
       'description':  _descCtrl.text.trim(),
-      'adviserName':  _aNameCtrl.text.trim(),
-      'adviserTitle': _aTitleCtrl.text.trim(),
-      'adviserEmail': _aEmailCtrl.text.trim(),
-      'adviserPhone': _aPhoneCtrl.text.trim(),
+      // Legacy singular fields mirror the primary adviser — admin's
+      // organization_management screen and other places that still read
+      // these directly keep working unchanged.
+      'adviserName':  primary.name,
+      'adviserTitle': primary.title,
+      'adviserEmail': primary.email,
+      'adviserPhone': primary.phone,
+      'advisers': advisers.map((a) => a.toMap()).toList(),
       if (_adviserPhotoUrl != null) 'adviserPhotoUrl': _adviserPhotoUrl,
       'facebook':  _fbCtrl.text.trim(),
       'instagram': _igCtrl.text.trim(),
@@ -1649,6 +1814,49 @@ class _EditOrgProfileSheetState extends State<_EditOrgProfileSheet> {
       shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(_DS.radiusSm)),
     ));
+  }
+
+  Widget _adviserFields({
+    required TextEditingController nameCtrl,
+    required TextEditingController titleCtrl,
+    required TextEditingController phoneCtrl,
+    required TextEditingController emailCtrl,
+  }) {
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Row(children: [
+        Expanded(
+          child: TextField(
+            controller: nameCtrl,
+            style: GoogleFonts.beVietnamPro(fontSize: 13, color: _C.charcoal),
+            decoration: _inputDecoration('Full Name',
+                hint: 'Adviser full name', icon: Icons.person_outline),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: TextField(
+            controller: titleCtrl,
+            style: GoogleFonts.beVietnamPro(fontSize: 13, color: _C.charcoal),
+            decoration: _inputDecoration('Title',
+                hint: 'e.g. Instructor', icon: Icons.badge_outlined),
+          ),
+        ),
+      ]),
+      const SizedBox(height: 12),
+      TextField(
+        controller: phoneCtrl,
+        style: GoogleFonts.beVietnamPro(fontSize: 13, color: _C.charcoal),
+        decoration: _inputDecoration('Phone',
+            hint: '+63 xxx xxx xxxx', icon: Icons.phone_outlined),
+      ),
+      const SizedBox(height: 12),
+      TextField(
+        controller: emailCtrl,
+        style: GoogleFonts.beVietnamPro(fontSize: 13, color: _C.charcoal),
+        decoration: _inputDecoration('Email',
+            hint: 'adviser@example.com', icon: Icons.email_outlined),
+      ),
+    ]);
   }
 
   @override
@@ -1797,11 +2005,15 @@ class _EditOrgProfileSheetState extends State<_EditOrgProfileSheet> {
                 ),
                 const SizedBox(height: 22),
 
-                // Adviser section
-                _sectionLabel('Adviser Information',
-                    icon: Icons.person_outline_rounded),
+                // Adviser section — up to 2 advisers per org
+                Row(children: [
+                  Expanded(
+                    child: _sectionLabel('Primary Adviser',
+                        icon: Icons.person_outline_rounded),
+                  ),
+                ]),
                 const SizedBox(height: 12),
-                // Adviser photo
+                // Adviser photo (primary adviser only)
                 Row(children: [
                   Container(
                     width: 60, height: 60,
@@ -1847,51 +2059,53 @@ class _EditOrgProfileSheetState extends State<_EditOrgProfileSheet> {
                   ),
                 ]),
                 const SizedBox(height: 14),
-                Row(children: [
-                  Expanded(
-                    child: TextField(
-                      controller: _aNameCtrl,
-                      style: GoogleFonts.beVietnamPro(
-                          fontSize: 13, color: _C.charcoal),
-                      decoration: _inputDecoration('Full Name',
-                          hint: 'Adviser full name',
-                          icon: Icons.person_outline),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: TextField(
-                      controller: _aTitleCtrl,
-                      style: GoogleFonts.beVietnamPro(
-                          fontSize: 13, color: _C.charcoal),
-                      decoration: _inputDecoration('Title',
-                          hint: 'e.g. Instructor',
-                          icon: Icons.badge_outlined),
-                    ),
-                  ),
-                ]),
-                const SizedBox(height: 12),
-                Row(children: [
-                  Expanded(
-                    child: TextField(
-                      controller: _aPhoneCtrl,
-                      style: GoogleFonts.beVietnamPro(
-                          fontSize: 13, color: _C.charcoal),
-                      decoration: _inputDecoration('Phone',
-                          hint: '+63 xxx xxx xxxx',
-                          icon: Icons.phone_outlined),
-                    ),
-                  ),
-                ]),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: _aEmailCtrl,
-                  style: GoogleFonts.beVietnamPro(
-                      fontSize: 13, color: _C.charcoal),
-                  decoration: _inputDecoration('Email',
-                      hint: 'adviser@example.com',
-                      icon: Icons.email_outlined),
+                _adviserFields(
+                  nameCtrl: _a1NameCtrl,
+                  titleCtrl: _a1TitleCtrl,
+                  phoneCtrl: _a1PhoneCtrl,
+                  emailCtrl: _a1EmailCtrl,
                 ),
+                const SizedBox(height: 18),
+
+                if (_hasSecondAdviser) ...[
+                  Row(children: [
+                    Expanded(
+                      child: _sectionLabel('Co-Adviser',
+                          icon: Icons.person_outline_rounded),
+                    ),
+                    IconButton(
+                      tooltip: 'Remove co-adviser',
+                      icon: const Icon(Icons.close_rounded,
+                          size: 18, color: _C.error),
+                      onPressed: () => setState(() {
+                        _hasSecondAdviser = false;
+                        _a2NameCtrl.clear();
+                        _a2TitleCtrl.clear();
+                        _a2EmailCtrl.clear();
+                        _a2PhoneCtrl.clear();
+                      }),
+                    ),
+                  ]),
+                  const SizedBox(height: 8),
+                  _adviserFields(
+                    nameCtrl: _a2NameCtrl,
+                    titleCtrl: _a2TitleCtrl,
+                    phoneCtrl: _a2PhoneCtrl,
+                    emailCtrl: _a2EmailCtrl,
+                  ),
+                ] else
+                  OutlinedButton.icon(
+                    onPressed: () => setState(() => _hasSecondAdviser = true),
+                    icon: const Icon(Icons.add_rounded, size: 16),
+                    label: Text('Add Second Adviser (max 2)',
+                        style: GoogleFonts.beVietnamPro(fontSize: 12)),
+                    style: OutlinedButton.styleFrom(
+                      side: const BorderSide(color: _C.borderSoft),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8)),
+                      foregroundColor: _C.primaryDark,
+                    ),
+                  ),
                 const SizedBox(height: 22),
 
                 // Social Media

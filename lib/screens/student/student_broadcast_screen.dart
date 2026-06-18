@@ -59,6 +59,22 @@ ImageProvider _imageProviderFromUrl(String url) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Channel theme presets — must match the ids set by the org on
+// lib/screens/web/org/org_broadcast.dart's "Change theme" action.
+// ─────────────────────────────────────────────────────────────────────────────
+const Map<String, List<Color>> _kBroadcastThemeColors = {
+  'orange': [Color(0xFFEA580C), Color(0xFFF97316)],
+  'blue': [Color(0xFF2563EB), Color(0xFF3B82F6)],
+  'green': [Color(0xFF059669), Color(0xFF10B981)],
+  'purple': [Color(0xFF7C3AED), Color(0xFFA78BFA)],
+  'pink': [Color(0xFFDB2777), Color(0xFFF472B6)],
+  'teal': [Color(0xFF0D9488), Color(0xFF2DD4BF)],
+};
+
+List<Color> _broadcastThemeColors(String? id) =>
+    _kBroadcastThemeColors[id] ?? _kBroadcastThemeColors['orange']!;
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Main Screen - Student Broadcast
 // ─────────────────────────────────────────────────────────────────────────────
 class StudentBroadcastScreen extends StatefulWidget {
@@ -125,83 +141,108 @@ class _StudentBroadcastScreenState extends State<StudentBroadcastScreen> {
   }
 
   Widget _buildChannelHeader() {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        border: const Border(bottom: BorderSide(color: _C.border)),
-        boxShadow: _DS.cardShadow,
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 46,
-            height: 46,
-            decoration: BoxDecoration(
-              color: Colors.orange.withOpacity(0.10),
-              borderRadius: BorderRadius.circular(13),
-            ),
-            child: Icon(
-              Icons.campaign_rounded,
-              color: Colors.orange,
-              size: 24,
-            ),
+    return StreamBuilder<DocumentSnapshot>(
+      stream: FirebaseFirestore.instance.collection('organizations').doc(widget.orgId).snapshots(),
+      builder: (context, orgSnap) {
+        final orgData = orgSnap.data?.data() as Map<String, dynamic>?;
+        final channelName = (orgData?['broadcastChannelName'] as String?)?.trim();
+        final channelPhotoUrl = orgData?['broadcastChannelPhotoUrl'] as String?;
+        final colors = _broadcastThemeColors(orgData?['broadcastThemeId'] as String?);
+        final primary = colors[0];
+        final hasPhoto = channelPhotoUrl != null && channelPhotoUrl.isNotEmpty;
+
+        return Container(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            border: const Border(bottom: BorderSide(color: _C.border)),
+            boxShadow: _DS.cardShadow,
           ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Broadcast Channel',
-                    style: GoogleFonts.beVietnamPro(
-                        fontSize: 17,
-                        fontWeight: FontWeight.w800,
-                        color: _C.charcoal)),
-                const SizedBox(height: 2),
-                Text(widget.orgName,
-                    style: GoogleFonts.beVietnamPro(
-                        fontSize: 12, color: _C.darkGray)),
-              ],
-            ),
-          ),
-          // Message count
-          StreamBuilder<QuerySnapshot>(
-            stream: FirebaseFirestore.instance
-                .collection('broadcasts')
-                .where('orgId', isEqualTo: widget.orgId)
-                .snapshots(),
-            builder: (_, snap) {
-              final count = snap.data?.docs.length ?? 0;
-              return Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(
-                  color: Colors.orange.withOpacity(0.08),
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: Colors.orange.withOpacity(0.2)),
+          child: Row(
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(13),
+                child: Container(
+                  width: 46,
+                  height: 46,
+                  color: primary.withOpacity(0.10),
+                  child: hasPhoto
+                      ? Image(
+                          image: _imageProviderFromUrl(channelPhotoUrl),
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => Icon(Icons.campaign_rounded, color: primary, size: 24),
+                        )
+                      : Icon(Icons.campaign_rounded, color: primary, size: 24),
                 ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Icon(Icons.forum_outlined,
-                        size: 13, color: Colors.orange),
-                    const SizedBox(width: 6),
-                    Text('$count',
+                    Text(channelName?.isNotEmpty == true ? channelName! : 'Broadcast Channel',
                         style: GoogleFonts.beVietnamPro(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.orange)),
+                            fontSize: 17,
+                            fontWeight: FontWeight.w800,
+                            color: _C.charcoal)),
+                    const SizedBox(height: 2),
+                    Text(widget.orgName,
+                        style: GoogleFonts.beVietnamPro(
+                            fontSize: 12, color: _C.darkGray)),
                   ],
                 ),
-              );
-            },
+              ),
+              // Message count
+              StreamBuilder<QuerySnapshot>(
+                stream: FirebaseFirestore.instance
+                    .collection('broadcasts')
+                    .where('orgId', isEqualTo: widget.orgId)
+                    .snapshots(),
+                builder: (_, snap) {
+                  final count = snap.data?.docs.length ?? 0;
+                  return Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: primary.withOpacity(0.08),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: primary.withOpacity(0.2)),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.forum_outlined,
+                            size: 13, color: primary),
+                        const SizedBox(width: 6),
+                        Text('$count',
+                            style: GoogleFonts.beVietnamPro(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: primary)),
+                      ],
+                    ),
+                  );
+                },
+              ),
+            ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 
   Widget _buildFeed() {
+    return StreamBuilder<DocumentSnapshot>(
+      stream: FirebaseFirestore.instance.collection('organizations').doc(widget.orgId).snapshots(),
+      builder: (context, orgSnap) {
+        final orgData = orgSnap.data?.data() as Map<String, dynamic>?;
+        final colors = _broadcastThemeColors(orgData?['broadcastThemeId'] as String?);
+        return _buildFeedBody(colors[0], colors[1]);
+      },
+    );
+  }
+
+  Widget _buildFeedBody(Color primary, Color accent) {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
       decoration: BoxDecoration(
@@ -297,6 +338,8 @@ class _StudentBroadcastScreenState extends State<StudentBroadcastScreen> {
                   _BroadcastCard(
                     broadcast: broadcast,
                     orgId: widget.orgId,
+                    primaryColor: primary,
+                    accentColor: accent,
                   ),
                 ],
               );
@@ -592,10 +635,14 @@ class _DateSeparator extends StatelessWidget {
 class _BroadcastCard extends StatefulWidget {
   final BroadcastModel broadcast;
   final String orgId;
+  final Color primaryColor;
+  final Color accentColor;
 
   const _BroadcastCard({
     required this.broadcast,
     required this.orgId,
+    this.primaryColor = Colors.orange,
+    this.accentColor = const Color(0xFFFFA726),
   });
 
   @override
@@ -605,6 +652,7 @@ class _BroadcastCard extends StatefulWidget {
 class _BroadcastCardState extends State<_BroadcastCard> {
   late int _likes;
   bool _isLiked = false;
+  bool _repliesExpanded = false;
 
   @override
   void initState() {
@@ -950,10 +998,10 @@ class _BroadcastCardState extends State<_BroadcastCard> {
           Container(
             width: double.infinity,
             decoration: BoxDecoration(
-              gradient: const LinearGradient(
+              gradient: LinearGradient(
                 colors: [
-                  Colors.orange,
-                  Color(0xFFFFA726),
+                  widget.primaryColor,
+                  widget.accentColor,
                 ],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
@@ -961,7 +1009,7 @@ class _BroadcastCardState extends State<_BroadcastCard> {
               borderRadius: BorderRadius.circular(16),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.orange.withOpacity(0.2),
+                  color: widget.primaryColor.withOpacity(0.2),
                   blurRadius: 12,
                   offset: const Offset(0, 4),
                 ),
@@ -1051,21 +1099,28 @@ class _BroadcastCardState extends State<_BroadcastCard> {
               ),
               const SizedBox(width: 10),
               GestureDetector(
-                onTap: _showReplyDialog,
+                onTap: () => setState(() => _repliesExpanded = !_repliesExpanded),
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFF5F7FA),
+                    color: _repliesExpanded
+                        ? Colors.orange.withOpacity(0.1)
+                        : const Color(0xFFF5F7FA),
                     borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: const Color(0xFFE8ECF0)),
+                    border: Border.all(
+                      color: _repliesExpanded
+                          ? Colors.orange
+                          : const Color(0xFFE8ECF0),
+                      width: _repliesExpanded ? 1.5 : 1,
+                    ),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(
+                      Icon(
                         Icons.mode_comment_outlined,
                         size: 18,
-                        color: _C.darkGray,
+                        color: _repliesExpanded ? Colors.orange : _C.darkGray,
                       ),
                       const SizedBox(width: 8),
                       Text(
@@ -1073,7 +1128,7 @@ class _BroadcastCardState extends State<_BroadcastCard> {
                         style: GoogleFonts.beVietnamPro(
                           fontSize: 13,
                           fontWeight: FontWeight.w600,
-                          color: _C.darkGray,
+                          color: _repliesExpanded ? Colors.orange : _C.darkGray,
                         ),
                       ),
                     ],
@@ -1083,46 +1138,56 @@ class _BroadcastCardState extends State<_BroadcastCard> {
             ],
           ),
 
-          // ── REPLIES SECTION (IMPROVED) ──
-          const SizedBox(height: 12),
-          StreamBuilder<QuerySnapshot>(
-            stream: FirebaseFirestore.instance
-                .collection('broadcasts')
-                .doc(b.id)
-                .collection('replies')
-                .orderBy('timestamp', descending: false)
-                .snapshots(),
-            builder: (context, replySnapshot) {
-              if (replySnapshot.connectionState == ConnectionState.waiting) {
-                return const SizedBox.shrink();
-              }
+          // ── REPLIES SECTION — only shown once the reply button above is tapped ──
+          if (_repliesExpanded) ...[
+            const SizedBox(height: 12),
+            StreamBuilder<QuerySnapshot>(
+              stream: FirebaseFirestore.instance
+                  .collection('broadcasts')
+                  .doc(b.id)
+                  .collection('replies')
+                  .orderBy('timestamp', descending: false)
+                  .snapshots(),
+              builder: (context, replySnapshot) {
+                final replies = replySnapshot.data?.docs ?? [];
+                final currentUser = FirebaseAuth.instance.currentUser;
 
-              if (!replySnapshot.hasData || replySnapshot.data!.docs.isEmpty) {
-                return const SizedBox.shrink();
-              }
-
-              final replies = replySnapshot.data!.docs;
-              final currentUser = FirebaseAuth.instance.currentUser;
-
-              return Container(
-                padding: const EdgeInsets.only(top: 12),
-                decoration: BoxDecoration(
-                  border: Border(
-                    top: BorderSide(color: const Color(0xFFF0F2F5), width: 1),
-                  ),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Replies',
-                      style: GoogleFonts.beVietnamPro(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: _C.darkGray,
-                      ),
+                return Container(
+                  padding: const EdgeInsets.only(top: 12),
+                  decoration: BoxDecoration(
+                    border: Border(
+                      top: BorderSide(color: const Color(0xFFF0F2F5), width: 1),
                     ),
-                    const SizedBox(height: 8),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              replies.isEmpty ? 'No replies yet' : 'Replies',
+                              style: GoogleFonts.beVietnamPro(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: _C.darkGray,
+                              ),
+                            ),
+                          ),
+                          GestureDetector(
+                            onTap: _showReplyDialog,
+                            child: Text(
+                              'Add a reply',
+                              style: GoogleFonts.beVietnamPro(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                                color: Colors.orange,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
                     ...replies.map((replyDoc) {
                       final replyData = replyDoc.data() as Map<String, dynamic>;
                       final replyAuthor = replyData['authorName'] ?? 'Anonymous';
@@ -1228,6 +1293,7 @@ class _BroadcastCardState extends State<_BroadcastCard> {
               );
             },
           ),
+          ],
         ],
       ),
     );
