@@ -186,7 +186,6 @@ class _StudentOrganizationsScreenState extends State<StudentOrganizationsScreen>
                   final logoUrl = org['logoUrl'] as String?;
                   final name = org['name'] ?? 'Organization';
                   final description = org['description'] ?? '';
-                  final memberCount = org['members'] ?? 0;
 
                   return InkWell(
                     onTap: () {
@@ -257,6 +256,7 @@ class _StudentOrganizationsScreenState extends State<StudentOrganizationsScreen>
                             Expanded(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
                                   Text(
                                     name,
@@ -266,33 +266,16 @@ class _StudentOrganizationsScreenState extends State<StudentOrganizationsScreen>
                                       color: Colors.black87,
                                     ),
                                   ),
-                                  const SizedBox(height: 2),
+                                  const SizedBox(height: 4),
                                   Text(
                                     description,
                                     style: const TextStyle(
                                       fontSize: 13,
                                       color: Colors.grey,
+                                      height: 1.3,
                                     ),
                                     maxLines: 2,
                                     overflow: TextOverflow.ellipsis,
-                                  ),
-                                  const SizedBox(height: 6),
-                                  Row(
-                                    children: [
-                                      Icon(
-                                        Icons.people_outline,
-                                        size: 14,
-                                        color: Colors.grey.shade500,
-                                      ),
-                                      const SizedBox(width: 4),
-                                      Text(
-                                        '$memberCount members',
-                                        style: TextStyle(
-                                          fontSize: 12,
-                                          color: Colors.grey.shade500,
-                                        ),
-                                      ),
-                                    ],
                                   ),
                                 ],
                               ),

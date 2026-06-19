@@ -1126,6 +1126,7 @@ class _EventProposalsState extends State<EventProposals> {
         'startTime': startTime,
         'endTime': endTime,
         'capacity': capacity,
+        'slotsLeft': capacity, // NEW: automatically set slotsLeft equal to capacity when the event is created
         'guestSpeaker': guestSpeaker,
         'resources': resources,
         'labPreparation': labPreparation,
