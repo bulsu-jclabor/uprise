@@ -444,22 +444,7 @@ class _StudentEventsScreenState extends State<StudentEventsScreen>
         ),
         centerTitle: true,
         // ✅ ADDED: Create Event Button
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.add_circle_outline, color: Colors.orange, size: 28),
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const CreateEventScreen(),
-                ),
-              ).then((_) {
-                setState(() {}); // Refresh when returning
-              });
-            },
-            tooltip: 'Create New Event',
-          ),
-        ],
+        
         bottom: TabBar(
           controller: _tabController,
           indicatorColor: Colors.orange,
