@@ -1852,10 +1852,7 @@ class _DashboardHomeState extends State<DashboardHome> {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    List.generate(
-                                      6,
-                                      _monthLabel,
-                                    )[_hoveredChartIndex!],
+                                    _monthLabel(_hoveredChartIndex!),
                                     style: GoogleFonts.beVietnamPro(
                                       fontSize: 12,
                                       fontWeight: FontWeight.w700,
