@@ -1,6 +1,7 @@
 // ignore_for_file: use_build_context_synchronously, deprecated_member_use
 
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -9,12 +10,14 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:firebase_storage/firebase_storage.dart';
+// Firebase Storage is no longer needed for uploads
+// import 'package:firebase_storage/firebase_storage.dart';
 import '../../../services/activity_logger.dart' as activity_log;
 import 'export_util.dart';
 import 'export_pdf.dart';
 import 'dart:io';
 import 'package:path_provider/path_provider.dart';
+import '../../../utils/platform_file_utils.dart' as platform_file_utils;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Design tokens — mirrors student_accounts.dart / org_letter_request.dart
@@ -176,8 +179,7 @@ class OrgReportsScreen extends StatefulWidget {
 
 class _OrgReportsScreenState extends State<OrgReportsScreen> {
   final TextEditingController _searchController = TextEditingController();
-  String _typeFilter = 'All';
-  String _statusFilter = 'All';
+  String? _typeFilter; // null = no filter, 'Financial' or 'Accomplishment'
   int _currentPage = 1;
   static const int _pageSize = 10;
 
@@ -283,12 +285,10 @@ class _OrgReportsScreenState extends State<OrgReportsScreen> {
       ..sort((a, b) => b.submittedAt.compareTo(a.submittedAt));
 
     return sorted.where((r) {
-      if (_typeFilter != 'All') {
-        final fv = _typeFilter == 'Financial' ? 'financial' : 'accomplishment';
-        if (r.type != fv) return false;
-      }
-      if (_statusFilter != 'All' && r.status != _statusFilter.toLowerCase()) {
-        return false;
+      // Type filter
+      if (_typeFilter != null) {
+        final typeVal = _typeFilter == 'Financial' ? 'financial' : 'accomplishment';
+        if (r.type != typeVal) return false;
       }
       final term = _searchController.text.trim().toLowerCase();
       if (term.isNotEmpty) {
@@ -494,24 +494,14 @@ class _OrgReportsScreenState extends State<OrgReportsScreen> {
             ),
           ),
           const SizedBox(width: 10),
+          // Type filter (no "All" option; placeholder shows "Type")
           _FilterDropdown(
             value: _typeFilter,
-            items: const ['All', 'Financial', 'Accomplishment'],
+            items: const ['Financial', 'Accomplishment'],
             hint: 'Type',
             icon: Icons.category_outlined,
             onChanged: (v) => setState(() {
-              _typeFilter = v!;
-              _currentPage = 1;
-            }),
-          ),
-          const SizedBox(width: 10),
-          _FilterDropdown(
-            value: _statusFilter,
-            items: const ['All', 'Pending', 'Approved', 'Rejected', 'Review'],
-            hint: 'Status',
-            icon: Icons.tune_rounded,
-            onChanged: (v) => setState(() {
-              _statusFilter = v!;
+              _typeFilter = v;
               _currentPage = 1;
             }),
           ),
@@ -576,31 +566,30 @@ class _OrgReportsScreenState extends State<OrgReportsScreen> {
   }
 
   Widget _buildTableHeader() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 13),
-      decoration: const BoxDecoration(
-        color: Color(0xFFFFF7ED),
-        borderRadius: BorderRadius.vertical(top: Radius.circular(14)),
-        border: Border(bottom: BorderSide(color: Color(0xFFFB923C))),
-      ),
-      child: Row(
-        children: [
-          Expanded(flex: 2, child: _headerCell('REPORT ID')),
-          Expanded(flex: 4, child: _headerCell('TITLE')),
-          Expanded(flex: 2, child: _headerCell('TYPE')),
-          Expanded(flex: 2, child: _headerCell('DATE SUBMITTED')),
-          Expanded(flex: 1, child: _headerCell('STATUS')),
-          Expanded(
-            flex: 2,
-            child: Align(
-              alignment: Alignment.centerRight,
-              child: _headerCell('ACTIONS'),
-            ),
+  return Container(
+    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 13),
+    decoration: const BoxDecoration(
+      color: Color(0xFFFFF7ED),
+      borderRadius: BorderRadius.vertical(top: Radius.circular(14)),
+      border: Border(bottom: BorderSide(color: Color(0xFFFB923C))),
+    ),
+    child: Row(
+      children: [
+        Expanded(flex: 2, child: _headerCell('REPORT ID')),
+        Expanded(flex: 4, child: _headerCell('EVENT')),  // Changed from 'TITLE' to 'EVENT'
+        Expanded(flex: 2, child: _headerCell('TYPE')),
+        Expanded(flex: 2, child: _headerCell('DATE SUBMITTED')),
+        Expanded(
+          flex: 2,
+          child: Align(
+            alignment: Alignment.centerRight,
+            child: _headerCell('ACTIONS'),
           ),
-        ],
-      ),
-    );
-  }
+        ),
+      ],
+    ),
+  );
+}
 
   Widget _headerCell(String text) => Text(
     text,
@@ -612,138 +601,128 @@ class _OrgReportsScreenState extends State<OrgReportsScreen> {
     ),
   );
 
-  Widget _buildReportRow(ReportModel report, {required bool isLast}) {
-    final isFinancial = report.type == 'financial';
-    return InkWell(
-      hoverColor: const Color(0xFFF8F9FB),
-      onTap: () => _openViewModal(report),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-        decoration: BoxDecoration(
-          border: isLast
-              ? null
-              : const Border(bottom: BorderSide(color: Color(0xFFF1F5F9))),
-        ),
-        child: Row(
-          children: [
-            // Report ID
-            Expanded(
-              flex: 2,
-              child: Text(
-                report.reportId,
-                style: GoogleFonts.beVietnamPro(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  color: _DS.primary,
-                ),
-                overflow: TextOverflow.ellipsis,
+  
+ Widget _buildReportRow(ReportModel report, {required bool isLast}) {
+  final isFinancial = report.type == 'financial';
+  return InkWell(
+    hoverColor: const Color(0xFFF8F9FB),
+    onTap: () => _openViewModal(report),
+    child: Container(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+      decoration: BoxDecoration(
+        border: isLast
+            ? null
+            : const Border(bottom: BorderSide(color: Color(0xFFF1F5F9))),
+      ),
+      child: Row(
+        children: [
+          // Report ID
+          Expanded(
+            flex: 2,
+            child: Text(
+              report.reportId,
+              style: GoogleFonts.beVietnamPro(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: _DS.primary,
               ),
+              overflow: TextOverflow.ellipsis,
             ),
-            // Title
-            Expanded(
-              flex: 4,
-              child: Text(
-                report.title,
-                style: GoogleFonts.beVietnamPro(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w500,
-                  color: const Color(0xFF1A202C),
-                ),
-                overflow: TextOverflow.ellipsis,
-                maxLines: 1,
-              ),
-            ),
-            // Type chip
-            Expanded(
-              flex: 2,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: isFinancial
-                      ? const Color(0xFFECFDF5)
-                      : const Color(0xFFEFF6FF),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: Text(
-                  isFinancial ? 'Financial' : 'Accomplishment',
+          ),
+          // EVENT (Title + Description)
+          Expanded(
+            flex: 4,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  report.title,
                   style: GoogleFonts.beVietnamPro(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    color: isFinancial
-                        ? const Color(0xFF059669)
-                        : const Color(0xFF2563EB),
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: const Color(0xFF1A202C),
                   ),
                   overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
                 ),
-              ),
+                if (report.description.isNotEmpty)
+                  Text(
+                    report.description,
+                    style: GoogleFonts.beVietnamPro(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w400,
+                      color: const Color(0xFF64748B),
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                    maxLines: 2,
+                  ),
+              ],
             ),
-            // Date
-            Expanded(
-              flex: 2,
+          ),
+          // Type chip
+          Expanded(
+            flex: 2,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(
+                color: isFinancial
+                    ? const Color(0xFFECFDF5)
+                    : const Color(0xFFEFF6FF),
+                borderRadius: BorderRadius.circular(6),
+              ),
               child: Text(
-                DateFormat('MMM dd, yyyy').format(report.submittedAt.toDate()),
+                isFinancial ? 'Financial' : 'Accomplishment',
                 style: GoogleFonts.beVietnamPro(
-                  fontSize: 12,
-                  color: const Color(0xFF64748B),
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  color: isFinancial
+                      ? const Color(0xFF059669)
+                      : const Color(0xFF2563EB),
                 ),
                 overflow: TextOverflow.ellipsis,
               ),
             ),
-            // Status — tappable to change
-            Expanded(flex: 1, child: _StatusDropdown(report: report)),
-            // Actions
-            Expanded(
-              flex: 2,
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  _ActionIconButton(
-                    icon: Icons.visibility_outlined,
-                    tooltip: 'View Details',
-                    onTap: () => _openViewModal(report),
-                  ),
-                  const SizedBox(width: 4),
-                  _ActionIconButton(
-                    icon: report.fileUrl?.isNotEmpty == true
-                        ? Icons.copy_outlined
-                        : Icons.attach_file_rounded,
-                    tooltip: report.fileUrl?.isNotEmpty == true
-                        ? 'Copy File URL'
-                        : 'No attachment',
-                    color: report.fileUrl?.isNotEmpty == true
-                        ? const Color(0xFF2563EB)
-                        : const Color(0xFFD1D5DB),
-                    onTap: report.fileUrl?.isNotEmpty == true
-                        ? () {
-                            Clipboard.setData(
-                              ClipboardData(text: report.fileUrl!),
-                            );
-                            _snack('File URL copied to clipboard');
-                          }
-                        : null,
-                  ),
-                  const SizedBox(width: 4),
-                  _ActionIconButton(
-                    icon: Icons.edit_outlined,
-                    tooltip: 'Edit Report',
-                    color: _DS.primary,
-                    onTap: () => _openEditModal(report),
-                  ),
-                  const SizedBox(width: 4),
-                  _ActionIconButton(
-                    icon: Icons.delete_outline_rounded,
-                    tooltip: 'Delete',
-                    color: const Color(0xFFDC2626),
-                    onTap: () => _deleteReport(report),
-                  ),
-                ],
+          ),
+          // Date
+          Expanded(
+            flex: 2,
+            child: Text(
+              DateFormat('MMM dd, yyyy').format(report.submittedAt.toDate()),
+              style: GoogleFonts.beVietnamPro(
+                fontSize: 12,
+                color: const Color(0xFF64748B),
               ),
+              overflow: TextOverflow.ellipsis,
             ),
-          ],
-        ),
+          ),
+          // Actions - removed the delete button, only View + Edit remain
+          Expanded(
+            flex: 2,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                _ActionIconButton(
+                  icon: Icons.visibility_outlined,
+                  tooltip: 'View Details',
+                  onTap: () => _openViewModal(report),
+                ),
+                const SizedBox(width: 4),
+                _ActionIconButton(
+                  icon: Icons.edit_outlined,
+                  tooltip: 'Edit Report',
+                  color: _DS.primary,
+                  onTap: () => _openEditModal(report),
+                ),
+                // DELETE BUTTON REMOVED
+              ],
+            ),
+          ),
+        ],
       ),
-    );
-  }
+    ),
+  );
+}
 
   Widget _buildEmptyState() {
     return Center(
@@ -886,11 +865,7 @@ class _OrgReportsScreenState extends State<OrgReportsScreen> {
     );
     if (ok != true) return;
     try {
-      if (report.fileUrl?.isNotEmpty == true) {
-        try {
-          await FirebaseStorage.instance.refFromURL(report.fileUrl!).delete();
-        } catch (_) {}
-      }
+      // No storage deletion needed since files are stored in Firestore
       await FirebaseFirestore.instance
           .collection('reports')
           .doc(report.id)
@@ -940,7 +915,9 @@ class _OrgReportsScreenState extends State<OrgReportsScreen> {
     });
     await doc.set({
       'orgId': widget.orgId,
-      'fileUrl': latest.data()['fileUrl'],
+      'fileBase64': latest.data()['fileBase64'],
+      'fileName': latest.data()['fileName'],
+      'fileSize': latest.data()['fileSize'],
       'submittedAt':
           latest.data()['submittedAt'] ?? FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
@@ -982,113 +959,33 @@ class _OrgReportsScreenState extends State<OrgReportsScreen> {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Status dropdown (inline in table)
+// View Report Modal (updated to handle base64)
 // ─────────────────────────────────────────────────────────────────────────────
-class _StatusDropdown extends StatelessWidget {
-  final ReportModel report;
-  const _StatusDropdown({required this.report});
-
-  static const _cfg = <String, Map<String, dynamic>>{
-    'pending': {
-      'label': 'PENDING',
-      'bg': Color(0xFFFFFBEB),
-      'fg': Color(0xFFFB923C),
-    },
-    'approved': {
-      'label': 'APPROVED',
-      'bg': Color(0xFFECFDF5),
-      'fg': Color(0xFF059669),
-    },
-    'rejected': {
-      'label': 'REJECTED',
-      'bg': Color(0xFFFEF2F2),
-      'fg': Color(0xFFDC2626),
-    },
-    'review': {
-      'label': 'ON REVIEW',
-      'bg': Color(0xFFEDE9FE),
-      'fg': Color(0xFF5B21B6),
-    },
-  };
-
-  @override
-  Widget build(BuildContext context) {
-    final c = _cfg[report.status] ?? _cfg['pending']!;
-    return PopupMenuButton<String>(
-      tooltip: 'Change status',
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-      offset: const Offset(0, 32),
-      onSelected: (s) async {
-        try {
-          await FirebaseFirestore.instance
-              .collection('reports')
-              .doc(report.id)
-              .update({'status': s, 'updatedAt': FieldValue.serverTimestamp()});
-        } catch (_) {}
-      },
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-        decoration: BoxDecoration(
-          color: c['bg'] as Color,
-          borderRadius: BorderRadius.circular(_DS.radiusPill),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              c['label'] as String,
-              style: GoogleFonts.beVietnamPro(
-                fontSize: 10,
-                fontWeight: FontWeight.w700,
-                color: c['fg'] as Color,
-                letterSpacing: 0.8,
-              ),
-            ),
-            const SizedBox(width: 2),
-            Icon(Icons.arrow_drop_down, size: 14, color: c['fg'] as Color),
-          ],
-        ),
-      ),
-      itemBuilder: (_) => ['pending', 'approved', 'rejected', 'review']
-          .where((s) => s != report.status)
-          .map((s) {
-            final cfg = _cfg[s]!;
-            return PopupMenuItem(
-              value: s,
-              child: Row(
-                children: [
-                  Container(
-                    width: 8,
-                    height: 8,
-                    decoration: BoxDecoration(
-                      color: cfg['fg'] as Color,
-                      shape: BoxShape.circle,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    cfg['label'] as String,
-                    style: GoogleFonts.beVietnamPro(fontSize: 13),
-                  ),
-                ],
-              ),
-            );
-          })
-          .toList(),
-    );
-  }
-}
-
 // ─────────────────────────────────────────────────────────────────────────────
-// View Report Modal
+// View Report Modal (updated: removed Status, uses event proposal file viewing)
 // ─────────────────────────────────────────────────────────────────────────────
 class _ViewReportModal extends StatelessWidget {
   final ReportModel report;
   const _ViewReportModal({required this.report});
 
+  // MIME type detection (copied from event proposals)
+  static String _mimeFromExt(String ext) {
+    switch (ext) {
+      case 'png': return 'image/png';
+      case 'jpg': case 'jpeg': return 'image/jpeg';
+      case 'pdf': return 'application/pdf';
+      case 'doc': return 'application/msword';
+      case 'docx': return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+      case 'xlsx': return 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+      default: return 'application/octet-stream';
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final isFinancial = report.type == 'financial';
+    final hasFile = report.fileBase64 != null && report.fileBase64!.isNotEmpty;
+
     return Dialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
       child: SizedBox(
@@ -1170,6 +1067,7 @@ class _ViewReportModal extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 16),
+                  // Status removed here
                   Row(
                     children: [
                       Expanded(
@@ -1182,10 +1080,11 @@ class _ViewReportModal extends StatelessWidget {
                       const SizedBox(width: 16),
                       Expanded(
                         child: _detailItem(
-                          'Status',
-                          report.status.toUpperCase(),
-                          Icons.circle_outlined,
-                          valueColor: _statusColor(report.status),
+                          'Type',
+                          isFinancial
+                              ? 'Financial Report'
+                              : 'Accomplishment Report',
+                          Icons.label_outlined,
                         ),
                       ),
                     ],
@@ -1195,16 +1094,6 @@ class _ViewReportModal extends StatelessWidget {
                     children: [
                       Expanded(
                         child: _detailItem(
-                          'Type',
-                          isFinancial
-                              ? 'Financial Report'
-                              : 'Accomplishment Report',
-                          Icons.label_outlined,
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: _detailItem(
                           'Date Submitted',
                           DateFormat(
                             'MMM dd, yyyy',
@@ -1212,6 +1101,9 @@ class _ViewReportModal extends StatelessWidget {
                           Icons.calendar_today_outlined,
                         ),
                       ),
+                      const SizedBox(width: 16),
+                      // Empty space to keep layout balanced
+                      const Expanded(child: SizedBox.shrink()),
                     ],
                   ),
                   if (report.description.isNotEmpty) ...[
@@ -1222,63 +1114,63 @@ class _ViewReportModal extends StatelessWidget {
                       Icons.notes_rounded,
                     ),
                   ],
-                  if (report.fileUrl?.isNotEmpty == true) ...[
-                    const SizedBox(height: 14),
-                    InkWell(
-                      onTap: () {
-                        Clipboard.setData(ClipboardData(text: report.fileUrl!));
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text(
-                              'File URL copied to clipboard',
-                              style: GoogleFonts.beVietnamPro(
-                                color: Colors.white,
-                              ),
-                            ),
-                            backgroundColor: const Color(0xFF059669),
-                            behavior: SnackBarBehavior.floating,
-                            shape: RoundedRectangleBorder(
+                  // File Attachment (using event proposal style)
+                  if (hasFile) ...[
+                    const SizedBox(height: 20),
+                    Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF8F9FB),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: const Color(0xFFE2E6EA)),
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: _DS.primary.withAlpha(26),
                               borderRadius: BorderRadius.circular(8),
                             ),
+                            child: Icon(
+                              Icons.insert_drive_file_rounded,
+                              size: 20,
+                              color: _DS.primary,
+                            ),
                           ),
-                        );
-                      },
-                      borderRadius: BorderRadius.circular(8),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 14,
-                          vertical: 12,
-                        ),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFEFF6FF),
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: const Color(0xFFBFDBFE)),
-                        ),
-                        child: Row(
-                          children: [
-                            const Icon(
-                              Icons.attach_file_rounded,
-                              size: 16,
-                              color: Color(0xFF2563EB),
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                'View attachment — tap to copy URL',
-                                style: GoogleFonts.beVietnamPro(
-                                  fontSize: 12,
-                                  color: const Color(0xFF2563EB),
-                                  decoration: TextDecoration.underline,
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  report.fileName ?? 'Attached File',
+                                  style: GoogleFonts.beVietnamPro(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
                                 ),
-                              ),
+                                if (report.fileSize != null)
+                                  Text(
+                                    report.fileSize!,
+                                    style: GoogleFonts.beVietnamPro(
+                                      fontSize: 11,
+                                      color: const Color(0xFF64748B),
+                                    ),
+                                  ),
+                              ],
                             ),
-                            const Icon(
-                              Icons.copy_outlined,
-                              size: 14,
-                              color: Color(0xFF2563EB),
+                          ),
+                          TextButton.icon(
+                            onPressed: () => _openAttachment(context),
+                            icon: const Icon(Icons.open_in_new_rounded, size: 15),
+                            label: const Text('Open'),
+                            style: TextButton.styleFrom(
+                              foregroundColor: _DS.primary,
                             ),
-                          ],
-                        ),
+                          ),
+                        ],
                       ),
                     ),
                   ],
@@ -1322,19 +1214,6 @@ class _ViewReportModal extends StatelessWidget {
     );
   }
 
-  Color _statusColor(String s) {
-    switch (s) {
-      case 'approved':
-        return const Color(0xFF059669);
-      case 'rejected':
-        return const Color(0xFFDC2626);
-      case 'review':
-        return const Color(0xFF5B21B6);
-      default:
-        return const Color(0xFFFB923C);
-    }
-  }
-
   Widget _detailItem(
     String label,
     String value,
@@ -1371,10 +1250,78 @@ class _ViewReportModal extends StatelessWidget {
       ],
     );
   }
+
+  // ── OPEN ATTACHMENT (exact copy from event proposals) ──
+  Future<void> _openAttachment(BuildContext context) async {
+    final b64 = report.fileBase64;
+    if (b64 == null || b64.isEmpty) return;
+    try {
+      final bytes = base64Decode(b64);
+      final name = report.fileName ?? 'document';
+      final ext = name.contains('.') ? name.split('.').last.toLowerCase() : '';
+      final mime = _mimeFromExt(ext);
+
+      if (mime.startsWith('image/')) {
+        showDialog(
+          context: context,
+          builder: (_) => Dialog(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.all(8),
+                  child: Text(
+                    name,
+                    style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.w600),
+                  ),
+                ),
+                Flexible(child: Image.memory(bytes)),
+                Padding(
+                  padding: const EdgeInsets.all(8),
+                  child: TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('Close'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      } else if (mime == 'text/plain') {
+        final text = utf8.decode(bytes);
+        showDialog(
+          context: context,
+          builder: (_) => AlertDialog(
+            title: Text(name),
+            content: SingleChildScrollView(
+              child: SelectableText(text),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Close'),
+              ),
+            ],
+          ),
+        );
+      } else {
+        await platform_file_utils.saveBytesToTempAndOpen(bytes, name, mimeType: mime);
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error opening attachment: $e'),
+            backgroundColor: const Color(0xFFDC2626),
+          ),
+        );
+      }
+    }
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Create / Edit Report Modal (modified with event dropdown + REAL upload progress)
+// Create / Edit Report Modal (base64 approach - identical to event proposals)
 // ─────────────────────────────────────────────────────────────────────────────
 class _ReportModal extends StatefulWidget {
   final String orgId;
@@ -1390,10 +1337,9 @@ class _ReportModalState extends State<_ReportModal> {
   final _descCtrl = TextEditingController();
 
   String _type = 'financial';
-  String? _fileUrl;
-  String? _newFileUrl;
-  String? _attachedFileName;
-  String? _attachedFileSize;
+  String? _fileBase64;
+  String? _fileName;
+  String? _fileSize;
   bool _isSubmitting = false;
   bool _isUploading = false;
   double _uploadProgress = 0.0;
@@ -1410,8 +1356,9 @@ class _ReportModalState extends State<_ReportModal> {
     if (r != null) {
       _descCtrl.text = r.description;
       _type = r.type;
-      _fileUrl = r.fileUrl;
-      if (r.fileUrl?.isNotEmpty == true) _attachedFileName = 'Attached file';
+      _fileBase64 = r.fileBase64;
+      _fileName = r.fileName;
+      _fileSize = r.fileSize;
     }
     _loadEvents();
   }
@@ -1472,107 +1419,21 @@ class _ReportModalState extends State<_ReportModal> {
       ? 'financial_submissions'
       : 'accomplishment_submissions';
 
-  Future<void> _syncSubmissionRecord(String type, String? fileUrl) async {
+  Future<void> _syncSubmissionRecord(String type, String? base64, String? name, String? size) async {
     await FirebaseFirestore.instance
         .collection(_submissionCollection(type))
         .doc(widget.orgId)
         .set({
           'orgId': widget.orgId,
-          'fileUrl': fileUrl,
+          'fileBase64': base64,
+          'fileName': name,
+          'fileSize': size,
           'submittedAt': FieldValue.serverTimestamp(),
         }, SetOptions(merge: true));
   }
 
-  String _contentTypeFor(String? extension) {
-    switch (extension?.toLowerCase()) {
-      case 'pdf':
-        return 'application/pdf';
-      case 'doc':
-        return 'application/msword';
-      case 'docx':
-        return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
-      case 'xlsx':
-        return 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
-      case 'jpg':
-      case 'jpeg':
-        return 'image/jpeg';
-      case 'png':
-        return 'image/png';
-      default:
-        return 'application/octet-stream';
-    }
-  }
-
-  String _safeStorageName(String name) {
-    return name.replaceAll(RegExp(r'[\\/#?%\[\]*]'), '_');
-  }
-
-  Future<TaskSnapshot> _uploadWithProgress(
-    Reference ref,
-    Uint8List bytes,
-    SettableMetadata metadata,
-  ) async {
-    final uploadTask = ref.putData(bytes, metadata);
-    final completer = Completer<TaskSnapshot>();
-    late StreamSubscription<TaskSnapshot> subscription;
-
-    subscription = uploadTask.snapshotEvents.listen(
-      (snapshot) {
-        final totalBytes = snapshot.totalBytes;
-        final progress = totalBytes <= 0
-            ? 0.0
-            : snapshot.bytesTransferred / totalBytes;
-
-        if (mounted) {
-          setState(() {
-            _uploadProgress = progress.clamp(0.0, 1.0);
-          });
-        }
-
-        if (snapshot.state == TaskState.success && !completer.isCompleted) {
-          completer.complete(snapshot);
-        } else if (snapshot.state == TaskState.error &&
-            !completer.isCompleted) {
-          completer.completeError(
-            FirebaseException(
-              plugin: 'firebase_storage',
-              message: 'Storage upload failed.',
-            ),
-          );
-        } else if (snapshot.state == TaskState.canceled &&
-            !completer.isCompleted) {
-          completer.completeError(
-            FirebaseException(
-              plugin: 'firebase_storage',
-              message: 'Storage upload was canceled.',
-            ),
-          );
-        }
-      },
-      onError: (Object error, StackTrace stackTrace) {
-        if (!completer.isCompleted) {
-          completer.completeError(error, stackTrace);
-        }
-      },
-    );
-
-    try {
-      return await completer.future.timeout(
-        const Duration(minutes: 2),
-        onTimeout: () async {
-          await uploadTask.cancel();
-          throw TimeoutException(
-            'Upload did not receive progress from Firebase Storage.',
-          );
-        },
-      );
-    } finally {
-      await subscription.cancel();
-    }
-  }
-
-  // ── UPLOAD WITH REAL PROGRESS TRACKING ──────────────────────────────────
-  Future<void> _pickAndUploadFile() async {
+  // ── PICK FILE (base64 encoding, identical to event proposals) ──────────
+  Future<void> _pickFile() async {
     final result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
       allowedExtensions: ['pdf', 'doc', 'docx', 'xlsx', 'jpg', 'png'],
@@ -1584,59 +1445,35 @@ class _ReportModalState extends State<_ReportModal> {
       _snack('Cannot read file!', error: true);
       return;
     }
-
-    const maxSize = 10 * 1024 * 1024;
+    const maxSize = 700 * 1024; // 700 KB limit (same as event proposals)
     if (file.bytes!.length > maxSize) {
-      _snack('File too large. Max 10 MB allowed.', error: true);
+      _snack('File too large. Max 700 KB allowed.', error: true);
       return;
     }
-
     final sizeKB = (file.bytes!.length / 1024).toStringAsFixed(1);
     setState(() {
       _isUploading = true;
       _uploadProgress = 0.0;
-      _attachedFileName = file.name;
-      _attachedFileSize = sizeKB;
+      _fileName = file.name;
+      _fileSize = '$sizeKB KB';
     });
-
-    try {
-      final timestamp = DateTime.now().millisecondsSinceEpoch;
-      final name = '${timestamp}_${_safeStorageName(file.name)}';
-      final ref = FirebaseStorage.instance.ref().child(
-        'reports/${widget.orgId}/$name',
-      );
-      final metadata = SettableMetadata(
-        contentType: _contentTypeFor(file.extension),
-        customMetadata: {'orgId': widget.orgId, 'originalName': file.name},
-      );
-
-      await _uploadWithProgress(ref, file.bytes!, metadata);
-      final url = await ref.getDownloadURL();
-
-      if (mounted) {
-        setState(() {
-          _newFileUrl = url;
-          _isUploading = false;
-          _uploadProgress = 1.0;
-        });
-        _snack('File uploaded successfully');
-      }
-    } catch (e) {
-      debugPrint('Upload exception: $e');
-      if (mounted) {
-        setState(() {
-          _isUploading = false;
-          _uploadProgress = 0.0;
-        });
-        _snack('Upload failed: $e', error: true);
-      }
+    // Simulate progress (like event proposals)
+    for (int i = 0; i <= 100; i += 20) {
+      await Future.delayed(const Duration(milliseconds: 50));
+      if (mounted) setState(() => _uploadProgress = i / 100);
     }
+    setState(() {
+      _fileBase64 = base64Encode(file.bytes!);
+      _uploadProgress = 1.0;
+      _isUploading = false;
+    });
+    _snack('File ready: ${file.name}');
   }
 
-  void _clearFile() => setState(() {
-    _newFileUrl = null;
-    _attachedFileName = null;
-    _attachedFileSize = null;
+  void _removeFile() => setState(() {
+    _fileBase64 = null;
+    _fileName = null;
+    _fileSize = null;
     _uploadProgress = 0.0;
   });
 
@@ -1669,14 +1506,15 @@ class _ReportModalState extends State<_ReportModal> {
     final eventTitle = selectedEvent['title'] as String;
 
     setState(() => _isSubmitting = true);
-    final fileUrl = _newFileUrl ?? _fileUrl;
 
     final Map<String, dynamic> data = {
       'orgId': widget.orgId,
       'title': eventTitle,
       'type': _type,
       'description': _descCtrl.text.trim(),
-      'fileUrl': fileUrl,
+      'fileBase64': _fileBase64,
+      'fileName': _fileName,
+      'fileSize': _fileSize,
       'eventId': _selectedEventId,
       'updatedAt': FieldValue.serverTimestamp(),
     };
@@ -1686,7 +1524,7 @@ class _ReportModalState extends State<_ReportModal> {
       if (isEdit) {
         final oldType = widget.existingReport!.type;
         await col.doc(widget.existingReport!.id).update(data);
-        await _syncSubmissionRecord(_type, fileUrl);
+        await _syncSubmissionRecord(_type, _fileBase64, _fileName, _fileSize);
         if (oldType != _type) {
           final snap = await col
               .where('orgId', isEqualTo: widget.orgId)
@@ -1717,7 +1555,7 @@ class _ReportModalState extends State<_ReportModal> {
         data['submittedAt'] = FieldValue.serverTimestamp();
         data['submittedBy'] = FirebaseAuth.instance.currentUser?.uid ?? '';
         await col.add(data);
-        await _syncSubmissionRecord(_type, fileUrl);
+        await _syncSubmissionRecord(_type, _fileBase64, _fileName, _fileSize);
         await activity_log.ActivityLogger.log(
           action: 'create_report',
           module: 'reports',
@@ -1753,9 +1591,7 @@ class _ReportModalState extends State<_ReportModal> {
   @override
   Widget build(BuildContext context) {
     final isEdit = widget.existingReport != null;
-    final hasFile =
-        _newFileUrl != null ||
-        (_fileUrl?.isNotEmpty == true && _attachedFileName != null);
+    final hasFile = _fileBase64 != null && _fileBase64!.isNotEmpty;
 
     return Dialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
@@ -2091,11 +1927,31 @@ class _ReportModalState extends State<_ReportModal> {
             color: const Color(0xFF9AA5B4),
           ),
         ),
+        // FIX for "RenderFlex overflowed by 11 pixels on the bottom":
+        // the closed field now shows a single-line title only. The full
+        // two-line (title + date) layout still shows in the open menu via
+        // `items` below — this is exactly what selectedItemBuilder is for.
+        selectedItemBuilder: (context) => _events
+            .map(
+              (event) => Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  event['title'] as String,
+                  style: GoogleFonts.beVietnamPro(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            )
+            .toList(),
         items: _events.map((event) {
           return DropdownMenuItem<String>(
             value: event['id'] as String,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
                   event['title'] as String,
@@ -2149,7 +2005,7 @@ class _ReportModalState extends State<_ReportModal> {
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
-                    _attachedFileName ?? 'Uploading...',
+                    _fileName ?? 'Uploading...',
                     style: GoogleFonts.beVietnamPro(
                       fontSize: 12,
                       fontWeight: FontWeight.w500,
@@ -2158,9 +2014,9 @@ class _ReportModalState extends State<_ReportModal> {
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
-                if (_attachedFileSize != null)
+                if (_fileSize != null)
                   Text(
-                    _attachedFileSize!,
+                    _fileSize!,
                     style: GoogleFonts.beVietnamPro(
                       fontSize: 11,
                       color: const Color(0xFF64748B),
@@ -2180,7 +2036,7 @@ class _ReportModalState extends State<_ReportModal> {
             ),
             const SizedBox(height: 6),
             Text(
-              'Uploading ${(_uploadProgress * 100).toInt()}%',
+              'Processing ${(_uploadProgress * 100).toInt()}%',
               style: GoogleFonts.beVietnamPro(
                 fontSize: 10,
                 color: const Color(0xFF64748B),
@@ -2219,7 +2075,7 @@ class _ReportModalState extends State<_ReportModal> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    _attachedFileName ?? 'File attached',
+                    _fileName ?? 'File attached',
                     style: GoogleFonts.beVietnamPro(
                       fontSize: 12,
                       fontWeight: FontWeight.w600,
@@ -2227,9 +2083,9 @@ class _ReportModalState extends State<_ReportModal> {
                     ),
                     overflow: TextOverflow.ellipsis,
                   ),
-                  if (_attachedFileSize != null)
+                  if (_fileSize != null)
                     Text(
-                      _attachedFileSize!,
+                      _fileSize!,
                       style: GoogleFonts.beVietnamPro(
                         fontSize: 11,
                         color: const Color(0xFF059669),
@@ -2239,7 +2095,7 @@ class _ReportModalState extends State<_ReportModal> {
               ),
             ),
             TextButton(
-              onPressed: _clearFile,
+              onPressed: _removeFile,
               child: Text(
                 'Remove',
                 style: GoogleFonts.beVietnamPro(
@@ -2249,7 +2105,7 @@ class _ReportModalState extends State<_ReportModal> {
               ),
             ),
             TextButton(
-              onPressed: _pickAndUploadFile,
+              onPressed: _pickFile,
               child: Text(
                 'Change',
                 style: GoogleFonts.beVietnamPro(
@@ -2264,7 +2120,7 @@ class _ReportModalState extends State<_ReportModal> {
     }
 
     return GestureDetector(
-      onTap: _pickAndUploadFile,
+      onTap: _pickFile,
       child: Container(
         width: double.infinity,
         padding: const EdgeInsets.all(24),
@@ -2309,7 +2165,7 @@ class _ReportModalState extends State<_ReportModal> {
             ),
             const SizedBox(height: 4),
             Text(
-              'PDF, DOC, DOCX, XLSX, JPG, PNG — max 10 MB',
+              'PDF, DOC, DOCX, XLSX, JPG, PNG — max 700 KB',
               style: GoogleFonts.beVietnamPro(
                 fontSize: 11,
                 color: const Color(0xFF9AA5B4),
@@ -2323,7 +2179,7 @@ class _ReportModalState extends State<_ReportModal> {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Type selector card
+// Type selector card (unchanged)
 // ─────────────────────────────────────────────────────────────────────────────
 class _TypeCard extends StatelessWidget {
   final String label;
@@ -2385,7 +2241,7 @@ class _TypeCard extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Countdown card
+// Countdown card (unchanged)
 // ─────────────────────────────────────────────────────────────────────────────
 class _CountdownCard extends StatelessWidget {
   final Duration remaining;
@@ -2540,7 +2396,7 @@ class _Colon extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Deadline card
+// Deadline card (unchanged)
 // ─────────────────────────────────────────────────────────────────────────────
 class _DeadlineCard extends StatelessWidget {
   final String label;
@@ -2647,7 +2503,7 @@ class _DeadlineCard extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Confirm dialog
+// Confirm dialog (unchanged)
 // ─────────────────────────────────────────────────────────────────────────────
 class _ConfirmDialog extends StatelessWidget {
   final String title;
@@ -2766,7 +2622,7 @@ class _ConfirmDialog extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Error state
+// Error state (unchanged)
 // ─────────────────────────────────────────────────────────────────────────────
 class _ErrorState extends StatelessWidget {
   final String message;
@@ -2848,7 +2704,7 @@ class _ErrorState extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Export button
+// Export button (unchanged)
 // ─────────────────────────────────────────────────────────────────────────────
 class _ExportButton extends StatelessWidget {
   final String orgId;
@@ -3008,7 +2864,7 @@ class _ExportButton extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Reusable widgets
+// Reusable widgets (unchanged)
 // ─────────────────────────────────────────────────────────────────────────────
 class _StatCard extends StatelessWidget {
   final String label, value;
@@ -3074,13 +2930,13 @@ class _StatCard extends StatelessWidget {
 }
 
 class _FilterDropdown extends StatelessWidget {
-  final String value;
+  final String? value; // now nullable, no "All" option
   final List<String> items;
   final String hint;
   final IconData icon;
   final ValueChanged<String?> onChanged;
   const _FilterDropdown({
-    required this.value,
+    this.value,
     required this.items,
     required this.hint,
     required this.icon,
@@ -3098,7 +2954,7 @@ class _FilterDropdown extends StatelessWidget {
     ),
     child: DropdownButtonHideUnderline(
       child: DropdownButton<String>(
-        value: items.contains(value) ? value : null,
+        value: value, // null allowed
         icon: const Icon(
           Icons.keyboard_arrow_down_rounded,
           size: 18,
@@ -3254,7 +3110,7 @@ class _PageNumButton extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Report Model (updated with eventId)
+// Report Model (updated with base64 fields)
 // ─────────────────────────────────────────────────────────────────────────────
 class ReportModel {
   final String id;
@@ -3262,11 +3118,13 @@ class ReportModel {
   final String title;
   final String type;
   final String description;
-  final String? fileUrl;
+  final String? fileBase64;   // base64 encoded file data
+  final String? fileName;     // original file name
+  final String? fileSize;     // formatted size (e.g., "123.4 KB")
   final String status;
   final Timestamp submittedAt;
   final String submittedBy;
-  final String? eventId; // new field
+  final String? eventId;
 
   const ReportModel({
     required this.id,
@@ -3274,7 +3132,9 @@ class ReportModel {
     required this.title,
     required this.type,
     required this.description,
-    this.fileUrl,
+    this.fileBase64,
+    this.fileName,
+    this.fileSize,
     required this.status,
     required this.submittedAt,
     required this.submittedBy,
@@ -3291,7 +3151,9 @@ class ReportModel {
       title: d['title'] as String? ?? '',
       type: d['type'] as String? ?? 'financial',
       description: d['description'] as String? ?? '',
-      fileUrl: d['fileUrl'] as String?,
+      fileBase64: d['fileBase64'] as String?,
+      fileName: d['fileName'] as String?,
+      fileSize: d['fileSize'] as String?,
       status: d['status'] as String? ?? 'pending',
       submittedAt: d['submittedAt'] as Timestamp? ?? Timestamp.now(),
       submittedBy: d['submittedBy'] as String? ?? '',
