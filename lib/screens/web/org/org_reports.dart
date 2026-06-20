@@ -346,56 +346,39 @@ class _OrgReportsScreenState extends State<OrgReportsScreen> {
     );
   }
 
-  // ── Stats row ──────────────────────────────────────────────────────────────
   Widget _buildStatsRow(List<ReportModel> all) {
-    final total = all.length;
-    final financial = all.where((r) => r.type == 'financial').length;
-    final accompl = all.where((r) => r.type == 'accomplishment').length;
-    final pending = all.where((r) => r.status == 'pending').length;
-    final approved = all.where((r) => r.status == 'approved').length;
+  final total = all.length;
+  final financial = all.where((r) => r.type == 'financial').length;
+  final accompl = all.where((r) => r.type == 'accomplishment').length;
 
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(28, 24, 28, 0),
-      child: Row(
-        children: [
-          _StatCard(
-            label: 'Total Reports',
-            value: '$total',
-            icon: Icons.article_outlined,
-            color: _DS.primary,
-          ),
-          const SizedBox(width: 14),
-          _StatCard(
-            label: 'Financial',
-            value: '$financial',
-            icon: Icons.account_balance_outlined,
-            color: const Color(0xFF059669),
-          ),
-          const SizedBox(width: 14),
-          _StatCard(
-            label: 'Accomplishment',
-            value: '$accompl',
-            icon: Icons.assignment_turned_in_outlined,
-            color: const Color(0xFF2563EB),
-          ),
-          const SizedBox(width: 14),
-          _StatCard(
-            label: 'Pending Review',
-            value: '$pending',
-            icon: Icons.pending_outlined,
-            color: const Color(0xFFFB923C),
-          ),
-          const SizedBox(width: 14),
-          _StatCard(
-            label: 'Approved',
-            value: '$approved',
-            icon: Icons.check_circle_outline,
-            color: const Color(0xFF059669),
-          ),
-        ],
-      ),
-    );
-  }
+  return Padding(
+    padding: const EdgeInsets.fromLTRB(28, 24, 28, 0),
+    child: Row(
+      children: [
+        _StatCard(
+          label: 'Total Reports',
+          value: '$total',
+          icon: Icons.article_outlined,
+          color: _DS.primary,
+        ),
+        const SizedBox(width: 14),
+        _StatCard(
+          label: 'Financial',
+          value: '$financial',
+          icon: Icons.account_balance_outlined,
+          color: const Color(0xFF059669),
+        ),
+        const SizedBox(width: 14),
+        _StatCard(
+          label: 'Accomplishment',
+          value: '$accompl',
+          icon: Icons.assignment_turned_in_outlined,
+          color: const Color(0xFF2563EB),
+        ),
+      ],
+    ),
+  );
+}
 
   // ── Deadline row ───────────────────────────────────────────────────────────
   Widget _buildDeadlineRow(List<ReportModel> all) {

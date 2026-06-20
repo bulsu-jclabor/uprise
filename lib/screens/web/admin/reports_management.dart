@@ -280,7 +280,11 @@ class OrgSubmission {
   });
 
   bool get hasApprovedEvent => eventDate != null && eventTitle != null;
-  DateTime? get eventDeadline => eventDate?.subtract(const Duration(days: 7));
+
+  // Submission deadline rule: automatically 1 week AFTER the event date.
+  // No manual deadline setting is required for this — it's derived purely
+  // from the event date.
+  DateTime? get eventDeadline => eventDate?.add(const Duration(days: 7));
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -297,14 +301,14 @@ class _ReportsManagementState extends State<ReportsManagement>
   late TabController _tabController;
 
   String? _getOrgLogo(String orgId) {
-  // Find the organization with this ID
-  final org = _organizations.firstWhere(
-  (o) => o['id'] == orgId,
-  orElse: () => <String, dynamic>{},
-);
-  // Return its logo URL (or null if not found)
-  return org['logoUrl'] as String?;
-}
+    // Find the organization with this ID
+    final org = _organizations.firstWhere(
+      (o) => o['id'] == orgId,
+      orElse: () => <String, dynamic>{},
+    );
+    // Return its logo URL (or null if not found)
+    return org['logoUrl'] as String?;
+  }
 
   String _filterOrg = 'All Organizations';
   String _filterType = 'All Types';
@@ -320,15 +324,15 @@ class _ReportsManagementState extends State<ReportsManagement>
   static const List<String> _semesters = [
     'All Semesters', '1st Semester', '2nd Semester', 'Summer',
   ];
-  static const List<String> _statusOptions = [
-    'All', 'Approved', 'Pending', 'Rejected',
-  ];
 
   List<EventReport> _events = [];
   List<Map<String, dynamic>> _organizations = [];
   bool _loadingEvents = true;
 
-  // NEW: Admin reports for financial and accomplishment
+  // Event Summary tab — only shows results after "Generate Reports" is tapped
+  bool _summaryGenerated = false;
+
+  // Admin reports for financial and accomplishment
   List<AdminReport> _financialReports = [];
   List<AdminReport> _accomplishmentReports = [];
   bool _loadingFinancial = true;
@@ -423,21 +427,21 @@ class _ReportsManagementState extends State<ReportsManagement>
   // ── Firebase loaders ──────────────────────────────────────────────
 
   Future<void> _loadOrganizations() async {
-  final snap = await FirebaseFirestore.instance
-      .collection('organizations')
-      .get();
-  if (!mounted) return;
-  setState(() {
-    _organizations = snap.docs.map((doc) {
-      final data = doc.data();
-      return <String, dynamic>{       
-        'id': doc.id,
-        'name': data['name']?.toString() ?? 'Unknown',
-        'logoUrl': data['logoUrl'] as String?,
-      };
-    }).toList();
-  });
-}
+    final snap = await FirebaseFirestore.instance
+        .collection('organizations')
+        .get();
+    if (!mounted) return;
+    setState(() {
+      _organizations = snap.docs.map((doc) {
+        final data = doc.data();
+        return <String, dynamic>{
+          'id': doc.id,
+          'name': data['name']?.toString() ?? 'Unknown',
+          'logoUrl': data['logoUrl'] as String?,
+        };
+      }).toList();
+    });
+  }
 
   Future<void> _loadEvents() async {
     if (!mounted) return;
@@ -447,17 +451,17 @@ class _ReportsManagementState extends State<ReportsManagement>
       if (_filterStatus != 'All') {
         query = query.where('status', isEqualTo: _filterStatus.toLowerCase());
       }
-        if (_filterType != 'All Types') {   // <-- add opening brace
-  query = query.where('type', isEqualTo: _filterType);
-} // <-- add closing brace
+      if (_filterType != 'All Types') {
+        query = query.where('type', isEqualTo: _filterType);
+      }
       if (_filterOrg != 'All Organizations') {
         final org = _organizations.firstWhere(
-  (o) => o['name'] == _filterOrg,
-  orElse: () => <String, dynamic>{'id': '', 'name': ''},
-);
-        if ((org['id'] as String).isNotEmpty) {   // <-- add brace
-  query = query.where('orgId', isEqualTo: org['id']);
-} // <-- close
+          (o) => o['name'] == _filterOrg,
+          orElse: () => <String, dynamic>{'id': '', 'name': ''},
+        );
+        if ((org['id'] as String).isNotEmpty) {
+          query = query.where('orgId', isEqualTo: org['id']);
+        }
       }
       final (rangeStart, rangeEnd) = _computeDateRange();
       if (rangeStart != null) {
@@ -497,95 +501,94 @@ class _ReportsManagementState extends State<ReportsManagement>
     }
   }
 
-
-  // ── NEW: Load Financial Reports ──────────────────────────────────
-Future<void> _loadFinancialReports() async {
-  if (!mounted) return;
-  setState(() => _loadingFinancial = true);
-  try {
-    // Query WITHOUT the 'archived' filter
-    final reportsSnap = await FirebaseFirestore.instance
-        .collection('reports')
-        .where('type', isEqualTo: 'financial')
-        .get();
-
-    final orgsSnap = await FirebaseFirestore.instance
-        .collection('organizations')
-        .get();
-    final orgMap = {
-      for (var doc in orgsSnap.docs) doc.id: doc.data()['name']?.toString() ?? 'Unknown'
-    };
-
-    final allReports = reportsSnap.docs
-        .map((doc) => AdminReport.fromFirestore(doc, orgMap))
-        .toList();
-
-    // Filter out archived reports in memory
-    final activeReports = allReports.where((r) => !r.archived).toList();
-
+  // ── Load Financial Reports ──────────────────────────────────
+  Future<void> _loadFinancialReports() async {
     if (!mounted) return;
-    setState(() {
-      _financialReports = activeReports;
-      _loadingFinancial = false;
-    });
-  } catch (e) {
-    debugPrint('Error loading financial reports: $e');
-    if (mounted) {
-      setState(() => _loadingFinancial = false);
-      // Show a snackbar to let you know something went wrong
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Failed to load financial reports: $e'),
-          backgroundColor: UpriseColors.error,
-        ),
-      );
+    setState(() => _loadingFinancial = true);
+    try {
+      // Query WITHOUT the 'archived' filter
+      final reportsSnap = await FirebaseFirestore.instance
+          .collection('reports')
+          .where('type', isEqualTo: 'financial')
+          .get();
+
+      final orgsSnap = await FirebaseFirestore.instance
+          .collection('organizations')
+          .get();
+      final orgMap = {
+        for (var doc in orgsSnap.docs) doc.id: doc.data()['name']?.toString() ?? 'Unknown'
+      };
+
+      final allReports = reportsSnap.docs
+          .map((doc) => AdminReport.fromFirestore(doc, orgMap))
+          .toList();
+
+      // Filter out archived reports in memory
+      final activeReports = allReports.where((r) => !r.archived).toList();
+
+      if (!mounted) return;
+      setState(() {
+        _financialReports = activeReports;
+        _loadingFinancial = false;
+      });
+    } catch (e) {
+      debugPrint('Error loading financial reports: $e');
+      if (mounted) {
+        setState(() => _loadingFinancial = false);
+        // Show a snackbar to let you know something went wrong
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to load financial reports: $e'),
+            backgroundColor: UpriseColors.error,
+          ),
+        );
+      }
     }
   }
-}
 
-// ── NEW: Load Accomplishment Reports ─────────────────────────────
-Future<void> _loadAccomplishmentReports() async {
-  if (!mounted) return;
-  setState(() => _loadingAccomplishment = true);
-  try {
-    // Query WITHOUT the 'archived' filter
-    final reportsSnap = await FirebaseFirestore.instance
-        .collection('reports')
-        .where('type', isEqualTo: 'accomplishment')
-        .get();
-
-    final orgsSnap = await FirebaseFirestore.instance
-        .collection('organizations')
-        .get();
-    final orgMap = {
-      for (var doc in orgsSnap.docs) doc.id: doc.data()['name']?.toString() ?? 'Unknown'
-    };
-
-    final allReports = reportsSnap.docs
-        .map((doc) => AdminReport.fromFirestore(doc, orgMap))
-        .toList();
-
-    // Filter out archived reports in memory
-    final activeReports = allReports.where((r) => !r.archived).toList();
-
+  // ── Load Accomplishment Reports ─────────────────────────────
+  Future<void> _loadAccomplishmentReports() async {
     if (!mounted) return;
-    setState(() {
-      _accomplishmentReports = activeReports;
-      _loadingAccomplishment = false;
-    });
-  } catch (e) {
-    debugPrint('Error loading accomplishment reports: $e');
-    if (mounted) {
-      setState(() => _loadingAccomplishment = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Failed to load accomplishment reports: $e'),
-          backgroundColor: UpriseColors.error,
-        ),
-      );
+    setState(() => _loadingAccomplishment = true);
+    try {
+      // Query WITHOUT the 'archived' filter
+      final reportsSnap = await FirebaseFirestore.instance
+          .collection('reports')
+          .where('type', isEqualTo: 'accomplishment')
+          .get();
+
+      final orgsSnap = await FirebaseFirestore.instance
+          .collection('organizations')
+          .get();
+      final orgMap = {
+        for (var doc in orgsSnap.docs) doc.id: doc.data()['name']?.toString() ?? 'Unknown'
+      };
+
+      final allReports = reportsSnap.docs
+          .map((doc) => AdminReport.fromFirestore(doc, orgMap))
+          .toList();
+
+      // Filter out archived reports in memory
+      final activeReports = allReports.where((r) => !r.archived).toList();
+
+      if (!mounted) return;
+      setState(() {
+        _accomplishmentReports = activeReports;
+        _loadingAccomplishment = false;
+      });
+    } catch (e) {
+      debugPrint('Error loading accomplishment reports: $e');
+      if (mounted) {
+        setState(() => _loadingAccomplishment = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to load accomplishment reports: $e'),
+            backgroundColor: UpriseColors.error,
+          ),
+        );
+      }
     }
   }
-}
 
   // ── Archive Report ────────────────────────────────────────────────
   Future<void> _archiveReport(AdminReport report) async {
@@ -606,7 +609,7 @@ Future<void> _loadAccomplishmentReports() async {
           .collection('reports')
           .doc(report.id)
           .update({'archived': true});
-      
+
       await activity_log.ActivityLogger.log(
         action: 'archive_report',
         module: 'Reports',
@@ -1055,23 +1058,17 @@ Future<void> _loadAccomplishmentReports() async {
 
   @override
   Widget build(BuildContext context) {
-    final width = MediaQuery.of(context).size.width;
-    final isMobile = width < 720;
-    final isTablet = width >= 720 && width < 1200;
-
     return Scaffold(
       backgroundColor: const Color(0xFFFBFCFE),
       body: _detailEvent != null
           ? _buildDetailView(_detailEvent!)
-          : _buildMainView(isMobile, isTablet),
+          : _buildMainView(),
     );
   }
 
-  Widget _buildMainView(bool isMobile, bool isTablet) {
+  Widget _buildMainView() {
     return Column(
       children: [
-        _buildStatsRow(isMobile, isTablet),
-        _buildToolbar(isMobile, isTablet),
         _buildTabBar(),
         const SizedBox(height: 16),
         Expanded(
@@ -1090,204 +1087,10 @@ Future<void> _loadAccomplishmentReports() async {
     );
   }
 
-  Widget _buildStatsRow(bool isMobile, bool isTablet) {
-    final totalEvents = _events.length;
-    final totalIncome = _events.fold<double>(0, (s, e) => s + e.totalIncome);
-    final totalExpenses = _events.fold<double>(0, (s, e) => s + e.totalExpenses);
-
-    // Submission stats from both collections
-    final finSubmitted = _financialSubs.where((s) => s.submittedAt != null).length;
-    final accSubmitted = _accomplishmentSubs.where((s) => s.submittedAt != null).length;
-    final totalOrgs = _financialSubs.length;
-    final pendingCount = totalOrgs > 0
-        ? (totalOrgs - finSubmitted) + (totalOrgs - accSubmitted)
-        : 0;
-
-    final cards = [
-      _StatCard(label: 'Total Events', value: '$totalEvents', icon: Icons.event_rounded, color: UpriseColors.primaryDark),
-      _StatCard(label: 'Total Income', value: '₱${_fmtK(totalIncome)}', icon: Icons.attach_money_rounded, color: UpriseColors.success),
-      _StatCard(label: 'Total Expenses', value: '₱${_fmtK(totalExpenses)}', icon: Icons.money_off_rounded, color: UpriseColors.error),
-      _StatCard(label: 'Reports Submitted', value: '${finSubmitted + accSubmitted}', icon: Icons.assignment_turned_in_rounded, color: UpriseColors.info),
-      _StatCard(label: 'Pending Reports', value: '$pendingCount', icon: Icons.pending_actions_rounded, color: UpriseColors.warning),
-    ];
-
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(28, 20, 28, 10),
-      child: isMobile
-          ? SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: [
-                  for (int i = 0; i < cards.length; i++) ...[
-                    SizedBox(width: 180, child: cards[i]),
-                    if (i < cards.length - 1) const SizedBox(width: 14),
-                  ],
-                ],
-              ),
-            )
-          : Row(
-              children: [
-                for (int i = 0; i < cards.length; i++) ...[
-                  Expanded(child: cards[i]),
-                  if (i < cards.length - 1) const SizedBox(width: 14),
-                ],
-              ],
-            ),
-    );
-  }
-
-  // ── Toolbar ───────────────────────────────────────────────────────
-  Widget _buildToolbar(bool isMobile, bool isTablet) {
-    final orgNames = [
-      'All Organizations',
-      ..._organizations.map((o) => o['name'] as String),
-    ];
-
-    final filtersWrap = Wrap(
-      spacing: 10,
-      runSpacing: 10,
-      children: [
-        _FilterDropdown(
-          value: _filterOrg,
-          items: orgNames,
-          hint: 'Organization',
-          icon: Icons.business_rounded,
-          onChanged: (v) {
-            setState(() { _filterOrg = v!; _currentPage = 1; });
-            _loadEvents();
-          },
-        ),
-        _FilterDropdown(
-          value: _filterType,
-          items: const ['All Types', 'Seminar', 'Workshop', 'Exhibition', 'Social', 'Cultural', 'Competition'],
-          hint: 'Report Type',
-          icon: Icons.category_rounded,
-          onChanged: (v) {
-            setState(() { _filterType = v!; _currentPage = 1; });
-            _loadEvents();
-          },
-        ),
-        _FilterDropdown(
-          value: _filterAcademicYear,
-          items: _academicYears,
-          hint: 'Academic Year',
-          icon: Icons.school_rounded,
-          onChanged: (v) {
-            setState(() { _filterAcademicYear = v!; _currentPage = 1; });
-            _loadEvents();
-          },
-        ),
-        _FilterDropdown(
-          value: _filterSemester,
-          items: _semesters,
-          hint: 'Semester',
-          icon: Icons.calendar_view_month_rounded,
-          onChanged: (v) {
-            setState(() { _filterSemester = v!; _currentPage = 1; });
-            _loadEvents();
-          },
-        ),
-        _FilterDropdown(
-          value: _filterStatus,
-          items: _statusOptions,
-          hint: 'Status',
-          icon: Icons.tune_rounded,
-          onChanged: (v) {
-            setState(() { _filterStatus = v!; _currentPage = 1; });
-            _loadEvents();
-          },
-        ),
-        _FilterDropdown(
-          value: _filterRange,
-          items: const ['All Time', 'Last 30 Days', 'Last 90 Days', 'This Year'],
-          hint: 'Date Range',
-          icon: Icons.date_range_rounded,
-          onChanged: (v) {
-            setState(() { _filterRange = v!; _currentPage = 1; });
-            _loadEvents();
-          },
-        ),
-      ],
-    );
-
-    final bool collapseActions = isMobile || isTablet;
-
-    final Widget actionsRow = collapseActions
-        ? PopupMenuButton<String>(
-            icon: const Icon(Icons.more_vert),
-            itemBuilder: (_) => [
-              const PopupMenuItem(
-                value: 'set_deadlines',
-                child: Text('Set Deadlines'),
-              ),
-              const PopupMenuItem(
-                value: 'generate_report',
-                child: Text('Generate Report'),
-              ),
-              const PopupMenuItem(
-                value: 'export_csv',
-                child: Text('Export CSV'),
-              ),
-              const PopupMenuItem(
-                value: 'export_pdf',
-                child: Text('Export PDF'),
-              ),
-            ],
-            onSelected: (v) async {
-              if (v == 'export_csv') await _exportFinancialCSV();
-              if (v == 'export_pdf') await _generatePDFReport();
-              if (v == 'set_deadlines') _showDeadlineDialog();
-              if (v == 'generate_report') _showGenerateReportDialog();
-            },
-          )
-        : Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _ToolbarButton(
-                label: 'Set Deadlines',
-                icon: Icons.edit_calendar_rounded,
-                onPressed: _showDeadlineDialog,
-                outlined: true,
-              ),
-              const SizedBox(width: 6),
-              _ToolbarButton(
-                label: 'Generate Report',
-                icon: Icons.insert_drive_file_rounded,
-                onPressed: _showGenerateReportDialog,
-              ),
-              const SizedBox(width: 6),
-              _ExportButton(
-                onExportCsv: _exportFinancialCSV,
-                onExportPdf: _generatePDFReport,
-              ),
-            ],
-          );
-
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(28, 20, 28, 0),
-      child: isMobile
-          ? Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                filtersWrap,
-                const SizedBox(height: 10),
-                Align(alignment: Alignment.centerRight, child: actionsRow),
-              ],
-            )
-          : Row(
-              children: [
-                Expanded(child: filtersWrap),
-                const SizedBox(width: 12),
-                actionsRow,
-              ],
-            ),
-    );
-  }
-
   // ── Tab Bar ───────────────────────────────────────────────────────
   Widget _buildTabBar() {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(28, 16, 28, 0),
+      padding: const EdgeInsets.fromLTRB(28, 20, 28, 0),
       child: Container(
         decoration: BoxDecoration(
           color: Colors.white,
@@ -1325,7 +1128,7 @@ Future<void> _loadAccomplishmentReports() async {
     );
   }
 
-  // ── NEW: Report Tab ──────────────────────────────────────────────
+  // ── Report Tab (Accomplishment / Financial) ──────────────────────
   Widget _buildReportTab(String reportType, List<AdminReport> reports, bool loading) {
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(28, 8, 28, 24),
@@ -1342,7 +1145,7 @@ Future<void> _loadAccomplishmentReports() async {
     );
   }
 
-  // ── NEW: Report Table ─────────────────────────────────────────────
+  // ── Report Table ─────────────────────────────────────────────────
   Widget _buildReportTable(String reportType, List<AdminReport> reports, bool loading) {
     if (loading) {
       return const Padding(
@@ -1413,9 +1216,9 @@ Future<void> _loadAccomplishmentReports() async {
                         child: Row(
                           children: [
                             _OrgAvatar(
-  name: report.orgName,
-  imageUrl: _getOrgLogo(report.orgId),
-),
+                              name: report.orgName,
+                              imageUrl: _getOrgLogo(report.orgId),
+                            ),
                             const SizedBox(width: 10),
                             Expanded(
                               child: Text(
@@ -1533,7 +1336,6 @@ Future<void> _loadAccomplishmentReports() async {
                 AdminExportButton(
                   onSelected: (choice) async {
                     if (choice == 'csv') {
-                      // Implement export if needed
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
                           content: Text('Exporting $reportType reports as CSV...'),
@@ -1558,10 +1360,180 @@ Future<void> _loadAccomplishmentReports() async {
     );
   }
 
-  // ── Event Summary Tab — analytics overview ────────────────────────
+  // ── Event Summary Tab ─────────────────────────────────────────────
   Widget _buildEventSummaryTab() {
-    if (_loadingEvents) return const Center(child: CircularProgressIndicator());
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(28, 8, 28, 0),
+          child: _buildEventSummaryConfigCard(),
+        ),
+        const SizedBox(height: 16),
+        Expanded(
+          child: !_summaryGenerated
+              ? _buildEventSummaryEmptyState()
+              : _loadingEvents
+                  ? const Center(child: CircularProgressIndicator())
+                  : _buildEventSummaryResults(),
+        ),
+      ],
+    );
+  }
 
+  Widget _buildEventSummaryConfigCard() {
+    final orgNames = [
+      'All Organizations',
+      ..._organizations.map((o) => o['name'] as String),
+    ];
+
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFE8ECF0)),
+        boxShadow: _DS.cardShadow,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _sectionLabel('Report Configuration', icon: Icons.tune_rounded),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: [
+              _FilterDropdown(
+                value: _filterOrg,
+                items: orgNames,
+                hint: 'Organization',
+                icon: Icons.business_rounded,
+                onChanged: (v) => setState(() {
+                  _filterOrg = v!;
+                  _summaryGenerated = false;
+                }),
+              ),
+              _FilterDropdown(
+                value: _filterType,
+                items: const [
+                  'All Types', 'Seminar', 'Workshop', 'Exhibition',
+                  'Social', 'Cultural', 'Competition',
+                ],
+                hint: 'Event Type',
+                icon: Icons.category_rounded,
+                onChanged: (v) => setState(() {
+                  _filterType = v!;
+                  _summaryGenerated = false;
+                }),
+              ),
+              _FilterDropdown(
+                value: _filterAcademicYear,
+                items: _academicYears,
+                hint: 'Academic Year',
+                icon: Icons.school_rounded,
+                onChanged: (v) => setState(() {
+                  _filterAcademicYear = v!;
+                  _summaryGenerated = false;
+                }),
+              ),
+              _FilterDropdown(
+                value: _filterSemester,
+                items: _semesters,
+                hint: 'Semester',
+                icon: Icons.calendar_view_month_rounded,
+                onChanged: (v) => setState(() {
+                  _filterSemester = v!;
+                  _summaryGenerated = false;
+                }),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              ElevatedButton.icon(
+                onPressed: _generateEventSummary,
+                icon: const Icon(Icons.insert_chart_outlined_rounded, size: 16),
+                label: Text(
+                  'Generate Reports',
+                  style: GoogleFonts.beVietnamPro(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: UpriseColors.primaryDark,
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+                ),
+              ),
+              if (_summaryGenerated) ...[
+                const SizedBox(width: 10),
+                _ExportButton(
+                  onExportCsv: _exportFinancialCSV,
+                  onExportPdf: _generatePDFReport,
+                ),
+              ],
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _generateEventSummary() async {
+    setState(() {
+      _summaryGenerated = true;
+      _currentPage = 1;
+    });
+    await _loadEvents();
+  }
+
+  Widget _buildEventSummaryEmptyState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            width: 80,
+            height: 80,
+            decoration: BoxDecoration(
+              color: const Color(0xFFF1F5F9),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: const Icon(
+              Icons.insert_chart_outlined_rounded,
+              size: 40,
+              color: Color(0xFF9AA5B4),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'No summary generated yet',
+            style: GoogleFonts.beVietnamPro(
+              fontSize: 15,
+              fontWeight: FontWeight.w600,
+              color: const Color(0xFF374151),
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Choose your filters above, then tap "Generate Reports" to view the summary.',
+            style: GoogleFonts.beVietnamPro(
+              fontSize: 13,
+              color: const Color(0xFF64748B),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEventSummaryResults() {
     final typeCount = <String, int>{};
     final orgCount = <String, int>{};
     int totalAttendees = 0;
@@ -1589,7 +1561,7 @@ Future<void> _loadAccomplishmentReports() async {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(28, 8, 28, 12),
+          padding: const EdgeInsets.fromLTRB(28, 0, 28, 12),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -2526,7 +2498,7 @@ Future<void> _loadAccomplishmentReports() async {
     );
   }
 
-  // ── Submission Table (existing, unchanged) ──────────────────────
+  // ── Submission Table ──────────────────────────────────────────────
   Widget _buildSubmissionTable(
     String title,
     List<OrgSubmission> submissions,
@@ -3613,258 +3585,6 @@ Future<void> _loadAccomplishmentReports() async {
       ),
     );
   }
-
-  void _showGenerateReportDialog() {
-    String fmt = 'PDF';
-    showDialog(
-      context: context,
-      barrierColor: Colors.black54,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setDlg) => Dialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(18),
-          ),
-          child: SizedBox(
-            width: 440,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  padding: const EdgeInsets.fromLTRB(24, 20, 20, 20),
-                  decoration: BoxDecoration(
-                    color: UpriseColors.primaryDark,
-                    borderRadius: const BorderRadius.vertical(
-                      top: Radius.circular(18),
-                    ),
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 38,
-                        height: 38,
-                        decoration: BoxDecoration(
-                          color: Colors.white.withAlpha(38),
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: const Icon(
-                          Icons.insert_drive_file_rounded,
-                          color: Colors.white,
-                          size: 18,
-                        ),
-                      ),
-                      const SizedBox(width: 14),
-                      Expanded(
-                        child: Text(
-                          'Generate Report',
-                          style: GoogleFonts.beVietnamPro(
-                            fontSize: 17,
-                            fontWeight: FontWeight.w700,
-                            color: Colors.white,
-                          ),
-                        ),
-                      ),
-                      IconButton(
-                        icon: const Icon(
-                          Icons.close_rounded,
-                          color: Colors.white,
-                          size: 20,
-                        ),
-                        onPressed: () => Navigator.pop(ctx),
-                      ),
-                    ],
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _sectionLabel(
-                        'Report Parameters',
-                        icon: Icons.tune_rounded,
-                      ),
-                      _summaryRow('Date Range', _filterRange),
-                      const SizedBox(height: 8),
-                      _summaryRow('Organization', _filterOrg),
-                      const SizedBox(height: 8),
-                      _summaryRow('Event Type', _filterType),
-                      const SizedBox(height: 8),
-                      _summaryRow('Report View', _reportView),
-                      const SizedBox(height: 20),
-                      _sectionLabel(
-                        'Output Format',
-                        icon: Icons.file_download_rounded,
-                      ),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: GestureDetector(
-                              onTap: () => setDlg(() => fmt = 'PDF'),
-                              child: _formatOption(
-                                'PDF',
-                                Icons.picture_as_pdf_rounded,
-                                UpriseColors.error,
-                                UpriseColors.errorBg,
-                                fmt == 'PDF',
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: GestureDetector(
-                              onTap: () => setDlg(() => fmt = 'CSV'),
-                              child: _formatOption(
-                                'CSV',
-                                Icons.table_chart_rounded,
-                                UpriseColors.success,
-                                UpriseColors.successBg,
-                                fmt == 'CSV',
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-                Container(
-                  padding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
-                  decoration: const BoxDecoration(
-                    border: Border(top: BorderSide(color: Color(0xFFE8ECF0))),
-                    color: Color(0xFFF8F9FB),
-                    borderRadius: BorderRadius.vertical(
-                      bottom: Radius.circular(18),
-                    ),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                      OutlinedButton(
-                        onPressed: () => Navigator.pop(ctx),
-                        style: OutlinedButton.styleFrom(
-                          side: const BorderSide(color: Color(0xFFE2E6EA)),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 18,
-                            vertical: 11,
-                          ),
-                        ),
-                        child: Text(
-                          'Cancel',
-                          style: GoogleFonts.beVietnamPro(fontSize: 13),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      ElevatedButton.icon(
-                        onPressed: () async {
-                          Navigator.pop(ctx);
-                          if (fmt == 'PDF') {
-                            await _generatePDFReport();
-                          } else {
-                            await _exportFinancialCSV();
-                          }
-                        },
-                        icon: Icon(
-                          fmt == 'PDF'
-                              ? Icons.picture_as_pdf_rounded
-                              : Icons.download_rounded,
-                          size: 16,
-                        ),
-                        label: Text(
-                          'Generate & Download',
-                          style: GoogleFonts.beVietnamPro(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: UpriseColors.primaryDark,
-                          foregroundColor: Colors.white,
-                          elevation: 0,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 20,
-                            vertical: 11,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _formatOption(
-    String label,
-    IconData icon,
-    Color color,
-    Color bgColor,
-    bool selected,
-  ) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: selected ? bgColor : const Color(0xFFF8F9FB),
-        borderRadius: BorderRadius.circular(_DS.radiusSm),
-        border: Border.all(
-          color: selected ? color : const Color(0xFFE2E6EA),
-          width: selected ? 1.5 : 1,
-        ),
-      ),
-      child: Row(
-        children: [
-          Icon(
-            icon,
-            color: selected ? color : const Color(0xFF9AA5B4),
-            size: 20,
-          ),
-          const SizedBox(width: 10),
-          Text(
-            label,
-            style: GoogleFonts.beVietnamPro(
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-              color: selected ? color : const Color(0xFF64748B),
-            ),
-          ),
-          const Spacer(),
-          if (selected)
-            Icon(Icons.check_circle_rounded, color: color, size: 16),
-        ],
-      ),
-    );
-  }
-
-  Widget _summaryRow(String label, String value) => Row(
-    children: [
-      SizedBox(
-        width: 120,
-        child: Text(
-          label,
-          style: GoogleFonts.beVietnamPro(
-            fontSize: 12,
-            color: const Color(0xFF64748B),
-          ),
-        ),
-      ),
-      Text(
-        value,
-        style: GoogleFonts.beVietnamPro(
-          fontSize: 12,
-          fontWeight: FontWeight.w600,
-        ),
-      ),
-    ],
-  );
 
   void _viewSubmission(OrgSubmission sub, String reportType) {
     showDialog(
