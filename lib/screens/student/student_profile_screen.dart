@@ -1,10 +1,14 @@
+import 'dart:convert';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:intl/intl.dart';  
 import '../auth/role_router.dart';
 import '../student/student_login.dart';
+import '../student/student_events_screen.dart';
 import '../../models/profile_model.dart';
 
 // ─────────────────────────────────────────────────────────────
@@ -25,12 +29,9 @@ class ProfileModel extends ChangeNotifier {
   String address = '';
   String photoUrl = '';
   // ── ID card fields ──
-  String middleName = '';
-  String dateOfBirth = '';
-  String dateOfIssue = '';
-  String sex = '';
-  String maritalStatus = '';
-  String placeOfBirth = '';
+  String course = '';
+  String yearLevel = '';
+  String department = '';
   // ── Organization ──
   String orgId = '';
   String orgName = '';
@@ -57,12 +58,9 @@ if (snapshot.docs.isNotEmpty) {
   mobile = data['mobile'] ?? '';
   address = data['address'] ?? '';
   photoUrl = data['photoUrl'] ?? '';
-  middleName = data['middleName'] ?? '';
-  dateOfBirth = data['dateOfBirth'] ?? '';
-  dateOfIssue = data['dateOfIssue'] ?? '';
-  sex = data['sex'] ?? '';
-  maritalStatus = data['maritalStatus'] ?? '';
-  placeOfBirth = data['placeOfBirth'] ?? '';
+  course = data['course'] ?? '';
+  yearLevel = data['yearLevel'] ?? '';
+  department = data['department'] ?? '';
   orgId = data['orgId'] ?? '';
 
   // Resolve org name if orgId is set
@@ -87,24 +85,18 @@ if (snapshot.docs.isNotEmpty) {
     required String mobile,
     required String address,
     String? photoUrl,
-    String? middleName,
-    String? dateOfBirth,
-    String? dateOfIssue,
-    String? sex,
-    String? maritalStatus,
-    String? placeOfBirth,
+    String? course,
+    String? yearLevel,
+    String? department,
   }) async {
     this.fullName = fullName;
     this.email = email;
     this.mobile = mobile;
     this.address = address;
     if (photoUrl != null) this.photoUrl = photoUrl;
-    if (middleName != null) this.middleName = middleName;
-    if (dateOfBirth != null) this.dateOfBirth = dateOfBirth;
-    if (dateOfIssue != null) this.dateOfIssue = dateOfIssue;
-    if (sex != null) this.sex = sex;
-    if (maritalStatus != null) this.maritalStatus = maritalStatus;
-    if (placeOfBirth != null) this.placeOfBirth = placeOfBirth;
+    if (course != null) this.course = course;
+    if (yearLevel != null) this.yearLevel = yearLevel;
+    if (department != null) this.department = department;
 
     final user = FirebaseAuth.instance.currentUser;
 if (user != null) {
@@ -123,17 +115,171 @@ if (user != null) {
       'mobile': mobile,
       'address': address,
       'photoUrl': this.photoUrl,
-      'middleName': this.middleName,
-      'dateOfBirth': this.dateOfBirth,
-      'dateOfIssue': this.dateOfIssue,
-      'sex': this.sex,
-      'maritalStatus': this.maritalStatus,
-      'placeOfBirth': this.placeOfBirth,
+      'course': this.course,
+      'yearLevel': this.yearLevel,
+      'department': this.department,
     }, SetOptions(merge: true));
   }
 }
     notifyListeners();
   }
+
+  // ── Update just the photo (used by the camera/edit icon) ──
+  // Kept separate from update() so changing the photo doesn't require
+  // re-passing every other field. Saves to Firestore immediately and
+  // calls notifyListeners() so every screen watching this model
+  // (Profile screen + ID card) refreshes automatically.
+  Future<void> updatePhotoUrl(String url) async {
+    photoUrl = url;
+
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      final snapshot = await FirebaseFirestore.instance
+          .collection('students')
+          .where('uid', isEqualTo: user.uid)
+          .limit(1)
+          .get();
+
+      if (snapshot.docs.isNotEmpty) {
+        await snapshot.docs.first.reference.set(
+          {'photoUrl': url},
+          SetOptions(merge: true),
+        );
+      }
+    }
+
+    notifyListeners();
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+// Shared helper — pick a new photo from the gallery and save it
+// directly on the shared ProfileModel. No Firebase Storage (which
+// needs a paid Blaze plan) — instead the photo is shrunk and stored
+// as a base64 string right inside the student's Firestore document,
+// which is free on the normal Firestore tier. Because every screen
+// (Profile header + ID card) listens to the same ProfileModel
+// instance, calling this from anywhere instantly updates both
+// places — no extra wiring needed.
+// ─────────────────────────────────────────────────────────────
+Future<void> _pickAndUploadPhoto(
+    BuildContext context, ProfileModel profile) async {
+  XFile? picked;
+  try {
+    final picker = ImagePicker();
+    picked = await picker.pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 70,
+      maxWidth: 400, // kept small so the base64 string stays well under
+                     // Firestore's 1 MiB per-document limit
+    );
+  } catch (e) {
+    // Picker itself failed (e.g. permission denied)
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not open gallery: $e')),
+      );
+    }
+    return;
+  }
+  if (picked == null) return; // user cancelled
+
+  if (!context.mounted) return;
+  showDialog(
+    context: context,
+    barrierDismissible: false,
+    builder: (_) =>
+        const Center(child: CircularProgressIndicator(color: kOrange)),
+  );
+
+  try {
+    // readAsBytes() works the same on mobile, web, and desktop —
+    // unlike dart:io's File(), which breaks on Flutter Web.
+    final Uint8List bytes = await picked.readAsBytes();
+
+    if (bytes.lengthInBytes > 400 * 1024) {
+      throw Exception(
+          'That photo is too large. Please pick a smaller image.');
+    }
+
+    final String dataUrl = 'data:image/jpeg;base64,${base64Encode(bytes)}';
+
+    await profile.updatePhotoUrl(dataUrl);
+
+    if (context.mounted) {
+      Navigator.pop(context); // close loading dialog
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Profile photo updated!'),
+          backgroundColor: kOrange,
+        ),
+      );
+    }
+  } catch (e) {
+    if (context.mounted) {
+      Navigator.pop(context); // close loading dialog
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to update photo: $e')),
+      );
+    }
+  }
+}
+
+// ── Renders profile.photoUrl whether it's a base64 data: string
+//    (new uploads) or a plain network URL (legacy data) ──
+class _ProfileImage extends StatelessWidget {
+  final String photoUrl;
+  final double? width;
+  final double? height;
+  final BoxFit fit;
+  final Widget Function(BuildContext, Object, StackTrace?) errorBuilder;
+
+  const _ProfileImage({
+    required this.photoUrl,
+    required this.errorBuilder,
+    this.width,
+    this.height,
+    this.fit = BoxFit.cover,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (photoUrl.startsWith('data:image')) {
+      try {
+        final bytes = base64Decode(photoUrl.split(',').last);
+        return Image.memory(
+          bytes,
+          width: width,
+          height: height,
+          fit: fit,
+          errorBuilder: errorBuilder,
+        );
+      } catch (e, st) {
+        return errorBuilder(context, e, st);
+      }
+    }
+    return Image.network(
+      photoUrl,
+      width: width,
+      height: height,
+      fit: fit,
+      errorBuilder: errorBuilder,
+    );
+  }
+}
+
+// ── Same idea, but as an ImageProvider for widgets like CircleAvatar
+//    that take backgroundImage instead of a child Image widget ──
+ImageProvider? _profileImageProvider(String photoUrl) {
+  if (photoUrl.isEmpty) return null;
+  if (photoUrl.startsWith('data:image')) {
+    try {
+      return MemoryImage(base64Decode(photoUrl.split(',').last));
+    } catch (_) {
+      return null;
+    }
+  }
+  return NetworkImage(photoUrl);
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -221,9 +367,8 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
                             ),
                             child: ClipOval(
                               child: _profile.photoUrl.isNotEmpty
-                                  ? Image.network(
-                                      _profile.photoUrl,
-                                      fit: BoxFit.cover,
+                                  ? _ProfileImage(
+                                      photoUrl: _profile.photoUrl,
                                       errorBuilder: (_, __, ___) =>
                                           const Icon(Icons.person,
                                               size: 50,
@@ -236,13 +381,17 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
                           Positioned(
                             bottom: 0,
                             right: 0,
-                            child: Container(
-                              width: 26,
-                              height: 26,
-                              decoration: const BoxDecoration(
-                                  color: kOrange, shape: BoxShape.circle),
-                              child: const Icon(Icons.edit,
-                                  color: Colors.white, size: 14),
+                            child: GestureDetector(
+                              onTap: () =>
+                                  _pickAndUploadPhoto(context, _profile),
+                              child: Container(
+                                width: 26,
+                                height: 26,
+                                decoration: const BoxDecoration(
+                                    color: kOrange, shape: BoxShape.circle),
+                                child: const Icon(Icons.edit,
+                                    color: Colors.white, size: 14),
+                              ),
                             ),
                           ),
                         ],
@@ -450,10 +599,12 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
                                   fontSize: 15)),
                           GestureDetector(
                             onTap: () {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text('View all events - Coming Soon'),
-                                  duration: Duration(seconds: 2),
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) =>
+                                      const StudentEventsScreen(
+                                          initialTabIndex: 1),
                                 ),
                               );
                             },
@@ -656,54 +807,63 @@ class PersonalIdentityScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: kBg,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        centerTitle: true,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.black),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: const Text('Personal Identity',
-            style: TextStyle(
-                color: Colors.black,
-                fontWeight: FontWeight.w600,
-                fontSize: 18)),
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(2),
-          child: Container(height: 2, color: kOrange),
-        ),
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          children: [
-            _IdCard1(profile: profile),
-            const SizedBox(height: 16),
-            _IdCard2(profile: profile),
-            const SizedBox(height: 28),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: () => _showDownloadPreview(context),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: kOrange,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12)),
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                ),
-                child: const Text('Download ID',
-                    style:
-                        TextStyle(fontWeight: FontWeight.w600, fontSize: 16)),
-              ),
+    // AnimatedBuilder makes this screen listen to the shared ProfileModel,
+    // so if the photo or any ID field changes (e.g. while this screen is
+    // still on the navigation stack), the ID card updates immediately —
+    // no need to re-open the screen to see the latest data.
+    return AnimatedBuilder(
+      animation: profile,
+      builder: (context, _) {
+        return Scaffold(
+          backgroundColor: kBg,
+          appBar: AppBar(
+            backgroundColor: Colors.white,
+            elevation: 0,
+            centerTitle: true,
+            leading: IconButton(
+              icon: const Icon(Icons.arrow_back, color: Colors.black),
+              onPressed: () => Navigator.pop(context),
             ),
-            const SizedBox(height: 20),
-          ],
-        ),
-      ),
+            title: const Text('Personal Identity',
+                style: TextStyle(
+                    color: Colors.black,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 18)),
+            bottom: PreferredSize(
+              preferredSize: const Size.fromHeight(2),
+              child: Container(height: 2, color: kOrange),
+            ),
+          ),
+          body: SingleChildScrollView(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              children: [
+                _IdCard1(profile: profile),
+                const SizedBox(height: 16),
+                _IdCard2(profile: profile),
+                const SizedBox(height: 28),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: () => _showDownloadPreview(context),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: kOrange,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12)),
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                    ),
+                    child: const Text('Download ID',
+                        style: TextStyle(
+                            fontWeight: FontWeight.w600, fontSize: 16)),
+                  ),
+                ),
+                const SizedBox(height: 20),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 }
@@ -798,18 +958,13 @@ class _IdDownloadPreviewSheet extends StatelessWidget {
   }
 }
 
-// ── ID Card 1: Personal Info ──
+// ── ID Card 1: University header, photo, name, ID number, course ──
 class _IdCard1 extends StatelessWidget {
   final ProfileModel profile;
   const _IdCard1({required this.profile});
 
   @override
   Widget build(BuildContext context) {
-    final nameParts = profile.fullName.trim().split(' ');
-    final lastName =
-        nameParts.length > 1 ? nameParts.last.toUpperCase() : '';
-    final firstName = nameParts.first.toUpperCase();
-
     return Container(
       width: double.infinity,
       decoration: BoxDecoration(
@@ -828,29 +983,45 @@ class _IdCard1 extends StatelessWidget {
         children: [
           Row(
             children: [
-              Container(
-                width: 28,
-                height: 28,
-                decoration: const BoxDecoration(
-                    color: kOrange, shape: BoxShape.circle),
-                child: const Icon(Icons.local_fire_department,
-                    color: Colors.white, size: 16),
+              Image.asset(
+                'assets/images/bsu_logo.png',
+                width: 32,
+                height: 32,
+                errorBuilder: (_, __, ___) => Container(
+                  width: 32,
+                  height: 32,
+                  decoration: const BoxDecoration(
+                      color: kOrange, shape: BoxShape.circle),
+                  child: const Icon(Icons.local_fire_department,
+                      color: Colors.white, size: 16),
+                ),
               ),
-              const SizedBox(width: 6),
-              const Text('UPRISE',
-                  style: TextStyle(
-                      color: kOrange,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
-                      letterSpacing: 1)),
+              const SizedBox(width: 8),
+              const Expanded(
+                child: Text('BULACAN STATE UNIVERSITY',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                        color: kOrange,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 13,
+                        letterSpacing: 0.4)),
+              ),
+              const SizedBox(width: 8),
+              Image.asset(
+                'assets/images/logo.png',
+                width: 32,
+                height: 32,
+                errorBuilder: (_, __, ___) => Container(
+                  width: 32,
+                  height: 32,
+                  decoration: const BoxDecoration(
+                      color: kOrange, shape: BoxShape.circle),
+                  child: const Icon(Icons.local_fire_department,
+                      color: Colors.white, size: 16),
+                ),
+              ),
             ],
           ),
-          const SizedBox(height: 8),
-          Text(profile.studentId,
-              style: const TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w500,
-                  color: Colors.black87)),
           const SizedBox(height: 12),
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -858,11 +1029,10 @@ class _IdCard1 extends StatelessWidget {
               ClipRRect(
                 borderRadius: BorderRadius.circular(8),
                 child: profile.photoUrl.isNotEmpty
-                    ? Image.network(
-                        profile.photoUrl,
+                    ? _ProfileImage(
+                        photoUrl: profile.photoUrl,
                         width: 80,
                         height: 100,
-                        fit: BoxFit.cover,
                         errorBuilder: (_, __, ___) => Container(
                           width: 80,
                           height: 100,
@@ -890,20 +1060,22 @@ class _IdCard1 extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _IdFieldWidget(label: 'LAST NAME', value: lastName),
-                    const SizedBox(height: 10),
-                    _IdFieldWidget(label: 'GIVEN NAMES', value: firstName),
-                    const SizedBox(height: 10),
                     _IdFieldWidget(
-                        label: 'MIDDLE NAME',
-                        value: profile.middleName.isNotEmpty
-                            ? profile.middleName.toUpperCase()
+                        label: 'FULL NAME',
+                        value: profile.fullName.isNotEmpty
+                            ? profile.fullName.toUpperCase()
                             : '—'),
                     const SizedBox(height: 10),
                     _IdFieldWidget(
-                        label: 'DATE OF BIRTH',
-                        value: profile.dateOfBirth.isNotEmpty
-                            ? profile.dateOfBirth.toUpperCase()
+                        label: 'STUDENT ID NO.',
+                        value: profile.studentId.isNotEmpty
+                            ? profile.studentId
+                            : '—'),
+                    const SizedBox(height: 10),
+                    _IdFieldWidget(
+                        label: 'COURSE / PROGRAM',
+                        value: profile.course.isNotEmpty
+                            ? profile.course.toUpperCase()
                             : '—'),
                   ],
                 ),
@@ -916,7 +1088,7 @@ class _IdCard1 extends StatelessWidget {
   }
 }
 
-// ── ID Card 2: Additional Info + QR ──
+// ── ID Card 2: Year level, college/department + QR ──
 class _IdCard2 extends StatelessWidget {
   final ProfileModel profile;
   const _IdCard2({required this.profile});
@@ -946,27 +1118,15 @@ class _IdCard2 extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     _IdFieldWidget(
-                        label: 'DATE OF ISSUE',
-                        value: profile.dateOfIssue.isNotEmpty
-                            ? profile.dateOfIssue.toUpperCase()
+                        label: 'YEAR LEVEL',
+                        value: profile.yearLevel.isNotEmpty
+                            ? profile.yearLevel.toUpperCase()
                             : '—'),
                     const SizedBox(height: 12),
                     _IdFieldWidget(
-                        label: 'SEX',
-                        value: profile.sex.isNotEmpty
-                            ? profile.sex.toUpperCase()
-                            : '—'),
-                    const SizedBox(height: 12),
-                    _IdFieldWidget(
-                        label: 'MARITAL STATUS',
-                        value: profile.maritalStatus.isNotEmpty
-                            ? profile.maritalStatus.toUpperCase()
-                            : '—'),
-                    const SizedBox(height: 12),
-                    _IdFieldWidget(
-                        label: 'PLACE OF BIRTH',
-                        value: profile.placeOfBirth.isNotEmpty
-                            ? profile.placeOfBirth.toUpperCase()
+                        label: 'COLLEGE / DEPARTMENT',
+                        value: profile.department.isNotEmpty
+                            ? profile.department.toUpperCase()
                             : '—'),
                   ],
                 ),
@@ -986,13 +1146,24 @@ class _IdCard2 extends StatelessWidget {
             bottom: 0,
             right: 0,
             child: Container(
-              width: 30,
-              height: 30,
-              decoration: BoxDecoration(
-                  border: Border.all(color: kOrange, width: 2),
-                  shape: BoxShape.circle),
-              child: const Icon(Icons.local_fire_department,
-                  color: kOrange, size: 16),
+              width: 34,
+              height: 34,
+              decoration: const BoxDecoration(shape: BoxShape.circle),
+              child: ClipOval(
+                child: Image.asset(
+                  'assets/images/logo.png',
+                  width: 34,
+                  height: 34,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => Container(
+                    decoration: BoxDecoration(
+                        border: Border.all(color: kOrange, width: 2),
+                        shape: BoxShape.circle),
+                    child: const Icon(Icons.local_fire_department,
+                        color: kOrange, size: 16),
+                  ),
+                ),
+              ),
             ),
           ),
         ],
@@ -1017,12 +1188,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   late final TextEditingController _emailCtrl;
   late final TextEditingController _mobileCtrl;
   late final TextEditingController _addressCtrl;
-  late final TextEditingController _middleNameCtrl;
-  late final TextEditingController _dateOfBirthCtrl;
-  late final TextEditingController _dateOfIssueCtrl;
-  late final TextEditingController _sexCtrl;
-  late final TextEditingController _maritalStatusCtrl;
-  late final TextEditingController _placeOfBirthCtrl;
+  late final TextEditingController _courseCtrl;
+  late final TextEditingController _yearLevelCtrl;
+  late final TextEditingController _departmentCtrl;
 
   @override
   void initState() {
@@ -1035,18 +1203,12 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         TextEditingController(text: widget.profile.mobile);
     _addressCtrl =
         TextEditingController(text: widget.profile.address);
-    _middleNameCtrl =
-        TextEditingController(text: widget.profile.middleName);
-    _dateOfBirthCtrl =
-        TextEditingController(text: widget.profile.dateOfBirth);
-    _dateOfIssueCtrl =
-        TextEditingController(text: widget.profile.dateOfIssue);
-    _sexCtrl =
-        TextEditingController(text: widget.profile.sex);
-    _maritalStatusCtrl =
-        TextEditingController(text: widget.profile.maritalStatus);
-    _placeOfBirthCtrl =
-        TextEditingController(text: widget.profile.placeOfBirth);
+    _courseCtrl =
+        TextEditingController(text: widget.profile.course);
+    _yearLevelCtrl =
+        TextEditingController(text: widget.profile.yearLevel);
+    _departmentCtrl =
+        TextEditingController(text: widget.profile.department);
   }
 
   @override
@@ -1055,12 +1217,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     _emailCtrl.dispose();
     _mobileCtrl.dispose();
     _addressCtrl.dispose();
-    _middleNameCtrl.dispose();
-    _dateOfBirthCtrl.dispose();
-    _dateOfIssueCtrl.dispose();
-    _sexCtrl.dispose();
-    _maritalStatusCtrl.dispose();
-    _placeOfBirthCtrl.dispose();
+    _courseCtrl.dispose();
+    _yearLevelCtrl.dispose();
+    _departmentCtrl.dispose();
     super.dispose();
   }
 
@@ -1072,12 +1231,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       email: _emailCtrl.text.trim(),
       mobile: _mobileCtrl.text.trim(),
       address: _addressCtrl.text.trim(),
-      middleName: _middleNameCtrl.text.trim(),
-      dateOfBirth: _dateOfBirthCtrl.text.trim(),
-      dateOfIssue: _dateOfIssueCtrl.text.trim(),
-      sex: _sexCtrl.text.trim(),
-      maritalStatus: _maritalStatusCtrl.text.trim(),
-      placeOfBirth: _placeOfBirthCtrl.text.trim(),
+      course: _courseCtrl.text.trim(),
+      yearLevel: _yearLevelCtrl.text.trim(),
+      department: _departmentCtrl.text.trim(),
     );
     
     // Update Firebase Auth display name
@@ -1140,9 +1296,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                           ),
                           child: ClipOval(
                             child: widget.profile.photoUrl.isNotEmpty
-                                ? Image.network(
-                                    widget.profile.photoUrl,
-                                    fit: BoxFit.cover,
+                                ? _ProfileImage(
+                                    photoUrl: widget.profile.photoUrl,
                                     errorBuilder: (_, __, ___) =>
                                         const Icon(Icons.person,
                                             size: 40, color: Colors.white),
@@ -1154,13 +1309,17 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                         Positioned(
                           bottom: 0,
                           right: 0,
-                          child: Container(
-                            width: 24,
-                            height: 24,
-                            decoration: const BoxDecoration(
-                                color: kOrange, shape: BoxShape.circle),
-                            child: const Icon(Icons.edit,
-                                color: Colors.white, size: 13),
+                          child: GestureDetector(
+                            onTap: () => _pickAndUploadPhoto(
+                                context, widget.profile),
+                            child: Container(
+                              width: 24,
+                              height: 24,
+                              decoration: const BoxDecoration(
+                                  color: kOrange, shape: BoxShape.circle),
+                              child: const Icon(Icons.edit,
+                                  color: Colors.white, size: 13),
+                            ),
                           ),
                         ),
                       ],
@@ -1233,39 +1392,21 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                           fontWeight: FontWeight.bold, fontSize: 15)),
                   const SizedBox(height: 16),
                   _EditField(
-                    label: 'Middle Name',
-                    controller: _middleNameCtrl,
-                    icon: Icons.person_outline,
+                    label: 'Course / Program',
+                    controller: _courseCtrl,
+                    icon: Icons.school_outlined,
                   ),
                   const SizedBox(height: 14),
                   _EditField(
-                    label: 'Date of Birth',
-                    controller: _dateOfBirthCtrl,
-                    icon: Icons.cake_outlined,
+                    label: 'Year Level',
+                    controller: _yearLevelCtrl,
+                    icon: Icons.stairs_outlined,
                   ),
                   const SizedBox(height: 14),
                   _EditField(
-                    label: 'Date of Issue',
-                    controller: _dateOfIssueCtrl,
-                    icon: Icons.calendar_today_outlined,
-                  ),
-                  const SizedBox(height: 14),
-                  _EditField(
-                    label: 'Sex',
-                    controller: _sexCtrl,
-                    icon: Icons.wc_outlined,
-                  ),
-                  const SizedBox(height: 14),
-                  _EditField(
-                    label: 'Marital Status',
-                    controller: _maritalStatusCtrl,
-                    icon: Icons.favorite_border_outlined,
-                  ),
-                  const SizedBox(height: 14),
-                  _EditField(
-                    label: 'Place of Birth',
-                    controller: _placeOfBirthCtrl,
-                    icon: Icons.location_city_outlined,
+                    label: 'College / Department',
+                    controller: _departmentCtrl,
+                    icon: Icons.account_balance_outlined,
                   ),
                 ],
               ),
@@ -1429,9 +1570,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       CircleAvatar(
                         radius: 42,
                         backgroundColor: kOrangeLight,
-                        backgroundImage: widget.profile.photoUrl.isNotEmpty
-                            ? NetworkImage(widget.profile.photoUrl)
-                            : null,
+                        backgroundImage:
+                            _profileImageProvider(widget.profile.photoUrl),
                         child: widget.profile.photoUrl.isEmpty
                             ? const Icon(Icons.person,
                                 size: 42, color: kOrange)

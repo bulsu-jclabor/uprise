@@ -172,7 +172,7 @@ class EventData {
 // ─────────────────────────────────────────────
 class StudentEventsScreen extends StatefulWidget {
   final int initialTabIndex;
-  
+
   const StudentEventsScreen({super.key, this.initialTabIndex = 0});
 
   @override
@@ -186,9 +186,10 @@ class _StudentEventsScreenState extends State<StudentEventsScreen>
 
   // ── Certificate tab state ──
   String _certFilter            = 'All';
-  final List<String> _certFilters = ['All', 'Academic', 'Workshops', 'Events'];
+  List<String> _certFilters     = ['All', 'Others'];
   List<Map<String, dynamic>> _allCertificates = [];
   bool _certLoading             = true;
+  bool _orgFiltersLoading       = true;
   String? _certError;
   final Set<String> _feedbackGiven = {};
   String? get _currentUid => FirebaseAuth.instance.currentUser?.uid;
@@ -197,7 +198,7 @@ class _StudentEventsScreenState extends State<StudentEventsScreen>
   void initState() {
     super.initState();
     _tabController = TabController(
-      length: 3, 
+      length: 3,
       vsync: this,
       initialIndex: widget.initialTabIndex,
     );
@@ -205,6 +206,7 @@ class _StudentEventsScreenState extends State<StudentEventsScreen>
       if (_tabController.index == 2 && _certLoading) _fetchCertificates();
     });
     _fetchCertificates();
+    _fetchOrganizationFilters();
   }
 
   @override
@@ -241,6 +243,31 @@ class _StudentEventsScreenState extends State<StudentEventsScreen>
       });
     } catch (e) {
       setState(() { _certError = e.toString(); _certLoading = false; });
+    }
+  }
+
+  Future<void> _fetchOrganizationFilters() async {
+    setState(() => _orgFiltersLoading = true);
+    try {
+      final snap = await FirebaseFirestore.instance
+          .collection('organizations')
+          .where('status', isEqualTo: 'active')
+          .get();
+      final names = snap.docs
+          .map((d) => (d.data()['name'] ?? '').toString())
+          .where((n) => n.isNotEmpty)
+          .toSet()
+          .toList();
+      names.sort();
+      setState(() {
+        _certFilters = ['All', ...names, 'Others'];
+        _orgFiltersLoading = false;
+      });
+    } catch (_) {
+      setState(() {
+        _certFilters = ['All', 'Others'];
+        _orgFiltersLoading = false;
+      });
     }
   }
 
@@ -302,11 +329,10 @@ class _StudentEventsScreenState extends State<StudentEventsScreen>
   Future<void> _showUploadDialog() async {
     final eventNameCtrl = TextEditingController();
 
-    String selectedType = 'Academic';
+    final orgOptions = _certFilters.where((f) => f != 'All').toList();
+    String selectedType = orgOptions.isNotEmpty ? orgOptions.first : '';
     File? pickedFile;
     bool isUploading = false;
-
-    const typeOptions = ['Academic', 'Workshops', 'Events'];
 
     InputDecoration fd(String label, {String? hint}) => InputDecoration(
       labelText: label, hintText: hint,
@@ -345,6 +371,12 @@ class _StudentEventsScreenState extends State<StudentEventsScreen>
                 backgroundColor: Colors.orange));
               return;
             }
+            if (selectedType.isEmpty) {
+              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                content: Text('Please select an organization.'),
+                backgroundColor: Colors.orange));
+              return;
+            }
             setSheet(() => isUploading = true);
             try {
               final bytes  = await pickedFile!.readAsBytes();
@@ -359,6 +391,7 @@ class _StudentEventsScreenState extends State<StudentEventsScreen>
               final docRef = await FirebaseFirestore.instance.collection('certificates').add({
                 'eventName'    : eventNameCtrl.text.trim(),
                 'type'         : selectedType,
+                'organization' : selectedType,
                 'imageUrl'     : b64Img,
                 'issuedAt'     : FieldValue.serverTimestamp(),
                 'recipientUid' : _currentUid,
@@ -373,7 +406,7 @@ class _StudentEventsScreenState extends State<StudentEventsScreen>
                 'title'       : eventNameCtrl.text.trim(),
                 'date'        : '${months[now.month-1]} ${now.day.toString().padLeft(2,'0')}, ${now.year}',
                 'category'    : selectedType,
-                'organization': '',
+                'organization': selectedType,
                 'signatories' : '',
                 'status'      : 'issued',
                 'recipients'  : 1,
@@ -476,11 +509,26 @@ class _StudentEventsScreenState extends State<StudentEventsScreen>
                   const SizedBox(height: 12),
                   TextField(controller: eventNameCtrl, decoration: fd('Certificate Name *', hint: 'e.g. Codecraft')),
                   const SizedBox(height: 12),
-                  DropdownButtonFormField<String>(
-                    value: selectedType, decoration: fd('Type'),
-                    items: typeOptions.map((t) => DropdownMenuItem(value: t, child: Text(t))).toList(),
-                    onChanged: (v) { if (v != null) setSheet(() => selectedType = v); },
-                  ),
+                  orgOptions.isNotEmpty
+                      ? DropdownButtonFormField<String>(
+                          value: selectedType, decoration: fd('Organization *'),
+                          items: orgOptions.map((o) => DropdownMenuItem(value: o, child: Text(o))).toList(),
+                          onChanged: (v) { if (v != null) setSheet(() => selectedType = v); },
+                        )
+                      : Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Colors.grey.shade100,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: Colors.grey.shade300),
+                          ),
+                          child: Row(children: [
+                            Icon(Icons.info_outline, size: 18, color: Colors.grey.shade500),
+                            const SizedBox(width: 8),
+                            Expanded(child: Text('No organizations available yet.',
+                                style: TextStyle(fontSize: 12, color: Colors.grey.shade600))),
+                          ]),
+                        ),
                   const SizedBox(height: 28),
 
                   SizedBox(
@@ -1048,7 +1096,7 @@ class _StudentEventsScreenState extends State<StudentEventsScreen>
   Widget _buildCertificateTab() {
     final filtered = _certFilter == 'All'
         ? _allCertificates
-        : _allCertificates.where((c) => c['category'] == _certFilter).toList();
+        : _allCertificates.where((c) => c['organization'] == _certFilter).toList();
 
     return Stack(children: [
       Column(children: [
@@ -1125,16 +1173,15 @@ class _StudentEventsScreenState extends State<StudentEventsScreen>
         ),
       ]),
 
-      // Upload FAB
+      // Upload FAB — icon only, circular
       Positioned(
         right: 16, bottom: 16,
-        child: FloatingActionButton.extended(
+        child: FloatingActionButton(
           heroTag: 'cert_upload_fab',
+          shape: const CircleBorder(),
           onPressed: _showUploadDialog,
           backgroundColor: Colors.orange,
-          icon: const Icon(Icons.cloud_upload_rounded, color: Colors.white),
-          label: const Text('Upload Certificate',
-              style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+          child: const Icon(Icons.cloud_upload_rounded, color: Colors.white),
         ),
       ),
     ]);
