@@ -21,7 +21,10 @@ class AppNotification {
   final String body;
   final DateTime createdAt;
   final bool isRead;
-  final String type; // 'event' | 'announcement' | 'org' | 'schedule' | 'booth'
+  final String type;
+  final String orgId;
+  final String orgName;
+  final Map<String, dynamic>? data;
 
   const AppNotification({
     required this.id,
@@ -30,6 +33,9 @@ class AppNotification {
     required this.createdAt,
     required this.isRead,
     required this.type,
+    required this.orgId,
+    required this.orgName,
+    this.data,
   });
 
   factory AppNotification.fromFirestore(DocumentSnapshot doc) {
@@ -41,6 +47,9 @@ class AppNotification {
       createdAt: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
       isRead: data['isRead'] ?? false,
       type: data['type'] ?? 'announcement',
+      orgId: data['orgId'] ?? '',
+      orgName: data['orgName'] ?? 'Organization',
+      data: data['data'] as Map<String, dynamic>?,
     );
   }
 }
@@ -54,6 +63,14 @@ class StudentNotificationsScreen extends StatefulWidget {
 }
 
 class _StudentNotificationsScreenState extends State<StudentNotificationsScreen> {
+  String? _uid;
+
+  @override
+  void initState() {
+    super.initState();
+    _uid = FirebaseAuth.instance.currentUser?.uid;
+  }
+
   ({IconData icon, Color bg, Color fg}) _typeStyle(String type) {
     switch (type) {
       case 'event':
@@ -64,7 +81,7 @@ class _StudentNotificationsScreenState extends State<StudentNotificationsScreen>
         );
       case 'org':
         return (
-          icon: Icons.check_circle_rounded,
+          icon: Icons.business_center_rounded,
           bg: Colors.orange.withOpacity(0.1),
           fg: Colors.orange,
         );
@@ -76,11 +93,17 @@ class _StudentNotificationsScreenState extends State<StudentNotificationsScreen>
         );
       case 'booth':
         return (
-          icon: Icons.cancel_rounded,
+          icon: Icons.storefront_rounded,
           bg: Colors.orange.withOpacity(0.1),
           fg: Colors.orange,
         );
-      default: // 'announcement'
+      case 'order':
+        return (
+          icon: Icons.shopping_bag_rounded,
+          bg: Colors.orange.withOpacity(0.1),
+          fg: Colors.orange,
+        );
+      default:
         return (
           icon: Icons.campaign_rounded,
           bg: Colors.orange.withOpacity(0.1),
@@ -99,25 +122,60 @@ class _StudentNotificationsScreenState extends State<StudentNotificationsScreen>
   }
 
   Future<void> _markAsRead(String notifId) async {
-    await FirebaseFirestore.instance
-        .collection('notifications')
-        .doc(notifId)
-        .update({'isRead': true});
+    try {
+      await FirebaseFirestore.instance
+          .collection('notifications')
+          .doc(notifId)
+          .update({'isRead': true});
+    } catch (e) {
+      print('Error marking as read: $e');
+    }
   }
 
-  Future<void> _markAllAsRead(List<AppNotification> notifs) async {
-    final batch = FirebaseFirestore.instance.batch();
-    for (final n in notifs.where((n) => !n.isRead)) {
-      final ref = FirebaseFirestore.instance.collection('notifications').doc(n.id);
-      batch.update(ref, {'isRead': true});
+  Future<void> _markAllAsRead() async {
+    try {
+      final snapshot = await FirebaseFirestore.instance
+          .collection('notifications')
+          .where('isRead', isEqualTo: false)
+          .get();
+      
+      final batch = FirebaseFirestore.instance.batch();
+      for (final doc in snapshot.docs) {
+        batch.update(doc.reference, {'isRead': true});
+      }
+      await batch.commit();
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('All notifications marked as read'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+    } catch (e) {
+      print('Error marking all as read: $e');
     }
-    await batch.commit();
+  }
+
+  void _onNotificationTap(AppNotification notif) {
+    _markAsRead(notif.id);
+    
+    // Navigate based on type
+    if (notif.type == 'event' && notif.data?['eventId'] != null) {
+      // Navigate to event details
+      // Navigator.push(context, MaterialPageRoute(builder: (_) => StudentEventDetailsScreen(eventId: notif.data!['eventId'])));
+    } else if (notif.type == 'announcement' && notif.data?['announcementId'] != null) {
+      // Navigate to announcement details
+      // Navigator.push(context, MaterialPageRoute(builder: (_) => AnnouncementDetailScreen(announcementId: notif.data!['announcementId'])));
+    } else if (notif.type == 'order' && notif.data?['orderId'] != null) {
+      // Navigate to order details
+      // Navigator.push(context, MaterialPageRoute(builder: (_) => OrderDetailScreen(orderId: notif.data!['orderId'])));
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final uid = FirebaseAuth.instance.currentUser?.uid;
-
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
@@ -133,23 +191,15 @@ class _StudentNotificationsScreenState extends State<StudentNotificationsScreen>
         ),
         actions: [
           StreamBuilder<QuerySnapshot>(
-            stream: uid == null
-                ? null
-                : FirebaseFirestore.instance
-                    .collection('notifications')
-                    .where('userId', isEqualTo: uid)
-                    .where('isRead', isEqualTo: false)
-                    .snapshots(),
+            stream: FirebaseFirestore.instance
+                .collection('notifications')
+                .where('isRead', isEqualTo: false)
+                .snapshots(),
             builder: (context, snap) {
               final hasUnread = snap.hasData && snap.data!.docs.isNotEmpty;
               if (!hasUnread) return const SizedBox.shrink();
               return TextButton(
-                onPressed: () {
-                  final notifs = snap.data!.docs
-                      .map((d) => AppNotification.fromFirestore(d))
-                      .toList();
-                  _markAllAsRead(notifs);
-                },
+                onPressed: _markAllAsRead,
                 style: TextButton.styleFrom(
                   foregroundColor: Colors.orange,
                 ),
@@ -159,116 +209,108 @@ class _StudentNotificationsScreenState extends State<StudentNotificationsScreen>
           ),
         ],
       ),
-      body: uid == null
-          ? Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.person_off_outlined, size: 48, color: Colors.grey),
-                  const SizedBox(height: 12),
-                  Text(
-                    'Not logged in',
-                    style: TextStyle(color: Colors.grey[600]),
+      body: _buildNotificationsList(),
+    );
+  }
+
+  Widget _buildNotificationsList() {
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('notifications')
+          .orderBy('createdAt', descending: true)
+          .limit(50)
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Padding(
+            padding: EdgeInsets.all(16),
+            child: Center(child: CircularProgressIndicator(color: Colors.orange)),
+          );
+        }
+        
+        if (snapshot.hasError) {
+          print('Error loading notifications: ${snapshot.error}');
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.error_outline, size: 48, color: Colors.grey),
+                const SizedBox(height: 12),
+                Text(
+                  'Could not load notifications.',
+                  style: TextStyle(color: Colors.grey[600]),
+                ),
+                const SizedBox(height: 12),
+                ElevatedButton(
+                  onPressed: () => setState(() {}),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.orange,
+                    foregroundColor: Colors.white,
                   ),
-                ],
-              ),
-            )
-          : StreamBuilder<QuerySnapshot>(
-              stream: FirebaseFirestore.instance
-                  .collection('notifications')
-                  .where('userId', isEqualTo: uid)
-                  .orderBy('createdAt', descending: true)
-                  .limit(50)
-                  .snapshots(),
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Padding(
-                    padding: EdgeInsets.all(16),
-                    child: SkeletonLoader(count: 5, height: 72),
-                  );
-                }
-                if (snapshot.hasError) {
-                  return Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.error_outline, size: 48, color: Colors.grey),
-                        const SizedBox(height: 12),
-                        Text(
-                          'Could not load notifications.',
-                          style: TextStyle(color: Colors.grey[600]),
-                        ),
-                        const SizedBox(height: 12),
-                        ElevatedButton(
-                          onPressed: () => setState(() {}),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.orange,
-                            foregroundColor: Colors.white,
-                          ),
-                          child: const Text('Retry'),
-                        ),
-                      ],
-                    ),
-                  );
-                }
-                if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                  return _EmptyState();
-                }
-
-                final all = snapshot.data!.docs
-                    .map((d) => AppNotification.fromFirestore(d))
-                    .toList();
-
-                final now = DateTime.now();
-                final todayStart = DateTime(now.year, now.month, now.day);
-                final yesterdayStart =
-                    todayStart.subtract(const Duration(days: 1));
-
-                final today =
-                    all.where((n) => n.createdAt.isAfter(todayStart)).toList();
-                final yesterday = all
-                    .where((n) =>
-                        n.createdAt.isAfter(yesterdayStart) &&
-                        !n.createdAt.isAfter(todayStart))
-                    .toList();
-                final earlier = all
-                    .where((n) => !n.createdAt.isAfter(yesterdayStart))
-                    .toList();
-
-                return ListView(
-                  children: [
-                    if (today.isNotEmpty) ...[
-                      _SectionHeader(label: 'Today'),
-                      ...today.map((n) => _NotifTile(
-                            notif: n,
-                            style: _typeStyle(n.type),
-                            timeLabel: _formatTime(n.createdAt),
-                            onTap: () => _markAsRead(n.id),
-                          )),
-                    ],
-                    if (yesterday.isNotEmpty) ...[
-                      _SectionHeader(label: 'Yesterday'),
-                      ...yesterday.map((n) => _NotifTile(
-                            notif: n,
-                            style: _typeStyle(n.type),
-                            timeLabel: _formatTime(n.createdAt),
-                            onTap: () => _markAsRead(n.id),
-                          )),
-                    ],
-                    if (earlier.isNotEmpty) ...[
-                      _SectionHeader(label: 'Earlier'),
-                      ...earlier.map((n) => _NotifTile(
-                            notif: n,
-                            style: _typeStyle(n.type),
-                            timeLabel: _formatTime(n.createdAt),
-                            onTap: () => _markAsRead(n.id),
-                          )),
-                    ],
-                    const SizedBox(height: 24),
-                  ],
-                );
-              },
+                  child: const Text('Retry'),
+                ),
+              ],
             ),
+          );
+        }
+        
+        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+          return _EmptyState();
+        }
+
+        final all = snapshot.data!.docs
+            .map((d) => AppNotification.fromFirestore(d))
+            .toList();
+
+        final now = DateTime.now();
+        final todayStart = DateTime(now.year, now.month, now.day);
+        final yesterdayStart =
+            todayStart.subtract(const Duration(days: 1));
+
+        final today =
+            all.where((n) => n.createdAt.isAfter(todayStart)).toList();
+        final yesterday = all
+            .where((n) =>
+                n.createdAt.isAfter(yesterdayStart) &&
+                !n.createdAt.isAfter(todayStart))
+            .toList();
+        final earlier = all
+            .where((n) => !n.createdAt.isAfter(yesterdayStart))
+            .toList();
+
+        return ListView(
+          children: [
+            if (today.isNotEmpty) ...[
+              _SectionHeader(label: 'Today'),
+              ...today.map((n) => _NotifTile(
+                    notif: n,
+                    style: _typeStyle(n.type),
+                    timeLabel: _formatTime(n.createdAt),
+                    onTap: () => _onNotificationTap(n),
+                  )),
+            ],
+            if (yesterday.isNotEmpty) ...[
+              _SectionHeader(label: 'Yesterday'),
+              ...yesterday.map((n) => _NotifTile(
+                    notif: n,
+                    style: _typeStyle(n.type),
+                    timeLabel: _formatTime(n.createdAt),
+                    onTap: () => _onNotificationTap(n),
+                  )),
+            ],
+            if (earlier.isNotEmpty) ...[
+              _SectionHeader(label: 'Earlier'),
+              ...earlier.map((n) => _NotifTile(
+                    notif: n,
+                    style: _typeStyle(n.type),
+                    timeLabel: _formatTime(n.createdAt),
+                    onTap: () => _onNotificationTap(n),
+                  )),
+            ],
+            const SizedBox(height: 24),
+          ],
+        );
+      },
     );
   }
 }
@@ -331,14 +373,35 @@ class _NotifTile extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    notif.title,
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight:
-                          notif.isRead ? FontWeight.w400 : FontWeight.w600,
-                      color: Colors.black87,
-                    ),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          notif.title,
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight:
+                                notif.isRead ? FontWeight.w400 : FontWeight.w600,
+                            color: Colors.black87,
+                          ),
+                        ),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: Colors.orange.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          notif.orgName,
+                          style: const TextStyle(
+                            fontSize: 9,
+                            fontWeight: FontWeight.w500,
+                            color: Colors.orange,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 2),
                   Text(

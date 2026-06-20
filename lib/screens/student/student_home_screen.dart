@@ -346,6 +346,7 @@ class _HomeContentState extends State<_HomeContent> {
               ],
             ),
             actions: [
+              // ── Shopping Cart ──
               IconButton(
                 icon: Icon(
                   Icons.shopping_cart_outlined,
@@ -360,17 +361,60 @@ class _HomeContentState extends State<_HomeContent> {
                   );
                 },
               ),
-              IconButton(
-                icon: Icon(
-                  Icons.notifications_outlined,
-                  color: Colors.orange,
-                ),
-                onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const StudentNotificationsScreen(),
-                    ),
+              
+              // ── NOTIFICATION ICON WITH BADGE ──
+              StreamBuilder<QuerySnapshot>(
+                stream: FirebaseFirestore.instance
+                    .collection('notifications')
+                    .where('isRead', isEqualTo: false)
+                    .snapshots(),
+                builder: (context, snapshot) {
+                  final unreadCount = snapshot.hasData ? snapshot.data!.docs.length : 0;
+                  
+                  return Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      IconButton(
+                        icon: Icon(
+                          Icons.notifications_outlined,
+                          color: Colors.orange,
+                        ),
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => const StudentNotificationsScreen(),
+                            ),
+                          );
+                        },
+                      ),
+                      if (unreadCount > 0)
+                        Positioned(
+                          top: 4,
+                          right: 4,
+                          child: Container(
+                            padding: const EdgeInsets.all(4),
+                            decoration: const BoxDecoration(
+                              color: Colors.red,
+                              shape: BoxShape.circle,
+                            ),
+                            constraints: const BoxConstraints(
+                              minWidth: 18,
+                              minHeight: 18,
+                            ),
+                            child: Center(
+                              child: Text(
+                                unreadCount > 9 ? '9+' : '$unreadCount',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
                   );
                 },
               ),
@@ -473,8 +517,8 @@ class _HomeContentState extends State<_HomeContent> {
                     },
                   ),
                   _QuickAccessItem(
-                    icon: Icons.card_membership, // Pinalitan ang icon
-                    label: 'Certificate', // Pinalitan ang label
+                    icon: Icons.card_membership,
+                    label: 'Certificate',
                     onTap: () {
                       Navigator.push(
                         context,

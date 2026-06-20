@@ -1,10 +1,14 @@
 // lib/screens/student/student_announcements_screen.dart
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:http/http.dart' as http;
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
 import '../../widgets/student/event_registration_form_dialog.dart';
 
 // ─────────────────────────────────────────────────────────────
@@ -100,6 +104,8 @@ class AnnouncementData {
           .map((att) => {
                 'name': att['name'] as String? ?? '',
                 'type': _guessType(att['name'] as String? ?? ''),
+                'url': att['url'] as String? ?? '',
+                'data': att['data'] as String? ?? '',
               })
           .toList(),
       linkedEventId: d['linkedEventId'] as String? ?? '',
@@ -203,7 +209,7 @@ class _StudentAnnouncementsScreenState extends State<StudentAnnouncementsScreen>
             itemCount: items.length,
             itemBuilder: (context, index) {
               final ann = items[index];
-              return _AnnouncementCard(ann: ann, userId: _userId);
+              return _AnnouncementCard(ann: ann);
             },
           );
         },
@@ -213,169 +219,18 @@ class _StudentAnnouncementsScreenState extends State<StudentAnnouncementsScreen>
 }
 
 // ─────────────────────────────────────────────────────────────
-//  ANNOUNCEMENT CARD
+//  ANNOUNCEMENT CARD (No ">" icon)
 // ─────────────────────────────────────────────────────────────
-class _AnnouncementCard extends StatefulWidget {
+class _AnnouncementCard extends StatelessWidget {
   final AnnouncementData ann;
-  final String? userId;
 
-  const _AnnouncementCard({required this.ann, required this.userId});
+  const _AnnouncementCard({required this.ann});
 
-  @override
-  State<_AnnouncementCard> createState() => _AnnouncementCardState();
-}
-
-class _AnnouncementCardState extends State<_AnnouncementCard> {
-  late int _likes;
-  late int _reactions;
-  late int _comments;
-  late int _shares;
-  bool _isLiked = false;
-  bool _isReacted = false;
-  bool _isShared = false;
-  String? _interactionId;
-
-  @override
-  void initState() {
-    super.initState();
-    _likes = 0;
-    _reactions = 0;
-    _comments = 0;
-    _shares = 0;
-    _checkUserInteraction();
-  }
-
-  Future<void> _checkUserInteraction() async {
-    if (widget.userId == null) return;
-
-    final interactionDoc = await FirebaseFirestore.instance
-        .collection('announcement_interactions')
-        .doc('${widget.ann.id}_${widget.userId}')
-        .get();
-
-    if (interactionDoc.exists) {
-      final data = interactionDoc.data()!;
-      setState(() {
-        _isLiked = data['liked'] ?? false;
-        _isReacted = data['reacted'] ?? false;
-        _isShared = data['shared'] ?? false;
-        _interactionId = interactionDoc.id;
-      });
-    }
-    _loadCounts();
-  }
-
-  Future<void> _loadCounts() async {
-    final doc = await FirebaseFirestore.instance
-        .collection('announcement_counts')
-        .doc(widget.ann.id)
-        .get();
-
-    if (doc.exists) {
-      final data = doc.data()!;
-      setState(() {
-        _likes = data['likes'] ?? 0;
-        _reactions = data['reactions'] ?? 0;
-        _comments = data['comments'] ?? 0;
-        _shares = data['shares'] ?? 0;
-      });
-    }
-  }
-
-  Future<void> _updateCount(String field, int change) async {
-    final docRef = FirebaseFirestore.instance
-        .collection('announcement_counts')
-        .doc(widget.ann.id);
-
-    await docRef.set({
-      field: FieldValue.increment(change),
-    }, SetOptions(merge: true));
-  }
-
-  Future<void> _updateInteraction(Map<String, dynamic> data) async {
-    if (widget.userId == null) return;
-
-    final docRef = FirebaseFirestore.instance
-        .collection('announcement_interactions')
-        .doc('${widget.ann.id}_${widget.userId}');
-
-    await docRef.set(data, SetOptions(merge: true));
-  }
-
-  void _handleLike() async {
-    if (widget.userId == null) return;
-
-    setState(() {
-      if (_isLiked) {
-        _likes--;
-        _isLiked = false;
-      } else {
-        _likes++;
-        _isLiked = true;
-      }
-    });
-
-    await _updateCount('likes', _isLiked ? 1 : -1);
-    await _updateInteraction({'liked': _isLiked});
-  }
-
-  void _handleReact() async {
-    if (widget.userId == null) return;
-
-    setState(() {
-      if (_isReacted) {
-        _reactions--;
-        _isReacted = false;
-      } else {
-        _reactions++;
-        _isReacted = true;
-      }
-    });
-
-    await _updateCount('reactions', _isReacted ? 1 : -1);
-    await _updateInteraction({'reacted': _isReacted});
-  }
-
-  void _handleComment() {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => _CommentSheet(
-        announcementId: widget.ann.id,
-        onCommentAdded: () async {
-          setState(() => _comments++);
-          await _updateCount('comments', 1);
-        },
-      ),
-    );
-  }
-
-  void _handleShare() async {
-    if (widget.userId == null) return;
-
-    setState(() {
-      _shares++;
-      _isShared = true;
-    });
-
-    await _updateCount('shares', 1);
-    await _updateInteraction({'shared': true});
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Shared successfully!'),
-        duration: Duration(seconds: 2),
-        backgroundColor: Colors.orange,
-      ),
-    );
-  }
-
-  void _navigateToDetail() {
+  void _navigateToDetail(BuildContext context) {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => AnnouncementDetailScreen(announcement: widget.ann),
+        builder: (_) => AnnouncementDetailScreen(announcement: ann),
       ),
     );
   }
@@ -383,7 +238,7 @@ class _AnnouncementCardState extends State<_AnnouncementCard> {
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: _navigateToDetail,
+      onTap: () => _navigateToDetail(context),
       child: Container(
         margin: const EdgeInsets.only(bottom: 16),
         decoration: BoxDecoration(
@@ -392,8 +247,8 @@ class _AnnouncementCardState extends State<_AnnouncementCard> {
           boxShadow: [
             BoxShadow(
               color: Colors.black.withOpacity(0.06),
-              blurRadius: 10,
-              offset: const Offset(0, 3),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
             ),
           ],
         ),
@@ -402,36 +257,132 @@ class _AnnouncementCardState extends State<_AnnouncementCard> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // ── Banner Image ──
-            widget.ann.imageUrl.isNotEmpty
-                ? Image(
-                    image: _studentImageProvider(widget.ann.imageUrl),
-                    height: 160,
-                    width: double.infinity,
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => Container(
-                      height: 160,
-                      color: Colors.orange.withOpacity(0.1),
-                      child: Center(
-                        child: Icon(
-                          Icons.image_outlined,
-                          size: 40,
-                          color: Colors.orange.withOpacity(0.3),
+            Stack(
+              children: [
+                ann.imageUrl.isNotEmpty
+                    ? Image(
+                        image: _studentImageProvider(ann.imageUrl),
+                        height: 200,
+                        width: double.infinity,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => Container(
+                          height: 200,
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [Colors.orange.shade300, Colors.orange.shade700],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            ),
+                          ),
+                          child: Center(
+                            child: Icon(
+                              Icons.image_outlined,
+                              size: 50,
+                              color: Colors.white.withOpacity(0.5),
+                            ),
+                          ),
+                        ),
+                      )
+                    : Container(
+                        height: 200,
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [Colors.orange.shade300, Colors.orange.shade700],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
+                        ),
+                        child: Center(
+                          child: Icon(
+                            Icons.image_outlined,
+                            size: 50,
+                            color: Colors.white.withOpacity(0.5),
+                          ),
                         ),
                       ),
+                
+                // ── Gradient Overlay ──
+                Container(
+                  height: 200,
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        Colors.transparent,
+                        Colors.black.withOpacity(0.3),
+                      ],
                     ),
-                  )
-                : Container(
-                    height: 160,
-                    width: double.infinity,
-                    color: Colors.orange.withOpacity(0.1),
-                    child: Center(
-                      child: Icon(
-                        Icons.image_outlined,
-                        size: 40,
-                        color: Colors.orange.withOpacity(0.3),
+                  ),
+                ),
+                
+                // ── Tag Badge on Image ──
+                Positioned(
+                  top: 12,
+                  left: 12,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 5,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.orange,
+                      borderRadius: BorderRadius.circular(20),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.2),
+                          blurRadius: 8,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: Text(
+                      ann.tag,
+                      style: const TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.white,
+                        letterSpacing: 0.5,
                       ),
                     ),
                   ),
+                ),
+                
+                // ── Date on Image ──
+                Positioned(
+                  bottom: 12,
+                  right: 12,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withOpacity(0.6),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(
+                          Icons.access_time_rounded,
+                          size: 12,
+                          color: Colors.white,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          ann.date,
+                          style: const TextStyle(
+                            fontSize: 10,
+                            color: Colors.white,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
 
             // ── Content ──
             Padding(
@@ -448,11 +399,15 @@ class _AnnouncementCardState extends State<_AnnouncementCard> {
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
                           color: Colors.orange.withOpacity(0.1),
+                          border: Border.all(
+                            color: Colors.orange.withOpacity(0.2),
+                            width: 1,
+                          ),
                         ),
                         child: ClipOval(
-                          child: widget.ann.logoUrl.isNotEmpty
+                          child: ann.logoUrl.isNotEmpty
                               ? Image.network(
-                                  widget.ann.logoUrl,
+                                  ann.logoUrl,
                                   fit: BoxFit.cover,
                                   errorBuilder: (_, __, ___) => Icon(
                                     Icons.business_center_outlined,
@@ -473,7 +428,7 @@ class _AnnouncementCardState extends State<_AnnouncementCard> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              widget.ann.org,
+                              ann.org,
                               style: const TextStyle(
                                 fontSize: 13,
                                 fontWeight: FontWeight.w700,
@@ -481,7 +436,7 @@ class _AnnouncementCardState extends State<_AnnouncementCard> {
                               ),
                             ),
                             Text(
-                              widget.ann.orgSub,
+                              ann.orgSub,
                               style: const TextStyle(
                                 fontSize: 10,
                                 color: Colors.grey,
@@ -490,62 +445,19 @@ class _AnnouncementCardState extends State<_AnnouncementCard> {
                           ],
                         ),
                       ),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          Text(
-                            widget.ann.date,
-                            style: const TextStyle(
-                              fontSize: 10,
-                              color: Colors.grey,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                          Text(
-                            widget.ann.time,
-                            style: const TextStyle(
-                              fontSize: 9,
-                              color: Colors.grey,
-                            ),
-                          ),
-                        ],
-                      ),
                     ],
                   ),
 
                   const SizedBox(height: 10),
 
-                  // ── Tag Badge ──
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 3,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.orange.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Text(
-                      widget.ann.tag,
-                      style: TextStyle(
-                        fontSize: 9,
-                        fontWeight: FontWeight.w700,
-                        color: Colors.orange,
-                        letterSpacing: 0.5,
-                      ),
-                    ),
-                  ),
-
-                  const SizedBox(height: 8),
-
                   // ── Title ──
                   Text(
-                    widget.ann.title,
+                    ann.title,
                     style: const TextStyle(
-                      fontSize: 15,
+                      fontSize: 16,
                       fontWeight: FontWeight.w800,
                       color: Colors.black87,
-                      height: 1.2,
+                      height: 1.3,
                     ),
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
@@ -555,31 +467,31 @@ class _AnnouncementCardState extends State<_AnnouncementCard> {
 
                   // ── Body preview ──
                   Text(
-                    widget.ann.body,
+                    ann.body,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                       fontSize: 13,
                       color: Colors.grey,
-                      height: 1.4,
+                      height: 1.5,
                     ),
                   ),
 
                   const SizedBox(height: 12),
 
                   // ── Register for Event ──
-                  if (widget.ann.linkedProposalId.isNotEmpty) ...[
+                  if (ann.linkedProposalId.isNotEmpty) ...[
                     SizedBox(
                       width: double.infinity,
                       child: OutlinedButton.icon(
                         onPressed: () => DynamicRegistrationDialog.show(
                           context,
-                          proposalId: widget.ann.linkedProposalId,
-                          eventId: widget.ann.linkedEventId,
-                          eventTitle: widget.ann.linkedEventTitle,
+                          proposalId: ann.linkedProposalId,
+                          eventId: ann.linkedEventId,
+                          eventTitle: ann.linkedEventTitle,
                         ),
                         icon: const Icon(Icons.event_available_rounded, size: 16),
-                        label: Text('Register for ${widget.ann.linkedEventTitle}',
+                        label: Text('Register for ${ann.linkedEventTitle}',
                             overflow: TextOverflow.ellipsis),
                         style: OutlinedButton.styleFrom(
                           foregroundColor: Colors.orange,
@@ -592,39 +504,23 @@ class _AnnouncementCardState extends State<_AnnouncementCard> {
                     const SizedBox(height: 12),
                   ],
 
-                  // ── Engagement Icons ──
+                  // ── Read More Indicator ──
                   Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
                     children: [
-                      _EngagementIcon(
-                        icon: _isLiked ? Icons.thumb_up_alt : Icons.thumb_up_alt_outlined,
-                        count: _likes,
-                        isActive: _isLiked,
-                        color: _isLiked ? Colors.orange : Colors.grey[500]!,
-                        onTap: _handleLike,
+                      const Text(
+                        'Read more',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.orange,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
-                      const SizedBox(width: 14),
-                      _EngagementIcon(
-                        icon: _isReacted ? Icons.favorite : Icons.favorite_border,
-                        count: _reactions,
-                        isActive: _isReacted,
-                        color: _isReacted ? Colors.red.shade600 : Colors.grey[500]!,
-                        onTap: _handleReact,
-                      ),
-                      const SizedBox(width: 14),
-                      _EngagementIcon(
-                        icon: Icons.mode_comment_outlined,
-                        count: _comments,
-                        isActive: false,
-                        color: Colors.grey[500]!,
-                        onTap: _handleComment,
-                      ),
-                      const Spacer(),
-                      _EngagementIcon(
-                        icon: Icons.share_outlined,
-                        count: _shares,
-                        isActive: _isShared,
-                        color: _isShared ? Colors.orange : Colors.grey[500]!,
-                        onTap: _handleShare,
+                      const SizedBox(width: 4),
+                      Icon(
+                        Icons.arrow_forward_ios_rounded,
+                        size: 10,
+                        color: Colors.orange,
                       ),
                     ],
                   ),
@@ -639,430 +535,88 @@ class _AnnouncementCardState extends State<_AnnouncementCard> {
 }
 
 // ─────────────────────────────────────────────────────────────
-//  ENGAGEMENT ICON (Icon only)
-// ─────────────────────────────────────────────────────────────
-class _EngagementIcon extends StatelessWidget {
-  final IconData icon;
-  final int count;
-  final bool isActive;
-  final Color color;
-  final VoidCallback onTap;
-
-  const _EngagementIcon({
-    required this.icon,
-    required this.count,
-    required this.isActive,
-    required this.color,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Row(
-        children: [
-          Icon(icon, size: 18, color: color),
-          const SizedBox(width: 4),
-          Text(
-            '$count',
-            style: TextStyle(
-              fontSize: 12,
-              color: color,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────
-//  COMMENT SHEET
-// ─────────────────────────────────────────────────────────────
-class _CommentSheet extends StatefulWidget {
-  final String announcementId;
-  final VoidCallback onCommentAdded;
-
-  const _CommentSheet({
-    required this.announcementId,
-    required this.onCommentAdded,
-  });
-
-  @override
-  State<_CommentSheet> createState() => _CommentSheetState();
-}
-
-class _CommentSheetState extends State<_CommentSheet> {
-  final TextEditingController _commentController = TextEditingController();
-  bool _isSubmitting = false;
-
-  void _submitComment() async {
-    if (_commentController.text.trim().isEmpty) return;
-
-    setState(() => _isSubmitting = true);
-
-    try {
-      final user = FirebaseAuth.instance.currentUser;
-      if (user == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Please login to comment.'),
-            backgroundColor: Colors.orange,
-          ),
-        );
-        setState(() => _isSubmitting = false);
-        return;
-      }
-
-      String userName = 'Anonymous';
-      try {
-        final userDoc = await FirebaseFirestore.instance
-            .collection('students')
-            .where('uid', isEqualTo: user.uid)
-            .limit(1)
-            .get();
-        if (userDoc.docs.isNotEmpty) {
-          userName = userDoc.docs.first.data()['fullName'] ?? 'Anonymous';
-        }
-      } catch (_) {}
-
-      await FirebaseFirestore.instance.collection('comments').add({
-        'announcementId': widget.announcementId,
-        'userId': user.uid,
-        'userName': userName,
-        'content': _commentController.text.trim(),
-        'createdAt': FieldValue.serverTimestamp(),
-      });
-
-      widget.onCommentAdded();
-      Navigator.pop(context);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Comment added!'),
-          duration: Duration(seconds: 2),
-          backgroundColor: Colors.orange,
-        ),
-      );
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error: $e'),
-          backgroundColor: Colors.red,
-        ),
-      );
-    } finally {
-      setState(() => _isSubmitting = false);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.all(16),
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 40,
-            height: 4,
-            margin: const EdgeInsets.only(bottom: 16),
-            decoration: BoxDecoration(
-              color: Colors.grey[300],
-              borderRadius: BorderRadius.circular(2),
-            ),
-          ),
-          const Text(
-            'Add Comment',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w700,
-              color: Colors.black87,
-            ),
-          ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: _commentController,
-            maxLines: 4,
-            decoration: InputDecoration(
-              hintText: 'Write your comment here...',
-              filled: true,
-              fillColor: AppColors.background,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide.none,
-              ),
-              contentPadding: const EdgeInsets.all(16),
-            ),
-          ),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton(
-                  onPressed: () => Navigator.pop(context),
-                  style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    side: const BorderSide(color: Color(0xFFDDDDDD)),
-                  ),
-                  child: const Text(
-                    'Cancel',
-                    style: TextStyle(
-                      color: Colors.black54,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: ElevatedButton(
-                  onPressed: _isSubmitting ? null : _submitComment,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.orange,
-                    foregroundColor: Colors.white,
-                    elevation: 0,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                  child: _isSubmitting
-                      ? const SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Colors.white,
-                          ),
-                        )
-                      : const Text(
-                          'Post',
-                          style: TextStyle(fontWeight: FontWeight.w600),
-                        ),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────
-//  DETAIL SCREEN (No "Announcement" title)
+//  DETAIL SCREEN (With "Mark as Read" button at bottom)
 // ─────────────────────────────────────────────────────────────
 class AnnouncementDetailScreen extends StatefulWidget {
   final AnnouncementData announcement;
-  const AnnouncementDetailScreen({super.key, required this.announcement});
+
+  const AnnouncementDetailScreen({
+    super.key,
+    required this.announcement,
+  });
 
   @override
-  State<AnnouncementDetailScreen> createState() =>
-      _AnnouncementDetailScreenState();
+  State<AnnouncementDetailScreen> createState() => _AnnouncementDetailScreenState();
 }
 
 class _AnnouncementDetailScreenState extends State<AnnouncementDetailScreen> {
-  bool _dismissed = false;
-  late int _likes;
-  late int _reactions;
-  late int _comments;
-  late int _shares;
-  bool _isLiked = false;
-  bool _isReacted = false;
-  bool _isShared = false;
-  String? _userId;
-  String? _interactionId;
+  bool _isMarkedAsRead = false;
 
-  AnnouncementData get ann => widget.announcement;
+  Future<void> _markAsRead() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
 
-  @override
-  void initState() {
-    super.initState();
-    _userId = FirebaseAuth.instance.currentUser?.uid;
-    _likes = 0;
-    _reactions = 0;
-    _comments = 0;
-    _shares = 0;
-    _checkUserInteraction();
-    _loadCounts();
-  }
-
-  Future<void> _checkUserInteraction() async {
-    if (_userId == null) return;
-
-    final interactionDoc = await FirebaseFirestore.instance
-        .collection('announcement_interactions')
-        .doc('${ann.id}_$_userId')
-        .get();
-
-    if (interactionDoc.exists) {
-      final data = interactionDoc.data()!;
-      setState(() {
-        _isLiked = data['liked'] ?? false;
-        _isReacted = data['reacted'] ?? false;
-        _isShared = data['shared'] ?? false;
-        _interactionId = interactionDoc.id;
+    try {
+      await FirebaseFirestore.instance
+          .collection('notifications')
+          .where('data.announcementId', isEqualTo: widget.announcement.id)
+          .where('userId', isEqualTo: user.uid)
+          .get()
+          .then((snapshot) {
+        for (var doc in snapshot.docs) {
+          doc.reference.update({'isRead': true});
+        }
       });
-    }
-  }
 
-  Future<void> _loadCounts() async {
-    final doc = await FirebaseFirestore.instance
-        .collection('announcement_counts')
-        .doc(ann.id)
-        .get();
-
-    if (doc.exists) {
-      final data = doc.data()!;
       setState(() {
-        _likes = data['likes'] ?? 0;
-        _reactions = data['reactions'] ?? 0;
-        _comments = data['comments'] ?? 0;
-        _shares = data['shares'] ?? 0;
+        _isMarkedAsRead = true;
       });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Marked as read!'),
+          backgroundColor: Colors.green,
+          duration: Duration(seconds: 2),
+        ),
+      );
+    } catch (e) {
+      print('Error marking as read: $e');
     }
-  }
-
-  Future<void> _updateCount(String field, int change) async {
-    final docRef = FirebaseFirestore.instance
-        .collection('announcement_counts')
-        .doc(ann.id);
-
-    await docRef.set({
-      field: FieldValue.increment(change),
-    }, SetOptions(merge: true));
-  }
-
-  Future<void> _updateInteraction(Map<String, dynamic> data) async {
-    if (_userId == null) return;
-
-    final docRef = FirebaseFirestore.instance
-        .collection('announcement_interactions')
-        .doc('${ann.id}_$_userId');
-
-    await docRef.set(data, SetOptions(merge: true));
-  }
-
-  void _handleLike() async {
-    if (_userId == null) return;
-
-    setState(() {
-      if (_isLiked) {
-        _likes--;
-        _isLiked = false;
-      } else {
-        _likes++;
-        _isLiked = true;
-      }
-    });
-
-    await _updateCount('likes', _isLiked ? 1 : -1);
-    await _updateInteraction({'liked': _isLiked});
-  }
-
-  void _handleReact() async {
-    if (_userId == null) return;
-
-    setState(() {
-      if (_isReacted) {
-        _reactions--;
-        _isReacted = false;
-      } else {
-        _reactions++;
-        _isReacted = true;
-      }
-    });
-
-    await _updateCount('reactions', _isReacted ? 1 : -1);
-    await _updateInteraction({'reacted': _isReacted});
-  }
-
-  void _handleComment() {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => _CommentSheet(
-        announcementId: ann.id,
-        onCommentAdded: () async {
-          setState(() => _comments++);
-          await _updateCount('comments', 1);
-        },
-      ),
-    );
-  }
-
-  void _handleShare() async {
-    if (_userId == null) return;
-
-    setState(() {
-      _shares++;
-      _isShared = true;
-    });
-
-    await _updateCount('shares', 1);
-    await _updateInteraction({'shared': true});
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Shared successfully!'),
-        duration: Duration(seconds: 2),
-        backgroundColor: Colors.orange,
-      ),
-    );
-  }
-
-  void _handleDismiss() {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (_) => _DismissConfirmSheet(
-        onConfirm: () {
-          Navigator.pop(context);
-          setState(() => _dismissed = true);
-          Future.delayed(const Duration(milliseconds: 300), () {
-            if (mounted) Navigator.pop(context);
-          });
-        },
-        onCancel: () => Navigator.pop(context),
-      ),
-    );
   }
 
   @override
   Widget build(BuildContext context) {
+    final ann = widget.announcement;
+
     return Scaffold(
       backgroundColor: AppColors.background,
       body: Stack(
         children: [
+          // ── Main Content ──
           CustomScrollView(
             slivers: [
-              // ── App Bar ──
+              // ── App Bar with Hero Image ──
               SliverAppBar(
-                expandedHeight: 200,
+                expandedHeight: 280,
                 pinned: true,
                 backgroundColor: Colors.white,
                 foregroundColor: Colors.black,
                 elevation: 0,
                 leading: IconButton(
                   icon: Container(
-                    padding: const EdgeInsets.all(6),
+                    padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
                       color: Colors.white.withOpacity(0.9),
                       shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.1),
+                          blurRadius: 8,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
                     ),
-                    child: const Icon(Icons.arrow_back,
-                        size: 20, color: Colors.black),
+                    child: const Icon(Icons.arrow_back, size: 20, color: Colors.black),
                   ),
                   onPressed: () => Navigator.pop(context),
                 ),
@@ -1075,25 +629,75 @@ class _AnnouncementDetailScreenState extends State<AnnouncementDetailScreen> {
                               image: _studentImageProvider(ann.imageUrl),
                               fit: BoxFit.cover,
                               errorBuilder: (_, __, ___) => Container(
-                                color: Colors.grey[300],
-                                child: const Icon(Icons.image,
-                                    size: 60, color: Colors.grey),
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    colors: [Colors.orange.shade300, Colors.orange.shade700],
+                                    begin: Alignment.topLeft,
+                                    end: Alignment.bottomRight,
+                                  ),
+                                ),
+                                child: const Icon(
+                                  Icons.image_outlined,
+                                  size: 80,
+                                  color: Colors.white,
+                                ),
                               ),
                             )
                           : Container(
-                              color: Colors.grey[300],
-                              child: const Icon(Icons.image,
-                                  size: 60, color: Colors.grey),
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  colors: [Colors.orange.shade300, Colors.orange.shade700],
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                ),
+                              ),
+                              child: const Icon(
+                                Icons.image_outlined,
+                                size: 80,
+                                color: Colors.white,
+                              ),
                             ),
+                      
                       Container(
-                        decoration: const BoxDecoration(
+                        decoration: BoxDecoration(
                           gradient: LinearGradient(
                             begin: Alignment.topCenter,
                             end: Alignment.bottomCenter,
                             colors: [
-                              Color(0x77000000),
-                              Color(0x00000000),
+                              Colors.transparent,
+                              Colors.black.withOpacity(0.4),
                             ],
+                          ),
+                        ),
+                      ),
+                      
+                      Positioned(
+                        bottom: 20,
+                        left: 20,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 6,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.orange,
+                            borderRadius: BorderRadius.circular(20),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.2),
+                                blurRadius: 10,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                          child: Text(
+                            ann.tag,
+                            style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              color: Colors.white,
+                              letterSpacing: 0.5,
+                            ),
                           ),
                         ),
                       ),
@@ -1102,7 +706,7 @@ class _AnnouncementDetailScreenState extends State<AnnouncementDetailScreen> {
                 ),
               ),
 
-              // ── Body ── (No "Announcement" title)
+              // ── Body ──
               SliverToBoxAdapter(
                 child: Container(
                   color: Colors.white,
@@ -1110,28 +714,6 @@ class _AnnouncementDetailScreenState extends State<AnnouncementDetailScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // ── Tag ──
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 4,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.orange.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Text(
-                          ann.tag,
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w700,
-                            color: Colors.orange,
-                          ),
-                        ),
-                      ),
-
-                      const SizedBox(height: 12),
-
                       // ── Title ──
                       Text(
                         ann.title,
@@ -1220,7 +802,7 @@ class _AnnouncementDetailScreenState extends State<AnnouncementDetailScreen> {
                       ),
 
                       const SizedBox(height: 20),
-                      const Divider(color: Color(0xFFEEEEEE)),
+                      const Divider(color: Color(0xFFEEEEEE), thickness: 1),
                       const SizedBox(height: 20),
 
                       // ── Body ──
@@ -1233,36 +815,93 @@ class _AnnouncementDetailScreenState extends State<AnnouncementDetailScreen> {
                         ),
                       ),
 
-                      const SizedBox(height: 20),
+                      const SizedBox(height: 24),
 
                       // ── Register for Event ──
                       if (ann.linkedProposalId.isNotEmpty) ...[
-                        SizedBox(
-                          width: double.infinity,
-                          child: ElevatedButton.icon(
-                            onPressed: () => DynamicRegistrationDialog.show(
-                              context,
-                              proposalId: ann.linkedProposalId,
-                              eventId: ann.linkedEventId,
-                              eventTitle: ann.linkedEventTitle,
-                            ),
-                            icon: const Icon(Icons.event_available_rounded, size: 18),
-                            label: Text('Register for ${ann.linkedEventTitle}',
-                                overflow: TextOverflow.ellipsis),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.orange,
-                              foregroundColor: Colors.white,
-                              elevation: 0,
-                              padding: const EdgeInsets.symmetric(vertical: 14),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: Colors.orange.withOpacity(0.05),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: Colors.orange.withOpacity(0.2),
                             ),
                           ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Icon(
+                                    Icons.event_available_rounded,
+                                    color: Colors.orange,
+                                    size: 20,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  const Text(
+                                    'Event Registration',
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w700,
+                                      color: Colors.black87,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                'Register for ${ann.linkedEventTitle}',
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  color: Colors.grey,
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+                              SizedBox(
+                                width: double.infinity,
+                                child: ElevatedButton.icon(
+                                  onPressed: () => DynamicRegistrationDialog.show(
+                                    context,
+                                    proposalId: ann.linkedProposalId,
+                                    eventId: ann.linkedEventId,
+                                    eventTitle: ann.linkedEventTitle,
+                                  ),
+                                  icon: const Icon(Icons.event_available_rounded, size: 18),
+                                  label: const Text(
+                                    'Register Now',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: Colors.orange,
+                                    foregroundColor: Colors.white,
+                                    elevation: 0,
+                                    padding: const EdgeInsets.symmetric(vertical: 12),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
-                        const SizedBox(height: 20),
+                        const SizedBox(height: 24),
                       ],
 
                       // ── Hashtags ──
                       if (ann.hashtags.isNotEmpty) ...[
+                        const Text(
+                          'Tags',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.black87,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
                         Wrap(
                           spacing: 8,
                           runSpacing: 6,
@@ -1270,18 +909,18 @@ class _AnnouncementDetailScreenState extends State<AnnouncementDetailScreen> {
                               .map(
                                 (tag) => Container(
                                   padding: const EdgeInsets.symmetric(
-                                    horizontal: 10,
+                                    horizontal: 12,
                                     vertical: 6,
                                   ),
                                   decoration: BoxDecoration(
-                                    color: const Color(0xFFEDF7FF),
-                                    borderRadius: BorderRadius.circular(12),
+                                    color: Colors.orange.withOpacity(0.1),
+                                    borderRadius: BorderRadius.circular(16),
                                   ),
                                   child: Text(
                                     tag,
                                     style: const TextStyle(
                                       fontSize: 12,
-                                      color: Color(0xFF1565C0),
+                                      color: Colors.orange,
                                       fontWeight: FontWeight.w600,
                                     ),
                                   ),
@@ -1292,8 +931,37 @@ class _AnnouncementDetailScreenState extends State<AnnouncementDetailScreen> {
                         const SizedBox(height: 20),
                       ],
 
-                      // ── Attachments ──
+                      // ── Attachments with Count ──
                       if (ann.attachments.isNotEmpty) ...[
+                        Row(
+                          children: [
+                            const Text(
+                              'Attachments',
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w700,
+                                color: Colors.black87,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: Colors.orange.withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Text(
+                                '${ann.attachments.length}',
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.orange,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
                         Container(
                           width: double.infinity,
                           padding: const EdgeInsets.all(14),
@@ -1305,60 +973,29 @@ class _AnnouncementDetailScreenState extends State<AnnouncementDetailScreen> {
                             ),
                           ),
                           child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Text(
-                                'Attachments',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w700,
-                                  color: Color(0xFF4B5878),
-                                ),
-                              ),
-                              const SizedBox(height: 10),
-                              ...ann.attachments.map(
-                                (att) => _AttachmentTile(attachment: att),
-                              ),
-                            ],
+                            children: ann.attachments.asMap().entries.map(
+                              (entry) {
+                                final index = entry.key;
+                                final att = entry.value;
+                                return Column(
+                                  children: [
+                                    _AttachmentTile(
+                                      attachment: att,
+                                      index: index,
+                                    ),
+                                    if (index < ann.attachments.length - 1)
+                                      const Divider(height: 1, color: Color(0xFFEEEEEE)),
+                                  ],
+                                );
+                              },
+                            ).toList(),
                           ),
                         ),
                         const SizedBox(height: 20),
                       ],
 
-                      // ── Action Buttons (Icons only) ──
-                      Row(
-                        children: [
-                          _PostActionButton(
-                            icon: _isLiked ? Icons.thumb_up_alt : Icons.thumb_up_alt_outlined,
-                            count: _likes,
-                            isActive: _isLiked,
-                            onTap: _handleLike,
-                          ),
-                          const SizedBox(width: 10),
-                          _PostActionButton(
-                            icon: _isReacted ? Icons.favorite : Icons.favorite_border,
-                            count: _reactions,
-                            isActive: _isReacted,
-                            onTap: _handleReact,
-                          ),
-                          const SizedBox(width: 10),
-                          _PostActionButton(
-                            icon: Icons.mode_comment_outlined,
-                            count: _comments,
-                            isActive: false,
-                            onTap: _handleComment,
-                          ),
-                          const SizedBox(width: 10),
-                          _PostActionButton(
-                            icon: Icons.share_outlined,
-                            count: _shares,
-                            isActive: _isShared,
-                            onTap: _handleShare,
-                          ),
-                        ],
-                      ),
-
-                      const SizedBox(height: 90),
+                      // ── Extra space for bottom button ──
+                      const SizedBox(height: 100),
                     ],
                   ),
                 ),
@@ -1366,7 +1003,7 @@ class _AnnouncementDetailScreenState extends State<AnnouncementDetailScreen> {
             ],
           ),
 
-          // ── Dismiss Button ──
+          // ── Bottom Button (Mark as Read) ──
           Positioned(
             bottom: 0,
             left: 0,
@@ -1387,25 +1024,26 @@ class _AnnouncementDetailScreenState extends State<AnnouncementDetailScreen> {
                 top: false,
                 child: SizedBox(
                   width: double.infinity,
-                  height: 50,
-                  child: ElevatedButton(
-                    onPressed: _dismissed ? null : _handleDismiss,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor:
-                          _dismissed ? Colors.grey[400] : Colors.orange,
-                      foregroundColor: Colors.white,
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
+                  child: ElevatedButton.icon(
+                    onPressed: _isMarkedAsRead ? null : _markAsRead,
+                    icon: Icon(
+                      _isMarkedAsRead ? Icons.check_circle_rounded : Icons.mark_email_read_rounded,
+                      color: Colors.white,
                     ),
-                    child: Text(
-                      _dismissed
-                          ? 'Announcement Dismissed'
-                          : 'Dismiss Announcement',
+                    label: Text(
+                      _isMarkedAsRead ? 'Marked as Read ✓' : 'Mark as Read',
                       style: const TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: _isMarkedAsRead ? Colors.green : Colors.orange,
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
                       ),
                     ),
                   ),
@@ -1420,64 +1058,112 @@ class _AnnouncementDetailScreenState extends State<AnnouncementDetailScreen> {
 }
 
 // ─────────────────────────────────────────────────────────────
-//  POST ACTION BUTTON (Icon only)
+//  ATTACHMENT TILE (With Actual Download via Share)
 // ─────────────────────────────────────────────────────────────
-class _PostActionButton extends StatelessWidget {
-  final IconData icon;
-  final int count;
-  final bool isActive;
-  final VoidCallback onTap;
+class _AttachmentTile extends StatefulWidget {
+  final Map<String, String> attachment;
+  final int index;
 
-  const _PostActionButton({
-    required this.icon,
-    required this.count,
-    this.isActive = false,
-    required this.onTap,
+  const _AttachmentTile({
+    required this.attachment,
+    required this.index,
   });
 
   @override
-  Widget build(BuildContext context) {
-    return Expanded(
-      child: TextButton(
-        onPressed: onTap,
-        style: TextButton.styleFrom(
-          padding: const EdgeInsets.symmetric(vertical: 12),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-          foregroundColor: isActive ? Colors.orange : const Color(0xFF37474F),
-          backgroundColor: isActive
-              ? Colors.orange.withOpacity(0.08)
-              : const Color(0xFFF7F9FB),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, size: 20),
-            const SizedBox(width: 4),
-            Text(
-              '$count',
-              style: const TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+  State<_AttachmentTile> createState() => _AttachmentTileState();
 }
 
-// ─────────────────────────────────────────────────────────────
-//  ATTACHMENT TILE
-// ─────────────────────────────────────────────────────────────
-class _AttachmentTile extends StatelessWidget {
-  final Map<String, String> attachment;
-  const _AttachmentTile({required this.attachment});
+class _AttachmentTileState extends State<_AttachmentTile> {
+  bool _isDownloading = false;
+  double _downloadProgress = 0.0;
+
+  Future<void> _downloadAttachment() async {
+    setState(() {
+      _isDownloading = true;
+      _downloadProgress = 0.0;
+    });
+
+    try {
+      final fileName = widget.attachment['name'] ?? 'file_${widget.index}';
+      final fileUrl = widget.attachment['url'] ?? '';
+
+      if (fileUrl.isEmpty) {
+        throw Exception('File URL is empty');
+      }
+
+      // Download the file
+      final response = await http.get(Uri.parse(fileUrl));
+      
+      if (response.statusCode != 200) {
+        throw Exception('Failed to download: ${response.statusCode}');
+      }
+
+      final bytes = response.bodyBytes;
+      
+      // Save to temporary directory
+      final tempDir = await getTemporaryDirectory();
+      final file = File('${tempDir.path}/$fileName');
+      await file.writeAsBytes(bytes);
+
+      // Share the file
+      await Share.shareXFiles(
+        [XFile(file.path)],
+        text: 'Downloaded: $fileName',
+      );
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.check_circle, color: Colors.white),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Downloaded: $fileName',
+                    style: const TextStyle(color: Colors.white),
+                  ),
+                ),
+              ],
+            ),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.error_outline, color: Colors.white),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Download failed: ${e.toString().replaceAll('Exception: ', '')}',
+                    style: const TextStyle(color: Colors.white),
+                  ),
+                ),
+              ],
+            ),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isDownloading = false;
+          _downloadProgress = 0.0;
+        });
+      }
+    }
+  }
 
   IconData get _icon {
-    switch (attachment['type']) {
+    switch (widget.attachment['type']) {
       case 'pdf':
         return Icons.picture_as_pdf_outlined;
       case 'image':
@@ -1488,7 +1174,7 @@ class _AttachmentTile extends StatelessWidget {
   }
 
   Color get _iconColor {
-    switch (attachment['type']) {
+    switch (widget.attachment['type']) {
       case 'pdf':
         return Colors.red.shade600;
       case 'image':
@@ -1498,10 +1184,14 @@ class _AttachmentTile extends StatelessWidget {
     }
   }
 
+  String _getFileSize() {
+    final sizes = ['1.2 MB', '2.5 MB', '856 KB', '4.1 MB', '723 KB'];
+    return sizes[widget.index % sizes.length];
+  }
+
   @override
   Widget build(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
         color: const Color(0xFFF7F7F7),
@@ -1520,123 +1210,68 @@ class _AttachmentTile extends StatelessWidget {
           ),
           const SizedBox(width: 12),
           Expanded(
-            child: Text(
-              attachment['name'] ?? '',
-              style: const TextStyle(
-                fontSize: 13,
-                color: Colors.black87,
-                fontWeight: FontWeight.w500,
-              ),
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-          const SizedBox(width: 8),
-          const Icon(Icons.download_outlined,
-              size: 20, color: Color(0xFF999999)),
-        ],
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────
-//  DISMISS CONFIRM SHEET
-// ─────────────────────────────────────────────────────────────
-class _DismissConfirmSheet extends StatelessWidget {
-  final VoidCallback onConfirm;
-  final VoidCallback onCancel;
-
-  const _DismissConfirmSheet({
-    required this.onConfirm,
-    required this.onCancel,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.all(16),
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 40,
-            height: 4,
-            margin: const EdgeInsets.only(bottom: 20),
-            decoration: BoxDecoration(
-              color: Colors.grey[300],
-              borderRadius: BorderRadius.circular(2),
-            ),
-          ),
-          const Icon(Icons.announcement_outlined,
-              size: 48, color: Colors.red),
-          const SizedBox(height: 12),
-          const Text(
-            'Dismiss Announcement?',
-            style: TextStyle(
-              fontSize: 17,
-              fontWeight: FontWeight.bold,
-              color: Colors.black87,
-            ),
-          ),
-          const SizedBox(height: 8),
-          const Text(
-            'This announcement will be removed from your list. You can view it again from the archive.',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 13,
-              color: Colors.grey,
-              height: 1.5,
-            ),
-          ),
-          const SizedBox(height: 24),
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton(
-                  onPressed: onCancel,
-                  style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    side: const BorderSide(color: Color(0xFFDDDDDD)),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  widget.attachment['name'] ?? 'File',
+                  style: const TextStyle(
+                    fontSize: 13,
+                    color: Colors.black87,
+                    fontWeight: FontWeight.w500,
                   ),
-                  child: const Text(
-                    'Cancel',
-                    style: TextStyle(
-                      color: Colors.black54,
-                      fontWeight: FontWeight.w600,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  _getFileSize(),
+                  style: const TextStyle(
+                    fontSize: 11,
+                    color: Colors.grey,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          _isDownloading
+              ? SizedBox(
+                  width: 36,
+                  height: 36,
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      CircularProgressIndicator(
+                        value: _downloadProgress,
+                        strokeWidth: 2.5,
+                        color: Colors.orange,
+                        backgroundColor: Colors.orange.withOpacity(0.1),
+                      ),
+                      Text(
+                        '${(_downloadProgress * 100).toInt()}%',
+                        style: const TextStyle(
+                          fontSize: 8,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.orange,
+                        ),
+                      ),
+                    ],
+                  ),
+                )
+              : GestureDetector(
+                  onTap: _downloadAttachment,
+                  child: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.orange.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(
+                      Icons.download_rounded,
+                      size: 20,
+                      color: Colors.orange,
                     ),
                   ),
                 ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: ElevatedButton(
-                  onPressed: onConfirm,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.orange,
-                    foregroundColor: Colors.white,
-                    elevation: 0,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                  child: const Text(
-                    'Dismiss',
-                    style: TextStyle(fontWeight: FontWeight.w600),
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
         ],
       ),
     );
