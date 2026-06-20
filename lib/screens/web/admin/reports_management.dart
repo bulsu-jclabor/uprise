@@ -9,6 +9,8 @@ import 'export_util.dart';
 import 'package:uprise/widgets/admin_export_button.dart';
 import 'package:pdf/widgets.dart' as pw;
 import '../../../services/activity_logger.dart' as activity_log;
+import 'dart:convert'; // for base64Decode, utf8
+import '../../../utils/platform_file_utils.dart' as platform_file_utils; // adjust path if needed
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Design tokens — mirrors student_accounts.dart exactly
@@ -47,6 +49,55 @@ class UpriseColors {
   static const Color warningBg = Color(0xFFFFFBEB);
   static const Color info = Color(0xFF2563EB);
   static const Color infoBg = Color(0xFFEFF6FF);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Admin Report Model
+// ─────────────────────────────────────────────────────────────────────────────
+class AdminReport {
+  final String id;
+  final String orgId;
+  final String orgName;
+  final String eventTitle;
+  final String type;
+  final String description;
+  final DateTime submittedAt;
+  final String? fileBase64;
+  final String? fileName;
+  final String? fileSize;
+  final bool archived;
+
+  AdminReport({
+    required this.id,
+    required this.orgId,
+    required this.orgName,
+    required this.eventTitle,
+    required this.type,
+    required this.description,
+    required this.submittedAt,
+    this.fileBase64,
+    this.fileName,
+    this.fileSize,
+    this.archived = false,
+  });
+
+  factory AdminReport.fromFirestore(DocumentSnapshot doc, Map<String, String> orgMap) {
+    final data = doc.data() as Map<String, dynamic>;
+    final orgId = data['orgId']?.toString() ?? '';
+    return AdminReport(
+      id: doc.id,
+      orgId: orgId,
+      orgName: orgMap[orgId] ?? 'Unknown',
+      eventTitle: data['title']?.toString() ?? 'Untitled',
+      type: data['type']?.toString() ?? 'financial',
+      description: data['description']?.toString() ?? '',
+      submittedAt: (data['submittedAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
+      fileBase64: data['fileBase64'] as String?,
+      fileName: data['fileName'] as String?,
+      fileSize: data['fileSize'] as String?,
+      archived: data['archived'] as bool? ?? false,
+    );
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -133,7 +184,7 @@ class _BadgeStyle {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Data Models
+// Data Models for Events
 // ─────────────────────────────────────────────────────────────────────────────
 class EventReport {
   final String id, title, orgId, orgName, type, status;
@@ -245,6 +296,16 @@ class _ReportsManagementState extends State<ReportsManagement>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
 
+  String? _getOrgLogo(String orgId) {
+  // Find the organization with this ID
+  final org = _organizations.firstWhere(
+  (o) => o['id'] == orgId,
+  orElse: () => <String, dynamic>{},
+);
+  // Return its logo URL (or null if not found)
+  return org['logoUrl'] as String?;
+}
+
   String _filterOrg = 'All Organizations';
   String _filterType = 'All Types';
   String _filterRange = 'All Time';
@@ -267,10 +328,17 @@ class _ReportsManagementState extends State<ReportsManagement>
   List<Map<String, dynamic>> _organizations = [];
   bool _loadingEvents = true;
 
-  List<OrgSubmission> _financialSubs = [];
-  List<OrgSubmission> _accomplishmentSubs = [];
+  // NEW: Admin reports for financial and accomplishment
+  List<AdminReport> _financialReports = [];
+  List<AdminReport> _accomplishmentReports = [];
   bool _loadingFinancial = true;
   bool _loadingAccomplishment = true;
+
+  // Keep these for submission tracker tab
+  List<OrgSubmission> _financialSubs = [];
+  List<OrgSubmission> _accomplishmentSubs = [];
+  bool _loadingFinancialSubs = true;
+  bool _loadingAccomplishmentSubs = true;
   DateTime? _financialDeadline;
   DateTime? _accomplishmentDeadline;
   bool _loadingDeadlines = true;
@@ -292,6 +360,8 @@ class _ReportsManagementState extends State<ReportsManagement>
     _loadOrganizations();
     _loadDeadlines();
     _loadSubmissionData();
+    _loadFinancialReports();
+    _loadAccomplishmentReports();
     _loadEvents();
   }
 
@@ -353,21 +423,21 @@ class _ReportsManagementState extends State<ReportsManagement>
   // ── Firebase loaders ──────────────────────────────────────────────
 
   Future<void> _loadOrganizations() async {
-    final snap = await FirebaseFirestore.instance
-        .collection('organizations')
-        .get();
-    if (!mounted) return;
-    setState(() {
-      _organizations = snap.docs
-          .map(
-            (doc) => {
-              'id': doc.id,
-              'name': doc.data()['name']?.toString() ?? 'Unknown',
-            },
-          )
-          .toList();
-    });
-  }
+  final snap = await FirebaseFirestore.instance
+      .collection('organizations')
+      .get();
+  if (!mounted) return;
+  setState(() {
+    _organizations = snap.docs.map((doc) {
+      final data = doc.data();
+      return <String, dynamic>{       
+        'id': doc.id,
+        'name': data['name']?.toString() ?? 'Unknown',
+        'logoUrl': data['logoUrl'] as String?,
+      };
+    }).toList();
+  });
+}
 
   Future<void> _loadEvents() async {
     if (!mounted) return;
@@ -377,15 +447,17 @@ class _ReportsManagementState extends State<ReportsManagement>
       if (_filterStatus != 'All') {
         query = query.where('status', isEqualTo: _filterStatus.toLowerCase());
       }
-      if (_filterType != 'All Types')
-        query = query.where('type', isEqualTo: _filterType);
+        if (_filterType != 'All Types') {   // <-- add opening brace
+  query = query.where('type', isEqualTo: _filterType);
+} // <-- add closing brace
       if (_filterOrg != 'All Organizations') {
         final org = _organizations.firstWhere(
-          (o) => o['name'] == _filterOrg,
-          orElse: () => {'id': '', 'name': ''},
-        );
-        if ((org['id'] as String).isNotEmpty)
-          query = query.where('orgId', isEqualTo: org['id']);
+  (o) => o['name'] == _filterOrg,
+  orElse: () => <String, dynamic>{'id': '', 'name': ''},
+);
+        if ((org['id'] as String).isNotEmpty) {   // <-- add brace
+  query = query.where('orgId', isEqualTo: org['id']);
+} // <-- close
       }
       final (rangeStart, rangeEnd) = _computeDateRange();
       if (rangeStart != null) {
@@ -423,6 +495,170 @@ class _ReportsManagementState extends State<ReportsManagement>
     } finally {
       if (mounted) setState(() => _loadingEvents = false);
     }
+  }
+
+
+  // ── NEW: Load Financial Reports ──────────────────────────────────
+Future<void> _loadFinancialReports() async {
+  if (!mounted) return;
+  setState(() => _loadingFinancial = true);
+  try {
+    // Query WITHOUT the 'archived' filter
+    final reportsSnap = await FirebaseFirestore.instance
+        .collection('reports')
+        .where('type', isEqualTo: 'financial')
+        .get();
+
+    final orgsSnap = await FirebaseFirestore.instance
+        .collection('organizations')
+        .get();
+    final orgMap = {
+      for (var doc in orgsSnap.docs) doc.id: doc.data()['name']?.toString() ?? 'Unknown'
+    };
+
+    final allReports = reportsSnap.docs
+        .map((doc) => AdminReport.fromFirestore(doc, orgMap))
+        .toList();
+
+    // Filter out archived reports in memory
+    final activeReports = allReports.where((r) => !r.archived).toList();
+
+    if (!mounted) return;
+    setState(() {
+      _financialReports = activeReports;
+      _loadingFinancial = false;
+    });
+  } catch (e) {
+    debugPrint('Error loading financial reports: $e');
+    if (mounted) {
+      setState(() => _loadingFinancial = false);
+      // Show a snackbar to let you know something went wrong
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to load financial reports: $e'),
+          backgroundColor: UpriseColors.error,
+        ),
+      );
+    }
+  }
+}
+
+// ── NEW: Load Accomplishment Reports ─────────────────────────────
+Future<void> _loadAccomplishmentReports() async {
+  if (!mounted) return;
+  setState(() => _loadingAccomplishment = true);
+  try {
+    // Query WITHOUT the 'archived' filter
+    final reportsSnap = await FirebaseFirestore.instance
+        .collection('reports')
+        .where('type', isEqualTo: 'accomplishment')
+        .get();
+
+    final orgsSnap = await FirebaseFirestore.instance
+        .collection('organizations')
+        .get();
+    final orgMap = {
+      for (var doc in orgsSnap.docs) doc.id: doc.data()['name']?.toString() ?? 'Unknown'
+    };
+
+    final allReports = reportsSnap.docs
+        .map((doc) => AdminReport.fromFirestore(doc, orgMap))
+        .toList();
+
+    // Filter out archived reports in memory
+    final activeReports = allReports.where((r) => !r.archived).toList();
+
+    if (!mounted) return;
+    setState(() {
+      _accomplishmentReports = activeReports;
+      _loadingAccomplishment = false;
+    });
+  } catch (e) {
+    debugPrint('Error loading accomplishment reports: $e');
+    if (mounted) {
+      setState(() => _loadingAccomplishment = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to load accomplishment reports: $e'),
+          backgroundColor: UpriseColors.error,
+        ),
+      );
+    }
+  }
+}
+
+  // ── Archive Report ────────────────────────────────────────────────
+  Future<void> _archiveReport(AdminReport report) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      barrierColor: Colors.black54,
+      builder: (_) => _ConfirmDialog(
+        title: 'Archive Report',
+        message: 'Are you sure you want to archive "${report.eventTitle}" from ${report.orgName}?',
+        confirmLabel: 'Archive',
+        destructive: false,
+      ),
+    );
+    if (confirm != true) return;
+
+    try {
+      await FirebaseFirestore.instance
+          .collection('reports')
+          .doc(report.id)
+          .update({'archived': true});
+      
+      await activity_log.ActivityLogger.log(
+        action: 'archive_report',
+        module: 'Reports',
+        details: {
+          'reportId': report.id,
+          'orgId': report.orgId,
+          'eventTitle': report.eventTitle,
+        },
+      );
+
+      // Remove from the active list
+      setState(() {
+        if (report.type == 'financial') {
+          _financialReports.removeWhere((r) => r.id == report.id);
+        } else {
+          _accomplishmentReports.removeWhere((r) => r.id == report.id);
+        }
+      });
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Report archived successfully'),
+          backgroundColor: UpriseColors.success,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(_DS.radiusSm),
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error archiving report: $e'),
+          backgroundColor: UpriseColors.error,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(_DS.radiusSm),
+          ),
+        ),
+      );
+    }
+  }
+
+  // ── View Report Modal ─────────────────────────────────────────────
+  void _viewReport(AdminReport report) {
+    showDialog(
+      context: context,
+      barrierColor: Colors.black54,
+      builder: (ctx) => _ViewAdminReportModal(report: report),
+    );
   }
 
   Future<Map<String, Map<String, dynamic>>>
@@ -512,9 +748,10 @@ class _ReportsManagementState extends State<ReportsManagement>
     ]);
   }
 
+  // Keep these for submission tracker tab
   Future<void> _loadFinancialSubmissions() async {
     if (!mounted) return;
-    setState(() => _loadingFinancial = true);
+    setState(() => _loadingFinancialSubs = true);
     try {
       final orgsSnap = await FirebaseFirestore.instance
           .collection('organizations')
@@ -559,13 +796,13 @@ class _ReportsManagementState extends State<ReportsManagement>
     } catch (e) {
       debugPrint('Error: $e');
     } finally {
-      if (mounted) setState(() => _loadingFinancial = false);
+      if (mounted) setState(() => _loadingFinancialSubs = false);
     }
   }
 
   Future<void> _loadAccomplishmentSubmissions() async {
     if (!mounted) return;
-    setState(() => _loadingAccomplishment = true);
+    setState(() => _loadingAccomplishmentSubs = true);
     try {
       final orgsSnap = await FirebaseFirestore.instance
           .collection('organizations')
@@ -610,7 +847,7 @@ class _ReportsManagementState extends State<ReportsManagement>
     } catch (e) {
       debugPrint('Error: $e');
     } finally {
-      if (mounted) setState(() => _loadingAccomplishment = false);
+      if (mounted) setState(() => _loadingAccomplishmentSubs = false);
     }
   }
 
@@ -843,8 +1080,8 @@ class _ReportsManagementState extends State<ReportsManagement>
             physics: const NeverScrollableScrollPhysics(),
             children: [
               _buildEventSummaryTab(),
-              _buildSubmissionFilesTab('Accomplishment', _accomplishmentSubs, _accomplishmentDeadline, _loadingAccomplishment),
-              _buildSubmissionFilesTab('Financial', _financialSubs, _financialDeadline, _loadingFinancial),
+              _buildReportTab('Accomplishment', _accomplishmentReports, _loadingAccomplishment),
+              _buildReportTab('Financial', _financialReports, _loadingFinancial),
               _buildSubmissionTrackerTab(),
             ],
           ),
@@ -1088,6 +1325,239 @@ class _ReportsManagementState extends State<ReportsManagement>
     );
   }
 
+  // ── NEW: Report Tab ──────────────────────────────────────────────
+  Widget _buildReportTab(String reportType, List<AdminReport> reports, bool loading) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(28, 8, 28, 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildReportTable(reportType, reports, loading),
+          if (reportType == 'Financial') ...[
+            const SizedBox(height: 24),
+            _buildRecentReportsBar(),
+          ],
+        ],
+      ),
+    );
+  }
+
+  // ── NEW: Report Table ─────────────────────────────────────────────
+  Widget _buildReportTable(String reportType, List<AdminReport> reports, bool loading) {
+    if (loading) {
+      return const Padding(
+        padding: EdgeInsets.all(32),
+        child: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    final sorted = List<AdminReport>.from(reports)
+      ..sort((a, b) => b.submittedAt.compareTo(a.submittedAt));
+
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFE8ECF0)),
+        boxShadow: _DS.cardShadow,
+      ),
+      child: Column(
+        children: [
+          // Header
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 13),
+            decoration: const BoxDecoration(
+              color: Color(0xFFFFF7ED),
+              borderRadius: BorderRadius.vertical(top: Radius.circular(14)),
+              border: Border(bottom: BorderSide(color: Color(0xFFFB923C))),
+            ),
+            child: Row(
+              children: [
+                Expanded(flex: 2, child: _headerCell('ORGANIZATION')),
+                Expanded(flex: 3, child: _headerCell('EVENT')),
+                Expanded(flex: 2, child: _headerCell('TYPE')),
+                Expanded(flex: 3, child: _headerCell('DESCRIPTION')),
+                Expanded(flex: 2, child: _headerCell('DATE SUBMITTED')),
+                Expanded(
+                  flex: 1,
+                  child: Align(
+                    alignment: Alignment.centerRight,
+                    child: _headerCell('ACTIONS'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          // Rows
+          if (sorted.isEmpty)
+            _buildEmptyState()
+          else
+            ...sorted.asMap().entries.map((entry) {
+              final i = entry.key;
+              final report = entry.value;
+              final isLast = i == sorted.length - 1;
+              return InkWell(
+                hoverColor: const Color(0xFFF8F9FB),
+                onTap: () => _viewReport(report),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                  decoration: BoxDecoration(
+                    border: isLast
+                        ? null
+                        : const Border(bottom: BorderSide(color: Color(0xFFF1F5F9))),
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        flex: 2,
+                        child: Row(
+                          children: [
+                            _OrgAvatar(
+  name: report.orgName,
+  imageUrl: _getOrgLogo(report.orgId),
+),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                report.orgName,
+                                style: GoogleFonts.beVietnamPro(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: const Color(0xFF1A202C),
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Expanded(
+                        flex: 3,
+                        child: Text(
+                          report.eventTitle,
+                          style: GoogleFonts.beVietnamPro(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500,
+                            color: const Color(0xFF1A202C),
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      Expanded(
+                        flex: 2,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: report.type == 'financial'
+                                ? const Color(0xFFECFDF5)
+                                : const Color(0xFFEFF6FF),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            report.type == 'financial' ? 'Financial' : 'Accomplishment',
+                            style: GoogleFonts.beVietnamPro(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: report.type == 'financial'
+                                  ? const Color(0xFF059669)
+                                  : const Color(0xFF2563EB),
+                            ),
+                          ),
+                        ),
+                      ),
+                      Expanded(
+                        flex: 3,
+                        child: Text(
+                          report.description,
+                          style: GoogleFonts.beVietnamPro(
+                            fontSize: 12,
+                            color: const Color(0xFF64748B),
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                          maxLines: 2,
+                        ),
+                      ),
+                      Expanded(
+                        flex: 2,
+                        child: Text(
+                          DateFormat('MMM dd, yyyy').format(report.submittedAt),
+                          style: GoogleFonts.beVietnamPro(
+                            fontSize: 12,
+                            color: const Color(0xFF64748B),
+                          ),
+                        ),
+                      ),
+                      Expanded(
+                        flex: 1,
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.end,
+                          children: [
+                            _ActionIconButton(
+                              icon: Icons.visibility_outlined,
+                              tooltip: 'View Report',
+                              onTap: () => _viewReport(report),
+                            ),
+                            const SizedBox(width: 4),
+                            _ActionIconButton(
+                              icon: Icons.archive_outlined,
+                              tooltip: 'Archive Report',
+                              color: UpriseColors.warning,
+                              onTap: () => _archiveReport(report),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }),
+          // Footer
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+            decoration: const BoxDecoration(
+              border: Border(top: BorderSide(color: Color(0xFFE8ECF0))),
+              color: Color(0xFFF8F9FB),
+              borderRadius: BorderRadius.vertical(bottom: Radius.circular(14)),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Showing ${sorted.length} reports',
+                  style: GoogleFonts.beVietnamPro(
+                    fontSize: 12,
+                    color: const Color(0xFF64748B),
+                  ),
+                ),
+                AdminExportButton(
+                  onSelected: (choice) async {
+                    if (choice == 'csv') {
+                      // Implement export if needed
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('Exporting $reportType reports as CSV...'),
+                          backgroundColor: UpriseColors.primaryDark,
+                        ),
+                      );
+                    } else if (choice == 'pdf') {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('Exporting $reportType reports as PDF...'),
+                          backgroundColor: UpriseColors.primaryDark,
+                        ),
+                      );
+                    }
+                  },
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   // ── Event Summary Tab — analytics overview ────────────────────────
   Widget _buildEventSummaryTab() {
     if (_loadingEvents) return const Center(child: CircularProgressIndicator());
@@ -1240,30 +1710,7 @@ class _ReportsManagementState extends State<ReportsManagement>
     );
   }
 
-  // ── Submission Files Tab (Financial & Accomplishment) ─────────────
-  Widget _buildSubmissionFilesTab(
-    String reportType,
-    List<OrgSubmission> submissions,
-    DateTime? deadline,
-    bool loading,
-  ) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(28, 0, 28, 24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const SizedBox(height: 8),
-          _buildSubmissionTable(reportType, submissions, deadline, loading),
-          if (reportType == 'Financial') ...[
-            const SizedBox(height: 24),
-            _buildRecentReportsBar(),
-          ],
-        ],
-      ),
-    );
-  }
-
-  // ── Events Table — full StudentAccounts-style implementation ──────
+  // ── Events Table ──────────────────────────────────────────────────
   Widget _buildEventsTable({
     required bool showFinancial,
     required bool showCountdown,
@@ -1634,7 +2081,7 @@ class _ReportsManagementState extends State<ReportsManagement>
           ),
           const SizedBox(height: 16),
           Text(
-            'No events found',
+            'No reports found',
             style: GoogleFonts.beVietnamPro(
               fontSize: 15,
               fontWeight: FontWeight.w600,
@@ -1906,7 +2353,7 @@ class _ReportsManagementState extends State<ReportsManagement>
             'Financial',
             _financialSubs,
             _financialDeadline,
-            _loadingFinancial,
+            _loadingFinancialSubs,
           ),
           const SizedBox(height: 24),
           _sectionLabel(
@@ -1917,7 +2364,7 @@ class _ReportsManagementState extends State<ReportsManagement>
             'Accomplishment',
             _accomplishmentSubs,
             _accomplishmentDeadline,
-            _loadingAccomplishment,
+            _loadingAccomplishmentSubs,
           ),
           const SizedBox(height: 24),
         ],
@@ -2079,6 +2526,7 @@ class _ReportsManagementState extends State<ReportsManagement>
     );
   }
 
+  // ── Submission Table (existing, unchanged) ──────────────────────
   Widget _buildSubmissionTable(
     String title,
     List<OrgSubmission> submissions,
@@ -3723,7 +4171,500 @@ class _ReportsManagementState extends State<ReportsManagement>
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Reusable Widgets — identical pattern to student_accounts.dart
+// View Admin Report Modal
+// ─────────────────────────────────────────────────────────────────────────────
+class _ViewAdminReportModal extends StatelessWidget {
+  final AdminReport report;
+  const _ViewAdminReportModal({required this.report});
+
+  static String _mimeFromExt(String ext) {
+    switch (ext) {
+      case 'png': return 'image/png';
+      case 'jpg': case 'jpeg': return 'image/jpeg';
+      case 'pdf': return 'application/pdf';
+      case 'doc': return 'application/msword';
+      case 'docx': return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+      case 'xlsx': return 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+      default: return 'application/octet-stream';
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isFinancial = report.type == 'financial';
+    final hasFile = report.fileBase64 != null && report.fileBase64!.isNotEmpty;
+
+    return Dialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+      child: SizedBox(
+        width: 500,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Header
+            Container(
+              padding: const EdgeInsets.fromLTRB(24, 20, 20, 20),
+              decoration: BoxDecoration(
+                color: UpriseColors.primaryDark,
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(18),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 38,
+                    height: 38,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withAlpha(38),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(
+                      Icons.article_outlined,
+                      color: Colors.white,
+                      size: 18,
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Report Details',
+                          style: GoogleFonts.beVietnamPro(
+                            fontSize: 17,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.white,
+                          ),
+                        ),
+                        Text(
+                          report.orgName,
+                          style: GoogleFonts.beVietnamPro(
+                            fontSize: 12,
+                            color: Colors.white.withAlpha(179),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(
+                      Icons.close_rounded,
+                      color: Colors.white,
+                      size: 20,
+                    ),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ],
+              ),
+            ),
+            // Body
+            Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Event Title
+                  Text(
+                    report.eventTitle,
+                    style: GoogleFonts.beVietnamPro(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                      color: const Color(0xFF1A202C),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _detailItem(
+                          'Organization',
+                          report.orgName,
+                          Icons.business_rounded,
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: _detailItem(
+                          'Type',
+                          isFinancial
+                              ? 'Financial Report'
+                              : 'Accomplishment Report',
+                          Icons.label_outlined,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _detailItem(
+                          'Date Submitted',
+                          DateFormat(
+                            'MMM dd, yyyy',
+                          ).format(report.submittedAt),
+                          Icons.calendar_today_outlined,
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: _detailItem(
+                          'Event',
+                          report.eventTitle,
+                          Icons.event_rounded,
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (report.description.isNotEmpty) ...[
+                    const SizedBox(height: 14),
+                    _detailItem(
+                      'Description',
+                      report.description,
+                      Icons.notes_rounded,
+                    ),
+                  ],
+                  // File Attachment
+                  if (hasFile) ...[
+                    const SizedBox(height: 20),
+                    Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF8F9FB),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: const Color(0xFFE2E6EA)),
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: UpriseColors.primaryDark.withAlpha(26),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Icon(
+                              Icons.insert_drive_file_rounded,
+                              size: 20,
+                              color: UpriseColors.primaryDark,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  report.fileName ?? 'Attached File',
+                                  style: GoogleFonts.beVietnamPro(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                if (report.fileSize != null)
+                                  Text(
+                                    report.fileSize!,
+                                    style: GoogleFonts.beVietnamPro(
+                                      fontSize: 11,
+                                      color: const Color(0xFF64748B),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
+                          TextButton.icon(
+                            onPressed: () => _openAttachment(context),
+                            icon: const Icon(Icons.open_in_new_rounded, size: 15),
+                            label: const Text('Open'),
+                            style: TextButton.styleFrom(
+                              foregroundColor: UpriseColors.primaryDark,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            // Footer
+            Container(
+              padding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  ElevatedButton(
+                    onPressed: () => Navigator.pop(context),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: UpriseColors.primaryDark,
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 20,
+                        vertical: 11,
+                      ),
+                    ),
+                    child: Text(
+                      'Close',
+                      style: GoogleFonts.beVietnamPro(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _detailItem(
+    String label,
+    String value,
+    IconData icon, {
+    Color? valueColor,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(icon, size: 13, color: const Color(0xFF9AA5B4)),
+            const SizedBox(width: 5),
+            Text(
+              label,
+              style: GoogleFonts.beVietnamPro(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: const Color(0xFF64748B),
+                letterSpacing: 0.4,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        Text(
+          value,
+          style: GoogleFonts.beVietnamPro(
+            fontSize: 13,
+            fontWeight: FontWeight.w500,
+            color: valueColor ?? const Color(0xFF1A202C),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _openAttachment(BuildContext context) async {
+    final b64 = report.fileBase64;
+    if (b64 == null || b64.isEmpty) return;
+    try {
+      final bytes = base64Decode(b64);
+      final name = report.fileName ?? 'document';
+      final ext = name.contains('.') ? name.split('.').last.toLowerCase() : '';
+      final mime = _mimeFromExt(ext);
+
+      if (mime.startsWith('image/')) {
+        showDialog(
+          context: context,
+          builder: (_) => Dialog(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.all(8),
+                  child: Text(
+                    name,
+                    style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.w600),
+                  ),
+                ),
+                Flexible(child: Image.memory(bytes)),
+                Padding(
+                  padding: const EdgeInsets.all(8),
+                  child: TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('Close'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      } else if (mime == 'text/plain') {
+        final text = utf8.decode(bytes);
+        showDialog(
+          context: context,
+          builder: (_) => AlertDialog(
+            title: Text(name),
+            content: SingleChildScrollView(
+              child: SelectableText(text),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Close'),
+              ),
+            ],
+          ),
+        );
+      } else {
+        // Use platform_file_utils if available, otherwise fallback
+        try {
+          await platform_file_utils.saveBytesToTempAndOpen(bytes, name, mimeType: mime);
+        } catch (e) {
+          // Fallback: download via HTML
+          final anchor = html.AnchorElement(
+            href: 'data:$mime;base64,$b64',
+          )
+            ..download = name
+            ..target = '_blank';
+          html.document.body?.append(anchor);
+          anchor.click();
+          anchor.remove();
+        }
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error opening attachment: $e'),
+            backgroundColor: const Color(0xFFDC2626),
+          ),
+        );
+      }
+    }
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Confirm Dialog
+// ─────────────────────────────────────────────────────────────────────────────
+class _ConfirmDialog extends StatelessWidget {
+  final String title;
+  final String message;
+  final String confirmLabel;
+  final bool destructive;
+  const _ConfirmDialog({
+    required this.title,
+    required this.message,
+    required this.confirmLabel,
+    this.destructive = false,
+  });
+
+  @override
+  Widget build(BuildContext context) => Dialog(
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+    child: Container(
+      width: 420,
+      padding: const EdgeInsets.all(28),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: destructive ? const Color(0xFFFEF2F2) : UpriseColors.primaryLight,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(
+                  destructive
+                      ? Icons.delete_outline_rounded
+                      : Icons.check_circle_outline_rounded,
+                  color: destructive ? const Color(0xFFDC2626) : UpriseColors.primaryDark,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 14),
+              Text(
+                title,
+                style: GoogleFonts.beVietnamPro(
+                  fontSize: 17,
+                  fontWeight: FontWeight.w700,
+                  color: const Color(0xFF1A202C),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Text(
+            message,
+            style: GoogleFonts.beVietnamPro(
+              fontSize: 14,
+              color: const Color(0xFF64748B),
+              height: 1.5,
+            ),
+          ),
+          const SizedBox(height: 24),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              OutlinedButton(
+                onPressed: () => Navigator.pop(context, false),
+                style: OutlinedButton.styleFrom(
+                  side: const BorderSide(color: Color(0xFFE2E6EA)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 18,
+                    vertical: 11,
+                  ),
+                ),
+                child: Text(
+                  'Cancel',
+                  style: GoogleFonts.beVietnamPro(
+                    fontSize: 13,
+                    color: const Color(0xFF374151),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(context, true),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: destructive
+                      ? const Color(0xFFDC2626)
+                      : UpriseColors.primaryDark,
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 18,
+                    vertical: 11,
+                  ),
+                ),
+                child: Text(
+                  confirmLabel,
+                  style: GoogleFonts.beVietnamPro(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Reusable Widgets
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _StatCard extends StatelessWidget {
@@ -3982,18 +4923,19 @@ class _TypeBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isFinancial = type == 'financial';
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
-        color: UpriseColors.infoBg,
+        color: isFinancial ? const Color(0xFFECFDF5) : const Color(0xFFEFF6FF),
         borderRadius: BorderRadius.circular(_DS.radiusPill),
       ),
       child: Text(
-        type,
+        isFinancial ? 'Financial' : 'Accomplishment',
         style: GoogleFonts.beVietnamPro(
           fontSize: 11,
           fontWeight: FontWeight.w600,
-          color: UpriseColors.info,
+          color: isFinancial ? const Color(0xFF059669) : const Color(0xFF2563EB),
         ),
       ),
     );
@@ -4002,10 +4944,25 @@ class _TypeBadge extends StatelessWidget {
 
 class _OrgAvatar extends StatelessWidget {
   final String name;
-  const _OrgAvatar({required this.name});
+  final String? imageUrl;
+  const _OrgAvatar({required this.name, this.imageUrl});
 
   @override
   Widget build(BuildContext context) {
+    if (imageUrl != null && imageUrl!.isNotEmpty) {
+      return Container(
+        width: 32,
+        height: 32,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          image: DecorationImage(
+            image: NetworkImage(imageUrl!),
+            fit: BoxFit.cover,
+          ),
+        ),
+      );
+    }
+    // fallback: initials
     final parts = name.trim().split(' ');
     final initials = parts.length >= 2
         ? '${parts[0][0]}${parts[1][0]}'.toUpperCase()
@@ -4036,7 +4993,6 @@ class _ActionIconButton extends StatelessWidget {
   final String tooltip;
   final VoidCallback? onTap;
   final Color? color;
-  // ignore: unused_element_parameter
   const _ActionIconButton({
     required this.icon,
     required this.tooltip,
