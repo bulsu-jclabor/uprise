@@ -324,16 +324,7 @@ class _OrgReportsScreenState extends State<OrgReportsScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               _buildStatsRow(all),
-              if (_eventLoaded && _eventDate != null) ...[
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(28, 16, 28, 0),
-                  child: _CountdownCard(
-                    remaining: _remaining,
-                    eventDate: _eventDate!,
-                    eventLabel: _eventLabel,
-                  ),
-                ),
-              ],
+            
               if (_deadlinesLoaded) ...[_buildDeadlineRow(all)],
               _buildToolbar(),
               const SizedBox(height: 16),

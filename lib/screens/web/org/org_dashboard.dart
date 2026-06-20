@@ -33,7 +33,29 @@ import 'org_merchandise.dart';
 import 'org_settings.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Design tokens
+// Design tokens (copied from report.dart for the countdown)
+// ─────────────────────────────────────────────────────────────────────────────
+class _DS {
+  static const double radiusSm = 8;
+  static const double radiusMd = 12;
+  static const double radiusLg = 16;
+  static const double radiusPill = 100;
+
+  // Brand amber (matches report.dart)
+  static const Color primary = Color(0xFFEA580C);
+  static const Color primaryBg = Color(0xFFFEF3C7);
+
+  static final cardShadow = [
+    BoxShadow(
+      color: Colors.black.withAlpha(15),
+      blurRadius: 12,
+      offset: const Offset(0, 4),
+    ),
+  ];
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// OrgColors (your existing theme)
 // ─────────────────────────────────────────────────────────────────────────────
 class OrgColors {
   static const Color primaryDark = Color(0xFFBE4700);
@@ -55,30 +77,170 @@ class OrgColors {
   static const Color info = Color(0xFF2563EB);
 }
 
-class _DS {
-  static const double radiusSm = 8;
-  static const double radiusMd = 12;
-  static const double radiusLg = 16;
-  static const double radiusPill = 100;
+// ─────────────────────────────────────────────────────────────────────────────
+// Countdown widgets (copied from report.dart)
+// ─────────────────────────────────────────────────────────────────────────────
+class _CountdownCard extends StatelessWidget {
+  final Duration remaining;
+  final DateTime eventDate;
+  final String eventLabel;
+  const _CountdownCard({
+    required this.remaining,
+    required this.eventDate,
+    required this.eventLabel,
+  });
 
-  static final List<BoxShadow> cardShadow = [
-    BoxShadow(
-      color: Colors.black.withAlpha(15),
-      blurRadius: 12,
-      offset: const Offset(0, 4),
+  @override
+  Widget build(BuildContext context) {
+    final expired = remaining == Duration.zero;
+    final d = remaining.inDays;
+    final h = remaining.inHours % 24;
+    final m = remaining.inMinutes % 60;
+    final s = remaining.inSeconds % 60;
+
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: OrgColors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: OrgColors.border),
+        boxShadow: _DS.cardShadow,
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              color: _DS.primaryBg,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: const Icon(
+              Icons.timer_outlined,
+              color: _DS.primary,
+              size: 22,
+            ),
+          ),
+          const SizedBox(width: 14),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                expired
+                    ? '$eventLabel has started!'
+                    : 'Countdown to: $eventLabel',
+                style: GoogleFonts.beVietnamPro(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  color: OrgColors.charcoal,
+                ),
+              ),
+              Text(
+                DateFormat('MMMM d, yyyy — h:mm a').format(eventDate),
+                style: GoogleFonts.beVietnamPro(
+                  fontSize: 12,
+                  color: OrgColors.darkGray,
+                ),
+              ),
+            ],
+          ),
+          const Spacer(),
+          if (!expired)
+            Row(
+              children: [
+                _CountUnit(value: d, label: 'DAYS'),
+                _Colon(),
+                _CountUnit(value: h, label: 'HRS'),
+                _Colon(),
+                _CountUnit(value: m, label: 'MIN'),
+                _Colon(),
+                _CountUnit(value: s, label: 'SEC'),
+              ],
+            )
+          else
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              decoration: BoxDecoration(
+                color: OrgColors.success.withAlpha(26),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                'Event Started!',
+                style: GoogleFonts.beVietnamPro(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: OrgColors.success,
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CountUnit extends StatelessWidget {
+  final int value;
+  final String label;
+  const _CountUnit({required this.value, required this.label});
+
+  @override
+  Widget build(BuildContext context) => Column(
+    children: [
+      Container(
+        width: 48,
+        height: 42,
+        decoration: BoxDecoration(
+          color: _DS.primary,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        alignment: Alignment.center,
+        child: Text(
+          value.toString().padLeft(2, '0'),
+          style: GoogleFonts.beVietnamPro(
+            fontSize: 18,
+            fontWeight: FontWeight.w700,
+            color: Colors.white,
+          ),
+        ),
+      ),
+      const SizedBox(height: 4),
+      Text(
+        label,
+        style: GoogleFonts.beVietnamPro(
+          fontSize: 9,
+          color: OrgColors.darkGray,
+          letterSpacing: 0.5,
+        ),
+      ),
+    ],
+  );
+}
+
+class _Colon extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.symmetric(horizontal: 4),
+    child: Text(
+      ':',
+      style: GoogleFonts.beVietnamPro(
+        fontSize: 18,
+        fontWeight: FontWeight.w700,
+        color: _DS.primary,
+      ),
     ),
-  ];
+  );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Sidebar nav items
+// Sidebar nav items (unchanged)
 // ─────────────────────────────────────────────────────────────────────────────
 const List<Map<String, dynamic>> _navItems = [
   {'label': 'Dashboard', 'icon': Icons.dashboard_rounded},
   {'label': 'Event Proposals', 'icon': Icons.description_rounded},
   {'label': 'Events & Schedules', 'icon': Icons.calendar_month_rounded},
   {'label': 'Attendance QR', 'icon': Icons.qr_code_scanner_rounded},
-  {'label': 'Certificates', 'icon': Icons.verified_rounded},  // <-- ADDED
+  {'label': 'Certificates', 'icon': Icons.verified_rounded},
   {'label': 'Event Analytics', 'icon': Icons.bar_chart_rounded},
   {'label': 'Announcements', 'icon': Icons.campaign_rounded},
   {'label': 'Broadcast', 'icon': Icons.wifi_tethering_rounded},
@@ -91,7 +253,7 @@ const List<Map<String, dynamic>> _navItems = [
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
-// OrgDashboard shell
+// OrgDashboard shell (unchanged)
 // ─────────────────────────────────────────────────────────────────────────────
 class OrgDashboard extends StatefulWidget {
   const OrgDashboard({super.key});
@@ -101,7 +263,6 @@ class OrgDashboard extends StatefulWidget {
 }
 
 class _OrgDashboardState extends State<OrgDashboard> {
-  // -1 = settings (mirrors admin dashboard pattern)
   int _selectedIndex = 0;
   String _orgId = '';
   String _orgName = '';
@@ -143,7 +304,6 @@ class _OrgDashboardState extends State<OrgDashboard> {
     super.dispose();
   }
 
-  // ── Load org data ─────────────────────────────────────────────────
   Future<void> _loadOrgData() async {
     if (!mounted) return;
     setState(() {
@@ -253,7 +413,7 @@ class _OrgDashboardState extends State<OrgDashboard> {
       OrgEventProposalsScreen(orgId: _orgId),
       OrgEventsScheduleScreen(orgId: _orgId),
       EventManagementScreen(orgId: _orgId),
-      OrgCertificatesScreen(orgId: _orgId),  // <-- ADDED
+      OrgCertificatesScreen(orgId: _orgId),
       OrgEventAnalyticsScreen(orgId: _orgId),
       OrgAnnouncementsScreen(orgId: _orgId),
       OrgBroadcastScreen(orgId: _orgId),
@@ -271,7 +431,6 @@ class _OrgDashboardState extends State<OrgDashboard> {
     _screensBuilt = true;
   }
 
-  // ── Notifications ─────────────────────────────────────────────────
   Future<void> _fetchUnreadNotifications() async {
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) return;
@@ -353,7 +512,6 @@ class _OrgDashboardState extends State<OrgDashboard> {
     } catch (_) {}
   }
 
-  // ── Logout ────────────────────────────────────────────────────────
   Future<void> _logout() async => FirebaseAuth.instance.signOut();
 
   void _confirmLogout() {
@@ -473,12 +631,8 @@ class _OrgDashboardState extends State<OrgDashboard> {
     return 'Dashboard';
   }
 
-  // ─────────────────────────────────────────────────────────────────
-  // Build
-  // ─────────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
-    // Loading
     if (_isLoading) {
       return Scaffold(
         backgroundColor: OrgColors.surface,
@@ -522,7 +676,6 @@ class _OrgDashboardState extends State<OrgDashboard> {
       );
     }
 
-    // Error
     if (_loadError != null) {
       return Scaffold(
         backgroundColor: OrgColors.surface,
@@ -623,7 +776,6 @@ class _OrgDashboardState extends State<OrgDashboard> {
       );
     }
 
-    // Dashboard
     final screenWidth = MediaQuery.of(context).size.width;
     final isMobile = screenWidth < 768;
 
@@ -660,7 +812,6 @@ class _OrgDashboardState extends State<OrgDashboard> {
     );
   }
 
-  // ── Sidebar ───────────────────────────────────────────────────────
   Widget _buildSidebar() {
     return Container(
       width: 256,
@@ -676,7 +827,6 @@ class _OrgDashboardState extends State<OrgDashboard> {
       ),
       child: Column(
         children: [
-          // Brand
           Container(
             padding: const EdgeInsets.fromLTRB(20, 28, 20, 20),
             child: Row(
@@ -729,7 +879,6 @@ class _OrgDashboardState extends State<OrgDashboard> {
               ],
             ),
           ),
-
           Divider(
             color: Colors.white.withAlpha(38),
             thickness: 1,
@@ -737,8 +886,6 @@ class _OrgDashboardState extends State<OrgDashboard> {
             endIndent: 20,
           ),
           const SizedBox(height: 8),
-
-          // Nav section label
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
             child: Align(
@@ -754,8 +901,6 @@ class _OrgDashboardState extends State<OrgDashboard> {
               ),
             ),
           ),
-
-          // Nav items
           Expanded(
             child: ListView.builder(
               padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -830,8 +975,6 @@ class _OrgDashboardState extends State<OrgDashboard> {
               },
             ),
           ),
-
-          // Logout
           Divider(
             color: Colors.white.withAlpha(38),
             thickness: 1,
@@ -873,7 +1016,6 @@ class _OrgDashboardState extends State<OrgDashboard> {
     );
   }
 
-  // ── Top bar ───────────────────────────────────────────────────────
   Widget _buildTopBar(bool isMobile) {
     final screenWidth = MediaQuery.of(context).size.width;
     final horizontalPadding = screenWidth < 720 ? 12.0 : 28.0;
@@ -897,7 +1039,6 @@ class _OrgDashboardState extends State<OrgDashboard> {
       ),
       child: Row(
         children: [
-          // Hamburger (mobile only)
           if (isMobile)
             GestureDetector(
               onTap: () => setState(() => _sidebarOpen = !_sidebarOpen),
@@ -913,8 +1054,6 @@ class _OrgDashboardState extends State<OrgDashboard> {
                 child: const Icon(Icons.menu_rounded, color: OrgColors.darkGray, size: 18),
               ),
             ),
-
-          // Page title with accent bar
           Row(
             children: [
               Container(
@@ -952,10 +1091,7 @@ class _OrgDashboardState extends State<OrgDashboard> {
               ),
             ],
           ),
-
           const Spacer(),
-
-          // Datetime chip
           if (!isSmallMobile) ...[
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
@@ -992,8 +1128,6 @@ class _OrgDashboardState extends State<OrgDashboard> {
             ),
             const SizedBox(width: 12),
           ],
-
-          // Search
           if (screenWidth >= 600)
             SizedBox(
               width: 220,
@@ -1053,8 +1187,6 @@ class _OrgDashboardState extends State<OrgDashboard> {
               ),
             ),
           if (screenWidth >= 480) const SizedBox(width: 12),
-
-          // Notification bell
           PopupMenuButton<String>(
             offset: const Offset(-318, 54),
             onOpened: _fetchUnreadNotifications,
@@ -1131,14 +1263,10 @@ class _OrgDashboardState extends State<OrgDashboard> {
             ),
           ),
           const SizedBox(width: 10),
-
-          // Divider
           if (screenWidth >= 480) ...[
             Container(width: 1, height: 28, color: OrgColors.border),
             const SizedBox(width: 10),
           ],
-
-          // Org avatar chip
           if (screenWidth >= 480)
             Row(
               children: [
@@ -1231,7 +1359,7 @@ class _OrgDashboardState extends State<OrgDashboard> {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Org Dashboard Home
+// Org Dashboard Home (with countdown added)
 // ─────────────────────────────────────────────────────────────────────────────
 class _OrgDashboardHome extends StatefulWidget {
   final String orgId;
@@ -1243,13 +1371,21 @@ class _OrgDashboardHome extends StatefulWidget {
 }
 
 class _OrgDashboardHomeState extends State<_OrgDashboardHome> {
-  // AY format: 'AY 2025-2026' (July year1 → June year2)
+  // Existing variables
   String _selectedSemester = '';
   String _selectedMonth = '';
   List<int> _chartData = List.filled(12, 0);
   bool _chartLoading = true;
   int? _hoveredChartIndex;
 
+  // ── NEW: Countdown variables ──
+  Timer? _countdownTimer;
+  Duration _remaining = Duration.zero;
+  DateTime? _eventDate;
+  String _eventLabel = '';
+  bool _eventLoaded = false;
+
+  // Existing streams
   late final Stream<QuerySnapshot> _approvedEventsStream;
   late final Stream<QuerySnapshot> _pendingProposalsStream;
   late final Stream<QuerySnapshot> _membersStream;
@@ -1263,7 +1399,6 @@ class _OrgDashboardHomeState extends State<_OrgDashboardHome> {
 
   String _getCurrentAY() {
     final now = DateTime.now();
-    // AY starts in July; before July = still in previous AY
     if (now.month >= 7) return 'AY ${now.year}-${now.year + 1}';
     return 'AY ${now.year - 1}-${now.year}';
   }
@@ -1273,7 +1408,6 @@ class _OrgDashboardHomeState extends State<_OrgDashboardHome> {
     return ['AY ${y - 1}-$y', 'AY $y-${y + 1}', 'AY ${y + 1}-${y + 2}'];
   }
 
-  // 12 months: JUL=0, AUG=1, ..., DEC=5, JAN=6, ..., JUN=11
   String _monthLabel(int index) {
     const m = ['JUL','AUG','SEP','OCT','NOV','DEC','JAN','FEB','MAR','APR','MAY','JUN'];
     return m[index];
@@ -1314,14 +1448,64 @@ class _OrgDashboardHomeState extends State<_OrgDashboardHome> {
         .snapshots();
 
     _setupChartListener();
+
+    // ── NEW: Load the next event for countdown ──
+    _loadEventDate();
   }
 
   @override
   void dispose() {
     _chartDataSubscription?.cancel();
+    // ── NEW: Cancel countdown timer ──
+    _countdownTimer?.cancel();
     super.dispose();
   }
 
+  // ── NEW: Countdown logic (copied from report.dart) ──
+  Future<void> _loadEventDate() async {
+    try {
+      final now = DateTime.now();
+      final snap = await FirebaseFirestore.instance
+          .collection('events')
+          .where('orgId', isEqualTo: widget.orgId)
+          .where('status', isEqualTo: 'approved')
+          .get();
+
+      DateTime? nextDate;
+      String nextLabel = '';
+      for (final doc in snap.docs) {
+        final data = doc.data();
+        final ts = data['date'] as Timestamp?;
+        if (ts == null) continue;
+        final date = ts.toDate();
+        if (date.isBefore(now)) continue;
+        if (nextDate == null || date.isBefore(nextDate)) {
+          nextDate = date;
+          nextLabel = data['title']?.toString() ?? 'Upcoming Event';
+        }
+      }
+
+      if (nextDate != null) {
+        _eventDate = nextDate;
+        _eventLabel = nextLabel;
+        _updateRemaining();
+        _countdownTimer = Timer.periodic(
+          const Duration(seconds: 1),
+          (_) => _updateRemaining(),
+        );
+      }
+    } catch (_) {}
+    if (mounted) setState(() => _eventLoaded = true);
+  }
+
+  void _updateRemaining() {
+    if (_eventDate == null) return;
+    final diff = _eventDate!.difference(DateTime.now());
+    if (mounted)
+      setState(() => _remaining = diff.isNegative ? Duration.zero : diff);
+  }
+
+  // Existing methods unchanged...
   void _updateHoveredChartIndex(Offset localPosition, Size size) {
     const lp = 44.0, rp = 16.0, tp = 24.0, bp = 28.0;
     final cw = size.width - lp - rp;
@@ -1374,8 +1558,6 @@ class _OrgDashboardHomeState extends State<_OrgDashboardHome> {
   void _setupChartListener() {
     _chartDataSubscription?.cancel();
     setState(() => _chartLoading = true);
-
-    // AY Jul year1 → Jun year2: fetch Jul 1, year1 to Jul 1, year2
     final y = _ayFirstYear;
     final startDate = DateTime(y, 7, 1);
     final endDate = DateTime(y + 1, 7, 1);
@@ -1420,6 +1602,14 @@ class _OrgDashboardHomeState extends State<_OrgDashboardHome> {
           _buildStatCards(),
           const SizedBox(height: 20),
           _buildChartCard(),
+          // ── NEW: Countdown card placed here ──
+          const SizedBox(height: 20),
+          if (_eventLoaded && _eventDate != null)
+            _CountdownCard(
+              remaining: _remaining,
+              eventDate: _eventDate!,
+              eventLabel: _eventLabel,
+            ),
           const SizedBox(height: 20),
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
