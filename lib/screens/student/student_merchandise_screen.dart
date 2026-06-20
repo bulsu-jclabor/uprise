@@ -17,7 +17,7 @@ class AppColors {
 }
 
 // ─────────────────────────────────────────────────────────────
-// Models (mirrors org_merchandise.dart)
+// Models
 // ─────────────────────────────────────────────────────────────
 class ProductVariant {
   final String id;
@@ -35,10 +35,10 @@ class ProductVariant {
   });
 
   factory ProductVariant.fromMap(Map<String, dynamic> m) => ProductVariant(
-        id         : m['id'] as String? ?? '',
-        size       : m['size'] as String? ?? '',
-        color      : m['color'] as String? ?? '',
-        stock      : ((m['stock'] ?? 0) as num).toInt(),
+        id: m['id'] as String? ?? '',
+        size: m['size'] as String? ?? '',
+        color: m['color'] as String? ?? '',
+        stock: ((m['stock'] ?? 0) as num).toInt(),
         priceOffset: m['priceOffset'] != null
             ? (m['priceOffset'] as num).toDouble()
             : null,
@@ -54,7 +54,8 @@ class _Product {
   final double price;
   final int stock;
   final int sold;
-  final String imageUrl;
+  final String imageBase64;
+  final String imageFormat;
   final String status;
   final double costPrice;
   final List<ProductVariant> variants;
@@ -68,28 +69,43 @@ class _Product {
     required this.price,
     required this.stock,
     required this.sold,
-    required this.imageUrl,
-    this.status    = 'available',
+    required this.imageBase64,
+    required this.imageFormat,
+    this.status = 'available',
     this.costPrice = 0,
-    this.variants  = const [],
+    this.variants = const [],
   });
 
   factory _Product.fromFirestore(DocumentSnapshot doc) {
     final d = doc.data() as Map<String, dynamic>;
     final rawVariants = d['variants'];
+    
+    String imageBase64 = d['imageBase64'] as String? ?? '';
+    String imageFormat = d['imageFormat'] as String? ?? 'jpg';
+    
+    String imageDataUrl = '';
+    if (imageBase64.isNotEmpty) {
+      if (imageBase64.startsWith('data:image')) {
+        imageDataUrl = imageBase64;
+      } else {
+        imageDataUrl = 'data:image/$imageFormat;base64,$imageBase64';
+      }
+    }
+    
     return _Product(
-      id         : doc.id,
-      orgId      : d['orgId']       as String? ?? '',
-      name       : d['name']        as String? ?? '',
+      id: doc.id,
+      orgId: d['orgId'] as String? ?? '',
+      name: d['name'] as String? ?? '',
       description: d['description'] as String? ?? '',
-      category   : d['category']    as String? ?? '',
-      price      : (d['price']  ?? 0).toDouble(),
-      stock      : (d['stock']   ?? 0) as int,
-      sold       : (d['sold']   ?? 0) as int,
-      imageUrl   : d['imageUrl'] as String? ?? '',
-      status     : d['status']    as String? ?? 'available',
-      costPrice  : (d['costPrice'] ?? 0).toDouble(),
-      variants   : rawVariants is List
+      category: d['category'] as String? ?? '',
+      price: (d['price'] ?? 0).toDouble(),
+      stock: (d['stock'] ?? 0) as int,
+      sold: (d['sold'] ?? 0) as int,
+      imageBase64: imageDataUrl,
+      imageFormat: imageFormat,
+      status: d['status'] as String? ?? 'available',
+      costPrice: (d['costPrice'] ?? 0).toDouble(),
+      variants: rawVariants is List
           ? rawVariants
               .whereType<Map<String, dynamic>>()
               .map(ProductVariant.fromMap)
@@ -114,9 +130,9 @@ class _CartItem {
 
   _CartItem({
     required this.product,
-    this.quantity    = 1,
-    this.variantId   ,
-    this.variantSize ,
+    this.quantity = 1,
+    this.variantId,
+    this.variantSize,
     this.variantColor,
     this.variantPrice,
   });
@@ -167,7 +183,10 @@ class _StudentMerchandiseScreenState
 
   Future<void> _resolveOrgId() async {
     final user = FirebaseAuth.instance.currentUser;
-    if (user == null) { setState(() => _loadingOrgId = false); return; }
+    if (user == null) {
+      setState(() => _loadingOrgId = false);
+      return;
+    }
 
     try {
       final studentSnap = await FirebaseFirestore.instance
@@ -189,38 +208,37 @@ class _StudentMerchandiseScreenState
         if (userDoc.exists) {
           final ud = userDoc.data() ?? {};
           orgId = (ud['orgId'] as String?) ??
-                  (ud['organizationId'] as String?) ?? '';
+              (ud['organizationId'] as String?) ?? '';
         }
       }
 
       setState(() {
-        _studentOrgId   = orgId.isEmpty ? null : orgId;
-        _loadingOrgId   = false;
+        _studentOrgId = orgId.isEmpty ? null : orgId;
+        _loadingOrgId = false;
       });
     } catch (_) {
       setState(() => _loadingOrgId = false);
     }
   }
 
-  // ── Cart helpers ──────────────────────────────────────────
   void _addToCart(_Product product, {ProductVariant? variant}) {
     setState(() {
-      final variantId    = variant?.id;
+      final variantId = variant?.id;
       final variantPrice = variant != null
           ? product.price + (variant.priceOffset ?? 0)
           : null;
-      final key      = '${product.id}_${variantId ?? ''}';
+      final key = '${product.id}_${variantId ?? ''}';
       final maxStock = variant?.stock ?? product.stock;
       final existing = _cart.where((i) => i.cartKey == key);
       if (existing.isNotEmpty) {
         if (existing.first.quantity < maxStock) existing.first.quantity++;
       } else {
         _cart.add(_CartItem(
-          product      : product,
-          variantId    : variantId,
-          variantSize  : variant?.size,
-          variantColor : variant?.color,
-          variantPrice : variantPrice,
+          product: product,
+          variantId: variantId,
+          variantSize: variant?.size,
+          variantColor: variant?.color,
+          variantPrice: variantPrice,
         ));
       }
     });
@@ -228,7 +246,7 @@ class _StudentMerchandiseScreenState
 
   void _increaseItem(String cartKey) {
     setState(() {
-      final item     = _cart.firstWhere((i) => i.cartKey == cartKey);
+      final item = _cart.firstWhere((i) => i.cartKey == cartKey);
       final variants = item.product.variants.where((v) => v.id == item.variantId);
       final maxStock = variants.isEmpty ? item.product.stock : variants.first.stock;
       if (item.quantity < maxStock) item.quantity++;
@@ -252,7 +270,6 @@ class _StudentMerchandiseScreenState
 
   int _cartCount() => _cart.fold(0, (sum, i) => sum + i.quantity);
 
-  // ── Build ─────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -440,7 +457,7 @@ class _TabPill extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────
-// Products Tab - FETCHES ALL PRODUCTS FROM ALL ORGS
+// Products Tab - WITH CATEGORY CHIPS + ORG FILTER
 // ─────────────────────────────────────────────────────────────
 class _ProductsTab extends StatefulWidget {
   final void Function(_Product, {ProductVariant? variant}) onAddToCart;
@@ -456,14 +473,77 @@ class _ProductsTab extends StatefulWidget {
 }
 
 class _ProductsTabState extends State<_ProductsTab> {
-  String _search         = '';
-  String _selectedCat    = 'All';
-  final _searchCtrl      = TextEditingController();
+  String _search = '';
+  String _selectedCategory = 'All';
+  String _selectedOrg = 'All';
+  final _searchCtrl = TextEditingController();
+  
+  List<String> _categories = ['All'];
+  List<String> _orgs = ['All'];
+  final Map<String, String> _orgIdMap = {};
+  bool _loadingFilters = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadFilters();
+  }
 
   @override
   void dispose() {
     _searchCtrl.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadFilters() async {
+    try {
+      // Load organizations
+      final orgSnapshot = await FirebaseFirestore.instance
+          .collection('organizations')
+          .where('status', isEqualTo: 'active')
+          .get();
+      
+      for (final doc in orgSnapshot.docs) {
+        final name = doc.data()['name'] as String? ?? '';
+        if (name.isNotEmpty) {
+          _orgIdMap[name] = doc.id;
+        }
+      }
+      
+      // Load products to get categories and orgs with products
+      final productsSnap = await FirebaseFirestore.instance
+          .collection('products')
+          .where('isArchived', isEqualTo: false)
+          .get();
+      
+      // Get categories
+      final categories = productsSnap.docs
+          .map((d) => d.data()['category'] as String? ?? '')
+          .where((cat) => cat.isNotEmpty)
+          .toSet()
+          .toList()
+          ..sort();
+      
+      // Get orgs with products
+      final productOrgIds = productsSnap.docs
+          .map((d) => d.data()['orgId'] as String? ?? '')
+          .where((id) => id.isNotEmpty)
+          .toSet();
+      
+      final filteredOrgs = _orgIdMap.entries
+          .where((entry) => productOrgIds.contains(entry.value))
+          .map((entry) => entry.key)
+          .toList()
+          ..sort();
+      
+      setState(() {
+        _categories = ['All', ...categories];
+        _orgs = ['All', ...filteredOrgs];
+        _loadingFilters = false;
+      });
+    } catch (_) {
+      setState(() => _loadingFilters = false);
+    }
   }
 
   Stream<QuerySnapshot> get _stream {
@@ -473,14 +553,143 @@ class _ProductsTabState extends State<_ProductsTab> {
         .snapshots();
   }
 
+  bool get _hasOrgFilter => _selectedOrg != 'All';
+
   @override
   Widget build(BuildContext context) {
     return Column(
       children: [
-        _SearchBar(
-          controller: _searchCtrl,
-          onChanged: (v) => setState(() => _search = v),
+        // ── Search Bar with Filter Icon ──
+        Container(
+          color: Colors.white,
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+          child: Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _searchCtrl,
+                  onChanged: (v) => setState(() => _search = v),
+                  decoration: InputDecoration(
+                    hintText: 'Search merchandise…',
+                    hintStyle: const TextStyle(fontSize: 13),
+                    prefixIcon: const Icon(Icons.search, size: 18, color: Colors.black38),
+                    suffixIcon: _searchCtrl.text.isNotEmpty
+                        ? IconButton(
+                            icon: const Icon(Icons.clear, size: 16),
+                            onPressed: () {
+                              _searchCtrl.clear();
+                              setState(() => _search = '');
+                            },
+                          )
+                        : null,
+                    filled: true,
+                    fillColor: AppColors.background,
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: BorderSide.none,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              // ── Filter Icon with Badge ──
+              Stack(
+                children: [
+                  GestureDetector(
+                    onTap: _showOrgFilterDialog,
+                    child: Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: _hasOrgFilter 
+                            ? Colors.orange.withOpacity(0.1) 
+                            : AppColors.background,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: _hasOrgFilter 
+                              ? Colors.orange 
+                              : Colors.transparent,
+                          width: 1.5,
+                        ),
+                      ),
+                      child: Icon(
+                        Icons.filter_list_rounded,
+                        size: 22,
+                        color: _hasOrgFilter ? Colors.orange : Colors.black38,
+                      ),
+                    ),
+                  ),
+                  if (_hasOrgFilter)
+                    Positioned(
+                      top: 2,
+                      right: 2,
+                      child: Container(
+                        padding: const EdgeInsets.all(3),
+                        decoration: const BoxDecoration(
+                          color: Colors.orange,
+                          shape: BoxShape.circle,
+                        ),
+                        constraints: const BoxConstraints(
+                          minWidth: 16,
+                          minHeight: 16,
+                        ),
+                        child: Center(
+                          child: Text(
+                            '1',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 8,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ],
+          ),
         ),
+        
+        // ── Category Chips Row ──
+        if (!_loadingFilters && _categories.isNotEmpty)
+          Container(
+            color: Colors.white,
+            height: 40,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+            child: ListView.builder(
+              scrollDirection: Axis.horizontal,
+              itemCount: _categories.length,
+              itemBuilder: (_, i) {
+                final cat = _categories[i];
+                final sel = cat == _selectedCategory;
+                return GestureDetector(
+                  onTap: () => setState(() => _selectedCategory = cat),
+                  child: Container(
+                    margin: const EdgeInsets.only(right: 8),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 14, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: sel ? Colors.orange : Colors.transparent,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: sel ? Colors.orange : Colors.black12,
+                        width: 1,
+                      ),
+                    ),
+                    child: Text(
+                      cat,
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                        color: sel ? Colors.white : Colors.black54,
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
 
         Expanded(
           child: StreamBuilder<QuerySnapshot>(
@@ -502,19 +711,22 @@ class _ProductsTabState extends State<_ProductsTab> {
                   .map((d) => _Product.fromFirestore(d))
                   .toList();
 
-              final categories = [
-                'All',
-                ...{for (final p in products) p.category}
-                    .where((c) => c.isNotEmpty)
-                    .toList()
-                  ..sort(),
-              ];
-
-              if (_selectedCat != 'All') {
+              // ── FILTER BY CATEGORY ──
+              if (_selectedCategory != 'All') {
                 products = products
-                    .where((p) => p.category == _selectedCat)
+                    .where((p) => p.category == _selectedCategory)
                     .toList();
               }
+
+              // ── FILTER BY ORG ──
+              if (_selectedOrg != 'All') {
+                final orgId = _orgIdMap[_selectedOrg];
+                if (orgId != null) {
+                  products = products.where((p) => p.orgId == orgId).toList();
+                }
+              }
+
+              // ── FILTER BY SEARCH ──
               if (_search.isNotEmpty) {
                 final q = _search.toLowerCase();
                 products = products
@@ -530,39 +742,29 @@ class _ProductsTabState extends State<_ProductsTab> {
                   title: 'No products found',
                   subtitle: _search.isNotEmpty
                       ? 'Try a different search term.'
-                      : 'No merchandise available yet.',
+                      : _hasOrgFilter
+                          ? 'No products from ${_selectedOrg} organization.'
+                          : 'No merchandise available yet.',
                 );
               }
 
-              return Column(
-                children: [
-                  _CategoryRow(
-                    categories: categories,
-                    selected: _selectedCat,
-                    onSelect: (c) => setState(() => _selectedCat = c),
-                  ),
-                  Expanded(
-                    child: GridView.builder(
-                      padding: const EdgeInsets.all(16),
-                      gridDelegate:
-                          const SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: 2,
-                        childAspectRatio: 0.72,
-                        crossAxisSpacing: 12,
-                        mainAxisSpacing: 12,
-                      ),
-                      itemCount: products.length,
-                      itemBuilder: (ctx, i) => _ProductCard(
-                        product: products[i],
-                        onAdd: ({ProductVariant? variant}) =>
-                            widget.onAddToCart(products[i], variant: variant),
-                        cartQty: widget.cart
-                            .where((c) => c.product.id == products[i].id)
-                            .fold(0, (s, c) => s + c.quantity),
-                      ),
-                    ),
-                  ),
-                ],
+              return GridView.builder(
+                padding: const EdgeInsets.all(16),
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 2,
+                  childAspectRatio: 0.72,
+                  crossAxisSpacing: 12,
+                  mainAxisSpacing: 12,
+                ),
+                itemCount: products.length,
+                itemBuilder: (ctx, i) => _ProductCard(
+                  product: products[i],
+                  onAdd: ({ProductVariant? variant}) =>
+                      widget.onAddToCart(products[i], variant: variant),
+                  cartQty: widget.cart
+                      .where((c) => c.product.id == products[i].id)
+                      .fold(0, (s, c) => s + c.quantity),
+                ),
               );
             },
           ),
@@ -570,101 +772,120 @@ class _ProductsTabState extends State<_ProductsTab> {
       ],
     );
   }
-}
 
-class _SearchBar extends StatelessWidget {
-  final TextEditingController controller;
-  final ValueChanged<String> onChanged;
-  const _SearchBar({required this.controller, required this.onChanged});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      color: Colors.white,
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-      child: TextField(
-        controller: controller,
-        onChanged: onChanged,
-        decoration: InputDecoration(
-          hintText: 'Search merchandise…',
-          hintStyle: const TextStyle(fontSize: 13),
-          prefixIcon:
-              const Icon(Icons.search, size: 18, color: Colors.black38),
-          suffixIcon: controller.text.isNotEmpty
-              ? IconButton(
-                  icon: const Icon(Icons.clear, size: 16),
-                  onPressed: () {
-                    controller.clear();
-                    onChanged('');
+  // ── Org Filter Dialog ──
+  void _showOrgFilterDialog() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                margin: const EdgeInsets.only(bottom: 16),
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade300,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  'Filter by Organization',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                if (_hasOrgFilter)
+                  TextButton(
+                    onPressed: () {
+                      setState(() => _selectedOrg = 'All');
+                      Navigator.pop(context);
+                    },
+                    child: const Text(
+                      'Clear',
+                      style: TextStyle(
+                        color: Colors.red,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            const Divider(),
+            const SizedBox(height: 8),
+            if (_loadingFilters)
+              const Center(
+                child: Padding(
+                  padding: EdgeInsets.all(20),
+                  child: CircularProgressIndicator(),
+                ),
+              )
+            else if (_orgs.isEmpty || _orgs.length == 1)
+              const Padding(
+                padding: EdgeInsets.all(20),
+                child: Center(
+                  child: Text(
+                    'No organizations available',
+                    style: TextStyle(color: Colors.grey),
+                  ),
+                ),
+              )
+            else
+              ..._orgs.map((org) {
+                final isSelected = org == _selectedOrg;
+                return ListTile(
+                  leading: Radio<String>(
+                    value: org,
+                    groupValue: _selectedOrg,
+                    onChanged: (value) {
+                      if (value != null) {
+                        setState(() => _selectedOrg = value);
+                        Navigator.pop(context);
+                      }
+                    },
+                    activeColor: Colors.orange,
+                  ),
+                  title: Text(
+                    org,
+                    style: TextStyle(
+                      fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                      color: isSelected ? Colors.orange : Colors.black87,
+                    ),
+                  ),
+                  trailing: isSelected
+                      ? const Icon(Icons.check_circle, color: Colors.orange, size: 20)
+                      : null,
+                  onTap: () {
+                    setState(() => _selectedOrg = org);
+                    Navigator.pop(context);
                   },
-                )
-              : null,
-          filled: true,
-          fillColor: AppColors.background,
-          contentPadding:
-              const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(10),
-            borderSide: BorderSide.none,
-          ),
+                );
+              }).toList(),
+            const SizedBox(height: 16),
+          ],
         ),
       ),
     );
   }
 }
 
-class _CategoryRow extends StatelessWidget {
-  final List<String> categories;
-  final String selected;
-  final ValueChanged<String> onSelect;
-  const _CategoryRow(
-      {required this.categories,
-      required this.selected,
-      required this.onSelect});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: 36,
-      color: Colors.white,
-      margin: const EdgeInsets.only(bottom: 4),
-      child: ListView.builder(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 12),
-        itemCount: categories.length,
-        itemBuilder: (_, i) {
-          final cat = categories[i];
-          final sel = cat == selected;
-          return GestureDetector(
-            onTap: () => onSelect(cat),
-            child: Container(
-              margin: const EdgeInsets.only(right: 8),
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
-              decoration: BoxDecoration(
-                color: sel ? Colors.orange : Colors.transparent,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(
-                    color: sel ? Colors.orange : Colors.black12, width: 1),
-              ),
-              child: Text(
-                cat,
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500,
-                  color: sel ? Colors.white : Colors.black54,
-                ),
-              ),
-            ),
-          );
-        },
-      ),
-    );
-  }
-}
-
 // ─────────────────────────────────────────────────────────────
-// Product Card (with Base64 image support)
+// Product Card
 // ─────────────────────────────────────────────────────────────
 class _ProductCard extends StatelessWidget {
   final _Product product;
@@ -810,12 +1031,16 @@ class _ProductCard extends StatelessWidget {
     );
   }
 
-  // ── Build product image with base64 support ──
   Widget _buildProductImage() {
-    // Check if imageUrl is base64 data URL
-    if (product.imageUrl.startsWith('data:image')) {
-      try {
-        final base64String = product.imageUrl.split(',').last;
+    final imageData = product.imageBase64;
+    
+    if (imageData.isEmpty) {
+      return _imgPlaceholder(product.name);
+    }
+
+    try {
+      if (imageData.startsWith('data:image')) {
+        final base64String = imageData.split(',').last;
         final bytes = base64Decode(base64String);
         return Image.memory(
           bytes,
@@ -824,23 +1049,19 @@ class _ProductCard extends StatelessWidget {
           fit: BoxFit.cover,
           errorBuilder: (_, __, ___) => _imgPlaceholder(product.name),
         );
-      } catch (_) {
-        return _imgPlaceholder(product.name);
+      } else {
+        final bytes = base64Decode(imageData);
+        return Image.memory(
+          bytes,
+          height: 120,
+          width: double.infinity,
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) => _imgPlaceholder(product.name),
+        );
       }
+    } catch (e) {
+      return _imgPlaceholder(product.name);
     }
-    
-    // Regular network image
-    if (product.imageUrl.isNotEmpty) {
-      return Image.network(
-        product.imageUrl,
-        height: 120,
-        width: double.infinity,
-        fit: BoxFit.cover,
-        errorBuilder: (_, __, ___) => _imgPlaceholder(product.name),
-      );
-    }
-    
-    return _imgPlaceholder(product.name);
   }
 
   Widget _imgPlaceholder(String name) => Container(
@@ -1001,11 +1222,16 @@ class _ProductCard extends StatelessWidget {
     );
   }
 
-  // ── Detail image with base64 support ──
   Widget _buildDetailImage() {
-    if (product.imageUrl.startsWith('data:image')) {
-      try {
-        final base64String = product.imageUrl.split(',').last;
+    final imageData = product.imageBase64;
+    
+    if (imageData.isEmpty) {
+      return _detailPlaceholder();
+    }
+
+    try {
+      if (imageData.startsWith('data:image')) {
+        final base64String = imageData.split(',').last;
         final bytes = base64Decode(base64String);
         return ClipRRect(
           borderRadius: BorderRadius.circular(12),
@@ -1014,64 +1240,52 @@ class _ProductCard extends StatelessWidget {
             height: 200,
             width: double.infinity,
             fit: BoxFit.cover,
-            errorBuilder: (_, __, ___) => Container(
-              height: 200,
-              decoration: BoxDecoration(
-                color: Colors.orange.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: const Icon(
-                Icons.image_not_supported_outlined,
-                size: 48,
-                color: Colors.grey,
-              ),
-            ),
+            errorBuilder: (_, __, ___) => _detailPlaceholder(),
           ),
         );
-      } catch (_) {
-        return _buildNetworkImage();
+      } else {
+        final bytes = base64Decode(imageData);
+        return ClipRRect(
+          borderRadius: BorderRadius.circular(12),
+          child: Image.memory(
+            bytes,
+            height: 200,
+            width: double.infinity,
+            fit: BoxFit.cover,
+            errorBuilder: (_, __, ___) => _detailPlaceholder(),
+          ),
+        );
       }
+    } catch (e) {
+      return _detailPlaceholder();
     }
-    return _buildNetworkImage();
   }
 
-  Widget _buildNetworkImage() {
-    if (product.imageUrl.isNotEmpty) {
-      return ClipRRect(
-        borderRadius: BorderRadius.circular(12),
-        child: Image.network(
-          product.imageUrl,
-          height: 200,
-          width: double.infinity,
-          fit: BoxFit.cover,
-          errorBuilder: (_, __, ___) => Container(
-            height: 200,
-            decoration: BoxDecoration(
-              color: Colors.orange.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: const Icon(
+  Widget _detailPlaceholder() => Container(
+        height: 200,
+        decoration: BoxDecoration(
+          color: Colors.orange.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
               Icons.image_not_supported_outlined,
               size: 48,
-              color: Colors.grey,
+              color: Colors.grey.shade400,
             ),
-          ),
+            const SizedBox(height: 8),
+            Text(
+              'No Image Available',
+              style: TextStyle(
+                fontSize: 13,
+                color: Colors.grey.shade500,
+              ),
+            ),
+          ],
         ),
       );
-    }
-    return Container(
-      height: 200,
-      decoration: BoxDecoration(
-        color: Colors.orange.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: const Icon(
-        Icons.image_not_supported_outlined,
-        size: 48,
-        color: Colors.grey,
-      ),
-    );
-  }
 }
 
 class _VariantPickerSheet extends StatefulWidget {
@@ -1089,7 +1303,7 @@ class _VariantPickerSheetState extends State<_VariantPickerSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final fmt      = NumberFormat('#,##0.00');
+    final fmt = NumberFormat('#,##0.00');
     final variants = widget.product.variants;
 
     return Container(
@@ -1132,10 +1346,10 @@ class _VariantPickerSheetState extends State<_VariantPickerSheet> {
             physics: const NeverScrollableScrollPhysics(),
             itemCount: variants.length,
             itemBuilder: (_, i) {
-              final v          = variants[i];
-              final selected   = _selectedIndex == i;
+              final v = variants[i];
+              final selected = _selectedIndex == i;
               final totalPrice = widget.product.price + (v.priceOffset ?? 0);
-              final inStock    = v.stock > 0;
+              final inStock = v.stock > 0;
 
               return GestureDetector(
                 onTap: inStock ? () => setState(() => _selectedIndex = i) : null,
@@ -1277,13 +1491,16 @@ class _StatusBadge extends StatelessWidget {
     final String label;
     switch (status) {
       case 'out_of_stock':
-        bg = Colors.red.shade600; label = 'OUT OF STOCK';
+        bg = Colors.red.shade600;
+        label = 'OUT OF STOCK';
         break;
       case 'discontinued':
-        bg = Colors.grey.shade600; label = 'DISCONTINUED';
+        bg = Colors.grey.shade600;
+        label = 'DISCONTINUED';
         break;
       default:
-        bg = Colors.green.shade600; label = 'AVAILABLE';
+        bg = Colors.green.shade600;
+        label = 'AVAILABLE';
     }
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
@@ -1369,7 +1586,7 @@ class _VariantsTable extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────
-// My Orders Tab - FIXED (Pickup Status only)
+// My Orders Tab
 // ─────────────────────────────────────────────────────────────
 class _MyOrdersTab extends StatelessWidget {
   const _MyOrdersTab();
@@ -1426,16 +1643,16 @@ class _OrderTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final d           = doc.data() as Map<String, dynamic>;
-    final orderId     = d['orderId'] as String?
+    final d = doc.data() as Map<String, dynamic>;
+    final orderId = d['orderId'] as String?
         ?? 'ORD-${doc.id.substring(0, 6).toUpperCase()}';
-    final total       = (d['total']        ?? 0).toDouble();
-    final ts          = d['createdAt'] as Timestamp?;
-    final dateStr     = ts != null
+    final total = (d['total'] ?? 0).toDouble();
+    final ts = d['createdAt'] as Timestamp?;
+    final dateStr = ts != null
         ? DateFormat('MMM dd, yyyy').format(ts.toDate())
         : '—';
     final items = (d['items'] as List?) ?? [];
-    final fmt   = NumberFormat('#,##0.00');
+    final fmt = NumberFormat('#,##0.00');
     final pickupStatus = (d['pickupStatus'] as String?) ?? 'Pending';
 
     return Container(
@@ -1465,7 +1682,6 @@ class _OrderTile extends StatelessWidget {
                     color: Colors.black87),
               ),
               const Spacer(),
-              // Pickup Status only
               _PickupBadge(status: pickupStatus),
             ],
           ),
@@ -1674,7 +1890,7 @@ class _CartSheet extends StatelessWidget {
           .limit(1)
           .get();
       if (snap.docs.isNotEmpty) {
-        customerName   = snap.docs.first.data()['fullName'] as String? ?? '';
+        customerName = snap.docs.first.data()['fullName'] as String? ?? '';
         studentSection = snap.docs.first.data()['section'] as String? ?? '';
       }
     } catch (_) {}
@@ -1682,34 +1898,34 @@ class _CartSheet extends StatelessWidget {
     final orderId =
         'ORD-${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}';
 
-    final db       = FirebaseFirestore.instance;
+    final db = FirebaseFirestore.instance;
     final orderRef = db.collection('orders').doc();
 
     final orderData = {
-      'orderId'        : orderId,
-      'orgId'          : cart.isNotEmpty ? cart.first.product.orgId : '',
-      'customerName'   : customerName,
-      'customerEmail'  : user.email ?? '',
-      'customerPhone'  : '',
+      'orderId': orderId,
+      'orgId': cart.isNotEmpty ? cart.first.product.orgId : '',
+      'customerName': customerName,
+      'customerEmail': user.email ?? '',
+      'customerPhone': '',
       'customerAddress': '',
-      'section'        : studentSection,
-      'pickupStatus'   : 'Pending',
-      'items'          : cart
+      'section': studentSection,
+      'pickupStatus': 'Pending',
+      'items': cart
           .map((i) => {
-                'productId'   : i.product.id,
-                'name'        : i.product.name,
-                'variantId'   : i.variantId   ?? '',
-                'variantSize' : i.variantSize  ?? '',
+                'productId': i.product.id,
+                'name': i.product.name,
+                'variantId': i.variantId ?? '',
+                'variantSize': i.variantSize ?? '',
                 'variantColor': i.variantColor ?? '',
-                'quantity'    : i.quantity,
-                'price'       : i.variantPrice ?? i.product.price,
-                'totalPrice'  : i.subtotal,
+                'quantity': i.quantity,
+                'price': i.variantPrice ?? i.product.price,
+                'totalPrice': i.subtotal,
               })
           .toList(),
-      'total'        : _total,
+      'total': _total,
       'paymentMethod': 'Cash on Pickup',
-      'status'       : 'pending',
-      'createdAt'    : FieldValue.serverTimestamp(),
+      'status': 'pending',
+      'createdAt': FieldValue.serverTimestamp(),
     };
 
     final productIds = cart.map((i) => i.product.id).toSet().toList();
@@ -1726,8 +1942,8 @@ class _CartSheet extends StatelessWidget {
         for (final id in productIds) {
           final d = snaps[id]!.data() as Map<String, dynamic>? ?? {};
           productState[id] = {
-            'stock'   : (d['stock'] ?? 0) as int,
-            'status'  : (d['status'] ?? 'available') as String,
+            'stock': (d['stock'] ?? 0) as int,
+            'status': (d['status'] ?? 'available') as String,
             'variants': (d['variants'] is List)
                 ? (d['variants'] as List)
                     .whereType<Map<String, dynamic>>()
@@ -1739,7 +1955,7 @@ class _CartSheet extends StatelessWidget {
         }
 
         for (final item in cart) {
-          final state      = productState[item.product.id]!;
+          final state = productState[item.product.id]!;
           final variantList =
               state['variants'] as List<Map<String, dynamic>>;
           final hasVariant =
@@ -1752,8 +1968,8 @@ class _CartSheet extends StatelessWidget {
             final idx =
                 variantList.indexWhere((v) => v['id'] == item.variantId);
             if (idx != -1) {
-              logOldStock               = (variantList[idx]['stock'] ?? 0) as int;
-              logNewStock               = (logOldStock - item.quantity).clamp(0, 999999);
+              logOldStock = (variantList[idx]['stock'] ?? 0) as int;
+              logNewStock = (logOldStock - item.quantity).clamp(0, 999999);
               variantList[idx]['stock'] = logNewStock;
               state['variantsModified'] = true;
             } else {
@@ -1762,27 +1978,27 @@ class _CartSheet extends StatelessWidget {
             }
             state['stock'] = ((state['stock'] as int) - item.quantity).clamp(0, 999999);
           } else {
-            logOldStock    = state['stock'] as int;
-            logNewStock    = (logOldStock - item.quantity).clamp(0, 999999);
+            logOldStock = state['stock'] as int;
+            logNewStock = (logOldStock - item.quantity).clamp(0, 999999);
             state['stock'] = logNewStock;
           }
 
           txn.set(db.collection('stock_logs').doc(), {
-            'productId'  : item.product.id,
+            'productId': item.product.id,
             'productName': item.product.name,
             if (hasVariant) 'variantId': item.variantId,
-            'reason'     : 'sold',
-            'oldStock'   : logOldStock,
-            'newStock'   : logNewStock,
-            'quantity'   : item.quantity,
-            'changedBy'  : 'customer',
-            'changedAt'  : FieldValue.serverTimestamp(),
-            'orderId'    : orderId,
+            'reason': 'sold',
+            'oldStock': logOldStock,
+            'newStock': logNewStock,
+            'quantity': item.quantity,
+            'changedBy': 'customer',
+            'changedAt': FieldValue.serverTimestamp(),
+            'orderId': orderId,
           });
         }
 
         for (final entry in productState.entries) {
-          final state      = entry.value;
+          final state = entry.value;
           final variantList =
               state['variants'] as List<Map<String, dynamic>>;
           final update = <String, dynamic>{'stock': state['stock']};
@@ -1835,9 +2051,8 @@ class _CartItemRow extends StatelessWidget {
         children: [
           ClipRRect(
             borderRadius: BorderRadius.circular(6),
-            child: item.product.imageUrl.isNotEmpty
-                ? Image.network(item.product.imageUrl,
-                    width: 44, height: 44, fit: BoxFit.cover)
+            child: item.product.imageBase64.isNotEmpty
+                ? _buildCartImage()
                 : Container(
                     width: 44,
                     height: 44,
@@ -1917,6 +2132,49 @@ class _CartItemRow extends StatelessWidget {
       ),
     );
   }
+
+  Widget _buildCartImage() {
+    try {
+      final imageData = item.product.imageBase64;
+      if (imageData.startsWith('data:image')) {
+        final base64String = imageData.split(',').last;
+        final bytes = base64Decode(base64String);
+        return Image.memory(
+          bytes,
+          width: 44,
+          height: 44,
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) => Container(
+            width: 44,
+            height: 44,
+            color: Colors.orange.withOpacity(0.1),
+            child: const Icon(Icons.image_not_supported, size: 20, color: Colors.grey),
+          ),
+        );
+      } else {
+        final bytes = base64Decode(imageData);
+        return Image.memory(
+          bytes,
+          width: 44,
+          height: 44,
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) => Container(
+            width: 44,
+            height: 44,
+            color: Colors.orange.withOpacity(0.1),
+            child: const Icon(Icons.image_not_supported, size: 20, color: Colors.grey),
+          ),
+        );
+      }
+    } catch (e) {
+      return Container(
+        width: 44,
+        height: 44,
+        color: Colors.orange.withOpacity(0.1),
+        child: const Icon(Icons.image_not_supported, size: 20, color: Colors.grey),
+      );
+    }
+  }
 }
 
 class _QtyBtn extends StatelessWidget {
@@ -1951,13 +2209,19 @@ class _PickupBadge extends StatelessWidget {
     final String label;
     switch (status) {
       case 'Ready for Pickup':
-        bg = const Color(0xFFEFF6FF); fg = const Color(0xFF2563EB); label = 'READY';
+        bg = const Color(0xFFEFF6FF);
+        fg = const Color(0xFF2563EB);
+        label = 'READY';
         break;
       case 'Claimed':
-        bg = const Color(0xFFECFDF5); fg = const Color(0xFF059669); label = 'CLAIMED';
+        bg = const Color(0xFFECFDF5);
+        fg = const Color(0xFF059669);
+        label = 'CLAIMED';
         break;
       default:
-        bg = const Color(0xFFFFF3E0); fg = Colors.orange; label = 'PENDING';
+        bg = const Color(0xFFFFF3E0);
+        fg = Colors.orange;
+        label = 'PENDING';
     }
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),

@@ -171,7 +171,9 @@ class EventData {
 //  MAIN SCREEN
 // ─────────────────────────────────────────────
 class StudentEventsScreen extends StatefulWidget {
-  const StudentEventsScreen({super.key});
+  final int initialTabIndex;
+  
+  const StudentEventsScreen({super.key, this.initialTabIndex = 0});
 
   @override
   State<StudentEventsScreen> createState() => _StudentEventsScreenState();
@@ -182,7 +184,7 @@ class _StudentEventsScreenState extends State<StudentEventsScreen>
   late TabController _tabController;
   DateTime _selectedDate = DateTime.now();
 
-  // ── Certificate tab state (mirrors StudentCertificatesScreen) ──
+  // ── Certificate tab state ──
   String _certFilter            = 'All';
   final List<String> _certFilters = ['All', 'Academic', 'Workshops', 'Events'];
   List<Map<String, dynamic>> _allCertificates = [];
@@ -194,7 +196,11 @@ class _StudentEventsScreenState extends State<StudentEventsScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
+    _tabController = TabController(
+      length: 3, 
+      vsync: this,
+      initialIndex: widget.initialTabIndex,
+    );
     _tabController.addListener(() {
       if (_tabController.index == 2 && _certLoading) _fetchCertificates();
     });
@@ -414,7 +420,6 @@ class _StudentEventsScreenState extends State<StudentEventsScreen>
                       style: TextStyle(fontSize: 12, color: Colors.grey.shade500)),
                   const SizedBox(height: 20),
 
-                  // Image picker
                   GestureDetector(
                     onTap: () => showModalBottomSheet(
                       context: ctx,
@@ -762,7 +767,6 @@ class _StudentEventsScreenState extends State<StudentEventsScreen>
               ],
             ),
           ),
-          // Feedback row
           if (cert['status'] != 'draft') ...[
             const Divider(height: 1, color: Color(0xFFF0F0F0)),
             Padding(
@@ -785,7 +789,6 @@ class _StudentEventsScreenState extends State<StudentEventsScreen>
                     ),
             ),
           ],
-          // Verification QR row
           if (vCode.isNotEmpty) ...[
             const Divider(height: 1, color: Color(0xFFF0F0F0)),
             GestureDetector(
@@ -1519,238 +1522,5 @@ class _InfoRow extends StatelessWidget {
       Icon(icon, size: 18, color: Colors.grey.shade600), const SizedBox(width: 8),
       Expanded(child: Text(text, style: const TextStyle(fontSize: 14, color: Colors.black87))),
     ]);
-  }
-}
-
-// ─────────────────────────────────────────────
-//  CREATE EVENT SCREEN
-// ─────────────────────────────────────────────
-class CreateEventScreen extends StatefulWidget {
-  const CreateEventScreen({super.key});
-  @override
-  State<CreateEventScreen> createState() => _CreateEventScreenState();
-}
-
-class _CreateEventScreenState extends State<CreateEventScreen> {
-  final _formKey           = GlobalKey<FormState>();
-  final _titleCtrl         = TextEditingController();
-  final _subtitleCtrl      = TextEditingController();
-  final _descriptionCtrl   = TextEditingController();
-  final _locationCtrl      = TextEditingController();
-  final _capacityCtrl      = TextEditingController();
-  final _categoryCtrl      = TextEditingController();
-  final _startTimeCtrl     = TextEditingController();
-  final _endTimeCtrl       = TextEditingController();
-  final _orgNameCtrl       = TextEditingController();
-  DateTime? _selectedDate;
-  bool _isLoading = false;
-
-  @override
-  void dispose() {
-    for (final c in [_titleCtrl, _subtitleCtrl, _descriptionCtrl, _locationCtrl,
-                     _capacityCtrl, _categoryCtrl, _startTimeCtrl, _endTimeCtrl, _orgNameCtrl]) {
-      c.dispose();
-    }
-    super.dispose();
-  }
-
-  Future<void> _createEvent() async {
-    if (!_formKey.currentState!.validate()) return;
-    if (_selectedDate == null) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please select a date')));
-      return;
-    }
-    setState(() => _isLoading = true);
-    try {
-      final capacity = int.parse(_capacityCtrl.text);
-      final user = FirebaseAuth.instance.currentUser;
-      await FirebaseFirestore.instance.collection('events').add({
-        'title'      : _titleCtrl.text,
-        'subtitle'   : _subtitleCtrl.text.isNotEmpty ? _subtitleCtrl.text : _titleCtrl.text,
-        'description': _descriptionCtrl.text,
-        'location'   : _locationCtrl.text,
-        'capacity'   : capacity,
-        'slotsLeft'  : capacity,
-        'category'   : _categoryCtrl.text,
-        'startTime'  : _startTimeCtrl.text,
-        'endTime'    : _endTimeCtrl.text,
-        'date'       : Timestamp.fromDate(_selectedDate!),
-        'orgId'      : user?.uid ?? '',
-        'orgName'    : _orgNameCtrl.text.isNotEmpty ? _orgNameCtrl.text : 'Organization',
-        'isPublic'   : true,
-        'status'     : 'approved',
-        'bannerUrl'  : '',
-        'logoUrl'    : '',
-        'createdAt'  : FieldValue.serverTimestamp(),
-        'audience'   : 'Public',
-      });
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('✅ Event created successfully with $capacity slots!'),
-          backgroundColor: Colors.green));
-        Navigator.pop(context, true);
-      }
-    } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('❌ Error creating event: $e'), backgroundColor: Colors.red));
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
-    }
-  }
-
-  InputDecoration _deco(String label, {String? hint, IconData? icon}) => InputDecoration(
-    labelText: label, hintText: hint,
-    border: const OutlineInputBorder(),
-    prefixIcon: icon != null ? Icon(icon) : null,
-  );
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Create New Event'),
-          backgroundColor: Colors.orange, foregroundColor: Colors.white),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Form(
-          key: _formKey,
-          child: SingleChildScrollView(
-            child: Column(children: [
-              TextFormField(controller: _titleCtrl,       decoration: _deco('Event Title *',        icon: Icons.title),
-                  validator: (v) => v!.isEmpty ? 'Title is required' : null),
-              const SizedBox(height: 16),
-              TextFormField(controller: _subtitleCtrl,    decoration: _deco('Subtitle',             icon: Icons.subtitles)),
-              const SizedBox(height: 16),
-              TextFormField(controller: _orgNameCtrl,     decoration: _deco('Organization Name *',  icon: Icons.business),
-                  validator: (v) => v!.isEmpty ? 'Organization name is required' : null),
-              const SizedBox(height: 16),
-              TextFormField(controller: _descriptionCtrl, decoration: _deco('Description *',        icon: Icons.description),
-                  maxLines: 3, validator: (v) => v!.isEmpty ? 'Description is required' : null),
-              const SizedBox(height: 16),
-              TextFormField(controller: _locationCtrl,    decoration: _deco('Location *',           icon: Icons.location_on),
-                  validator: (v) => v!.isEmpty ? 'Location is required' : null),
-              const SizedBox(height: 16),
-              TextFormField(controller: _capacityCtrl,
-                  decoration: _deco('Total Slots (Capacity) *', hint: 'e.g., 20', icon: Icons.people),
-                  keyboardType: TextInputType.number,
-                  validator: (v) {
-                    if (v!.isEmpty) return 'Capacity is required';
-                    final val = int.tryParse(v);
-                    if (val == null) return 'Must be a number';
-                    if (val <= 0) return 'Must be greater than 0';
-                    return null;
-                  }),
-              const SizedBox(height: 16),
-              TextFormField(controller: _categoryCtrl,
-                  decoration: _deco('Category *', hint: 'e.g., Seminar, Workshop, Competition', icon: Icons.category),
-                  validator: (v) => v!.isEmpty ? 'Category is required' : null),
-              const SizedBox(height: 16),
-              TextFormField(controller: _startTimeCtrl,
-                  decoration: _deco('Start Time *', hint: 'e.g., 10:00 AM', icon: Icons.access_time),
-                  validator: (v) => v!.isEmpty ? 'Start time is required' : null),
-              const SizedBox(height: 16),
-              TextFormField(controller: _endTimeCtrl,
-                  decoration: _deco('End Time *', hint: 'e.g., 2:00 PM', icon: Icons.access_time),
-                  validator: (v) => v!.isEmpty ? 'End time is required' : null),
-              const SizedBox(height: 16),
-              ListTile(
-                title: Text(_selectedDate == null
-                    ? 'Select Event Date *'
-                    : 'Date: ${DateFormat('MMM dd, yyyy').format(_selectedDate!)}',
-                    style: TextStyle(fontWeight: FontWeight.w500,
-                        color: _selectedDate == null ? Colors.grey : Colors.black)),
-                trailing: const Icon(Icons.calendar_today, color: Colors.orange),
-                tileColor: Colors.grey.shade50,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8),
-                    side: BorderSide(color: Colors.grey.shade300)),
-                onTap: () async {
-                  final date = await showDatePicker(
-                    context: context,
-                    initialDate: DateTime.now().add(const Duration(days: 7)),
-                    firstDate: DateTime.now(),
-                    lastDate: DateTime.now().add(const Duration(days: 365)),
-                  );
-                  if (date != null) setState(() => _selectedDate = date);
-                },
-              ),
-              const SizedBox(height: 24),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: _isLoading ? null : _createEvent,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.orange, foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                  child: _isLoading
-                      ? const SizedBox(height: 20, width: 20,
-                          child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                      : const Text('Create Event', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
-                ),
-              ),
-              const SizedBox(height: 16),
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(color: Colors.blue.shade50,
-                    borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.blue.shade200)),
-                child: Row(children: [
-                  Icon(Icons.info_outline, color: Colors.blue.shade700),
-                  const SizedBox(width: 8),
-                  Expanded(child: Text(
-                    'Slots will be automatically set to the capacity you enter. '
-                    'Example: If you enter 20 slots, the event will show 20/20 slots available.',
-                    style: TextStyle(fontSize: 12, color: Colors.blue.shade700),
-                  )),
-                ]),
-              ),
-            ]),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────
-//  FIX MISSING SLOTS BUTTON (USE ONCE)
-// ─────────────────────────────────────────────
-class FixMissingSlotsButton extends StatelessWidget {
-  const FixMissingSlotsButton({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return ElevatedButton(
-      onPressed: () async {
-        try {
-          final events = await FirebaseFirestore.instance.collection('events').get();
-          final batch = FirebaseFirestore.instance.batch();
-          int fixedCount = 0;
-          for (var doc in events.docs) {
-            final data = doc.data();
-            if (!data.containsKey('slotsLeft') || data['slotsLeft'] == null) {
-              final capacity = data['capacity'] as int? ?? 0;
-              if (capacity > 0) { batch.update(doc.reference, {'slotsLeft': capacity}); fixedCount++; }
-            }
-          }
-          if (fixedCount > 0) {
-            await batch.commit();
-            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-              content: Text('✅ Fixed $fixedCount events with missing slots!'), backgroundColor: Colors.green));
-          } else {
-            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-              content: Text('✅ All events already have slotsLeft!'), backgroundColor: Colors.green));
-          }
-        } catch (e) {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text('❌ Error: $e'), backgroundColor: Colors.red));
-        }
-      },
-      style: ElevatedButton.styleFrom(
-        backgroundColor: Colors.orange,
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-      ),
-      child: const Text('Fix Missing Slots',
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
-    );
   }
 }

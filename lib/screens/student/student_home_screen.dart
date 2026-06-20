@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
-import '../../widgets/common/bottom_nav_bar.dart';
 import '../../widgets/common/loading_widget.dart';
 import '../../widgets/student/announcements_feed.dart';
 import '../../widgets/student/profile_summary.dart';
@@ -26,6 +25,89 @@ class AppColors {
   static const Color background = Color(0xFFF8F9FA);
 }
 
+// ─────────────────────────────────────────────────────────────
+// Bottom Nav Bar - Integrated
+// ─────────────────────────────────────────────────────────────
+class BottomNavItem {
+  final IconData icon;
+  final IconData selectedIcon;
+  final String label;
+
+  const BottomNavItem(this.icon, this.selectedIcon, this.label);
+}
+
+class BottomNavBar extends StatelessWidget {
+  final int currentIndex;
+  final Function(int) onTap;
+  final List<BottomNavItem> items;
+
+  const BottomNavBar({
+    super.key,
+    required this.currentIndex,
+    required this.onTap,
+    required this.items,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.08),
+            blurRadius: 10,
+            offset: const Offset(0, -2),
+          ),
+        ],
+      ),
+      child: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: List.generate(items.length, (index) {
+              final item = items[index];
+              final isSelected = currentIndex == index;
+              
+              return Expanded(
+                child: GestureDetector(
+                  onTap: () => onTap(index),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        isSelected ? item.selectedIcon : item.icon,
+                        color: isSelected ? Colors.orange : Colors.grey,
+                        size: 24,
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        item.label,
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
+                          color: isSelected ? Colors.orange : Colors.grey,
+                        ),
+                        textAlign: TextAlign.center,
+                        overflow: TextOverflow.visible,
+                        softWrap: false,
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+// Student Home Screen
+// ─────────────────────────────────────────────────────────────
 class StudentHomeScreen extends StatefulWidget {
   const StudentHomeScreen({super.key});
 
@@ -96,10 +178,9 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
         },
         items: const [
           BottomNavItem(Icons.home_outlined, Icons.home, 'Home'),
-          BottomNavItem(Icons.announcement_outlined, Icons.announcement, 'Announcements'),
+          BottomNavItem(Icons.announcement_outlined, Icons.announcement, 'Announce'),
           BottomNavItem(Icons.calendar_today_outlined, Icons.calendar_today, 'Events'),
           BottomNavItem(Icons.groups_outlined, Icons.groups, 'Orgs'),
-          BottomNavItem(Icons.card_membership_outlined, Icons.card_membership, 'Certs'),
           BottomNavItem(Icons.person_outline, Icons.person, 'Profile'),
         ],
       ),
@@ -111,7 +192,6 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
     const StudentAnnouncementsScreen(),
     const StudentEventsScreen(),
     const StudentOrganizationsScreen(),
-    const StudentCertificatesScreen(),
     const StudentProfileScreen(),
   ];
 }
@@ -197,6 +277,33 @@ class _HomeContentState extends State<_HomeContent> {
     }
   }
 
+  void _navigateToEventDetail(EventData event) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => EventDetailScreen(
+          event: event,
+          onRegistered: () {
+            // Refresh the home screen when registered
+            setState(() {});
+          },
+          isPastEvent: event.isPast,
+        ),
+      ),
+    );
+  }
+
+  void _navigateToAnnouncementDetail(AnnouncementData announcement) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => AnnouncementDetailScreen(
+          announcement: announcement,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final user = FirebaseAuth.instance.currentUser;
@@ -230,7 +337,7 @@ class _HomeContentState extends State<_HomeContent> {
                 const SizedBox(width: 10),
                 Text(
                   'UPRISE',
-                  style: TextStyle(
+                  style: const TextStyle(
                     fontSize: 22,
                     fontWeight: FontWeight.bold,
                     color: Color(0xFFBE4700),
@@ -293,7 +400,7 @@ class _HomeContentState extends State<_HomeContent> {
               ),
             ),
 
-          // Welcome Section - Uses updated userName
+          // Welcome Section
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
@@ -304,7 +411,7 @@ class _HomeContentState extends State<_HomeContent> {
                     'GOOD DAY,',
                     style: TextStyle(
                       fontSize: 14,
-                      color: Colors.grey[600],
+                      color: Colors.grey.shade600,
                       fontWeight: FontWeight.w600,
                       letterSpacing: 1.2,
                     ),
@@ -323,7 +430,7 @@ class _HomeContentState extends State<_HomeContent> {
                     'Ready to explore today\'s campus activities?',
                     style: TextStyle(
                       fontSize: 14,
-                      color: Colors.grey[500],
+                      color: Colors.grey.shade500,
                     ),
                   ),
                 ],
@@ -331,7 +438,7 @@ class _HomeContentState extends State<_HomeContent> {
             ),
           ),
 
-          // Quick Access Section with Label
+          // Quick Access
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(20, 12, 20, 4),
@@ -340,13 +447,13 @@ class _HomeContentState extends State<_HomeContent> {
                 style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w600,
-                  color: Colors.grey[700],
+                  color: Colors.grey.shade700,
                 ),
               ),
             ),
           ),
 
-          // Quick Access Icons (Uniform color - Colors.orange)
+          // Quick Access Icons
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -360,31 +467,19 @@ class _HomeContentState extends State<_HomeContent> {
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (context) => const StudentEventsScreen(),
+                          builder: (context) => const StudentEventsScreen(initialTabIndex: 0),
                         ),
                       );
                     },
                   ),
                   _QuickAccessItem(
-                    icon: Icons.event_note,
-                    label: 'My Events',
+                    icon: Icons.card_membership, // Pinalitan ang icon
+                    label: 'Certificate', // Pinalitan ang label
                     onTap: () {
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (context) => const StudentEventsScreen(),
-                        ),
-                      );
-                    },
-                  ),
-                  _QuickAccessItem(
-                    icon: Icons.card_membership,
-                    label: 'Certs',
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const StudentCertificatesScreen(),
+                          builder: (context) => const StudentEventsScreen(initialTabIndex: 2),
                         ),
                       );
                     },
@@ -401,6 +496,18 @@ class _HomeContentState extends State<_HomeContent> {
                       );
                     },
                   ),
+                  _QuickAccessItem(
+                    icon: Icons.person,
+                    label: 'Profile',
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const StudentProfileScreen(),
+                        ),
+                      );
+                    },
+                  ),
                 ],
               ),
             ),
@@ -413,12 +520,12 @@ class _HomeContentState extends State<_HomeContent> {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text(
+                  Text(
                     'Upcoming Events',
                     style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.black87,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.grey.shade700,
                     ),
                   ),
                   TextButton(
@@ -426,18 +533,22 @@ class _HomeContentState extends State<_HomeContent> {
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (context) => const StudentEventsScreen(),
+                          builder: (context) => const StudentEventsScreen(initialTabIndex: 1),
                         ),
                       );
                     },
                     style: TextButton.styleFrom(
                       foregroundColor: Colors.orange,
+                      padding: EdgeInsets.zero,
+                      minimumSize: const Size(0, 0),
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                     ),
                     child: const Text(
                       'View all',
                       style: TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w500,
+                        color: Colors.orange,
                       ),
                     ),
                   ),
@@ -459,7 +570,7 @@ class _HomeContentState extends State<_HomeContent> {
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return const Padding(
                     padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                    child: SkeletonLoader(count: 2, height: 110),
+                    child: SkeletonLoader(count: 2, height: 120),
                   );
                 }
 
@@ -484,7 +595,7 @@ class _HomeContentState extends State<_HomeContent> {
                 final events = snapshot.data!.docs;
                 
                 return SizedBox(
-                  height: 210,
+                  height: 200,
                   child: ListView.builder(
                     scrollDirection: Axis.horizontal,
                     padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -492,6 +603,9 @@ class _HomeContentState extends State<_HomeContent> {
                     itemBuilder: (context, index) {
                       final doc = events[index];
                       final data = doc.data() as Map<String, dynamic>;
+                      
+                      // Convert to EventData
+                      final eventData = EventData.fromFirestore(doc);
                       
                       Timestamp? timestamp = data['date'];
                       DateTime eventDate;
@@ -505,97 +619,131 @@ class _HomeContentState extends State<_HomeContent> {
                       final monthName = DateFormat('MMM').format(eventDate);
                       final dayNumber = DateFormat('dd').format(eventDate);
                       final formattedTime = data['startTime'] ?? 'TBA';
-                      final location = data['location'] ?? 'TBA';
                       final title = data['title'] ?? 'Untitled Event';
+                      final location = data['location'] ?? 'TBA';
                       
-                      return Container(
-                        width: 220,
-                        margin: const EdgeInsets.only(right: 12),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(16),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.grey.withOpacity(0.1),
-                              blurRadius: 8,
-                              offset: const Offset(0, 2),
-                            ),
-                          ],
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            ClipRRect(
-                              borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-                              child: data['bannerUrl'] != null && (data['bannerUrl'] as String).isNotEmpty
-                                  ? Image.network(
-                                      data['bannerUrl'],
-                                      height: 100,
-                                      width: double.infinity,
-                                      fit: BoxFit.cover,
-                                      errorBuilder: (_, __, ___) => Container(
-                                        height: 100,
-                                        color: Colors.orange.withOpacity(0.1),
-                                        child: const Icon(Icons.event, color: Colors.orange),
-                                      ),
-                                    )
-                                  : Container(
-                                      height: 100,
-                                      color: Colors.orange.withOpacity(0.1),
-                                      child: const Icon(Icons.event, color: Colors.orange),
-                                    ),
-                            ),
-                            
-                            Padding(
-                              padding: const EdgeInsets.all(12),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                    decoration: BoxDecoration(
-                                      color: Colors.orange.withOpacity(0.1),
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                    child: Text(
-                                      '$monthName $dayNumber',
-                                      style: TextStyle(
-                                        fontSize: 10,
-                                        fontWeight: FontWeight.w600,
-                                        color: Colors.orange,
-                                      ),
-                                    ),
-                                  ),
-                                  const SizedBox(height: 6),
-                                  Text(
-                                    title,
-                                    style: const TextStyle(
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.black87,
-                                    ),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                  const SizedBox(height: 2),
-                                  Row(
-                                    children: [
-                                      const Icon(Icons.access_time, size: 11, color: Colors.grey),
-                                      const SizedBox(width: 3),
-                                      Expanded(
-                                        child: Text(
-                                          formattedTime,
-                                          style: const TextStyle(fontSize: 10, color: Colors.grey),
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
-                                      ),
+                      return GestureDetector(
+                        onTap: () => _navigateToEventDetail(eventData),
+                        child: Container(
+                          width: 180,
+                          margin: const EdgeInsets.only(right: 12),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(14),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.grey.withOpacity(0.12),
+                                blurRadius: 8,
+                                offset: const Offset(0, 3),
+                              ),
+                            ],
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              // ── ORANGE TOP ──
+                              Container(
+                                height: 90,
+                                width: double.infinity,
+                                decoration: const BoxDecoration(
+                                  gradient: LinearGradient(
+                                    begin: Alignment.topLeft,
+                                    end: Alignment.bottomRight,
+                                    colors: [
+                                      Colors.orange,
+                                      Color(0xFFFF8C42),
                                     ],
                                   ),
-                                ],
+                                  borderRadius: BorderRadius.vertical(
+                                    top: Radius.circular(14),
+                                  ),
+                                ),
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(
+                                      Icons.calendar_today,
+                                      color: Colors.white.withOpacity(0.8),
+                                      size: 22,
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      '$monthName $dayNumber',
+                                      style: const TextStyle(
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.white,
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
-                            ),
-                          ],
+                              
+                              // ── WHITE BOTTOM ──
+                              Padding(
+                                padding: const EdgeInsets.all(10),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      title,
+                                      style: const TextStyle(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.black87,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                    const SizedBox(height: 3),
+                                    Row(
+                                      children: [
+                                        Icon(
+                                          Icons.access_time,
+                                          size: 11,
+                                          color: Colors.grey.shade500,
+                                        ),
+                                        const SizedBox(width: 3),
+                                        Expanded(
+                                          child: Text(
+                                            formattedTime,
+                                            style: TextStyle(
+                                              fontSize: 10,
+                                              color: Colors.grey.shade600,
+                                            ),
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Row(
+                                      children: [
+                                        Icon(
+                                          Icons.location_on,
+                                          size: 11,
+                                          color: Colors.grey.shade500,
+                                        ),
+                                        const SizedBox(width: 3),
+                                        Expanded(
+                                          child: Text(
+                                            location,
+                                            style: TextStyle(
+                                              fontSize: 10,
+                                              color: Colors.grey.shade600,
+                                            ),
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       );
                     },
@@ -612,12 +760,12 @@ class _HomeContentState extends State<_HomeContent> {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text(
+                  Text(
                     'Announcements',
                     style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.black87,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.grey.shade700,
                     ),
                   ),
                   TextButton(
@@ -631,12 +779,16 @@ class _HomeContentState extends State<_HomeContent> {
                     },
                     style: TextButton.styleFrom(
                       foregroundColor: Colors.orange,
+                      padding: EdgeInsets.zero,
+                      minimumSize: const Size(0, 0),
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                     ),
                     child: const Text(
                       'See all',
                       style: TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w500,
+                        color: Colors.orange,
                       ),
                     ),
                   ),
@@ -646,8 +798,12 @@ class _HomeContentState extends State<_HomeContent> {
           ),
           
           // Announcements Feed
-          const SliverToBoxAdapter(
-            child: AnnouncementsFeed(),
+          SliverToBoxAdapter(
+            child: AnnouncementsFeed(
+              onTap: (announcementData) {
+                _navigateToAnnouncementDetail(announcementData);
+              },
+            ),
           ),
 
           const SliverToBoxAdapter(
@@ -660,7 +816,7 @@ class _HomeContentState extends State<_HomeContent> {
 }
 
 // ─────────────────────────────────────────────────────────────
-// Quick Access Item (Uniform color - Colors.orange)
+// Quick Access Item
 // ─────────────────────────────────────────────────────────────
 class _QuickAccessItem extends StatelessWidget {
   final IconData icon;
@@ -705,7 +861,7 @@ class _QuickAccessItem extends StatelessWidget {
             style: TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.w600,
-              color: Colors.grey[700],
+              color: Colors.grey.shade700,
             ),
           ),
         ],
