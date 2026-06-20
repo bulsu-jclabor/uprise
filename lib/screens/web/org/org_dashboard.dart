@@ -41,7 +41,6 @@ class _DS {
   static const double radiusLg = 16;
   static const double radiusPill = 100;
 
-  // Brand amber (matches report.dart)
   static const Color primary = Color(0xFFEA580C);
   static const Color primaryBg = Color(0xFFFEF3C7);
 
@@ -78,25 +77,61 @@ class OrgColors {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Countdown widgets (copied from report.dart)
+// Countdown widget (stateful – updates itself, no parent rebuild)
 // ─────────────────────────────────────────────────────────────────────────────
-class _CountdownCard extends StatelessWidget {
-  final Duration remaining;
+class _CountdownCard extends StatefulWidget {
   final DateTime eventDate;
   final String eventLabel;
   const _CountdownCard({
-    required this.remaining,
     required this.eventDate,
     required this.eventLabel,
   });
 
   @override
+  State<_CountdownCard> createState() => _CountdownCardState();
+}
+
+class _CountdownCardState extends State<_CountdownCard> {
+  Duration _remaining = Duration.zero;
+  Timer? _timer;
+
+  void _updateRemaining() {
+    final diff = widget.eventDate.difference(DateTime.now());
+    setState(() {
+      _remaining = diff.isNegative ? Duration.zero : diff;
+    });
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _updateRemaining();
+    _timer = Timer.periodic(const Duration(seconds: 1), (_) => _updateRemaining());
+  }
+
+  @override
+  void didUpdateWidget(covariant _CountdownCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.eventDate != widget.eventDate) {
+      _updateRemaining();
+      _timer?.cancel();
+      _timer = Timer.periodic(const Duration(seconds: 1), (_) => _updateRemaining());
+    }
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final expired = remaining == Duration.zero;
-    final d = remaining.inDays;
-    final h = remaining.inHours % 24;
-    final m = remaining.inMinutes % 60;
-    final s = remaining.inSeconds % 60;
+    final expired = _remaining == Duration.zero;
+    final d = _remaining.inDays;
+    final h = _remaining.inHours % 24;
+    final m = _remaining.inMinutes % 60;
+    final s = _remaining.inSeconds % 60;
 
     return Container(
       padding: const EdgeInsets.all(18),
@@ -127,8 +162,8 @@ class _CountdownCard extends StatelessWidget {
             children: [
               Text(
                 expired
-                    ? '$eventLabel has started!'
-                    : 'Countdown to: $eventLabel',
+                    ? '${widget.eventLabel} has started!'
+                    : 'Countdown to: ${widget.eventLabel}',
                 style: GoogleFonts.beVietnamPro(
                   fontSize: 14,
                   fontWeight: FontWeight.w700,
@@ -136,7 +171,7 @@ class _CountdownCard extends StatelessWidget {
                 ),
               ),
               Text(
-                DateFormat('MMMM d, yyyy — h:mm a').format(eventDate),
+                DateFormat('MMMM d, yyyy — h:mm a').format(widget.eventDate),
                 style: GoogleFonts.beVietnamPro(
                   fontSize: 12,
                   color: OrgColors.darkGray,
@@ -233,7 +268,7 @@ class _Colon extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Sidebar nav items (unchanged)
+// Sidebar nav items
 // ─────────────────────────────────────────────────────────────────────────────
 const List<Map<String, dynamic>> _navItems = [
   {'label': 'Dashboard', 'icon': Icons.dashboard_rounded},
@@ -253,7 +288,7 @@ const List<Map<String, dynamic>> _navItems = [
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
-// OrgDashboard shell (unchanged)
+// OrgDashboard shell
 // ─────────────────────────────────────────────────────────────────────────────
 class OrgDashboard extends StatefulWidget {
   const OrgDashboard({super.key});
@@ -1359,7 +1394,7 @@ class _OrgDashboardState extends State<OrgDashboard> {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Org Dashboard Home (with countdown added)
+// Org Dashboard Home (with countdown – no timer updates here)
 // ─────────────────────────────────────────────────────────────────────────────
 class _OrgDashboardHome extends StatefulWidget {
   final String orgId;
@@ -1378,9 +1413,7 @@ class _OrgDashboardHomeState extends State<_OrgDashboardHome> {
   bool _chartLoading = true;
   int? _hoveredChartIndex;
 
-  // ── NEW: Countdown variables ──
-  Timer? _countdownTimer;
-  Duration _remaining = Duration.zero;
+  // Countdown – only store the event data, no timer here!
   DateTime? _eventDate;
   String _eventLabel = '';
   bool _eventLoaded = false;
@@ -1449,19 +1482,17 @@ class _OrgDashboardHomeState extends State<_OrgDashboardHome> {
 
     _setupChartListener();
 
-    // ── NEW: Load the next event for countdown ──
+    // Load the next event for countdown (no timer inside)
     _loadEventDate();
   }
 
   @override
   void dispose() {
     _chartDataSubscription?.cancel();
-    // ── NEW: Cancel countdown timer ──
-    _countdownTimer?.cancel();
     super.dispose();
   }
 
-  // ── NEW: Countdown logic (copied from report.dart) ──
+  // Load event date – only sets state, no timer
   Future<void> _loadEventDate() async {
     try {
       final now = DateTime.now();
@@ -1486,26 +1517,20 @@ class _OrgDashboardHomeState extends State<_OrgDashboardHome> {
       }
 
       if (nextDate != null) {
-        _eventDate = nextDate;
-        _eventLabel = nextLabel;
-        _updateRemaining();
-        _countdownTimer = Timer.periodic(
-          const Duration(seconds: 1),
-          (_) => _updateRemaining(),
-        );
+        setState(() {
+          _eventDate = nextDate;
+          _eventLabel = nextLabel;
+          _eventLoaded = true;
+        });
+      } else {
+        setState(() => _eventLoaded = true);
       }
-    } catch (_) {}
-    if (mounted) setState(() => _eventLoaded = true);
+    } catch (_) {
+      if (mounted) setState(() => _eventLoaded = true);
+    }
   }
 
-  void _updateRemaining() {
-    if (_eventDate == null) return;
-    final diff = _eventDate!.difference(DateTime.now());
-    if (mounted)
-      setState(() => _remaining = diff.isNegative ? Duration.zero : diff);
-  }
-
-  // Existing methods unchanged...
+  // Chart helper methods
   void _updateHoveredChartIndex(Offset localPosition, Size size) {
     const lp = 44.0, rp = 16.0, tp = 24.0, bp = 28.0;
     final cw = size.width - lp - rp;
@@ -1602,11 +1627,10 @@ class _OrgDashboardHomeState extends State<_OrgDashboardHome> {
           _buildStatCards(),
           const SizedBox(height: 20),
           _buildChartCard(),
-          // ── NEW: Countdown card placed here ──
           const SizedBox(height: 20),
+          // Countdown card – now stateful, doesn't cause parent rebuild
           if (_eventLoaded && _eventDate != null)
             _CountdownCard(
-              remaining: _remaining,
               eventDate: _eventDate!,
               eventLabel: _eventLabel,
             ),
@@ -3472,7 +3496,6 @@ class _OrgNotificationPanelState extends State<_OrgNotificationPanel> {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-
 class _MerchRow extends StatelessWidget {
   final String name;
   final int sold;
