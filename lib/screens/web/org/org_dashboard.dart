@@ -9,11 +9,11 @@
 //  - Top bar: title+subtitle, datetime pill, search, notification PopupMenu, org avatar
 //  - Unified "org" role — no officer/adviser split
 
-import 'dart:ui' as ui;
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:fl_chart/fl_chart.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 
@@ -1407,11 +1407,10 @@ class _OrgDashboardHome extends StatefulWidget {
 
 class _OrgDashboardHomeState extends State<_OrgDashboardHome> {
   // Existing variables
-  String _selectedSemester = '';
+  int _selectedYear = DateTime.now().year;
   String _selectedMonth = '';
   List<int> _chartData = List.filled(12, 0);
   bool _chartLoading = true;
-  int? _hoveredChartIndex;
 
   // Countdown – only store the event data, no timer here!
   DateTime? _eventDate;
@@ -1425,33 +1424,21 @@ class _OrgDashboardHomeState extends State<_OrgDashboardHome> {
   late final Stream<QuerySnapshot> _upcomingEventsStream;
   StreamSubscription<QuerySnapshot>? _chartDataSubscription;
 
-  int get _ayFirstYear {
-    final parts = _selectedSemester.split(' ').last.split('-');
-    return int.tryParse(parts.first) ?? DateTime.now().year;
-  }
-
-  String _getCurrentAY() {
-    final now = DateTime.now();
-    if (now.month >= 7) return 'AY ${now.year}-${now.year + 1}';
-    return 'AY ${now.year - 1}-${now.year}';
-  }
-
-  List<String> get _semesterOptions {
-    final y = _ayFirstYear;
-    return ['AY ${y - 1}-$y', 'AY $y-${y + 1}', 'AY ${y + 1}-${y + 2}'];
+  // Plain calendar years — no academic-year offset to keep in sync with.
+  List<int> get _yearOptions {
+    final y = DateTime.now().year;
+    return [y - 1, y, y + 1];
   }
 
   String _monthLabel(int index) {
-    const m = ['JUL','AUG','SEP','OCT','NOV','DEC','JAN','FEB','MAR','APR','MAY','JUN'];
+    const m = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
     return m[index];
   }
 
   @override
   void initState() {
     super.initState();
-    _selectedSemester = _getCurrentAY();
-    final currentMonthIdx = (DateTime.now().month - 7 + 12) % 12;
-    _selectedMonth = _monthLabel(currentMonthIdx);
+    _selectedMonth = _monthLabel(DateTime.now().month - 1);
     final now = DateTime.now();
 
     _approvedEventsStream = FirebaseFirestore.instance
@@ -1530,62 +1517,11 @@ class _OrgDashboardHomeState extends State<_OrgDashboardHome> {
     }
   }
 
-  // Chart helper methods
-  void _updateHoveredChartIndex(Offset localPosition, Size size) {
-    const lp = 44.0, rp = 16.0, tp = 24.0, bp = 28.0;
-    final cw = size.width - lp - rp;
-    final ch = size.height - tp - bp;
-    if (_chartData.isEmpty) return;
-
-    double maxVal = _chartData.reduce((a, b) => a > b ? a : b).toDouble();
-    if (maxVal == 0) maxVal = 5;
-
-    int? nearestIndex;
-    double nearestDistance = double.infinity;
-    for (var i = 0; i < _chartData.length; i++) {
-      final point = Offset(
-        lp + (i / (_chartData.length - 1)) * cw,
-        tp + ch - (_chartData[i] / maxVal) * ch,
-      );
-      final distance = (localPosition - point).distance;
-      if (distance < nearestDistance) {
-        nearestDistance = distance;
-        nearestIndex = i;
-      }
-    }
-    final newIndex = (nearestIndex != null && nearestDistance <= 24)
-        ? nearestIndex
-        : null;
-    if (_hoveredChartIndex != newIndex && mounted) {
-      setState(() => _hoveredChartIndex = newIndex);
-    }
-  }
-
-  void _clearHoveredChartIndex() {
-    if (_hoveredChartIndex != null && mounted) {
-      setState(() => _hoveredChartIndex = null);
-    }
-  }
-
-  List<Offset> _calculateChartPoints(Size size) {
-    const lp = 44.0, rp = 16.0, tp = 24.0, bp = 28.0;
-    final cw = size.width - lp - rp;
-    final ch = size.height - tp - bp;
-    if (_chartData.isEmpty) return [];
-    double maxVal = _chartData.reduce((a, b) => a > b ? a : b).toDouble();
-    if (maxVal == 0) maxVal = 5;
-    return List.generate(_chartData.length, (i) => Offset(
-      lp + (i / (_chartData.length - 1)) * cw,
-      tp + ch - (_chartData[i] / maxVal) * ch,
-    ));
-  }
-
   void _setupChartListener() {
     _chartDataSubscription?.cancel();
     setState(() => _chartLoading = true);
-    final y = _ayFirstYear;
-    final startDate = DateTime(y, 7, 1);
-    final endDate = DateTime(y + 1, 7, 1);
+    final startDate = DateTime(_selectedYear, 1, 1);
+    final endDate = DateTime(_selectedYear + 1, 1, 1);
 
     var query = FirebaseFirestore.instance
         .collection('event_proposals')
@@ -1599,7 +1535,7 @@ class _OrgDashboardHomeState extends State<_OrgDashboardHome> {
         for (final doc in snap.docs) {
           final ts = doc.data()['date'] as Timestamp?;
           if (ts == null) continue;
-          final idx = (ts.toDate().month - 7 + 12) % 12;
+          final idx = ts.toDate().month - 1;
           counts[idx]++;
         }
         if (mounted) {
@@ -1887,7 +1823,7 @@ class _OrgDashboardHomeState extends State<_OrgDashboardHome> {
                   ),
                   const SizedBox(height: 3),
                   Text(
-                    'Event proposals per month this semester (real-time)',
+                    'Event proposals per month this year (real-time)',
                     style: GoogleFonts.beVietnamPro(
                       fontSize: 12,
                       color: OrgColors.textFaint,
@@ -1904,10 +1840,8 @@ class _OrgDashboardHomeState extends State<_OrgDashboardHome> {
                   color: OrgColors.lightGray,
                 ),
                 child: DropdownButtonHideUnderline(
-                  child: DropdownButton<String>(
-                    value: _semesterOptions.contains(_selectedSemester)
-                        ? _selectedSemester
-                        : _semesterOptions[1],
+                  child: DropdownButton<int>(
+                    value: _selectedYear,
                     style: GoogleFonts.beVietnamPro(
                       fontSize: 12,
                       color: OrgColors.textMid,
@@ -1917,13 +1851,13 @@ class _OrgDashboardHomeState extends State<_OrgDashboardHome> {
                       size: 16,
                       color: OrgColors.textFaint,
                     ),
-                    items: _semesterOptions
-                        .map((s) => DropdownMenuItem(value: s, child: Text(s)))
+                    items: _yearOptions
+                        .map((y) => DropdownMenuItem(value: y, child: Text('$y')))
                         .toList(),
                     onChanged: (v) {
                       if (v != null) {
                         setState(() {
-                          _selectedSemester = v;
+                          _selectedYear = v;
                           _setupChartListener();
                         });
                       }
@@ -1935,96 +1869,22 @@ class _OrgDashboardHomeState extends State<_OrgDashboardHome> {
           ),
           const SizedBox(height: 20),
 
-          // Chart
+          // Chart — bar-per-month is more legible than a line for discrete
+          // monthly counts, and fl_chart handles touch/tooltips/scaling for us.
           SizedBox(
             height: 230,
-            child: LayoutBuilder(
-              builder: (ctx, constraints) {
-                final chartSize = Size(constraints.maxWidth, constraints.maxHeight);
-                final points = _calculateChartPoints(chartSize);
-                return MouseRegion(
-                  cursor: SystemMouseCursors.click,
-                  onHover: (e) => _updateHoveredChartIndex(e.localPosition, chartSize),
-                  onExit: (_) => _clearHoveredChartIndex(),
-                  child: GestureDetector(
-                    behavior: HitTestBehavior.translucent,
-                    onTapDown: (d) => _updateHoveredChartIndex(d.localPosition, chartSize),
-                    child: Stack(
-                      children: [
-                        _chartLoading
-                            ? const Center(
-                                child: CircularProgressIndicator(
-                                  color: OrgColors.primaryDark,
-                                  strokeWidth: 2,
-                                ),
-                              )
-                            : CustomPaint(
-                                painter: _LineChartPainter(
-                                  data: _chartData.map((e) => e.toDouble()).toList(),
-                                  months: List.generate(12, _monthLabel),
-                                  selectedMonth: _selectedMonth,
-                                  hoveredIndex: _hoveredChartIndex,
-                                ),
-                                size: Size.infinite,
-                              ),
-                        if (!_chartLoading &&
-                            _hoveredChartIndex != null &&
-                            _hoveredChartIndex! < points.length)
-                          Positioned(
-                            left: (points[_hoveredChartIndex!].dx - 80).clamp(0.0, chartSize.width - 160),
-                            top: (points[_hoveredChartIndex!].dy - 72).clamp(10.0, chartSize.height - 90),
-                            child: Container(
-                              width: 160,
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(10),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.black.withAlpha(20),
-                                    blurRadius: 16,
-                                    offset: const Offset(0, 6),
-                                  ),
-                                ],
-                                border: Border.all(color: OrgColors.border),
-                              ),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    List.generate(12, _monthLabel)[_hoveredChartIndex!],
-                                    style: GoogleFonts.beVietnamPro(
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w700,
-                                      color: OrgColors.primaryDark,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    '${_chartData[_hoveredChartIndex!]} proposal(s)',
-                                    style: GoogleFonts.beVietnamPro(
-                                      fontSize: 11,
-                                      color: OrgColors.darkGray,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    'Tap a dot for details',
-                                    style: GoogleFonts.beVietnamPro(
-                                      fontSize: 10,
-                                      color: OrgColors.textFaint,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                      ],
+            child: _chartLoading
+                ? const Center(
+                    child: CircularProgressIndicator(
+                      color: OrgColors.primaryDark,
+                      strokeWidth: 2,
                     ),
+                  )
+                : _ActivityBarChart(
+                    data: _chartData,
+                    selectedMonth: _selectedMonth,
+                    monthLabel: _monthLabel,
                   ),
-                );
-              },
-            ),
           ),
         ],
       ),
@@ -2591,188 +2451,102 @@ class _MerchSalesStatCard extends StatelessWidget {
   }
 }
 
-// ── Line chart painter ──────────────────────────────────────────────────────
-class _LineChartPainter extends CustomPainter {
-  final List<double> data;
-  final List<String> months;
+// ── Activity bar chart — monthly proposal counts via fl_chart ────────────────
+// A bar per month reads more clearly than a line for discrete counts, and
+// fl_chart owns touch/tooltip/scaling, so there's no custom hit-testing math
+// left to get wrong.
+class _ActivityBarChart extends StatelessWidget {
+  final List<int> data;
   final String selectedMonth;
-  final int? hoveredIndex;
+  final String Function(int) monthLabel;
 
-  const _LineChartPainter({
+  const _ActivityBarChart({
     required this.data,
-    required this.months,
     required this.selectedMonth,
-    this.hoveredIndex,
+    required this.monthLabel,
   });
 
   @override
-  void paint(Canvas canvas, Size size) {
-    if (data.isEmpty) return;
+  Widget build(BuildContext context) {
+    final maxVal = data.isEmpty ? 0 : data.reduce((a, b) => a > b ? a : b);
+    final maxY = (maxVal < 4 ? 4 : maxVal).toDouble() * 1.25;
 
-    const lp = 44.0, rp = 16.0, tp = 24.0, bp = 28.0;
-    final cw = size.width - lp - rp;
-    final ch = size.height - tp - bp;
-
-    double maxVal = data.reduce((a, b) => a > b ? a : b);
-    if (maxVal == 0) maxVal = 5;
-
-    final gridPaint = Paint()
-      ..color = const Color(0xFFF1F5F9)
-      ..strokeWidth = 1;
-    for (int i = 0; i <= 4; i++) {
-      final y = tp + (i / 4) * ch;
-      canvas.drawLine(Offset(lp, y), Offset(lp + cw, y), gridPaint);
-      final val = (maxVal * (1 - i / 4)).toInt();
-      _drawText(
-        canvas,
-        '$val',
-        Offset(lp - 8, y - 6),
-        fontSize: 10,
-        color: OrgColors.textFaint,
-        align: TextAlign.right,
-      );
-    }
-
-    final points = <Offset>[];
-    for (int i = 0; i < data.length; i++) {
-      points.add(
-        Offset(
-          lp + (i / (data.length - 1)) * cw,
-          tp + ch - (data[i] / maxVal) * ch,
+    return BarChart(
+      BarChartData(
+        maxY: maxY,
+        alignment: BarChartAlignment.spaceAround,
+        gridData: FlGridData(
+          show: true,
+          drawVerticalLine: false,
+          horizontalInterval: maxY / 4,
+          getDrawingHorizontalLine: (_) =>
+              const FlLine(color: Color(0xFFF1F5F9), strokeWidth: 1),
         ),
-      );
-    }
-
-    // Area fill
-    final areaPath = Path()..moveTo(points[0].dx, points[0].dy);
-    for (int i = 1; i < points.length; i++) {
-      final c1 = Offset(
-        (points[i - 1].dx + points[i].dx) / 2,
-        points[i - 1].dy,
-      );
-      final c2 = Offset((points[i - 1].dx + points[i].dx) / 2, points[i].dy);
-      areaPath.cubicTo(c1.dx, c1.dy, c2.dx, c2.dy, points[i].dx, points[i].dy);
-    }
-    areaPath
-      ..lineTo(points.last.dx, tp + ch)
-      ..lineTo(points.first.dx, tp + ch)
-      ..close();
-    canvas.drawPath(
-      areaPath,
-      Paint()
-        ..shader = LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [
-            OrgColors.primaryDark.withAlpha(71),
-            OrgColors.primaryDark.withAlpha(5),
-          ],
-        ).createShader(Rect.fromLTWH(0, tp, size.width, ch)),
-    );
-
-    // Line
-    final linePath = Path()..moveTo(points[0].dx, points[0].dy);
-    for (int i = 1; i < points.length; i++) {
-      final c1 = Offset(
-        (points[i - 1].dx + points[i].dx) / 2,
-        points[i - 1].dy,
-      );
-      final c2 = Offset((points[i - 1].dx + points[i].dx) / 2, points[i].dy);
-      linePath.cubicTo(c1.dx, c1.dy, c2.dx, c2.dy, points[i].dx, points[i].dy);
-    }
-    canvas.drawPath(
-      linePath,
-      Paint()
-        ..color = OrgColors.primaryDark
-        ..strokeWidth = 3
-        ..style = PaintingStyle.stroke
-        ..strokeCap = StrokeCap.round,
-    );
-
-    // Data points
-    for (int i = 0; i < points.length; i++) {
-      final isSelected = months[i] == selectedMonth;
-      final isHovered = hoveredIndex == i;
-      if (isSelected || isHovered) {
-        canvas.drawLine(
-          Offset(points[i].dx, points[i].dy),
-          Offset(points[i].dx, tp + ch),
-          Paint()
-            ..color = OrgColors.primaryDark.withAlpha(40)
-            ..strokeWidth = 1.5,
-        );
-        canvas.drawCircle(
-          points[i],
-          10,
-          Paint()..color = OrgColors.primaryDark.withAlpha(30),
-        );
-      }
-      canvas.drawCircle(
-        points[i],
-        isSelected || isHovered ? 6 : 4,
-        Paint()..color = OrgColors.white,
-      );
-      canvas.drawCircle(
-        points[i],
-        isSelected || isHovered ? 6 : 4,
-        Paint()
-          ..color = isSelected || isHovered ? OrgColors.accent : OrgColors.primaryDark
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 2,
-      );
-      if (isSelected || isHovered) {
-        _drawText(
-          canvas,
-          '${data[i].toInt()}',
-          Offset(points[i].dx, points[i].dy - 18),
-          fontSize: 12,
-          color: OrgColors.primaryDark,
-          fontWeight: FontWeight.bold,
-        );
-      }
-      _drawText(
-        canvas,
-        months[i],
-        Offset(points[i].dx, size.height - 16),
-        fontSize: 11,
-        color: isSelected || isHovered ? OrgColors.primaryDark : OrgColors.textFaint,
-        fontWeight: isSelected || isHovered ? FontWeight.bold : FontWeight.normal,
-      );
-    }
-  }
-
-  void _drawText(
-    Canvas canvas,
-    String text,
-    Offset position, {
-    double fontSize = 12,
-    Color color = const Color(0xFF64748B),
-    FontWeight fontWeight = FontWeight.normal,
-    TextAlign align = TextAlign.center,
-  }) {
-    final tp = TextPainter(
-      text: TextSpan(
-        text: text,
-        style: GoogleFonts.beVietnamPro(
-          fontSize: fontSize,
-          color: color,
-          fontWeight: fontWeight,
+        borderData: FlBorderData(show: false),
+        titlesData: FlTitlesData(
+          topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+          rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+          leftTitles: AxisTitles(
+            sideTitles: SideTitles(
+              showTitles: true,
+              reservedSize: 28,
+              interval: maxY / 4,
+              getTitlesWidget: (v, _) => Text(
+                '${v.toInt()}',
+                style: GoogleFonts.beVietnamPro(fontSize: 10, color: OrgColors.textFaint),
+              ),
+            ),
+          ),
+          bottomTitles: AxisTitles(
+            sideTitles: SideTitles(
+              showTitles: true,
+              getTitlesWidget: (v, _) {
+                final label = monthLabel(v.toInt());
+                final isSelected = label == selectedMonth;
+                return Padding(
+                  padding: const EdgeInsets.only(top: 6),
+                  child: Text(
+                    label,
+                    style: GoogleFonts.beVietnamPro(
+                      fontSize: 10,
+                      fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                      color: isSelected ? OrgColors.primaryDark : OrgColors.textFaint,
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
         ),
+        barTouchData: BarTouchData(
+          touchTooltipData: BarTouchTooltipData(
+            getTooltipColor: (_) => OrgColors.charcoal,
+            getTooltipItem: (group, _, rod, __) => BarTooltipItem(
+              '${monthLabel(group.x)}\n',
+              GoogleFonts.beVietnamPro(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 11),
+              children: [
+                TextSpan(
+                  text: '${rod.toY.toInt()} proposal(s)',
+                  style: GoogleFonts.beVietnamPro(color: Colors.white70, fontSize: 11),
+                ),
+              ],
+            ),
+          ),
+        ),
+        barGroups: List.generate(data.length, (i) {
+          final isSelected = monthLabel(i) == selectedMonth;
+          return BarChartGroupData(x: i, barRods: [
+            BarChartRodData(
+              toY: data[i].toDouble(),
+              color: isSelected ? OrgColors.primaryDark : OrgColors.primaryDark.withAlpha(110),
+              width: 14,
+              borderRadius: BorderRadius.circular(4),
+            ),
+          ]);
+        }),
       ),
-      textAlign: align,
-      textDirection: ui.TextDirection.ltr,
-    )..layout();
-    tp.paint(
-      canvas,
-      Offset(position.dx - tp.width / 2, position.dy - tp.height / 2),
     );
   }
-
-  @override
-  bool shouldRepaint(covariant _LineChartPainter old) =>
-      old.data != data ||
-      old.selectedMonth != selectedMonth ||
-      old.hoveredIndex != hoveredIndex;
 }
 
 // ── Event row ──────────────────────────────────────────────────────────────
@@ -3130,6 +2904,65 @@ class _OrgNotificationPanelState extends State<_OrgNotificationPanel> {
     await widget.onMarkAllRead();
   }
 
+  // The dropdown only shows ~400px worth of items — this opens the same
+  // (already fully-loaded) list in a taller dialog so "view all" actually
+  // shows more, instead of just closing the popover.
+  void _openAllNotifications() {
+    Navigator.of(context).pop();
+    showDialog(
+      context: context,
+      builder: (ctx) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        child: SizedBox(
+          width: 420,
+          height: MediaQuery.of(ctx).size.height * 0.75,
+          child: Column(
+            children: [
+              Container(
+                padding: const EdgeInsets.fromLTRB(18, 16, 12, 14),
+                decoration: const BoxDecoration(
+                  border: Border(bottom: BorderSide(color: OrgColors.border)),
+                ),
+                child: Row(
+                  children: [
+                    Text(
+                      'All Notifications',
+                      style: GoogleFonts.beVietnamPro(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                        color: OrgColors.charcoal,
+                      ),
+                    ),
+                    const Spacer(),
+                    IconButton(
+                      icon: const Icon(Icons.close_rounded, size: 20),
+                      onPressed: () => Navigator.of(ctx).pop(),
+                    ),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: _notifs.isEmpty
+                    ? Center(
+                        child: Text(
+                          'No notifications yet',
+                          style: GoogleFonts.beVietnamPro(fontSize: 13, color: OrgColors.textFaint),
+                        ),
+                      )
+                    : SingleChildScrollView(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: _buildGroupedItems(),
+                        ),
+                      ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   String _timeAgo(dynamic ts) {
     if (ts == null) return '';
     try {
@@ -3169,73 +3002,53 @@ class _OrgNotificationPanelState extends State<_OrgNotificationPanel> {
       child: GestureDetector(
         onTap: isRead ? null : () => _markRead(n['id'] as String),
         child: Container(
-          margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-          padding: const EdgeInsets.all(12),
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
           decoration: BoxDecoration(
             color: isRead ? Colors.white : const Color(0xFFFFF7ED),
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(
-              color: isRead
-                  ? OrgColors.border
-                  : OrgColors.primaryLight.withAlpha(100),
-            ),
-            boxShadow: isRead
-                ? []
-                : [
-                    BoxShadow(
-                      color: OrgColors.primaryDark.withAlpha(8),
-                      blurRadius: 4,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
+            border: const Border(bottom: BorderSide(color: Color(0xFFF1F5F9))),
           ),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Container(
-                width: 38,
-                height: 38,
+                width: 36,
+                height: 36,
                 decoration: BoxDecoration(
-                  color: isRead
-                      ? OrgColors.lightGray
-                      : OrgColors.primaryDark.withAlpha(20),
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(
-                    color: OrgColors.primaryDark.withAlpha(isRead ? 15 : 30),
-                  ),
+                  color: Colors.white,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: OrgColors.border),
                 ),
                 child: Icon(
-                  isRead
-                      ? Icons.notifications_outlined
-                      : Icons.notifications_active_rounded,
-                  size: 17,
+                  Icons.notifications_rounded,
+                  size: 16,
                   color: isRead ? OrgColors.textFaint : OrgColors.primaryDark,
                 ),
               ),
-              const SizedBox(width: 10),
+              const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        if (!isRead)
-                          Container(
-                            width: 6,
-                            height: 6,
-                            margin: const EdgeInsets.only(right: 6, top: 1),
-                            decoration: const BoxDecoration(
-                              color: OrgColors.primaryDark,
-                              shape: BoxShape.circle,
-                            ),
+                        Container(
+                          width: 6,
+                          height: 6,
+                          margin: const EdgeInsets.only(right: 6, top: 4),
+                          decoration: BoxDecoration(
+                            color: isRead ? OrgColors.border : OrgColors.primaryDark,
+                            shape: BoxShape.circle,
                           ),
+                        ),
                         Expanded(
                           child: Text(
                             n['title']?.toString() ?? 'Notification',
                             style: GoogleFonts.beVietnamPro(
-                              fontSize: 12.5,
+                              fontSize: 13,
                               fontWeight:
-                                  isRead ? FontWeight.w500 : FontWeight.w700,
+                                  isRead ? FontWeight.w600 : FontWeight.w700,
                               color: isRead
                                   ? OrgColors.darkGray
                                   : OrgColors.charcoal,
@@ -3244,42 +3057,25 @@ class _OrgNotificationPanelState extends State<_OrgNotificationPanel> {
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
-                        if (_timeAgo(n['timestamp']).isNotEmpty) ...[
-                          const SizedBox(width: 6),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 6,
-                              vertical: 2,
-                            ),
-                            decoration: BoxDecoration(
-                              color: isRead
-                                  ? const Color(0xFFF1F5F9)
-                                  : OrgColors.primaryDark.withAlpha(15),
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                            child: Text(
-                              _timeAgo(n['timestamp']),
-                              style: GoogleFonts.beVietnamPro(
-                                fontSize: 9,
-                                color: isRead
-                                    ? OrgColors.textFaint
-                                    : OrgColors.primaryDark,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
+                        const SizedBox(width: 8),
+                        Text(
+                          _timeAgo(n['timestamp']),
+                          style: GoogleFonts.beVietnamPro(
+                            fontSize: 11,
+                            color: OrgColors.textFaint,
                           ),
-                        ],
+                        ),
                       ],
                     ),
                     const SizedBox(height: 4),
                     Text(
                       n['message']?.toString() ?? '',
                       style: GoogleFonts.beVietnamPro(
-                        fontSize: 11.5,
-                        color: isRead ? OrgColors.textFaint : OrgColors.darkGray,
-                        height: 1.5,
+                        fontSize: 12,
+                        color: OrgColors.darkGray,
+                        height: 1.45,
                       ),
-                      maxLines: 2,
+                      maxLines: 3,
                       overflow: TextOverflow.ellipsis,
                     ),
                   ],
@@ -3303,15 +3099,16 @@ class _OrgNotificationPanelState extends State<_OrgNotificationPanel> {
     for (final groupKey in groupOrder) {
       final items = groups[groupKey];
       if (items == null || items.isEmpty) continue;
-      widgets.add(Padding(
-        padding: const EdgeInsets.fromLTRB(14, 10, 14, 4),
+      widgets.add(Container(
+        width: double.infinity,
+        color: OrgColors.lightGray,
+        padding: const EdgeInsets.fromLTRB(18, 8, 18, 8),
         child: Text(
           groupKey,
           style: GoogleFonts.beVietnamPro(
-            fontSize: 10,
-            fontWeight: FontWeight.w700,
-            color: const Color(0xFF9AA5B4),
-            letterSpacing: 0.8,
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: OrgColors.darkGray,
           ),
         ),
       ));
@@ -3333,85 +3130,42 @@ class _OrgNotificationPanelState extends State<_OrgNotificationPanel> {
         children: [
           // Header
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+            padding: const EdgeInsets.fromLTRB(18, 16, 16, 14),
             decoration: const BoxDecoration(
-              color: OrgColors.primaryDark,
-              borderRadius: BorderRadius.only(
-                topLeft: Radius.circular(16),
-                topRight: Radius.circular(16),
-              ),
+              color: Colors.white,
+              border: Border(bottom: BorderSide(color: OrgColors.border)),
+              borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
             ),
             child: Row(
               children: [
-                Container(
-                  width: 36,
-                  height: 36,
-                  decoration: BoxDecoration(
-                    color: Colors.white.withAlpha(25),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: const Icon(
-                    Icons.notifications_rounded,
-                    color: Colors.white,
-                    size: 18,
-                  ),
-                ),
-                const SizedBox(width: 12),
                 Text(
                   'Notifications',
                   style: GoogleFonts.beVietnamPro(
-                    color: Colors.white,
+                    color: OrgColors.charcoal,
                     fontWeight: FontWeight.w700,
-                    fontSize: 15,
-                    letterSpacing: 0.2,
+                    fontSize: 16,
                   ),
                 ),
-                if (unreadCount > 0) ...[
-                  const SizedBox(width: 10),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 4,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withAlpha(40),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.white.withAlpha(60)),
-                    ),
-                    child: Text(
-                      '$unreadCount new',
-                      style: GoogleFonts.beVietnamPro(
-                        color: Colors.white,
-                        fontSize: 10,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                ],
                 const Spacer(),
                 if (unreadCount > 0)
-                  MouseRegion(
-                    cursor: SystemMouseCursors.click,
-                    child: GestureDetector(
-                      onTap: _markAll,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 5,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withAlpha(20),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Text(
-                          'Mark all read',
+                  InkWell(
+                    onTap: _markAll,
+                    borderRadius: BorderRadius.circular(6),
+                    child: Padding(
+                      padding: const EdgeInsets.all(4),
+                      child: Row(mainAxisSize: MainAxisSize.min, children: [
+                        const Icon(Icons.done_all_rounded,
+                            size: 15, color: OrgColors.primaryDark),
+                        const SizedBox(width: 4),
+                        Text(
+                          'Mark all as read',
                           style: GoogleFonts.beVietnamPro(
-                            color: Colors.white.withAlpha(220),
-                            fontSize: 10,
+                            color: OrgColors.primaryDark,
+                            fontSize: 12,
                             fontWeight: FontWeight.w600,
                           ),
                         ),
-                      ),
+                      ]),
                     ),
                   ),
               ],
@@ -3468,27 +3222,28 @@ class _OrgNotificationPanelState extends State<_OrgNotificationPanel> {
               ),
             ),
           // Footer
-          Container(height: 1, color: const Color(0xFFF1F5F9)),
-          Container(
-            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-            decoration: const BoxDecoration(
-              color: Color(0xFFFAFBFC),
-              borderRadius: BorderRadius.only(
-                bottomLeft: Radius.circular(16),
-                bottomRight: Radius.circular(16),
+          if (_notifs.isNotEmpty)
+            InkWell(
+              onTap: _openAllNotifications,
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 13),
+                decoration: const BoxDecoration(
+                  color: Colors.white,
+                  border: Border(top: BorderSide(color: OrgColors.border)),
+                  borderRadius: BorderRadius.vertical(bottom: Radius.circular(16)),
+                ),
+                child: Text(
+                  'View all notifications',
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.beVietnamPro(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w600,
+                    color: OrgColors.primaryDark,
+                  ),
+                ),
               ),
             ),
-            child: Text(
-              _notifs.isEmpty
-                  ? 'No notifications'
-                  : '$unreadCount unread • ${_notifs.length} total',
-              style: GoogleFonts.beVietnamPro(
-                fontSize: 10,
-                color: OrgColors.textFaint,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ),
         ],
       ),
     );
