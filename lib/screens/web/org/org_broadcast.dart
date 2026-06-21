@@ -14,6 +14,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:image/image.dart' as img;
 import '../../../services/activity_logger.dart' as activity_log;
+import '../../../utils/platform_file_utils.dart' as platform_file_utils;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Design Tokens
@@ -179,28 +180,44 @@ class _OrgBroadcastScreenState extends State<OrgBroadcastScreen> {
 
   // ── File upload ──────────────────────────────────────────────────────────
   Future<void> _pickFiles() async {
-    final result = await FilePicker.platform.pickFiles(allowMultiple: true);
+    final result = await FilePicker.platform.pickFiles(allowMultiple: true, withData: true);
     if (result == null) return;
     setState(() => _isUploadingFile = true);
 
     try {
       int uploaded = 0;
+      int skipped = 0;
       for (final file in result.files) {
         final bytes = file.bytes;
-        if (bytes == null) continue;
-        if (bytes.length > 10 * 1024 * 1024) {
-          _snack('${file.name} exceeds 10 MB', isError: true);
+        if (bytes == null) {
+          // Some platforms don't populate `bytes` unless withData is set
+          // (now passed above), or the file came from a stream-only source.
+          debugPrint('Broadcast file attach: no bytes for "${file.name}" (path: ${file.path})');
+          skipped++;
           continue;
         }
-        final fileName = '${DateTime.now().millisecondsSinceEpoch}_${file.name}';
-        final ref = FirebaseStorage.instance.ref().child('broadcasts/${widget.orgId}/files/$fileName');
-        await ref.putData(bytes);
-        final url = await ref.getDownloadURL();
-        setState(() => _pendingAttachments.add(Attachment(name: file.name, url: url)));
-        uploaded++;
+        if (bytes.length > 10 * 1024 * 1024) {
+          _snack('${file.name} exceeds 10 MB', isError: true);
+          skipped++;
+          continue;
+        }
+        try {
+          final fileName = '${DateTime.now().millisecondsSinceEpoch}_${file.name}';
+          final ref = FirebaseStorage.instance.ref().child('broadcasts/${widget.orgId}/files/$fileName');
+          await ref.putData(bytes);
+          final url = await ref.getDownloadURL();
+          setState(() => _pendingAttachments.add(Attachment(name: file.name, url: url)));
+          uploaded++;
+        } on FirebaseException catch (e) {
+          debugPrint('Broadcast file upload failed for "${file.name}": ${e.code} ${e.message}');
+          _snack('Could not upload "${file.name}": ${e.message ?? e.code}', isError: true);
+          skipped++;
+        }
       }
       if (uploaded > 0) _snack('$uploaded file(s) attached');
+      if (uploaded == 0 && skipped == 0) _snack('No files were selected', isError: true);
     } catch (e) {
+      debugPrint('Broadcast file picker error: $e');
       _snack('Upload failed: $e', isError: true);
     } finally {
       if (mounted) setState(() => _isUploadingFile = false);
@@ -253,7 +270,11 @@ class _OrgBroadcastScreenState extends State<OrgBroadcastScreen> {
       final url = await ref.getDownloadURL();
       setState(() => _pendingImageUrl = url);
       _snack('Image ready to send');
+    } on FirebaseException catch (e) {
+      debugPrint('Broadcast image upload failed: ${e.code} ${e.message}');
+      _snack('Failed to upload image: ${e.message ?? e.code}', isError: true);
     } catch (e) {
+      debugPrint('Broadcast image upload error: $e');
       _snack('Failed to upload image: $e', isError: true);
     } finally {
       if (mounted) setState(() => _isUploadingImage = false);
@@ -1481,13 +1502,23 @@ class _InfoFileRow extends StatelessWidget {
   final Attachment attachment;
   const _InfoFileRow({required this.attachment});
 
+  Future<void> _open(BuildContext context) async {
+    try {
+      await platform_file_utils.openUrl(attachment.url);
+    } catch (e) {
+      Clipboard.setData(ClipboardData(text: attachment.url));
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not open file — link copied instead: $e')),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return InkWell(
-      onTap: () {
-        Clipboard.setData(ClipboardData(text: attachment.url));
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Link copied to clipboard'), duration: Duration(seconds: 2)));
-      },
+      onTap: () => _open(context),
       borderRadius: BorderRadius.circular(8),
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 7),
@@ -1496,7 +1527,7 @@ class _InfoFileRow extends StatelessWidget {
             const Icon(Icons.insert_drive_file_outlined, size: 16, color: _C.info),
             const SizedBox(width: 10),
             Expanded(child: Text(attachment.name, style: GoogleFonts.beVietnamPro(fontSize: 12.5, color: _C.textMid), overflow: TextOverflow.ellipsis)),
-            const Icon(Icons.copy_outlined, size: 13, color: _C.textFaint),
+            const Icon(Icons.open_in_new_rounded, size: 13, color: _C.textFaint),
           ],
         ),
       ),
@@ -2029,15 +2060,23 @@ class _AttachmentChip extends StatelessWidget {
   final Attachment att;
   const _AttachmentChip({required this.att});
 
+  Future<void> _open(BuildContext context) async {
+    try {
+      await platform_file_utils.openUrl(att.url);
+    } catch (e) {
+      Clipboard.setData(ClipboardData(text: att.url));
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not open file — link copied instead: $e')),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return InkWell(
-      onTap: () {
-        Clipboard.setData(ClipboardData(text: att.url));
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Link copied to clipboard'), duration: Duration(seconds: 2)),
-        );
-      },
+      onTap: () => _open(context),
       borderRadius: BorderRadius.circular(8),
       child: Container(
         margin: const EdgeInsets.only(bottom: 6),
@@ -2065,7 +2104,7 @@ class _AttachmentChip extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 8),
-            const Icon(Icons.copy_outlined, size: 13, color: Colors.white),
+            const Icon(Icons.open_in_new_rounded, size: 13, color: Colors.white),
           ],
         ),
       ),

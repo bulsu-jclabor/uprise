@@ -11,7 +11,6 @@ import 'package:uprise/widgets/admin_export_button.dart';
 import 'export_util.dart';
 import 'export_pdf.dart';
 import '../../../services/activity_logger.dart' as activity_log;
-import '../../../services/notification_service.dart';
 import '../../theme/app_theme.dart';
 import 'package:intl/intl.dart';
 
@@ -202,9 +201,6 @@ class _EventProposalsState extends State<EventProposals> {
 
   // Cache for organization logos
   final Map<String, String> _orgLogoCache = {};
-
-  // Proposals currently being published, to guard against double-tap duplicates
-  final Set<String> _publishingIds = {};
 
   // Helper to check if widget is still mounted
   bool get _isMounted => mounted;
@@ -678,15 +674,6 @@ class _EventProposalsState extends State<EventProposals> {
                         color: const Color(0xFFDC2626),
                         // CHANGE: call rejection reason dialog instead of _confirmSetStatus
                         onTap: () => _showRejectReasonDialog(docId, data['title'] ?? 'this event'),
-                      ),
-                      const SizedBox(width: 4),
-                    ],
-                    if (status == 'approved' && !isPublished) ...[
-                      _ActionIconButton(
-                        icon: Icons.publish_rounded,
-                        tooltip: 'Publish to Students',
-                        color: const Color(0xFF2563EB),
-                        onTap: () => _confirmPublish(docId, data),
                       ),
                       const SizedBox(width: 4),
                     ],
@@ -1283,259 +1270,6 @@ class _EventProposalsState extends State<EventProposals> {
     }
   }
 
-  // ── Publish: turn an approved proposal into a live student-facing event ──
-  void _confirmPublish(String docId, Map<String, dynamic> data) {
-    final title = data['title'] ?? 'this event';
-    showDialog(
-      context: context,
-      barrierColor: Colors.black54,
-      builder: (ctx) => Dialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        child: Container(
-          width: 420,
-          padding: const EdgeInsets.all(28),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(children: [
-                Container(
-                  width: 42,
-                  height: 42,
-                  decoration: BoxDecoration(color: const Color(0xFFEFF6FF), borderRadius: BorderRadius.circular(10)),
-                  child: const Icon(Icons.publish_rounded, color: Color(0xFF2563EB), size: 20),
-                ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Text('Publish Event',
-                      style: GoogleFonts.beVietnamPro(
-                          fontSize: 17, fontWeight: FontWeight.w700, color: const Color(0xFF1A202C))),
-                ),
-              ]),
-              const SizedBox(height: 16),
-              Text(
-                'Publish "$title" to the student events page? Students will be able to view its full details and register immediately.',
-                style: GoogleFonts.beVietnamPro(fontSize: 14, color: const Color(0xFF64748B), height: 1.5),
-              ),
-              const SizedBox(height: 24),
-              Row(mainAxisAlignment: MainAxisAlignment.end, children: [
-                OutlinedButton(
-                  onPressed: () => Navigator.pop(ctx),
-                  style: OutlinedButton.styleFrom(
-                    side: const BorderSide(color: Color(0xFFE2E6EA)),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 11),
-                  ),
-                  child: Text('Cancel',
-                      style: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF374151))),
-                ),
-                const SizedBox(width: 10),
-                ElevatedButton(
-                  onPressed: () {
-                    Navigator.pop(ctx);
-                    _publishProposalAsEvent(docId);
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF2563EB),
-                    foregroundColor: Colors.white,
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 11),
-                  ),
-                  child: Text('Publish',
-                      style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600)),
-                ),
-              ]),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Future<void> _publishProposalAsEvent(String proposalId) async {
-    if (_publishingIds.contains(proposalId)) return;
-    _publishingIds.add(proposalId);
-    try {
-      final doc = await FirebaseFirestore.instance
-          .collection('event_proposals')
-          .doc(proposalId)
-          .get();
-
-      if (!doc.exists) return;
-
-      final data = doc.data() as Map<String, dynamic>;
-
-      if (data['status'] != 'approved') {
-        if (_isMounted) {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text('Only approved proposals can be published.'),
-            backgroundColor: Colors.orange,
-            behavior: SnackBarBehavior.floating,
-          ));
-        }
-        return;
-      }
-      if ((data['publishedEventId'] ?? '').toString().isNotEmpty) {
-        if (_isMounted) {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text('This event has already been published.'),
-            backgroundColor: Colors.orange,
-            behavior: SnackBarBehavior.floating,
-          ));
-        }
-        return;
-      }
-
-      final title = data['title'] ?? 'Untitled Event';
-      final description = data['description'] ?? '';
-      final location = data['location'] ?? 'TBA';
-      final category = data['category'] ?? 'Other';
-      final orgId = data['orgId'] ?? '';
-      final orgName = data['orgName'] ?? 'Unknown Organization';
-      final proposalDate = data['date'] as Timestamp?;
-      final date = proposalDate?.toDate() ?? DateTime.now();
-      final String startTime = (data['startTime'] ?? data['time'] ?? '').toString();
-      final String endTime = (data['endTime'] ?? (startTime.isNotEmpty ? _addOneHourToTimeString(startTime) : '')).toString();
-
-      final int capacity = (data['capacity'] is num) ? (data['capacity'] as num).toInt() : 0;
-      final String guestSpeaker = (data['guestSpeaker'] ?? '').toString();
-      final List<String> resources = (data['resources'] is List) ? List<String>.from(data['resources']) : [];
-      final List<String> labPreparation = (data['labPreparation'] is List) ? List<String>.from(data['labPreparation']) : [];
-      final List<String> tags = (data['tags'] is List) ? List<String>.from(data['tags']) : [];
-      final audience = (data['audience'] ?? 'Public').toString();
-
-      // Upload the proposal's banner image (stored as base64) to Storage so the
-      // student app — which only renders http(s)/asset URLs, not base64 — can show it.
-      String bannerUrl = '';
-      final imgB64 = data['imageBase64'] as String?;
-      if (imgB64 != null && imgB64.isNotEmpty) {
-        try {
-          final bytes = base64Decode(imgB64);
-          final imageName = (data['imageName'] ?? 'banner.jpg').toString();
-          final ext = imageName.contains('.') ? imageName.split('.').last.toLowerCase() : 'jpg';
-          const contentTypes = {'png': 'image/png', 'gif': 'image/gif', 'webp': 'image/webp'};
-          final contentType = contentTypes[ext] ?? 'image/jpeg';
-          final ref = FirebaseStorage.instance.ref().child('event_banners/$proposalId.$ext');
-          await ref.putData(bytes, SettableMetadata(contentType: contentType));
-          bannerUrl = await ref.getDownloadURL();
-        } catch (e) {
-          debugPrint('Error uploading event banner: $e');
-        }
-      }
-
-      final logoUrl = (data['orgLogoUrl'] as String?)?.isNotEmpty == true
-          ? data['orgLogoUrl'] as String
-          : (await _fetchOrgLogo(orgId)) ?? '';
-
-      final eventData = {
-        'orgId': orgId,
-        'orgName': orgName,
-        'title': title,
-        'description': description,
-        'location': location,
-        'category': category,
-        'audience': audience,
-        'date': Timestamp.fromDate(date),
-        'startTime': startTime,
-        'endTime': endTime,
-        'capacity': capacity,
-        'slotsLeft': capacity,
-        'guestSpeaker': guestSpeaker,
-        'resources': resources,
-        'labPreparation': labPreparation,
-        'tags': tags,
-        'status': 'approved',
-        'isPublic': true,
-        'bannerUrl': bannerUrl,
-        'logoUrl': logoUrl,
-        'createdAt': FieldValue.serverTimestamp(),
-        'createdFromProposalId': proposalId,
-      };
-
-      final eventRef = await FirebaseFirestore.instance.collection('events').add(eventData);
-
-      await FirebaseFirestore.instance.collection('event_proposals').doc(proposalId).update({
-        'publishedEventId': eventRef.id,
-        'publishedAt': FieldValue.serverTimestamp(),
-        'publishedBy': FirebaseAuth.instance.currentUser?.uid ?? '',
-      });
-
-      // Notify all org members that their event is now live for students
-      () async {
-        try {
-          await NotificationService.sendToOrgMembers(
-            orgId: orgId,
-            title: 'Event Published: $title',
-            body: 'An event on ${DateFormat('MMM dd, yyyy').format(date)} is now live on the student events page.',
-            type: 'event_published',
-            data: {'eventTitle': title, 'eventDate': date.toIso8601String(), 'eventId': eventRef.id},
-          );
-        } catch (_) {}
-      }();
-
-      await activity_log.ActivityLogger.log(
-        action: 'publish_event_from_proposal',
-        module: 'Event Management',
-        details: {
-          'proposalId': proposalId,
-          'eventId': eventRef.id,
-          'eventTitle': title,
-          'orgId': orgId,
-        },
-      );
-
-      if (_isMounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('✅ Event published to the student events page!'),
-            backgroundColor: Color(0xFF059669),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
-    } catch (e) {
-      debugPrint('Error publishing event from proposal: $e');
-      if (_isMounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('⚠️ Publish failed: $e'),
-            backgroundColor: Colors.orange,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
-    } finally {
-      _publishingIds.remove(proposalId);
-    }
-  }
-
-  String _addOneHourToTimeString(String timeStr) {
-    try {
-      final match = RegExp(r'(\d+):(\d+)\s*(AM|PM)', caseSensitive: false).firstMatch(timeStr);
-      if (match != null) {
-        int hour = int.parse(match.group(1)!);
-        final minute = int.parse(match.group(2)!);
-        final isPM = match.group(3)!.toUpperCase() == 'PM';
-        
-        if (isPM && hour != 12) hour += 12;
-        if (!isPM && hour == 12) hour = 0;
-        
-        final dateTime = DateTime(2024, 1, 1, hour, minute);
-        final newDateTime = dateTime.add(const Duration(hours: 1));
-        
-        int newHour = newDateTime.hour;
-        final newMinute = newDateTime.minute;
-        final newIsPM = newHour >= 12;
-        if (newHour > 12) newHour -= 12;
-        if (newHour == 0) newHour = 12;
-        
-        return '$newHour:${newMinute.toString().padLeft(2, '0')} ${newIsPM ? 'PM' : 'AM'}';
-      }
-    } catch (e) {}
-    return '10:00 AM';
-  }
-
   Future<void> _setStatus(String docId, String title, String newStatus) async {
     try {
       await FirebaseFirestore.instance.collection('event_proposals').doc(docId).update({
@@ -2009,39 +1743,26 @@ class _EventProposalsState extends State<EventProposals> {
                     ),
                     const SizedBox(width: 10),
                   ],
-                  if (status == 'approved' && !isPublished) ...[
-                    Expanded(
-                      child: ElevatedButton.icon(
-                        onPressed: () {
-                          Navigator.pop(ctx);
-                          _confirmPublish(docId, data);
-                        },
-                        icon: const Icon(Icons.publish_rounded, size: 15),
-                        label: Text('Publish to Students',
-                            style: GoogleFonts.beVietnamPro(
-                                fontSize: 13, fontWeight: FontWeight.w600)),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF2563EB),
-                          foregroundColor: Colors.white,
-                          elevation: 0,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                          padding: const EdgeInsets.symmetric(vertical: 11),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                  ],
-                  if (status == 'approved' && isPublished)
+                  if (status == 'approved') ...[
                     Padding(
                       padding: const EdgeInsets.only(right: 10),
                       child: Row(mainAxisSize: MainAxisSize.min, children: [
-                        const Icon(Icons.check_circle_rounded, size: 15, color: Color(0xFF2563EB)),
+                        Icon(
+                          isPublished ? Icons.check_circle_rounded : Icons.hourglass_top_rounded,
+                          size: 15,
+                          color: isPublished ? const Color(0xFF2563EB) : const Color(0xFF9AA5B4),
+                        ),
                         const SizedBox(width: 6),
-                        Text('Published to students',
-                            style: GoogleFonts.beVietnamPro(
-                                fontSize: 13, fontWeight: FontWeight.w600, color: const Color(0xFF2563EB))),
+                        Text(
+                          isPublished ? 'Published to students' : 'Awaiting org to publish',
+                          style: GoogleFonts.beVietnamPro(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: isPublished ? const Color(0xFF2563EB) : const Color(0xFF9AA5B4)),
+                        ),
                       ]),
                     ),
+                  ],
                   if (status != 'archived')
                     OutlinedButton.icon(
                       onPressed: () {

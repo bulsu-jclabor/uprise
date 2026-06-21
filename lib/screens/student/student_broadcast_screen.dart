@@ -6,6 +6,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Custom Colors - UNIFORM (MATCHING ORANGE TABS)
@@ -1308,18 +1309,28 @@ class _AttachmentLink extends StatelessWidget {
 
   const _AttachmentLink({required this.attachment});
 
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: () {
-        Clipboard.setData(ClipboardData(text: attachment.url));
+  Future<void> _open(BuildContext context) async {
+    final uri = Uri.tryParse(attachment.url);
+    final opened = uri != null && await canLaunchUrl(uri)
+        ? await launchUrl(uri, mode: LaunchMode.externalApplication)
+        : false;
+    if (!opened) {
+      Clipboard.setData(ClipboardData(text: attachment.url));
+      if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Link copied to clipboard'),
+            content: Text('Could not open file — link copied instead'),
             duration: Duration(seconds: 2),
           ),
         );
-      },
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: () => _open(context),
       child: Container(
         margin: const EdgeInsets.only(bottom: 6),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
@@ -1344,7 +1355,7 @@ class _AttachmentLink extends StatelessWidget {
                   overflow: TextOverflow.ellipsis),
             ),
             const SizedBox(width: 8),
-            const Icon(Icons.copy_outlined, size: 13, color: Colors.white),
+            const Icon(Icons.open_in_new_rounded, size: 13, color: Colors.white),
           ],
         ),
       ),
