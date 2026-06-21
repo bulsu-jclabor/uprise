@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'student_broadcast_screen.dart';
 
 // ─────────────────────────────────────────────────────────────
@@ -250,61 +251,103 @@ class _StudentOrganizationsDetailsScreenState
                         ),
                         const SizedBox(height: 24),
 
-                        // ── Organization Adviser ──
-                        Container(
-                          padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            color: AppColors.background,
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Row(
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.all(10),
-                                decoration: BoxDecoration(
-                                  color: Colors.orange.withOpacity(0.1),
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
-                                child: Icon(
-                                  Icons.person_outline,
-                                  color: Colors.orange,
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    const Text(
-                                      'Organization Adviser',
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        color: Colors.grey,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 2),
-                                    Text(
-                                      org['adviserName'] ?? 'No adviser listed',
-                                      style: const TextStyle(
-                                        fontSize: 14,
-                                        fontWeight: FontWeight.w500,
-                                      ),
-                                    ),
-                                    if (org['adviserTitle'] != null)
-                                      Text(
-                                        org['adviserTitle'],
-                                        style: TextStyle(
-                                          fontSize: 12,
-                                          color: Colors.grey[600],
+                        // ── Organization Adviser(s) ──
+                        Builder(builder: (context) {
+                          final adviserList = (org['advisers'] as List?)
+                              ?.whereType<Map<String, dynamic>>()
+                              .toList();
+                          final hasMultiple = adviserList != null && adviserList.isNotEmpty;
+                          final photoUrl = org['adviserPhotoUrl'] as String?;
+                          ImageProvider? photoProvider;
+                          if (photoUrl != null && photoUrl.isNotEmpty) {
+                            try {
+                              photoProvider = photoUrl.startsWith('data:')
+                                  ? MemoryImage(base64Decode(photoUrl.split(',').last))
+                                  : NetworkImage(photoUrl) as ImageProvider;
+                            } catch (_) {}
+                          }
+                          final advisersToShow = hasMultiple
+                              ? adviserList!
+                              : [
+                                  {
+                                    'name': org['adviserName'] ?? 'No adviser listed',
+                                    'title': org['adviserTitle'],
+                                  }
+                                ];
+                          return Container(
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: AppColors.background,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                for (final adv in advisersToShow)
+                                  Padding(
+                                    padding: const EdgeInsets.only(bottom: 4),
+                                    child: Row(
+                                      children: [
+                                        photoProvider != null
+                                            ? CircleAvatar(radius: 20, backgroundImage: photoProvider)
+                                            : Container(
+                                                padding: const EdgeInsets.all(10),
+                                                decoration: BoxDecoration(
+                                                  color: Colors.orange.withOpacity(0.1),
+                                                  borderRadius: BorderRadius.circular(10),
+                                                ),
+                                                child: const Icon(Icons.person_outline, color: Colors.orange),
+                                              ),
+                                        const SizedBox(width: 12),
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              const Text('Organization Adviser',
+                                                  style: TextStyle(fontSize: 12, color: Colors.grey)),
+                                              const SizedBox(height: 2),
+                                              Text(
+                                                (adv['name'] ?? 'No adviser listed').toString(),
+                                                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+                                              ),
+                                              if ((adv['title'] ?? '').toString().isNotEmpty)
+                                                Text((adv['title']).toString(),
+                                                    style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+                                            ],
+                                          ),
                                         ),
-                                      ),
-                                  ],
-                                ),
-                              ),
+                                      ],
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          );
+                        }),
+                        const SizedBox(height: 16),
+
+                        // ── Connect / Social Links ──
+                        if ([org['facebook'], org['instagram'], org['twitter'], org['gmail']]
+                            .any((v) => (v ?? '').toString().trim().isNotEmpty)) ...[
+                          const Text('Connect',
+                              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                          const SizedBox(height: 10),
+                          Wrap(
+                            spacing: 10,
+                            runSpacing: 10,
+                            children: [
+                              if ((org['facebook'] ?? '').toString().trim().isNotEmpty)
+                                _SocialChip(icon: Icons.facebook_rounded, label: 'Facebook', url: org['facebook']),
+                              if ((org['instagram'] ?? '').toString().trim().isNotEmpty)
+                                _SocialChip(icon: Icons.camera_alt_outlined, label: 'Instagram', url: org['instagram']),
+                              if ((org['twitter'] ?? '').toString().trim().isNotEmpty)
+                                _SocialChip(icon: Icons.alternate_email_rounded, label: 'Twitter/X', url: org['twitter']),
+                              if ((org['gmail'] ?? '').toString().trim().isNotEmpty)
+                                _SocialChip(icon: Icons.email_outlined, label: org['gmail'], url: 'mailto:${org['gmail']}'),
                             ],
                           ),
-                        ),
-                        const SizedBox(height: 24),
+                          const SizedBox(height: 24),
+                        ] else
+                          const SizedBox(height: 8),
 
                         // ── Executive Officers ──
                         const Text(
@@ -592,6 +635,46 @@ class _StudentOrganizationsDetailsScreenState
             ),
           );
         },
+      ),
+    );
+  }
+}
+
+class _SocialChip extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String url;
+  const _SocialChip({required this.icon, required this.label, required this.url});
+
+  Future<void> _open(BuildContext context) async {
+    final uri = Uri.tryParse(url);
+    final opened = uri != null && await canLaunchUrl(uri)
+        ? await launchUrl(uri, mode: LaunchMode.externalApplication)
+        : false;
+    if (!opened && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not open link')),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: () => _open(context),
+      borderRadius: BorderRadius.circular(20),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: Colors.orange.withOpacity(0.08),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: Colors.orange.withOpacity(0.25)),
+        ),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          Icon(icon, size: 15, color: Colors.orange),
+          const SizedBox(width: 6),
+          Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.black87)),
+        ]),
       ),
     );
   }

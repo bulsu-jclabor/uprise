@@ -1028,6 +1028,7 @@ class RegistrationScreenState extends State<RegistrationScreen>
   final _schoolCtrl    = TextEditingController();
   final _courseCtrl    = TextEditingController();
   final _reasonCtrl    = TextEditingController();
+  String? _classification; // 'BulSUan' or 'Outsider' — determines which events this guest can see
 
   bool _isLoading   = false;
   int  _currentStep = 0;
@@ -1074,6 +1075,10 @@ class RegistrationScreenState extends State<RegistrationScreen>
       }
       if (_reasonCtrl.text.trim().length < 20) {
         _snack('Please describe your purpose in at least 20 characters.');
+        return;
+      }
+      if (_classification == null) {
+        _snack('Please select whether you are a BulSUan or an Outsider.');
         return;
       }
     }
@@ -1145,6 +1150,7 @@ class RegistrationScreenState extends State<RegistrationScreen>
         'phone'       : _phoneCtrl.text.trim(),
         'course'      : _courseCtrl.text.trim(),
         'type'        : 'guest',
+        'classification': _classification,
       });
 
       if (mounted) {
@@ -1219,6 +1225,8 @@ class RegistrationScreenState extends State<RegistrationScreen>
           schoolCtrl: _schoolCtrl,
           courseCtrl: _courseCtrl,
           reasonCtrl: _reasonCtrl,
+          classification: _classification,
+          onClassificationChanged: (v) => setState(() => _classification = v),
           onNext:     _nextStep,
           onBack:     _prevStep,
         );
@@ -1282,10 +1290,14 @@ class _PersonalStep extends StatelessWidget {
 
 class _DetailsStep extends StatelessWidget {
   final TextEditingController schoolCtrl, courseCtrl, reasonCtrl;
+  final String? classification;
+  final ValueChanged<String> onClassificationChanged;
   final VoidCallback onNext, onBack;
   const _DetailsStep({
     required this.schoolCtrl, required this.courseCtrl,
-    required this.reasonCtrl, required this.onNext, required this.onBack,
+    required this.reasonCtrl, required this.classification,
+    required this.onClassificationChanged,
+    required this.onNext, required this.onBack,
   });
 
   @override
@@ -1300,6 +1312,34 @@ class _DetailsStep extends StatelessWidget {
             _Field(label: 'Program / Course', controller: courseCtrl,
                 hint: 'e.g. BSIT, BSCS, BSCPE',
                 icon: Icons.menu_book_outlined, isRequired: false),
+          ]),
+      const SizedBox(height: 14),
+      _FormCard(title: 'Affiliation Type', icon: Icons.badge_outlined,
+          children: [
+            Text(
+              'Are you a BulSUan (BSU student/affiliate) or an Outsider? This determines which events you can see.',
+              style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF6B7280), height: 1.4),
+            ),
+            const SizedBox(height: 12),
+            Row(children: [
+              Expanded(
+                child: _ClassificationOption(
+                  label: 'BulSUan',
+                  icon: Icons.school_rounded,
+                  selected: classification == 'BulSUan',
+                  onTap: () => onClassificationChanged('BulSUan'),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _ClassificationOption(
+                  label: 'Outsider',
+                  icon: Icons.public_rounded,
+                  selected: classification == 'Outsider',
+                  onTap: () => onClassificationChanged('Outsider'),
+                ),
+              ),
+            ]),
           ]),
       const SizedBox(height: 14),
       _FormCard(title: 'Purpose', icon: Icons.description_outlined,
@@ -1810,6 +1850,39 @@ class _PrimaryBtn extends StatelessWidget {
                     strokeWidth: 2.5, color: Colors.white))
             : Text(label, style: GoogleFonts.beVietnamPro(
                 fontSize: 15, fontWeight: FontWeight.w700)),
+      ),
+    );
+  }
+}
+
+class _ClassificationOption extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final bool selected;
+  final VoidCallback onTap;
+  const _ClassificationOption({
+    required this.label, required this.icon, required this.selected, required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
+        padding: const EdgeInsets.symmetric(vertical: 14),
+        decoration: BoxDecoration(
+          color: selected ? _kOrangeLight : Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: selected ? _kOrange : const Color(0xFFE2E8F0), width: selected ? 1.5 : 1),
+        ),
+        child: Column(children: [
+          Icon(icon, size: 22, color: selected ? _kOrange : Colors.grey),
+          const SizedBox(height: 6),
+          Text(label, style: GoogleFonts.beVietnamPro(
+              fontSize: 13, fontWeight: FontWeight.w700,
+              color: selected ? _kOrange : Colors.black54)),
+        ]),
       ),
     );
   }

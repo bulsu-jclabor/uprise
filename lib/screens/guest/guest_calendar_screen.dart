@@ -15,6 +15,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 
+import 'guest_auth_service.dart';
 import 'guest_events_screen.dart'; // reuses GuestEventDetailScreen + _FirestoreEvent
 
 // ─────────────────────────────────────────────────────────────
@@ -58,11 +59,40 @@ class _GuestCalendarScreenState extends State<GuestCalendarScreen> {
   StreamSubscription<QuerySnapshot>? _sub;
   final Map<String,FirestoreEvent> _eventMap = {};
   bool _loading = true;
+  String _guestClassification = 'Outsider';
 
   @override
   void initState() {
     super.initState();
+    _init();
+  }
+
+  Future<void> _init() async {
+    final svc = GuestAuthService();
+    if (svc.isAuthenticated && svc.docId != null) {
+      try {
+        final doc = await FirebaseFirestore.instance
+            .collection('external_requests')
+            .doc(svc.docId)
+            .get();
+        if (doc.data()?['classification'] == 'BulSUan') {
+          _guestClassification = 'BulSUan';
+        }
+      } catch (_) {}
+    }
     _subscribe();
+  }
+
+  bool _audienceAllowed(String audience) {
+    switch (audience) {
+      case 'Bulsuan':
+        return _guestClassification == 'BulSUan';
+      case 'CICT Only':
+      case 'Members Only':
+        return false;
+      default:
+        return true;
+    }
   }
 
   @override
@@ -80,7 +110,7 @@ class _GuestCalendarScreenState extends State<GuestCalendarScreen> {
       for (final doc in snap.docs) {
         final d = doc.data() as Map<String, dynamic>;
         final aud = (d['audience'] as String?) ?? 'Public';
-        if (aud == 'Members Only') { _eventMap.remove(doc.id); continue; }
+        if (!_audienceAllowed(aud)) { _eventMap.remove(doc.id); continue; }
         _eventMap[doc.id] =FirestoreEvent.fromDoc(doc);
       }
       final ids = snap.docs.map((d) => d.id).toSet();

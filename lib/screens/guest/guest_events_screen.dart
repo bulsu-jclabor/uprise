@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
+import 'guest_auth_service.dart';
 
 // ─────────────────────────────────────────────────────────────
 // Theme
@@ -106,10 +107,47 @@ class _GuestEventsScreenState extends State<GuestEventsScreen> {
   // cache org logos to avoid re-fetching
   final Map<String, String> _orgLogoCache = {};
 
+  // Default to the most restrictive tier — unregistered/visitor guests (no
+  // approved external_requests doc yet) never see Bulsuan-only events.
+  String _guestClassification = 'Outsider';
+
   @override
   void initState() {
     super.initState();
+    _init();
+  }
+
+  Future<void> _init() async {
+    await _loadGuestClassification();
     _subscribe();
+  }
+
+  Future<void> _loadGuestClassification() async {
+    final svc = GuestAuthService();
+    if (!svc.isAuthenticated || svc.docId == null) return;
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('external_requests')
+          .doc(svc.docId)
+          .get();
+      if (doc.data()?['classification'] == 'BulSUan') {
+        _guestClassification = 'BulSUan';
+      }
+    } catch (_) {}
+  }
+
+  // 'Public' is open to everyone; 'Bulsuan' only to BulSUan-classified
+  // guests; 'CICT Only' and 'Members Only' are never shown to guests at all.
+  bool _audienceAllowed(String audience) {
+    switch (audience) {
+      case 'Bulsuan':
+        return _guestClassification == 'BulSUan';
+      case 'CICT Only':
+      case 'Members Only':
+        return false;
+      default:
+        return true;
+    }
   }
 
   @override
@@ -129,8 +167,8 @@ class _GuestEventsScreenState extends State<GuestEventsScreen> {
       for (final doc in snap.docs) {
         final d = doc.data() as Map<String, dynamic>;
         final audience = (d['audience'] as String?) ?? 'Public';
-        // Show only public-facing events to guests
-        if (audience == 'Members Only') {
+        // Show only events this guest's classification allows
+        if (!_audienceAllowed(audience)) {
           _eventMap.remove(doc.id);
           continue;
         }
@@ -158,7 +196,7 @@ class _GuestEventsScreenState extends State<GuestEventsScreen> {
       for (final doc in snap.docs) {
         final d = doc.data() as Map<String, dynamic>;
         final audience = (d['audience'] as String?) ?? 'Public';
-        if (audience == 'Members Only') {
+        if (!_audienceAllowed(audience)) {
           _eventMap.remove('proposal_${doc.id}');
           continue;
         }

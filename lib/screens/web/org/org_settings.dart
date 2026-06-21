@@ -438,6 +438,7 @@ class _SecurityTabState extends State<_SecurityTab> {
       await activity_log.ActivityLogger.log(
         action: 'change_password',
         module: 'settings',
+        severity: 'security',
         details: {'orgId': widget.orgId},
       );
       if (mounted) {
@@ -476,6 +477,7 @@ class _SecurityTabState extends State<_SecurityTab> {
     await activity_log.ActivityLogger.log(
       action: value ? 'enable_2fa' : 'disable_2fa',
       module: 'settings',
+      severity: 'security',
       details: {'orgId': widget.orgId},
     );
     if (mounted) {

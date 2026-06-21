@@ -109,6 +109,7 @@ class _OrgBroadcastScreenState extends State<OrgBroadcastScreen> {
   // separate route/overlay and never rebuilds from this State's setState.
   final ValueNotifier<bool> _uploadingChannelPhoto = ValueNotifier(false);
   int _memberCount = 0;
+  int _lastFeedLength = -1;
   String _searchQuery = '';
 
   String? _channelName;
@@ -1135,11 +1136,17 @@ class _OrgBroadcastScreenState extends State<OrgBroadcastScreen> {
             return _buildEmptySearchState();
           }
 
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (_scrollCtrl.hasClients) {
-              _scrollCtrl.animateTo(_scrollCtrl.position.maxScrollExtent, duration: const Duration(milliseconds: 200), curve: Curves.easeOut);
-            }
-          });
+          // Only auto-scroll when the message list actually changes — not on
+          // every rebuild (e.g. every keystroke in the compose field), which
+          // was forcing a visible scroll-jump/"refresh" on each letter typed.
+          if (items.length != _lastFeedLength) {
+            _lastFeedLength = items.length;
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (_scrollCtrl.hasClients) {
+                _scrollCtrl.animateTo(_scrollCtrl.position.maxScrollExtent, duration: const Duration(milliseconds: 200), curve: Curves.easeOut);
+              }
+            });
+          }
 
           return ListView.builder(
             controller: _scrollCtrl,
@@ -1385,7 +1392,6 @@ class _OrgBroadcastScreenState extends State<OrgBroadcastScreen> {
                           minLines: 1,
                           keyboardType: TextInputType.multiline,
                           textInputAction: TextInputAction.newline,
-                          onChanged: (v) => setState(() {}),
                           decoration: InputDecoration(
                             hintText: 'Aa',
                             hintStyle: GoogleFonts.beVietnamPro(fontSize: 13, color: _C.textFaint),
@@ -1403,9 +1409,10 @@ class _OrgBroadcastScreenState extends State<OrgBroadcastScreen> {
                 ),
               ),
               const SizedBox(width: 8),
-              Builder(
-                builder: (ctx) {
-                  final hasContent = _messageCtrl.text.trim().isNotEmpty || _pendingAttachments.isNotEmpty || _pendingImageUrl != null;
+              ValueListenableBuilder<TextEditingValue>(
+                valueListenable: _messageCtrl,
+                builder: (ctx, value, __) {
+                  final hasContent = value.text.trim().isNotEmpty || _pendingAttachments.isNotEmpty || _pendingImageUrl != null;
                   final canSend = hasContent && !_isSending;
                   return InkWell(
                     onTap: canSend ? _sendMessage : null,

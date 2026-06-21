@@ -903,6 +903,7 @@ class _OrgLetterRequestScreenState extends State<OrgLetterRequestScreen> {
           title: 'Letter Requests',
           headers: headers,
           rows: rows,
+          orgLogoUrl: _orgLogoUrl,
         );
         await OrgExportUtil.saveBytes(pdfBytes, 'letter_requests_$now.pdf', mimeType: 'application/pdf');
       }
@@ -1069,14 +1070,14 @@ class _RequestDetailsDialog extends StatelessWidget {
               TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Close')),
               TextButton(onPressed: () {
                 Navigator.pop(ctx);
-                platform_file_utils.saveBytesToTempAndOpen(bytes, fileName);
+                platform_file_utils.saveBytesToTempAndOpen(bytes, fileName, mimeType: mime);
               }, child: const Text('Download')),
             ],
           ),
         );
         return;
       }
-      
+
       if (mime.startsWith('image/')) {
         showDialog(
           context: context,
@@ -1091,7 +1092,7 @@ class _RequestDetailsDialog extends StatelessWidget {
                   TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Close')),
                   TextButton(onPressed: () {
                     Navigator.pop(ctx);
-                    platform_file_utils.saveBytesToTempAndOpen(bytes, fileName);
+                    platform_file_utils.saveBytesToTempAndOpen(bytes, fileName, mimeType: mime);
                   }, child: const Text('Download')),
                 ],
               ),
@@ -1100,8 +1101,12 @@ class _RequestDetailsDialog extends StatelessWidget {
         );
         return;
       }
-      
-      await platform_file_utils.saveBytesToTempAndOpen(bytes, fileName);
+
+      // PDFs render natively in the browser's own viewer when opened with
+      // the correct MIME type in a new tab — passing the real mime here
+      // (instead of the default octet-stream) is what makes this "view"
+      // instead of forcing a download.
+      await platform_file_utils.saveBytesToTempAndOpen(bytes, fileName, mimeType: mime);
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Error opening file: $e'), backgroundColor: Colors.red),

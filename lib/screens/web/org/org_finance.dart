@@ -92,6 +92,8 @@ class _OrgFinanceScreenState extends State<OrgFinanceScreen> {
   static const int _pageSize = 10;
   final ScrollController _tableScrollController = ScrollController();
   String? _highlightedTransactionId;
+  String _orgName = '';
+  String _orgLogoUrl = '';
 
   final List<String> _categories = [
     'All', 'Workshops', 'Competitions', 'Partnerships', 'Socials', 'Retail', 'General'
@@ -327,7 +329,7 @@ class _OrgFinanceScreenState extends State<OrgFinanceScreen> {
             mimeType: 'text/csv');
       } else if (choice == 'pdf') {
         final pdfBytes = await OrgExportPdf.generateTablePdf(
-            title: 'Transactions', headers: headers, rows: rows);
+            title: 'Transactions', headers: headers, rows: rows, orgLogoUrl: _orgLogoUrl);
         await OrgExportUtil.saveBytes(pdfBytes,
             'transactions_${DateFormat('yyyyMMdd').format(DateTime.now())}.pdf',
             mimeType: 'application/pdf');
@@ -622,14 +624,32 @@ class _OrgFinanceScreenState extends State<OrgFinanceScreen> {
           filters.add('From: ${DateFormat('MMM d, yyyy').format(startDate)}');
         if (endDate != null)
           filters.add('To: ${DateFormat('MMM d, yyyy').format(endDate)}');
-        final subtitle = filters.isEmpty
-            ? 'Organization financial report'
-            : filters.join(' • ');
-        final pdfBytes = await OrgExportPdf.generateTablePdf(
-            title: 'Financial Report',
-            headers: headers,
-            rows: rows,
-            subtitle: subtitle);
+        final periodLabel = filters.isEmpty ? 'All time' : filters.join(' • ');
+
+        final inflow = filtered.where((t) => t.type == 'income').toList();
+        final outflow = filtered.where((t) => t.type == 'expense').toList();
+        final currency = NumberFormat.currency(locale: 'en_PH', symbol: '₱');
+        List<List<String>> toRows(List<TransactionModel> list) => list
+            .map((t) => [
+                  DateFormat('MM/dd/yyyy').format(t.date.toDate()),
+                  t.eventName,
+                  t.category,
+                  t.segment,
+                  currency.format(t.amount),
+                ])
+            .toList();
+        double sumOf(List<TransactionModel> list) =>
+            list.fold(0.0, (s, t) => s + t.amount);
+
+        final pdfBytes = await OrgExportPdf.generateFinancialReportPdf(
+          orgName: _orgName.isNotEmpty ? _orgName : 'Organization',
+          periodLabel: periodLabel,
+          inflowRows: toRows(inflow),
+          outflowRows: toRows(outflow),
+          totalInflow: sumOf(inflow),
+          totalOutflow: sumOf(outflow),
+          orgLogoUrl: _orgLogoUrl,
+        );
         await OrgExportUtil.saveBytes(pdfBytes, '$fileName.pdf',
             mimeType: 'application/pdf');
       }
@@ -653,6 +673,22 @@ class _OrgFinanceScreenState extends State<OrgFinanceScreen> {
         .collection('transactions')
         .where('orgId', isEqualTo: widget.orgId)
         .snapshots();
+    _loadOrgProfile();
+  }
+
+  Future<void> _loadOrgProfile() async {
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('organizations')
+          .doc(widget.orgId)
+          .get();
+      if (doc.exists && mounted) {
+        setState(() {
+          _orgName = doc.data()?['name'] ?? 'Organization';
+          _orgLogoUrl = doc.data()?['logoUrl'] ?? '';
+        });
+      }
+    } catch (_) {}
   }
 
   @override

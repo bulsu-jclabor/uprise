@@ -113,6 +113,11 @@ class Organization {
   final List<String> categories;
   final List<Officer> officers;
   final List<Adviser> advisers;
+  final String adviserPhotoUrl;
+  final String facebook;
+  final String instagram;
+  final String twitter;
+  final String gmail;
 
   Organization({
     required this.id,
@@ -131,6 +136,11 @@ class Organization {
     required this.categories,
     required this.officers,
     this.advisers = const [],
+    this.adviserPhotoUrl = '',
+    this.facebook = '',
+    this.instagram = '',
+    this.twitter = '',
+    this.gmail = '',
   });
 }
 
@@ -622,6 +632,11 @@ class _OrganizationManagementState extends State<OrganizationManagement> {
       createdAt: (data['createdAt'] as Timestamp?)?.toDate(),
       categories: List<String>.from(data['categories'] ?? []),
       officers: (data['officers'] as List?)?.map((e) => Officer.fromMap(e as Map<String, dynamic>)).toList() ?? [],
+      adviserPhotoUrl: data['adviserPhotoUrl'] ?? '',
+      facebook: data['facebook'] ?? '',
+      instagram: data['instagram'] ?? '',
+      twitter: data['twitter'] ?? '',
+      gmail: data['gmail'] ?? '',
       advisers: advisers,
     );
   }
@@ -1658,19 +1673,41 @@ class _ViewOrganizationDialog extends StatelessWidget {
                             borderRadius: BorderRadius.circular(14),
                             border: Border.all(color: const Color(0xFFE2E6EA)),
                           ),
-                          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                            Text(adviser.name,
-                                style: GoogleFonts.beVietnamPro(fontSize: 14, fontWeight: FontWeight.w700, color: const Color(0xFF1A202C))),
-                            const SizedBox(height: 4),
-                            Text(adviser.title, style: GoogleFonts.beVietnamPro(fontSize: 12, color: UpriseColors.darkGray)),
-                            const SizedBox(height: 8),
-                            _readOnlyDetail('Email', adviser.email),
-                            const SizedBox(height: 4),
-                            _readOnlyDetail('Phone', adviser.phone),
+                          child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                            if (organization.adviserPhotoUrl.isNotEmpty)
+                              Padding(
+                                padding: const EdgeInsets.only(right: 12),
+                                child: ClipOval(
+                                  child: _buildOrgImageWidget(organization.adviserPhotoUrl, width: 40, height: 40, fit: BoxFit.cover),
+                                ),
+                              ),
+                            Expanded(
+                              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                                Text(adviser.name,
+                                    style: GoogleFonts.beVietnamPro(fontSize: 14, fontWeight: FontWeight.w700, color: const Color(0xFF1A202C))),
+                                const SizedBox(height: 4),
+                                Text(adviser.title, style: GoogleFonts.beVietnamPro(fontSize: 12, color: UpriseColors.darkGray)),
+                                const SizedBox(height: 8),
+                                _readOnlyDetail('Email', adviser.email),
+                                const SizedBox(height: 4),
+                                _readOnlyDetail('Phone', adviser.phone),
+                              ]),
+                            ),
                           ]),
                         );
                       }).toList(),
                     ),
+                  if ([organization.facebook, organization.instagram, organization.twitter, organization.gmail]
+                      .any((v) => v.trim().isNotEmpty)) ...[
+                    const SizedBox(height: 24),
+                    _sectionLabel('Social Links', icon: Icons.link_rounded),
+                    Wrap(spacing: 10, runSpacing: 10, children: [
+                      if (organization.facebook.isNotEmpty) _infoPill('Facebook', organization.facebook),
+                      if (organization.instagram.isNotEmpty) _infoPill('Instagram', organization.instagram),
+                      if (organization.twitter.isNotEmpty) _infoPill('Twitter/X', organization.twitter),
+                      if (organization.gmail.isNotEmpty) _infoPill('Gmail', organization.gmail),
+                    ]),
+                  ],
                 ]),
               ),
             ),
@@ -1714,6 +1751,20 @@ class _ViewOrganizationDialog extends StatelessWidget {
       ),
     );
   }
+}
+
+Widget _buildOrgImageWidget(String url, {double? width, double? height, BoxFit fit = BoxFit.cover}) {
+  if (url.startsWith('data:')) {
+    try {
+      return Image.memory(base64Decode(url.split(',').last),
+          width: width, height: height, fit: fit,
+          errorBuilder: (_, __, ___) => SizedBox(width: width, height: height));
+    } catch (_) {
+      return SizedBox(width: width, height: height);
+    }
+  }
+  return Image.network(url, width: width, height: height, fit: fit,
+      errorBuilder: (_, __, ___) => SizedBox(width: width, height: height));
 }
 
 Widget _infoPill(String label, String value) {
