@@ -15,7 +15,32 @@ import '../../../services/notification_service.dart';
 import '../../theme/app_theme.dart';
 import 'package:intl/intl.dart';
 
-// Helper for image handling (copied from adviser_roles.dart)
+// ─────────────────────────────────────────────────────────────────────────────
+// Helper functions for image handling (base64)
+// ─────────────────────────────────────────────────────────────────────────────
+bool _isImageAttachment(Map<String, dynamic> data) {
+  final name = data['attachmentName'] as String?;
+  if (name == null) return false;
+  final ext = name.split('.').last.toLowerCase();
+  return ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp'].contains(ext);
+}
+
+Widget _buildImageFromBase64(String base64, {double? width, double? height, BoxFit fit = BoxFit.cover}) {
+  try {
+    final bytes = base64Decode(base64);
+    return Image.memory(
+      bytes,
+      width: width,
+      height: height,
+      fit: fit,
+      errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+    );
+  } catch (e) {
+    return const SizedBox.shrink();
+  }
+}
+
+// Helper for image handling (already present for URLs)
 ImageProvider _imageProviderFromUrl(String url) {
   if (url.startsWith('data:image')) {
     final base64Part = url.split(',').last;
@@ -513,6 +538,15 @@ class _EventProposalsState extends State<EventProposals> {
     final orgName = data['orgName'] ?? '—';
     final orgLogoUrl = data['orgLogoUrl'] as String?;
 
+    // ── DEDICATED IMAGE thumbnail ──
+    final bool hasImage = data['imageBase64'] != null && data['imageBase64'].toString().isNotEmpty;
+    final Widget? imageThumbnail = hasImage
+        ? ClipRRect(
+            borderRadius: BorderRadius.circular(6),
+            child: _buildImageFromBase64(data['imageBase64']!, width: 40, height: 40, fit: BoxFit.cover),
+          )
+        : null;
+
     return FutureBuilder<String?>(
       future: _fetchOrgLogo(orgId),
       builder: (context, logoSnapshot) {
@@ -529,7 +563,7 @@ class _EventProposalsState extends State<EventProposals> {
                   : const Border(bottom: BorderSide(color: Color(0xFFF1F5F9))),
             ),
             child: Row(children: [
-              // ORGANIZATION column (with logo) - NOW FIRST
+              // ORGANIZATION column (unchanged)
               Expanded(
                 flex: 2,
                 child: Row(children: [
@@ -548,20 +582,30 @@ class _EventProposalsState extends State<EventProposals> {
                   ),
                 ]),
               ),
-              // EVENT TITLE column - title only, no category subtitle
+              // EVENT TITLE column – with image thumbnail if present
               Expanded(
                 flex: 3,
-                child: Text(
-                  data['title'] ?? '—',
-                  style: GoogleFonts.beVietnamPro(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: const Color(0xFF1A202C),
-                  ),
-                  overflow: TextOverflow.ellipsis,
+                child: Row(
+                  children: [
+                    if (imageThumbnail != null) ...[
+                      imageThumbnail,
+                      const SizedBox(width: 10),
+                    ],
+                    Expanded(
+                      child: Text(
+                        data['title'] ?? '—',
+                        style: GoogleFonts.beVietnamPro(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: const Color(0xFF1A202C),
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              // CATEGORY column
+              // CATEGORY column (unchanged)
               Expanded(
                 flex: 2,
                 child: Container(
@@ -581,7 +625,7 @@ class _EventProposalsState extends State<EventProposals> {
                   ),
                 ),
               ),
-              // DATE column
+              // DATE column (unchanged)
               Expanded(
                 flex: 2,
                 child: Text(
@@ -590,23 +634,20 @@ class _EventProposalsState extends State<EventProposals> {
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
-              // STATUS column
+              // STATUS column (unchanged)
               Expanded(flex: 1, child: _statusBadge(status)),
-              // ============ ACTIONS COLUMN - CORRECTED LOGIC ============
+              // ACTIONS column (unchanged)
               Expanded(
                 flex: 2,
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.end,
                   children: [
-                    // View button - always visible
                     _ActionIconButton(
                       icon: Icons.visibility_outlined,
                       tooltip: 'View Details',
                       onTap: () => _showProposalDetailDialog(docId, data),
                     ),
                     const SizedBox(width: 4),
-                    
-                    // For PENDING only: Show Approve and Reject buttons
                     if (status == 'pending') ...[
                       _ActionIconButton(
                         icon: Icons.check_circle_outline_rounded,
@@ -623,8 +664,6 @@ class _EventProposalsState extends State<EventProposals> {
                       ),
                       const SizedBox(width: 4),
                     ],
-                    
-                    // Archive button - visible for all except archived
                     if (status != 'archived')
                       _ActionIconButton(
                         icon: Icons.archive_outlined,
@@ -1126,7 +1165,7 @@ class _EventProposalsState extends State<EventProposals> {
         'startTime': startTime,
         'endTime': endTime,
         'capacity': capacity,
-        'slotsLeft': capacity, // NEW: automatically set slotsLeft equal to capacity when the event is created
+        'slotsLeft': capacity,
         'guestSpeaker': guestSpeaker,
         'resources': resources,
         'labPreparation': labPreparation,
@@ -1355,8 +1394,10 @@ class _EventProposalsState extends State<EventProposals> {
     );
   }
 
+  // ── View Detail Dialog – with dedicated image preview ──
   void _showProposalDetailDialog(String docId, Map<String, dynamic> data) {
     final status         = (data['status'] ?? 'pending') as String;
+    final hasImage       = data['imageBase64'] != null && data['imageBase64'].toString().isNotEmpty;
     final hasAttachment  = data['attachmentBase64'] != null &&
         data['attachmentBase64'].toString().isNotEmpty;
 
@@ -1414,6 +1455,22 @@ class _EventProposalsState extends State<EventProposals> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      // ── Dedicated Image Preview ──
+                      if (hasImage) ...[
+                        Container(
+                          width: double.infinity,
+                          height: 200,
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: const Color(0xFFE2E6EA)),
+                          ),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(10),
+                            child: _buildImageFromBase64(data['imageBase64']!, fit: BoxFit.contain),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                      ],
                       _sectionLabel('Proposal Details', icon: Icons.info_outline_rounded),
                       Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
                         Expanded(
@@ -1498,6 +1555,7 @@ class _EventProposalsState extends State<EventProposals> {
                           ]),
                         ),
                       ],
+                      // ── Attachment (if present) ──
                       if (hasAttachment) ...[
                         const SizedBox(height: 20),
                         _sectionLabel('Attachment', icon: Icons.attach_file_rounded),
@@ -1555,7 +1613,7 @@ class _EventProposalsState extends State<EventProposals> {
                   ),
                 ),
               ),
-              // ============ DIALOG FOOTER BUTTONS - CORRECTED LOGIC ============
+              // Dialog footer buttons (unchanged)
               Container(
                 padding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
                 decoration: const BoxDecoration(
@@ -1564,7 +1622,6 @@ class _EventProposalsState extends State<EventProposals> {
                   borderRadius: BorderRadius.vertical(bottom: Radius.circular(18)),
                 ),
                 child: Row(children: [
-                  // For PENDING only: Show Approve and Reject buttons
                   if (status == 'pending') ...[
                     Expanded(
                       child: ElevatedButton.icon(
@@ -1620,7 +1677,6 @@ class _EventProposalsState extends State<EventProposals> {
                     ),
                     const SizedBox(width: 10),
                   ],
-                  // Archive button - visible if not archived
                   if (status != 'archived')
                     OutlinedButton.icon(
                       onPressed: () {
@@ -1682,6 +1738,7 @@ class _EventProposalsState extends State<EventProposals> {
     ]);
   }
 
+  // ── Open attachment (unchanged) ──
   Future<void> _saveAndOpenFile(Map<String, dynamic> data) async {
     try {
       Uint8List bytes = Uint8List(0);

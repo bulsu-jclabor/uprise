@@ -8,13 +8,37 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:file_picker/file_picker.dart';
-// removed unused imports: firebase_storage, foundation kIsWeb, http
 import '../../../services/activity_logger.dart' as activity_log;
 import '../../../widgets/admin_export_button.dart';
 import 'export_util.dart';
 import 'export_pdf.dart';
 import '../../theme/app_theme.dart';
 import 'org_form_builder.dart';
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Helper to check if attachment is an image
+// ─────────────────────────────────────────────────────────────────────────────
+bool _isImageAttachment(Map<String, dynamic> data) {
+  final name = data['attachmentName'] as String?;
+  if (name == null) return false;
+  final ext = name.split('.').last.toLowerCase();
+  return ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp'].contains(ext);
+}
+
+Widget _buildImageFromBase64(String base64, {double? width, double? height, BoxFit fit = BoxFit.cover}) {
+  try {
+    final bytes = base64Decode(base64);
+    return Image.memory(
+      bytes,
+      width: width,
+      height: height,
+      fit: fit,
+      errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+    );
+  } catch (e) {
+    return const SizedBox.shrink();
+  }
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Design tokens
@@ -221,26 +245,24 @@ class _OrgEventProposalsScreenState extends State<OrgEventProposalsScreen> {
   }
 
   void _openEditModal(String docId, Map<String, dynamic> data) {
-  final status = data['status'] ?? 'pending';
-
-  if (status != 'pending' && status != 'for_review') {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Only pending or revision-requested proposals can be edited'),
-        backgroundColor: Colors.orange,
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
-    return;
+    final status = data['status'] ?? 'pending';
+    if (status != 'pending' && status != 'for_review') {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Only pending or revision-requested proposals can be edited'),
+          backgroundColor: Colors.orange,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      barrierColor: Colors.black54,
+      builder: (_) => _SubmitProposalModal(orgId: widget.orgId, editDocId: docId, existing: data),
+    ).then((_) => setState(() {}));
   }
-  
-  showDialog(
-    context: context,
-    barrierDismissible: false,
-    barrierColor: Colors.black54,
-    builder: (_) => _SubmitProposalModal(orgId: widget.orgId, editDocId: docId, existing: data),
-  ).then((_) => setState(() {}));
-}
 
   void _openFormBuilder(String docId, Map<String, dynamic> data) {
     final eventDate = data['date'];
@@ -267,109 +289,106 @@ class _OrgEventProposalsScreenState extends State<OrgEventProposalsScreen> {
     );
   }
 
-  // ── Archive logic (replaces delete for approved/rejected) ────────────────
-void _confirmArchive(String docId, String title) {
-  showDialog(
-    context: context,
-    barrierColor: Colors.black54,
-    builder: (ctx) => Dialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: Container(
-        width: 420,
-        padding: const EdgeInsets.all(28),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(children: [
-              Container(
-                width: 42, height: 42,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF3F4F6),
-                  borderRadius: BorderRadius.circular(10),
+  // ── Archive logic ────────────────────────────────────────────────
+  void _confirmArchive(String docId, String title) {
+    showDialog(
+      context: context,
+      barrierColor: Colors.black54,
+      builder: (ctx) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        child: Container(
+          width: 420,
+          padding: const EdgeInsets.all(28),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(children: [
+                Container(
+                  width: 42, height: 42,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF3F4F6),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(Icons.archive_outlined, color: Color(0xFF6B7280), size: 20),
                 ),
-                child: const Icon(Icons.archive_outlined, color: Color(0xFF6B7280), size: 20),
+                const SizedBox(width: 14),
+                Text('Archive Proposal',
+                    style: GoogleFonts.beVietnamPro(fontSize: 17, fontWeight: FontWeight.w700, color: const Color(0xFF1A202C))),
+              ]),
+              const SizedBox(height: 16),
+              Text(
+                'Are you sure you want to archive "$title"? You can still view it in the archived filter. This action can be reversed.',
+                style: GoogleFonts.beVietnamPro(fontSize: 14, color: const Color(0xFF64748B), height: 1.5),
               ),
-              const SizedBox(width: 14),
-              Text('Archive Proposal',
-                  style: GoogleFonts.beVietnamPro(fontSize: 17, fontWeight: FontWeight.w700, color: const Color(0xFF1A202C))),
-            ]),
-            const SizedBox(height: 16),
-            Text(
-              'Are you sure you want to archive "$title"? You can still view it in the archived filter. This action can be reversed.',
-              style: GoogleFonts.beVietnamPro(fontSize: 14, color: const Color(0xFF64748B), height: 1.5),
-            ),
-            const SizedBox(height: 24),
-            Row(mainAxisAlignment: MainAxisAlignment.end, children: [
-              OutlinedButton(
-                onPressed: () => Navigator.pop(ctx),
-                style: OutlinedButton.styleFrom(
-                  side: const BorderSide(color: Color(0xFFE2E6EA)),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 11),
+              const SizedBox(height: 24),
+              Row(mainAxisAlignment: MainAxisAlignment.end, children: [
+                OutlinedButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: Color(0xFFE2E6EA)),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 11),
+                  ),
+                  child: Text('Cancel', style: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF374151))),
                 ),
-                child: Text('Cancel', style: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF374151))),
-              ),
-              const SizedBox(width: 10),
-              ElevatedButton(
-                onPressed: () async {
-                  Navigator.pop(ctx);
-                  await _archiveProposal(docId, title);
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF6B7280),
-                  foregroundColor: Colors.white,
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 11),
+                const SizedBox(width: 10),
+                ElevatedButton(
+                  onPressed: () async {
+                    Navigator.pop(ctx);
+                    await _archiveProposal(docId, title);
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF6B7280),
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 11),
+                  ),
+                  child: Text('Archive', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600)),
                 ),
-                child: Text('Archive', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600)),
-              ),
-            ]),
-          ],
+              ]),
+            ],
+          ),
         ),
       ),
-    ),
-  );
-}
-
-Future<void> _archiveProposal(String docId, String title) async {
-  try {
-    // Update proposal status to 'archived'
-    await FirebaseFirestore.instance
-        .collection('event_proposals')
-        .doc(docId)
-        .update({
-      'status': 'archived',
-      'archivedAt': FieldValue.serverTimestamp(),
-      'archivedBy': FirebaseAuth.instance.currentUser?.uid ?? '',
-    });
-    
-    await activity_log.ActivityLogger.log(
-      action: 'archive_proposal',
-      module: 'event_proposals',
-      details: {'orgId': widget.orgId, 'proposalId': docId, 'title': title},
     );
-    
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('Proposal "$title" has been archived'),
-        backgroundColor: const Color(0xFF6B7280),
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-      ));
-    }
-  } catch (e) {
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('Archive failed: $e'),
-        backgroundColor: UpriseColors.error,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-      ));
+  }
+
+  Future<void> _archiveProposal(String docId, String title) async {
+    try {
+      await FirebaseFirestore.instance
+          .collection('event_proposals')
+          .doc(docId)
+          .update({
+        'status': 'archived',
+        'archivedAt': FieldValue.serverTimestamp(),
+        'archivedBy': FirebaseAuth.instance.currentUser?.uid ?? '',
+      });
+      await activity_log.ActivityLogger.log(
+        action: 'archive_proposal',
+        module: 'event_proposals',
+        details: {'orgId': widget.orgId, 'proposalId': docId, 'title': title},
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Proposal "$title" has been archived'),
+          backgroundColor: const Color(0xFF6B7280),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        ));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Archive failed: $e'),
+          backgroundColor: UpriseColors.error,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        ));
+      }
     }
   }
-}
 
   // ── Export ────────────────────────────────────────────────────────
   Future<void> _exportProposals(String format) async {
@@ -718,27 +737,27 @@ Future<void> _archiveProposal(String docId, String title) async {
   }
 
   Widget _buildTableHeader() {
-  return Container(
-    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 13),
-    decoration: BoxDecoration(
-      color: const Color(0xFFFFF7ED),
-      borderRadius: const BorderRadius.vertical(top: Radius.circular(14)),
-      border: Border(bottom: BorderSide(color: UpriseColors.primaryDark.withAlpha(60))),
-    ),
-    child: Row(children: [
-      Expanded(flex: 4, child: _headerCell('EVENT TITLE')),
-      Expanded(flex: 2, child: _headerCell('CATEGORY')),
-      Expanded(flex: 2, child: _headerCell('EVENT DATE')),
-      Expanded(flex: 2, child: _headerCell('STATUS')),
-      Expanded(flex: 2, child: _headerCell('SIGNING DATE')),
-      Expanded(flex: 2, child: _headerCell('SUBMITTED')),
-      Expanded(flex: 2, child: Align(
-        alignment: Alignment.centerRight,
-        child: _headerCell('ACTIONS'),
-      )),
-    ]),
-  );
-}
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 13),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF7ED),
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(14)),
+        border: Border(bottom: BorderSide(color: UpriseColors.primaryDark.withAlpha(60))),
+      ),
+      child: Row(children: [
+        Expanded(flex: 4, child: _headerCell('EVENT TITLE')),
+        Expanded(flex: 2, child: _headerCell('CATEGORY')),
+        Expanded(flex: 2, child: _headerCell('EVENT DATE')),
+        Expanded(flex: 2, child: _headerCell('STATUS')),
+        Expanded(flex: 2, child: _headerCell('SIGNING DATE')),
+        Expanded(flex: 2, child: _headerCell('SUBMITTED')),
+        Expanded(flex: 2, child: Align(
+          alignment: Alignment.centerRight,
+          child: _headerCell('ACTIONS'),
+        )),
+      ]),
+    );
+  }
 
   Widget _headerCell(String text) => Text(
     text,
@@ -751,144 +770,163 @@ Future<void> _archiveProposal(String docId, String title) async {
   );
 
   Widget _buildProposalRow({
-  required String docId,
-  required Map<String, dynamic> data,
-  required bool isLast,
-}) {
-  final status = (data['status'] ?? 'pending').toString().toLowerCase();
-  final date = data['date'];
-  final dateStr = date is Timestamp
-      ? DateFormat('MMM dd, yyyy').format(date.toDate())
-      : '—';
-  final submittedAt = data['submittedAt'];
-  final submittedStr = submittedAt is Timestamp
-      ? DateFormat('MMM dd, yyyy').format(submittedAt.toDate())
-      : '—';
+    required String docId,
+    required Map<String, dynamic> data,
+    required bool isLast,
+  }) {
+    final status = (data['status'] ?? 'pending').toString().toLowerCase();
+    final date = data['date'];
+    final dateStr = date is Timestamp
+        ? DateFormat('MMM dd, yyyy').format(date.toDate())
+        : '—';
+    final submittedAt = data['submittedAt'];
+    final submittedStr = submittedAt is Timestamp
+        ? DateFormat('MMM dd, yyyy').format(submittedAt.toDate())
+        : '—';
 
-  final wetSign = data['wetSignSchedule'] as Map<String, dynamic>?;
-  final signingTs = wetSign?['startDateTime'] as Timestamp?;
-  final signingStr = signingTs != null
-      ? DateFormat('MMM dd, yyyy').format(signingTs.toDate())
-      : '—';
-  final hasSigningDate = signingTs != null;
+    final wetSign = data['wetSignSchedule'] as Map<String, dynamic>?;
+    final signingTs = wetSign?['startDateTime'] as Timestamp?;
+    final signingStr = signingTs != null
+        ? DateFormat('MMM dd, yyyy').format(signingTs.toDate())
+        : '—';
+    final hasSigningDate = signingTs != null;
 
-  return InkWell(
-    hoverColor: const Color(0xFFF8F9FB),
-    onTap: () => _openViewModal(docId, data),
-    child: Container(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-      decoration: BoxDecoration(
-        border: isLast ? null : const Border(bottom: BorderSide(color: Color(0xFFF1F5F9))),
-      ),
-      child: Row(children: [
-        // TITLE
-        Expanded(
-          flex: 4,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                data['title'] ?? '—',
-                style: GoogleFonts.beVietnamPro(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  color: const Color(0xFF1A202C),
-                ),
-                overflow: TextOverflow.ellipsis,
-              ),
-              if ((data['location'] ?? '').toString().isNotEmpty)
-                Text(
-                  data['location'] ?? '',
-                  style: GoogleFonts.beVietnamPro(fontSize: 11, color: const Color(0xFF9AA5B4)),
-                  overflow: TextOverflow.ellipsis,
-                ),
-            ],
-          ),
+    // Use the dedicated image if present, else fallback to attachment image
+    final bool hasImage = data['imageBase64'] != null && data['imageBase64'].toString().isNotEmpty;
+    final Widget? thumbnail = hasImage
+        ? ClipRRect(
+            borderRadius: BorderRadius.circular(6),
+            child: _buildImageFromBase64(data['imageBase64']!, width: 40, height: 40, fit: BoxFit.cover),
+          )
+        : null;
+
+    return InkWell(
+      hoverColor: const Color(0xFFF8F9FB),
+      onTap: () => _openViewModal(docId, data),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+        decoration: BoxDecoration(
+          border: isLast ? null : const Border(bottom: BorderSide(color: Color(0xFFF1F5F9))),
         ),
-        // CATEGORY
-        Expanded(
-          flex: 2,
-          child: Align(
-            alignment: Alignment.centerLeft,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                color: UpriseColors.primaryDark.withAlpha(18),
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: Text(
-                data['category'] ?? '—',
-                style: GoogleFonts.beVietnamPro(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                  color: UpriseColors.primaryDark,
-                  letterSpacing: 0.2,
-                ),
-              ),
-            ),
-          ),
-        ),
-        // EVENT DATE
-        Expanded(
-          flex: 2,
-          child: Row(mainAxisSize: MainAxisSize.min, children: [
-            const Icon(Icons.calendar_today_outlined, size: 12, color: Color(0xFF9AA5B4)),
-            const SizedBox(width: 5),
-            Flexible(child: Text(dateStr,
-                style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF64748B)))),
-          ]),
-        ),
-        // STATUS
-        Expanded(
-          flex: 2,
-          child: Align(alignment: Alignment.centerLeft, child: _statusBadge(status)),
-        ),
-        // SIGNING DATE
-        Expanded(
-          flex: 2,
-          child: hasSigningDate
-              ? Row(mainAxisSize: MainAxisSize.min, children: [
-                  Container(
-                    padding: const EdgeInsets.all(4),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF059669).withAlpha(20),
-                      borderRadius: BorderRadius.circular(5),
-                    ),
-                    child: const Icon(Icons.edit_calendar_rounded, size: 11, color: Color(0xFF059669)),
+        child: Row(children: [
+          // TITLE column – now with dedicated image thumbnail if exists
+          Expanded(
+            flex: 4,
+            child: Row(
+              children: [
+                if (thumbnail != null) ...[
+                  thumbnail,
+                  const SizedBox(width: 10),
+                ],
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        data['title'] ?? '—',
+                        style: GoogleFonts.beVietnamPro(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: const Color(0xFF1A202C),
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      if ((data['location'] ?? '').toString().isNotEmpty)
+                        Text(
+                          data['location'] ?? '',
+                          style: GoogleFonts.beVietnamPro(fontSize: 11, color: const Color(0xFF9AA5B4)),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                    ],
                   ),
-                  const SizedBox(width: 5),
-                  Flexible(child: Text(signingStr,
-                      style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF059669), fontWeight: FontWeight.w500))),
-                ])
-              : Text('—', style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFFD1D5DB))),
-        ),
-        // SUBMITTED
-        Expanded(
-          flex: 2,
-          child: Text(submittedStr,
-              style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF64748B))),
-        ),
-        // ACTIONS
-        Expanded(
-          flex: 2,
-          child: Align(
-            alignment: Alignment.centerRight,
-            child: _ActionPopupButton(
-              onView: () => _openViewModal(docId, data),
-              onEdit: status == 'pending' ? () => _openEditModal(docId, data) : null,
-              onRevise: status == 'for_review' ? () => _openEditModal(docId, data) : null,
-              onFormBuilder: status == 'approved' ? () => _openFormBuilder(docId, data) : null,
-              onArchive: (status == 'approved' || status == 'rejected')
-                  ? () => _confirmArchive(docId, data['title'] ?? 'Proposal')
-                  : null,
+                ),
+              ],
             ),
           ),
-        ),
-      ]),
-    ),
-  );
-}
+          // CATEGORY
+          Expanded(
+            flex: 2,
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: UpriseColors.primaryDark.withAlpha(18),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text(
+                  data['category'] ?? '—',
+                  style: GoogleFonts.beVietnamPro(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: UpriseColors.primaryDark,
+                    letterSpacing: 0.2,
+                  ),
+                ),
+              ),
+            ),
+          ),
+          // EVENT DATE
+          Expanded(
+            flex: 2,
+            child: Row(mainAxisSize: MainAxisSize.min, children: [
+              const Icon(Icons.calendar_today_outlined, size: 12, color: Color(0xFF9AA5B4)),
+              const SizedBox(width: 5),
+              Flexible(child: Text(dateStr,
+                  style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF64748B)))),
+            ]),
+          ),
+          // STATUS
+          Expanded(
+            flex: 2,
+            child: Align(alignment: Alignment.centerLeft, child: _statusBadge(status)),
+          ),
+          // SIGNING DATE
+          Expanded(
+            flex: 2,
+            child: hasSigningDate
+                ? Row(mainAxisSize: MainAxisSize.min, children: [
+                    Container(
+                      padding: const EdgeInsets.all(4),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF059669).withAlpha(20),
+                        borderRadius: BorderRadius.circular(5),
+                      ),
+                      child: const Icon(Icons.edit_calendar_rounded, size: 11, color: Color(0xFF059669)),
+                    ),
+                    const SizedBox(width: 5),
+                    Flexible(child: Text(signingStr,
+                        style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF059669), fontWeight: FontWeight.w500))),
+                  ])
+                : Text('—', style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFFD1D5DB))),
+          ),
+          // SUBMITTED
+          Expanded(
+            flex: 2,
+            child: Text(submittedStr,
+                style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF64748B))),
+          ),
+          // ACTIONS
+          Expanded(
+            flex: 2,
+            child: Align(
+              alignment: Alignment.centerRight,
+              child: _ActionPopupButton(
+                onView: () => _openViewModal(docId, data),
+                onEdit: status == 'pending' ? () => _openEditModal(docId, data) : null,
+                onRevise: status == 'for_review' ? () => _openEditModal(docId, data) : null,
+                onFormBuilder: status == 'approved' ? () => _openFormBuilder(docId, data) : null,
+                onArchive: (status == 'approved' || status == 'rejected')
+                    ? () => _confirmArchive(docId, data['title'] ?? 'Proposal')
+                    : null,
+              ),
+            ),
+          ),
+        ]),
+      ),
+    );
+  }
 
   Widget _buildEmptyState() {
     return Center(
@@ -1067,10 +1105,9 @@ class _ToolbarButton extends StatelessWidget {
   final IconData icon;
   final VoidCallback onPressed;
   final bool outlined;
-  
   const _ToolbarButton({
-    required this.label, 
-    required this.icon, 
+    required this.label,
+    required this.icon,
     required this.onPressed,
     this.outlined = false,
   });
@@ -1248,7 +1285,7 @@ class _PageNumButton extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Submit / Edit Modal
+// Submit / Edit Modal – with dedicated image upload
 // ─────────────────────────────────────────────────────────────────────────────
 class _SubmitProposalModal extends StatefulWidget {
   final String orgId;
@@ -1275,11 +1312,19 @@ class _SubmitProposalModalState extends State<_SubmitProposalModal> {
   String? _errorMsg;
   bool _issuesCertificate = false;
 
+  // DEDICATED IMAGE fields
+  String? _imageBase64;
+  String? _imageName;
+  String? _imageSize;
+  bool _isImageUploading = false;
+  double _imageUploadProgress = 0.0;
+
+  // ATTACHMENT fields (unchanged)
   String? _attachmentBase64;
   String? _attachmentName;
   String? _attachmentSize;
-  bool _isUploading = false;
-  double _uploadProgress = 0.0;
+  bool _isAttachmentUploading = false;
+  double _attachmentUploadProgress = 0.0;
 
   static const _categories = [
     'Workshop', 'Seminar', 'Competition', 'General Assembly',
@@ -1297,6 +1342,11 @@ class _SubmitProposalModalState extends State<_SubmitProposalModal> {
       _locCtrl.text   = e['location'] ?? '';
       _startTimeCtrl.text = e['startTime'] ?? '';
       _endTimeCtrl.text   = e['endTime'] ?? '';
+      // Dedicated image
+      _imageBase64 = e['imageBase64'];
+      _imageName   = e['imageName'];
+      _imageSize   = e['imageSize'];
+      // Attachment
       _attachmentBase64 = e['attachmentBase64'];
       _attachmentName   = e['attachmentName'];
       _attachmentSize   = e['attachmentSize'];
@@ -1321,7 +1371,51 @@ class _SubmitProposalModalState extends State<_SubmitProposalModal> {
     super.dispose();
   }
 
-  Future<void> _pickFile() async {
+  // ── Image upload ──────────────────────────────────────────────────
+  Future<void> _pickImage() async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.image,
+      withData: true,
+    );
+    if (result == null) return;
+    final file = result.files.first;
+    if (file.bytes == null || file.bytes!.isEmpty) {
+      _showError('Cannot read image file!');
+      return;
+    }
+    final sizeBytes = file.bytes!.length;
+    if (sizeBytes > 700 * 1024) {
+      _showError('Image too large. Max 700 KB allowed.');
+      return;
+    }
+    final sizeKB = (sizeBytes / 1024).toStringAsFixed(1);
+    setState(() {
+      _isImageUploading = true;
+      _imageUploadProgress = 0.0;
+      _imageName = file.name;
+      _imageSize = '$sizeKB KB';
+    });
+    // Simulate progress
+    for (int i = 0; i <= 100; i += 20) {
+      await Future.delayed(const Duration(milliseconds: 50));
+      if (mounted) setState(() => _imageUploadProgress = i / 100);
+    }
+    setState(() {
+      _imageBase64 = base64Encode(file.bytes!);
+      _imageUploadProgress = 1.0;
+      _isImageUploading = false;
+    });
+  }
+
+  void _removeImage() => setState(() {
+    _imageBase64 = null;
+    _imageName   = null;
+    _imageSize   = null;
+    _imageUploadProgress = 0.0;
+  });
+
+  // ── Attachment upload (unchanged) ──────────────────────────────
+  Future<void> _pickAttachment() async {
     final result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
       allowedExtensions: ['pdf', 'doc', 'docx', 'txt', 'jpg', 'png'],
@@ -1340,27 +1434,27 @@ class _SubmitProposalModalState extends State<_SubmitProposalModal> {
     }
     final sizeKB = (sizeBytes / 1024).toStringAsFixed(1);
     setState(() {
-      _isUploading = true;
-      _uploadProgress = 0.0;
+      _isAttachmentUploading = true;
+      _attachmentUploadProgress = 0.0;
       _attachmentName = file.name;
       _attachmentSize = '$sizeKB KB';
     });
     for (int i = 0; i <= 100; i += 20) {
       await Future.delayed(const Duration(milliseconds: 50));
-      if (mounted) setState(() => _uploadProgress = i / 100);
+      if (mounted) setState(() => _attachmentUploadProgress = i / 100);
     }
     setState(() {
       _attachmentBase64 = base64Encode(file.bytes!);
-      _uploadProgress = 1.0;
-      _isUploading = false;
+      _attachmentUploadProgress = 1.0;
+      _isAttachmentUploading = false;
     });
   }
 
-  void _removeFile() => setState(() {
+  void _removeAttachment() => setState(() {
     _attachmentBase64 = null;
     _attachmentName   = null;
     _attachmentSize   = null;
-    _uploadProgress   = 0.0;
+    _attachmentUploadProgress = 0.0;
   });
 
   void _showError(String msg) {
@@ -1398,6 +1492,11 @@ class _SubmitProposalModalState extends State<_SubmitProposalModal> {
         'submittedBy': user?.uid ?? '',
         'submittedByEmail': user?.email ?? '',
         'issuesCertificate': _issuesCertificate,
+        // Dedicated image
+        'imageBase64': _imageBase64,
+        'imageName': _imageName,
+        'imageSize': _imageSize,
+        // Attachment
         'attachmentBase64': _attachmentBase64,
         'attachmentName': _attachmentName,
         'attachmentSize': _attachmentSize,
@@ -1502,6 +1601,11 @@ class _SubmitProposalModalState extends State<_SubmitProposalModal> {
               child: Form(
                 key: _formKey,
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  // ── NEW: Dedicated Image Upload (before title) ──
+                  _sectionLabel('Event Image', icon: Icons.image_outlined),
+                  _buildImageUploadArea(),
+                  const SizedBox(height: 20),
+
                   _sectionLabel('Event Details', icon: Icons.event_outlined),
                   Row(children: [
                     Expanded(
@@ -1606,8 +1710,8 @@ class _SubmitProposalModalState extends State<_SubmitProposalModal> {
                     onChanged: (v) => setState(() => _issuesCertificate = v ?? false),
                   ),
                   const SizedBox(height: 20),
-                  _sectionLabel('Attachment', icon: Icons.attach_file_rounded),
-                  _buildFileArea(),
+                  _sectionLabel('Attachment (PDF, DOC, etc.)', icon: Icons.attach_file_rounded),
+                  _buildAttachmentArea(),
                   if (_errorMsg != null) ...[
                     const SizedBox(height: 14),
                     Container(
@@ -1648,7 +1752,7 @@ class _SubmitProposalModalState extends State<_SubmitProposalModal> {
               ),
               const SizedBox(width: 12),
               ElevatedButton.icon(
-                onPressed: (_isSubmitting || _isUploading) ? null : _submit,
+                onPressed: (_isSubmitting || _isImageUploading || _isAttachmentUploading) ? null : _submit,
                 icon: _isSubmitting
                     ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                     : Icon(isEdit ? Icons.save_rounded : Icons.send_rounded, size: 16),
@@ -1671,7 +1775,109 @@ class _SubmitProposalModalState extends State<_SubmitProposalModal> {
     );
   }
 
-  Widget _buildFileArea() {
+  // ── Image upload UI ──────────────────────────────────────────────────
+  Widget _buildImageUploadArea() {
+    final hasImage = _imageBase64 != null;
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 200),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8F9FB),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: _isImageUploading
+              ? UpriseColors.primaryDark.withAlpha(102)
+              : hasImage ? const Color(0xFF059669) : const Color(0xFFE2E6EA),
+          width: (_isImageUploading || hasImage) ? 1.5 : 1,
+        ),
+      ),
+      child: _isImageUploading
+          ? _imageUploadingState()
+          : hasImage ? _imageUploadedState() : _imageIdleState(),
+    );
+  }
+
+  Widget _imageIdleState() => GestureDetector(
+    onTap: _pickImage,
+    behavior: HitTestBehavior.opaque,
+    child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+      Container(
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(
+          color: UpriseColors.primaryDark.withAlpha(20),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Icon(Icons.image_outlined, size: 24, color: UpriseColors.primaryDark),
+      ),
+      const SizedBox(width: 14),
+      Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        RichText(
+          text: TextSpan(
+            style: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF64748B)),
+            children: [
+              TextSpan(text: 'Click to upload event image ', style: GoogleFonts.beVietnamPro(fontSize: 13, color: UpriseColors.primaryDark, fontWeight: FontWeight.w600)),
+              const TextSpan(text: '(JPG, PNG)'),
+            ],
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text('Max 700 KB',
+            style: GoogleFonts.beVietnamPro(fontSize: 11, color: const Color(0xFF9AA5B4))),
+      ]),
+    ]),
+  );
+
+  Widget _imageUploadingState() => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+    Row(children: [
+      Icon(Icons.image_outlined, size: 16, color: UpriseColors.primaryDark),
+      const SizedBox(width: 10),
+      Expanded(child: Text(_imageName ?? 'Uploading...',
+          style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.w500, color: const Color(0xFF1A202C)),
+          overflow: TextOverflow.ellipsis)),
+      Text(_imageSize ?? '', style: GoogleFonts.beVietnamPro(fontSize: 11, color: const Color(0xFF64748B))),
+    ]),
+    const SizedBox(height: 10),
+    ClipRRect(
+      borderRadius: BorderRadius.circular(6),
+      child: LinearProgressIndicator(
+        value: _imageUploadProgress, minHeight: 6,
+        backgroundColor: const Color(0xFFE2E6EA),
+        valueColor: AlwaysStoppedAnimation<Color>(UpriseColors.primaryDark),
+      ),
+    ),
+    const SizedBox(height: 6),
+    Text('Uploading ${(_imageUploadProgress * 100).toInt()}%',
+        style: GoogleFonts.beVietnamPro(fontSize: 10, color: const Color(0xFF64748B))),
+  ]);
+
+  Widget _imageUploadedState() => Row(children: [
+    // Preview thumbnail
+    ClipRRect(
+      borderRadius: BorderRadius.circular(6),
+      child: _buildImageFromBase64(_imageBase64!, width: 48, height: 48, fit: BoxFit.cover),
+    ),
+    const SizedBox(width: 12),
+    Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Text(_imageName ?? 'Image attached',
+          style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.w500, color: const Color(0xFF1A202C)),
+          overflow: TextOverflow.ellipsis),
+      if (_imageSize != null)
+        Text(_imageSize!, style: GoogleFonts.beVietnamPro(fontSize: 11, color: const Color(0xFF059669))),
+    ])),
+    TextButton(
+      onPressed: _removeImage,
+      style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), minimumSize: Size.zero, tapTargetSize: MaterialTapTargetSize.shrinkWrap),
+      child: Text('Remove', style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFFDC2626))),
+    ),
+    TextButton(
+      onPressed: _pickImage,
+      style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), minimumSize: Size.zero, tapTargetSize: MaterialTapTargetSize.shrinkWrap),
+      child: Text('Change', style: GoogleFonts.beVietnamPro(fontSize: 12, color: UpriseColors.primaryDark)),
+    ),
+  ]);
+
+  // ── Attachment upload UI (unchanged but renamed) ──────────────────
+  Widget _buildAttachmentArea() {
     final hasFile = _attachmentBase64 != null;
     return AnimatedContainer(
       duration: const Duration(milliseconds: 200),
@@ -1680,20 +1886,20 @@ class _SubmitProposalModalState extends State<_SubmitProposalModal> {
         color: const Color(0xFFF8F9FB),
         borderRadius: BorderRadius.circular(10),
         border: Border.all(
-          color: _isUploading
+          color: _isAttachmentUploading
               ? UpriseColors.primaryDark.withAlpha(102)
               : hasFile ? const Color(0xFF059669) : const Color(0xFFE2E6EA),
-          width: (_isUploading || hasFile) ? 1.5 : 1,
+          width: (_isAttachmentUploading || hasFile) ? 1.5 : 1,
         ),
       ),
-      child: _isUploading
-          ? _uploadingState()
-          : hasFile ? _uploadedState() : _idleState(),
+      child: _isAttachmentUploading
+          ? _attachmentUploadingState()
+          : hasFile ? _attachmentUploadedState() : _attachmentIdleState(),
     );
   }
 
-  Widget _idleState() => GestureDetector(
-    onTap: _pickFile,
+  Widget _attachmentIdleState() => GestureDetector(
+    onTap: _pickAttachment,
     behavior: HitTestBehavior.opaque,
     child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
       Container(
@@ -1710,8 +1916,8 @@ class _SubmitProposalModalState extends State<_SubmitProposalModal> {
           text: TextSpan(
             style: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF64748B)),
             children: [
-              TextSpan(text: 'Click to upload ', style: GoogleFonts.beVietnamPro(fontSize: 13, color: UpriseColors.primaryDark, fontWeight: FontWeight.w600)),
-              const TextSpan(text: 'proposal documents'),
+              TextSpan(text: 'Click to upload attachment ', style: GoogleFonts.beVietnamPro(fontSize: 13, color: UpriseColors.primaryDark, fontWeight: FontWeight.w600)),
+              const TextSpan(text: '(PDF, DOC, etc.)'),
             ],
           ),
         ),
@@ -1722,7 +1928,7 @@ class _SubmitProposalModalState extends State<_SubmitProposalModal> {
     ]),
   );
 
-  Widget _uploadingState() => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+  Widget _attachmentUploadingState() => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
     Row(children: [
       Icon(Icons.insert_drive_file_outlined, size: 16, color: UpriseColors.primaryDark),
       const SizedBox(width: 10),
@@ -1735,17 +1941,17 @@ class _SubmitProposalModalState extends State<_SubmitProposalModal> {
     ClipRRect(
       borderRadius: BorderRadius.circular(6),
       child: LinearProgressIndicator(
-        value: _uploadProgress, minHeight: 6,
+        value: _attachmentUploadProgress, minHeight: 6,
         backgroundColor: const Color(0xFFE2E6EA),
         valueColor: AlwaysStoppedAnimation<Color>(UpriseColors.primaryDark),
       ),
     ),
     const SizedBox(height: 6),
-    Text('Uploading ${(_uploadProgress * 100).toInt()}%',
+    Text('Uploading ${(_attachmentUploadProgress * 100).toInt()}%',
         style: GoogleFonts.beVietnamPro(fontSize: 10, color: const Color(0xFF64748B))),
   ]);
 
-  Widget _uploadedState() => Row(children: [
+  Widget _attachmentUploadedState() => Row(children: [
     Container(
       padding: const EdgeInsets.all(8),
       decoration: BoxDecoration(color: const Color(0xFFECFDF5), borderRadius: BorderRadius.circular(8)),
@@ -1760,12 +1966,12 @@ class _SubmitProposalModalState extends State<_SubmitProposalModal> {
         Text(_attachmentSize!, style: GoogleFonts.beVietnamPro(fontSize: 11, color: const Color(0xFF059669))),
     ])),
     TextButton(
-      onPressed: _removeFile,
+      onPressed: _removeAttachment,
       style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), minimumSize: Size.zero, tapTargetSize: MaterialTapTargetSize.shrinkWrap),
       child: Text('Remove', style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFFDC2626))),
     ),
     TextButton(
-      onPressed: _pickFile,
+      onPressed: _pickAttachment,
       style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), minimumSize: Size.zero, tapTargetSize: MaterialTapTargetSize.shrinkWrap),
       child: Text('Change', style: GoogleFonts.beVietnamPro(fontSize: 12, color: UpriseColors.primaryDark)),
     ),
@@ -1773,7 +1979,7 @@ class _SubmitProposalModalState extends State<_SubmitProposalModal> {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// View Proposal Modal - UPDATED with Proposal ID in header
+// View Proposal Modal – WITH DEDICATED IMAGE PREVIEW
 // ─────────────────────────────────────────────────────────────────────────────
 class _ViewProposalModal extends StatelessWidget {
   final String docId;
@@ -1800,8 +2006,9 @@ class _ViewProposalModal extends StatelessWidget {
   Widget build(BuildContext context) {
     final status   = (data['status'] ?? 'pending').toString().toLowerCase();
     final propNum  = 'EP-${docId.substring(0, 4).toUpperCase()}';
-    final hasFile  = data['attachmentBase64'] != null && data['attachmentBase64'].toString().isNotEmpty;
-    
+    final hasImage = data['imageBase64'] != null && data['imageBase64'].toString().isNotEmpty;
+    final hasAttachment = data['attachmentBase64'] != null && data['attachmentBase64'].toString().isNotEmpty;
+
     final startTime = data['startTime'] ?? '';
     final endTime = data['endTime'] ?? '';
     final timeStr = (startTime.isNotEmpty && endTime.isNotEmpty) 
@@ -1826,12 +2033,11 @@ class _ViewProposalModal extends StatelessWidget {
                 child: const Icon(Icons.description_outlined, color: Colors.white, size: 18),
               ),
               const SizedBox(width: 14),
-              // ============ ADDED PROPOSAL ID HERE ============
               Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Text(data['title'] ?? 'Proposal Details',
                     style: GoogleFonts.beVietnamPro(fontSize: 17, fontWeight: FontWeight.w700, color: Colors.white)),
                 const SizedBox(height: 2),
-                Text(propNum,  // <-- Proposal ID now visible here
+                Text(propNum,
                     style: GoogleFonts.beVietnamPro(fontSize: 12, color: Colors.white.withAlpha(179))),
               ])),
               _statusBadge(status),
@@ -1846,6 +2052,22 @@ class _ViewProposalModal extends StatelessWidget {
             child: SingleChildScrollView(
               padding: const EdgeInsets.all(24),
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                // ── Dedicated Image Preview ──
+                if (hasImage) ...[
+                  Container(
+                    width: double.infinity,
+                    height: 200,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: const Color(0xFFE2E6EA)),
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(10),
+                      child: _buildImageFromBase64(data['imageBase64']!, fit: BoxFit.contain),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                ],
                 Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   Expanded(child: _detailItem('Category', data['category'] ?? '—', Icons.category_outlined)),
                   const SizedBox(width: 16),
@@ -1894,7 +2116,8 @@ class _ViewProposalModal extends StatelessWidget {
                   _buildWetSignInfo(),
                 ],
                 
-                if (hasFile) ...[
+                // ── Attachment (if present) ──
+                if (hasAttachment) ...[
                   const SizedBox(height: 20),
                   Container(
                     padding: const EdgeInsets.all(14),
@@ -1968,20 +2191,15 @@ class _ViewProposalModal extends StatelessWidget {
   Widget _buildWetSignInfo() {
     final wetSign = data['wetSignSchedule'];
     if (wetSign == null) return const SizedBox.shrink();
-    
     final startDateTime = wetSign['startDateTime'] as Timestamp?;
     final endDateTime = wetSign['endDateTime'] as Timestamp?;
     final location = wetSign['location'] ?? 'Dean\'s Office';
-    
     if (startDateTime == null) return const SizedBox.shrink();
-    
     final startDate = startDateTime.toDate();
     final endDate = endDateTime?.toDate();
-    
     final dateStr = DateFormat('MMMM dd, yyyy').format(startDate);
     final startTimeStr = DateFormat('h:mm a').format(startDate);
     final endTimeStr = endDate != null ? DateFormat('h:mm a').format(endDate) : 'TBD';
-    
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -1992,29 +2210,23 @@ class _ViewProposalModal extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF059669).withAlpha(26),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: const Icon(Icons.edit_calendar_rounded, color: Color(0xFF059669), size: 18),
+          Row(children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: const Color(0xFF059669).withAlpha(26),
+                borderRadius: BorderRadius.circular(8),
               ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  '📄 Wet Sign Schedule',
-                  style: GoogleFonts.beVietnamPro(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                    color: const Color(0xFF059669),
-                  ),
-                ),
+              child: const Icon(Icons.edit_calendar_rounded, color: Color(0xFF059669), size: 18),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                '📄 Wet Sign Schedule',
+                style: GoogleFonts.beVietnamPro(fontSize: 14, fontWeight: FontWeight.w700, color: const Color(0xFF059669)),
               ),
-            ],
-          ),
+            ),
+          ]),
           const SizedBox(height: 12),
           _buildWetSignDetailRow(Icons.calendar_today_outlined, 'Date', dateStr),
           const SizedBox(height: 8),
@@ -2028,18 +2240,16 @@ class _ViewProposalModal extends StatelessWidget {
               color: const Color(0xFF059669).withAlpha(13),
               borderRadius: BorderRadius.circular(8),
             ),
-            child: Row(
-              children: [
-                const Icon(Icons.info_outline_rounded, size: 14, color: Color(0xFF059669)),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    'Please bring printed copies of your proposal documents for signing.',
-                    style: GoogleFonts.beVietnamPro(fontSize: 11, color: const Color(0xFF065F46)),
-                  ),
+            child: Row(children: [
+              const Icon(Icons.info_outline_rounded, size: 14, color: Color(0xFF059669)),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Please bring printed copies of your proposal documents for signing.',
+                  style: GoogleFonts.beVietnamPro(fontSize: 11, color: const Color(0xFF065F46)),
                 ),
-              ],
-            ),
+              ),
+            ]),
           ),
         ],
       ),
@@ -2052,20 +2262,9 @@ class _ViewProposalModal extends StatelessWidget {
       children: [
         Icon(icon, size: 14, color: const Color(0xFF059669)),
         const SizedBox(width: 8),
-        SizedBox(
-          width: 50,
-          child: Text(
-            label,
-            style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF64748B)),
-          ),
-        ),
+        SizedBox(width: 50, child: Text(label, style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF64748B)))),
         const SizedBox(width: 8),
-        Expanded(
-          child: Text(
-            value,
-            style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.w500, color: const Color(0xFF1F2937)),
-          ),
-        ),
+        Expanded(child: Text(value, style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.w500, color: const Color(0xFF1F2937)))),
       ],
     );
   }
@@ -2078,18 +2277,14 @@ class _ViewProposalModal extends StatelessWidget {
       final name  = data['attachmentName'] ?? 'document';
       final ext   = name.contains('.') ? name.split('.').last.toLowerCase() : '';
       final mime  = _mimeFromExt(ext);
-
       if (mime.startsWith('image/')) {
         showDialog(
           context: context,
           builder: (_) => Dialog(
             child: Column(mainAxisSize: MainAxisSize.min, children: [
-              Padding(padding: const EdgeInsets.all(8),
-                  child: Text(name, style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.w600))),
+              Padding(padding: const EdgeInsets.all(8), child: Text(name, style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.w600))),
               Flexible(child: Image.memory(bytes)),
-              Padding(padding: const EdgeInsets.all(8),
-                child: TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close')),
-              ),
+              Padding(padding: const EdgeInsets.all(8), child: TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close'))),
             ]),
           ),
         );
