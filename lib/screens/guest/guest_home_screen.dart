@@ -11,7 +11,11 @@
 // from there so both this file and guest_access_gateway_screen share it.
 //
 
+import 'dart:async';
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../student/student_login.dart';
 import 'guest_announcements_screen.dart';
@@ -180,180 +184,202 @@ class _NavItem {
 }
 
 // ─────────────────────────────────────────────────────────────
-//  HOME CONTENT
+//  FEED ITEM MODEL  (unified announcement + event)
 // ─────────────────────────────────────────────────────────────
-class _GuestHomeContent extends StatelessWidget {
+enum _FeedType { announcement, event }
+
+class _FeedItem {
+  final String    id;
+  final _FeedType type;
+  final String    title;
+  final String    body;          // content / description
+  final String    orgName;
+  final String    orgInitial;
+  final String    imageBase64;   // announcement image
+  final String    category;      // event category
+  final String    audience;      // Public / CICT Only
+  final bool      isPinned;
+  final DateTime  timestamp;
+  final DateTime? eventDate;
+  final String    location;
+  final bool      isSoon;
+
+  const _FeedItem({
+    required this.id,
+    required this.type,
+    required this.title,
+    required this.body,
+    required this.orgName,
+    required this.orgInitial,
+    required this.imageBase64,
+    required this.category,
+    required this.audience,
+    required this.isPinned,
+    required this.timestamp,
+    this.eventDate,
+    this.location = '',
+    this.isSoon   = false,
+  });
+}
+
+// ─────────────────────────────────────────────────────────────
+//  CATEGORY COLOUR MAP
+// ─────────────────────────────────────────────────────────────
+const _catColors = <String, Color>{
+  'Workshop':         Color(0xFF8B5CF6),
+  'Seminar':          Color(0xFF3B82F6),
+  'Competition':      Color(0xFFEF4444),
+  'General Assembly': Color(0xFFF97316),
+  'Social':           Color(0xFFEC4899),
+  'Outreach':         Color(0xFF10B981),
+  'Sports':           Color(0xFF14B8A6),
+  'Academic':         Color(0xFF6366F1),
+  'Technical':        Color(0xFF06B6D4),
+  'Cultural':         Color(0xFFD946EF),
+};
+Color _catColor(String cat) => _catColors[cat] ?? const Color(0xFF6B7280);
+
+// ─────────────────────────────────────────────────────────────
+//  HOME CONTENT  (social-media feed)
+// ─────────────────────────────────────────────────────────────
+class _GuestHomeContent extends StatefulWidget {
   final GuestMode mode;
   const _GuestHomeContent({this.mode = GuestMode.visitor});
 
-  bool get _isAuthenticated => mode == GuestMode.authenticated;
+  @override
+  State<_GuestHomeContent> createState() => _GuestHomeContentState();
+}
+
+class _GuestHomeContentState extends State<_GuestHomeContent> {
+  bool get _isAuthenticated => widget.mode == GuestMode.authenticated;
+
+  // Feed data
+  final List<_FeedItem> _feed = [];
+  bool _loadingFeed = true;
+
+  // Firestore streams
+  StreamSubscription<QuerySnapshot>? _annSub;
+  StreamSubscription<QuerySnapshot>? _evtSub;
+
+  final Map<String, _FeedItem> _annMap = {};
+  final Map<String, _FeedItem> _evtMap = {};
 
   @override
-  Widget build(BuildContext context) {
-    return CustomScrollView(
-      slivers: [
-        // ── App Bar ──
-        SliverAppBar(
-          floating: true,
-          backgroundColor: Colors.white,
-          elevation: 0,
-          title: Row(
-            children: [
-              Container(
-                width: 30,
-                height: 30,
-                decoration: const BoxDecoration(
-                  color: _kPrimary,
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(
-                  Icons.local_fire_department,
-                  color: Colors.white,
-                  size: 17,
-                ),
-              ),
-              const SizedBox(width: 8),
-              const Text(
-                'UPRISE',
-                style: TextStyle(
-                  color: _kPrimary,
-                  fontWeight: FontWeight.w900,
-                  fontSize: 20,
-                  letterSpacing: 1.4,
-                ),
-              ),
-            ],
-          ),
-          // Hide the "Sign In" button once the guest is authenticated
-          actions: _isAuthenticated
-              ? [
-                  Padding(
-                    padding: const EdgeInsets.only(right: 12),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFECFDF5),
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(
-                            color: const Color(0xFF059669).withOpacity(0.4)),
-                      ),
-                      child: const Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.verified_rounded,
-                              size: 13, color: Color(0xFF059669)),
-                          SizedBox(width: 5),
-                          Text(
-                            'Verified Guest',
-                            style: TextStyle(
-                              color: Color(0xFF059669),
-                              fontSize: 11,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ]
-              : [
-                  Padding(
-                    padding: const EdgeInsets.only(right: 12),
-                    child: GestureDetector(
-                      onTap: () => _showSignInPrompt(context),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 16, vertical: 8),
-                        decoration: BoxDecoration(
-                          color: _kPrimary,
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: const Text(
-                          'Sign In',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-          bottom: PreferredSize(
-            preferredSize: const Size.fromHeight(1),
-            child: Container(height: 1, color: const Color(0xFFF0F0F0)),
-          ),
-        ),
-
-        // ── Banner ──
-        SliverToBoxAdapter(
-          child: _GuestBanner(
-            onSignIn: () => _showSignInPrompt(context),
-            isAuthenticated: _isAuthenticated,
-          ),
-        ),
-
-        // ── Quick Access ──
-        const SliverToBoxAdapter(
-          child: Padding(
-            padding: EdgeInsets.fromLTRB(16, 22, 16, 10),
-            child: Text(
-              'Quick Access',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w800,
-                color: Colors.black87,
-              ),
-            ),
-          ),
-        ),
-
-        SliverToBoxAdapter(
-          child: _QuickActions(
-            onEventsTap: () {
-              final s = context.findAncestorStateOfType<_GuestHomeScreenState>();
-              if (s != null) s.switchTab(2);
-            },
-            onAnnouncementsTap: () {
-              final s = context.findAncestorStateOfType<_GuestHomeScreenState>();
-              if (s != null) s.switchTab(1);
-            },
-            onCalendarTap: () {
-              final s = context.findAncestorStateOfType<_GuestHomeScreenState>();
-              if (s != null) s.switchTab(3);
-            },
-          ),
-        ),
-
-        // ── Locked features heading — only for visitors ──
-        if (!_isAuthenticated) ...[
-          const SliverToBoxAdapter(
-            child: Padding(
-              padding: EdgeInsets.fromLTRB(16, 26, 16, 10),
-              child: Text(
-                'Available to CICT Students',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w800,
-                  color: Colors.black87,
-                ),
-              ),
-            ),
-          ),
-          SliverToBoxAdapter(
-            child: _LockedFeaturesGrid(
-                onSignIn: () => _showSignInPrompt(context)),
-          ),
-        ],
-
-        const SliverToBoxAdapter(child: SizedBox(height: 80)),
-      ],
-    );
+  void initState() {
+    super.initState();
+    _subscribeFeed();
   }
 
-  void _showSignInPrompt(BuildContext context) {
+  @override
+  void dispose() {
+    _annSub?.cancel();
+    _evtSub?.cancel();
+    super.dispose();
+  }
+
+  void _subscribeFeed() {
+    // ── Announcements ──────────────────────────────────────
+    _annSub = FirebaseFirestore.instance
+        .collection('announcements')
+        .where('isPublished', isEqualTo: true)
+        .where('targetAudience', whereIn: ['Public', 'CICT Only'])
+        .snapshots()
+        .listen((snap) {
+      for (final doc in snap.docs) {
+        final d        = doc.data() as Map<String, dynamic>;
+        final ts       = d['timestamp'] as Timestamp?;
+        final orgName  = (d['authorName'] as String?) ?? 'UPRISE';
+        _annMap[doc.id] = _FeedItem(
+          id          : doc.id,
+          type        : _FeedType.announcement,
+          title       : (d['title']    as String?) ?? '',
+          body        : (d['content']  as String?) ?? '',
+          orgName     : orgName,
+          orgInitial  : orgName.isNotEmpty ? orgName[0].toUpperCase() : 'U',
+          imageBase64 : (d['imageBase64'] as String?) ?? '',
+          category    : '',
+          audience    : (d['targetAudience'] as String?) ?? 'Public',
+          isPinned    : (d['pinned'] as bool?) ?? false,
+          timestamp   : ts?.toDate() ?? DateTime.now(),
+        );
+      }
+      final ids = snap.docs.map((d) => d.id).toSet();
+      _annMap.removeWhere((k, _) => !ids.contains(k));
+      _rebuildFeed();
+    });
+
+    // ── Events ─────────────────────────────────────────────
+    _evtSub = FirebaseFirestore.instance
+        .collection('events')
+        .where('status', isEqualTo: 'approved')
+        .snapshots()
+        .listen((snap) {
+      for (final doc in snap.docs) {
+        final d       = doc.data() as Map<String, dynamic>;
+        final aud     = (d['audience'] as String?) ?? 'Public';
+        if (aud == 'Members Only') { _evtMap.remove(doc.id); continue; }
+        final dateField = d['date'];
+        final evDate  = dateField is Timestamp ? dateField.toDate() : DateTime.now();
+        final created = d['createdAt'] as Timestamp?;
+        final orgName = (d['orgName'] as String?) ?? 'Organization';
+        _evtMap[doc.id] = _FeedItem(
+          id         : doc.id,
+          type       : _FeedType.event,
+          title      : (d['title']       as String?) ?? 'Untitled',
+          body       : (d['description'] as String?) ?? '',
+          orgName    : orgName,
+          orgInitial : orgName.isNotEmpty ? orgName[0].toUpperCase() : 'O',
+          imageBase64: '',
+          category   : (d['category']   as String?) ?? 'Other',
+          audience   : aud,
+          isPinned   : false,
+          timestamp  : created?.toDate() ?? evDate,
+          eventDate  : evDate,
+          location   : (d['location']   as String?) ?? 'TBA',
+          isSoon     : evDate.difference(DateTime.now()).inDays <= 7 &&
+                       evDate.isAfter(DateTime.now()),
+        );
+      }
+      final ids = snap.docs.map((d) => d.id).toSet();
+      _evtMap.removeWhere((k, _) => !ids.contains(k));
+      _rebuildFeed();
+    });
+  }
+
+  void _rebuildFeed() {
+    if (!mounted) return;
+    final all = <_FeedItem>[..._annMap.values, ..._evtMap.values];
+    // Pinned announcements float to top, then sort by timestamp desc
+    all.sort((a, b) {
+      if (a.isPinned && !b.isPinned) return -1;
+      if (!a.isPinned && b.isPinned) return 1;
+      return b.timestamp.compareTo(a.timestamp);
+    });
+    setState(() {
+      _feed
+        ..clear()
+        ..addAll(all);
+      _loadingFeed = false;
+    });
+  }
+
+  String _timeAgo(DateTime dt) {
+    final diff = DateTime.now().difference(dt);
+    if (diff.inMinutes < 1)  return 'just now';
+    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
+    if (diff.inHours < 24)   return '${diff.inHours}h ago';
+    if (diff.inDays < 7)     return '${diff.inDays}d ago';
+    if (diff.inDays < 30)    return '${(diff.inDays / 7).floor()}w ago';
+    if (diff.inDays < 365)   return '${(diff.inDays / 30).floor()}mo ago';
+    return '${(diff.inDays / 365).floor()}y ago';
+  }
+
+  void _switchTab(int index) {
+    final s = context.findAncestorStateOfType<_GuestHomeScreenState>();
+    if (s != null) s.switchTab(index);
+  }
+
+  void _showSignInPrompt() {
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
@@ -361,401 +387,923 @@ class _GuestHomeContent extends StatelessWidget {
       builder: (_) => const _SignInPromptSheet(),
     );
   }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFF0F2F5),
+      body: CustomScrollView(
+        slivers: [
+          // ── Floating App Bar ──────────────────────────────
+          SliverAppBar(
+            floating: true,
+            snap: true,
+            backgroundColor: Colors.white,
+            elevation: 0,
+            titleSpacing: 16,
+            title: Row(
+              children: [
+                Container(
+                  width: 32, height: 32,
+                  decoration: const BoxDecoration(
+                      color: _kPrimary, shape: BoxShape.circle),
+                  child: const Icon(Icons.local_fire_department,
+                      color: Colors.white, size: 18),
+                ),
+                const SizedBox(width: 8),
+                const Text('UPRISE',
+                    style: TextStyle(
+                      color: _kPrimary,
+                      fontWeight: FontWeight.w900,
+                      fontSize: 22,
+                      letterSpacing: 1.5,
+                    )),
+              ],
+            ),
+            actions: [
+              if (_isAuthenticated)
+                Padding(
+                  padding: const EdgeInsets.only(right: 14),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 10, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFECFDF5),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                          color: const Color(0xFF059669).withOpacity(0.4)),
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.verified_rounded,
+                            size: 12, color: Color(0xFF059669)),
+                        SizedBox(width: 4),
+                        Text('Verified',
+                            style: TextStyle(
+                                color: Color(0xFF059669),
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700)),
+                      ],
+                    ),
+                  ),
+                )
+              else
+                Padding(
+                  padding: const EdgeInsets.only(right: 14),
+                  child: GestureDetector(
+                    onTap: _showSignInPrompt,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 7),
+                      decoration: BoxDecoration(
+                        color: _kPrimary,
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: const Text('Sign In',
+                          style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700)),
+                    ),
+                  ),
+                ),
+            ],
+            bottom: PreferredSize(
+              preferredSize: const Size.fromHeight(1),
+              child: Container(height: 1, color: const Color(0xFFE4E6EA)),
+            ),
+          ),
+
+          // ── Stories / Quick nav row ───────────────────────
+          SliverToBoxAdapter(
+            child: _QuickNavRow(
+              isAuthenticated: _isAuthenticated,
+              onEvents:        () => _switchTab(2),
+              onAnnouncements: () => _switchTab(1),
+              onCalendar:      () => _switchTab(3),
+              onSignIn:        _showSignInPrompt,
+            ),
+          ),
+
+          // ── Feed ─────────────────────────────────────────
+          if (_loadingFeed)
+            const SliverFillRemaining(
+              child: Center(
+                  child: CircularProgressIndicator(color: _kPrimary)),
+            )
+          else if (_feed.isEmpty)
+            const SliverFillRemaining(child: _EmptyFeed())
+          else
+            SliverList(
+              delegate: SliverChildBuilderDelegate(
+                (context, i) {
+                  // Inject "See all events" divider after 4 items
+                  if (i == 4 && _feed.length > 4) {
+                    return _SeeAllBanner(
+                      label: 'See all public events',
+                      icon: Icons.calendar_today_rounded,
+                      color: _kPrimary,
+                      onTap: () => _switchTab(2),
+                    );
+                  }
+                  final idx = i > 4 ? i - 1 : i;
+                  if (idx >= _feed.length) return null;
+                  final item = _feed[idx];
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: item.type == _FeedType.announcement
+                        ? _AnnouncementCard(
+                            item: item,
+                            timeAgo: _timeAgo(item.timestamp),
+                            onOrgTap: () => _switchTab(1),
+                          )
+                        : _EventCard(
+                            item: item,
+                            timeAgo: _timeAgo(item.timestamp),
+                            onTap: () => _switchTab(2),
+                          ),
+                  );
+                },
+                childCount: _feed.length + (_feed.length > 4 ? 1 : 0),
+              ),
+            ),
+
+          const SliverToBoxAdapter(child: SizedBox(height: 90)),
+        ],
+      ),
+    );
+  }
 }
 
 // ─────────────────────────────────────────────────────────────
-//  GUEST BANNER
+//  QUICK NAV ROW  (Stories-style horizontal scroll)
 // ─────────────────────────────────────────────────────────────
-class _GuestBanner extends StatelessWidget {
-  final VoidCallback onSignIn;
+class _QuickNavRow extends StatelessWidget {
   final bool         isAuthenticated;
-  const _GuestBanner({
+  final VoidCallback onEvents;
+  final VoidCallback onAnnouncements;
+  final VoidCallback onCalendar;
+  final VoidCallback onSignIn;
+
+  const _QuickNavRow({
+    required this.isAuthenticated,
+    required this.onEvents,
+    required this.onAnnouncements,
+    required this.onCalendar,
     required this.onSignIn,
-    this.isAuthenticated = false,
   });
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.fromLTRB(16, 14, 16, 0),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Color(0xFF1A1A2E), Color(0xFF16213E)],
+      color: Colors.white,
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: [
+            _QuickNavChip(
+              icon: Icons.calendar_today_rounded,
+              label: 'Events',
+              color: _kPrimary,
+              onTap: onEvents,
+            ),
+            const SizedBox(width: 8),
+            _QuickNavChip(
+              icon: Icons.campaign_rounded,
+              label: 'Announcements',
+              color: const Color(0xFF1565C0),
+              onTap: onAnnouncements,
+            ),
+            const SizedBox(width: 8),
+            _QuickNavChip(
+              icon: Icons.calendar_month_rounded,
+              label: 'Calendar',
+              color: const Color(0xFF2E7D32),
+              onTap: onCalendar,
+            ),
+            if (!isAuthenticated) ...[
+              const SizedBox(width: 8),
+              _QuickNavChip(
+                icon: Icons.login_rounded,
+                label: 'Sign In',
+                color: const Color(0xFF6A1B9A),
+                onTap: onSignIn,
+                outlined: true,
+              ),
+            ],
+          ],
         ),
-        borderRadius: BorderRadius.circular(18),
-      ),
-      child: Stack(
-        children: [
-          // Decorative orange circle
-          Positioned(
-            right: -20,
-            top: -20,
-            child: Container(
-              width: 120,
-              height: 120,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: _kPrimary.withOpacity(0.12),
-              ),
-            ),
-          ),
-          Positioned(
-            right: 20,
-            bottom: -30,
-            child: Container(
-              width: 80,
-              height: 80,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: _kPrimary.withOpacity(0.08),
-              ),
-            ),
-          ),
-
-          Padding(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Mode badge — green for authenticated, orange for visitor
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 10, vertical: 5),
-                  decoration: BoxDecoration(
-                    color: isAuthenticated
-                        ? const Color(0xFF059669).withOpacity(0.2)
-                        : _kPrimary.withOpacity(0.2),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(
-                      color: isAuthenticated
-                          ? const Color(0xFF059669).withOpacity(0.4)
-                          : _kPrimary.withOpacity(0.4),
-                      width: 1,
-                    ),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        isAuthenticated
-                            ? Icons.verified_rounded
-                            : Icons.person_outline_rounded,
-                        size: 12,
-                        color: isAuthenticated
-                            ? const Color(0xFF34D399)
-                            : _kPrimary,
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        isAuthenticated ? 'VERIFIED GUEST' : 'GUEST MODE',
-                        style: TextStyle(
-                          color: isAuthenticated
-                              ? const Color(0xFF34D399)
-                              : _kPrimary,
-                          fontSize: 10,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: 1.2,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 12),
-                const Text(
-                  'Welcome to UPRISE',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 20,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: 0.3,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  isAuthenticated
-                      ? 'You have full guest access. Use the Profile tab for your QR pass.'
-                      : 'Browse public events & announcements.',
-                  style: const TextStyle(
-                    color: Colors.white54,
-                    fontSize: 12,
-                    height: 1.4,
-                  ),
-                ),
-                // Only show the "Sign In as CICT Student" button for visitors
-                if (!isAuthenticated) ...[
-                  const SizedBox(height: 16),
-                  GestureDetector(
-                    onTap: onSignIn,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 18, vertical: 10),
-                      decoration: BoxDecoration(
-                        color: _kPrimary,
-                        borderRadius: BorderRadius.circular(22),
-                        boxShadow: [
-                          BoxShadow(
-                            color: _kPrimary.withOpacity(0.35),
-                            blurRadius: 10,
-                            offset: const Offset(0, 4),
-                          ),
-                        ],
-                      ),
-                      child: const Text(
-                        'Sign In as CICT Student →',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ),
-        ],
       ),
     );
   }
 }
 
-// ─────────────────────────────────────────────────────────────
-//  QUICK ACTIONS
-// ─────────────────────────────────────────────────────────────
-class _QuickActions extends StatelessWidget {
-  final VoidCallback onEventsTap;
-  final VoidCallback onAnnouncementsTap;
-  final VoidCallback onCalendarTap;
+class _QuickNavChip extends StatelessWidget {
+  final IconData     icon;
+  final String       label;
+  final Color        color;
+  final VoidCallback onTap;
+  final bool         outlined;
 
-  const _QuickActions({
-    required this.onEventsTap,
-    required this.onAnnouncementsTap,
-    required this.onCalendarTap,
+  const _QuickNavChip({
+    required this.icon,
+    required this.label,
+    required this.color,
+    required this.onTap,
+    this.outlined = false,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: Row(
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+          color: outlined ? Colors.transparent : color.withOpacity(0.10),
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(
+            color: outlined ? color.withOpacity(0.5) : color.withOpacity(0.2),
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 15, color: color),
+            const SizedBox(width: 6),
+            Text(label,
+                style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: color)),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+//  ANNOUNCEMENT FEED CARD  (Facebook-post style)
+// ─────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────
+//  SHARED CARD IMAGE BANNER  (full-width, gradient placeholder)
+// ─────────────────────────────────────────────────────────────
+class _CardImageBanner extends StatelessWidget {
+  final String  imageBase64;   // may be empty — shows placeholder
+  final String  orgName;       // used to pick placeholder gradient
+  final String  badgeLabel;    // e.g. "NEW" / "POPULAR" / "UPCOMING"
+  final Color   badgeColor;
+  final double  height;
+
+  const _CardImageBanner({
+    required this.imageBase64,
+    required this.orgName,
+    required this.badgeLabel,
+    required this.badgeColor,
+    this.height = 190,
+  });
+
+  // Deterministic gradient from the org name hash
+  List<Color> get _gradientColors {
+    final hash = orgName.hashCode.abs();
+    const palettes = [
+      [Color(0xFF1A237E), Color(0xFF283593)],
+      [Color(0xFF4A148C), Color(0xFF6A1B9A)],
+      [Color(0xFF880E4F), Color(0xFFC2185B)],
+      [Color(0xFF1B5E20), Color(0xFF2E7D32)],
+      [Color(0xFF0D47A1), Color(0xFF1565C0)],
+      [Color(0xFF37474F), Color(0xFF546E7A)],
+      [Color(0xFFBF360C), Color(0xFFE64A19)],
+      [Color(0xFF006064), Color(0xFF00838F)],
+    ];
+    return palettes[hash % palettes.length];
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: double.infinity,
+      height: height,
+      child: Stack(
+        fit: StackFit.expand,
         children: [
-          _QuickActionTile(
-            icon: Icons.calendar_today_rounded,
-            label: 'Public\nEvents',
-            color: _kPrimary,
-            onTap: onEventsTap,
+          // ── Background: real image or gradient placeholder ──
+          if (imageBase64.isNotEmpty)
+            _tryDecodeImage(imageBase64, height)
+          else
+            _GradientPlaceholder(
+              colors: _gradientColors,
+              initial: orgName.isNotEmpty ? orgName[0].toUpperCase() : '?',
+            ),
+
+          // ── Subtle bottom scrim so text below stays readable ──
+          Positioned(
+            bottom: 0, left: 0, right: 0,
+            child: Container(
+              height: 60,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.bottomCenter,
+                  end: Alignment.topCenter,
+                  colors: [
+                    Colors.black.withOpacity(0.35),
+                    Colors.transparent,
+                  ],
+                ),
+              ),
+            ),
           ),
-          const SizedBox(width: 12),
-          _QuickActionTile(
-            icon: Icons.campaign_rounded,
-            label: 'Announce-\nments',
-            color: const Color(0xFF1565C0),
-            onTap: onAnnouncementsTap,
+
+          // ── Status badge top-left ──────────────────────────
+          if (badgeLabel.isNotEmpty)
+            Positioned(
+              top: 12, left: 12,
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 10, vertical: 5),
+                decoration: BoxDecoration(
+                  color: badgeColor,
+                  borderRadius: BorderRadius.circular(6),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.25),
+                      blurRadius: 6,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: Text(
+                  badgeLabel,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0.8,
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  static Widget _tryDecodeImage(String b64, double height) {
+    try {
+      final bytes = base64Decode(b64);
+      return Image.memory(
+        bytes,
+        width: double.infinity,
+        height: height,
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+      );
+    } catch (_) {
+      return const SizedBox.shrink();
+    }
+  }
+}
+
+class _GradientPlaceholder extends StatelessWidget {
+  final List<Color> colors;
+  final String      initial;
+  const _GradientPlaceholder(
+      {required this.colors, required this.initial});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: colors,
+        ),
+      ),
+      child: Center(
+        child: Text(
+          initial,
+          style: TextStyle(
+            fontSize: 72,
+            fontWeight: FontWeight.w900,
+            color: Colors.white.withOpacity(0.12),
           ),
-          const SizedBox(width: 12),
-          _QuickActionTile(
-            icon: Icons.calendar_month_rounded,
-            label: 'Calendar',
-            color: const Color(0xFF2E7D32),
-            onTap: onCalendarTap,
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+//  ANNOUNCEMENT FEED CARD
+// ─────────────────────────────────────────────────────────────
+class _AnnouncementCard extends StatefulWidget {
+  final _FeedItem    item;
+  final String       timeAgo;
+  final VoidCallback onOrgTap;
+
+  const _AnnouncementCard({
+    required this.item,
+    required this.timeAgo,
+    required this.onOrgTap,
+  });
+
+  @override
+  State<_AnnouncementCard> createState() => _AnnouncementCardState();
+}
+
+class _AnnouncementCardState extends State<_AnnouncementCard> {
+  bool _expanded = false;
+
+  String get _badgeLabel {
+    if (widget.item.isPinned) return 'PINNED';
+    final diff = DateTime.now().difference(widget.item.timestamp);
+    if (diff.inHours < 24) return 'NEW';
+    return '';
+  }
+
+  Color get _badgeColor {
+    if (widget.item.isPinned) return _kPrimary;
+    return const Color(0xFF059669);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final item = widget.item;
+
+    return Container(
+      color: Colors.white,
+      margin: const EdgeInsets.only(bottom: 0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // ── Full-width image / placeholder ────────────────
+          _CardImageBanner(
+            imageBase64: item.imageBase64,
+            orgName:     item.orgName,
+            badgeLabel:  _badgeLabel,
+            badgeColor:  _badgeColor,
+            height:      200,
           ),
+
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // ── Org row ────────────────────────────────
+                Row(
+                  children: [
+                    const Icon(Icons.campaign_outlined,
+                        size: 13, color: Colors.grey),
+                    const SizedBox(width: 4),
+                    Expanded(
+                      child: Text(
+                        '${item.orgName} · ${widget.timeAgo}',
+                        style: const TextStyle(
+                            fontSize: 12, color: Colors.grey),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    if (item.audience == 'CICT Only')
+                      _MiniChip(
+                          label: 'CICT',
+                          color: const Color(0xFF1565C0)),
+                  ],
+                ),
+
+                const SizedBox(height: 8),
+
+                // ── Title ──────────────────────────────────
+                Text(
+                  item.title,
+                  style: const TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.w800,
+                      color: Colors.black87,
+                      height: 1.25),
+                ),
+
+                if (item.body.isNotEmpty) ...[
+                  const SizedBox(height: 6),
+                  Text(
+                    item.body,
+                    style: const TextStyle(
+                        fontSize: 13,
+                        color: Color(0xFF666666),
+                        height: 1.5),
+                    maxLines: _expanded ? null : 3,
+                    overflow: _expanded
+                        ? TextOverflow.visible
+                        : TextOverflow.ellipsis,
+                  ),
+                  if (!_expanded && item.body.length > 140)
+                    GestureDetector(
+                      onTap: () =>
+                          setState(() => _expanded = true),
+                      child: const Padding(
+                        padding: EdgeInsets.only(top: 3),
+                        child: Text('See more',
+                            style: TextStyle(
+                                fontSize: 12,
+                                color: Color(0xFF1565C0),
+                                fontWeight: FontWeight.w600)),
+                      ),
+                    ),
+                ],
+
+                const SizedBox(height: 14),
+
+                // ── Action row ─────────────────────────────
+                Row(
+                  children: [
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: widget.onOrgTap,
+                        child: Container(
+                          height: 42,
+                          decoration: BoxDecoration(
+                            color: _kPrimary,
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          alignment: Alignment.center,
+                          child: const Text(
+                            'View Announcement',
+                            style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w700),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Container(
+                      width: 42, height: 42,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF0F2F5),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Icon(Icons.share_outlined,
+                          size: 18, color: Colors.black54),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+
+          const Divider(height: 1, color: Color(0xFFE4E6EA)),
         ],
       ),
     );
   }
 }
 
-class _QuickActionTile extends StatelessWidget {
-  final IconData    icon;
-  final String      label;
-  final Color       color;
+// ─────────────────────────────────────────────────────────────
+//  EVENT FEED CARD  (image-first, matches reference design)
+// ─────────────────────────────────────────────────────────────
+class _EventCard extends StatelessWidget {
+  final _FeedItem    item;
+  final String       timeAgo;
   final VoidCallback onTap;
 
-  const _QuickActionTile({
+  const _EventCard({
+    required this.item,
+    required this.timeAgo,
+    required this.onTap,
+  });
+
+  String get _badgeLabel {
+    if (item.isSoon) return 'UPCOMING';
+    final diff = DateTime.now().difference(item.timestamp);
+    if (diff.inHours < 48) return 'NEW';
+    // Rough "popular" signal: recently created events in high-traffic categories
+    if (['Competition', 'General Assembly', 'Sports']
+        .contains(item.category)) return 'POPULAR';
+    return '';
+  }
+
+  Color get _badgeColor {
+    switch (_badgeLabel) {
+      case 'UPCOMING': return const Color(0xFFF59E0B);
+      case 'NEW':      return const Color(0xFF059669);
+      case 'POPULAR':  return const Color(0xFF8B5CF6);
+      default:         return _kPrimary;
+    }
+  }
+
+  String _formatEventDate(DateTime dt) {
+    const months = [
+      'Jan','Feb','Mar','Apr','May','Jun',
+      'Jul','Aug','Sep','Oct','Nov','Dec'
+    ];
+    const wdays = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+    final h   = dt.hour % 12 == 0 ? 12 : dt.hour % 12;
+    final min = dt.minute.toString().padLeft(2, '0');
+    final ampm = dt.hour < 12 ? 'AM' : 'PM';
+    return '${wdays[dt.weekday - 1]}, ${months[dt.month - 1]} ${dt.day}'
+           ' · $h:$min $ampm';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final catColor = _catColor(item.category);
+
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        color: Colors.white,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // ── Full-width image / gradient placeholder ────
+            _CardImageBanner(
+              imageBase64: item.imageBase64,
+              orgName:     item.orgName,
+              badgeLabel:  _badgeLabel,
+              badgeColor:  _badgeColor,
+              height:      190,
+            ),
+
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // ── Date + time ──────────────────────────
+                  Row(
+                    children: [
+                      Icon(Icons.access_time_rounded,
+                          size: 13, color: catColor),
+                      const SizedBox(width: 5),
+                      Expanded(
+                        child: Text(
+                          item.eventDate != null
+                              ? _formatEventDate(item.eventDate!)
+                              : 'Date TBA',
+                          style: TextStyle(
+                              fontSize: 12,
+                              color: catColor,
+                              fontWeight: FontWeight.w600),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      // Category dot
+                      Container(
+                        width: 8, height: 8,
+                        decoration: BoxDecoration(
+                          color: catColor,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 8),
+
+                  // ── Title ────────────────────────────────
+                  Text(
+                    item.title,
+                    style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800,
+                        color: Colors.black87,
+                        height: 1.2),
+                  ),
+
+                  const SizedBox(height: 6),
+
+                  // ── Location ─────────────────────────────
+                  if (item.location.isNotEmpty &&
+                      item.location != 'TBA')
+                    Row(
+                      children: [
+                        const Icon(Icons.location_on_outlined,
+                            size: 13, color: Colors.grey),
+                        const SizedBox(width: 4),
+                        Expanded(
+                          child: Text(
+                            item.location,
+                            style: const TextStyle(
+                                fontSize: 12, color: Colors.grey),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+
+                  // ── Description ───────────────────────────
+                  if (item.body.isNotEmpty) ...[
+                    const SizedBox(height: 6),
+                    Text(
+                      item.body,
+                      style: const TextStyle(
+                          fontSize: 13,
+                          color: Color(0xFF666666),
+                          height: 1.5),
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+
+                  const SizedBox(height: 14),
+
+                  // ── Action row (full-width button + share) ─
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Container(
+                          height: 44,
+                          decoration: BoxDecoration(
+                            color: _kPrimary,
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          alignment: Alignment.center,
+                          child: const Text(
+                            'View Details',
+                            style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 14,
+                                fontWeight: FontWeight.w700),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Container(
+                        width: 44, height: 44,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF0F2F5),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: const Icon(Icons.share_outlined,
+                            size: 18, color: Colors.black54),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+
+            const Divider(height: 1, color: Color(0xFFE4E6EA)),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _DetailRow extends StatelessWidget {
+  final IconData icon;
+  final Color    color;
+  final String   text;
+  final int      maxLines;
+
+  const _DetailRow({
     required this.icon,
+    required this.color,
+    required this.text,
+    this.maxLines = 1,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, size: 13, color: color),
+        const SizedBox(width: 7),
+        Expanded(
+          child: Text(
+            text,
+            style: TextStyle(
+                fontSize: 12,
+                color: color == Colors.grey
+                    ? const Color(0xFF666666)
+                    : Colors.black87,
+                height: 1.4),
+            maxLines: maxLines,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+//  SEE ALL BANNER  (feed divider)
+// ─────────────────────────────────────────────────────────────
+class _SeeAllBanner extends StatelessWidget {
+  final String       label;
+  final IconData     icon;
+  final Color        color;
+  final VoidCallback onTap;
+
+  const _SeeAllBanner({
     required this.label,
+    required this.icon,
     required this.color,
     required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Expanded(
-      child: GestureDetector(
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 18),
-          decoration: BoxDecoration(
-            color: color.withOpacity(0.08),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-                color: color.withOpacity(0.15), width: 1),
-          ),
-          child: Column(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: color.withOpacity(0.12),
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(icon, color: color, size: 22),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                label,
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                  color: color,
-                  height: 1.3,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────
-//  LOCKED FEATURES
-// ─────────────────────────────────────────────────────────────
-class _LockedFeaturesGrid extends StatelessWidget {
-  final VoidCallback onSignIn;
-  const _LockedFeaturesGrid({required this.onSignIn});
-
-  static const _features = [
-    _LockedFeature(
-      icon: Icons.badge_outlined,
-      label: 'Digital ID',
-      description: 'Your student identity card',
-      color: Color(0xFFFF6B00),
-    ),
-    _LockedFeature(
-      icon: Icons.groups_outlined,
-      label: 'Organizations',
-      description: 'CICT org directory',
-      color: Color(0xFF1565C0),
-    ),
-    _LockedFeature(
-      icon: Icons.workspace_premium_outlined,
-      label: 'Certificates',
-      description: 'Event certificates',
-      color: Color(0xFF6A1B9A),
-    ),
-    _LockedFeature(
-      icon: Icons.shopping_bag_outlined,
-      label: 'Merchandise',
-      description: 'Org merch store',
-      color: Color(0xFF2E7D32),
-    ),
-  ];
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: GridView.count(
-        shrinkWrap: true,
-        physics: const NeverScrollableScrollPhysics(),
-        crossAxisCount: 2,
-        mainAxisSpacing: 12,
-        crossAxisSpacing: 12,
-        childAspectRatio: 1.6,
-        children: _features
-            .map((f) => _LockedTile(feature: f, onSignIn: onSignIn))
-            .toList(),
-      ),
-    );
-  }
-}
-
-class _LockedFeature {
-  final IconData icon;
-  final String   label;
-  final String   description;
-  final Color    color;
-  const _LockedFeature({
-    required this.icon,
-    required this.label,
-    required this.description,
-    required this.color,
-  });
-}
-
-class _LockedTile extends StatelessWidget {
-  final _LockedFeature feature;
-  final VoidCallback   onSignIn;
-  const _LockedTile({required this.feature, required this.onSignIn});
-
-  @override
-  Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: onSignIn,
+      onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: const Color(0xFFEEEEEE)),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.04),
-              blurRadius: 6,
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
+        margin: const EdgeInsets.only(bottom: 8),
+        color: Colors.white,
+        padding: const EdgeInsets.symmetric(
+            horizontal: 16, vertical: 14),
         child: Row(
           children: [
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: feature.color.withOpacity(0.1),
+                color: color.withOpacity(0.1),
                 borderRadius: BorderRadius.circular(10),
               ),
-              child: Icon(feature.icon, size: 20, color: feature.color),
+              child: Icon(icon, size: 16, color: color),
             ),
-            const SizedBox(width: 10),
+            const SizedBox(width: 12),
             Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(
-                    feature.label,
-                    style: const TextStyle(
-                      fontSize: 12,
+              child: Text(label,
+                  style: TextStyle(
+                      fontSize: 14,
                       fontWeight: FontWeight.w700,
-                      color: Colors.black87,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Row(
-                    children: const [
-                      Icon(Icons.lock_outline_rounded,
-                          size: 10, color: Colors.grey),
-                      SizedBox(width: 3),
-                      Flexible(
-                        child: Text(
-                          'Sign in',
-                          style: TextStyle(
-                              fontSize: 10, color: Colors.grey),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
+                      color: color)),
             ),
+            Icon(Icons.arrow_forward_rounded, size: 18, color: color),
           ],
         ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+//  MINI CHIP  (audience badge)
+// ─────────────────────────────────────────────────────────────
+class _MiniChip extends StatelessWidget {
+  final String label;
+  final Color  color;
+  const _MiniChip({required this.label, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding:
+          const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+            fontSize: 9,
+            fontWeight: FontWeight.w800,
+            color: color,
+            letterSpacing: 0.4),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+//  EMPTY FEED
+// ─────────────────────────────────────────────────────────────
+class _EmptyFeed extends StatelessWidget {
+  const _EmptyFeed();
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(24),
+            decoration: const BoxDecoration(
+                color: _kPrimaryBg, shape: BoxShape.circle),
+            child: const Icon(Icons.dynamic_feed_outlined,
+                size: 48, color: _kPrimary),
+          ),
+          const SizedBox(height: 20),
+          const Text('No posts yet',
+              style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.black54)),
+          const SizedBox(height: 6),
+          const Text('Events & announcements will appear here.',
+              style:
+                  TextStyle(fontSize: 13, color: Colors.black38)),
+        ],
       ),
     );
   }
@@ -779,65 +1327,46 @@ class _SignInPromptSheet extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Handle
           Container(
-            width: 40,
-            height: 4,
+            width: 40, height: 4,
             margin: const EdgeInsets.only(bottom: 22),
             decoration: BoxDecoration(
-              color: Colors.grey[300],
-              borderRadius: BorderRadius.circular(2),
-            ),
+                color: Colors.grey[300],
+                borderRadius: BorderRadius.circular(2)),
           ),
-
-          // Icon
           Container(
-            width: 68,
-            height: 68,
-            decoration: BoxDecoration(
-              color: _kPrimaryBg,
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(
-              Icons.school_rounded,
-              size: 34,
-              color: _kPrimary,
-            ),
+            width: 68, height: 68,
+            decoration: const BoxDecoration(
+                color: _kPrimaryBg, shape: BoxShape.circle),
+            child: const Icon(Icons.school_rounded,
+                size: 34, color: _kPrimary),
           ),
-
           const SizedBox(height: 16),
-
-          const Text(
-            'CICT Student Access',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w800,
-              color: Colors.black87,
-            ),
-          ),
-
+          const Text('CICT Student Access',
+              style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                  color: Colors.black87)),
           const SizedBox(height: 8),
-
           const Text(
             'Sign in with your CICT credentials\nto unlock full access.',
             textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 13, color: Colors.grey, height: 1.5),
+            style: TextStyle(
+                fontSize: 13, color: Colors.grey, height: 1.5),
           ),
-
           const SizedBox(height: 24),
-
-          // Feature list
           _SheetFeatureRow(
-              icon: Icons.badge_outlined,       text: 'Digital ID & Profile'),
+              icon: Icons.badge_outlined,
+              text: 'Digital ID & Profile'),
           const SizedBox(height: 8),
           _SheetFeatureRow(
-              icon: Icons.groups_outlined,       text: 'Organizations & Clubs'),
+              icon: Icons.groups_outlined,
+              text: 'Organizations & Clubs'),
           const SizedBox(height: 8),
           _SheetFeatureRow(
-              icon: Icons.workspace_premium_outlined, text: 'Certificates & Merch'),
-
+              icon: Icons.workspace_premium_outlined,
+              text: 'Certificates & Merch'),
           const SizedBox(height: 24),
-
           SizedBox(
             width: double.infinity,
             child: ElevatedButton(
@@ -845,32 +1374,30 @@ class _SignInPromptSheet extends StatelessWidget {
                 Navigator.pop(context);
                 Navigator.pushReplacement(
                   context,
-                  MaterialPageRoute(builder: (_) => const StudentLogin()),
+                  MaterialPageRoute(
+                      builder: (_) => const StudentLogin()),
                 );
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: _kPrimary,
                 foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 16),
+                padding:
+                    const EdgeInsets.symmetric(vertical: 16),
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(14)),
                 elevation: 0,
               ),
-              child: const Text(
-                'Sign In as CICT Student',
-                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
-              ),
+              child: const Text('Sign In as CICT Student',
+                  style: TextStyle(
+                      fontWeight: FontWeight.w700, fontSize: 15)),
             ),
           ),
-
           const SizedBox(height: 10),
-
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text(
-              'Continue as Guest',
-              style: TextStyle(color: Colors.grey, fontSize: 13),
-            ),
+            child: const Text('Continue as Guest',
+                style:
+                    TextStyle(color: Colors.grey, fontSize: 13)),
           ),
         ],
       ),
@@ -890,19 +1417,16 @@ class _SheetFeatureRow extends StatelessWidget {
         Container(
           padding: const EdgeInsets.all(7),
           decoration: BoxDecoration(
-            color: _kPrimaryBg,
-            borderRadius: BorderRadius.circular(8),
-          ),
+              color: _kPrimaryBg,
+              borderRadius: BorderRadius.circular(8)),
           child: Icon(icon, size: 16, color: _kPrimary),
         ),
         const SizedBox(width: 12),
-        Text(
-          text,
-          style: const TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w500,
-              color: Colors.black87),
-        ),
+        Text(text,
+            style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+                color: Colors.black87)),
         const Spacer(),
         const Icon(Icons.check_circle_rounded,
             size: 16, color: Color(0xFF2E7D32)),

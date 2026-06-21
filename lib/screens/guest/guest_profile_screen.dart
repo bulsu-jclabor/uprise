@@ -64,10 +64,37 @@ class _GuestProfileScreenState extends State<GuestProfileScreen> {
   @override
   void initState() {
     super.initState();
+    // Re-render whenever the auth singleton notifies (login / logout).
+    GuestAuthService().addListener(_onAuthChanged);
     _checkSavedApplication();
   }
 
+  @override
+  void dispose() {
+    GuestAuthService().removeListener(_onAuthChanged);
+    super.dispose();
+  }
+
+  void _onAuthChanged() {
+    if (mounted) _checkSavedApplication();
+  }
+
+  /// Priority order:
+  ///   1. GuestAuthService (authenticated login via GuestLoginScreen)
+  ///      → docId is persisted under 'guest_auth_doc_id'
+  ///   2. Legacy visitor self-registration key ('external_request_doc_id')
+  ///      → set when a visitor submits the RegistrationScreen form
   Future<void> _checkSavedApplication() async {
+    if (mounted) setState(() => _checking = true);
+
+    final svc = GuestAuthService();
+    if (!svc.loaded) await svc.load();
+
+    if (svc.isAuthenticated && (svc.docId?.isNotEmpty ?? false)) {
+      if (mounted) setState(() { _savedDocId = svc.docId; _checking = false; });
+      return;
+    }
+
     final prefs = await SharedPreferences.getInstance();
     final docId = prefs.getString(_kPrefKey);
     if (mounted) setState(() { _savedDocId = docId; _checking = false; });
@@ -80,6 +107,7 @@ class _GuestProfileScreenState extends State<GuestProfileScreen> {
   }
 
   Future<void> _onWithdraw() async {
+    await GuestAuthService.clearSession();
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_kPrefKey);
     if (mounted) setState(() => _savedDocId = null);
