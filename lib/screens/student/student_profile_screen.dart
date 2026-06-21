@@ -5,7 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:qr_flutter/qr_flutter.dart';
-import 'package:intl/intl.dart';  
+import 'package:intl/intl.dart';
 import '../auth/role_router.dart';
 import '../student/student_login.dart';
 import '../student/student_events_screen.dart';
@@ -22,7 +22,28 @@ const kBg = Color(0xFFF5F5F5);
 // ProfileModel — single source of truth
 // ─────────────────────────────────────────────────────────────
 class ProfileModel extends ChangeNotifier {
-  String fullName = '';
+  // ── Name is split into 3 fields. `fullName` below is a derived
+  //    getter kept for any other screen in the app that still reads
+  //    profile.fullName — it composes the 3 parts automatically. ──
+  String firstName = '';
+  String middleName = '';
+  String lastName = '';
+
+  String get fullName {
+    final parts = [firstName, middleName, lastName]
+        .where((p) => p.trim().isNotEmpty);
+    return parts.join(' ');
+  }
+
+  // "Dela Cruz, Juan Miguel" style — handy for ID-card last-name-first display
+  String get fullNameLastFirst {
+    if (lastName.trim().isEmpty) return fullName;
+    final first = [firstName, middleName]
+        .where((p) => p.trim().isNotEmpty)
+        .join(' ');
+    return first.isEmpty ? lastName : '$lastName, $first';
+  }
+
   String studentId = '';
   String email = '';
   String mobile = '';
@@ -30,6 +51,7 @@ class ProfileModel extends ChangeNotifier {
   String photoUrl = '';
   // ── ID card fields ──
   String course = '';
+  String major = '';
   String yearLevel = '';
   String department = '';
   // ── Organization ──
@@ -53,12 +75,15 @@ class ProfileModel extends ChangeNotifier {
 
 if (snapshot.docs.isNotEmpty) {
   final data = snapshot.docs.first.data();
-  fullName = data['fullName'] ?? '';
+  firstName = data['firstName'] ?? '';
+  middleName = data['middleName'] ?? '';
+  lastName = data['lastName'] ?? '';
   studentId = data['studentId'] ?? '';
   mobile = data['mobile'] ?? '';
   address = data['address'] ?? '';
   photoUrl = data['photoUrl'] ?? '';
   course = data['course'] ?? '';
+  major = data['major'] ?? '';
   yearLevel = data['yearLevel'] ?? '';
   department = data['department'] ?? '';
   orgId = data['orgId'] ?? '';
@@ -80,21 +105,27 @@ if (snapshot.docs.isNotEmpty) {
   }
 
   Future<void> update({
-    required String fullName,
+    required String firstName,
+    required String middleName,
+    required String lastName,
     required String email,
     required String mobile,
     required String address,
     String? photoUrl,
     String? course,
+    String? major,
     String? yearLevel,
     String? department,
   }) async {
-    this.fullName = fullName;
+    this.firstName = firstName;
+    this.middleName = middleName;
+    this.lastName = lastName;
     this.email = email;
     this.mobile = mobile;
     this.address = address;
     if (photoUrl != null) this.photoUrl = photoUrl;
     if (course != null) this.course = course;
+    if (major != null) this.major = major;
     if (yearLevel != null) this.yearLevel = yearLevel;
     if (department != null) this.department = department;
 
@@ -109,13 +140,16 @@ if (user != null) {
   if (snapshot.docs.isNotEmpty) {
     final docRef = snapshot.docs.first.reference;
     await docRef.set({
-      'fullName': fullName,
+      'firstName': firstName,
+      'middleName': middleName,
+      'lastName': lastName,
       'studentId': studentId,
       'email': email,
       'mobile': mobile,
       'address': address,
       'photoUrl': this.photoUrl,
       'course': this.course,
+      'major': this.major,
       'yearLevel': this.yearLevel,
       'department': this.department,
     }, SetOptions(merge: true));
@@ -790,7 +824,8 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
 }
 
 // ─────────────────────────────────────────────────────────────
-// Personal Identity Screen
+// Personal Identity Screen — shows the ID card's front and back
+// stacked together (no flip/tap needed)
 // ─────────────────────────────────────────────────────────────
 class PersonalIdentityScreen extends StatelessWidget {
   final ProfileModel profile;
@@ -838,14 +873,19 @@ class PersonalIdentityScreen extends StatelessWidget {
             padding: const EdgeInsets.all(20),
             child: Column(
               children: [
+                _IdCardLabel(text: 'FRONT'),
+                const SizedBox(height: 8),
                 _IdCard1(profile: profile),
-                const SizedBox(height: 16),
+                const SizedBox(height: 20),
+                _IdCardLabel(text: 'BACK'),
+                const SizedBox(height: 8),
                 _IdCard2(profile: profile),
                 const SizedBox(height: 28),
                 SizedBox(
                   width: double.infinity,
-                  child: ElevatedButton(
+                  child: ElevatedButton.icon(
                     onPressed: () => _showDownloadPreview(context),
+                    icon: const Icon(Icons.download_rounded, size: 20),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: kOrange,
                       foregroundColor: Colors.white,
@@ -853,7 +893,7 @@ class PersonalIdentityScreen extends StatelessWidget {
                           borderRadius: BorderRadius.circular(12)),
                       padding: const EdgeInsets.symmetric(vertical: 16),
                     ),
-                    child: const Text('Download ID',
+                    label: const Text('Download ID',
                         style: TextStyle(
                             fontWeight: FontWeight.w600, fontSize: 16)),
                   ),
@@ -868,7 +908,32 @@ class PersonalIdentityScreen extends StatelessWidget {
   }
 }
 
-// ── Download Preview Bottom Sheet ──
+// Small "FRONT" / "BACK" eyebrow label used above each card
+class _IdCardLabel extends StatelessWidget {
+  final String text;
+  const _IdCardLabel({required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Padding(
+        padding: const EdgeInsets.only(left: 4),
+        child: Text(
+          text,
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 1.0,
+            color: Colors.grey[600],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ── Download Preview Bottom Sheet — shows front & back stacked ──
 class _IdDownloadPreviewSheet extends StatelessWidget {
   final ProfileModel profile;
   const _IdDownloadPreviewSheet({required this.profile});
@@ -881,84 +946,59 @@ class _IdDownloadPreviewSheet extends StatelessWidget {
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 40,
-            height: 4,
-            margin: const EdgeInsets.only(bottom: 16),
-            decoration: BoxDecoration(
-                color: Colors.grey[400],
-                borderRadius: BorderRadius.circular(2)),
-          ),
-          Stack(
-            alignment: Alignment.topCenter,
-            children: [
-              Padding(
-                padding:
-                    const EdgeInsets.only(top: 12, left: 12, right: 12),
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(14),
-                    boxShadow: [
-                      BoxShadow(
-                          color: Colors.black.withOpacity(0.08),
-                          blurRadius: 8,
-                          offset: const Offset(0, 4))
-                    ],
-                  ),
-                  child: _IdCard2(profile: profile),
-                ),
-              ),
-              Container(
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(14),
-                  boxShadow: [
-                    BoxShadow(
-                        color: Colors.black.withOpacity(0.1),
-                        blurRadius: 12,
-                        offset: const Offset(0, 6))
-                  ],
-                ),
-                child: _IdCard1(profile: profile),
-              ),
-            ],
-          ),
-          const SizedBox(height: 24),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed: () {
-                Navigator.pop(context);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('ID downloaded successfully!'),
-                    backgroundColor: kOrange,
-                  ),
-                );
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: kOrange,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12)),
-                padding: const EdgeInsets.symmetric(vertical: 16),
-              ),
-              child: const Text('Download',
-                  style:
-                      TextStyle(fontWeight: FontWeight.w600, fontSize: 16)),
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 40,
+              height: 4,
+              margin: const EdgeInsets.only(bottom: 16),
+              decoration: BoxDecoration(
+                  color: Colors.grey[400],
+                  borderRadius: BorderRadius.circular(2)),
             ),
-          ),
-        ],
+            _IdCardLabel(text: 'FRONT'),
+            const SizedBox(height: 8),
+            _IdCard1(profile: profile),
+            const SizedBox(height: 20),
+            _IdCardLabel(text: 'BACK'),
+            const SizedBox(height: 8),
+            _IdCard2(profile: profile),
+            const SizedBox(height: 24),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: () {
+                  Navigator.pop(context);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('ID downloaded successfully!'),
+                      backgroundColor: kOrange,
+                    ),
+                  );
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: kOrange,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                ),
+                child: const Text('Download',
+                    style:
+                        TextStyle(fontWeight: FontWeight.w600, fontSize: 16)),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
 }
 
-// ── ID Card 1: University header, photo, name, ID number, course ──
+// ── FRONT of ID: orange header banner, photo, last/first/middle name,
+//    student number, major/program ──
 class _IdCard1 extends StatelessWidget {
   final ProfileModel profile;
   const _IdCard1({required this.profile});
@@ -969,118 +1009,149 @@ class _IdCard1 extends StatelessWidget {
       width: double.infinity,
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(18),
         boxShadow: [
           BoxShadow(
-              color: Colors.black.withOpacity(0.06),
-              blurRadius: 10,
+              color: Colors.black.withOpacity(0.08),
+              blurRadius: 12,
               offset: const Offset(0, 4))
         ],
       ),
-      padding: const EdgeInsets.all(16),
+      clipBehavior: Clip.antiAlias,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Image.asset(
-                'assets/images/bsu_logo.png',
-                width: 32,
-                height: 32,
-                errorBuilder: (_, __, ___) => Container(
-                  width: 32,
-                  height: 32,
-                  decoration: const BoxDecoration(
-                      color: kOrange, shape: BoxShape.circle),
-                  child: const Icon(Icons.local_fire_department,
-                      color: Colors.white, size: 16),
+          // ── Orange header band ──
+          Container(
+            color: kOrange,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            child: Row(
+              children: [
+                _HeaderBadge(
+                  assetPath: 'assets/images/bsu_logo.png',
+                  icon: Icons.school,
                 ),
-              ),
-              const SizedBox(width: 8),
-              const Expanded(
-                child: Text('BULACAN STATE UNIVERSITY',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                        color: kOrange,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 13,
-                        letterSpacing: 0.4)),
-              ),
-              const SizedBox(width: 8),
-              Image.asset(
-                'assets/images/logo.png',
-                width: 32,
-                height: 32,
-                errorBuilder: (_, __, ___) => Container(
-                  width: 32,
-                  height: 32,
-                  decoration: const BoxDecoration(
-                      color: kOrange, shape: BoxShape.circle),
-                  child: const Icon(Icons.local_fire_department,
-                      color: Colors.white, size: 16),
+                const SizedBox(width: 10),
+                const Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      Text('BULACAN STATE UNIVERSITY',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 12,
+                              letterSpacing: 0.4)),
+                      SizedBox(height: 2),
+                      Text('OFFICIAL STUDENT IDENTIFICATION',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                              color: Colors.white70,
+                              fontWeight: FontWeight.w500,
+                              fontSize: 8,
+                              letterSpacing: 0.6)),
+                    ],
+                  ),
                 ),
-              ),
-            ],
+                const SizedBox(width: 10),
+                _HeaderBadge(
+                  assetPath: 'assets/images/logo.png',
+                  icon: Icons.local_fire_department,
+                ),
+              ],
+            ),
           ),
-          const SizedBox(height: 12),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              ClipRRect(
-                borderRadius: BorderRadius.circular(8),
-                child: profile.photoUrl.isNotEmpty
-                    ? _ProfileImage(
-                        photoUrl: profile.photoUrl,
-                        width: 80,
-                        height: 100,
-                        errorBuilder: (_, __, ___) => Container(
-                          width: 80,
-                          height: 100,
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFF5C8A0),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: const Icon(Icons.person,
-                              size: 40, color: Colors.white),
-                        ),
-                      )
-                    : Container(
-                        width: 80,
-                        height: 100,
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFF5C8A0),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: const Icon(Icons.person,
-                            size: 40, color: Colors.white),
-                      ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _IdFieldWidget(
-                        label: 'FULL NAME',
-                        value: profile.fullName.isNotEmpty
-                            ? profile.fullName.toUpperCase()
-                            : '—'),
-                    const SizedBox(height: 10),
-                    _IdFieldWidget(
-                        label: 'STUDENT ID NO.',
-                        value: profile.studentId.isNotEmpty
-                            ? profile.studentId
-                            : '—'),
-                    const SizedBox(height: 10),
-                    _IdFieldWidget(
-                        label: 'COURSE / PROGRAM',
-                        value: profile.course.isNotEmpty
-                            ? profile.course.toUpperCase()
-                            : '—'),
-                  ],
+
+          // ── Photo + name fields, each row paired with its
+          //    corresponding ID detail (last name/student no.,
+          //    first name/program, middle name/major) ──
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 18, 16, 20),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(10),
+                  child: profile.photoUrl.isNotEmpty
+                      ? _ProfileImage(
+                          photoUrl: profile.photoUrl,
+                          width: 84,
+                          height: 104,
+                          errorBuilder: (_, __, ___) => _PhotoPlaceholder(),
+                        )
+                      : _PhotoPlaceholder(),
                 ),
-              ),
-            ],
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _IdFieldWidget(
+                                label: 'LAST NAME',
+                                value: profile.lastName.isNotEmpty
+                                    ? profile.lastName.toUpperCase()
+                                    : '—'),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: _IdFieldWidget(
+                                label: 'STUDENT NO.',
+                                value: profile.studentId.isNotEmpty
+                                    ? profile.studentId
+                                    : '—'),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 11),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _IdFieldWidget(
+                                label: 'FIRST NAME',
+                                value: profile.firstName.isNotEmpty
+                                    ? profile.firstName.toUpperCase()
+                                    : '—'),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: _IdFieldWidget(
+                                label: 'PROGRAM',
+                                value: profile.course.isNotEmpty
+                                    ? profile.course.toUpperCase()
+                                    : '—'),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 11),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _IdFieldWidget(
+                                label: 'MIDDLE NAME',
+                                value: profile.middleName.isNotEmpty
+                                    ? profile.middleName.toUpperCase()
+                                    : '—'),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: _IdFieldWidget(
+                                label: 'MAJOR',
+                                value: profile.major.isNotEmpty
+                                    ? profile.major.toUpperCase()
+                                    : '—'),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
       ),
@@ -1088,7 +1159,7 @@ class _IdCard1 extends StatelessWidget {
   }
 }
 
-// ── ID Card 2: Year level, college/department + QR ──
+// ── BACK of ID: year level, college/department, QR code, validity strip ──
 class _IdCard2 extends StatelessWidget {
   final ProfileModel profile;
   const _IdCard2({required this.profile});
@@ -1099,81 +1170,157 @@ class _IdCard2 extends StatelessWidget {
       width: double.infinity,
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(18),
         boxShadow: [
           BoxShadow(
-              color: Colors.black.withOpacity(0.06),
-              blurRadius: 10,
+              color: Colors.black.withOpacity(0.08),
+              blurRadius: 12,
               offset: const Offset(0, 4))
         ],
       ),
-      padding: const EdgeInsets.all(16),
-      child: Stack(
+      clipBehavior: Clip.antiAlias,
+      child: Column(
         children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _IdFieldWidget(
-                        label: 'YEAR LEVEL',
-                        value: profile.yearLevel.isNotEmpty
-                            ? profile.yearLevel.toUpperCase()
-                            : '—'),
-                    const SizedBox(height: 12),
-                    _IdFieldWidget(
-                        label: 'COLLEGE / DEPARTMENT',
-                        value: profile.department.isNotEmpty
-                            ? profile.department.toUpperCase()
-                            : '—'),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 12),
-              QrImageView(
-                data: profile.studentId.isNotEmpty
-                    ? profile.studentId
-                    : 'N/A',
-                version: QrVersions.auto,
-                size: 120,
-                backgroundColor: Colors.white,
-              ),
-            ],
+          // ── Orange header band ──
+          Container(
+            color: kOrange,
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            alignment: Alignment.center,
+            child: const Text('ACADEMIC INFORMATION',
+                style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 11,
+                    letterSpacing: 0.6)),
           ),
-          Positioned(
-            bottom: 0,
-            right: 0,
-            child: Container(
-              width: 34,
-              height: 34,
-              decoration: const BoxDecoration(shape: BoxShape.circle),
-              child: ClipOval(
-                child: Image.asset(
-                  'assets/images/logo.png',
-                  width: 34,
-                  height: 34,
-                  fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) => Container(
-                    decoration: BoxDecoration(
-                        border: Border.all(color: kOrange, width: 2),
-                        shape: BoxShape.circle),
-                    child: const Icon(Icons.local_fire_department,
-                        color: kOrange, size: 16),
+
+          Padding(
+            padding: const EdgeInsets.all(18),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _IdFieldWidget(
+                          label: 'YEAR LEVEL',
+                          value: profile.yearLevel.isNotEmpty
+                              ? profile.yearLevel.toUpperCase()
+                              : '—'),
+                      const SizedBox(height: 16),
+                      _IdFieldWidget(
+                          label: 'COLLEGE / DEPARTMENT',
+                          value: profile.department.isNotEmpty
+                              ? profile.department.toUpperCase()
+                              : '—'),
+                    ],
                   ),
                 ),
-              ),
+                const SizedBox(width: 14),
+                Container(
+                  width: 96,
+                  height: 96,
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: Colors.grey.shade300),
+                  ),
+                  child: QrImageView(
+                    data: profile.studentId.isNotEmpty
+                        ? profile.studentId
+                        : 'N/A',
+                    version: QrVersions.auto,
+                    backgroundColor: Colors.white,
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // ── Validity strip ──
+          Container(
+            width: double.infinity,
+            color: kOrangeLight,
+            padding: const EdgeInsets.symmetric(vertical: 9),
+            alignment: Alignment.center,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.verified_outlined, size: 14, color: Colors.green[700]),
+                const SizedBox(width: 6),
+                Text(
+                  'VALID FOR A.Y. ${_currentAcademicYear()} · NON-TRANSFERABLE',
+                  style: TextStyle(
+                      fontSize: 9,
+                      letterSpacing: 0.3,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.grey[700]),
+                ),
+              ],
             ),
           ),
         ],
       ),
     );
   }
+
+  String _currentAcademicYear() {
+    final now = DateTime.now();
+    // Academic year starts around June/August in PH — adjust the cutoff
+    // month if your school year starts differently.
+    final startYear = now.month >= 6 ? now.year : now.year - 1;
+    return '$startYear-${startYear + 1}';
+  }
+}
+
+// ── Small reusable bits used by the new ID card design ──
+
+class _HeaderBadge extends StatelessWidget {
+  final String assetPath;
+  final IconData icon;
+  const _HeaderBadge({required this.assetPath, required this.icon});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 30,
+      height: 30,
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.25),
+        shape: BoxShape.circle,
+      ),
+      child: ClipOval(
+        child: Image.asset(
+          assetPath,
+          width: 30,
+          height: 30,
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) => Icon(icon, color: Colors.white, size: 16),
+        ),
+      ),
+    );
+  }
+}
+
+class _PhotoPlaceholder extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 84,
+      height: 104,
+      decoration: BoxDecoration(
+        color: const Color(0xFFF5C8A0),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: const Icon(Icons.person, size: 42, color: Colors.white),
+    );
+  }
 }
 
 // ─────────────────────────────────────────────────────────────
-// Edit Profile Screen - UPDATED with return value
+// Edit Profile Screen — now split into first / middle / last name
 // ─────────────────────────────────────────────────────────────
 class EditProfileScreen extends StatefulWidget {
   final ProfileModel profile;
@@ -1184,19 +1331,34 @@ class EditProfileScreen extends StatefulWidget {
 }
 
 class _EditProfileScreenState extends State<EditProfileScreen> {
-  late final TextEditingController _fullNameCtrl;
+  // ── Fixed list of majors students can choose from. Add more here
+  //    if the program offers additional tracks. ──
+  static const List<String> kMajorOptions = [
+    'WMAD',
+    'DBA',
+    'Infrastructure',
+  ];
+
+  late final TextEditingController _firstNameCtrl;
+  late final TextEditingController _middleNameCtrl;
+  late final TextEditingController _lastNameCtrl;
   late final TextEditingController _emailCtrl;
   late final TextEditingController _mobileCtrl;
   late final TextEditingController _addressCtrl;
   late final TextEditingController _courseCtrl;
   late final TextEditingController _yearLevelCtrl;
   late final TextEditingController _departmentCtrl;
+  String? _selectedMajor;
 
   @override
   void initState() {
     super.initState();
-    _fullNameCtrl =
-        TextEditingController(text: widget.profile.fullName);
+    _firstNameCtrl =
+        TextEditingController(text: widget.profile.firstName);
+    _middleNameCtrl =
+        TextEditingController(text: widget.profile.middleName);
+    _lastNameCtrl =
+        TextEditingController(text: widget.profile.lastName);
     _emailCtrl =
         TextEditingController(text: widget.profile.email);
     _mobileCtrl =
@@ -1209,11 +1371,18 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         TextEditingController(text: widget.profile.yearLevel);
     _departmentCtrl =
         TextEditingController(text: widget.profile.department);
+    // Only pre-select if it matches one of the known options —
+    // protects against stale/legacy free-text values in Firestore.
+    _selectedMajor = kMajorOptions.contains(widget.profile.major)
+        ? widget.profile.major
+        : null;
   }
 
   @override
   void dispose() {
-    _fullNameCtrl.dispose();
+    _firstNameCtrl.dispose();
+    _middleNameCtrl.dispose();
+    _lastNameCtrl.dispose();
     _emailCtrl.dispose();
     _mobileCtrl.dispose();
     _addressCtrl.dispose();
@@ -1224,33 +1393,40 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   }
 
   void _save() {
-    final newName = _fullNameCtrl.text.trim();
-    
+    final newFirst = _firstNameCtrl.text.trim();
+    final newMiddle = _middleNameCtrl.text.trim();
+    final newLast = _lastNameCtrl.text.trim();
+
     widget.profile.update(
-      fullName: newName,
+      firstName: newFirst,
+      middleName: newMiddle,
+      lastName: newLast,
       email: _emailCtrl.text.trim(),
       mobile: _mobileCtrl.text.trim(),
       address: _addressCtrl.text.trim(),
       course: _courseCtrl.text.trim(),
+      major: _selectedMajor ?? '',
       yearLevel: _yearLevelCtrl.text.trim(),
       department: _departmentCtrl.text.trim(),
     );
-    
-    // Update Firebase Auth display name
+
+    // Update Firebase Auth display name using the composed full name
     final user = FirebaseAuth.instance.currentUser;
     if (user != null) {
-      user.updateDisplayName(newName);
+      final displayName =
+          [newFirst, newMiddle, newLast].where((p) => p.isNotEmpty).join(' ');
+      user.updateDisplayName(displayName);
     }
-    
+
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
         content: Text('Profile updated successfully!'),
         backgroundColor: kOrange,
       ),
     );
-    
-    // Return the new name when popping
-    Navigator.pop(context, newName);
+
+    // Return the new full name when popping
+    Navigator.pop(context, widget.profile.fullName);
   }
 
   @override
@@ -1355,8 +1531,20 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                           fontWeight: FontWeight.bold, fontSize: 15)),
                   const SizedBox(height: 16),
                   _EditField(
-                    label: 'Full Name',
-                    controller: _fullNameCtrl,
+                    label: 'First Name',
+                    controller: _firstNameCtrl,
+                    icon: Icons.person_outline,
+                  ),
+                  const SizedBox(height: 14),
+                  _EditField(
+                    label: 'Middle Name',
+                    controller: _middleNameCtrl,
+                    icon: Icons.person_outline,
+                  ),
+                  const SizedBox(height: 14),
+                  _EditField(
+                    label: 'Last Name',
+                    controller: _lastNameCtrl,
                     icon: Icons.person_outline,
                   ),
                   const SizedBox(height: 14),
@@ -1395,6 +1583,16 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                     label: 'Course / Program',
                     controller: _courseCtrl,
                     icon: Icons.school_outlined,
+                  ),
+                  const SizedBox(height: 14),
+                  _MajorDropdownField(
+                    label: 'Major',
+                    icon: Icons.workspace_premium_outlined,
+                    value: _selectedMajor,
+                    options: kMajorOptions,
+                    onChanged: (value) {
+                      setState(() => _selectedMajor = value);
+                    },
                   ),
                   const SizedBox(height: 14),
                   _EditField(
@@ -1873,6 +2071,72 @@ class _EditField extends StatelessWidget {
   }
 }
 
+// ── Dropdown field for picking the student's major, styled to match
+//    _EditField above (same label style, icon, border, focus color) ──
+class _MajorDropdownField extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final String? value;
+  final List<String> options;
+  final ValueChanged<String?> onChanged;
+
+  const _MajorDropdownField({
+    required this.label,
+    required this.icon,
+    required this.value,
+    required this.options,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label,
+            style: const TextStyle(
+                fontSize: 13,
+                color: Colors.black87,
+                fontWeight: FontWeight.w500)),
+        const SizedBox(height: 6),
+        DropdownButtonFormField<String>(
+          initialValue: value,
+          icon: const Icon(Icons.keyboard_arrow_down, size: 20),
+          style: const TextStyle(fontSize: 14, color: Colors.black87),
+          decoration: InputDecoration(
+            prefixIcon: Icon(icon, size: 18, color: Colors.grey),
+            hintText: 'Select major',
+            hintStyle: TextStyle(fontSize: 14, color: Colors.grey.shade400),
+            filled: true,
+            fillColor: Colors.white,
+            contentPadding: const EdgeInsets.symmetric(
+                horizontal: 12, vertical: 14),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: BorderSide(color: Colors.grey.shade200),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: BorderSide(color: Colors.grey.shade200),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: const BorderSide(color: kOrange),
+            ),
+          ),
+          items: options
+              .map((option) => DropdownMenuItem<String>(
+                    value: option,
+                    child: Text(option),
+                  ))
+              .toList(),
+          onChanged: onChanged,
+        ),
+      ],
+    );
+  }
+}
+
 class _IdFieldWidget extends StatelessWidget {
   final String label;
   final String value;
@@ -1889,10 +2153,10 @@ class _IdFieldWidget extends StatelessWidget {
                 color: Colors.grey,
                 letterSpacing: 0.4,
                 fontWeight: FontWeight.w500)),
-        const SizedBox(height: 1),
+        const SizedBox(height: 2),
         Text(value,
             style: const TextStyle(
-                fontSize: 12,
+                fontSize: 13,
                 fontWeight: FontWeight.bold,
                 color: Colors.black87)),
       ],
