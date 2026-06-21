@@ -128,6 +128,11 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
     _loadUserName();
   }
 
+  // ── Builds the "Hello, ___" name from the split first/middle name
+  //    fields in Firestore (firstName + middleName only — last name
+  //    is intentionally left out of the greeting). Falls back to
+  //    Firebase Auth display name / email if the student doc or the
+  //    name fields are missing. ──
   Future<void> _loadUserName() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user != null) {
@@ -140,8 +145,17 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
 
         if (snapshot.docs.isNotEmpty) {
           final data = snapshot.docs.first.data();
+          final firstName = (data['firstName'] ?? '').toString().trim();
+          final middleName = (data['middleName'] ?? '').toString().trim();
+
+          final greetingName = [firstName, middleName]
+              .where((p) => p.isNotEmpty)
+              .join(' ');
+
           setState(() {
-            _userName = data['fullName'] ?? user.displayName ?? user.email?.split('@').first ?? 'Student';
+            _userName = greetingName.isNotEmpty
+                ? greetingName
+                : (user.displayName ?? user.email?.split('@').first ?? 'Student');
           });
         }
       } catch (_) {
@@ -307,7 +321,8 @@ class _HomeContentState extends State<_HomeContent> {
   @override
   Widget build(BuildContext context) {
     final user = FirebaseAuth.instance.currentUser;
-    // Use the userName passed from parent, or fallback
+    // Use the userName passed from parent (already first + middle name
+    // only — see _loadUserName in StudentHomeScreen), or fallback
     final userName = widget.userName.isNotEmpty 
         ? widget.userName 
         : user?.displayName ?? user?.email?.split('@').first ?? 'Student';
