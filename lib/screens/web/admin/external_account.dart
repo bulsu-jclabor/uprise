@@ -1,7 +1,11 @@
 ﻿import 'dart:convert';
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:http/http.dart' as http;
 import 'package:uprise/widgets/admin_export_button.dart';
 import 'package:intl/intl.dart';
 import 'export_util.dart';
@@ -94,6 +98,9 @@ class ExternalRequest {
   final String   status;
   final DateTime requestDate;
   final String   purpose;
+  final String?  tempPassword;
+  final String?  uid;
+  final bool     accountCreated;
 
   const ExternalRequest({
     required this.id,
@@ -104,19 +111,25 @@ class ExternalRequest {
     required this.status,
     required this.requestDate,
     required this.purpose,
+    this.tempPassword,
+    this.uid,
+    this.accountCreated = false,
   });
 
   factory ExternalRequest.fromFirestore(
       String id, Map<String, dynamic> d) {
     return ExternalRequest(
-      id:          id,
-      userId:      d['userId']      ?? '',
-      userName:    d['userName']    ?? '',
-      email:       d['email']       ?? '',
-      university:  d['university']  ?? '',
-      status:      d['status']      ?? 'pending',
-      requestDate: (d['requestDate'] as Timestamp?)?.toDate() ?? DateTime.now(),
-      purpose:     d['purpose']     ?? '',
+      id:             id,
+      userId:         d['userId']      ?? '',
+      userName:       d['userName']    ?? '',
+      email:          d['email']       ?? '',
+      university:     d['university']  ?? '',
+      status:         d['status']      ?? 'pending',
+      requestDate:    (d['requestDate'] as Timestamp?)?.toDate() ?? DateTime.now(),
+      purpose:        d['purpose']     ?? '',
+      tempPassword:   d['tempPassword'] as String?,
+      uid:            d['uid'] as String?,
+      accountCreated: d['accountCreated'] == true,
     );
   }
 }
@@ -382,7 +395,7 @@ class _ExternalAccountState extends State<ExternalAccount> {
         Expanded(flex: 2, child: _headerCell('REQUEST DATE')),
         Expanded(flex: 1, child: _headerCell('STATUS')),
         Expanded(
-          flex: 2,
+          flex: 3,
           child: Align(
               alignment: Alignment.centerRight,
               child: _headerCell('ACTIONS')),
@@ -511,7 +524,7 @@ class _ExternalAccountState extends State<ExternalAccount> {
           Expanded(flex: 1, child: _statusBadge(req.status)),
           // Actions
           Expanded(
-            flex: 2,
+            flex: 3,
             child: Row(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
@@ -524,10 +537,10 @@ class _ExternalAccountState extends State<ExternalAccount> {
                   const SizedBox(width: 4),
                   _ActionIconButton(
                     icon: Icons.check_circle_outline,
-                    tooltip: 'Approve',
+                    tooltip: 'Approve & Create Account',
                     color: const Color(0xFF059669),
-                    onTap: () =>
-                        _setStatus(req.id, 'approved', userName: req.userName),
+                    onTap: () => _setStatus(req.id, 'approved',
+                        userName: req.userName, email: req.email),
                   ),
                   const SizedBox(width: 4),
                   _ActionIconButton(
@@ -536,6 +549,20 @@ class _ExternalAccountState extends State<ExternalAccount> {
                     color: const Color(0xFFDC2626),
                     onTap: () =>
                         _setStatus(req.id, 'rejected', userName: req.userName),
+                  ),
+                ],
+                if (req.status == 'approved') ...[
+                  const SizedBox(width: 4),
+                  _ActionIconButton(
+                    icon: Icons.key_rounded,
+                    tooltip: 'View Credentials',
+                    onTap: () => _showCredentialsDialog(req),
+                  ),
+                  const SizedBox(width: 4),
+                  _ActionIconButton(
+                    icon: Icons.email_outlined,
+                    tooltip: 'Resend Credentials',
+                    onTap: () => _confirmResendCredentials(req),
                   ),
                 ],
                 const SizedBox(width: 4),
@@ -660,7 +687,14 @@ class _ExternalAccountState extends State<ExternalAccount> {
     String docId,
     String newStatus, {
     required String userName,
+    String email = '',
   }) async {
+    // Approving for the first time → create the guest account + send credentials
+    if (newStatus == 'approved') {
+      await _approveAndCreateAccount(docId, userName, email);
+      return;
+    }
+
     await FirebaseFirestore.instance
         .collection('external_requests')
         .doc(docId)
@@ -685,6 +719,546 @@ class _ExternalAccountState extends State<ExternalAccount> {
             borderRadius: BorderRadius.circular(8)),
       ));
     }
+  }
+
+  // ── Approve + create guest account + send credentials ──────────────
+  //
+  // Mirrors _createStudentAccount() in student_accounts.dart:
+  //   1. Generate a temp password
+  //   2. Create the Firebase Auth user via a secondary app instance
+  //      (so the admin's own session isn't replaced)
+  //   3. Write account fields to `external_requests` + a `users` doc
+  //      so auth_service.needsPasswordChange() can read the flag
+  //   4. Email the credentials (with Firestore queue fallback)
+  //
+  Future<void> _approveAndCreateAccount(
+    String docId,
+    String userName,
+    String email,
+  ) async {
+    // Re-fetch the doc to make sure we have the freshest email/university
+    final snap = await FirebaseFirestore.instance
+        .collection('external_requests')
+        .doc(docId)
+        .get();
+    final data = snap.data() ?? {};
+    final resolvedEmail = (email.isNotEmpty
+            ? email
+            : (data['email'] as String? ?? ''))
+        .trim()
+        .toLowerCase();
+    final university = (data['university'] as String?) ?? '';
+
+    if (resolvedEmail.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: const Text(
+              'Cannot approve: this request has no email address.'),
+          backgroundColor: const Color(0xFFDC2626),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8)),
+        ));
+      }
+      return;
+    }
+
+    // Already has an account? Just flip status, don't recreate.
+    if (data['accountCreated'] == true) {
+      await FirebaseFirestore.instance
+          .collection('external_requests')
+          .doc(docId)
+          .update({'status': 'approved'});
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: const Text('Request approved.'),
+          backgroundColor: const Color(0xFF059669),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8)),
+        ));
+      }
+      return;
+    }
+
+    final password = _generateGuestPassword();
+
+    // Secondary Firebase app so we don't sign the admin out
+    FirebaseApp secondaryApp;
+    try {
+      secondaryApp = Firebase.app('secondaryApp');
+    } catch (_) {
+      secondaryApp = await Firebase.initializeApp(
+        name: 'secondaryApp',
+        options: Firebase.app().options,
+      );
+    }
+    final secondaryAuth = FirebaseAuth.instanceFor(app: secondaryApp);
+
+    UserCredential cred;
+    try {
+      cred = await secondaryAuth.createUserWithEmailAndPassword(
+          email: resolvedEmail, password: password);
+    } catch (e) {
+      await secondaryAuth.signOut();
+      String msg = 'Account creation failed: $e';
+      if (e.toString().contains('email-already-in-use')) {
+        msg = 'Email already registered: $resolvedEmail';
+      }
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(msg),
+          backgroundColor: const Color(0xFFDC2626),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8)),
+        ));
+      }
+      return;
+    }
+
+    await cred.user?.updateDisplayName(userName);
+    final uid = cred.user!.uid;
+
+    final batch = FirebaseFirestore.instance.batch();
+
+    // Update the external_requests doc itself
+    batch.update(
+      FirebaseFirestore.instance.collection('external_requests').doc(docId),
+      {
+        'status'             : 'approved',
+        'uid'                : uid,
+        'tempPassword'       : password,
+        'mustChangePassword' : true,
+        'accountCreated'     : true,
+        'approvedAt'         : FieldValue.serverTimestamp(),
+      },
+    );
+
+    // Mirror into a `guests` collection for easy lookups elsewhere
+    batch.set(
+      FirebaseFirestore.instance.collection('guests').doc(uid),
+      {
+        'requestId'          : docId,
+        'fullName'           : userName,
+        'university'         : university,
+        'email'              : resolvedEmail,
+        'tempPassword'       : password,
+        'mustChangePassword' : true,
+        'archived'           : false,
+        'createdAt'          : FieldValue.serverTimestamp(),
+        'uid'                : uid,
+      },
+    );
+
+    // `users` doc so auth_service.needsPasswordChange() can read the flag
+    batch.set(
+      FirebaseFirestore.instance.collection('users').doc(uid),
+      {
+        'uid'                : uid,
+        'email'              : resolvedEmail,
+        'fullName'           : userName,
+        'role'               : 'guest',
+        'mustChangePassword' : true,
+        'createdAt'          : FieldValue.serverTimestamp(),
+      },
+    );
+
+    await batch.commit();
+    await secondaryAuth.signOut();
+
+    // Send credentials (falls back to a queued email doc on failure)
+    final sent = await _sendGuestCredentialsEmail(
+        resolvedEmail, userName, password);
+    if (!sent) {
+      await _queueGuestCredentialEmail(resolvedEmail, userName, password);
+    }
+
+    await activity_log.ActivityLogger.log(
+      action: 'APPROVED external request for $userName ($resolvedEmail) — guest account created',
+      module: 'External Account',
+      severity: 'info',
+      details: {'requestId': docId, 'uid': uid},
+    );
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(sent
+            ? 'Approved. Credentials sent to $resolvedEmail.'
+            : 'Approved. Credentials queued — sending failed for $resolvedEmail.'),
+        backgroundColor: sent
+            ? const Color(0xFF059669)
+            : const Color(0xFFF97316),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(8)),
+      ));
+    }
+  }
+
+  // ── Credential helpers (mirrors student_accounts.dart) ─────────────
+
+  String _generateGuestPassword() {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ0123456789';
+    final rng = Random.secure();
+    return 'GST-${List.generate(6, (_) => chars[rng.nextInt(chars.length)]).join()}';
+  }
+
+  Future<bool> _sendGuestCredentialsEmail(
+      String email, String fullName, String password) async {
+    const int maxAttempts = 3;
+    for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        final response = await http.post(
+          Uri.parse('https://api.emailjs.com/api/v1.0/email/send'),
+          headers: {
+            'Content-Type': 'application/json',
+            'origin': 'http://localhost',
+          },
+          body: jsonEncode({
+            'service_id'  : 'service_s3ke8zd',
+            'template_id' : 'template_76fn2md',
+            'user_id'     : 'tmx47wQJmb1uMNUpr',
+            'template_params': {
+              'to_email'   : email,
+              'student_id' : fullName, // reused template field for guest name
+              'password'   : password,
+            },
+          }),
+        );
+        if (response.statusCode == 200) {
+          debugPrint('✅ Guest credentials email sent to $email (attempt $attempt)');
+          return true;
+        }
+        debugPrint('❌ EmailJS ${response.statusCode}: ${response.body} (attempt $attempt)');
+      } catch (e) {
+        debugPrint('❌ Failed to send guest credentials to $email (attempt $attempt): $e');
+      }
+      if (attempt < maxAttempts) await Future.delayed(Duration(seconds: attempt));
+    }
+    return false;
+  }
+
+  Future<void> _queueGuestCredentialEmail(
+      String email, String fullName, String password) async {
+    try {
+      await FirebaseFirestore.instance.collection('email_queue').add({
+        'to_email'   : email,
+        'student_id' : fullName,
+        'password'   : password,
+        'type'       : 'guest_credentials',
+        'attempts'   : 0,
+        'createdAt'  : FieldValue.serverTimestamp(),
+      });
+      debugPrint('Queued guest credential email for $email');
+    } catch (e) {
+      debugPrint('Failed to queue guest credential email for $email: $e');
+    }
+  }
+
+  // ── Resend credentials (for already-approved guests) ────────────────
+  Future<void> _confirmResendCredentials(ExternalRequest req) async {
+    if (req.tempPassword == null || req.tempPassword!.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: const Text(
+            'No stored password for this guest. Approve again is not possible — '
+            'ask the guest to use "Forgot Password" once available.'),
+        backgroundColor: const Color(0xFFF97316),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      ));
+      return;
+    }
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      barrierColor: Colors.black54,
+      builder: (ctx) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        child: Container(
+          width: 400,
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(children: [
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFFF7ED),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(Icons.email_outlined,
+                      color: Color(0xFFEA580C), size: 20),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text('Resend Credentials',
+                      style: GoogleFonts.beVietnamPro(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                          color: const Color(0xFF1A202C))),
+                ),
+                IconButton(
+                    icon: const Icon(Icons.close_rounded, size: 18),
+                    onPressed: () => Navigator.pop(ctx, false)),
+              ]),
+              const SizedBox(height: 16),
+              Text('Send login credentials to:',
+                  style: GoogleFonts.beVietnamPro(
+                      fontSize: 13, color: const Color(0xFF64748B))),
+              const SizedBox(height: 8),
+              Container(
+                width: double.infinity,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF8F9FB),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: const Color(0xFFE2E6EA)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(req.email,
+                        style: GoogleFonts.beVietnamPro(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: const Color(0xFF1A202C))),
+                    Text('Guest: ${req.userName}',
+                        style: GoogleFonts.beVietnamPro(
+                            fontSize: 12, color: const Color(0xFF64748B))),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 20),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  OutlinedButton(
+                    onPressed: () => Navigator.pop(ctx, false),
+                    style: OutlinedButton.styleFrom(
+                      side: const BorderSide(color: Color(0xFFE2E6EA)),
+                      shape:
+                          RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 10),
+                    ),
+                    child:
+                        Text('Cancel', style: GoogleFonts.beVietnamPro(fontSize: 13)),
+                  ),
+                  const SizedBox(width: 10),
+                  ElevatedButton.icon(
+                    onPressed: () => Navigator.pop(ctx, true),
+                    icon: const Icon(Icons.send_rounded, size: 15),
+                    label: Text('Send',
+                        style: GoogleFonts.beVietnamPro(
+                            fontSize: 13, fontWeight: FontWeight.w600)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFFEA580C),
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      shape:
+                          RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 10),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    if (confirmed == true) {
+      final sent = await _sendGuestCredentialsEmail(
+          req.email, req.userName, req.tempPassword!);
+      if (!sent) {
+        await _queueGuestCredentialEmail(
+            req.email, req.userName, req.tempPassword!);
+      }
+      await activity_log.ActivityLogger.log(
+        action: 'Resent credentials for guest: ${req.userName} (${req.email})',
+        module: 'External Account',
+        severity: 'info',
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(sent
+              ? 'Credentials resent to ${req.email}.'
+              : 'Credentials queued but sending failed for ${req.email}.'),
+          backgroundColor:
+              sent ? const Color(0xFF059669) : const Color(0xFFF97316),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        ));
+      }
+    }
+  }
+
+  // ── View stored credentials dialog ──────────────────────────────────
+  void _showCredentialsDialog(ExternalRequest req) {
+    showDialog(
+      context: context,
+      barrierColor: Colors.black54,
+      builder: (ctx) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        child: SizedBox(
+          width: 420,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                padding: const EdgeInsets.fromLTRB(24, 20, 20, 20),
+                decoration: BoxDecoration(
+                  color: UpriseColors.primaryDark,
+                  borderRadius:
+                      const BorderRadius.vertical(top: Radius.circular(18)),
+                ),
+                child: Row(children: [
+                  Container(
+                    width: 38,
+                    height: 38,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(Icons.key_rounded,
+                        color: Colors.white, size: 18),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Text('Guest Credentials',
+                        style: GoogleFonts.beVietnamPro(
+                            fontSize: 17,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.white)),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close_rounded,
+                        color: Colors.white, size: 20),
+                    onPressed: () => Navigator.pop(ctx),
+                  ),
+                ]),
+              ),
+              Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _credentialRow(
+                      label: 'Email',
+                      value: req.email.isEmpty ? '—' : req.email,
+                      icon: Icons.alternate_email_rounded,
+                    ),
+                    const SizedBox(height: 14),
+                    _credentialRow(
+                      label: 'Temporary Password',
+                      value: req.tempPassword ??
+                          'Not stored — use Resend to generate a new one.',
+                      icon: Icons.lock_outline_rounded,
+                      isPassword: true,
+                    ),
+                    const SizedBox(height: 20),
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFFFBEB),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: const Color(0xFFFED7AA)),
+                      ),
+                      child: Row(children: [
+                        const Icon(Icons.info_outline_rounded,
+                            size: 15, color: Color(0xFFFB923C)),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Guests are prompted to change their password on first login.',
+                            style: GoogleFonts.beVietnamPro(
+                                fontSize: 12, color: const Color(0xFF92400E)),
+                          ),
+                        ),
+                      ]),
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    ElevatedButton(
+                      onPressed: () => Navigator.pop(ctx),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: UpriseColors.primaryDark,
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8)),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 20, vertical: 11),
+                      ),
+                      child: Text('Done',
+                          style: GoogleFonts.beVietnamPro(
+                              fontSize: 13, fontWeight: FontWeight.w600)),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _credentialRow({
+    required String label,
+    required String value,
+    required IconData icon,
+    bool isPassword = false,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(children: [
+          Icon(icon, size: 14, color: const Color(0xFF64748B)),
+          const SizedBox(width: 6),
+          Text(label,
+              style: GoogleFonts.beVietnamPro(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: const Color(0xFF64748B),
+                  letterSpacing: 0.5)),
+        ]),
+        const SizedBox(height: 6),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF8F9FB),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: const Color(0xFFE2E6EA)),
+          ),
+          child: SelectableText(
+            value,
+            style: GoogleFonts.beVietnamPro(
+              fontSize: isPassword ? 15 : 14,
+              fontWeight: isPassword ? FontWeight.w700 : FontWeight.w500,
+              color: isPassword
+                  ? UpriseColors.primaryDark
+                  : const Color(0xFF1A202C),
+              letterSpacing: isPassword ? 1.5 : 0,
+            ),
+          ),
+        ),
+      ],
+    );
   }
 
   // ── View Dialog ────────────────────────────────────────────────────
@@ -797,6 +1371,12 @@ class _ExternalAccountState extends State<ExternalAccount> {
                           req.userId.isNotEmpty
                               ? req.userId
                               : '—'),
+                      ('Account Status',
+                          req.accountCreated
+                              ? 'Credentials issued'
+                              : (req.status == 'approved'
+                                  ? 'Approved — pending account creation'
+                                  : 'No account yet')),
                     ]),
                     if (req.purpose.isNotEmpty) ...[
                       const SizedBox(height: 16),
@@ -863,12 +1443,13 @@ class _ExternalAccountState extends State<ExternalAccount> {
                         onPressed: () async {
                           Navigator.pop(ctx);
                           await _setStatus(req.id, 'approved',
-                              userName: req.userName);
+                              userName: req.userName,
+                              email: req.email);
                         },
                         icon: const Icon(
                             Icons.check_circle_rounded,
                             size: 15),
-                        label: Text('Approve',
+                        label: Text('Approve & Create Account',
                             style: GoogleFonts.beVietnamPro(
                                 fontSize: 13,
                                 fontWeight: FontWeight.w600)),
@@ -884,6 +1465,53 @@ class _ExternalAccountState extends State<ExternalAccount> {
                               const EdgeInsets.symmetric(
                                   vertical: 11),
                         ),
+                      ),
+                    ),
+                  ] else if (req.status == 'approved') ...[
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: () {
+                          Navigator.pop(ctx);
+                          _showCredentialsDialog(req);
+                        },
+                        icon: const Icon(Icons.key_rounded, size: 15),
+                        label: Text('View Credentials',
+                            style: GoogleFonts.beVietnamPro(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600)),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: UpriseColors.primaryDark,
+                          side: BorderSide(
+                              color: UpriseColors.primaryDark
+                                  .withOpacity(0.4)),
+                          shape: RoundedRectangleBorder(
+                              borderRadius:
+                                  BorderRadius.circular(8)),
+                          padding: const EdgeInsets.symmetric(
+                              vertical: 11),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: () => Navigator.pop(ctx),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor:
+                              UpriseColors.primaryDark,
+                          foregroundColor: Colors.white,
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                              borderRadius:
+                                  BorderRadius.circular(8)),
+                          padding:
+                              const EdgeInsets.symmetric(
+                                  vertical: 11),
+                        ),
+                        child: Text('Close',
+                            style: GoogleFonts.beVietnamPro(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600)),
                       ),
                     ),
                   ] else ...[

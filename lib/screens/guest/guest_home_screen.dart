@@ -1,36 +1,37 @@
 // lib/screens/guest/guest_home_screen.dart
 //
-// GUEST SHELL — Supports two modes:
-//   GuestMode.visitor       → 4 tabs: Home | Announcements | Events | Calendar
-//   GuestMode.authenticated → 6 tabs: adds Feedback + Digital ID
+// GUEST MODE – public-only access
+// Tabs: Home | Announcements | Events | QR Attendance | Profile
 //
-// The mode is passed at construction and stored in GuestAuthService.
+// GuestMode.visitor      → no Firebase Auth session (browse-only)
+// GuestMode.authenticated → signed in via Firebase Auth with admin-issued
+//                           credentials (full guest feature set)
+//
+// GuestMode enum is defined in guest_auth_service.dart and re-exported
+// from there so both this file and guest_access_gateway_screen share it.
 //
 
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 import '../student/student_login.dart';
-import 'guest_auth_service.dart';
 import 'guest_announcements_screen.dart';
+import 'guest_auth_service.dart'; // GuestMode enum
 import 'guest_events_screen.dart';
-import 'guest_calendar_screen.dart';
+import 'guest_qr_attendance_screen.dart';
 import 'guest_profile_screen.dart';
-import 'guest_feedback_screen.dart';
-import 'guest_digital_id_screen.dart';
-
-export 'guest_auth_service.dart' show GuestMode;
 
 // ─────────────────────────────────────────────────────────────
-//  THEME
+//  THEME CONSTANTS
 // ─────────────────────────────────────────────────────────────
 const _kPrimary   = Color(0xFFFF6B00);
 const _kPrimaryBg = Color(0xFFFFF3EB);
 
 // ─────────────────────────────────────────────────────────────
-//  SHELL
+//  GUEST SHELL
 // ─────────────────────────────────────────────────────────────
 class GuestHomeScreen extends StatefulWidget {
+  /// Defaults to [GuestMode.visitor] so existing call-sites that omit
+  /// the parameter keep compiling unchanged.
   final GuestMode mode;
 
   const GuestHomeScreen({
@@ -45,69 +46,28 @@ class GuestHomeScreen extends StatefulWidget {
 class _GuestHomeScreenState extends State<GuestHomeScreen> {
   int _currentIndex = 0;
 
-  // Visitor tabs (4)
-  static const _visitorTabs = [
-    _NavItem(Icons.home_outlined,            Icons.home_rounded,             'Home'),
-    _NavItem(Icons.campaign_outlined,         Icons.campaign_rounded,          'Announcements'),
-    _NavItem(Icons.calendar_today_outlined,   Icons.calendar_today_rounded,    'Events'),
-    _NavItem(Icons.date_range_outlined,       Icons.date_range_rounded,        'Calendar'),
+  // Screens are the same for both modes; the Profile tab handles the
+  // authenticated vs visitor distinction internally via GuestProfileScreen.
+  List<Widget> get _screens => [
+    _GuestHomeContent(mode: widget.mode),
+    const GuestAnnouncementsScreen(),
+    const GuestEventsScreen(),
+    const GuestQrAttendanceScreen(),
+    const GuestProfileScreen(),
   ];
 
-  // Authenticated tabs (6)
-  static const _authTabs = [
-    _NavItem(Icons.home_outlined,            Icons.home_rounded,             'Home'),
-    _NavItem(Icons.campaign_outlined,         Icons.campaign_rounded,          'News'),
-    _NavItem(Icons.calendar_today_outlined,   Icons.calendar_today_rounded,    'Events'),
-    _NavItem(Icons.date_range_outlined,       Icons.date_range_rounded,        'Calendar'),
-    _NavItem(Icons.rate_review_outlined,      Icons.rate_review_rounded,       'Feedback'),
-    _NavItem(Icons.badge_outlined,            Icons.badge_rounded,             'ID'),
-  ];
-
-  List<_NavItem> get _tabs =>
-      widget.mode == GuestMode.authenticated ? _authTabs : _visitorTabs;
-
-  List<Widget> _buildScreens() {
-    final isAuth = widget.mode == GuestMode.authenticated;
-    return [
-      _GuestHomeContent(
-        mode:          widget.mode,
-        onEventsTap:   () => setState(() => _currentIndex = 2),
-        onNewsTap:     () => setState(() => _currentIndex = 1),
-        onCalendarTap: () => setState(() => _currentIndex = 3),
-        onSignInTap:   () => _showSignInPrompt(context),
-      ),
-      const GuestAnnouncementsScreen(),
-      const GuestEventsScreen(),
-      const GuestCalendarScreen(),
-      if (isAuth) const GuestFeedbackScreen(),
-      if (isAuth) const GuestDigitalIdScreen(),
-    ];
-  }
-
-  void _showSignInPrompt(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      builder: (_) => const _SignInPromptSheet(),
-    );
-  }
+  void switchTab(int index) => setState(() => _currentIndex = index);
 
   @override
   Widget build(BuildContext context) {
-    final screens = _buildScreens();
-    // Clamp in case mode changes
-    if (_currentIndex >= screens.length) _currentIndex = 0;
-
     return Scaffold(
       body: IndexedStack(
         index: _currentIndex,
-        children: screens,
+        children: _screens,
       ),
       bottomNavigationBar: _GuestBottomNav(
-        items:        _tabs,
         currentIndex: _currentIndex,
-        onTap:        (i) => setState(() => _currentIndex = i),
+        onTap: (i) => setState(() => _currentIndex = i),
       ),
     );
   }
@@ -117,15 +77,21 @@ class _GuestHomeScreenState extends State<GuestHomeScreen> {
 //  BOTTOM NAV
 // ─────────────────────────────────────────────────────────────
 class _GuestBottomNav extends StatelessWidget {
-  final List<_NavItem>    items;
-  final int               currentIndex;
+  final int currentIndex;
   final ValueChanged<int> onTap;
 
   const _GuestBottomNav({
-    required this.items,
     required this.currentIndex,
     required this.onTap,
   });
+
+  static const _items = [
+  _NavItem(Icons.home_outlined, Icons.home_rounded, 'Home'),
+  _NavItem(Icons.campaign_outlined, Icons.campaign_rounded, 'Announcements'),
+  _NavItem(Icons.calendar_today_outlined, Icons.calendar_today_rounded, 'Events'),
+  _NavItem(Icons.qr_code_scanner_outlined, Icons.qr_code_scanner_rounded, 'Attendance'),
+  _NavItem(Icons.person_outline, Icons.person, 'Profile'),
+];
 
   @override
   Widget build(BuildContext context) {
@@ -145,8 +111,8 @@ class _GuestBottomNav extends StatelessWidget {
         child: SizedBox(
           height: 62,
           child: Row(
-            children: List.generate(items.length, (i) {
-              final item     = items[i];
+            children: List.generate(_items.length, (i) {
+              final item    = _items[i];
               final isActive = currentIndex == i;
 
               return Expanded(
@@ -206,27 +172,16 @@ class _NavItem {
 //  HOME CONTENT
 // ─────────────────────────────────────────────────────────────
 class _GuestHomeContent extends StatelessWidget {
-  final GuestMode    mode;
-  final VoidCallback onEventsTap;
-  final VoidCallback onNewsTap;
-  final VoidCallback onCalendarTap;
-  final VoidCallback onSignInTap;
+  final GuestMode mode;
+  const _GuestHomeContent({this.mode = GuestMode.visitor});
 
-  const _GuestHomeContent({
-    required this.mode,
-    required this.onEventsTap,
-    required this.onNewsTap,
-    required this.onCalendarTap,
-    required this.onSignInTap,
-  });
-
-  bool get _isAuth => mode == GuestMode.authenticated;
+  bool get _isAuthenticated => mode == GuestMode.authenticated;
 
   @override
   Widget build(BuildContext context) {
     return CustomScrollView(
       slivers: [
-        // ── App Bar ──────────────────────────────────────────
+        // ── App Bar ──
         SliverAppBar(
           floating: true,
           backgroundColor: Colors.white,
@@ -234,137 +189,151 @@ class _GuestHomeContent extends StatelessWidget {
           title: Row(
             children: [
               Container(
-                width: 30, height: 30,
+                width: 30,
+                height: 30,
                 decoration: const BoxDecoration(
-                    color: _kPrimary, shape: BoxShape.circle),
-                child: const Icon(Icons.local_fire_department,
-                    color: Colors.white, size: 17),
+                  color: _kPrimary,
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.local_fire_department,
+                  color: Colors.white,
+                  size: 17,
+                ),
               ),
               const SizedBox(width: 8),
-              Text('UPRISE',
-                  style: GoogleFonts.beVietnamPro(
-                      color: _kPrimary,
-                      fontWeight: FontWeight.w900,
-                      fontSize: 20,
-                      letterSpacing: 1.4)),
+              const Text(
+                'UPRISE',
+                style: TextStyle(
+                  color: _kPrimary,
+                  fontWeight: FontWeight.w900,
+                  fontSize: 20,
+                  letterSpacing: 1.4,
+                ),
+              ),
             ],
           ),
-          actions: [
-            if (!_isAuth)
-              Padding(
-                padding: const EdgeInsets.only(right: 12),
-                child: GestureDetector(
-                  onTap: onSignInTap,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 8),
-                    decoration: BoxDecoration(
-                      color: _kPrimary,
-                      borderRadius: BorderRadius.circular(20),
+          // Hide the "Sign In" button once the guest is authenticated
+          actions: _isAuthenticated
+              ? [
+                  Padding(
+                    padding: const EdgeInsets.only(right: 12),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFECFDF5),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                            color: const Color(0xFF059669).withOpacity(0.4)),
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.verified_rounded,
+                              size: 13, color: Color(0xFF059669)),
+                          SizedBox(width: 5),
+                          Text(
+                            'Verified Guest',
+                            style: TextStyle(
+                              color: Color(0xFF059669),
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                    child: Text('Sign In',
-                        style: GoogleFonts.beVietnamPro(
+                  ),
+                ]
+              : [
+                  Padding(
+                    padding: const EdgeInsets.only(right: 12),
+                    child: GestureDetector(
+                      onTap: () => _showSignInPrompt(context),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: _kPrimary,
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: const Text(
+                          'Sign In',
+                          style: TextStyle(
                             color: Colors.white,
                             fontSize: 12,
-                            fontWeight: FontWeight.w700)),
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                    ),
                   ),
-                ),
-              ),
-            if (_isAuth)
-              Padding(
-                padding: const EdgeInsets.only(right: 12),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 10, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFECFDF5),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(
-                        color: const Color(0xFF059669).withOpacity(0.3)),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.verified_rounded,
-                          size: 12, color: Color(0xFF059669)),
-                      const SizedBox(width: 4),
-                      Text('GUEST',
-                          style: GoogleFonts.beVietnamPro(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w800,
-                              color: const Color(0xFF059669),
-                              letterSpacing: 0.6)),
-                    ],
-                  ),
-                ),
-              ),
-          ],
+                ],
           bottom: PreferredSize(
             preferredSize: const Size.fromHeight(1),
-            child:
-                Container(height: 1, color: const Color(0xFFF0F0F0)),
+            child: Container(height: 1, color: const Color(0xFFF0F0F0)),
           ),
         ),
 
-        // ── Banner ───────────────────────────────────────────
+        // ── Banner ──
         SliverToBoxAdapter(
-          child: _isAuth
-              ? _AuthenticatedBanner()
-              : _VisitorBanner(onSignIn: onSignInTap),
+          child: _GuestBanner(
+            onSignIn: () => _showSignInPrompt(context),
+            isAuthenticated: _isAuthenticated,
+          ),
         ),
 
-        // ── Quick Access ─────────────────────────────────────
-        SliverToBoxAdapter(
+        // ── Quick Access ──
+        const SliverToBoxAdapter(
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 22, 16, 10),
-            child: Text('Quick Access',
-                style: GoogleFonts.beVietnamPro(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w800,
-                    color: Colors.black87)),
+            padding: EdgeInsets.fromLTRB(16, 22, 16, 10),
+            child: Text(
+              'Quick Access',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w800,
+                color: Colors.black87,
+              ),
+            ),
           ),
         ),
 
         SliverToBoxAdapter(
           child: _QuickActions(
-            isAuth:            _isAuth,
-            onEventsTap:       onEventsTap,
-            onAnnouncementsTap: onNewsTap,
-            onCalendarTap:     onCalendarTap,
+            onEventsTap: () {
+              final s = context.findAncestorStateOfType<_GuestHomeScreenState>();
+              if (s != null) s.switchTab(2);
+            },
+            onAnnouncementsTap: () {
+              final s = context.findAncestorStateOfType<_GuestHomeScreenState>();
+              if (s != null) s.switchTab(1);
+            },
+            onAttendanceTap: () {
+              final s = context.findAncestorStateOfType<_GuestHomeScreenState>();
+              if (s != null) s.switchTab(3);
+            },
           ),
         ),
 
-        // ── Locked features (visitor only) ───────────────────
-        if (!_isAuth) ...[
-          SliverToBoxAdapter(
+        // ── Locked features heading — only for visitors ──
+        if (!_isAuthenticated) ...[
+          const SliverToBoxAdapter(
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 26, 16, 10),
-              child: Text('Available to CICT Students',
-                  style: GoogleFonts.beVietnamPro(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w800,
-                      color: Colors.black87)),
+              padding: EdgeInsets.fromLTRB(16, 26, 16, 10),
+              child: Text(
+                'Available to CICT Students',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w800,
+                  color: Colors.black87,
+                ),
+              ),
             ),
           ),
           SliverToBoxAdapter(
-            child: _LockedFeaturesGrid(onSignIn: onSignInTap),
-          ),
-        ],
-
-        // ── Authenticated guest extra features ───────────────
-        if (_isAuth) ...[
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 26, 16, 10),
-              child: Text('Your Features',
-                  style: GoogleFonts.beVietnamPro(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w800,
-                      color: Colors.black87)),
-            ),
-          ),
-          SliverToBoxAdapter(
-            child: _AuthFeatureTiles(),
+            child: _LockedFeaturesGrid(
+                onSignIn: () => _showSignInPrompt(context)),
           ),
         ],
 
@@ -372,14 +341,27 @@ class _GuestHomeContent extends StatelessWidget {
       ],
     );
   }
+
+  void _showSignInPrompt(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (_) => const _SignInPromptSheet(),
+    );
+  }
 }
 
 // ─────────────────────────────────────────────────────────────
-//  VISITOR BANNER
+//  GUEST BANNER
 // ─────────────────────────────────────────────────────────────
-class _VisitorBanner extends StatelessWidget {
+class _GuestBanner extends StatelessWidget {
   final VoidCallback onSignIn;
-  const _VisitorBanner({required this.onSignIn});
+  final bool         isAuthenticated;
+  const _GuestBanner({
+    required this.onSignIn,
+    this.isAuthenticated = false,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -395,156 +377,131 @@ class _VisitorBanner extends StatelessWidget {
       ),
       child: Stack(
         children: [
+          // Decorative orange circle
           Positioned(
-            right: -20, top: -20,
+            right: -20,
+            top: -20,
             child: Container(
-              width: 120, height: 120,
+              width: 120,
+              height: 120,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 color: _kPrimary.withOpacity(0.12),
               ),
             ),
           ),
-          Padding(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 10, vertical: 5),
-                  decoration: BoxDecoration(
-                    color: _kPrimary.withOpacity(0.2),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(
-                        color: _kPrimary.withOpacity(0.4), width: 1),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.explore_outlined,
-                          size: 12, color: _kPrimary),
-                      const SizedBox(width: 4),
-                      Text('VISITOR MODE',
-                          style: GoogleFonts.beVietnamPro(
-                              color: _kPrimary,
-                              fontSize: 10,
-                              fontWeight: FontWeight.w700,
-                              letterSpacing: 1.2)),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Text('Welcome to UPRISE',
-                    style: GoogleFonts.beVietnamPro(
-                        color: Colors.white,
-                        fontSize: 20,
-                        fontWeight: FontWeight.w900,
-                        letterSpacing: 0.3)),
-                const SizedBox(height: 4),
-                Text('Browse public events & announcements.',
-                    style: GoogleFonts.beVietnamPro(
-                        color: Colors.white54,
-                        fontSize: 12,
-                        height: 1.4)),
-                const SizedBox(height: 16),
-                GestureDetector(
-                  onTap: onSignIn,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 18, vertical: 10),
-                    decoration: BoxDecoration(
-                      color: _kPrimary,
-                      borderRadius: BorderRadius.circular(22),
-                    ),
-                    child: Text('Sign In as CICT Student →',
-                        style: GoogleFonts.beVietnamPro(
-                            color: Colors.white,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700)),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────
-//  AUTHENTICATED BANNER
-// ─────────────────────────────────────────────────────────────
-class _AuthenticatedBanner extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    final svc = GuestAuthService();
-    final name = svc.fullName ?? 'Guest';
-    final first = name.split(' ').first;
-
-    return Container(
-      margin: const EdgeInsets.fromLTRB(16, 14, 16, 0),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Color(0xFFFF6B00), Color(0xFFFF9A4D)],
-        ),
-        borderRadius: BorderRadius.circular(18),
-      ),
-      child: Stack(
-        children: [
           Positioned(
-            right: -20, top: -20,
+            right: 20,
+            bottom: -30,
             child: Container(
-              width: 140, height: 140,
+              width: 80,
+              height: 80,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: Colors.white.withOpacity(0.08),
+                color: _kPrimary.withOpacity(0.08),
               ),
             ),
           ),
+
           Padding(
             padding: const EdgeInsets.all(20),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // Mode badge — green for authenticated, orange for visitor
                 Container(
                   padding: const EdgeInsets.symmetric(
                       horizontal: 10, vertical: 5),
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.2),
+                    color: isAuthenticated
+                        ? const Color(0xFF059669).withOpacity(0.2)
+                        : _kPrimary.withOpacity(0.2),
                     borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: isAuthenticated
+                          ? const Color(0xFF059669).withOpacity(0.4)
+                          : _kPrimary.withOpacity(0.4),
+                      width: 1,
+                    ),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(Icons.verified_rounded,
-                          size: 12, color: Colors.white),
+                      Icon(
+                        isAuthenticated
+                            ? Icons.verified_rounded
+                            : Icons.person_outline_rounded,
+                        size: 12,
+                        color: isAuthenticated
+                            ? const Color(0xFF34D399)
+                            : _kPrimary,
+                      ),
                       const SizedBox(width: 4),
-                      Text('VERIFIED GUEST',
-                          style: GoogleFonts.beVietnamPro(
-                              color: Colors.white,
-                              fontSize: 10,
-                              fontWeight: FontWeight.w700,
-                              letterSpacing: 1.2)),
+                      Text(
+                        isAuthenticated ? 'VERIFIED GUEST' : 'GUEST MODE',
+                        style: TextStyle(
+                          color: isAuthenticated
+                              ? const Color(0xFF34D399)
+                              : _kPrimary,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 1.2,
+                        ),
+                      ),
                     ],
                   ),
                 ),
                 const SizedBox(height: 12),
-                Text('Welcome back, $first!',
-                    style: GoogleFonts.beVietnamPro(
-                        color: Colors.white,
-                        fontSize: 20,
-                        fontWeight: FontWeight.w900)),
+                const Text(
+                  'Welcome to UPRISE',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 20,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 0.3,
+                  ),
+                ),
                 const SizedBox(height: 4),
                 Text(
-                    'You have full guest access. Check out your\nDigital ID and leave feedback on events.',
-                    style: GoogleFonts.beVietnamPro(
-                        color: Colors.white70,
-                        fontSize: 12,
-                        height: 1.4)),
+                  isAuthenticated
+                      ? 'You have full guest access. Use the Profile tab for your QR pass.'
+                      : 'Browse public events & announcements.',
+                  style: const TextStyle(
+                    color: Colors.white54,
+                    fontSize: 12,
+                    height: 1.4,
+                  ),
+                ),
+                // Only show the "Sign In as CICT Student" button for visitors
+                if (!isAuthenticated) ...[
+                  const SizedBox(height: 16),
+                  GestureDetector(
+                    onTap: onSignIn,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 18, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: _kPrimary,
+                        borderRadius: BorderRadius.circular(22),
+                        boxShadow: [
+                          BoxShadow(
+                            color: _kPrimary.withOpacity(0.35),
+                            blurRadius: 10,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      child: const Text(
+                        'Sign In as CICT Student →',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
@@ -558,16 +515,14 @@ class _AuthenticatedBanner extends StatelessWidget {
 //  QUICK ACTIONS
 // ─────────────────────────────────────────────────────────────
 class _QuickActions extends StatelessWidget {
-  final bool         isAuth;
   final VoidCallback onEventsTap;
   final VoidCallback onAnnouncementsTap;
-  final VoidCallback onCalendarTap;
+  final VoidCallback onAttendanceTap;
 
   const _QuickActions({
-    required this.isAuth,
     required this.onEventsTap,
     required this.onAnnouncementsTap,
-    required this.onCalendarTap,
+    required this.onAttendanceTap,
   });
 
   @override
@@ -591,10 +546,10 @@ class _QuickActions extends StatelessWidget {
           ),
           const SizedBox(width: 12),
           _QuickActionTile(
-            icon: Icons.date_range_rounded,
-            label: 'Calendar',
+            icon: Icons.qr_code_scanner_rounded,
+            label: 'QR\nAttendance',
             color: const Color(0xFF2E7D32),
-            onTap: onCalendarTap,
+            onTap: onAttendanceTap,
           ),
         ],
       ),
@@ -603,9 +558,9 @@ class _QuickActions extends StatelessWidget {
 }
 
 class _QuickActionTile extends StatelessWidget {
-  final IconData     icon;
-  final String       label;
-  final Color        color;
+  final IconData    icon;
+  final String      label;
+  final Color       color;
   final VoidCallback onTap;
 
   const _QuickActionTile({
@@ -658,96 +613,7 @@ class _QuickActionTile extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────
-//  AUTH FEATURE TILES  (for authenticated home)
-// ─────────────────────────────────────────────────────────────
-class _AuthFeatureTiles extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: Row(
-        children: [
-          Expanded(
-            child: _FeatureTile(
-              icon: Icons.rate_review_outlined,
-              color: const Color(0xFF6A1B9A),
-              label: 'Event Feedback',
-              sub: 'Rate events you attended',
-              onTap: () {},
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: _FeatureTile(
-              icon: Icons.badge_outlined,
-              color: _kPrimary,
-              label: 'Digital ID',
-              sub: 'Your verified guest card',
-              onTap: () {},
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _FeatureTile extends StatelessWidget {
-  final IconData     icon;
-  final Color        color;
-  final String       label;
-  final String       sub;
-  final VoidCallback onTap;
-
-  const _FeatureTile({
-    required this.icon,
-    required this.color,
-    required this.label,
-    required this.sub,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: color.withOpacity(0.06),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: color.withOpacity(0.15)),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: color.withOpacity(0.12),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Icon(icon, color: color, size: 22),
-            ),
-            const SizedBox(height: 10),
-            Text(label,
-                style: GoogleFonts.beVietnamPro(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    color: Colors.black87)),
-            const SizedBox(height: 2),
-            Text(sub,
-                style: GoogleFonts.beVietnamPro(
-                    fontSize: 10, color: Colors.grey)),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────
-//  LOCKED FEATURES GRID  (visitor)
+//  LOCKED FEATURES
 // ─────────────────────────────────────────────────────────────
 class _LockedFeaturesGrid extends StatelessWidget {
   final VoidCallback onSignIn;
@@ -773,9 +639,9 @@ class _LockedFeaturesGrid extends StatelessWidget {
       color: Color(0xFF6A1B9A),
     ),
     _LockedFeature(
-      icon: Icons.rate_review_outlined,
-      label: 'Feedback',
-      description: 'Rate events you attended',
+      icon: Icons.shopping_bag_outlined,
+      label: 'Merchandise',
+      description: 'Org merch store',
       color: Color(0xFF2E7D32),
     ),
   ];
@@ -851,20 +717,27 @@ class _LockedTile extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Text(feature.label,
-                      style: const TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                          color: Colors.black87)),
+                  Text(
+                    feature.label,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.black87,
+                    ),
+                  ),
                   const SizedBox(height: 2),
                   Row(
                     children: const [
                       Icon(Icons.lock_outline_rounded,
                           size: 10, color: Colors.grey),
                       SizedBox(width: 3),
-                      Text('Sign in',
+                      Flexible(
+                        child: Text(
+                          'Sign in',
                           style: TextStyle(
-                              fontSize: 10, color: Colors.grey)),
+                              fontSize: 10, color: Colors.grey),
+                        ),
+                      ),
                     ],
                   ),
                 ],
@@ -895,44 +768,65 @@ class _SignInPromptSheet extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
+          // Handle
           Container(
-            width: 40, height: 4,
+            width: 40,
+            height: 4,
             margin: const EdgeInsets.only(bottom: 22),
             decoration: BoxDecoration(
-                color: Colors.grey[300],
-                borderRadius: BorderRadius.circular(2)),
+              color: Colors.grey[300],
+              borderRadius: BorderRadius.circular(2),
+            ),
           ),
+
+          // Icon
           Container(
-            width: 68, height: 68,
+            width: 68,
+            height: 68,
             decoration: BoxDecoration(
-                color: _kPrimaryBg, shape: BoxShape.circle),
-            child: const Icon(Icons.school_rounded,
-                size: 34, color: _kPrimary),
+              color: _kPrimaryBg,
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.school_rounded,
+              size: 34,
+              color: _kPrimary,
+            ),
           ),
+
           const SizedBox(height: 16),
-          Text('CICT Student Access',
-              style: GoogleFonts.beVietnamPro(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w800,
-                  color: Colors.black87)),
+
+          const Text(
+            'CICT Student Access',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w800,
+              color: Colors.black87,
+            ),
+          ),
+
           const SizedBox(height: 8),
-          Text(
-              'Sign in with your CICT credentials\nto unlock full access.',
-              textAlign: TextAlign.center,
-              style: GoogleFonts.beVietnamPro(
-                  fontSize: 13, color: Colors.grey, height: 1.5)),
+
+          const Text(
+            'Sign in with your CICT credentials\nto unlock full access.',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 13, color: Colors.grey, height: 1.5),
+          ),
+
           const SizedBox(height: 24),
+
+          // Feature list
           _SheetFeatureRow(
-              icon: Icons.badge_outlined, text: 'Digital ID & Profile'),
+              icon: Icons.badge_outlined,       text: 'Digital ID & Profile'),
           const SizedBox(height: 8),
           _SheetFeatureRow(
-              icon: Icons.groups_outlined,
-              text: 'Organizations & Clubs'),
+              icon: Icons.groups_outlined,       text: 'Organizations & Clubs'),
           const SizedBox(height: 8),
           _SheetFeatureRow(
-              icon: Icons.workspace_premium_outlined,
-              text: 'Certificates & Merch'),
+              icon: Icons.workspace_premium_outlined, text: 'Certificates & Merch'),
+
           const SizedBox(height: 24),
+
           SizedBox(
             width: double.infinity,
             child: ElevatedButton(
@@ -940,8 +834,7 @@ class _SignInPromptSheet extends StatelessWidget {
                 Navigator.pop(context);
                 Navigator.pushReplacement(
                   context,
-                  MaterialPageRoute(
-                      builder: (_) => const StudentLogin()),
+                  MaterialPageRoute(builder: (_) => const StudentLogin()),
                 );
               },
               style: ElevatedButton.styleFrom(
@@ -952,17 +845,21 @@ class _SignInPromptSheet extends StatelessWidget {
                     borderRadius: BorderRadius.circular(14)),
                 elevation: 0,
               ),
-              child: Text('Sign In as CICT Student',
-                  style: GoogleFonts.beVietnamPro(
-                      fontWeight: FontWeight.w700, fontSize: 15)),
+              child: const Text(
+                'Sign In as CICT Student',
+                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
+              ),
             ),
           ),
+
           const SizedBox(height: 10),
+
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: Text('Continue as Guest',
-                style: GoogleFonts.beVietnamPro(
-                    color: Colors.grey, fontSize: 13)),
+            child: const Text(
+              'Continue as Guest',
+              style: TextStyle(color: Colors.grey, fontSize: 13),
+            ),
           ),
         ],
       ),
@@ -982,16 +879,19 @@ class _SheetFeatureRow extends StatelessWidget {
         Container(
           padding: const EdgeInsets.all(7),
           decoration: BoxDecoration(
-              color: _kPrimaryBg,
-              borderRadius: BorderRadius.circular(8)),
+            color: _kPrimaryBg,
+            borderRadius: BorderRadius.circular(8),
+          ),
           child: Icon(icon, size: 16, color: _kPrimary),
         ),
         const SizedBox(width: 12),
-        Text(text,
-            style: const TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w500,
-                color: Colors.black87)),
+        Text(
+          text,
+          style: const TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w500,
+              color: Colors.black87),
+        ),
         const Spacer(),
         const Icon(Icons.check_circle_rounded,
             size: 16, color: Color(0xFF2E7D32)),

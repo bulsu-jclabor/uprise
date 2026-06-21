@@ -1,12 +1,17 @@
+// lib/screens/student/student_login.dart
+//
+// STUDENT LOGIN — Updated to route "Continue as Guest" through the
+//                 GuestAccessGatewayScreen (3 options: Visit / Sign Up / Log In).
+//
+
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../auth_service.dart';
-import '../guest/guest_home_screen.dart';
-import '../student/student_home_screen.dart'; // ✅ Import your home screen
+import '../guest/guest_access_gateway_screen.dart';
+import '../student/student_home_screen.dart';
 import 'student_change_password_screen.dart';
-
 
 class StudentLogin extends StatefulWidget {
   const StudentLogin({super.key});
@@ -16,17 +21,25 @@ class StudentLogin extends StatefulWidget {
 }
 
 class _StudentLoginState extends State<StudentLogin> {
-  final TextEditingController _emailController = TextEditingController();
-  final TextEditingController _passwordController = TextEditingController();
+  final _emailCtrl    = TextEditingController();
+  final _passwordCtrl = TextEditingController();
 
-  bool _isLoading = false;
+  bool _isLoading       = false;
   bool _obscurePassword = true;
 
   final AuthService _auth = AuthService();
 
+  @override
+  void dispose() {
+    _emailCtrl.dispose();
+    _passwordCtrl.dispose();
+    super.dispose();
+  }
+
+  // ── Login ──────────────────────────────────────────────
   Future<void> _login() async {
-    final email = _emailController.text.trim();
-    final password = _passwordController.text.trim();
+    final email    = _emailCtrl.text.trim();
+    final password = _passwordCtrl.text.trim();
 
     if (email.isEmpty || password.isEmpty) {
       _showError('Please enter email and password');
@@ -41,36 +54,56 @@ class _StudentLoginState extends State<StudentLogin> {
     setState(() => _isLoading = true);
 
     try {
-      final user = await _auth.loginWithEmail(email, password);
+  final user = await _auth.loginWithEmail(email, password);
 
-      if (!mounted) return;
+  if (user != null) {
+    final role = await _auth.getUserRole(user.uid);
+    print('UID: ${user.uid}');
+    print('ROLE: $role');
+  }
 
-      if (user == null) {
-        _showError('Invalid email or password');
-      } else {
-        final mustChange = await _auth.needsPasswordChange(user.uid);
+  if (!mounted) return;
 
-        if (!mounted) return;
+  if (user == null) {
+    _showError('Invalid email or password');
+  } else {
+    final mustChange = await _auth.needsPasswordChange(user.uid);
 
-        if (mustChange) {
-          Navigator.of(context).pushAndRemoveUntil(
-            MaterialPageRoute(builder: (_) => StudentChangePasswordScreen()),
-            (route) => false,
-          );
-        } else {
-          Navigator.of(context).pushAndRemoveUntil(
-            MaterialPageRoute(builder: (_) => const StudentHomeScreen()),
-            (route) => false,
-          );
-        }
-      }
-    } on FirebaseAuthException catch (e) {
+    if (!mounted) return;
+
+    if (mustChange) {
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(
+          builder: (_) => StudentChangePasswordScreen(),
+        ),
+        (route) => false,
+      );
+    } else {
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(
+          builder: (_) => const StudentHomeScreen(),
+        ),
+        (route) => false,
+      );
+    }
+  }
+} on FirebaseAuthException catch (e) {
       if (!mounted) return;
       String message = 'Login failed. Please try again.';
-      if (e.code == 'user-not-found') message = 'No account found with this email';
-      else if (e.code == 'wrong-password') message = 'Incorrect password';
-      else if (e.code == 'invalid-email') message = 'Please enter a valid email address';
-      else if (e.code == 'too-many-requests') message = 'Too many attempts. Please wait and try again.';
+      switch (e.code) {
+        case 'user-not-found':
+          message = 'No account found with this email';
+          break;
+        case 'wrong-password':
+          message = 'Incorrect password';
+          break;
+        case 'invalid-email':
+          message = 'Please enter a valid email address';
+          break;
+        case 'too-many-requests':
+          message = 'Too many attempts. Please wait and try again.';
+          break;
+      }
       _showError(message);
     } catch (_) {
       if (mounted) _showError('An error occurred. Please try again.');
@@ -80,22 +113,28 @@ class _StudentLoginState extends State<StudentLogin> {
     setState(() => _isLoading = false);
   }
 
-  void _showError(String message) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: Colors.red.shade700,
-        behavior: SnackBarBehavior.floating,
+  // ── Guest access → Gateway ─────────────────────────────
+  void _openGuestGateway() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => const GuestAccessGatewayScreen(),
       ),
     );
   }
 
-  @override
-  void dispose() {
-    _emailController.dispose();
-    _passwordController.dispose();
-    super.dispose();
+  void _showError(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message,
+            style: GoogleFonts.beVietnamPro(fontSize: 13)),
+        backgroundColor: Colors.red.shade700,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10)),
+      ),
+    );
   }
 
   @override
@@ -103,6 +142,7 @@ class _StudentLoginState extends State<StudentLogin> {
     return Scaffold(
       body: Stack(
         children: [
+          // ── Background image ─────────────────────────────
           Positioned.fill(
             child: Image.asset(
               'assets/images/bg_pattern.png',
@@ -111,6 +151,7 @@ class _StudentLoginState extends State<StudentLogin> {
                   Container(color: Colors.grey[200]),
             ),
           ),
+          // ── Gradient overlay ─────────────────────────────
           Positioned.fill(
             child: Container(
               decoration: BoxDecoration(
@@ -125,6 +166,8 @@ class _StudentLoginState extends State<StudentLogin> {
               ),
             ),
           ),
+
+          // ── Content ──────────────────────────────────────
           SafeArea(
             child: Center(
               child: SingleChildScrollView(
@@ -132,19 +175,38 @@ class _StudentLoginState extends State<StudentLogin> {
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: 520),
                   child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: Text(
-                          'Student Login',
-                          style: GoogleFonts.beVietnamPro(
-                            fontSize: 30,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                          ),
+                      // UPRISE logo
+                      Row(children: [
+                        Container(
+                          width: 38, height: 38,
+                          decoration: const BoxDecoration(
+                              color: Color(0xFFFF6B00),
+                              shape: BoxShape.circle),
+                          child: const Icon(Icons.local_fire_department,
+                              color: Colors.white, size: 22),
                         ),
-                      ),
+                        const SizedBox(width: 10),
+                        Text('UPRISE',
+                            style: GoogleFonts.beVietnamPro(
+                                color: const Color(0xFFFF6B00),
+                                fontWeight: FontWeight.w900,
+                                fontSize: 22,
+                                letterSpacing: 1.8)),
+                      ]),
+
+                      const SizedBox(height: 24),
+
+                      Text('Student Login',
+                          style: GoogleFonts.beVietnamPro(
+                              fontSize: 30,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white)),
+
                       const SizedBox(height: 18),
+
+                      // ── Login card ──────────────────────────
                       Container(
                         padding: const EdgeInsets.all(28),
                         decoration: BoxDecoration(
@@ -152,7 +214,8 @@ class _StudentLoginState extends State<StudentLogin> {
                           borderRadius: BorderRadius.circular(28),
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.black.withOpacity(0.2),
+                              color:
+                                  Colors.black.withOpacity(0.2),
                               blurRadius: 30,
                               offset: const Offset(0, 18),
                             ),
@@ -160,19 +223,35 @@ class _StudentLoginState extends State<StudentLogin> {
                         ),
                         child: Column(
                           children: [
-                            const SizedBox(height: 20),
+                            const SizedBox(height: 8),
+
+                            // Email
                             TextField(
-                              controller: _emailController,
-                              decoration: const InputDecoration(
+                              controller: _emailCtrl,
+                              keyboardType:
+                                  TextInputType.emailAddress,
+                              decoration: InputDecoration(
                                 labelText: 'Email Address',
+                                labelStyle: GoogleFonts.beVietnamPro(
+                                    fontSize: 14),
+                                prefixIcon: const Icon(
+                                    Icons.email_outlined,
+                                    size: 20),
                               ),
                             ),
+
                             const SizedBox(height: 18),
+
+                            // Password
                             TextField(
-                              controller: _passwordController,
+                              controller: _passwordCtrl,
                               obscureText: _obscurePassword,
                               decoration: InputDecoration(
                                 labelText: 'Password',
+                                labelStyle: GoogleFonts.beVietnamPro(
+                                    fontSize: 14),
+                                prefixIcon: const Icon(
+                                    Icons.lock_outline, size: 20),
                                 suffixIcon: IconButton(
                                   icon: Icon(
                                     _obscurePassword
@@ -181,45 +260,90 @@ class _StudentLoginState extends State<StudentLogin> {
                                   ),
                                   onPressed: () {
                                     if (!mounted) return;
-                                    setState(() {
-                                      _obscurePassword = !_obscurePassword;
-                                    });
+                                    setState(() => _obscurePassword =
+                                        !_obscurePassword);
                                   },
                                 ),
                               ),
                             ),
+
                             const SizedBox(height: 24),
+
+                            // Login button
                             SizedBox(
                               width: double.infinity,
                               height: 52,
                               child: ElevatedButton(
-                                onPressed: _isLoading ? null : _login,
+                                onPressed:
+                                    _isLoading ? null : _login,
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor:
+                                      const Color(0xFFFF6B00),
+                                  foregroundColor: Colors.white,
+                                  elevation: 0,
+                                  shape: RoundedRectangleBorder(
+                                      borderRadius:
+                                          BorderRadius.circular(14)),
+                                ),
                                 child: _isLoading
-                                    ? const CircularProgressIndicator(
-                                        color: Colors.white,
-                                      )
-                                    : const Text('Login'),
+                                    ? const SizedBox(
+                                        width: 22, height: 22,
+                                        child:
+                                            CircularProgressIndicator(
+                                          color: Colors.white,
+                                          strokeWidth: 2.5,
+                                        ))
+                                    : Text('Login',
+                                        style: GoogleFonts.beVietnamPro(
+                                            fontSize: 15,
+                                            fontWeight:
+                                                FontWeight.w700)),
                               ),
                             ),
+
                             const SizedBox(height: 12),
-                            TextButton(
-                              onPressed: () {
-                                Navigator.pushReplacement(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) => const GuestHomeScreen(),
-                                  ),
-                                );
-                              },
-                              child: const Text(
-                                'Continue as Guest',
-                                style: TextStyle(
-                                  color: Colors.grey,
-                                  fontSize: 13,
+
+                            // ── Continue as Guest → Gateway ────
+                            SizedBox(
+                              width: double.infinity,
+                              child: OutlinedButton.icon(
+                                onPressed: _openGuestGateway,
+                                icon: const Icon(
+                                    Icons.explore_outlined,
+                                    size: 18),
+                                label: Text('Continue as Guest',
+                                    style: GoogleFonts.beVietnamPro(
+                                        fontSize: 14,
+                                        fontWeight:
+                                            FontWeight.w600)),
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: Colors.black54,
+                                  side: const BorderSide(
+                                      color: Color(0xFFDDDDDD)),
+                                  padding:
+                                      const EdgeInsets.symmetric(
+                                          vertical: 14),
+                                  shape: RoundedRectangleBorder(
+                                      borderRadius:
+                                          BorderRadius.circular(14)),
                                 ),
                               ),
                             ),
                           ],
+                        ),
+                      ),
+
+                      const SizedBox(height: 20),
+
+                      // Small hint below card
+                      Center(
+                        child: Text(
+                          'Guests can visit, sign up, or log in\nfrom the Continue as Guest option.',
+                          textAlign: TextAlign.center,
+                          style: GoogleFonts.beVietnamPro(
+                              fontSize: 11,
+                              color: Colors.white54,
+                              height: 1.5),
                         ),
                       ),
                     ],

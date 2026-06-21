@@ -13,11 +13,13 @@
 //   Log In          → GuestLoginScreen → GuestHomeScreen (authenticated mode)
 //
 
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'guest_auth_service.dart'; // GuestMode enum + auth state management
-import 'guest_home_screen.dart';
-import 'guest_profile_screen.dart'; // exposes _RegistrationScreen via re-export
+import 'guest_auth_service.dart'; // GuestAuthService.saveSession() + GuestMode enum
+import 'guest_home_screen.dart' hide GuestMode; // GuestHomeScreen only — GuestMode comes from guest_auth_service
+import 'guest_profile_screen.dart'; // exposes RegistrationScreen via re-export
 
 // ─────────────────────────────────────────────────────────────
 //  THEME
@@ -443,28 +445,82 @@ class _GuestLoginScreenState extends State<GuestLoginScreen> {
     setState(() => _isLoading = true);
 
     try {
-      // Authenticate against the external_requests collection
-      // (guests don't have Firebase Auth accounts — their "password" is
-      // stored as a hashed field set by the admin upon approval).
-      // For demo purposes this checks email + approvalCode.
-      final snap = await _queryGuestAccount(email, password);
+      // ── Step 1: Authenticate with Firebase Auth ──────────────────
+      // The admin created this account via createUserWithEmailAndPassword
+      // in external_account.dart (_approveAndCreateAccount), using the
+      // generated tempPassword (e.g. "GST-AB1234").
+      final cred = await FirebaseAuth.instance.signInWithEmailAndPassword(
+        email:    email,
+        password: password,
+      );
 
       if (!mounted) return;
 
-      if (snap == null) {
-        _snack('Invalid credentials or account not yet approved.');
+      final uid = cred.user!.uid;
+
+      // ── Step 2: Look up the matching external_requests doc by uid ─
+      // The admin batch-write stored uid in both external_requests and
+      // the guests collection when approving.
+      QuerySnapshot snap;
+      try {
+        snap = await FirebaseFirestore.instance
+            .collection('external_requests')
+            .where('uid', isEqualTo: uid)
+            .where('status', isEqualTo: 'approved')
+            .limit(1)
+            .get();
+      } catch (_) {
+        // Fallback: look up by email in case uid wasn't written yet
+        snap = await FirebaseFirestore.instance
+            .collection('external_requests')
+            .where('email', isEqualTo: email)
+            .where('status', isEqualTo: 'approved')
+            .limit(1)
+            .get();
+      }
+
+      if (!mounted) return;
+
+      if (snap.docs.isEmpty) {
+        // Auth succeeded but no matching approved request — sign out
+        // and tell the user their account isn't approved yet.
+        await FirebaseAuth.instance.signOut();
+        _snack('Your account is not yet approved. Please wait for admin review.');
         setState(() => _isLoading = false);
         return;
       }
 
-      // Store the docId in SharedPreferences then navigate
+      final docId    = snap.docs.first.id;
+      final data     = snap.docs.first.data() as Map<String, dynamic>;
+      final fullName = (data['userName'] as String?) ?? '';
+      final mustChange = data['mustChangePassword'] == true;
+
+      // ── Step 3: Persist the session ──────────────────────────────
       await GuestAuthService.saveSession(
-        docId    : snap['docId']    as String,
+        docId    : docId,
         email    : email,
-        fullName : snap['userName'] as String? ?? '',
+        fullName : fullName,
       );
 
       if (!mounted) return;
+
+      // ── Step 4: First-login password change prompt ────────────────
+      if (mustChange) {
+        // Show the change-password screen before entering the app.
+        // After the user changes their password we clear the flag and
+        // push to GuestHomeScreen.
+        await Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => _GuestChangePasswordScreen(
+              uid:   uid,
+              docId: docId,
+            ),
+          ),
+        );
+        if (!mounted) return;
+      }
+
       Navigator.pushAndRemoveUntil(
         context,
         MaterialPageRoute(
@@ -474,43 +530,24 @@ class _GuestLoginScreenState extends State<GuestLoginScreen> {
         ),
         (route) => false,
       );
+    } on FirebaseAuthException catch (e) {
+      if (!mounted) return;
+      final msg = switch (e.code) {
+        'user-not-found'  => 'No account found for this email.',
+        'wrong-password'  => 'Incorrect password.',
+        'invalid-email'   => 'Invalid email address.',
+        'user-disabled'   => 'This account has been disabled.',
+        'too-many-requests' => 'Too many attempts. Please try again later.',
+        _                 => e.message ?? 'Login failed.',
+      };
+      _snack(msg);
+      setState(() => _isLoading = false);
     } catch (e) {
       if (mounted) {
         _snack('Login failed: $e');
         setState(() => _isLoading = false);
       }
     }
-  }
-
-  Future<Map<String, dynamic>?> _queryGuestAccount(
-      String email, String password) async {
-    try {
-      final import1 = await _firestore()
-          .collection('external_requests')
-          .where('email', isEqualTo: email)
-          .where('status', isEqualTo: 'approved')
-          .limit(1)
-          .get();
-
-      if (import1.docs.isEmpty) return null;
-
-      final doc  = import1.docs.first;
-      final data = doc.data() as Map<String, dynamic>;
-
-      // Check approvalCode (set by admin when approving the guest)
-      final storedCode = (data['approvalCode'] as String?) ?? '';
-      if (storedCode.isEmpty || storedCode != password) return null;
-
-      return {'docId': doc.id, ...data};
-    } catch (_) {
-      return null;
-    }
-  }
-
-  // ignore: non_constant_identifier_names
-  dynamic _firestore() {
-    // ignore: undefined_prefixes
-    return _FirestoreProxy.instance;
   }
 
   void _snack(String msg) {
@@ -800,23 +837,266 @@ class _GuestLoginScreenState extends State<GuestLoginScreen> {
 }
 
 // ─────────────────────────────────────────────────────────────
-//  PROXY (avoids direct cloud_firestore import here; real app uses DI)
+//  FIRST-LOGIN CHANGE PASSWORD SCREEN
+//
+//  Shown once after the guest logs in with their admin-issued
+//  tempPassword.  On success it:
+//    • Updates the Firebase Auth password
+//    • Clears mustChangePassword in both external_requests and users
+//  Then pops back so _login() can push GuestHomeScreen.
 // ─────────────────────────────────────────────────────────────
-class _FirestoreProxy {
-  static dynamic get instance {
-    // In the real app this returns FirebaseFirestore.instance
-    // ignore: undefined_class, return_of_invalid_type
-    return _realFirestore();
+class _GuestChangePasswordScreen extends StatefulWidget {
+  final String uid;
+  final String docId;
+
+  const _GuestChangePasswordScreen({
+    required this.uid,
+    required this.docId,
+  });
+
+  @override
+  State<_GuestChangePasswordScreen> createState() =>
+      _GuestChangePasswordScreenState();
+}
+
+class _GuestChangePasswordScreenState
+    extends State<_GuestChangePasswordScreen> {
+  final _newCtrl     = TextEditingController();
+  final _confirmCtrl = TextEditingController();
+  bool _obscureNew     = true;
+  bool _obscureConfirm = true;
+  bool _isLoading      = false;
+
+  @override
+  void dispose() {
+    _newCtrl.dispose();
+    _confirmCtrl.dispose();
+    super.dispose();
   }
-}
 
-dynamic _realFirestore() {
-  // ignore: undefined_identifier
-  return _cloudFirestoreInstance;
-}
+  Future<void> _changePassword() async {
+    final newPw  = _newCtrl.text.trim();
+    final confirm = _confirmCtrl.text.trim();
 
-// ignore: unused_element
-dynamic get _cloudFirestoreInstance {
-  // Returns FirebaseFirestore.instance — resolved at build time
-  throw UnimplementedError('Wire up FirebaseFirestore.instance here.');
+    if (newPw.isEmpty || confirm.isEmpty) {
+      _snack('Please fill in both fields.');
+      return;
+    }
+    if (newPw.length < 8) {
+      _snack('Password must be at least 8 characters.');
+      return;
+    }
+    if (newPw != confirm) {
+      _snack('Passwords do not match.');
+      return;
+    }
+
+    setState(() => _isLoading = true);
+
+    try {
+      // Update Firebase Auth password
+      await FirebaseAuth.instance.currentUser?.updatePassword(newPw);
+
+      // Clear the mustChangePassword flag in Firestore (both collections)
+      final batch = FirebaseFirestore.instance.batch();
+      batch.update(
+        FirebaseFirestore.instance
+            .collection('external_requests')
+            .doc(widget.docId),
+        {'mustChangePassword': false, 'tempPassword': FieldValue.delete()},
+      );
+      batch.update(
+        FirebaseFirestore.instance
+            .collection('users')
+            .doc(widget.uid),
+        {'mustChangePassword': false},
+      );
+      await batch.commit();
+
+      if (mounted) Navigator.pop(context); // return to _login flow
+    } on FirebaseAuthException catch (e) {
+      if (mounted) {
+        _snack(e.message ?? 'Failed to change password.');
+        setState(() => _isLoading = false);
+      }
+    } catch (e) {
+      if (mounted) {
+        _snack('Error: $e');
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  void _snack(String msg) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content:
+          Text(msg, style: GoogleFonts.beVietnamPro(fontSize: 13)),
+      backgroundColor: const Color(0xFFDC2626),
+      behavior: SnackBarBehavior.floating,
+      shape:
+          RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+    ));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: _kDark,
+      appBar: AppBar(
+        backgroundColor: _kDark,
+        elevation: 0,
+        automaticallyImplyLeading: false, // can't skip this step
+        title: Text('Set Your Password',
+            style: GoogleFonts.beVietnamPro(
+                fontSize: 17,
+                fontWeight: FontWeight.w700,
+                color: Colors.white)),
+      ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Info banner
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: _kOrange.withOpacity(0.10),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: _kOrange.withOpacity(0.3)),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(Icons.info_outline_rounded,
+                      size: 18, color: _kOrange),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'You are using a temporary password issued by the CICT admin. '
+                      'Please set a new personal password before continuing.',
+                      style: GoogleFonts.beVietnamPro(
+                          fontSize: 13,
+                          color: Colors.white70,
+                          height: 1.5),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 32),
+
+            // New password field
+            _buildPasswordField(
+              label:      'New Password',
+              controller: _newCtrl,
+              hint:       'At least 8 characters',
+              obscure:    _obscureNew,
+              onToggle:   () => setState(() => _obscureNew = !_obscureNew),
+            ),
+
+            const SizedBox(height: 16),
+
+            // Confirm password field
+            _buildPasswordField(
+              label:      'Confirm New Password',
+              controller: _confirmCtrl,
+              hint:       'Re-enter your new password',
+              obscure:    _obscureConfirm,
+              onToggle:   () =>
+                  setState(() => _obscureConfirm = !_obscureConfirm),
+            ),
+
+            const SizedBox(height: 28),
+
+            SizedBox(
+              width: double.infinity,
+              height: 52,
+              child: ElevatedButton(
+                onPressed: _isLoading ? null : _changePassword,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: _kOrange,
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
+                ),
+                child: _isLoading
+                    ? const SizedBox(
+                        width: 22, height: 22,
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2.5, color: Colors.white))
+                    : Text('Set Password & Continue',
+                        style: GoogleFonts.beVietnamPro(
+                            fontSize: 15, fontWeight: FontWeight.w700)),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPasswordField({
+    required String                label,
+    required TextEditingController controller,
+    required String                hint,
+    required bool                  obscure,
+    required VoidCallback          onToggle,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label,
+            style: GoogleFonts.beVietnamPro(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: Colors.white70)),
+        const SizedBox(height: 8),
+        TextFormField(
+          controller:   controller,
+          obscureText:  obscure,
+          style: GoogleFonts.beVietnamPro(
+              fontSize: 14, color: Colors.white),
+          decoration: InputDecoration(
+            hintText: hint,
+            hintStyle: GoogleFonts.beVietnamPro(
+                fontSize: 13, color: Colors.white38),
+            prefixIcon: const Icon(Icons.lock_outline,
+                size: 18, color: Colors.white38),
+            suffixIcon: IconButton(
+              icon: Icon(
+                obscure
+                    ? Icons.visibility_off_outlined
+                    : Icons.visibility_outlined,
+                size: 18,
+                color: Colors.white38,
+              ),
+              onPressed: onToggle,
+            ),
+            filled:      true,
+            fillColor:   Colors.white.withOpacity(0.07),
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide:
+                  BorderSide(color: Colors.white.withOpacity(0.15)),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide:
+                  BorderSide(color: Colors.white.withOpacity(0.15)),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide:
+                  const BorderSide(color: _kOrange, width: 1.5),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
 }
