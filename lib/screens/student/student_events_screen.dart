@@ -97,6 +97,7 @@ class EventImage extends StatelessWidget {
 // ─────────────────────────────────────────────
 class EventData {
   final String id;
+  final String proposalId;
   final String title;
   final String subtitle;
   final String organizer;
@@ -117,6 +118,7 @@ class EventData {
 
   const EventData({
     required this.id,
+    this.proposalId = '',
     required this.title,
     required this.subtitle,
     required this.organizer,
@@ -146,6 +148,7 @@ class EventData {
     final slotsLeft = d['slotsLeft'] as int? ?? capacity;
     return EventData(
       id:           doc.id,
+      proposalId:   d['createdFromProposalId'] ?? '',
       title:        d['title']       ?? '',
       subtitle:     d['subtitle']    ?? '',
       organizer:    d['orgName']     ?? '',
@@ -1427,6 +1430,99 @@ class EventDetailScreen extends StatefulWidget {
 
 class _EventDetailScreenState extends State<EventDetailScreen> {
   bool _isLoading = false;
+  bool _loadingForm = true;
+  Map<String, dynamic>? _formDef;
+  final Map<String, TextEditingController> _fieldControllers = {};
+  final Map<String, String?> _singleChoice = {};
+  final Map<String, Set<String>> _multiChoice = {};
+
+  @override
+  void initState() {
+    super.initState();
+    _loadRegistrationForm();
+  }
+
+  @override
+  void dispose() {
+    for (final c in _fieldControllers.values) {
+      c.dispose();
+    }
+    super.dispose();
+  }
+
+  // The org's Registration Form Builder writes to `registration_forms/{proposalId}`.
+  // Look it up via the event's source proposal so students see the org's actual form.
+  Future<void> _loadRegistrationForm() async {
+    if (widget.event.proposalId.isEmpty) {
+      if (mounted) setState(() => _loadingForm = false);
+      return;
+    }
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('registration_forms')
+          .doc(widget.event.proposalId)
+          .get();
+      if (doc.exists) {
+        final d = doc.data()!;
+        final fields = (d['fields'] as List? ?? [])
+            .map((e) => Map<String, dynamic>.from(e as Map))
+            .toList();
+        if (d['isPublished'] == true && fields.isNotEmpty) {
+          for (final f in fields) {
+            final id = f['id'] as String;
+            final type = (f['type'] ?? 'short_text') as String;
+            if (type == 'multiple_choice' || type == 'dropdown') {
+              _singleChoice[id] = null;
+            } else if (type == 'checkboxes') {
+              _multiChoice[id] = {};
+            } else {
+              _fieldControllers[id] = TextEditingController();
+            }
+          }
+          _formDef = {...d, 'fields': fields};
+        }
+      }
+    } catch (_) {}
+    if (mounted) setState(() => _loadingForm = false);
+  }
+
+  String? _validateDynamicFields() {
+    if (_formDef == null) return null;
+    final fields = (_formDef!['fields'] as List).cast<Map<String, dynamic>>();
+    for (final f in fields) {
+      if (f['required'] != true) continue;
+      final id = f['id'] as String;
+      final type = (f['type'] ?? 'short_text') as String;
+      final label = (f['label'] ?? 'This question').toString();
+      if (type == 'multiple_choice' || type == 'dropdown') {
+        if (_singleChoice[id] == null) return 'Please answer: $label';
+      } else if (type == 'checkboxes') {
+        if ((_multiChoice[id] ?? {}).isEmpty) return 'Please answer: $label';
+      } else {
+        if ((_fieldControllers[id]?.text ?? '').trim().isEmpty) return 'Please answer: $label';
+      }
+    }
+    return null;
+  }
+
+  Map<String, dynamic> _collectFormResponses() {
+    if (_formDef == null) return {};
+    final fields = (_formDef!['fields'] as List).cast<Map<String, dynamic>>();
+    final out = <String, dynamic>{};
+    for (final f in fields) {
+      final id = f['id'] as String;
+      final type = (f['type'] ?? 'short_text') as String;
+      final label = f['label'] ?? '';
+      if (type == 'multiple_choice' || type == 'dropdown') {
+        out[id] = {'label': label, 'value': _singleChoice[id]};
+      } else if (type == 'checkboxes') {
+        out[id] = {'label': label, 'value': (_multiChoice[id] ?? {}).toList()};
+      } else {
+        out[id] = {'label': label, 'value': _fieldControllers[id]?.text.trim() ?? ''};
+      }
+    }
+    return out;
+  }
 
   Future<void> _registerForEvent() async {
     if (widget.isPastEvent) {
@@ -1439,6 +1535,12 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
         content: Text('Event is full! No slots available.'), backgroundColor: Colors.red));
       return;
     }
+    final formError = _validateDynamicFields();
+    if (formError != null) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(formError), backgroundColor: Colors.red));
+      return;
+    }
     setState(() => _isLoading = true);
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
@@ -1447,6 +1549,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
       return;
     }
     try {
+      final formResponses = _collectFormResponses();
       final regRef = FirebaseFirestore.instance
           .collection('registrations').doc('${user.uid}_${widget.event.id}');
       await FirebaseFirestore.instance.runTransaction((tx) async {
@@ -1461,6 +1564,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
         tx.set(regRef, {
           'userId': user.uid, 'eventId': widget.event.id,
           'registeredAt': FieldValue.serverTimestamp(), 'status': 'registered',
+          if (formResponses.isNotEmpty) 'formResponses': formResponses,
         });
       });
       widget.onRegistered();
@@ -1475,6 +1579,138 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+  InputDecoration _fieldDecoration(String hint) => InputDecoration(
+    hintText: hint,
+    filled: true,
+    fillColor: Colors.grey.shade50,
+    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: Colors.grey.shade300)),
+    enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: Colors.grey.shade300)),
+    focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: AppColors.primaryDark, width: 1.5)),
+  );
+
+  Widget _buildDynamicField(Map<String, dynamic> field) {
+    final id = field['id'] as String;
+    final type = (field['type'] ?? 'short_text') as String;
+    final label = (field['label'] ?? '').toString();
+    final desc = (field['description'] ?? '').toString();
+    final required = field['required'] == true;
+    final options = (field['options'] as List?)?.map((o) => o.toString()).toList() ?? [];
+
+    Widget input;
+    switch (type) {
+      case 'paragraph':
+        input = TextField(controller: _fieldControllers[id], maxLines: 4, decoration: _fieldDecoration('Your answer'));
+        break;
+      case 'email':
+        input = TextField(controller: _fieldControllers[id], keyboardType: TextInputType.emailAddress, decoration: _fieldDecoration('someone@email.com'));
+        break;
+      case 'number':
+        input = TextField(controller: _fieldControllers[id], keyboardType: TextInputType.number, decoration: _fieldDecoration('0'));
+        break;
+      case 'date':
+        input = TextField(
+          controller: _fieldControllers[id],
+          readOnly: true,
+          decoration: _fieldDecoration('Select date').copyWith(suffixIcon: const Icon(Icons.calendar_today_outlined, size: 18)),
+          onTap: () async {
+            final picked = await showDatePicker(
+              context: context, initialDate: DateTime.now(),
+              firstDate: DateTime(2020), lastDate: DateTime(2100),
+            );
+            if (picked != null) {
+              setState(() => _fieldControllers[id]!.text = DateFormat('MMM dd, yyyy').format(picked));
+            }
+          },
+        );
+        break;
+      case 'multiple_choice':
+        input = Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: options.map((o) => RadioListTile<String>(
+            value: o, groupValue: _singleChoice[id],
+            title: Text(o, style: const TextStyle(fontSize: 13)),
+            dense: true, contentPadding: EdgeInsets.zero,
+            onChanged: (v) => setState(() => _singleChoice[id] = v),
+          )).toList(),
+        );
+        break;
+      case 'dropdown':
+        input = DropdownButtonFormField<String>(
+          initialValue: _singleChoice[id],
+          decoration: _fieldDecoration('Select an option'),
+          items: options.map((o) => DropdownMenuItem(value: o, child: Text(o, style: const TextStyle(fontSize: 13)))).toList(),
+          onChanged: (v) => setState(() => _singleChoice[id] = v),
+        );
+        break;
+      case 'checkboxes':
+        input = Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: options.map((o) => CheckboxListTile(
+            value: _multiChoice[id]?.contains(o) ?? false,
+            title: Text(o, style: const TextStyle(fontSize: 13)),
+            controlAffinity: ListTileControlAffinity.leading,
+            dense: true, contentPadding: EdgeInsets.zero,
+            onChanged: (v) => setState(() {
+              _multiChoice.putIfAbsent(id, () => {});
+              if (v == true) {
+                _multiChoice[id]!.add(o);
+              } else {
+                _multiChoice[id]!.remove(o);
+              }
+            }),
+          )).toList(),
+        );
+        break;
+      default:
+        input = TextField(controller: _fieldControllers[id], decoration: _fieldDecoration('Your answer'));
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        RichText(text: TextSpan(children: [
+          TextSpan(text: label, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.black87)),
+          if (required) const TextSpan(text: ' *', style: TextStyle(color: Colors.red, fontWeight: FontWeight.w700)),
+        ])),
+        if (desc.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(top: 2, bottom: 6),
+            child: Text(desc, style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
+          )
+        else
+          const SizedBox(height: 6),
+        input,
+      ]),
+    );
+  }
+
+  Widget _buildRegistrationFormSection() {
+    if (_formDef == null) return const SizedBox.shrink();
+    final fields = (_formDef!['fields'] as List).cast<Map<String, dynamic>>();
+    final title = (_formDef!['title'] ?? 'Registration Form').toString();
+    final desc = (_formDef!['description'] ?? '').toString();
+    return Container(
+      margin: const EdgeInsets.only(bottom: 24),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade50,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+        if (desc.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Text(desc, style: TextStyle(fontSize: 13, color: Colors.grey.shade600)),
+          ),
+        const SizedBox(height: 14),
+        ...fields.map(_buildDynamicField),
+      ]),
+    );
   }
 
   @override
@@ -1515,11 +1751,18 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
               Text(widget.event.description,
                   style: const TextStyle(fontSize: 14, color: Colors.black87, height: 1.4)),
               const SizedBox(height: 30),
+              if (!widget.isPastEvent && !widget.event.isRegistered && _loadingForm)
+                const Center(child: Padding(
+                  padding: EdgeInsets.symmetric(vertical: 12),
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )),
+              if (!widget.isPastEvent && !widget.event.isRegistered && !_loadingForm)
+                _buildRegistrationFormSection(),
               if (!widget.isPastEvent && !widget.event.isRegistered)
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton(
-                    onPressed: _isLoading ? null : _registerForEvent,
+                    onPressed: _isLoading || _loadingForm ? null : _registerForEvent,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: widget.event.slotsLeft > 0 ? Colors.orange : Colors.grey,
                       padding: const EdgeInsets.symmetric(vertical: 14),
