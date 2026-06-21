@@ -2002,6 +2002,73 @@ class _ViewProposalModal extends StatelessWidget {
     }
   }
 
+  // Helper to build the admin feedback widget – avoids in‑line if errors.
+  Widget _buildAdminFeedback() {
+    final feedback = data['adminFeedback'];
+    if (feedback == null || feedback.toString().isEmpty) return const SizedBox.shrink();
+
+    final status = (data['status'] ?? '').toString().toLowerCase();
+    final isRejected = status == 'rejected';
+    final isForReview = status == 'for_review';
+
+    Color bgColor, borderColor, iconColor, titleColor, textColor;
+    IconData iconData;
+    String titleText;
+
+    if (isRejected) {
+      bgColor = const Color(0xFFFEF2F2);
+      borderColor = const Color(0xFFDC2626).withAlpha(60);
+      iconColor = const Color(0xFFDC2626);
+      titleColor = const Color(0xFFDC2626);
+      textColor = const Color(0xFF991B1B);
+      iconData = Icons.cancel_outlined;
+      titleText = 'Rejection Reason';
+    } else if (isForReview) {
+      bgColor = const Color(0xFFF3E8FF);
+      borderColor = const Color(0xFF7C3AED).withAlpha(60);
+      iconColor = const Color(0xFF7C3AED);
+      titleColor = const Color(0xFF7C3AED);
+      textColor = const Color(0xFF4C1D95);
+      iconData = Icons.rate_review_rounded;
+      titleText = 'Revision Requested by Admin';
+    } else {
+      // Fallback for any other status with feedback
+      bgColor = const Color(0xFFF3F4F6);
+      borderColor = const Color(0xFF6B7280).withAlpha(60);
+      iconColor = const Color(0xFF6B7280);
+      titleColor = const Color(0xFF6B7280);
+      textColor = const Color(0xFF374151);
+      iconData = Icons.info_outline;
+      titleText = 'Admin Feedback';
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 16),
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: bgColor,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: borderColor),
+        ),
+        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Icon(iconData, size: 16, color: iconColor),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(titleText,
+                  style: GoogleFonts.beVietnamPro(
+                      fontSize: 12, fontWeight: FontWeight.w700, color: titleColor)),
+              const SizedBox(height: 4),
+              Text(feedback.toString(),
+                  style: GoogleFonts.beVietnamPro(fontSize: 13, color: textColor, height: 1.4)),
+            ]),
+          ),
+        ]),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final status   = (data['status'] ?? 'pending').toString().toLowerCase();
@@ -2086,29 +2153,8 @@ class _ViewProposalModal extends StatelessWidget {
                 const SizedBox(height: 14),
                 _detailItem('Submitted', _fmt(data['submittedAt']), Icons.send_outlined),
 
-                // Admin revision feedback banner
-                if (data['adminFeedback'] != null && data['adminFeedback'].toString().isNotEmpty) ...[
-                  const SizedBox(height: 16),
-                  Container(
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF3E8FF),
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: const Color(0xFF7C3AED).withAlpha(60)),
-                    ),
-                    child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      const Icon(Icons.rate_review_rounded, size: 16, color: Color(0xFF7C3AED)),
-                      const SizedBox(width: 10),
-                      Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                        Text('Revision Requested by Admin',
-                            style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.w700, color: const Color(0xFF7C3AED))),
-                        const SizedBox(height: 4),
-                        Text(data['adminFeedback'].toString(),
-                            style: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF4C1D95), height: 1.4)),
-                      ])),
-                    ]),
-                  ),
-                ],
+                // ── Admin feedback (rejection reason OR revision request) ──
+                _buildAdminFeedback(),
 
                 // Wet Sign Schedule
                 if (data['wetSignSchedule'] != null) ...[
