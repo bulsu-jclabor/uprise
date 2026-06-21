@@ -492,9 +492,82 @@ class _AttendanceTabState extends State<AttendanceTab> with AutomaticKeepAliveCl
     if (code == null || code == _lastCode) return;
     _lastCode = code;
     setState(() => _scanning = false);
-    await _markAttendance(code);
+    if (code.startsWith('UPRISE|GUEST|')) {
+      await _markGuestAttendance(code);
+    } else {
+      await _markAttendance(code);
+    }
     await Future.delayed(const Duration(seconds: 2));
     if (mounted) setState(() { _scanning = true; _lastCode = ''; });
+  }
+
+  // Guest QR payload: 'UPRISE|GUEST|{docId}|{FIRST}|{LAST}|{email}'
+  // (see lib/screens/guest/guest_digital_id_screen.dart _qrPayload).
+  // Guests have no `users` doc, so they're validated against
+  // external_requests instead, and attendance is keyed by email rather
+  // than studentId — kept as a distinct field so existing student-only
+  // aggregations (roll-call, eligible-recipient lookup, exporters) never
+  // see a foreign identity space mixed into `studentId`.
+  Future<void> _markGuestAttendance(String payload) async {
+    if (widget.eventDocId == null || widget.event == null) return;
+    try {
+      final parts = payload.split('|');
+      if (parts.length != 6 || parts[0] != 'UPRISE' || parts[1] != 'GUEST') {
+        throw Exception('Invalid guest QR code');
+      }
+      final docId = parts[2];
+      final email = parts[5].trim().toLowerCase();
+      if (email.isEmpty) throw Exception('Invalid guest QR code');
+
+      final evDoc = await FirebaseFirestore.instance.collection('events').doc(widget.eventDocId).get();
+      if (!_isActive(evDoc)) throw Exception('Attendance is not open for this event');
+
+      final guestDoc = await FirebaseFirestore.instance.collection('external_requests').doc(docId).get();
+      if (!guestDoc.exists) throw Exception('Guest record not found');
+      final guestData = guestDoc.data() as Map<String, dynamic>;
+      if ((guestData['status'] ?? '') != 'approved') {
+        throw Exception('Guest is not an approved visitor');
+      }
+      final name = (guestData['userName'] as String?)?.trim().isNotEmpty == true
+          ? guestData['userName'] as String
+          : '${parts[3]} ${parts[4]}';
+
+      final attCol = FirebaseFirestore.instance.collection('events')
+          .doc(widget.eventDocId).collection('attendances');
+      final existing = await attCol.where('guestEmail', isEqualTo: email).get();
+      if (existing.docs.any((d) => d.data()['isGuest'] == true)) {
+        throw Exception('$name already marked');
+      }
+
+      String status = 'present';
+      try {
+        final s = DateFormat.jm().parse(widget.event!.startTime);
+        final startDt = DateTime(widget.event!.date.year, widget.event!.date.month,
+            widget.event!.date.day, s.hour, s.minute);
+        if (DateTime.now().isAfter(startDt.add(const Duration(minutes: 15)))) status = 'late';
+      } catch (_) {}
+
+      await attCol.add({
+        'isGuest': true, 'guestEmail': email, 'guestDocId': docId,
+        'studentName': name, 'studentEmail': email,
+        'program': 'N/A', 'yearLevel': '',
+        'timestamp': FieldValue.serverTimestamp(),
+        'status': status, 'method': 'qr',
+      });
+
+      await activity_log.ActivityLogger.log(
+        action: 'mark_attendance', module: 'attendance',
+        details: { 'orgId': widget.orgId, 'eventId': widget.eventDocId,
+            'guestEmail': email, 'status': status, 'method': 'qr' },
+      );
+      if (mounted) {
+        _toast(context, '$name marked ${status.toUpperCase()} ${status == 'late' ? '⏰' : '✓'}');
+      }
+    } catch (e) {
+      if (mounted) {
+        _toast(context, e.toString().replaceFirst('Exception: ', ''), error: true);
+      }
+    }
   }
 
   Future<void> _toggleActive(bool currentlyActive) async {

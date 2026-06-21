@@ -16,8 +16,9 @@ import 'package:flutter/material.dart';
 import '../student/student_login.dart';
 import 'guest_announcements_screen.dart';
 import 'guest_auth_service.dart'; // GuestMode enum
+import 'guest_calendar_screen.dart';
+import 'guest_digital_id_notice.dart';
 import 'guest_events_screen.dart';
-import 'guest_qr_attendance_screen.dart';
 import 'guest_profile_screen.dart';
 
 // ─────────────────────────────────────────────────────────────
@@ -52,9 +53,19 @@ class _GuestHomeScreenState extends State<GuestHomeScreen> {
     _GuestHomeContent(mode: widget.mode),
     const GuestAnnouncementsScreen(),
     const GuestEventsScreen(),
-    const GuestQrAttendanceScreen(),
+    const GuestCalendarScreen(),
     const GuestProfileScreen(),
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.mode == GuestMode.authenticated) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) maybeShowGuestDigitalIdNotice(context);
+      });
+    }
+  }
 
   void switchTab(int index) => setState(() => _currentIndex = index);
 
@@ -89,7 +100,7 @@ class _GuestBottomNav extends StatelessWidget {
   _NavItem(Icons.home_outlined, Icons.home_rounded, 'Home'),
   _NavItem(Icons.campaign_outlined, Icons.campaign_rounded, 'Announcements'),
   _NavItem(Icons.calendar_today_outlined, Icons.calendar_today_rounded, 'Events'),
-  _NavItem(Icons.qr_code_scanner_outlined, Icons.qr_code_scanner_rounded, 'Attendance'),
+  _NavItem(Icons.calendar_month_outlined, Icons.calendar_month_rounded, 'Calendar'),
   _NavItem(Icons.person_outline, Icons.person, 'Profile'),
 ];
 
@@ -309,7 +320,7 @@ class _GuestHomeContent extends StatelessWidget {
               final s = context.findAncestorStateOfType<_GuestHomeScreenState>();
               if (s != null) s.switchTab(1);
             },
-            onAttendanceTap: () {
+            onCalendarTap: () {
               final s = context.findAncestorStateOfType<_GuestHomeScreenState>();
               if (s != null) s.switchTab(3);
             },
@@ -517,12 +528,12 @@ class _GuestBanner extends StatelessWidget {
 class _QuickActions extends StatelessWidget {
   final VoidCallback onEventsTap;
   final VoidCallback onAnnouncementsTap;
-  final VoidCallback onAttendanceTap;
+  final VoidCallback onCalendarTap;
 
   const _QuickActions({
     required this.onEventsTap,
     required this.onAnnouncementsTap,
-    required this.onAttendanceTap,
+    required this.onCalendarTap,
   });
 
   @override
@@ -546,10 +557,10 @@ class _QuickActions extends StatelessWidget {
           ),
           const SizedBox(width: 12),
           _QuickActionTile(
-            icon: Icons.qr_code_scanner_rounded,
-            label: 'QR\nAttendance',
+            icon: Icons.calendar_month_rounded,
+            label: 'Calendar',
             color: const Color(0xFF2E7D32),
-            onTap: onAttendanceTap,
+            onTap: onCalendarTap,
           ),
         ],
       ),

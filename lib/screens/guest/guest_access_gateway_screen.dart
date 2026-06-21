@@ -512,7 +512,7 @@ class _GuestLoginScreenState extends State<GuestLoginScreen> {
         await Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (_) => _GuestChangePasswordScreen(
+            builder: (_) => GuestChangePasswordScreen(
               uid:   uid,
               docId: docId,
             ),
@@ -837,30 +837,36 @@ class _GuestLoginScreenState extends State<GuestLoginScreen> {
 }
 
 // ─────────────────────────────────────────────────────────────
-//  FIRST-LOGIN CHANGE PASSWORD SCREEN
+//  CHANGE PASSWORD SCREEN
 //
-//  Shown once after the guest logs in with their admin-issued
-//  tempPassword.  On success it:
+//  Used two ways:
+//   • forced=true  — shown once after the guest logs in with their
+//     admin-issued tempPassword (can't be skipped/backed out of). Pops
+//     back so _login() can push GuestHomeScreen.
+//   • forced=false — opened voluntarily from GuestSettingsScreen.
+//  Either way, on success it:
 //    • Updates the Firebase Auth password
 //    • Clears mustChangePassword in both external_requests and users
-//  Then pops back so _login() can push GuestHomeScreen.
 // ─────────────────────────────────────────────────────────────
-class _GuestChangePasswordScreen extends StatefulWidget {
+class GuestChangePasswordScreen extends StatefulWidget {
   final String uid;
   final String docId;
+  final bool forced;
 
-  const _GuestChangePasswordScreen({
+  const GuestChangePasswordScreen({
+    super.key,
     required this.uid,
     required this.docId,
+    this.forced = true,
   });
 
   @override
-  State<_GuestChangePasswordScreen> createState() =>
+  State<GuestChangePasswordScreen> createState() =>
       _GuestChangePasswordScreenState();
 }
 
 class _GuestChangePasswordScreenState
-    extends State<_GuestChangePasswordScreen> {
+    extends State<GuestChangePasswordScreen> {
   final _newCtrl     = TextEditingController();
   final _confirmCtrl = TextEditingController();
   bool _obscureNew     = true;
@@ -945,8 +951,8 @@ class _GuestChangePasswordScreenState
       appBar: AppBar(
         backgroundColor: _kDark,
         elevation: 0,
-        automaticallyImplyLeading: false, // can't skip this step
-        title: Text('Set Your Password',
+        automaticallyImplyLeading: !widget.forced, // forced step can't be skipped/backed out of
+        title: Text(widget.forced ? 'Set Your Password' : 'Change Password',
             style: GoogleFonts.beVietnamPro(
                 fontSize: 17,
                 fontWeight: FontWeight.w700,
@@ -973,8 +979,10 @@ class _GuestChangePasswordScreenState
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
-                      'You are using a temporary password issued by the CICT admin. '
-                      'Please set a new personal password before continuing.',
+                      widget.forced
+                          ? 'You are using a temporary password issued by the CICT admin. '
+                            'Please set a new personal password before continuing.'
+                          : 'Choose a new password for your account.',
                       style: GoogleFonts.beVietnamPro(
                           fontSize: 13,
                           color: Colors.white70,

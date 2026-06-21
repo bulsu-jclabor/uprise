@@ -30,6 +30,7 @@ const _kGuestDocId   = 'guest_auth_doc_id';
 const _kGuestEmail   = 'guest_auth_email';
 const _kGuestName    = 'guest_auth_name';
 const _kGuestMode    = 'guest_auth_mode'; // 'visitor' | 'authenticated'
+const _kDigitalIdNoticePrefix = 'guest_digital_id_notice_';
 
 // ─────────────────────────────────────────────────────────────
 //  SERVICE
@@ -86,6 +87,17 @@ class GuestAuthService extends ChangeNotifier {
     svc._email    = email;
     svc._fullName = fullName;
     svc.notifyListeners();
+  }
+
+  // ── First-login Digital ID notice (shown once per guest account) ──
+  static Future<bool> hasShownDigitalIdNotice(String docId) async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool('$_kDigitalIdNoticePrefix$docId') ?? false;
+  }
+
+  static Future<void> markDigitalIdNoticeShown(String docId) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('$_kDigitalIdNoticePrefix$docId', true);
   }
 
   // ── Clear session (logout) ───────────────────────────────

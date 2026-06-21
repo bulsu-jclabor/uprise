@@ -12,6 +12,7 @@
 // Firestore: external_requests/{docId}  (streamed live)
 //
 
+import 'dart:convert';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -30,6 +31,14 @@ const _kDark        = Color(0xFF1A1A2E);
 const _kBg          = Color(0xFFF5F5F5);
 const _kSuccess     = Color(0xFF059669);
 const _kSuccessBg   = Color(0xFFECFDF5);
+
+ImageProvider _avatarImageProvider(String url) {
+  if (url.startsWith('data:image')) {
+    final base64Part = url.contains(',') ? url.split(',').last : url;
+    return MemoryImage(base64Decode(base64Part));
+  }
+  return NetworkImage(url);
+}
 
 // ─────────────────────────────────────────────────────────────
 //  SCREEN
@@ -91,6 +100,7 @@ class _IdCardView extends StatelessWidget {
   String get _school    => (data['university']  as String?) ?? '';
   String get _phone     => (data['phone']       as String?) ?? '';
   String get _course    => (data['course']      as String?) ?? '';
+  String get _photoUrl  => (data['photoUrl']    as String?) ?? '';
   String get _firstName =>
       (data['firstName'] as String?) ?? _fullName.split(' ').first;
   String get _lastName  =>
@@ -146,6 +156,7 @@ class _IdCardView extends StatelessWidget {
               phone:      _phone,
               course:     _course,
               initials:   _initials,
+              photoUrl:   _photoUrl,
               qrPayload:  _qrPayload,
               onFullscreen: () => _openFullscreen(context),
             ),
@@ -300,6 +311,7 @@ class _DigitalIdCard extends StatelessWidget {
   final String   phone;
   final String   course;
   final String   initials;
+  final String   photoUrl;
   final String   qrPayload;
   final VoidCallback onFullscreen;
 
@@ -313,6 +325,7 @@ class _DigitalIdCard extends StatelessWidget {
     required this.phone,
     required this.course,
     required this.initials,
+    required this.photoUrl,
     required this.qrPayload,
     required this.onFullscreen,
   });
@@ -432,7 +445,7 @@ class _DigitalIdCard extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 12),
-                // Avatar
+                // Avatar — photo if available, otherwise initials
                 Container(
                   width: 70, height: 70,
                   decoration: BoxDecoration(
@@ -442,13 +455,26 @@ class _DigitalIdCard extends StatelessWidget {
                         color: _kOrange.withOpacity(0.25),
                         width: 1.5),
                   ),
-                  child: Center(
-                    child: Text(initials,
-                        style: GoogleFonts.beVietnamPro(
-                            fontSize: 26,
-                            fontWeight: FontWeight.w900,
-                            color: _kOrange)),
-                  ),
+                  clipBehavior: Clip.antiAlias,
+                  child: photoUrl.isNotEmpty
+                      ? Image(
+                          image: _avatarImageProvider(photoUrl),
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => Center(
+                            child: Text(initials,
+                                style: GoogleFonts.beVietnamPro(
+                                    fontSize: 26,
+                                    fontWeight: FontWeight.w900,
+                                    color: _kOrange)),
+                          ),
+                        )
+                      : Center(
+                          child: Text(initials,
+                              style: GoogleFonts.beVietnamPro(
+                                  fontSize: 26,
+                                  fontWeight: FontWeight.w900,
+                                  color: _kOrange)),
+                        ),
                 ),
               ],
             ),

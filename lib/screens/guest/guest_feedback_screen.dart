@@ -110,13 +110,17 @@ class _GuestFeedbackScreenState extends State<GuestFeedbackScreen> {
       final eventDocs = await Future.wait(eventIds.map((id) =>
           FirebaseFirestore.instance.collection('events').doc(id).get()));
 
-      // 3. Check attendance records
+      // 3. Check attendance records — real check-ins are written by the org's
+      // QR scanner into events/{id}/attendances (see org_attendance_qr.dart
+      // _markGuestAttendance), keyed by guestEmail.
       final attendSnap = await FirebaseFirestore.instance
-          .collection('attendance')
-          .where('email', isEqualTo: _email)
+          .collectionGroup('attendances')
+          .where('guestEmail', isEqualTo: _email)
           .get();
-      final attendedIds =
-          attendSnap.docs.map((d) => (d.data())['eventId'] as String? ?? '').toSet();
+      final attendedIds = attendSnap.docs
+          .map((d) => d.reference.parent.parent?.id ?? '')
+          .where((id) => id.isNotEmpty)
+          .toSet();
 
       // 4. Check existing feedback
       final feedbackSnap = await FirebaseFirestore.instance
@@ -573,6 +577,20 @@ class _FeedbackFormSheetState extends State<_FeedbackFormSheet> {
         'comment'         : _commentCtrl.text.trim(),
         'submittedAt'     : FieldValue.serverTimestamp(),
         'type'            : 'guest',
+      });
+
+      // Mirror into event_feedback (the collection org_certificates.dart
+      // reads for eligibility) so this guest counts as "evaluated" when
+      // the org generates & distributes certificates for this event.
+      await FirebaseFirestore.instance.collection('event_feedback').add({
+        'eventId'     : widget.event.eventId,
+        'eventTitle'  : widget.event.title,
+        'guestEmail'  : widget.email,
+        'isGuest'     : true,
+        'rating'      : _rating,
+        'questionRatings': _questionRatings,
+        'comment'     : _commentCtrl.text.trim(),
+        'submittedAt' : FieldValue.serverTimestamp(),
       });
 
       widget.onSubmit();

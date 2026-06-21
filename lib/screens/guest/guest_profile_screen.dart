@@ -5,21 +5,31 @@
 // States:
 //   1. Not registered  → Hero banner + "Apply for Access" button
 //   2. Registered / pending / rejected → Status card + details (read-only)
-//   3. Approved        → Full profile card + QR attendance pass + settings/logout
+//   3. Approved        → Messenger-style menu hub (Digital ID, Certificate
+//      Repository, Registered/Participated Events, Submitted Feedback,
+//      Settings, Logout)
 //
 // Firestore collection: `external_requests`
 // SharedPreferences key: 'external_request_doc_id'
 //
-// Dependencies: cloud_firestore, google_fonts, shared_preferences, qr_flutter
+// Dependencies: cloud_firestore, google_fonts, shared_preferences
 //
 
-import 'dart:math' as math;
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:qr_flutter/qr_flutter.dart';
+
+import 'guest_auth_service.dart';
+import 'guest_certificate_repository_screen.dart';
+import 'guest_digital_id_screen.dart';
+import 'guest_feedback_screen.dart';
+import 'guest_participated_events_screen.dart';
+import 'guest_profile_information_screen.dart';
+import 'guest_registered_events_screen.dart';
+import 'guest_settings_screen.dart';
 
 // ─────────────────────────────────────────────────────────────
 //  THEME
@@ -27,7 +37,6 @@ import 'package:qr_flutter/qr_flutter.dart';
 const _kOrange      = Color(0xFFFF6B00);
 const _kOrangeLight = Color(0xFFFFEDD5);
 const _kBg          = Color(0xFFF5F5F5);
-const _kDark        = Color(0xFF1A1A2E);
 const _kSuccess     = Color(0xFF059669);
 const _kSuccessBg   = Color(0xFFECFDF5);
 const _kWarning     = Color(0xFFD97706);
@@ -661,19 +670,25 @@ class _ApprovedProfileScreen extends StatelessWidget {
   String get _fullName  => (data['userName']   as String?) ?? 'Guest';
   String get _email     => (data['email']       as String?) ?? '';
   String get _school    => (data['university']  as String?) ?? '';
-  String get _phone     => (data['phone']       as String?) ?? '';
-  String get _course    => (data['course']      as String?) ?? '';
-  String get _firstName => (data['firstName']   as String?) ?? _fullName.split(' ').first;
-  String get _lastName  => (data['lastName']    as String?) ?? (_fullName.split(' ').length > 1 ? _fullName.split(' ').last : '');
+  String get _photoUrl  => (data['photoUrl']    as String?) ?? '';
   String get _initials {
     final parts = _fullName.trim().split(' ');
     if (parts.length >= 2) return '${parts.first[0]}${parts.last[0]}'.toUpperCase();
     return _fullName.isNotEmpty ? _fullName[0].toUpperCase() : 'G';
   }
 
-  /// QR payload mirrors GuestEventPass.qrPayload format for the profile pass
-  String get _qrPayload =>
-      'UPRISE|GUEST|$docId|${_firstName.toUpperCase()}|${_lastName.toUpperCase()}|$_email';
+  ImageProvider? get _avatarImage {
+    if (_photoUrl.isEmpty) return null;
+    if (_photoUrl.startsWith('data:image')) {
+      try {
+        final b64 = _photoUrl.contains(',') ? _photoUrl.split(',').last : _photoUrl;
+        return MemoryImage(base64Decode(b64));
+      } catch (_) {
+        return null;
+      }
+    }
+    return NetworkImage(_photoUrl);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -688,42 +703,38 @@ class _ApprovedProfileScreen extends StatelessWidget {
                 fontSize: 18,
                 fontWeight: FontWeight.w700,
                 color: Colors.black87)),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.settings, color: _kOrange),
-            onPressed: () => Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => _GuestSettingsScreen(
-                  fullName:   _fullName,
-                  email:      _email,
-                  school:     _school,
-                  onWithdraw: onWithdraw,
-                ),
-              ),
-            ),
-          ),
-        ],
         bottom: const _AppBarLine(),
       ),
       body: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(16, 20, 16, 32),
         child: Column(
           children: [
-            // ── Header — mirrors StudentProfileScreen header ──
+            // ── Header card — Messenger/Facebook-style ───────
             Container(
-              color: Colors.white,
-              padding: const EdgeInsets.symmetric(
-                  vertical: 24, horizontal: 16),
+              width: double.infinity,
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: [
+                  BoxShadow(
+                      color: Colors.black.withOpacity(0.05),
+                      blurRadius: 14,
+                      offset: const Offset(0, 4)),
+                ],
+              ),
               child: Column(
                 children: [
-                  // Avatar
                   Container(
-                    width: 90,
-                    height: 90,
+                    width: 84,
+                    height: 84,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
                       color: _kOrangeLight,
                       border: Border.all(color: Colors.white, width: 3),
+                      image: _avatarImage != null
+                          ? DecorationImage(image: _avatarImage!, fit: BoxFit.cover)
+                          : null,
                       boxShadow: [
                         BoxShadow(
                             color: Colors.black.withOpacity(0.08),
@@ -731,218 +742,136 @@ class _ApprovedProfileScreen extends StatelessWidget {
                             offset: const Offset(0, 4)),
                       ],
                     ),
-                    child: Center(
-                      child: Text(
-                        _initials,
-                        style: GoogleFonts.beVietnamPro(
-                            fontSize: 30,
-                            fontWeight: FontWeight.w900,
-                            color: _kOrange),
-                      ),
-                    ),
+                    child: _avatarImage == null
+                        ? Center(
+                            child: Text(_initials,
+                                style: GoogleFonts.beVietnamPro(
+                                    fontSize: 28,
+                                    fontWeight: FontWeight.w900,
+                                    color: _kOrange)),
+                          )
+                        : null,
                   ),
                   const SizedBox(height: 12),
                   Text(_fullName,
                       style: GoogleFonts.beVietnamPro(
-                          fontSize: 20,
-                          fontWeight: FontWeight.w800,
-                          color: Colors.black87)),
-                  const SizedBox(height: 4),
-                  Text(_school.isNotEmpty ? _school : 'External Guest',
-                      style: GoogleFonts.beVietnamPro(
-                          fontSize: 13, color: Colors.grey)),
-                  const SizedBox(height: 2),
+                          fontSize: 19, fontWeight: FontWeight.w800, color: Colors.black87)),
+                  const SizedBox(height: 3),
                   Text(_email,
-                      style: GoogleFonts.beVietnamPro(
-                          fontSize: 13, color: _kOrange)),
-                  const SizedBox(height: 4),
-                  // Approved badge
+                      style: GoogleFonts.beVietnamPro(fontSize: 13, color: Colors.grey)),
+                  const SizedBox(height: 8),
                   Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 10, vertical: 4),
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(
                       color: _kSuccessBg,
                       borderRadius: BorderRadius.circular(20),
-                      border: Border.all(
-                          color: _kSuccess.withOpacity(0.3)),
+                      border: Border.all(color: _kSuccess.withOpacity(0.3)),
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Icon(Icons.verified_rounded,
-                            size: 12, color: _kSuccess),
+                        const Icon(Icons.verified_rounded, size: 12, color: _kSuccess),
                         const SizedBox(width: 5),
                         Text('VERIFIED GUEST',
                             style: GoogleFonts.beVietnamPro(
-                                fontSize: 10,
-                                fontWeight: FontWeight.w800,
-                                color: _kSuccess,
-                                letterSpacing: 0.6)),
+                                fontSize: 10, fontWeight: FontWeight.w800,
+                                color: _kSuccess, letterSpacing: 0.6)),
                       ],
                     ),
                   ),
                   const SizedBox(height: 16),
-
-                  // Action buttons row — mirrors student profile
-                  Row(
-                    children: [
-                      Expanded(
-                        child: ElevatedButton(
-                          onPressed: () => _openQrPass(context),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: _kOrange,
-                            foregroundColor: Colors.white,
-                            elevation: 0,
-                            shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(10)),
-                            padding: const EdgeInsets.symmetric(vertical: 14),
-                          ),
-                          child: Text('My QR Pass',
-                              style: GoogleFonts.beVietnamPro(
-                                  fontWeight: FontWeight.w700,
-                                  fontSize: 15)),
-                        ),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      onPressed: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const GuestDigitalIdScreen()),
                       ),
-                      const SizedBox(width: 10),
-                      Container(
-                        decoration: BoxDecoration(
-                          color: _kOrangeLight,
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: IconButton(
-                          onPressed: () => _openQrFullscreen(context),
-                          icon: const Icon(Icons.qr_code_2_rounded,
-                              color: _kOrange, size: 22),
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 16, vertical: 14),
-                        ),
+                      icon: const Icon(Icons.badge_outlined, size: 18),
+                      label: Text('View Digital ID',
+                          style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.w700, fontSize: 14)),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: _kOrange,
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        padding: const EdgeInsets.symmetric(vertical: 13),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       ),
-                    ],
+                    ),
                   ),
                 ],
-              ),
-            ),
-
-            const SizedBox(height: 12),
-
-            // ── QR Attendance Pass card ─────────────────────
-            Container(
-              color: Colors.white,
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text('Attendance QR Pass',
-                          style: GoogleFonts.beVietnamPro(
-                              fontWeight: FontWeight.w700, fontSize: 15)),
-                      GestureDetector(
-                        onTap: () => _openQrPass(context),
-                        child: Text('View Full',
-                            style: GoogleFonts.beVietnamPro(
-                                color: _kOrange, fontSize: 14)),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 14),
-                  _InlineQrCard(
-                    fullName:   _fullName,
-                    email:      _email,
-                    school:     _school,
-                    qrPayload:  _qrPayload,
-                    docId:      docId,
-                    onTap:      () => _openQrPass(context),
-                  ),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 12),
-
-            // ── Contact Information ─────────────────────────
-            Container(
-              color: Colors.white,
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Contact Information',
-                      style: GoogleFonts.beVietnamPro(
-                          fontWeight: FontWeight.w700, fontSize: 15)),
-                  const SizedBox(height: 14),
-                  _ContactRow(
-                      icon: Icons.email_outlined,
-                      label: 'EMAIL',
-                      value: _email.isNotEmpty ? _email : '—'),
-                  const SizedBox(height: 12),
-                  _ContactRow(
-                      icon: Icons.phone_outlined,
-                      label: 'PHONE',
-                      value: _phone.isNotEmpty ? _phone : 'Not provided'),
-                  const SizedBox(height: 12),
-                  _ContactRow(
-                      icon: Icons.school_outlined,
-                      label: 'INSTITUTION',
-                      value: _school.isNotEmpty ? _school : '—'),
-                  const SizedBox(height: 12),
-                  _ContactRow(
-                      icon: Icons.menu_book_outlined,
-                      label: 'COURSE / PROGRAM',
-                      value: _course.isNotEmpty ? _course : 'Not provided'),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 12),
-
-            // ── Logout ──────────────────────────────────────
-            Padding(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              child: TextButton.icon(
-                onPressed: () => _confirmLogout(context),
-                icon: const Icon(Icons.logout, color: _kOrange),
-                label: Text('Log Out',
-                    style: GoogleFonts.beVietnamPro(
-                        color: _kOrange,
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600)),
               ),
             ),
 
             const SizedBox(height: 16),
+
+            // ── Menu list ─────────────────────────────────────
+            _MenuSection(items: [
+              _MenuItemData(
+                icon: Icons.person_outline_rounded,
+                label: 'Profile Information',
+                subtitle: 'Edit your details',
+                onTap: () => Navigator.push(context,
+                    MaterialPageRoute(builder: (_) => const GuestProfileInformationScreen())),
+              ),
+              _MenuItemData(
+                icon: Icons.workspace_premium_outlined,
+                label: 'Certificate Repository',
+                subtitle: 'View and download certificates',
+                onTap: () => Navigator.push(context,
+                    MaterialPageRoute(builder: (_) => const GuestCertificateRepositoryScreen())),
+              ),
+              _MenuItemData(
+                icon: Icons.event_note_outlined,
+                label: 'Registered Events',
+                subtitle: 'Upcoming and past registrations',
+                onTap: () => Navigator.push(context,
+                    MaterialPageRoute(builder: (_) => const GuestRegisteredEventsScreen())),
+              ),
+              _MenuItemData(
+                icon: Icons.event_available_outlined,
+                label: 'Participated Events',
+                subtitle: 'Your attendance history',
+                onTap: () => Navigator.push(context,
+                    MaterialPageRoute(builder: (_) => const GuestParticipatedEventsScreen())),
+              ),
+              _MenuItemData(
+                icon: Icons.rate_review_outlined,
+                label: 'Submitted Feedback',
+                subtitle: 'Feedback you\'ve given for events',
+                onTap: () => Navigator.push(context,
+                    MaterialPageRoute(builder: (_) => const GuestFeedbackScreen())),
+              ),
+              _MenuItemData(
+                icon: Icons.settings_outlined,
+                label: 'Settings',
+                subtitle: 'Password, notifications, privacy',
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => GuestSettingsScreen(
+                      fullName: _fullName,
+                      email: _email,
+                      school: _school,
+                      docId: docId,
+                      onLogout: () => _confirmLogout(context),
+                    ),
+                  ),
+                ),
+              ),
+            ]),
+
+            const SizedBox(height: 16),
+
+            // ── Logout ──────────────────────────────────────
+            TextButton.icon(
+              onPressed: () => _confirmLogout(context),
+              icon: const Icon(Icons.logout, color: _kOrange),
+              label: Text('Log Out',
+                  style: GoogleFonts.beVietnamPro(
+                      color: _kOrange, fontSize: 15, fontWeight: FontWeight.w600)),
+            ),
           ],
-        ),
-      ),
-    );
-  }
-
-  void _openQrPass(BuildContext context) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => _QrPassScreen(
-          fullName:  _fullName,
-          email:     _email,
-          school:    _school,
-          phone:     _phone,
-          course:    _course,
-          docId:     docId,
-          qrPayload: _qrPayload,
-        ),
-      ),
-    );
-  }
-
-  void _openQrFullscreen(BuildContext context) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => _FullscreenQrScreen(
-          fullName:  _fullName,
-          qrPayload: _qrPayload,
         ),
       ),
     );
@@ -952,37 +881,30 @@ class _ApprovedProfileScreen extends StatelessWidget {
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
-        shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text('Log Out?',
-            style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.w800)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text('Log Out?', style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.w800)),
         content: Text(
           'You will be returned to the guest landing screen.',
-          style: GoogleFonts.beVietnamPro(
-              fontSize: 13, color: Colors.grey),
+          style: GoogleFonts.beVietnamPro(fontSize: 13, color: Colors.grey),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: Text('Cancel',
-                style:
-                    GoogleFonts.beVietnamPro(color: Colors.grey)),
+            child: Text('Cancel', style: GoogleFonts.beVietnamPro(color: Colors.grey)),
           ),
           ElevatedButton(
             onPressed: () async {
               Navigator.pop(context);
-              onWithdraw(); // clears pref → back to not-registered state
+              await GuestAuthService.clearSession();
+              onWithdraw(); // clears this screen's own pref → back to not-registered state
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: _kOrange,
               foregroundColor: Colors.white,
               elevation: 0,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10)),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
             ),
-            child: Text('Log Out',
-                style: GoogleFonts.beVietnamPro(
-                    fontWeight: FontWeight.w700)),
+            child: Text('Log Out', style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.w700)),
           ),
         ],
       ),
@@ -991,386 +913,19 @@ class _ApprovedProfileScreen extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────
-//  INLINE QR CARD (compact preview on profile)
+//  MENU SECTION (Messenger/Facebook-style icon-led rows)
 // ─────────────────────────────────────────────────────────────
-class _InlineQrCard extends StatelessWidget {
-  final String   fullName;
-  final String   email;
-  final String   school;
-  final String   qrPayload;
-  final String   docId;
+class _MenuItemData {
+  final IconData icon;
+  final String label;
+  final String subtitle;
   final VoidCallback onTap;
-
-  const _InlineQrCard({
-    required this.fullName,
-    required this.email,
-    required this.school,
-    required this.qrPayload,
-    required this.docId,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: const Color(0xFFF0F0F0)),
-          boxShadow: [
-            BoxShadow(
-                color: Colors.black.withOpacity(0.05),
-                blurRadius: 12,
-                offset: const Offset(0, 4)),
-          ],
-        ),
-        clipBehavior: Clip.antiAlias,
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.all(14),
-              child: Row(
-                children: [
-                  // Info
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Container(
-                              width: 20,
-                              height: 20,
-                              decoration: const BoxDecoration(
-                                  color: _kOrange, shape: BoxShape.circle),
-                              child: const Icon(
-                                  Icons.local_fire_department,
-                                  color: Colors.white, size: 12),
-                            ),
-                            const SizedBox(width: 5),
-                            Text('UPRISE',
-                                style: GoogleFonts.beVietnamPro(
-                                    color: _kOrange,
-                                    fontWeight: FontWeight.w900,
-                                    fontSize: 12,
-                                    letterSpacing: 1.2)),
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-                        Text(fullName,
-                            style: GoogleFonts.beVietnamPro(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w800,
-                                color: Colors.black87)),
-                        const SizedBox(height: 2),
-                        Text('VERIFIED GUEST',
-                            style: GoogleFonts.beVietnamPro(
-                                fontSize: 9,
-                                fontWeight: FontWeight.w700,
-                                color: _kSuccess,
-                                letterSpacing: 0.8)),
-                        const SizedBox(height: 4),
-                        Text(email,
-                            style: GoogleFonts.beVietnamPro(
-                                fontSize: 10, color: Colors.grey)),
-                        if (school.isNotEmpty) ...[
-                          const SizedBox(height: 2),
-                          Text(school,
-                              style: GoogleFonts.beVietnamPro(
-                                  fontSize: 10, color: Colors.grey)),
-                        ],
-                        const SizedBox(height: 8),
-                        Text('ID: ${docId.substring(0, 8).toUpperCase()}…',
-                            style: GoogleFonts.beVietnamPro(
-                                fontSize: 9,
-                                color: const Color(0xFFAAAAAA),
-                                letterSpacing: 0.3)),
-                      ],
-                    ),
-                  ),
-
-                  const SizedBox(width: 12),
-
-                  // QR code
-                  Column(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(7),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(
-                              color: const Color(0xFFEEEEEE)),
-                          boxShadow: [
-                            BoxShadow(
-                                color: Colors.black.withOpacity(0.05),
-                                blurRadius: 6,
-                                offset: const Offset(0, 2)),
-                          ],
-                        ),
-                        child: QrImageView(
-                          data:            qrPayload,
-                          version:         QrVersions.auto,
-                          size:            90,
-                          backgroundColor: Colors.white,
-                          eyeStyle: const QrEyeStyle(
-                            eyeShape: QrEyeShape.square,
-                            color:    _kDark,
-                          ),
-                          dataModuleStyle: const QrDataModuleStyle(
-                            dataModuleShape: QrDataModuleShape.square,
-                            color:           _kDark,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(Icons.open_in_full_rounded,
-                              size: 9, color: _kOrange),
-                          const SizedBox(width: 2),
-                          Text('Tap to enlarge',
-                              style: GoogleFonts.beVietnamPro(
-                                  fontSize: 8,
-                                  color: _kOrange,
-                                  fontWeight: FontWeight.w600)),
-                        ],
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-            // Bottom strip
-            Container(
-              height: 4,
-              decoration: const BoxDecoration(
-                gradient:
-                    LinearGradient(colors: [_kOrange, Color(0xFFFF9A4D)]),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+  _MenuItemData({required this.icon, required this.label, required this.subtitle, required this.onTap});
 }
 
-// ─────────────────────────────────────────────────────────────
-//  QR PASS SCREEN (full-page pass, like guest_qr_attendance_screen)
-// ─────────────────────────────────────────────────────────────
-class _QrPassScreen extends StatelessWidget {
-  final String fullName;
-  final String email;
-  final String school;
-  final String phone;
-  final String course;
-  final String docId;
-  final String qrPayload;
-
-  const _QrPassScreen({
-    required this.fullName,
-    required this.email,
-    required this.school,
-    required this.phone,
-    required this.course,
-    required this.docId,
-    required this.qrPayload,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: _kBg,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        centerTitle: true,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.black),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: Text('My QR Pass',
-            style: GoogleFonts.beVietnamPro(
-                fontSize: 17,
-                fontWeight: FontWeight.w700,
-                color: Colors.black87)),
-        bottom: const _AppBarLine(),
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 40),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Instruction banner
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: const Color(0xFFFFF3EB),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                    color: _kOrange.withOpacity(0.25)),
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.info_outline_rounded,
-                      size: 18, color: _kOrange),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      'Show this QR pass to event staff to record your attendance.',
-                      style: GoogleFonts.beVietnamPro(
-                          fontSize: 12,
-                          color: const Color(0xFF7A3300)),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 18),
-
-            // Pass card
-            _FullPassCard(
-              fullName:  fullName,
-              email:     email,
-              school:    school,
-              phone:     phone,
-              course:    course,
-              docId:     docId,
-              qrPayload: qrPayload,
-              onFullscreen: () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => _FullscreenQrScreen(
-                    fullName:  fullName,
-                    qrPayload: qrPayload,
-                  ),
-                ),
-              ),
-            ),
-
-            const SizedBox(height: 14),
-
-            // Fullscreen hint
-            GestureDetector(
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => _FullscreenQrScreen(
-                    fullName:  fullName,
-                    qrPayload: qrPayload,
-                  ),
-                ),
-              ),
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 14, vertical: 11),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                      color: const Color(0xFFEEEEEE)),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(Icons.open_in_full_rounded,
-                        size: 16, color: _kOrange),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        'Tap to show full-screen QR for easy scanning',
-                        style: GoogleFonts.beVietnamPro(
-                            fontSize: 12, color: Colors.black54),
-                      ),
-                    ),
-                    const Icon(Icons.chevron_right_rounded,
-                        size: 18, color: Colors.grey),
-                  ],
-                ),
-              ),
-            ),
-
-            const SizedBox(height: 14),
-
-            // Download button
-            SizedBox(
-              width: double.infinity,
-              height: 52,
-              child: ElevatedButton.icon(
-                onPressed: () {
-                  HapticFeedback.lightImpact();
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Row(
-                        children: [
-                          const Icon(Icons.check_circle_outline,
-                              color: Colors.white, size: 18),
-                          const SizedBox(width: 8),
-                          Text('Pass saved to your gallery',
-                              style: GoogleFonts.beVietnamPro(
-                                  fontSize: 13)),
-                        ],
-                      ),
-                      backgroundColor: _kOrange,
-                      behavior: SnackBarBehavior.floating,
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10)),
-                    ),
-                  );
-                },
-                icon: const Icon(Icons.download_rounded, size: 20),
-                label: Text('Download Pass',
-                    style: GoogleFonts.beVietnamPro(
-                        fontSize: 15, fontWeight: FontWeight.w700)),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: _kOrange,
-                  foregroundColor: Colors.white,
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14)),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────
-//  FULL PASS CARD  (ticket-style with QR)
-// ─────────────────────────────────────────────────────────────
-class _FullPassCard extends StatelessWidget {
-  final String   fullName;
-  final String   email;
-  final String   school;
-  final String   phone;
-  final String   course;
-  final String   docId;
-  final String   qrPayload;
-  final VoidCallback onFullscreen;
-
-  const _FullPassCard({
-    required this.fullName,
-    required this.email,
-    required this.school,
-    required this.phone,
-    required this.course,
-    required this.docId,
-    required this.qrPayload,
-    required this.onFullscreen,
-  });
-
-  String get _initials {
-    final parts = fullName.trim().split(' ');
-    if (parts.length >= 2) return '${parts.first[0]}${parts.last[0]}'.toUpperCase();
-    return fullName.isNotEmpty ? fullName[0].toUpperCase() : 'G';
-  }
+class _MenuSection extends StatelessWidget {
+  final List<_MenuItemData> items;
+  const _MenuSection({required this.items});
 
   @override
   Widget build(BuildContext context) {
@@ -1379,499 +934,47 @@ class _FullPassCard extends StatelessWidget {
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
-          BoxShadow(
-              color: Colors.black.withOpacity(0.10),
-              blurRadius: 18,
-              offset: const Offset(0, 6)),
-          BoxShadow(
-              color: _kOrange.withOpacity(0.06),
-              blurRadius: 30,
-              offset: const Offset(0, 10)),
+          BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 14, offset: const Offset(0, 4)),
         ],
       ),
-      clipBehavior: Clip.antiAlias,
       child: Column(
-        children: [
-          // Top: branding + identity
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Container(
-                            width: 22,
-                            height: 22,
-                            decoration: const BoxDecoration(
-                                color: _kOrange, shape: BoxShape.circle),
-                            child: const Icon(Icons.local_fire_department,
-                                color: Colors.white, size: 13),
-                          ),
-                          const SizedBox(width: 6),
-                          Text('UPRISE',
-                              style: GoogleFonts.beVietnamPro(
-                                  color: _kOrange,
-                                  fontWeight: FontWeight.w900,
-                                  fontSize: 14,
-                                  letterSpacing: 1.4)),
-                        ],
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'ID: ${docId.substring(0, 8).toUpperCase()}…',
-                        style: GoogleFonts.beVietnamPro(
-                            fontSize: 10,
-                            color: const Color(0xFF999999),
-                            letterSpacing: 0.3),
-                      ),
-                      const SizedBox(height: 10),
-                      Text(
-                        fullName.toUpperCase(),
-                        style: GoogleFonts.beVietnamPro(
-                            fontSize: 17,
-                            fontWeight: FontWeight.w900,
-                            color: Colors.black87,
-                            letterSpacing: 0.3,
-                            height: 1.15),
-                      ),
-                      const SizedBox(height: 2),
-                      Text('VERIFIED GUEST',
-                          style: GoogleFonts.beVietnamPro(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w700,
-                              color: _kSuccess,
-                              letterSpacing: 1.2)),
-                      const SizedBox(height: 4),
-                      Text(email,
-                          style: GoogleFonts.beVietnamPro(
-                              fontSize: 10,
-                              color: const Color(0xFFAAAAAA),
-                              letterSpacing: 0.2)),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 10),
-                // Avatar initial
-                Container(
-                  width: 64,
-                  height: 64,
-                  decoration: BoxDecoration(
-                    color: _kOrangeLight,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                        color: _kOrange.withOpacity(0.2), width: 1.5),
-                  ),
-                  child: Center(
-                    child: Text(
-                      _initials,
-                      style: GoogleFonts.beVietnamPro(
-                          fontSize: 24,
-                          fontWeight: FontWeight.w900,
-                          color: _kOrange),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          // Dashed divider
-          _DashedDivider(),
-
-          // Bottom: details + QR
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      if (school.isNotEmpty) ...[
-                        _CardDetailRow(label: 'SCHOOL', value: school),
-                        const SizedBox(height: 6),
-                      ],
-                      if (phone.isNotEmpty) ...[
-                        _CardDetailRow(label: 'PHONE', value: phone),
-                        const SizedBox(height: 6),
-                      ],
-                      if (course.isNotEmpty) ...[
-                        _CardDetailRow(label: 'COURSE', value: course),
-                        const SizedBox(height: 6),
-                      ],
-                      _CardDetailRow(label: 'TYPE', value: 'External Guest'),
-                      const SizedBox(height: 10),
-                      // Verified chip
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: _kSuccessBg,
-                          borderRadius: BorderRadius.circular(6),
-                          border: Border.all(
-                              color: _kSuccess.withOpacity(0.4)),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Icon(Icons.verified_rounded,
-                                size: 10, color: _kSuccess),
-                            const SizedBox(width: 4),
-                            Text('APPROVED',
-                                style: GoogleFonts.beVietnamPro(
-                                    fontSize: 9,
-                                    fontWeight: FontWeight.w800,
-                                    color: _kSuccess,
-                                    letterSpacing: 0.6)),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-
-                const SizedBox(width: 12),
-
-                // QR code
-                GestureDetector(
-                  onTap: onFullscreen,
-                  child: Column(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                              color: const Color(0xFFEEEEEE)),
-                          boxShadow: [
-                            BoxShadow(
-                                color: Colors.black.withOpacity(0.06),
-                                blurRadius: 8,
-                                offset: const Offset(0, 2)),
-                          ],
-                        ),
-                        child: QrImageView(
-                          data:            qrPayload,
-                          version:         QrVersions.auto,
-                          size:            100,
-                          backgroundColor: Colors.white,
-                          eyeStyle: const QrEyeStyle(
-                            eyeShape: QrEyeShape.square,
-                            color:    _kDark,
-                          ),
-                          dataModuleStyle: const QrDataModuleStyle(
-                            dataModuleShape: QrDataModuleShape.square,
-                            color:           _kDark,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 5),
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(Icons.open_in_full_rounded,
-                              size: 10, color: _kOrange),
-                          const SizedBox(width: 3),
-                          Text('Tap to enlarge',
-                              style: GoogleFonts.beVietnamPro(
-                                  fontSize: 9,
-                                  color: _kOrange,
-                                  fontWeight: FontWeight.w600)),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          // Bottom orange strip
-          Container(
-            height: 6,
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                  colors: [_kOrange, Color(0xFFFF9A4D)]),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────
-//  FULLSCREEN QR SCREEN
-// ─────────────────────────────────────────────────────────────
-class _FullscreenQrScreen extends StatelessWidget {
-  final String fullName;
-  final String qrPayload;
-
-  const _FullscreenQrScreen({
-    required this.fullName,
-    required this.qrPayload,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: _kDark,
-      appBar: AppBar(
-        backgroundColor: _kDark,
-        elevation: 0,
-        foregroundColor: Colors.white,
-        leading: IconButton(
-          icon: Container(
-            padding: const EdgeInsets.all(6),
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.1),
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(Icons.arrow_back,
-                size: 18, color: Colors.white),
-          ),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: Text('Scan to Record Attendance',
-            style: GoogleFonts.beVietnamPro(
-                fontSize: 15,
-                fontWeight: FontWeight.w700,
-                color: Colors.white)),
-      ),
-      body: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Text(
-            fullName.toUpperCase(),
-            style: GoogleFonts.beVietnamPro(
-                fontSize: 22,
-                fontWeight: FontWeight.w900,
-                color: Colors.white,
-                letterSpacing: 0.5),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 4),
-          Text('VERIFIED GUEST',
-              style: GoogleFonts.beVietnamPro(
-                  fontSize: 13,
-                  color: _kOrange,
-                  fontWeight: FontWeight.w600)),
-          const SizedBox(height: 32),
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(24),
-              boxShadow: [
-                BoxShadow(
-                    color: _kOrange.withOpacity(0.25),
-                    blurRadius: 40,
-                    spreadRadius: 5),
-              ],
-            ),
-            child: QrImageView(
-              data:            qrPayload,
-              version:         QrVersions.auto,
-              size:            240,
-              backgroundColor: Colors.white,
-              eyeStyle: const QrEyeStyle(
-                eyeShape: QrEyeShape.square,
-                color:    _kDark,
+        children: List.generate(items.length, (i) {
+          final item = items[i];
+          return Column(children: [
+            InkWell(
+              onTap: item.onTap,
+              borderRadius: BorderRadius.vertical(
+                top: i == 0 ? const Radius.circular(20) : Radius.zero,
+                bottom: i == items.length - 1 ? const Radius.circular(20) : Radius.zero,
               ),
-              dataModuleStyle: const QrDataModuleStyle(
-                dataModuleShape: QrDataModuleShape.square,
-                color:           _kDark,
-              ),
-            ),
-          ),
-          const SizedBox(height: 28),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Container(
-                width: 8,
-                height: 8,
-                decoration: const BoxDecoration(
-                    color: _kOrange, shape: BoxShape.circle),
-              ),
-              const SizedBox(width: 8),
-              Text('Show to event staff for scanning',
-                  style: GoogleFonts.beVietnamPro(
-                      fontSize: 12, color: Colors.white54)),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────
-//  GUEST SETTINGS SCREEN (mirrors SettingsScreen from student)
-// ─────────────────────────────────────────────────────────────
-class _GuestSettingsScreen extends StatelessWidget {
-  final String       fullName;
-  final String       email;
-  final String       school;
-  final VoidCallback onWithdraw;
-
-  const _GuestSettingsScreen({
-    required this.fullName,
-    required this.email,
-    required this.school,
-    required this.onWithdraw,
-  });
-
-  String get _initials {
-    final parts = fullName.trim().split(' ');
-    if (parts.length >= 2) return '${parts.first[0]}${parts.last[0]}'.toUpperCase();
-    return fullName.isNotEmpty ? fullName[0].toUpperCase() : 'G';
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: _kBg,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        centerTitle: true,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.black),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: Text('Settings',
-            style: GoogleFonts.beVietnamPro(
-                fontSize: 18,
-                fontWeight: FontWeight.w700,
-                color: Colors.black87)),
-        bottom: const _AppBarLine(),
-      ),
-      body: SingleChildScrollView(
-        child: Column(
-          children: [
-            // ── Profile card ────────────────────────────────
-            Container(
-              width: double.infinity,
-              color: Colors.white,
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                children: [
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                child: Row(children: [
                   Container(
-                    width: 80,
-                    height: 80,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: _kOrangeLight,
-                      border: Border.all(color: Colors.white, width: 3),
-                    ),
-                    child: Center(
-                      child: Text(_initials,
-                          style: GoogleFonts.beVietnamPro(
-                              fontSize: 26,
-                              fontWeight: FontWeight.w900,
-                              color: _kOrange)),
+                    width: 38, height: 38,
+                    decoration: BoxDecoration(color: _kOrangeLight, borderRadius: BorderRadius.circular(10)),
+                    child: Icon(item.icon, size: 19, color: _kOrange),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(item.label,
+                            style: GoogleFonts.beVietnamPro(fontSize: 14, fontWeight: FontWeight.w700, color: Colors.black87)),
+                        const SizedBox(height: 2),
+                        Text(item.subtitle,
+                            style: GoogleFonts.beVietnamPro(fontSize: 11.5, color: Colors.grey)),
+                      ],
                     ),
                   ),
-                  const SizedBox(height: 10),
-                  Text(fullName,
-                      style: GoogleFonts.beVietnamPro(
-                          fontSize: 18, fontWeight: FontWeight.w800)),
-                  const SizedBox(height: 4),
-                  Text(email,
-                      style: GoogleFonts.beVietnamPro(
-                          fontSize: 13, color: Colors.grey)),
-                  const SizedBox(height: 4),
-                  Text(school,
-                      style: GoogleFonts.beVietnamPro(
-                          fontSize: 12, color: Colors.grey)),
-                  const SizedBox(height: 4),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: _kSuccessBg,
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Text('VERIFIED GUEST',
-                        style: GoogleFonts.beVietnamPro(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w800,
-                            color: _kSuccess,
-                            letterSpacing: 0.6)),
-                  ),
-                ],
+                  const Icon(Icons.chevron_right_rounded, color: Colors.grey),
+                ]),
               ),
             ),
-
-            const SizedBox(height: 12),
-
-            // ── General settings tiles ──────────────────────
-            Container(
-              color: Colors.white,
-              child: Column(
-                children: [
-                  _SettingsTile(
-                    icon: Icons.notifications_outlined,
-                    title: 'Notifications',
-                    subtitle: 'Manage event alerts',
-                    onTap: () {},
-                  ),
-                  Divider(height: 1, color: Colors.grey.shade200),
-                  _SettingsTile(
-                    icon: Icons.shield_outlined,
-                    title: 'Privacy',
-                    subtitle: 'Data and privacy settings',
-                    onTap: () {},
-                  ),
-                  Divider(height: 1, color: Colors.grey.shade200),
-                  _SettingsTile(
-                    icon: Icons.help_outline_rounded,
-                    title: 'Help & Support',
-                    subtitle: 'FAQs and contact info',
-                    onTap: () {},
-                  ),
-                  Divider(height: 1, color: Colors.grey.shade200),
-                  _SettingsTile(
-                    icon: Icons.info_outline_rounded,
-                    title: 'About UPRISE',
-                    subtitle: 'App version and information',
-                    onTap: () {},
-                  ),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 24),
-
-            // ── Logout ──────────────────────────────────────
-            Padding(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              child: TextButton.icon(
-                onPressed: () {
-                  Navigator.pop(context); // close settings first
-                  onWithdraw();           // then trigger logout
-                },
-                icon: const Icon(Icons.logout, color: _kOrange),
-                label: Text('Log Out',
-                    style: GoogleFonts.beVietnamPro(
-                        color: _kOrange,
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600)),
-              ),
-            ),
-
-            const SizedBox(height: 16),
-          ],
-        ),
+            if (i != items.length - 1) Divider(height: 1, indent: 16, endIndent: 16, color: Colors.grey.shade200),
+          ]);
+        }),
       ),
     );
   }
@@ -2441,32 +1544,6 @@ class _StepRow extends StatelessWidget {
   }
 }
 
-class _SettingsTile extends StatelessWidget {
-  final IconData     icon;
-  final String       title;
-  final String       subtitle;
-  final VoidCallback onTap;
-  const _SettingsTile({
-    required this.icon,     required this.title,
-    required this.subtitle, required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return ListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      leading: Icon(icon, color: _kOrange),
-      title: Text(title,
-          style: GoogleFonts.beVietnamPro(
-              fontWeight: FontWeight.w600, fontSize: 14)),
-      subtitle: Text(subtitle,
-          style: GoogleFonts.beVietnamPro(fontSize: 12, color: Colors.grey)),
-      trailing: const Icon(Icons.chevron_right, color: Colors.grey),
-      onTap: onTap,
-    );
-  }
-}
-
 class _FormCard extends StatelessWidget {
   final String       title;
   final IconData     icon;
@@ -2552,93 +1629,6 @@ class _ReviewPair extends StatelessWidget {
       ]),
     );
   }
-}
-
-class _CardDetailRow extends StatelessWidget {
-  final String  label;
-  final String  value;
-  final TextStyle? valueStyle;
-  const _CardDetailRow(
-      {required this.label, required this.value, this.valueStyle});
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      SizedBox(
-        width: 46,
-        child: Text(label,
-            style: GoogleFonts.beVietnamPro(
-                fontSize: 9,
-                fontWeight: FontWeight.w700,
-                color: const Color(0xFFAAAAAA),
-                letterSpacing: 0.5)),
-      ),
-      const SizedBox(width: 4),
-      Expanded(
-        child: Text(value,
-            style: valueStyle ??
-                GoogleFonts.beVietnamPro(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w500,
-                    color: Colors.black87)),
-      ),
-    ]);
-  }
-}
-
-class _DashedDivider extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: Row(
-        children: [
-          Container(
-            width: 12, height: 12,
-            decoration:
-                const BoxDecoration(color: _kBg, shape: BoxShape.circle),
-          ),
-          Expanded(
-            child: CustomPaint(
-              painter: _DashedLinePainter(),
-              child: const SizedBox(height: 1),
-            ),
-          ),
-          Container(
-            width: 12, height: 12,
-            decoration:
-                const BoxDecoration(color: _kBg, shape: BoxShape.circle),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _DashedLinePainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color       = const Color(0xFFEEEEEE)
-      ..strokeWidth = 1.5
-      ..style       = PaintingStyle.stroke;
-
-    const dashW = 6.0;
-    const gapW  = 4.0;
-    double startX = 0;
-
-    while (startX < size.width) {
-      canvas.drawLine(
-        Offset(startX, 0),
-        Offset(math.min(startX + dashW, size.width), 0),
-        paint,
-      );
-      startX += dashW + gapW;
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter old) => false;
 }
 
 class _StepIndicator extends StatelessWidget {
