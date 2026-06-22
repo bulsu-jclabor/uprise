@@ -1,21 +1,22 @@
 // lib/screens/student/student_events_screen.dart
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
 
 // ─────────────────────────────────────────────────────────────
-//  CUSTOM COLORS - UNIFORM
+//  CUSTOM COLORS - UNIFORM (ORANGE)
 // ─────────────────────────────────────────────────────────────
 class AppColors {
-  static const Color primaryDark = Color(0xFFBE4700);
-  static const Color primaryLight = Color(0xFFD47A00);
-  static const Color accent = Color(0xFFDA6937);
-  static const Color background = Color(0xFFF8F9FA);
+  static const Color primaryDark = Colors.orange;
+  static const Color primaryLight = Color(0xFFFFCC80);
+  static const Color accent = Color(0xFFFF9800);
+  static const Color background = Color(0xFFF5F5F5);
 }
 
 // ─────────────────────────────────────────────────────────────
-//  CUSTOM EVENT IMAGE WIDGET
+//  CUSTOM EVENT IMAGE WIDGET (WITH BASE64 SUPPORT)
 // ─────────────────────────────────────────────────────────────
 class EventImage extends StatelessWidget {
   final String imageUrl;
@@ -35,10 +36,54 @@ class EventImage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (imageUrl.isEmpty || !_isValidImageUrl(imageUrl)) {
+    if (imageUrl.isEmpty) {
       return _buildFallbackImage();
     }
 
+    // Check if it's a base64 image
+    if (_isBase64Image(imageUrl)) {
+      return _buildBase64Image();
+    }
+
+    // Check if it's a valid network URL
+    if (_isValidImageUrl(imageUrl)) {
+      return _buildNetworkImage();
+    }
+
+    return _buildFallbackImage();
+  }
+
+  bool _isBase64Image(String url) {
+    return url.startsWith('data:image') || 
+           (url.isNotEmpty && !url.startsWith('http') && !url.startsWith('assets'));
+  }
+
+  bool _isValidImageUrl(String url) {
+    return url.startsWith('http://') ||
+        url.startsWith('https://') ||
+        url.startsWith('assets/');
+  }
+
+  Widget _buildBase64Image() {
+    try {
+      String base64String = imageUrl;
+      if (imageUrl.contains(',')) {
+        base64String = imageUrl.split(',').last;
+      }
+      final bytes = base64Decode(base64String);
+      return Image.memory(
+        bytes,
+        height: height,
+        width: width,
+        fit: fit,
+        errorBuilder: (_, __, ___) => _buildFallbackImage(),
+      );
+    } catch (_) {
+      return _buildFallbackImage();
+    }
+  }
+
+  Widget _buildNetworkImage() {
     return Image.network(
       imageUrl,
       height: height,
@@ -46,6 +91,7 @@ class EventImage extends StatelessWidget {
       fit: fit,
       loadingBuilder: (context, child, loadingProgress) {
         if (loadingProgress == null) return child;
+        if (!showLoadingIndicator) return child;
         return Container(
           height: height,
           width: width,
@@ -68,12 +114,6 @@ class EventImage extends StatelessWidget {
       },
       errorBuilder: (_, __, ___) => _buildFallbackImage(),
     );
-  }
-
-  bool _isValidImageUrl(String url) {
-    return url.startsWith('http://') ||
-        url.startsWith('https://') ||
-        url.startsWith('assets/');
   }
 
   Widget _buildFallbackImage() {
@@ -161,14 +201,17 @@ class EventData {
     final now = DateTime.now();
     final isPast = dateTime.isBefore(now);
 
+    String bannerUrl = d['bannerUrl'] as String? ?? '';
+    String logoUrl = d['logoUrl'] as String? ?? '';
+
     return EventData(
       id: doc.id,
       title: d['title'] ?? '',
       subtitle: d['subtitle'] ?? '',
       organizer: d['orgName'] ?? '',
       organizerSub: 'ORGANIZATION',
-      logoUrl: d['logoUrl'] ?? '',
-      bannerUrl: d['bannerUrl'] ?? '',
+      logoUrl: logoUrl,
+      bannerUrl: bannerUrl,
       date: DateFormat('MMM dd, yyyy').format(dateTime),
       time: '${d['startTime'] ?? ''} – ${d['endTime'] ?? ''}',
       location: d['location'] ?? '',
@@ -188,7 +231,9 @@ class EventData {
 //  MAIN SCREEN (CALENDAR + EVENTS)
 // ─────────────────────────────────────────────
 class StudentEventsScreen extends StatefulWidget {
-  const StudentEventsScreen({super.key});
+  final int initialTabIndex;
+
+  const StudentEventsScreen({super.key, this.initialTabIndex = 0});
 
   @override
   State<StudentEventsScreen> createState() => _StudentEventsScreenState();
@@ -203,7 +248,11 @@ class _StudentEventsScreenState extends State<StudentEventsScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
+    _tabController = TabController(
+      length: 3,
+      vsync: this,
+      initialIndex: widget.initialTabIndex,
+    );
     _attendedEventsFuture = _loadAttendedEvents();
   }
 
@@ -338,7 +387,9 @@ class _StudentEventsScreenState extends State<StudentEventsScreen>
 
           return Padding(
             padding: EdgeInsets.only(
-              left: 20, right: 20, top: 20,
+              left: 20,
+              right: 20,
+              top: 20,
               bottom: 20 + MediaQuery.of(ctx).viewInsets.bottom,
             ),
             child: Column(
@@ -347,7 +398,8 @@ class _StudentEventsScreenState extends State<StudentEventsScreen>
               children: [
                 Center(
                   child: Container(
-                    width: 40, height: 4,
+                    width: 40,
+                    height: 4,
                     margin: const EdgeInsets.only(bottom: 16),
                     decoration: BoxDecoration(
                       color: Colors.grey.shade300,
@@ -398,7 +450,8 @@ class _StudentEventsScreenState extends State<StudentEventsScreen>
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),
                     child: submitting
-                        ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                        ? const SizedBox(width: 18, height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                         : const Text('Submit Evaluation', style: TextStyle(fontWeight: FontWeight.w600)),
                   ),
                 ),
@@ -1254,7 +1307,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
 
   Future<void> _registerForEvent() async {
     if (widget.isPastEvent) return;
-    
+
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1263,7 +1316,6 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
       return;
     }
 
-    // Check if already registered
     final existingReg = await FirebaseFirestore.instance
         .collection('registrations')
         .where('userId', isEqualTo: user.uid)
@@ -1296,14 +1348,14 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
             .collection('events')
             .doc(widget.event.id);
         final eventDoc = await transaction.get(eventRef);
-        
+
         if (!eventDoc.exists) {
           throw Exception('Event not found');
         }
 
         final eventData = eventDoc.data()!;
         final currentSlotsLeft = (eventData['slotsLeft'] ?? 0) as int;
-        
+
         if (currentSlotsLeft <= 0) {
           throw Exception('No slots available');
         }
@@ -1554,7 +1606,6 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
             ),
             const SizedBox(height: 16),
 
-            // Full Name
             const Text(
               'Full Name',
               style: TextStyle(
@@ -1584,7 +1635,6 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
             ),
             const SizedBox(height: 14),
 
-            // Student Number
             const Text(
               'Student Number',
               style: TextStyle(
@@ -1614,7 +1664,6 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
             ),
             const SizedBox(height: 14),
 
-            // Email Address
             const Text(
               'Email Address',
               style: TextStyle(
@@ -1648,7 +1697,6 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
             ),
             const SizedBox(height: 14),
 
-            // Contact Number
             const Text(
               'Contact Number',
               style: TextStyle(
@@ -1682,7 +1730,6 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
             ),
             const SizedBox(height: 20),
 
-            // Upload ID
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
@@ -1747,7 +1794,6 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
             ),
             const SizedBox(height: 20),
 
-            // Submit Button
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(

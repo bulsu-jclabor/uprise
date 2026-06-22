@@ -20,7 +20,7 @@ class AppColors {
 }
 
 // ─────────────────────────────────────────────
-//  EVENT IMAGE WIDGET
+//  EVENT IMAGE WIDGET (WITH BASE64 SUPPORT)
 // ─────────────────────────────────────────────
 class EventImage extends StatelessWidget {
   final String imageUrl;
@@ -33,46 +33,81 @@ class EventImage extends StatelessWidget {
     required this.imageUrl,
     this.height,
     this.width,
-    this.fit = BoxFit.contain,
+    this.fit = BoxFit.cover,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      height: height,
-      width: width,
-      color: Colors.grey[200],
-      child: _isValidImageUrl(imageUrl)
-          ? Image.network(
-              imageUrl,
-              height: height,
-              width: width,
-              fit: fit,
-              loadingBuilder: (context, child, progress) {
-                if (progress == null) return child;
-                return Center(
-                  child: SizedBox(
-                    width: 30, height: 30,
-                    child: CircularProgressIndicator(
-                      value: progress.expectedTotalBytes != null
-                          ? progress.cumulativeBytesLoaded / progress.expectedTotalBytes!
-                          : null,
-                      strokeWidth: 2,
-                      color: Colors.orange,
-                    ),
-                  ),
-                );
-              },
-              errorBuilder: (_, __, ___) => _noImage(),
-            )
-          : _noImage(),
-    );
+    if (imageUrl.isEmpty) {
+      return _noImage();
+    }
+
+    // Check if it's a base64 image
+    if (_isBase64Image(imageUrl)) {
+      return _buildBase64Image();
+    }
+
+    // Check if it's a valid network URL
+    if (_isValidImageUrl(imageUrl)) {
+      return _buildNetworkImage();
+    }
+
+    return _noImage();
+  }
+
+  bool _isBase64Image(String url) {
+    return url.startsWith('data:image') || 
+           (url.isNotEmpty && !url.startsWith('http') && !url.startsWith('assets'));
   }
 
   bool _isValidImageUrl(String url) {
     if (url.isEmpty) return false;
     if (url == 'www' || url == 'https://www' || url == 'http://www') return false;
     return url.startsWith('http://') || url.startsWith('https://');
+  }
+
+  Widget _buildBase64Image() {
+    try {
+      String base64String = imageUrl;
+      if (imageUrl.contains(',')) {
+        base64String = imageUrl.split(',').last;
+      }
+      final bytes = base64Decode(base64String);
+      return Image.memory(
+        bytes,
+        height: height,
+        width: width,
+        fit: fit,
+        errorBuilder: (_, __, ___) => _noImage(),
+      );
+    } catch (_) {
+      return _noImage();
+    }
+  }
+
+  Widget _buildNetworkImage() {
+    return Image.network(
+      imageUrl,
+      height: height,
+      width: width,
+      fit: fit,
+      loadingBuilder: (context, child, progress) {
+        if (progress == null) return child;
+        return Center(
+          child: SizedBox(
+            width: 30, height: 30,
+            child: CircularProgressIndicator(
+              value: progress.expectedTotalBytes != null
+                  ? progress.cumulativeBytesLoaded / progress.expectedTotalBytes!
+                  : null,
+              strokeWidth: 2,
+              color: Colors.orange,
+            ),
+          ),
+        );
+      },
+      errorBuilder: (_, __, ___) => _noImage(),
+    );
   }
 
   Widget _noImage() => Container(
@@ -1306,7 +1341,7 @@ class _CompactEventCard extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────
-//  UPCOMING EVENT CARD
+//  UPCOMING EVENT CARD (WITH IMAGE SUPPORT)
 // ─────────────────────────────────────────────
 class _UpcomingEventCard extends StatelessWidget {
   final EventData event;
@@ -1324,7 +1359,13 @@ class _UpcomingEventCard extends StatelessWidget {
         ),
         clipBehavior: Clip.antiAlias,
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          EventImage(imageUrl: event.bannerUrl, height: 160, width: double.infinity, fit: BoxFit.contain),
+          // ── Event Image ──
+          EventImage(
+            imageUrl: event.bannerUrl,
+            height: 160,
+            width: double.infinity,
+            fit: BoxFit.cover,
+          ),
           Padding(
             padding: const EdgeInsets.all(12),
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -1726,7 +1767,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
       ),
       body: SingleChildScrollView(
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          EventImage(imageUrl: widget.event.bannerUrl, height: 220, width: double.infinity, fit: BoxFit.contain),
+          EventImage(imageUrl: widget.event.bannerUrl, height: 220, width: double.infinity, fit: BoxFit.cover),
           Padding(
             padding: const EdgeInsets.all(16),
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
