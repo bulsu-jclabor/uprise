@@ -1,11 +1,16 @@
 import 'dart:convert';
 import 'dart:typed_data';
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:intl/intl.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
 import '../auth/role_router.dart';
 import '../student/student_login.dart';
 import '../student/student_events_screen.dart';
@@ -911,9 +916,110 @@ class _IdCardLabel extends StatelessWidget {
 }
 
 // ── Download Preview Bottom Sheet ──
-class _IdDownloadPreviewSheet extends StatelessWidget {
+class _IdDownloadPreviewSheet extends StatefulWidget {
   final ProfileModel profile;
   const _IdDownloadPreviewSheet({required this.profile});
+
+  @override
+  State<_IdDownloadPreviewSheet> createState() =>
+      _IdDownloadPreviewSheetState();
+}
+
+class _IdDownloadPreviewSheetState extends State<_IdDownloadPreviewSheet> {
+  final GlobalKey _frontKey = GlobalKey();
+  final GlobalKey _backKey = GlobalKey();
+  bool _isGenerating = false;
+
+  Future<Uint8List?> _captureCard(GlobalKey key) async {
+    final boundary =
+        key.currentContext?.findRenderObject() as RenderRepaintBoundary?;
+    if (boundary == null) return null;
+    // pixelRatio 3 keeps the exported PDF sharp on high-density phone screens.
+    final ui.Image image = await boundary.toImage(pixelRatio: 3.0);
+    final ByteData? byteData =
+        await image.toByteData(format: ui.ImageByteFormat.png);
+    if (byteData == null) return null;
+    return byteData.buffer.asUint8List();
+  }
+
+  Future<void> _downloadAsPdf() async {
+    setState(() => _isGenerating = true);
+
+    try {
+      final frontBytes = await _captureCard(_frontKey);
+      final backBytes = await _captureCard(_backKey);
+
+      if (frontBytes == null || backBytes == null) {
+        throw Exception('Could not capture the ID card.');
+      }
+
+      final frontImage = pw.MemoryImage(frontBytes);
+      final backImage = pw.MemoryImage(backBytes);
+
+      final doc = pw.Document();
+
+      // Both sides of the ID on a single page, stacked vertically.
+      doc.addPage(
+        pw.Page(
+          pageFormat: PdfPageFormat.a4,
+          margin: const pw.EdgeInsets.all(24),
+          build: (context) => pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.center,
+            children: [
+              pw.Text(
+                'FRONT',
+                style: pw.TextStyle(
+                  fontSize: 9,
+                  letterSpacing: 1.4,
+                  color: PdfColors.grey500,
+                  fontWeight: pw.FontWeight.bold,
+                ),
+              ),
+              pw.SizedBox(height: 8),
+              pw.Expanded(
+                child: pw.Image(frontImage, fit: pw.BoxFit.contain),
+              ),
+              pw.SizedBox(height: 20),
+              pw.Text(
+                'BACK',
+                style: pw.TextStyle(
+                  fontSize: 9,
+                  letterSpacing: 1.4,
+                  color: PdfColors.grey500,
+                  fontWeight: pw.FontWeight.bold,
+                ),
+              ),
+              pw.SizedBox(height: 8),
+              pw.Expanded(
+                child: pw.Image(backImage, fit: pw.BoxFit.contain),
+              ),
+            ],
+          ),
+        ),
+      );
+
+      final pdfBytes = await doc.save();
+
+      final studentId = widget.profile.studentId.isNotEmpty
+          ? widget.profile.studentId
+          : 'student';
+      final fileName = 'BSU_ID_$studentId.pdf';
+
+      if (!mounted) return;
+      setState(() => _isGenerating = false);
+      Navigator.pop(context);
+
+      // Opens the native iOS/Android share & save sheet so the user can
+      // save the PDF to Files, Drive, or share it directly.
+      await Printing.sharePdf(bytes: pdfBytes, filename: fileName);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isGenerating = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to generate ID PDF: $e')),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -937,34 +1043,42 @@ class _IdDownloadPreviewSheet extends StatelessWidget {
             ),
             _IdCardLabel(text: 'FRONT'),
             const SizedBox(height: 8),
-            _IdCard1(profile: profile),
+            RepaintBoundary(
+              key: _frontKey,
+              child: _IdCard1(profile: widget.profile),
+            ),
             const SizedBox(height: 20),
             _IdCardLabel(text: 'BACK'),
             const SizedBox(height: 8),
-            _IdCard2(profile: profile),
+            RepaintBoundary(
+              key: _backKey,
+              child: _IdCard2(profile: widget.profile),
+            ),
             const SizedBox(height: 24),
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
-                onPressed: () {
-                  Navigator.pop(context);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('ID downloaded successfully!'),
-                      backgroundColor: kOrange,
-                    ),
-                  );
-                },
+                onPressed: _isGenerating ? null : _downloadAsPdf,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: kOrange,
                   foregroundColor: Colors.white,
+                  disabledBackgroundColor: kOrange.withOpacity(0.6),
                   shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12)),
                   padding: const EdgeInsets.symmetric(vertical: 16),
                 ),
-                child: const Text('Download',
-                    style:
-                        TextStyle(fontWeight: FontWeight.w600, fontSize: 16)),
+                child: _isGenerating
+                    ? const SizedBox(
+                        height: 20,
+                        width: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2.4,
+                          color: Colors.white,
+                        ),
+                      )
+                    : const Text('Download',
+                        style: TextStyle(
+                            fontWeight: FontWeight.w600, fontSize: 16)),
               ),
             ),
           ],
