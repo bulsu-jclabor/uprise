@@ -255,12 +255,14 @@ class OrgModel {
 // Officer info for view dialog
 class OfficerInfo {
   final String name;
+  final String position;
   final String email;
   final String phone;
   final String photoUrl;
   
   const OfficerInfo({
     required this.name,
+    required this.position,
     required this.email,
     required this.phone,
     required this.photoUrl,
@@ -269,6 +271,7 @@ class OfficerInfo {
   factory OfficerInfo.fromMap(Map<String, dynamic> map) {
     return OfficerInfo(
       name: map['name'] ?? '',
+      position: map['position'] ?? '',
       email: map['email'] ?? '',
       phone: map['phone'] ?? '',
       photoUrl: map['photoUrl'] ?? '',
@@ -299,8 +302,19 @@ class _AdviserRolesState extends State<AdviserRoles> {
   late StreamSubscription _metaListener;
   late StreamSubscription _officersListener;
 
+  int _getPositionPriority(String position) {
+  final lower = position.toLowerCase().trim();
+  if (lower == 'president') return 0;
+  if (lower == 'vice president') return 1;
+  if (lower == 'secretary') return 2;
+  if (lower == 'treasurer') return 3;
+  return 999; // custom positions go last
+}
+
   // Cache for officer data by orgId
   Map<String, Map<String, OfficerInfo>> _officersCache = {};
+  // Add this with the other variables (around line 95)
+  Map<String, List<OfficerInfo>> _allOfficersCache = {};
 
   @override
   void initState() {
@@ -342,55 +356,67 @@ class _AdviserRolesState extends State<AdviserRoles> {
   }
 
   Future<void> _loadOfficersForOrg(String orgId) async {
-    try {
-      final orgDoc = await FirebaseFirestore.instance
-          .collection('organizations')
-          .doc(orgId)
-          .get();
-      
-      final orgData = orgDoc.data();
-      final adviserPhotoUrl = orgData?['adviserPhotoUrl'] ?? '';
-      
-      final roleSnap = await FirebaseFirestore.instance
-          .collection('adviser_roles')
-          .where('orgId', isEqualTo: orgId)
-          .where('archived', isEqualTo: false)
-          .get();
-      
-      for (final doc in roleSnap.docs) {
-        if (adviserPhotoUrl.isNotEmpty) {
-          await doc.reference.update({'adviserPhotoUrl': adviserPhotoUrl});
-        }
+  try {
+    final orgDoc = await FirebaseFirestore.instance
+        .collection('organizations')
+        .doc(orgId)
+        .get();
+    
+    final orgData = orgDoc.data();
+    final adviserPhotoUrl = orgData?['adviserPhotoUrl'] ?? '';
+    
+    // Update adviser photo in roles
+    final roleSnap = await FirebaseFirestore.instance
+        .collection('adviser_roles')
+        .where('orgId', isEqualTo: orgId)
+        .where('archived', isEqualTo: false)
+        .get();
+    
+    for (final doc in roleSnap.docs) {
+      if (adviserPhotoUrl.isNotEmpty) {
+        await doc.reference.update({'adviserPhotoUrl': adviserPhotoUrl});
       }
-      
-      final officerSnap = await FirebaseFirestore.instance
-          .collection('organizations')
-          .doc(orgId)
-          .collection('officers')
-          .get();
-      
-      final officers = <String, OfficerInfo>{};
-      for (final doc in officerSnap.docs) {
-        final data = doc.data();
-        final position = (data['position'] ?? '').toString().toLowerCase();
-        final officer = OfficerInfo.fromMap(data);
-        
-        if (position == 'president') {
-          officers['president'] = officer;
-        } else if (position == 'vice president') {
-          officers['vicePresident'] = officer;
-        } else if (position == 'secretary') {
-          officers['secretary'] = officer;
-        }
-      }
-      
-      _officersCache[orgId] = officers;
-      await _syncAdviserRoleOfficers(orgId, officers);
-      
-    } catch (e) {
-      debugPrint('Error loading officers for org $orgId: $e');
     }
+    
+    // 👇 FETCH ALL OFFICERS from the subcollection
+    final officerSnap = await FirebaseFirestore.instance
+        .collection('organizations')
+        .doc(orgId)
+        .collection('officers')
+        .get();
+    
+    // Store ALL officers in the cache
+    final allOfficers = <OfficerInfo>[];
+    for (final doc in officerSnap.docs) {
+      final data = doc.data();
+      allOfficers.add(OfficerInfo.fromMap(data));
+    }
+    
+    _allOfficersCache[orgId] = allOfficers;
+    
+    // Also keep the old cache for the three main positions (for backward compatibility)
+    final officers = <String, OfficerInfo>{};
+    for (final doc in officerSnap.docs) {
+      final data = doc.data();
+      final position = (data['position'] ?? '').toString().toLowerCase();
+      final officer = OfficerInfo.fromMap(data);
+      
+      if (position == 'president') {
+        officers['president'] = officer;
+      } else if (position == 'vice president') {
+        officers['vicePresident'] = officer;
+      } else if (position == 'secretary') {
+        officers['secretary'] = officer;
+      }
+    }
+    
+    _officersCache[orgId] = officers;
+    await _syncAdviserRoleOfficers(orgId, officers);
+    
+  } catch (e) {
+    debugPrint('Error loading officers for org $orgId: $e');
   }
+}
 
   Future<void> _syncAdviserRoleOfficers(String orgId, Map<String, OfficerInfo> officers) async {
     try {
@@ -545,6 +571,128 @@ class _AdviserRolesState extends State<AdviserRoles> {
             ]),
     );
   }
+
+  Widget _officerTile({
+  required String position,
+  required String name,
+  required String email,
+  required String phone,
+  required String photoUrl,
+}) {
+  return Container(
+    margin: const EdgeInsets.only(bottom: 10),
+    padding: const EdgeInsets.all(12),
+    decoration: BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(10),
+      border: Border.all(color: const Color(0xFFE2E6EA)),
+    ),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Photo
+        Container(
+          width: 44,
+          height: 44,
+          decoration: const BoxDecoration(
+            shape: BoxShape.circle,
+            color: Color(0xFFE2E6EA),
+          ),
+          child: photoUrl.isNotEmpty
+              ? ClipOval(
+                  child: _buildImageWidget(photoUrl, fit: BoxFit.cover, width: 44, height: 44),
+                )
+              : Center(
+                  child: Text(
+                    name.isNotEmpty ? name[0].toUpperCase() : '?',
+                    style: GoogleFonts.beVietnamPro(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                      color: UpriseColors.primaryDark,
+                    ),
+                  ),
+                ),
+        ),
+        const SizedBox(width: 14),
+        // Details
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Text(
+                    name,
+                    style: GoogleFonts.beVietnamPro(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: const Color(0xFF1A202C),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: UpriseColors.primaryDark.withOpacity(0.12),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      position,
+                      style: GoogleFonts.beVietnamPro(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600,
+                        color: UpriseColors.primaryDark,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              if (email.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 2),
+                  child: Row(
+                    children: [
+                      Icon(Icons.email_outlined, size: 12, color: const Color(0xFF9AA5B4)),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          email,
+                          style: GoogleFonts.beVietnamPro(
+                            fontSize: 12,
+                            color: const Color(0xFF374151),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              if (phone.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 2),
+                  child: Row(
+                    children: [
+                      Icon(Icons.phone_outlined, size: 12, color: const Color(0xFF9AA5B4)),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          phone,
+                          style: GoogleFonts.beVietnamPro(
+                            fontSize: 12,
+                            color: const Color(0xFF374151),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ],
+    ),
+  );
+}
 
   Widget _buildToolbar(bool isMobile, bool isTablet) {
     final searchField = SizedBox(
@@ -892,21 +1040,23 @@ class _AdviserRolesState extends State<AdviserRoles> {
 
   // ── View dialog with photos ────────────────────────────────────────────────
   void _showViewDialog(Map<String, dynamic> data, String docId) {
-    final rank = data['adviserRank'] ?? 'Instructor';
-    final archived = data['archived'] == true;
-    
-    final presidentPhoto = data['presidentPhotoUrl'] ?? '';
-    final vicePresidentPhoto = data['vicePresidentPhotoUrl'] ?? '';
-    final secretaryPhoto = data['secretaryPhotoUrl'] ?? '';
+  final rank = data['adviserRank'] ?? 'Instructor';
+  final archived = data['archived'] == true;
+  final orgName = data['orgName'] ?? '—';
+  final orgTag = data['orgTag'] ?? '';
 
-    showDialog(
-      context: context,
-      barrierColor: Colors.black54,
-      builder: (ctx) => Dialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-        child: SizedBox(
-          width: 520,
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
+  showDialog(
+    context: context,
+    barrierColor: Colors.black54,
+    builder: (ctx) => Dialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+      child: Container(
+        width: 540,
+        constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.88),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // ---- Header ----
             Container(
               padding: const EdgeInsets.fromLTRB(24, 20, 20, 20),
               decoration: BoxDecoration(
@@ -914,108 +1064,131 @@ class _AdviserRolesState extends State<AdviserRoles> {
                 borderRadius: const BorderRadius.vertical(top: Radius.circular(18)),
               ),
               child: Row(children: [
-                _OrgAvatar(data['orgAbbrev'] ?? '??'),
+                Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: _OrgAvatar(data['orgAbbrev'] ?? '??'),
+                ),
                 const SizedBox(width: 14),
                 Expanded(
-                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text(data['orgName'] ?? '—',
-                        style: GoogleFonts.beVietnamPro(fontSize: 16, fontWeight: FontWeight.w700, color: Colors.white)),
-                    if ((data['orgTag'] ?? '').toString().isNotEmpty)
-                      Text(data['orgTag'] ?? '',
-                          style: GoogleFonts.beVietnamPro(fontSize: 11, color: Colors.white.withAlpha(179))),
-                  ]),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(orgName,
+                          style: GoogleFonts.beVietnamPro(fontSize: 16, fontWeight: FontWeight.w700, color: Colors.white)),
+                      if (orgTag.isNotEmpty)
+                        Text(orgTag,
+                            style: GoogleFonts.beVietnamPro(fontSize: 11, color: Colors.white.withOpacity(0.7))),
+                    ],
+                  ),
                 ),
                 if (archived)
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(
-                      color: Colors.white.withAlpha(51),
+                      color: Colors.white.withOpacity(0.2),
                       borderRadius: BorderRadius.circular(100),
                     ),
                     child: Text('ARCHIVED',
                         style: GoogleFonts.beVietnamPro(fontSize: 10, fontWeight: FontWeight.w700, color: Colors.white)),
                   ),
-                const SizedBox(width: 6),
                 IconButton(
                   icon: const Icon(Icons.close_rounded, color: Colors.white, size: 20),
                   onPressed: () => Navigator.pop(ctx),
                 ),
               ]),
             ),
+
+            // ---- Adviser Card (fixed, not scrolling) ----
             Padding(
-              padding: const EdgeInsets.all(24),
-              child: Column(children: [
-                _viewCard('Adviser', [
-                  _buildAdviserRow('Name', data['adviserName'] ?? '—', Icons.badge_outlined, data['adviserPhotoUrl'] ?? ''),
-                  _buildInfoRow('Email', data['adviserEmail'] ?? '—', Icons.email_outlined),
-                  _buildInfoRow('Phone', data['adviserPhone'] ?? '—', Icons.phone_outlined),
-                  const SizedBox(height: 10),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Row(children: [
-                        const Icon(Icons.work_outline, size: 13, color: Color(0xFF9AA5B4)),
-                        const SizedBox(width: 6),
-                        Text('Position', style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF64748B))),
-                      ]),
-                      _PositionBadge(rank),
-                    ],
-                  ),
-                ]),
-                const SizedBox(height: 12),
-                _viewCard('Officers', [
-                  _buildOfficerRow('President', data['president'] ?? '—', Icons.star_outline_rounded, presidentPhoto),
-                  _buildOfficerRow('Vice President', data['vicePresident'] ?? '—', Icons.person_outline_rounded, vicePresidentPhoto),
-                  _buildOfficerRow('Secretary', data['secretary'] ?? '—', Icons.person_outline_rounded, secretaryPhoto),
-                ]),
-              ]),
+              padding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
+              child: _buildAdviserCard(
+                name: data['adviserName'] ?? '—',
+                email: data['adviserEmail'] ?? '—',
+                phone: data['adviserPhone'] ?? '—',
+                rank: rank,
+                photoUrl: data['adviserPhotoUrl'] ?? '',
+              ),
             ),
+            const SizedBox(height: 16),
+
+            // ---- Officers (scrollable) ----
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+                child: _buildOfficersCard(_allOfficersCache[data['orgId']] ?? []),
+              ),
+            ),
+
+            // ---- Footer ----
             Container(
-              padding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
-              child: Row(children: [
-                if (!archived)
-                  OutlinedButton.icon(
-                    onPressed: () { Navigator.pop(ctx); _confirmArchive(docId, data['orgName'] ?? ''); },
-                    icon: const Icon(Icons.archive_outlined, size: 15),
-                    label: Text('Archive', style: GoogleFonts.beVietnamPro(fontSize: 13)),
-                    style: OutlinedButton.styleFrom(
-                      side: const BorderSide(color: Color(0xFFE2E6EA)),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+              padding: const EdgeInsets.fromLTRB(24, 16, 24, 20),
+              decoration: const BoxDecoration(
+                border: Border(top: BorderSide(color: Color(0xFFE8ECF0))),
+                color: Color(0xFFF8F9FB),
+                borderRadius: BorderRadius.vertical(bottom: Radius.circular(18)),
+              ),
+              child: Row(
+                children: [
+                  if (!archived)
+                    OutlinedButton.icon(
+                      onPressed: () {
+                        Navigator.pop(ctx);
+                        _confirmArchive(docId, orgName);
+                      },
+                      icon: const Icon(Icons.archive_outlined, size: 15),
+                      label: Text('Archive', style: GoogleFonts.beVietnamPro(fontSize: 13)),
+                      style: OutlinedButton.styleFrom(
+                        side: const BorderSide(color: Color(0xFFE2E6EA)),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+                      ),
                     ),
-                  ),
-                if (archived)
-                  OutlinedButton.icon(
-                    onPressed: () { Navigator.pop(ctx); _restoreRecord(docId, data['orgName'] ?? ''); },
-                    icon: const Icon(Icons.unarchive_outlined, size: 15, color: Color(0xFF059669)),
-                    label: Text('Restore', style: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF059669))),
-                    style: OutlinedButton.styleFrom(
-                      side: const BorderSide(color: Color(0xFF6EE7B7)),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+                  if (archived)
+                    OutlinedButton.icon(
+                      onPressed: () {
+                        Navigator.pop(ctx);
+                        _restoreRecord(docId, orgName);
+                      },
+                      icon: const Icon(Icons.unarchive_outlined, size: 15, color: Color(0xFF059669)),
+                      label: Text('Restore', style: GoogleFonts.beVietnamPro(fontSize: 13, color: Color(0xFF059669))),
+                      style: OutlinedButton.styleFrom(
+                        side: const BorderSide(color: Color(0xFF6EE7B7)),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+                      ),
                     ),
-                  ),
-                const Spacer(),
-                if (!archived)
-                  ElevatedButton.icon(
-                    onPressed: () { Navigator.pop(ctx); _showEditDialog(data, docId); },
-                    icon: const Icon(Icons.edit_outlined, size: 15),
-                    label: Text('Edit', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600)),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: UpriseColors.primaryDark,
-                      foregroundColor: Colors.white,
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 11),
+                  const Spacer(),
+                  if (!archived)
+                    ElevatedButton.icon(
+                      onPressed: () {
+                        Navigator.pop(ctx);
+                        _showEditDialog(data, docId);
+                      },
+                      icon: const Icon(Icons.edit_outlined, size: 15),
+                      label: Text('Edit', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600)),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: UpriseColors.primaryDark,
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 11),
+                      ),
                     ),
-                  ),
-              ]),
+                ],
+              ),
             ),
-          ]),
+          ],
         ),
       ),
-    );
-  }
+    ),
+  );
+}
+
 
   Widget _viewCard(String title, List<Widget> rows) {
     return Container(
@@ -1040,112 +1213,149 @@ class _AdviserRolesState extends State<AdviserRoles> {
       ]),
     );
   }
-
-  Widget _buildAdviserRow(String label, String value, IconData icon, String photoUrl) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 5),
-      child: Row(children: [
-        if (photoUrl.isNotEmpty) ...[
-          Container(
-            width: 32, height: 32,
-            decoration: const BoxDecoration(shape: BoxShape.circle),
-            clipBehavior: Clip.antiAlias,
-            child: _buildImageWidget(photoUrl, fit: BoxFit.cover, width: 32, height: 32),
-          ),
-          const SizedBox(width: 10),
-        ],
-        if (photoUrl.isEmpty) ...[
-          Container(
-            width: 32, height: 32,
-            decoration: BoxDecoration(
-              color: UpriseColors.primaryDark.withAlpha(26),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(icon, size: 16, color: UpriseColors.primaryDark),
-          ),
-          const SizedBox(width: 10),
-        ],
-        SizedBox(
-          width: 100,
-          child: Text(label,
-              style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF64748B))),
-        ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: Text(value,
-              style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w500, color: const Color(0xFF1A202C)),
-              overflow: TextOverflow.ellipsis),
-        ),
-      ]),
-    );
-  }
-
-  Widget _buildInfoRow(String label, String value, IconData icon) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 5),
-      child: Row(children: [
+  Widget _buildAdviserCard({
+  required String name,
+  required String email,
+  required String phone,
+  required String rank,
+  required String photoUrl,
+}) {
+  return Container(
+    width: double.infinity,
+    padding: const EdgeInsets.all(16),
+    decoration: BoxDecoration(
+      color: const Color(0xFFF8F9FB),
+      borderRadius: BorderRadius.circular(12),
+      border: Border.all(color: const Color(0xFFE8ECF0)),
+    ),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Large photo
         Container(
-          width: 32, height: 32,
-          decoration: BoxDecoration(
-            color: UpriseColors.primaryDark.withAlpha(26),
+          width: 60,
+          height: 60,
+          decoration: const BoxDecoration(
             shape: BoxShape.circle,
+            color: Color(0xFFE2E6EA),
           ),
-          child: Icon(icon, size: 16, color: UpriseColors.primaryDark),
+          child: photoUrl.isNotEmpty
+              ? ClipOval(
+                  child: _buildImageWidget(photoUrl, fit: BoxFit.cover, width: 60, height: 60),
+                )
+              : Icon(Icons.person, size: 32, color: Colors.grey[600]),
         ),
-        const SizedBox(width: 10),
-        SizedBox(
-          width: 100,
-          child: Text(label,
-              style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF64748B))),
-        ),
-        const SizedBox(width: 8),
+        const SizedBox(width: 16),
+        // Details
         Expanded(
-          child: Text(value,
-              style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w500, color: const Color(0xFF1A202C)),
-              overflow: TextOverflow.ellipsis),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                name,
+                style: GoogleFonts.beVietnamPro(fontSize: 16, fontWeight: FontWeight.w700, color: const Color(0xFF1A202C)),
+              ),
+              const SizedBox(height: 6),
+              _infoChip(Icons.work_outline, rank, color: UpriseColors.primaryDark),
+              const SizedBox(height: 8),
+              _infoRow(Icons.email_outlined, email),
+              _infoRow(Icons.phone_outlined, phone),
+            ],
+          ),
         ),
-      ]),
+      ],
+    ),
+  );
+}
+
+Widget _buildOfficersCard(List<OfficerInfo> officers) {
+  if (officers.isEmpty) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8F9FB),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE8ECF0)),
+      ),
+      child: Center(
+        child: Text('No officers listed',
+            style: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF64748B))),
+      ),
     );
   }
 
-  Widget _buildOfficerRow(String label, String value, IconData icon, String photoUrl) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 5),
-      child: Row(children: [
-        if (photoUrl.isNotEmpty) ...[
-          Container(
-            width: 28, height: 28,
-            decoration: const BoxDecoration(shape: BoxShape.circle),
-            clipBehavior: Clip.antiAlias,
-            child: _buildImageWidget(photoUrl, fit: BoxFit.cover, width: 28, height: 28),
-          ),
-          const SizedBox(width: 8),
-        ],
-        if (photoUrl.isEmpty) ...[
-          Container(
-            width: 28, height: 28,
-            decoration: BoxDecoration(
-              color: UpriseColors.primaryDark.withAlpha(26),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(icon, size: 14, color: UpriseColors.primaryDark),
-          ),
-          const SizedBox(width: 8),
-        ],
-        SizedBox(
-          width: 100,
-          child: Text(label,
-              style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF64748B))),
-        ),
+  // Sort: President → VP → Secretary → Treasurer → others (alphabetical)
+  final sorted = List<OfficerInfo>.from(officers)
+    ..sort((a, b) {
+      final pa = _getPositionPriority(a.position);
+      final pb = _getPositionPriority(b.position);
+      if (pa != pb) return pa.compareTo(pb);
+      return a.position.compareTo(b.position);
+    });
+
+  return Container(
+    width: double.infinity,
+    padding: const EdgeInsets.all(16),
+    decoration: BoxDecoration(
+      color: const Color(0xFFF8F9FB),
+      borderRadius: BorderRadius.circular(12),
+      border: Border.all(color: const Color(0xFFE8ECF0)),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Officers',
+            style: GoogleFonts.beVietnamPro(
+                fontSize: 13, fontWeight: FontWeight.w700, color: UpriseColors.primaryDark, letterSpacing: 0.3)),
+        const SizedBox(height: 12),
+        ...sorted.map((officer) => _officerTile(
+              position: officer.position,
+              name: officer.name,
+              email: officer.email,
+              phone: officer.phone,
+              photoUrl: officer.photoUrl,
+            )),
+      ],
+    ),
+  );
+}
+
+
+Widget _infoChip(IconData icon, String label, {Color color = const Color(0xFF64748B)}) {
+  return Container(
+    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+    decoration: BoxDecoration(
+      color: color.withOpacity(0.12),
+      borderRadius: BorderRadius.circular(20),
+    ),
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 14, color: color),
+        const SizedBox(width: 6),
+        Text(label,
+            style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.w600, color: color)),
+      ],
+    ),
+  );
+}
+
+Widget _infoRow(IconData icon, String text) {
+  return Padding(
+    padding: const EdgeInsets.only(bottom: 4),
+    child: Row(
+      children: [
+        Icon(icon, size: 14, color: const Color(0xFF9AA5B4)),
         const SizedBox(width: 8),
         Expanded(
-          child: Text(value,
-              style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w500, color: const Color(0xFF1A202C)),
-              overflow: TextOverflow.ellipsis),
+          child: Text(text,
+              style: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF374151))),
         ),
-      ]),
-    );
-  }
+      ],
+    ),
+  );
+}
 
   // ── Form dialog (Edit) ──────────────────────────────────────
   void _showEditDialog(Map<String, dynamic> data, String docId) =>
