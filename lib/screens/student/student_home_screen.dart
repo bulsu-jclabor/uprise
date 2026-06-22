@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
+import 'package:uprise/models/event_model.dart';
 import '../../widgets/common/loading_widget.dart';
 import '../../widgets/student/announcements_feed.dart';
 import '../../widgets/student/profile_summary.dart';
@@ -291,7 +292,7 @@ class _HomeContentState extends State<_HomeContent> {
     }
   }
 
-  void _navigateToEventDetail(EventData event) {
+  void _navigateToEventDetail(EventModel event) {
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -381,6 +382,7 @@ class _HomeContentState extends State<_HomeContent> {
               StreamBuilder<QuerySnapshot>(
                 stream: FirebaseFirestore.instance
                     .collection('notifications')
+                    .where('userId', isEqualTo: user?.uid)
                     .where('isRead', isEqualTo: false)
                     .snapshots(),
                 builder: (context, snapshot) {
@@ -513,64 +515,64 @@ class _HomeContentState extends State<_HomeContent> {
           ),
 
           // Quick Access Icons
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: [
-                  _QuickAccessItem(
-                    icon: Icons.calendar_today,
-                    label: 'Calendar',
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const StudentEventsScreen(initialTabIndex: 0),
-                        ),
-                      );
-                    },
-                  ),
-                  _QuickAccessItem(
-                    icon: Icons.card_membership,
-                    label: 'Certificate',
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const StudentEventsScreen(initialTabIndex: 2),
-                        ),
-                      );
-                    },
-                  ),
-                  _QuickAccessItem(
-                    icon: Icons.groups,
-                    label: 'Orgs',
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const StudentOrganizationsScreen(),
-                        ),
-                      );
-                    },
-                  ),
-                  _QuickAccessItem(
-                    icon: Icons.person,
-                    label: 'Profile',
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const StudentProfileScreen(),
-                        ),
-                      );
-                    },
-                  ),
-                ],
+SliverToBoxAdapter(
+  child: Padding(
+    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+    child: Row(
+      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+      children: [
+        _QuickAccessItem(
+          icon: Icons.calendar_today,
+          label: 'Calendar',
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => const StudentEventsScreen(initialTabIndex: 0),
               ),
-            ),
-          ),
+            );
+          },
+        ),
+        _QuickAccessItem(
+          icon: Icons.card_membership,
+          label: 'Certificates',
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => const StudentCertificatesScreen(),
+              ),
+            );
+          },
+        ),
+        _QuickAccessItem(
+          icon: Icons.groups,
+          label: 'Orgs',
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => const StudentOrganizationsScreen(),
+              ),
+            );
+          },
+        ),
+        _QuickAccessItem(
+          icon: Icons.person,
+          label: 'Profile',
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => const StudentProfileScreen(),
+              ),
+            );
+          },
+        ),
+      ],
+    ),
+  ),
+),
 
           // Upcoming Events Section Header
           SliverToBoxAdapter(
@@ -664,7 +666,7 @@ class _HomeContentState extends State<_HomeContent> {
                       final data = doc.data() as Map<String, dynamic>;
                       
                       // Convert to EventData
-                      final eventData = EventData.fromFirestore(doc);
+                      final eventData = EventModel.fromFirestore(doc);
                       
                       Timestamp? timestamp = data['date'];
                       DateTime eventDate;

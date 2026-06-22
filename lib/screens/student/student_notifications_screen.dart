@@ -1,12 +1,7 @@
-// lib/screens/student/student_notifications_screen.dart
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import '../../../widgets/common/loading_widget.dart';
 
-// ─────────────────────────────────────────────────────────────
-// Custom Colors - UNIFORM (Colors.orange)
-// ─────────────────────────────────────────────────────────────
 class AppColors {
   static const Color primaryDark = Colors.orange;
   static const Color primaryLight = Color(0xFFFFCC80);
@@ -14,7 +9,6 @@ class AppColors {
   static const Color background = Color(0xFFF5F5F5);
 }
 
-// ── Notification model ────────────────────────────────────────
 class AppNotification {
   final String id;
   final String title;
@@ -54,7 +48,6 @@ class AppNotification {
   }
 }
 
-// ── Notifications Screen ──────────────────────────────────────
 class StudentNotificationsScreen extends StatefulWidget {
   const StudentNotificationsScreen({super.key});
 
@@ -74,41 +67,17 @@ class _StudentNotificationsScreenState extends State<StudentNotificationsScreen>
   ({IconData icon, Color bg, Color fg}) _typeStyle(String type) {
     switch (type) {
       case 'event':
-        return (
-          icon: Icons.calendar_today_rounded,
-          bg: Colors.orange.withOpacity(0.1),
-          fg: Colors.orange,
-        );
+        return (icon: Icons.calendar_today_rounded, bg: Colors.orange.withOpacity(0.1), fg: Colors.orange);
       case 'org':
-        return (
-          icon: Icons.business_center_rounded,
-          bg: Colors.orange.withOpacity(0.1),
-          fg: Colors.orange,
-        );
+        return (icon: Icons.business_center_rounded, bg: Colors.orange.withOpacity(0.1), fg: Colors.orange);
       case 'schedule':
-        return (
-          icon: Icons.access_time_rounded,
-          bg: Colors.orange.withOpacity(0.1),
-          fg: Colors.orange,
-        );
+        return (icon: Icons.access_time_rounded, bg: Colors.orange.withOpacity(0.1), fg: Colors.orange);
       case 'booth':
-        return (
-          icon: Icons.storefront_rounded,
-          bg: Colors.orange.withOpacity(0.1),
-          fg: Colors.orange,
-        );
+        return (icon: Icons.storefront_rounded, bg: Colors.orange.withOpacity(0.1), fg: Colors.orange);
       case 'order':
-        return (
-          icon: Icons.shopping_bag_rounded,
-          bg: Colors.orange.withOpacity(0.1),
-          fg: Colors.orange,
-        );
+        return (icon: Icons.shopping_bag_rounded, bg: Colors.orange.withOpacity(0.1), fg: Colors.orange);
       default:
-        return (
-          icon: Icons.campaign_rounded,
-          bg: Colors.orange.withOpacity(0.1),
-          fg: Colors.orange,
-        );
+        return (icon: Icons.campaign_rounded, bg: Colors.orange.withOpacity(0.1), fg: Colors.orange);
     }
   }
 
@@ -136,15 +105,16 @@ class _StudentNotificationsScreenState extends State<StudentNotificationsScreen>
     try {
       final snapshot = await FirebaseFirestore.instance
           .collection('notifications')
+          .where('userId', isEqualTo: _uid)
           .where('isRead', isEqualTo: false)
           .get();
-      
+
       final batch = FirebaseFirestore.instance.batch();
       for (final doc in snapshot.docs) {
         batch.update(doc.reference, {'isRead': true});
       }
       await batch.commit();
-      
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -160,18 +130,7 @@ class _StudentNotificationsScreenState extends State<StudentNotificationsScreen>
 
   void _onNotificationTap(AppNotification notif) {
     _markAsRead(notif.id);
-    
-    // Navigate based on type
-    if (notif.type == 'event' && notif.data?['eventId'] != null) {
-      // Navigate to event details
-      // Navigator.push(context, MaterialPageRoute(builder: (_) => StudentEventDetailsScreen(eventId: notif.data!['eventId'])));
-    } else if (notif.type == 'announcement' && notif.data?['announcementId'] != null) {
-      // Navigate to announcement details
-      // Navigator.push(context, MaterialPageRoute(builder: (_) => AnnouncementDetailScreen(announcementId: notif.data!['announcementId'])));
-    } else if (notif.type == 'order' && notif.data?['orderId'] != null) {
-      // Navigate to order details
-      // Navigator.push(context, MaterialPageRoute(builder: (_) => OrderDetailScreen(orderId: notif.data!['orderId'])));
-    }
+    // Navigate based on type (optional)
   }
 
   @override
@@ -193,6 +152,7 @@ class _StudentNotificationsScreenState extends State<StudentNotificationsScreen>
           StreamBuilder<QuerySnapshot>(
             stream: FirebaseFirestore.instance
                 .collection('notifications')
+                .where('userId', isEqualTo: _uid)
                 .where('isRead', isEqualTo: false)
                 .snapshots(),
             builder: (context, snap) {
@@ -200,9 +160,7 @@ class _StudentNotificationsScreenState extends State<StudentNotificationsScreen>
               if (!hasUnread) return const SizedBox.shrink();
               return TextButton(
                 onPressed: _markAllAsRead,
-                style: TextButton.styleFrom(
-                  foregroundColor: Colors.orange,
-                ),
+                style: TextButton.styleFrom(foregroundColor: Colors.orange),
                 child: const Text('Mark all read'),
               );
             },
@@ -214,9 +172,14 @@ class _StudentNotificationsScreenState extends State<StudentNotificationsScreen>
   }
 
   Widget _buildNotificationsList() {
+    if (_uid == null) {
+      return const Center(child: Text('Please log in.'));
+    }
+
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance
           .collection('notifications')
+          .where('userId', isEqualTo: _uid)
           .orderBy('createdAt', descending: true)
           .limit(50)
           .snapshots(),
@@ -227,33 +190,26 @@ class _StudentNotificationsScreenState extends State<StudentNotificationsScreen>
             child: Center(child: CircularProgressIndicator(color: Colors.orange)),
           );
         }
-        
+
         if (snapshot.hasError) {
-          print('Error loading notifications: ${snapshot.error}');
           return Center(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Icon(Icons.error_outline, size: 48, color: Colors.grey),
                 const SizedBox(height: 12),
-                Text(
-                  'Could not load notifications.',
-                  style: TextStyle(color: Colors.grey[600]),
-                ),
+                Text('Could not load notifications.', style: TextStyle(color: Colors.grey[600])),
                 const SizedBox(height: 12),
                 ElevatedButton(
                   onPressed: () => setState(() {}),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.orange,
-                    foregroundColor: Colors.white,
-                  ),
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.orange, foregroundColor: Colors.white),
                   child: const Text('Retry'),
                 ),
               ],
             ),
           );
         }
-        
+
         if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
           return _EmptyState();
         }
@@ -264,19 +220,11 @@ class _StudentNotificationsScreenState extends State<StudentNotificationsScreen>
 
         final now = DateTime.now();
         final todayStart = DateTime(now.year, now.month, now.day);
-        final yesterdayStart =
-            todayStart.subtract(const Duration(days: 1));
+        final yesterdayStart = todayStart.subtract(const Duration(days: 1));
 
-        final today =
-            all.where((n) => n.createdAt.isAfter(todayStart)).toList();
-        final yesterday = all
-            .where((n) =>
-                n.createdAt.isAfter(yesterdayStart) &&
-                !n.createdAt.isAfter(todayStart))
-            .toList();
-        final earlier = all
-            .where((n) => !n.createdAt.isAfter(yesterdayStart))
-            .toList();
+        final today = all.where((n) => n.createdAt.isAfter(todayStart)).toList();
+        final yesterday = all.where((n) => n.createdAt.isAfter(yesterdayStart) && !n.createdAt.isAfter(todayStart)).toList();
+        final earlier = all.where((n) => !n.createdAt.isAfter(yesterdayStart)).toList();
 
         return ListView(
           children: [
@@ -315,6 +263,7 @@ class _StudentNotificationsScreenState extends State<StudentNotificationsScreen>
   }
 }
 
+// ─── Helper Widgets ──────────────────────────────────────────────────────
 class _SectionHeader extends StatelessWidget {
   final String label;
   const _SectionHeader({required this.label});
@@ -325,12 +274,7 @@ class _SectionHeader extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
       child: Text(
         label.toUpperCase(),
-        style: const TextStyle(
-          fontSize: 11,
-          fontWeight: FontWeight.w600,
-          color: Colors.grey,
-          letterSpacing: 0.6,
-        ),
+        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.grey, letterSpacing: 0.6),
       ),
     );
   }
@@ -342,12 +286,7 @@ class _NotifTile extends StatelessWidget {
   final String timeLabel;
   final VoidCallback onTap;
 
-  const _NotifTile({
-    required this.notif,
-    required this.style,
-    required this.timeLabel,
-    required this.onTap,
-  });
+  const _NotifTile({required this.notif, required this.style, required this.timeLabel, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -380,8 +319,7 @@ class _NotifTile extends StatelessWidget {
                           notif.title,
                           style: TextStyle(
                             fontSize: 13,
-                            fontWeight:
-                                notif.isRead ? FontWeight.w400 : FontWeight.w600,
+                            fontWeight: notif.isRead ? FontWeight.w400 : FontWeight.w600,
                             color: Colors.black87,
                           ),
                         ),
@@ -394,11 +332,7 @@ class _NotifTile extends StatelessWidget {
                         ),
                         child: Text(
                           notif.orgName,
-                          style: const TextStyle(
-                            fontSize: 9,
-                            fontWeight: FontWeight.w500,
-                            color: Colors.orange,
-                          ),
+                          style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w500, color: Colors.orange),
                         ),
                       ),
                     ],
@@ -408,31 +342,21 @@ class _NotifTile extends StatelessWidget {
                     notif.body,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: Colors.black54,
-                      height: 1.4,
-                    ),
+                    style: const TextStyle(fontSize: 12, color: Colors.black54, height: 1.4),
                   ),
                   const SizedBox(height: 4),
                   Row(
                     children: [
                       Text(
                         timeLabel,
-                        style: const TextStyle(
-                          fontSize: 11,
-                          color: Colors.grey,
-                        ),
+                        style: const TextStyle(fontSize: 11, color: Colors.grey),
                       ),
                       if (!notif.isRead) ...[
                         const SizedBox(width: 6),
                         Container(
                           width: 6,
                           height: 6,
-                          decoration: const BoxDecoration(
-                            color: Colors.orange,
-                            shape: BoxShape.circle,
-                          ),
+                          decoration: const BoxDecoration(color: Colors.orange, shape: BoxShape.circle),
                         ),
                       ],
                     ],
@@ -454,16 +378,11 @@ class _EmptyState extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.notifications_off_outlined,
-              size: 64, color: Colors.grey.shade300),
+          Icon(Icons.notifications_off_outlined, size: 64, color: Colors.grey.shade300),
           const SizedBox(height: 16),
           Text(
             'No notifications yet',
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w500,
-              color: Colors.grey.shade500,
-            ),
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500, color: Colors.grey.shade500),
           ),
           const SizedBox(height: 6),
           Text(

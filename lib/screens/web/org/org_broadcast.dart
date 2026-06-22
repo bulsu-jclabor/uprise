@@ -284,51 +284,85 @@ class _OrgBroadcastScreenState extends State<OrgBroadcastScreen> {
 
   // ── Send message ─────────────────────────────────────────────────────────
   Future<void> _sendMessage() async {
-    final text = _messageCtrl.text.trim();
-    if (text.isEmpty && _pendingAttachments.isEmpty && _pendingImageUrl == null) return;
-    setState(() => _isSending = true);
+  final text = _messageCtrl.text.trim();
+  if (text.isEmpty && _pendingAttachments.isEmpty && _pendingImageUrl == null) return;
+  setState(() => _isSending = true);
 
-    try {
-      final user = FirebaseAuth.instance.currentUser;
-      if (user == null) throw 'No user logged in';
-      final userDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
-      final authorName = userDoc.data()?['name'] ?? user.email ?? 'Unknown';
+  try {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) throw 'No user logged in';
+    final userDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+    final authorName = userDoc.data()?['name'] ?? user.email ?? 'Unknown';
 
-      final data = <String, dynamic>{
-        'orgId': widget.orgId,
-        'content': text,
-        'authorId': user.uid,
-        'authorName': authorName,
-        'attachments': _pendingAttachments.map((a) => {'name': a.name, 'url': a.url}).toList(),
-        'likes': 0,
-        'replyCount': 0,
-        'pinned': false,
-        'timestamp': FieldValue.serverTimestamp(),
-      };
-      if (_pendingImageUrl != null && _pendingImageUrl!.isNotEmpty) {
-        data['imageUrl'] = _pendingImageUrl;
-      }
-
-      await FirebaseFirestore.instance.collection('broadcasts').add(data);
-      await activity_log.ActivityLogger.log(
-        action: 'send_broadcast',
-        module: 'broadcast',
-        details: {'orgId': widget.orgId},
-      );
-
-      _messageCtrl.clear();
-      setState(() {
-        _pendingAttachments = [];
-        _pendingImageUrl = null;
-      });
-      _inputFocus.requestFocus();
-      Future.delayed(const Duration(milliseconds: 500), _scrollToBottom);
-    } catch (e) {
-      _snack('Failed to send: $e', isError: true);
-    } finally {
-      if (mounted) setState(() => _isSending = false);
+    final data = <String, dynamic>{
+      'orgId': widget.orgId,
+      'content': text,
+      'authorId': user.uid,
+      'authorName': authorName,
+      'attachments': _pendingAttachments.map((a) => {'name': a.name, 'url': a.url}).toList(),
+      'likes': 0,
+      'replyCount': 0,
+      'pinned': false,
+      'timestamp': FieldValue.serverTimestamp(),
+    };
+    if (_pendingImageUrl != null && _pendingImageUrl!.isNotEmpty) {
+      data['imageUrl'] = _pendingImageUrl;
     }
+
+    final docRef = await FirebaseFirestore.instance.collection('broadcasts').add(data);
+
+    // --- NEW: Create notifications for all students ---
+    await _createNotificationsForBroadcast(docRef.id, widget.orgId, text);
+
+    await activity_log.ActivityLogger.log(
+      action: 'send_broadcast',
+      module: 'broadcast',
+      details: {'orgId': widget.orgId},
+    );
+
+    _messageCtrl.clear();
+    setState(() {
+      _pendingAttachments = [];
+      _pendingImageUrl = null;
+    });
+    _inputFocus.requestFocus();
+    Future.delayed(const Duration(milliseconds: 500), _scrollToBottom);
+  } catch (e) {
+    _snack('Failed to send: $e', isError: true);
+  } finally {
+    if (mounted) setState(() => _isSending = false);
   }
+}
+
+  Future<void> _createNotificationsForBroadcast(String broadcastId, String orgId, String content) async {
+  try {
+    // Fetch all students (assuming collection 'students' with field 'uid')
+    final students = await FirebaseFirestore.instance.collection('students').get();
+    final batch = FirebaseFirestore.instance.batch();
+
+    for (final student in students.docs) {
+      final uid = student.data()['uid'] as String?;
+      if (uid == null || uid.isEmpty) continue;
+
+      final notifRef = FirebaseFirestore.instance.collection('notifications').doc();
+      batch.set(notifRef, {
+        'userId': uid,
+        'title': 'New Announcement',
+        'body': content,
+        'type': 'broadcast',
+        'broadcastId': broadcastId,
+        'orgId': orgId,
+        'createdAt': FieldValue.serverTimestamp(),
+        'isRead': false,
+      });
+    }
+
+    await batch.commit();
+  } catch (e) {
+    // Log the error but don't fail the broadcast send
+    debugPrint('Failed to create notifications for broadcast: $e');
+  }
+}
 
   // ── Delete message ───────────────────────────────────────────────────────
   Future<void> _deleteMessage(BroadcastModel broadcast) async {

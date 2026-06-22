@@ -1,111 +1,88 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:intl/intl.dart';
 
 class EventModel {
   final String id;
-  final String orgId;
-  final String orgName;
   final String title;
-  final String description;
+  final String category;
   final String location;
-  final int capacity;
-  final int slotsLeft;
+  final DateTime date;
   final String startTime;
   final String endTime;
-  final String category;
-  final String guestSpeaker;
-  final List<String> resources;
-  final List<String> labPreparation;
-  final List<String> tags;
-  final DateTime date;
-  final String status;
-  final bool isPublic;
-  final String? bannerUrl;
-  final String? logoUrl;
-  final DateTime? createdAt;
-  final DateTime? updatedAt;
+  final String orgId;
+  final String orgName;
+  final String description;
+  final String audience;
+  final int capacity;
+  final int slotsLeft;
+  final String? proposalId;         // createdFromProposalId
+  final String? createdFromProposalId;
+  final String? orgLogoUrl;
 
-  const EventModel({
+  EventModel({
     required this.id,
-    required this.orgId,
-    this.orgName = '',
     required this.title,
-    this.description = '',
-    this.location = '',
-    this.capacity = 0,
-    this.slotsLeft = 0,
-    this.startTime = '',
-    this.endTime = '',
-    this.category = 'Other',
-    this.guestSpeaker = '',
-    this.resources = const [],
-    this.labPreparation = const [],
-    this.tags = const [],
+    required this.category,
+    required this.location,
     required this.date,
-    this.status = 'pending',
-    this.isPublic = true,
-    this.bannerUrl,
-    this.logoUrl,
-    this.createdAt,
-    this.updatedAt,
+    required this.startTime,
+    required this.endTime,
+    required this.orgId,
+    required this.orgName,
+    required this.description,
+    required this.audience,
+    required this.capacity,
+    required this.slotsLeft,
+    this.proposalId,
+    this.createdFromProposalId,
+    this.orgLogoUrl,
   });
 
   factory EventModel.fromFirestore(DocumentSnapshot doc) {
     final d = doc.data() as Map<String, dynamic>? ?? {};
-    List<String> toList(dynamic v) {
-      if (v is List) return v.map((e) => e.toString()).toList();
-      return [];
-    }
-    DateTime toDate(dynamic v) {
-      if (v is Timestamp) return v.toDate();
-      return DateTime.tryParse(v?.toString() ?? '') ?? DateTime.now();
-    }
+    final timestamp = d['date'];
+    final dateTime = timestamp is Timestamp
+        ? timestamp.toDate()
+        : DateTime.tryParse(d['date']?.toString() ?? '') ?? DateTime.now();
+
     return EventModel(
       id: doc.id,
-      orgId: (d['orgId'] ?? '').toString(),
-      orgName: (d['orgName'] ?? '').toString(),
       title: d['title'] ?? '',
-      description: d['description'] ?? '',
+      category: d['category'] ?? 'Other',
       location: d['location'] ?? '',
-      capacity: (d['capacity'] as num?)?.toInt() ?? 0,
-      slotsLeft: (d['slotsLeft'] as num?)?.toInt() ?? (d['capacity'] as num?)?.toInt() ?? 0,
+      date: dateTime,
       startTime: d['startTime'] ?? '',
       endTime: d['endTime'] ?? '',
-      category: d['category'] ?? 'Other',
-      guestSpeaker: d['guestSpeaker'] ?? '',
-      resources: toList(d['resources']),
-      labPreparation: toList(d['labPreparation']),
-      tags: toList(d['tags']),
-      date: toDate(d['date']),
-      status: (d['status'] ?? 'pending').toString().toLowerCase(),
-      isPublic: d['isPublic'] ?? true,
-      bannerUrl: d['bannerUrl'] as String?,
-      logoUrl: d['logoUrl'] as String?,
-      createdAt: d['createdAt'] is Timestamp ? (d['createdAt'] as Timestamp).toDate() : null,
-      updatedAt: d['updatedAt'] is Timestamp ? (d['updatedAt'] as Timestamp).toDate() : null,
+      orgId: d['orgId'] ?? '',
+      orgName: d['orgName'] ?? '',
+      description: d['description'] ?? '',
+      audience: d['audience'] ?? 'Public',
+      capacity: (d['capacity'] as int?) ?? 0,
+      slotsLeft: (d['slotsLeft'] as int?) ?? (d['capacity'] as int? ?? 0),
+      proposalId: d['createdFromProposalId'] as String?,
+      createdFromProposalId: d['createdFromProposalId'] as String?,
+      orgLogoUrl: d['logoUrl'] as String?,
     );
   }
 
-  Map<String, dynamic> toMap() {
-    return {
-      'orgId': orgId,
-      'orgName': orgName,
-      'title': title,
-      'description': description,
-      'location': location,
-      'capacity': capacity,
-      'slotsLeft': slotsLeft,
-      'startTime': startTime,
-      'endTime': endTime,
-      'category': category,
-      'guestSpeaker': guestSpeaker,
-      'resources': resources,
-      'labPreparation': labPreparation,
-      'tags': tags,
-      'date': Timestamp.fromDate(date),
-      'status': status,
-      'isPublic': isPublic,
-      if (bannerUrl != null) 'bannerUrl': bannerUrl,
-      if (logoUrl != null) 'logoUrl': logoUrl,
-    };
-  }
+  Map<String, dynamic> toMap() => {
+    'title': title,
+    'category': category,
+    'location': location,
+    'date': Timestamp.fromDate(date),
+    'startTime': startTime,
+    'endTime': endTime,
+    'orgId': orgId,
+    'orgName': orgName,
+    'description': description,
+    'audience': audience,
+    'capacity': capacity,
+    'slotsLeft': slotsLeft,
+    'createdFromProposalId': proposalId,
+    'logoUrl': orgLogoUrl,
+  };
+
+  bool get isPast => date.isBefore(DateTime.now());
+  String get formattedDate => DateFormat('MMM dd, yyyy').format(date);
+  String get formattedTime => '$startTime – $endTime';
 }
