@@ -1970,6 +1970,7 @@ class _CartSheet extends StatelessWidget {
                 'quantity': i.quantity,
                 'price': i.variantPrice ?? i.product.price,
                 'totalPrice': i.subtotal,
+                'imageBase64': i.product.imageBase64,
               })
           .toList(),
       'total': _total,

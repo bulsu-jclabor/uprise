@@ -1767,7 +1767,8 @@ class _ProductModalState extends State<_ProductModal> {
                       ),
                       style: GoogleFonts.beVietnamPro(fontSize: 13),
                     ),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 16),
+                    _sectionLabel('Pricing', icon: Icons.payments_outlined),
                     Row(
                       children: [
                         Expanded(
@@ -1782,6 +1783,7 @@ class _ProductModalState extends State<_ProductModal> {
                               icon: Icons.money_off_outlined,
                             ),
                             style: GoogleFonts.beVietnamPro(fontSize: 13),
+                            onChanged: (_) => setState(() {}),
                           ),
                         ),
                         const SizedBox(width: 12),
@@ -1797,12 +1799,15 @@ class _ProductModalState extends State<_ProductModal> {
                               icon: Icons.attach_money_outlined,
                             ),
                             style: GoogleFonts.beVietnamPro(fontSize: 13),
+                            onChanged: (_) => setState(() {}),
                           ),
                         ),
                       ],
                     ),
+                    _buildProfitMarginLine(),
                     if (_variants.isEmpty) ...[
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 16),
+                      _sectionLabel('Inventory', icon: Icons.inventory_2_outlined),
                       TextFormField(
                         controller: _stockCtrl,
                         keyboardType: TextInputType.number,
@@ -2189,6 +2194,39 @@ class _ProductModalState extends State<_ProductModal> {
               Icons.close_rounded,
               size: 16,
               color: Color(0xFF9AA5B4),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildProfitMarginLine() {
+    final cost = double.tryParse(_costPriceCtrl.text.trim());
+    final price = double.tryParse(_priceCtrl.text.trim());
+    if (cost == null || price == null || price <= 0) {
+      return const SizedBox(height: 4);
+    }
+    final profit = price - cost;
+    final marginPct = (profit / price) * 100;
+    final isNegative = profit < 0;
+    final color = isNegative ? const Color(0xFFDC2626) : const Color(0xFF059669);
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Row(
+        children: [
+          Icon(
+            isNegative ? Icons.trending_down_rounded : Icons.trending_up_rounded,
+            size: 14,
+            color: color,
+          ),
+          const SizedBox(width: 6),
+          Text(
+            'Profit: ₱${profit.toStringAsFixed(2)} (${marginPct.toStringAsFixed(0)}% margin)',
+            style: GoogleFonts.beVietnamPro(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: color,
             ),
           ),
         ],
@@ -3555,6 +3593,7 @@ class _OrdersTabState extends State<_OrdersTab> {
             Expanded(
               child: Container(
                 margin: const EdgeInsets.symmetric(horizontal: 28),
+                clipBehavior: Clip.antiAlias,
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(14),
@@ -4202,22 +4241,34 @@ class _ActionIconButton extends StatelessWidget {
     this.color,
   });
 
+  static const Map<int, Color> _bgByFg = {
+    0xFF3B82F6: Color(0xFFEFF6FF), // view - blue
+    0xFF2563EB: Color(0xFFEFF6FF), // publish - blue
+    0xFFB45309: Color(0xFFFFF7ED), // edit - orange (UpriseColors.primaryDark)
+    0xFF7C3AED: Color(0xFFF3E8FF), // revise - purple
+    0xFF0D9488: Color(0xFFECFDF5), // form builder - teal
+    0xFF6B7280: Color(0xFFF3F4F6), // archive - gray
+    0xFFDC2626: Color(0xFFFEF2F2), // delete - red
+    0xFF059669: Color(0xFFECFDF5), // approve - green
+  };
+
   @override
   Widget build(BuildContext context) {
+    final fg = onTap == null ? const Color(0xFFD1D5DB) : (color ?? const Color(0xFF3B82F6));
+    final bg = onTap == null ? const Color(0xFFF1F5F9) : (_bgByFg[fg.value] ?? fg.withAlpha(26));
     return Tooltip(
       message: tooltip,
+      waitDuration: const Duration(milliseconds: 400),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(6),
-        child: Padding(
-          padding: const EdgeInsets.all(5),
-          child: Icon(
-            icon,
-            size: 16,
-            color: onTap == null
-                ? const Color(0xFFD1D5DB)
-                : (color ?? const Color(0xFF64748B)),
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+          padding: const EdgeInsets.all(7),
+          decoration: BoxDecoration(
+            color: bg,
+            borderRadius: BorderRadius.circular(8),
           ),
+          child: Icon(icon, size: 14, color: fg),
         ),
       ),
     );
@@ -4380,18 +4431,9 @@ class _OrderDetailsModal extends StatelessWidget {
                         padding: const EdgeInsets.symmetric(vertical: 6),
                         child: Row(
                           children: [
-                            Container(
-                              width: 40,
-                              height: 40,
-                              decoration: BoxDecoration(
-                                color: UpriseColors.primaryDark.withAlpha(20),
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: const Icon(
-                                Icons.shopping_bag_outlined,
-                                size: 20,
-                                color: UpriseColors.primaryDark,
-                              ),
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(8),
+                              child: _itemThumbnail(item.imageBase64),
                             ),
                             const SizedBox(width: 10),
                             Expanded(
@@ -4535,6 +4577,40 @@ class _OrderDetailsModal extends StatelessWidget {
     );
   }
 
+  Widget _itemThumbnail(String imageBase64) {
+    if (imageBase64.isNotEmpty) {
+      try {
+        final raw = imageBase64.contains(',')
+            ? imageBase64.split(',').last
+            : imageBase64;
+        return Image.memory(
+          base64Decode(raw),
+          width: 40,
+          height: 40,
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) => _itemThumbnailFallback(),
+        );
+      } catch (_) {
+        return _itemThumbnailFallback();
+      }
+    }
+    return _itemThumbnailFallback();
+  }
+
+  Widget _itemThumbnailFallback() => Container(
+    width: 40,
+    height: 40,
+    decoration: BoxDecoration(
+      color: UpriseColors.primaryDark.withAlpha(20),
+      borderRadius: BorderRadius.circular(8),
+    ),
+    child: const Icon(
+      Icons.shopping_bag_outlined,
+      size: 20,
+      color: UpriseColors.primaryDark,
+    ),
+  );
+
   Widget _sectionTitle(String text) => Text(
     text,
     style: GoogleFonts.beVietnamPro(
@@ -4639,7 +4715,7 @@ class _SalesReportModal extends StatelessWidget {
 
       final pdfBytes = await OrgExportPdf.generateTablePdf(
         title: 'Merchandise Sales Report',
-        subtitle: '$orgName — Merchandise Performance',
+        subtitle: '$orgName - Merchandise Performance',
         headers: headers,
         rows: rows,
         orgLogoUrl: orgLogoUrl,
@@ -5276,6 +5352,7 @@ class OrderItem {
   final int quantity;
   final double price;
   final double totalPrice;
+  final String imageBase64;
 
   OrderItem({
     required this.productId,
@@ -5283,6 +5360,7 @@ class OrderItem {
     required this.quantity,
     required this.price,
     required this.totalPrice,
+    this.imageBase64 = '',
   });
 
   factory OrderItem.fromMap(Map<String, dynamic> map) => OrderItem(
@@ -5291,6 +5369,7 @@ class OrderItem {
     quantity: map['quantity'] ?? 0,
     price: (map['price'] ?? 0).toDouble(),
     totalPrice: (map['totalPrice'] ?? 0).toDouble(),
+    imageBase64: map['imageBase64'] ?? '',
   );
 }
 

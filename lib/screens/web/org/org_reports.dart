@@ -18,6 +18,8 @@ import 'export_pdf.dart';
 import 'dart:io';
 import 'package:path_provider/path_provider.dart';
 import '../../../utils/platform_file_utils.dart' as platform_file_utils;
+import '../../../theme/app_theme.dart';
+import '../../../widgets/admin_export_button.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Design tokens — mirrors student_accounts.dart / org_letter_request.dart
@@ -195,9 +197,6 @@ class _OrgReportsScreenState extends State<OrgReportsScreen> {
   DateTime? _accomplishmentDeadline;
   bool _deadlinesLoaded = false;
 
-  DateTime? get _eventBasedDeadline =>
-      _eventDate?.subtract(const Duration(days: 7));
-
   @override
   void initState() {
     super.initState();
@@ -285,6 +284,7 @@ class _OrgReportsScreenState extends State<OrgReportsScreen> {
       ..sort((a, b) => b.submittedAt.compareTo(a.submittedAt));
 
     return sorted.where((r) {
+      if (r.status == 'archived') return false;
       // Type filter
       if (_typeFilter != null) {
         final typeVal = _typeFilter == 'Financial' ? 'financial' : 'accomplishment';
@@ -394,13 +394,13 @@ class _OrgReportsScreenState extends State<OrgReportsScreen> {
         children: [
           _DeadlineCard(
             label: 'Financial Report Deadline',
-            deadline: _financialDeadline ?? _eventBasedDeadline,
+            deadline: _financialDeadline,
             submittedOn: latestFinancial,
           ),
           const SizedBox(width: 14),
           _DeadlineCard(
             label: 'Accomplishment Report Deadline',
-            deadline: _accomplishmentDeadline ?? _eventBasedDeadline,
+            deadline: _accomplishmentDeadline,
             submittedOn: latestAccompl,
           ),
         ],
@@ -513,6 +513,7 @@ class _OrgReportsScreenState extends State<OrgReportsScreen> {
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 28),
+      clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(14),
@@ -637,26 +638,28 @@ class _OrgReportsScreenState extends State<OrgReportsScreen> {
           // Type chip
           Expanded(
             flex: 2,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-              decoration: BoxDecoration(
-                color: isFinancial
-                    ? const Color(0xFFECFDF5)
-                    : const Color(0xFFEFF6FF),
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: Text(
-                isFinancial ? 'Financial' : 'Accomplishment',
-                style: GoogleFonts.beVietnamPro(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
+            child: Row(children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
                   color: isFinancial
-                      ? const Color(0xFF059669)
-                      : const Color(0xFF2563EB),
+                      ? const Color(0xFFECFDF5)
+                      : const Color(0xFFEFF6FF),
+                  borderRadius: BorderRadius.circular(6),
                 ),
-                overflow: TextOverflow.ellipsis,
+                child: Text(
+                  isFinancial ? 'Financial' : 'Accomplishment',
+                  style: GoogleFonts.beVietnamPro(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: isFinancial
+                        ? const Color(0xFF059669)
+                        : const Color(0xFF2563EB),
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
-            ),
+            ]),
           ),
           // Date
           Expanded(
@@ -670,7 +673,7 @@ class _OrgReportsScreenState extends State<OrgReportsScreen> {
               overflow: TextOverflow.ellipsis,
             ),
           ),
-          // Actions - removed the delete button, only View + Edit remain
+          // Actions
           Expanded(
             flex: 2,
             child: Row(
@@ -681,14 +684,20 @@ class _OrgReportsScreenState extends State<OrgReportsScreen> {
                   tooltip: 'View Details',
                   onTap: () => _openViewModal(report),
                 ),
-                const SizedBox(width: 4),
+                const SizedBox(width: 6),
                 _ActionIconButton(
                   icon: Icons.edit_outlined,
                   tooltip: 'Edit Report',
-                  color: _DS.primary,
+                  color: UpriseColors.primaryDark,
                   onTap: () => _openEditModal(report),
                 ),
-                // DELETE BUTTON REMOVED
+                const SizedBox(width: 6),
+                _ActionIconButton(
+                  icon: Icons.archive_outlined,
+                  tooltip: 'Archive',
+                  color: const Color(0xFF6B7280),
+                  onTap: () => _archiveReport(report),
+                ),
               ],
             ),
           ),
@@ -829,6 +838,34 @@ class _OrgReportsScreenState extends State<OrgReportsScreen> {
     barrierColor: Colors.black54,
     builder: (_) => _ViewReportModal(report: r),
   );
+
+  Future<void> _archiveReport(ReportModel report) async {
+    final ok = await _confirm(
+      title: 'Archive Report',
+      message: 'Archive "${report.title}"? It will be removed from the active list.',
+      confirmLabel: 'Archive',
+      destructive: true,
+    );
+    if (ok != true) return;
+    try {
+      await FirebaseFirestore.instance
+          .collection('reports')
+          .doc(report.id)
+          .update({'status': 'archived'});
+      await activity_log.ActivityLogger.log(
+        action: 'archive_report',
+        module: 'reports',
+        details: {
+          'orgId': widget.orgId,
+          'reportId': report.id,
+          'title': report.title,
+        },
+      );
+      _snack('Report archived');
+    } catch (e) {
+      _snack('Failed to archive report: $e', error: true);
+    }
+  }
 
   Future<void> _deleteReport(ReportModel report) async {
     final ok = await _confirm(
@@ -1461,6 +1498,20 @@ class _ReportModalState extends State<_ReportModal> {
     }
 
     final isEdit = widget.existingReport != null;
+
+    final dupSnap = await FirebaseFirestore.instance
+        .collection('reports')
+        .where('orgId', isEqualTo: widget.orgId)
+        .where('eventId', isEqualTo: _selectedEventId)
+        .where('type', isEqualTo: _type)
+        .get();
+    final hasDuplicate = dupSnap.docs.any((d) => d.id != widget.existingReport?.id);
+    if (hasDuplicate) {
+      setState(() => _errorMsg =
+          'A ${_type == 'financial' ? 'financial' : 'accomplishment'} report has already been uploaded for that selection. Only one of each type is allowed.');
+      return;
+    }
+
     final ok = await showDialog<bool>(
       context: context,
       barrierColor: Colors.black54,
@@ -2678,7 +2729,8 @@ class _ErrorState extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Export button (unchanged)
+// Export button — uses the shared AdminExportButton so styling matches
+// every other table screen (neutral gray outline, not brand orange).
 // ─────────────────────────────────────────────────────────────────────────────
 class _ExportButton extends StatelessWidget {
   final String orgId;
@@ -2686,70 +2738,9 @@ class _ExportButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return PopupMenuButton<String>(
-      tooltip: 'Export',
-      offset: const Offset(0, 44),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-      itemBuilder: (_) => [
-        PopupMenuItem(
-          value: 'csv',
-          child: Row(
-            children: [
-              const Icon(
-                Icons.table_chart_outlined,
-                size: 16,
-                color: Color(0xFF374151),
-              ),
-              const SizedBox(width: 10),
-              Text('Export CSV', style: GoogleFonts.beVietnamPro(fontSize: 13)),
-            ],
-          ),
-        ),
-        PopupMenuItem(
-          value: 'pdf',
-          child: Row(
-            children: [
-              const Icon(
-                Icons.picture_as_pdf_outlined,
-                size: 16,
-                color: Color(0xFF374151),
-              ),
-              const SizedBox(width: 10),
-              Text('Export PDF', style: GoogleFonts.beVietnamPro(fontSize: 13)),
-            ],
-          ),
-        ),
-      ],
+    return AdminExportButton(
+      label: 'Export',
       onSelected: (choice) => _doExport(context, choice),
-      child: Container(
-        height: 40,
-        padding: const EdgeInsets.symmetric(horizontal: 14),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: _DS.primary),
-        ),
-        child: Row(
-          children: [
-            Icon(Icons.download_outlined, size: 16, color: _DS.primary),
-            const SizedBox(width: 6),
-            Text(
-              'Export',
-              style: GoogleFonts.beVietnamPro(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                color: _DS.primary,
-              ),
-            ),
-            const SizedBox(width: 4),
-            Icon(
-              Icons.keyboard_arrow_down_rounded,
-              size: 16,
-              color: _DS.primary,
-            ),
-          ],
-        ),
-      ),
     );
   }
 
@@ -2983,7 +2974,7 @@ class _ToolbarButton extends StatelessWidget {
       ),
     ),
     style: ElevatedButton.styleFrom(
-      backgroundColor: _DS.primary,
+      backgroundColor: UpriseColors.primaryDark,
       foregroundColor: Colors.white,
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -3004,24 +2995,38 @@ class _ActionIconButton extends StatelessWidget {
     this.color,
   });
 
+  static const Map<int, Color> _bgByFg = {
+    0xFF3B82F6: Color(0xFFEFF6FF), // view - blue
+    0xFF2563EB: Color(0xFFEFF6FF), // publish - blue
+    0xFFB45309: Color(0xFFFFF7ED), // edit - orange (UpriseColors.primaryDark)
+    0xFF7C3AED: Color(0xFFF3E8FF), // revise - purple
+    0xFF0D9488: Color(0xFFECFDF5), // form builder - teal
+    0xFF6B7280: Color(0xFFF3F4F6), // archive - gray
+    0xFFDC2626: Color(0xFFFEF2F2), // delete - red
+    0xFF059669: Color(0xFFECFDF5), // approve - green
+  };
+
   @override
-  Widget build(BuildContext context) => Tooltip(
-    message: tooltip,
-    child: InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(6),
-      child: Padding(
-        padding: const EdgeInsets.all(5),
-        child: Icon(
-          icon,
-          size: 16,
-          color: onTap == null
-              ? const Color(0xFFD1D5DB)
-              : (color ?? const Color(0xFF64748B)),
+  Widget build(BuildContext context) {
+    final fg = onTap == null ? const Color(0xFFD1D5DB) : (color ?? const Color(0xFF3B82F6));
+    final bg = onTap == null ? const Color(0xFFF1F5F9) : (_bgByFg[fg.value] ?? fg.withAlpha(26));
+    return Tooltip(
+      message: tooltip,
+      waitDuration: const Duration(milliseconds: 400),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+          padding: const EdgeInsets.all(7),
+          decoration: BoxDecoration(
+            color: bg,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Icon(icon, size: 14, color: fg),
         ),
       ),
-    ),
-  );
+    );
+  }
 }
 
 class _PageButton extends StatelessWidget {

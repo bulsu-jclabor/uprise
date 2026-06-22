@@ -521,7 +521,7 @@ class _ExternalAccountState extends State<ExternalAccount> {
             ),
           ),
           // Status
-          Expanded(flex: 1, child: _statusBadge(req.status)),
+          Expanded(flex: 1, child: Row(children: [_statusBadge(req.status)])),
           // Actions
           Expanded(
             flex: 3,

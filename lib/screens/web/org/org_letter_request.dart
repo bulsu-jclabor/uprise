@@ -485,6 +485,7 @@ class _OrgLetterRequestScreenState extends State<OrgLetterRequestScreen> {
 
         final tableContent = Container(
           margin: EdgeInsets.symmetric(horizontal: horizontalPadding),
+          clipBehavior: Clip.antiAlias,
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(14),
@@ -626,7 +627,7 @@ class _OrgLetterRequestScreenState extends State<OrgLetterRequestScreen> {
             ),
             Expanded(
               flex: 1,
-              child: _statusBadge(request.status),
+              child: Row(children: [_statusBadge(request.status)]),
             ),
             Expanded(
               flex: 2,
@@ -638,24 +639,24 @@ class _OrgLetterRequestScreenState extends State<OrgLetterRequestScreen> {
                     tooltip: 'View Details',
                     onTap: () => _viewRequestDetails(request),
                   ),
-                  const SizedBox(width: 4),
+                  const SizedBox(width: 6),
                   if (request.status == 'pending' ||
                       request.status == 'revision' ||
                       request.status == 'resubmitted')
                     _ActionIconButton(
                       icon: Icons.edit_outlined,
                       tooltip: 'Edit Request',
-                      color: const Color(0xFF2563EB),
+                      color: _DS.primary,
                       onTap: () => _openEditRequestModal(request),
                     ),
                   if (request.status == 'pending' ||
                       request.status == 'revision' ||
                       request.status == 'resubmitted')
-                    const SizedBox(width: 4),
+                    const SizedBox(width: 6),
                   _ActionIconButton(
                     icon: Icons.archive_outlined,
                     tooltip: 'Archive',
-                    color: const Color(0xFFFB923C),
+                    color: const Color(0xFF6B7280),
                     onTap: () => _archiveRequest(request),
                   ),
                 ],
@@ -2225,20 +2226,34 @@ class _ActionIconButton extends StatelessWidget {
     this.color,
   });
 
+  static const Map<int, Color> _bgByFg = {
+    0xFF3B82F6: Color(0xFFEFF6FF), // view - blue
+    0xFF2563EB: Color(0xFFEFF6FF), // publish - blue
+    0xFFB45309: Color(0xFFFFF7ED), // edit - orange (UpriseColors.primaryDark)
+    0xFF7C3AED: Color(0xFFF3E8FF), // revise - purple
+    0xFF0D9488: Color(0xFFECFDF5), // form builder - teal
+    0xFF6B7280: Color(0xFFF3F4F6), // archive - gray
+    0xFFDC2626: Color(0xFFFEF2F2), // delete - red
+    0xFF059669: Color(0xFFECFDF5), // approve - green
+  };
+
   @override
   Widget build(BuildContext context) {
+    final fg = onTap == null ? const Color(0xFFD1D5DB) : (color ?? const Color(0xFF3B82F6));
+    final bg = onTap == null ? const Color(0xFFF1F5F9) : (_bgByFg[fg.value] ?? fg.withAlpha(26));
     return Tooltip(
       message: tooltip,
+      waitDuration: const Duration(milliseconds: 400),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(6),
-        child: Padding(
-          padding: const EdgeInsets.all(5),
-          child: Icon(icon,
-              size: 16,
-              color: onTap == null
-                  ? const Color(0xFFD1D5DB)
-                  : (color ?? const Color(0xFF64748B))),
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+          padding: const EdgeInsets.all(7),
+          decoration: BoxDecoration(
+            color: bg,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Icon(icon, size: 14, color: fg),
         ),
       ),
     );

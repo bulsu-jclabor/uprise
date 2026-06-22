@@ -485,6 +485,7 @@ class _OrgCertificatesScreenState extends State<OrgCertificatesScreen> {
 
         return Container(
           margin: EdgeInsets.symmetric(horizontal: horizontalMargin),
+          clipBehavior: Clip.antiAlias,
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(14),
@@ -595,10 +596,10 @@ class _OrgCertificatesScreenState extends State<OrgCertificatesScreen> {
           Expanded(
             flex: 2,
             child: Row(mainAxisAlignment: MainAxisAlignment.end, children: [
-              _ActionIconButton(icon: Icons.visibility_outlined,    tooltip: 'View',   color: const Color(0xFF2563EB),  onTap: () => _viewCert(r)),
-              const SizedBox(width: 4),
+              _ActionIconButton(icon: Icons.visibility_outlined,    tooltip: 'View',   color: const Color(0xFF3B82F6),  onTap: () => _viewCert(r)),
+              const SizedBox(width: 6),
               _ActionIconButton(icon: Icons.edit_outlined,          tooltip: 'Edit',   color: UpriseColors.primaryDark, onTap: () => _editCert(r)),
-              const SizedBox(width: 4),
+              const SizedBox(width: 6),
               _ActionIconButton(icon: Icons.delete_outline_rounded, tooltip: 'Delete', color: const Color(0xFFDC2626),  onTap: () => _confirmDelete(r)),
             ]),
           ),
@@ -778,9 +779,9 @@ class _OrgCertificatesScreenState extends State<OrgCertificatesScreen> {
             ),
             Row(
               mainAxisAlignment: MainAxisAlignment.end,
-              spacing: 4,
+              spacing: 6,
               children: [
-                _ActionIconButton(icon: Icons.visibility_outlined,    tooltip: 'View',   color: const Color(0xFF2563EB),  onTap: () => _viewCert(r)),
+                _ActionIconButton(icon: Icons.visibility_outlined,    tooltip: 'View',   color: const Color(0xFF3B82F6),  onTap: () => _viewCert(r)),
                 _ActionIconButton(icon: Icons.edit_outlined,          tooltip: 'Edit',   color: UpriseColors.primaryDark, onTap: () => _editCert(r)),
                 _ActionIconButton(icon: Icons.delete_outline_rounded, tooltip: 'Delete', color: const Color(0xFFDC2626),  onTap: () => _confirmDelete(r)),
               ],
@@ -927,16 +928,34 @@ class _ActionIconButton extends StatelessWidget {
   final VoidCallback? onTap;
   const _ActionIconButton({required this.icon, required this.tooltip, required this.color, required this.onTap});
 
+  static const Map<int, Color> _bgByFg = {
+    0xFF3B82F6: Color(0xFFEFF6FF), // view - blue
+    0xFF2563EB: Color(0xFFEFF6FF), // publish - blue
+    0xFFB45309: Color(0xFFFFF7ED), // edit - orange (UpriseColors.primaryDark)
+    0xFF7C3AED: Color(0xFFF3E8FF), // revise - purple
+    0xFF0D9488: Color(0xFFECFDF5), // form builder - teal
+    0xFF6B7280: Color(0xFFF3F4F6), // archive - gray
+    0xFFDC2626: Color(0xFFFEF2F2), // delete - red
+    0xFF059669: Color(0xFFECFDF5), // approve - green
+  };
+
   @override
   Widget build(BuildContext context) {
+    final fg = onTap == null ? const Color(0xFFD1D5DB) : color;
+    final bg = onTap == null ? const Color(0xFFF1F5F9) : (_bgByFg[fg.value] ?? fg.withAlpha(26));
     return Tooltip(
       message: tooltip,
+      waitDuration: const Duration(milliseconds: 400),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(6),
-        child: Padding(
-          padding: const EdgeInsets.all(5),
-          child: Icon(icon, size: 16, color: onTap == null ? const Color(0xFFD1D5DB) : color),
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+          padding: const EdgeInsets.all(7),
+          decoration: BoxDecoration(
+            color: bg,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Icon(icon, size: 14, color: fg),
         ),
       ),
     );

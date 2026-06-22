@@ -9,6 +9,7 @@ import 'package:fl_chart/fl_chart.dart';
 import '../../../widgets/admin_export_button.dart';
 import 'export_util.dart';
 import 'export_pdf.dart';
+import '../../../theme/app_theme.dart';
 
 // ============ COLOR SCHEME ============
 class OrgColors {
@@ -47,6 +48,7 @@ class TransactionModel {
   final double amount;
   final String type;
   final Timestamp date;
+  final bool isArchived;
 
   TransactionModel({
     required this.id,
@@ -57,6 +59,7 @@ class TransactionModel {
     required this.amount,
     required this.type,
     required this.date,
+    this.isArchived = false,
   });
 
   factory TransactionModel.fromFirestore(DocumentSnapshot doc) {
@@ -70,6 +73,7 @@ class TransactionModel {
       amount: (data['amount'] ?? 0).toDouble(),
       type: data['type'] ?? 'income',
       date: data['date'] as Timestamp,
+      isArchived: data['isArchived'] ?? false,
     );
   }
 }
@@ -104,6 +108,7 @@ class _OrgFinanceScreenState extends State<OrgFinanceScreen> {
 
   List<TransactionModel> _filterTransactions(List<TransactionModel> list) {
     return list.where((t) {
+      if (t.isArchived) return false;
       final matchSearch = _searchQuery.isEmpty ||
           t.eventName.toLowerCase().contains(_searchQuery.toLowerCase()) ||
           t.category.toLowerCase().contains(_searchQuery.toLowerCase()) ||
@@ -121,6 +126,7 @@ class _OrgFinanceScreenState extends State<OrgFinanceScreen> {
     DateTime? endDate,
   }) {
     return list.where((t) {
+      if (t.isArchived) return false;
       final eventMatch = eventFilter == 'All Events' || t.eventName == eventFilter;
       final startMatch = startDate == null || !t.date.toDate().isBefore(startDate);
       final endMatch = endDate == null || !t.date.toDate().isAfter(endDate);
@@ -293,6 +299,193 @@ class _OrgFinanceScreenState extends State<OrgFinanceScreen> {
     }
   }
 
+  Future<void> _archiveTransaction(TransactionModel transaction) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      barrierColor: Colors.black54,
+      builder: (ctx) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        child: Container(
+          width: 420,
+          padding: const EdgeInsets.all(28),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(children: [
+                Container(
+                  width: 42,
+                  height: 42,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF3F4F6),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(Icons.archive_outlined,
+                      color: Color(0xFF6B7280), size: 20),
+                ),
+                const SizedBox(width: 14),
+                Text('Archive Transaction',
+                    style: GoogleFonts.beVietnamPro(
+                        fontSize: 17, fontWeight: FontWeight.w700,
+                        color: OrgColors.charcoal)),
+              ]),
+              const SizedBox(height: 16),
+              Text(
+                'Archive "${transaction.segment.isNotEmpty ? transaction.segment : transaction.eventName}"? It will be removed from the active list but kept on record.',
+                style: GoogleFonts.beVietnamPro(
+                    fontSize: 14, color: OrgColors.darkGray, height: 1.5),
+              ),
+              const SizedBox(height: 24),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  OutlinedButton(
+                    onPressed: () => Navigator.pop(ctx, false),
+                    style: OutlinedButton.styleFrom(
+                      side: const BorderSide(color: OrgColors.mediumGray),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8)),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 18, vertical: 11),
+                    ),
+                    child: Text('Cancel',
+                        style: GoogleFonts.beVietnamPro(
+                            fontSize: 13, color: OrgColors.charcoal)),
+                  ),
+                  const SizedBox(width: 10),
+                  ElevatedButton(
+                    onPressed: () => Navigator.pop(ctx, true),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF6B7280),
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8)),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 18, vertical: 11),
+                    ),
+                    child: Text('Archive',
+                        style: GoogleFonts.beVietnamPro(
+                            fontSize: 13, fontWeight: FontWeight.w600)),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (confirm != true) return;
+    try {
+      await FirebaseFirestore.instance
+          .collection('transactions')
+          .doc(transaction.id)
+          .update({'isArchived': true});
+      await activity_log.ActivityLogger.log(
+        action: 'archive_transaction',
+        module: 'finance',
+        details: {
+          'orgId': widget.orgId,
+          'transactionId': transaction.id,
+          'amount': transaction.amount,
+        },
+      );
+      if (mounted) {
+        _showSnack('Transaction archived', OrgColors.success);
+      }
+    } catch (e) {
+      if (mounted) _showSnack('Error: $e', OrgColors.error);
+    }
+  }
+
+  void _viewTransactionDetails(TransactionModel transaction) {
+    showDialog(
+      context: context,
+      barrierColor: Colors.black54,
+      builder: (ctx) {
+        final isIncome = transaction.type == 'income';
+        return Dialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          child: Container(
+            width: 420,
+            padding: const EdgeInsets.all(28),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(children: [
+                  Container(
+                    width: 42,
+                    height: 42,
+                    decoration: BoxDecoration(
+                      color: (isIncome ? OrgColors.success : OrgColors.error)
+                          .withOpacity(0.12),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Icon(
+                      isIncome
+                          ? Icons.trending_up_rounded
+                          : Icons.trending_down_rounded,
+                      color: isIncome ? OrgColors.success : OrgColors.error,
+                      size: 20,
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Text('Transaction Details',
+                        style: GoogleFonts.beVietnamPro(
+                            fontSize: 17,
+                            fontWeight: FontWeight.w700,
+                            color: OrgColors.charcoal)),
+                  ),
+                  IconButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    icon: const Icon(Icons.close_rounded,
+                        size: 20, color: OrgColors.darkGray),
+                  ),
+                ]),
+                const SizedBox(height: 20),
+                _viewDetailRow('Event', transaction.eventName),
+                _viewDetailRow('Category', transaction.category),
+                _viewDetailRow('Description',
+                    transaction.segment.isNotEmpty ? transaction.segment : '—'),
+                _viewDetailRow('Amount',
+                    '₱${NumberFormat('#,###.00').format(transaction.amount)}'),
+                _viewDetailRow('Type', isIncome ? 'Income' : 'Expense'),
+                _viewDetailRow('Date',
+                    DateFormat('MMMM d, yyyy').format(transaction.date.toDate())),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _viewDetailRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 100,
+            child: Text(label,
+                style: GoogleFonts.beVietnamPro(
+                    fontSize: 13, color: OrgColors.darkGray)),
+          ),
+          Expanded(
+            child: Text(value,
+                style: GoogleFonts.beVietnamPro(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: OrgColors.charcoal)),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _showSnack(String msg, Color color) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
       content: Text(msg, style: GoogleFonts.beVietnamPro()),
@@ -307,6 +500,11 @@ class _OrgFinanceScreenState extends State<OrgFinanceScreen> {
     if (filtered.isEmpty) {
       _showSnack('No transactions to export', OrgColors.warning);
       return;
+    }
+    if (choice == 'pdf') {
+      // PDF generation is CPU-bound and blocks the UI thread for a moment on
+      // web — show feedback now so it doesn't look like the page froze.
+      _showSnack('Generating PDF…', UpriseColors.primaryDark);
     }
     final headers = ['Event Name', 'Category', 'Segment', 'Amount', 'Type', 'Date'];
     final rows = filtered.map((t) {
@@ -398,7 +596,7 @@ class _OrgFinanceScreenState extends State<OrgFinanceScreen> {
                 Container(
                   padding: const EdgeInsets.fromLTRB(24, 20, 20, 20),
                   decoration: const BoxDecoration(
-                    color: OrgColors.primaryDark,
+                    color: UpriseColors.primaryDark,
                     borderRadius:
                         BorderRadius.vertical(top: Radius.circular(18)),
                   ),
@@ -565,7 +763,7 @@ class _OrgFinanceScreenState extends State<OrgFinanceScreen> {
                                     endDate: endDate);
                               },
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: OrgColors.primaryDark,
+                          backgroundColor: UpriseColors.primaryDark,
                           foregroundColor: Colors.white,
                           elevation: 0,
                           shape: RoundedRectangleBorder(
@@ -624,7 +822,7 @@ class _OrgFinanceScreenState extends State<OrgFinanceScreen> {
           filters.add('From: ${DateFormat('MMM d, yyyy').format(startDate)}');
         if (endDate != null)
           filters.add('To: ${DateFormat('MMM d, yyyy').format(endDate)}');
-        final periodLabel = filters.isEmpty ? 'All time' : filters.join(' • ');
+        final periodLabel = filters.isEmpty ? 'All time' : filters.join(' | ');
 
         final inflow = filtered.where((t) => t.type == 'income').toList();
         final outflow = filtered.where((t) => t.type == 'expense').toList();
@@ -815,7 +1013,7 @@ class _OrgFinanceScreenState extends State<OrgFinanceScreen> {
               label: 'Transactions',
               value: '${snapshot.data?.docs.length ?? 0}',
               icon: Icons.receipt_long_outlined,
-              color: OrgColors.primaryDark,
+              color: UpriseColors.primaryDark,
             ),
           ]),
         );
@@ -829,7 +1027,6 @@ class _OrgFinanceScreenState extends State<OrgFinanceScreen> {
       padding: const EdgeInsets.fromLTRB(28, 20, 28, 0),
       child: Row(
         children: [
-          // Search
           Expanded(
             child: SizedBox(
               height: 40,
@@ -857,7 +1054,7 @@ class _OrgFinanceScreenState extends State<OrgFinanceScreen> {
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(10),
                     borderSide: const BorderSide(
-                        color: OrgColors.primaryDark, width: 1.5),
+                        color: UpriseColors.primaryDark, width: 1.5),
                   ),
                 ),
                 onChanged: (v) =>
@@ -894,8 +1091,8 @@ class _OrgFinanceScreenState extends State<OrgFinanceScreen> {
                       style: GoogleFonts.beVietnamPro(
                           fontSize: 13, fontWeight: FontWeight.w600)),
                   style: OutlinedButton.styleFrom(
-                    foregroundColor: OrgColors.primaryDark,
-                    side: const BorderSide(color: OrgColors.primaryDark),
+                    foregroundColor: UpriseColors.primaryDark,
+                    side: const BorderSide(color: UpriseColors.primaryDark),
                     padding: const EdgeInsets.symmetric(
                         horizontal: 16, vertical: 10),
                     shape: RoundedRectangleBorder(
@@ -912,8 +1109,8 @@ class _OrgFinanceScreenState extends State<OrgFinanceScreen> {
                     style: GoogleFonts.beVietnamPro(
                         fontSize: 13, fontWeight: FontWeight.w600)),
                 style: OutlinedButton.styleFrom(
-                  foregroundColor: OrgColors.primaryDark,
-                  side: const BorderSide(color: OrgColors.primaryDark),
+                  foregroundColor: UpriseColors.primaryDark,
+                  side: const BorderSide(color: UpriseColors.primaryDark),
                   padding: const EdgeInsets.symmetric(
                       horizontal: 16, vertical: 10),
                   shape: RoundedRectangleBorder(
@@ -947,7 +1144,7 @@ class _OrgFinanceScreenState extends State<OrgFinanceScreen> {
                 style: GoogleFonts.beVietnamPro(
                     fontSize: 13, fontWeight: FontWeight.w600)),
             style: ElevatedButton.styleFrom(
-              backgroundColor: OrgColors.primaryDark,
+              backgroundColor: UpriseColors.primaryDark,
               foregroundColor: Colors.white,
               padding:
                   const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
@@ -992,6 +1189,7 @@ class _OrgFinanceScreenState extends State<OrgFinanceScreen> {
               Expanded(
                 flex: 3,
                 child: Container(
+                  clipBehavior: Clip.antiAlias,
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(14),
@@ -1052,11 +1250,11 @@ class _OrgFinanceScreenState extends State<OrgFinanceScreen> {
         Expanded(flex: 2, child: _headerCell('DATE')),
         Expanded(flex: 3, child: _headerCell('EVENT')),
         Expanded(flex: 2, child: _headerCell('CATEGORY')),
-        Expanded(flex: 3, child: _headerCell('DESCRIPTION')),
+        Expanded(flex: 2, child: _headerCell('DESCRIPTION')),
         Expanded(flex: 2, child: _headerCell('AMOUNT')),
-        Expanded(flex: 1, child: _headerCell('TYPE')),
+        Expanded(flex: 2, child: _headerCell('TYPE')),
         Expanded(
-            flex: 2,
+            flex: 4,
             child: Align(
                 alignment: Alignment.centerRight,
                 child: _headerCell('ACTIONS'))),
@@ -1112,33 +1310,35 @@ class _OrgFinanceScreenState extends State<OrgFinanceScreen> {
                 style: GoogleFonts.beVietnamPro(
                     fontSize: 13,
                     fontWeight: FontWeight.w600,
-                    color: OrgColors.primaryDark),
+                    color: UpriseColors.primaryDark),
                 overflow: TextOverflow.ellipsis,
               ),
             ),
             // Category
             Expanded(
               flex: 2,
-              child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: OrgColors.primaryDark.withOpacity(0.07),
-                  borderRadius: BorderRadius.circular(6),
+              child: Row(children: [
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: UpriseColors.primaryDark.withOpacity(0.07),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(
+                    transaction.category,
+                    style: GoogleFonts.beVietnamPro(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: UpriseColors.primaryDark),
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
-                child: Text(
-                  transaction.category,
-                  style: GoogleFonts.beVietnamPro(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                      color: OrgColors.primaryDark),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
+              ]),
             ),
             // Description
             Expanded(
-              flex: 3,
+              flex: 2,
               child: Text(
                 transaction.segment.isNotEmpty ? transaction.segment : '—',
                 style: GoogleFonts.beVietnamPro(
@@ -1159,40 +1359,56 @@ class _OrgFinanceScreenState extends State<OrgFinanceScreen> {
             ),
             // Type badge
             Expanded(
-              flex: 1,
-              child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: isIncome
-                      ? OrgColors.success.withOpacity(0.12)
-                      : OrgColors.error.withOpacity(0.12),
-                  borderRadius: BorderRadius.circular(20),
+              flex: 2,
+              child: Row(children: [
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: isIncome
+                        ? OrgColors.success.withOpacity(0.12)
+                        : OrgColors.error.withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    isIncome ? 'Income' : 'Expense',
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.beVietnamPro(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                        color: isIncome ? OrgColors.success : OrgColors.error,
+                        letterSpacing: 0.3),
+                  ),
                 ),
-                child: Text(
-                  isIncome ? 'Income' : 'Expense',
-                  textAlign: TextAlign.center,
-                  style: GoogleFonts.beVietnamPro(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w700,
-                      color: isIncome ? OrgColors.success : OrgColors.error,
-                      letterSpacing: 0.3),
-                ),
-              ),
+              ]),
             ),
             // Actions
             Expanded(
-              flex: 2,
+              flex: 4,
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
                   _ActionIconButton(
+                    icon: Icons.visibility_outlined,
+                    tooltip: 'View Details',
+                    color: const Color(0xFF3B82F6),
+                    onTap: () => _viewTransactionDetails(transaction),
+                  ),
+                  const SizedBox(width: 6),
+                  _ActionIconButton(
                     icon: Icons.edit_outlined,
                     tooltip: 'Edit',
-                    color: OrgColors.info,
+                    color: UpriseColors.primaryDark,
                     onTap: () => _openEditModal(transaction),
                   ),
-                  const SizedBox(width: 4),
+                  const SizedBox(width: 6),
+                  _ActionIconButton(
+                    icon: Icons.archive_outlined,
+                    tooltip: 'Archive',
+                    color: const Color(0xFF6B7280),
+                    onTap: () => _archiveTransaction(transaction),
+                  ),
+                  const SizedBox(width: 6),
                   _ActionIconButton(
                     icon: Icons.delete_outline_rounded,
                     tooltip: 'Delete',
@@ -1647,7 +1863,7 @@ class _TransactionModalState extends State<_TransactionModal> {
       lastDate: DateTime(2035),
       builder: (context, child) => Theme(
         data: Theme.of(context).copyWith(
-          colorScheme: const ColorScheme.light(primary: OrgColors.primaryDark),
+          colorScheme: const ColorScheme.light(primary: UpriseColors.primaryDark),
         ),
         child: child!,
       ),
@@ -1759,7 +1975,7 @@ class _TransactionModalState extends State<_TransactionModal> {
             Container(
               padding: const EdgeInsets.fromLTRB(24, 20, 20, 20),
               decoration: const BoxDecoration(
-                color: OrgColors.primaryDark,
+                color: UpriseColors.primaryDark,
                 borderRadius:
                     BorderRadius.vertical(top: Radius.circular(18)),
               ),
@@ -1989,7 +2205,7 @@ class _TransactionModalState extends State<_TransactionModal> {
                   ElevatedButton(
                     onPressed: _submitting ? null : _submit,
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: OrgColors.primaryDark,
+                      backgroundColor: UpriseColors.primaryDark,
                       foregroundColor: Colors.white,
                       elevation: 0,
                       shape: RoundedRectangleBorder(
@@ -2036,7 +2252,7 @@ class _TransactionModalState extends State<_TransactionModal> {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
-          borderSide: const BorderSide(color: OrgColors.primaryDark, width: 1.5),
+          borderSide: const BorderSide(color: UpriseColors.primaryDark, width: 1.5),
         ),
         isDense: true,
       );
@@ -2206,9 +2422,9 @@ class _FormatChip extends StatelessWidget {
         duration: const Duration(milliseconds: 150),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         decoration: BoxDecoration(
-          color: selected ? OrgColors.primaryDark : OrgColors.lightGray,
+          color: selected ? UpriseColors.primaryDark : OrgColors.lightGray,
           border: Border.all(
-              color: selected ? OrgColors.primaryDark : const Color(0xFFE2E6EA)),
+              color: selected ? UpriseColors.primaryDark : const Color(0xFFE2E6EA)),
           borderRadius: BorderRadius.circular(8),
         ),
         child: Row(
@@ -2386,20 +2602,34 @@ class _ActionIconButton extends StatelessWidget {
     this.color,
   });
 
+  static const Map<int, Color> _bgByFg = {
+    0xFF3B82F6: Color(0xFFEFF6FF), // view - blue
+    0xFF2563EB: Color(0xFFEFF6FF), // publish - blue
+    0xFFB45309: Color(0xFFFFF7ED), // edit - orange (UpriseColors.primaryDark)
+    0xFF7C3AED: Color(0xFFF3E8FF), // revise - purple
+    0xFF0D9488: Color(0xFFECFDF5), // form builder - teal
+    0xFF6B7280: Color(0xFFF3F4F6), // archive - gray
+    0xFFDC2626: Color(0xFFFEF2F2), // delete - red
+    0xFF059669: Color(0xFFECFDF5), // approve - green
+  };
+
   @override
   Widget build(BuildContext context) {
+    final fg = onTap == null ? const Color(0xFFD1D5DB) : (color ?? const Color(0xFF3B82F6));
+    final bg = onTap == null ? const Color(0xFFF1F5F9) : (_bgByFg[fg.value] ?? fg.withAlpha(26));
     return Tooltip(
       message: tooltip,
+      waitDuration: const Duration(milliseconds: 400),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(6),
-        child: Padding(
-          padding: const EdgeInsets.all(5),
-          child: Icon(icon,
-              size: 16,
-              color: onTap == null
-                  ? const Color(0xFFD1D5DB)
-                  : (color ?? OrgColors.darkGray)),
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+          padding: const EdgeInsets.all(7),
+          decoration: BoxDecoration(
+            color: bg,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Icon(icon, size: 14, color: fg),
         ),
       ),
     );
@@ -2455,7 +2685,7 @@ class _PageNumButton extends StatelessWidget {
         height: 28,
         alignment: Alignment.center,
         decoration: BoxDecoration(
-          color: isActive ? OrgColors.primaryDark : Colors.transparent,
+          color: isActive ? UpriseColors.primaryDark : Colors.transparent,
           borderRadius: BorderRadius.circular(6),
         ),
         child: Text(
