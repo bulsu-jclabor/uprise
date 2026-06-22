@@ -22,9 +22,6 @@ const kBg = Color(0xFFF5F5F5);
 // ProfileModel — single source of truth
 // ─────────────────────────────────────────────────────────────
 class ProfileModel extends ChangeNotifier {
-  // ── Name is split into 3 fields. `fullName` below is a derived
-  //    getter kept for any other screen in the app that still reads
-  //    profile.fullName — it composes the 3 parts automatically. ──
   String firstName = '';
   String middleName = '';
   String lastName = '';
@@ -35,7 +32,6 @@ class ProfileModel extends ChangeNotifier {
     return parts.join(' ');
   }
 
-  // "Dela Cruz, Juan Miguel" style — handy for ID-card last-name-first display
   String get fullNameLastFirst {
     if (lastName.trim().isEmpty) return fullName;
     final first = [firstName, middleName]
@@ -49,12 +45,10 @@ class ProfileModel extends ChangeNotifier {
   String mobile = '';
   String address = '';
   String photoUrl = '';
-  // ── ID card fields ──
   String course = '';
   String major = '';
   String yearLevel = '';
   String department = '';
-  // ── Organization ──
   String orgId = '';
   String orgName = '';
 
@@ -68,37 +62,36 @@ class ProfileModel extends ChangeNotifier {
       email = user.email ?? '';
 
       final snapshot = await FirebaseFirestore.instance
-    .collection('students')
-    .where('uid', isEqualTo: user.uid)
-    .limit(1)
-    .get();
+          .collection('students')
+          .where('uid', isEqualTo: user.uid)
+          .limit(1)
+          .get();
 
-if (snapshot.docs.isNotEmpty) {
-  final data = snapshot.docs.first.data();
-  firstName = data['firstName'] ?? '';
-  middleName = data['middleName'] ?? '';
-  lastName = data['lastName'] ?? '';
-  studentId = data['studentId'] ?? '';
-  mobile = data['mobile'] ?? '';
-  address = data['address'] ?? '';
-  photoUrl = data['photoUrl'] ?? '';
-  course = data['course'] ?? '';
-  major = data['major'] ?? '';
-  yearLevel = data['yearLevel'] ?? '';
-  department = data['department'] ?? '';
-  orgId = data['orgId'] ?? '';
+      if (snapshot.docs.isNotEmpty) {
+        final data = snapshot.docs.first.data();
+        firstName = data['firstName'] ?? '';
+        middleName = data['middleName'] ?? '';
+        lastName = data['lastName'] ?? '';
+        studentId = data['studentId'] ?? '';
+        mobile = data['mobile'] ?? '';
+        address = data['address'] ?? '';
+        photoUrl = data['photoUrl'] ?? '';
+        course = data['course'] ?? '';
+        major = data['major'] ?? '';
+        yearLevel = data['yearLevel'] ?? '';
+        department = data['department'] ?? '';
+        orgId = data['orgId'] ?? '';
 
-  // Resolve org name if orgId is set
-  if (orgId.isNotEmpty) {
-    final orgSnap = await FirebaseFirestore.instance
-        .collection('organizations')
-        .doc(orgId)
-        .get();
-    if (orgSnap.exists) {
-      orgName = orgSnap.data()?['orgName'] ?? orgSnap.data()?['name'] ?? '';
-    }
-  }
-}
+        if (orgId.isNotEmpty) {
+          final orgSnap = await FirebaseFirestore.instance
+              .collection('organizations')
+              .doc(orgId)
+              .get();
+          if (orgSnap.exists) {
+            orgName = orgSnap.data()?['orgName'] ?? orgSnap.data()?['name'] ?? '';
+          }
+        }
+      }
 
       notifyListeners();
     }
@@ -130,39 +123,34 @@ if (snapshot.docs.isNotEmpty) {
     if (department != null) this.department = department;
 
     final user = FirebaseAuth.instance.currentUser;
-if (user != null) {
-  final snapshot = await FirebaseFirestore.instance
-      .collection('students')
-      .where('uid', isEqualTo: user.uid)
-      .limit(1)
-      .get();
+    if (user != null) {
+      final snapshot = await FirebaseFirestore.instance
+          .collection('students')
+          .where('uid', isEqualTo: user.uid)
+          .limit(1)
+          .get();
 
-  if (snapshot.docs.isNotEmpty) {
-    final docRef = snapshot.docs.first.reference;
-    await docRef.set({
-      'firstName': firstName,
-      'middleName': middleName,
-      'lastName': lastName,
-      'studentId': studentId,
-      'email': email,
-      'mobile': mobile,
-      'address': address,
-      'photoUrl': this.photoUrl,
-      'course': this.course,
-      'major': this.major,
-      'yearLevel': this.yearLevel,
-      'department': this.department,
-    }, SetOptions(merge: true));
-  }
-}
+      if (snapshot.docs.isNotEmpty) {
+        final docRef = snapshot.docs.first.reference;
+        await docRef.set({
+          'firstName': firstName,
+          'middleName': middleName,
+          'lastName': lastName,
+          'studentId': studentId,
+          'email': email,
+          'mobile': mobile,
+          'address': address,
+          'photoUrl': this.photoUrl,
+          'course': this.course,
+          'major': this.major,
+          'yearLevel': this.yearLevel,
+          'department': this.department,
+        }, SetOptions(merge: true));
+      }
+    }
     notifyListeners();
   }
 
-  // ── Update just the photo (used by the camera/edit icon) ──
-  // Kept separate from update() so changing the photo doesn't require
-  // re-passing every other field. Saves to Firestore immediately and
-  // calls notifyListeners() so every screen watching this model
-  // (Profile screen + ID card) refreshes automatically.
   Future<void> updatePhotoUrl(String url) async {
     photoUrl = url;
 
@@ -187,14 +175,7 @@ if (user != null) {
 }
 
 // ─────────────────────────────────────────────────────────────
-// Shared helper — pick a new photo from the gallery and save it
-// directly on the shared ProfileModel. No Firebase Storage (which
-// needs a paid Blaze plan) — instead the photo is shrunk and stored
-// as a base64 string right inside the student's Firestore document,
-// which is free on the normal Firestore tier. Because every screen
-// (Profile header + ID card) listens to the same ProfileModel
-// instance, calling this from anywhere instantly updates both
-// places — no extra wiring needed.
+// Pick & upload photo helper
 // ─────────────────────────────────────────────────────────────
 Future<void> _pickAndUploadPhoto(
     BuildContext context, ProfileModel profile) async {
@@ -204,11 +185,9 @@ Future<void> _pickAndUploadPhoto(
     picked = await picker.pickImage(
       source: ImageSource.gallery,
       imageQuality: 70,
-      maxWidth: 400, // kept small so the base64 string stays well under
-                     // Firestore's 1 MiB per-document limit
+      maxWidth: 400,
     );
   } catch (e) {
-    // Picker itself failed (e.g. permission denied)
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Could not open gallery: $e')),
@@ -216,7 +195,7 @@ Future<void> _pickAndUploadPhoto(
     }
     return;
   }
-  if (picked == null) return; // user cancelled
+  if (picked == null) return;
 
   if (!context.mounted) return;
   showDialog(
@@ -227,13 +206,10 @@ Future<void> _pickAndUploadPhoto(
   );
 
   try {
-    // readAsBytes() works the same on mobile, web, and desktop —
-    // unlike dart:io's File(), which breaks on Flutter Web.
     final Uint8List bytes = await picked.readAsBytes();
 
     if (bytes.lengthInBytes > 400 * 1024) {
-      throw Exception(
-          'That photo is too large. Please pick a smaller image.');
+      throw Exception('That photo is too large. Please pick a smaller image.');
     }
 
     final String dataUrl = 'data:image/jpeg;base64,${base64Encode(bytes)}';
@@ -241,7 +217,7 @@ Future<void> _pickAndUploadPhoto(
     await profile.updatePhotoUrl(dataUrl);
 
     if (context.mounted) {
-      Navigator.pop(context); // close loading dialog
+      Navigator.pop(context);
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Profile photo updated!'),
@@ -251,7 +227,7 @@ Future<void> _pickAndUploadPhoto(
     }
   } catch (e) {
     if (context.mounted) {
-      Navigator.pop(context); // close loading dialog
+      Navigator.pop(context);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Failed to update photo: $e')),
       );
@@ -259,8 +235,9 @@ Future<void> _pickAndUploadPhoto(
   }
 }
 
-// ── Renders profile.photoUrl whether it's a base64 data: string
-//    (new uploads) or a plain network URL (legacy data) ──
+// ─────────────────────────────────────────────────────────────
+// Profile image helpers
+// ─────────────────────────────────────────────────────────────
 class _ProfileImage extends StatelessWidget {
   final String photoUrl;
   final double? width;
@@ -302,8 +279,6 @@ class _ProfileImage extends StatelessWidget {
   }
 }
 
-// ── Same idea, but as an ImageProvider for widgets like CircleAvatar
-//    that take backgroundImage instead of a child Image widget ──
 ImageProvider? _profileImageProvider(String photoUrl) {
   if (photoUrl.isEmpty) return null;
   if (photoUrl.startsWith('data:image')) {
@@ -329,17 +304,15 @@ class StudentProfileScreen extends StatefulWidget {
 class _StudentProfileScreenState extends State<StudentProfileScreen> {
   final ProfileModel _profile = ProfileModel();
 
-  // Helper method to fetch events by IDs
   Future<List<QueryDocumentSnapshot>> _fetchEventsByIds(List<String> eventIds) async {
     if (eventIds.isEmpty) return [];
-    
-    // Firestore whereIn supports max 10 items
+
     final chunks = <List<String>>[];
     for (var i = 0; i < eventIds.length; i += 10) {
       chunks.add(eventIds.sublist(
           i, i + 10 > eventIds.length ? eventIds.length : i + 10));
     }
-    
+
     final results = <QueryDocumentSnapshot>[];
     for (final chunk in chunks) {
       final snap = await FirebaseFirestore.instance
@@ -396,8 +369,7 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
                               color: const Color(0xFFF5C8A0),
-                              border:
-                                  Border.all(color: Colors.white, width: 3),
+                              border: Border.all(color: Colors.white, width: 3),
                             ),
                             child: ClipOval(
                               child: _profile.photoUrl.isNotEmpty
@@ -405,8 +377,7 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
                                       photoUrl: _profile.photoUrl,
                                       errorBuilder: (_, __, ___) =>
                                           const Icon(Icons.person,
-                                              size: 50,
-                                              color: Colors.white),
+                                              size: 50, color: Colors.white),
                                     )
                                   : const Icon(Icons.person,
                                       size: 50, color: Colors.white),
@@ -455,7 +426,6 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
                                         EditProfileScreen(profile: _profile),
                                   ),
                                 );
-                                // If a new name was returned, refresh the profile
                                 if (result != null && result is String) {
                                   _profile._loadUserData();
                                 }
@@ -465,8 +435,8 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
                                 foregroundColor: Colors.white,
                                 shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(10)),
-                                padding: const EdgeInsets.symmetric(
-                                    vertical: 14),
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 14),
                               ),
                               child: const Text('Edit Profile',
                                   style: TextStyle(
@@ -484,9 +454,8 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
                               onPressed: () => Navigator.push(
                                 context,
                                 MaterialPageRoute(
-                                    builder: (_) =>
-                                        PersonalIdentityScreen(
-                                            profile: _profile)),
+                                    builder: (_) => PersonalIdentityScreen(
+                                        profile: _profile)),
                               ),
                               icon: const Text('ID',
                                   style: TextStyle(
@@ -585,8 +554,7 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
                         children: [
                           const Text('Contact Information',
                               style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 15)),
+                                  fontWeight: FontWeight.bold, fontSize: 15)),
                           GestureDetector(
                             onTap: () => Navigator.push(
                               context,
@@ -629,34 +597,34 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
                         children: [
                           const Text('Events Registered',
                               style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 15)),
+                                  fontWeight: FontWeight.bold, fontSize: 15)),
                           GestureDetector(
                             onTap: () {
                               Navigator.push(
                                 context,
                                 MaterialPageRoute(
-                                  builder: (_) =>
-                                      const StudentEventsScreen(
-                                          initialTabIndex: 1),
+                                  builder: (_) => const StudentEventsScreen(
+                                      initialTabIndex: 1),
                                 ),
                               );
                             },
                             child: const Text('See All',
-                                style: TextStyle(color: kOrange, fontSize: 14)),
+                                style:
+                                    TextStyle(color: kOrange, fontSize: 14)),
                           ),
                         ],
                       ),
                       const SizedBox(height: 12),
-                      
-                      // Dynamic events list from Firestore
                       StreamBuilder<QuerySnapshot>(
                         stream: FirebaseFirestore.instance
                             .collection('registrations')
-                            .where('userId', isEqualTo: FirebaseAuth.instance.currentUser?.uid)
+                            .where('userId',
+                                isEqualTo:
+                                    FirebaseAuth.instance.currentUser?.uid)
                             .snapshots(),
                         builder: (context, regSnapshot) {
-                          if (regSnapshot.connectionState == ConnectionState.waiting) {
+                          if (regSnapshot.connectionState ==
+                              ConnectionState.waiting) {
                             return const Center(
                               child: Padding(
                                 padding: EdgeInsets.all(16),
@@ -664,40 +632,44 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
                               ),
                             );
                           }
-                          
-                          if (!regSnapshot.hasData || regSnapshot.data!.docs.isEmpty) {
+
+                          if (!regSnapshot.hasData ||
+                              regSnapshot.data!.docs.isEmpty) {
                             return const Padding(
                               padding: EdgeInsets.symmetric(vertical: 20),
                               child: Center(
                                 child: Text(
                                   'No registered events yet',
-                                  style: TextStyle(color: Colors.grey, fontSize: 13),
+                                  style: TextStyle(
+                                      color: Colors.grey, fontSize: 13),
                                 ),
                               ),
                             );
                           }
-                          
+
                           final registrations = regSnapshot.data!.docs;
-                          
-                          // Get event IDs from registrations
-                          final eventIds = registrations.map((doc) => doc['eventId'] as String).toList();
-                          
+                          final eventIds = registrations
+                              .map((doc) => doc['eventId'] as String)
+                              .toList();
+
                           if (eventIds.isEmpty) {
                             return const Padding(
                               padding: EdgeInsets.symmetric(vertical: 20),
                               child: Center(
                                 child: Text(
                                   'No registered events yet',
-                                  style: TextStyle(color: Colors.grey, fontSize: 13),
+                                  style: TextStyle(
+                                      color: Colors.grey, fontSize: 13),
                                 ),
                               ),
                             );
                           }
-                          
+
                           return FutureBuilder<List<QueryDocumentSnapshot>>(
                             future: _fetchEventsByIds(eventIds),
                             builder: (context, eventSnapshot) {
-                              if (eventSnapshot.connectionState == ConnectionState.waiting) {
+                              if (eventSnapshot.connectionState ==
+                                  ConnectionState.waiting) {
                                 return const Center(
                                   child: Padding(
                                     padding: EdgeInsets.all(16),
@@ -705,58 +677,71 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
                                   ),
                                 );
                               }
-                              
+
                               final events = eventSnapshot.data ?? [];
-                              
+
                               if (events.isEmpty) {
                                 return const Padding(
                                   padding: EdgeInsets.symmetric(vertical: 20),
                                   child: Center(
                                     child: Text(
                                       'No registered events yet',
-                                      style: TextStyle(color: Colors.grey, fontSize: 13),
+                                      style: TextStyle(
+                                          color: Colors.grey, fontSize: 13),
                                     ),
                                   ),
                                 );
                               }
-                              
-                              // Show only first 3 events
+
                               final displayEvents = events.take(3).toList();
-                              
+
                               return Column(
                                 children: displayEvents.asMap().entries.map((entry) {
                                   final index = entry.key;
                                   final doc = entry.value;
-                                  final eventData = doc.data() as Map<String, dynamic>;
-                                  
-                                  // Determine if event is upcoming or past
+                                  final eventData =
+                                      doc.data() as Map<String, dynamic>;
+
                                   final eventDate = eventData['date'] is Timestamp
                                       ? (eventData['date'] as Timestamp).toDate()
-                                      : DateTime.tryParse(eventData['date']?.toString() ?? '');
-                                  final isUpcoming = eventDate != null && eventDate.isAfter(DateTime.now());
-                                  final badgeText = isUpcoming ? 'UPCOMING' : 'PAST';
-                                  final badgeColor = isUpcoming ? const Color(0xFF2196F3) : Colors.grey;
-                                  
-                                  // Format date display
+                                      : DateTime.tryParse(
+                                          eventData['date']?.toString() ?? '');
+                                  final isUpcoming = eventDate != null &&
+                                      eventDate.isAfter(DateTime.now());
+                                  final badgeText =
+                                      isUpcoming ? 'UPCOMING' : 'PAST';
+                                  final badgeColor = isUpcoming
+                                      ? const Color(0xFF2196F3)
+                                      : Colors.grey;
+
                                   String displayDate = '';
                                   if (eventDate != null) {
-                                    if (isUpcoming && eventDate.difference(DateTime.now()).inDays == 1) {
-                                      displayDate = 'Tomorrow • ${eventData['startTime'] ?? '9:00 AM'}';
+                                    if (isUpcoming &&
+                                        eventDate
+                                                .difference(DateTime.now())
+                                                .inDays ==
+                                            1) {
+                                      displayDate =
+                                          'Tomorrow • ${eventData['startTime'] ?? '9:00 AM'}';
                                     } else {
-                                      displayDate = '${DateFormat('MMM d, yyyy').format(eventDate)} • ${eventData['startTime'] ?? '9:00 AM'}';
+                                      displayDate =
+                                          '${DateFormat('MMM d, yyyy').format(eventDate)} • ${eventData['startTime'] ?? '9:00 AM'}';
                                     }
                                   }
-                                  
+
                                   return Column(
                                     children: [
                                       _EventCard(
-                                        title: eventData['title'] ?? 'Untitled Event',
+                                        title: eventData['title'] ??
+                                            'Untitled Event',
                                         subtitle: displayDate,
                                         badge: badgeText,
                                         badgeColor: badgeColor,
-                                        imageUrl: eventData['bannerUrl'] ?? '',
+                                        imageUrl:
+                                            eventData['bannerUrl'] ?? '',
                                       ),
-                                      if (index < displayEvents.length - 1) const Divider(height: 1),
+                                      if (index < displayEvents.length - 1)
+                                        const Divider(height: 1),
                                     ],
                                   );
                                 }).toList(),
@@ -771,9 +756,10 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
 
                 const SizedBox(height: 12),
 
-                // ── RED LOG OUT BUTTON ──
+                // ── Log Out Button ──
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 16, vertical: 8),
                   child: SizedBox(
                     width: double.infinity,
                     child: ElevatedButton(
@@ -781,7 +767,8 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
                         await FirebaseAuth.instance.signOut();
                         if (context.mounted) {
                           Navigator.of(context).pushAndRemoveUntil(
-                            MaterialPageRoute(builder: (_) => const StudentLogin()),
+                            MaterialPageRoute(
+                                builder: (_) => const StudentLogin()),
                             (route) => false,
                           );
                         }
@@ -824,8 +811,7 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
 }
 
 // ─────────────────────────────────────────────────────────────
-// Personal Identity Screen — shows the ID card's front and back
-// stacked together (no flip/tap needed)
+// Personal Identity Screen
 // ─────────────────────────────────────────────────────────────
 class PersonalIdentityScreen extends StatelessWidget {
   final ProfileModel profile;
@@ -842,10 +828,6 @@ class PersonalIdentityScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // AnimatedBuilder makes this screen listen to the shared ProfileModel,
-    // so if the photo or any ID field changes (e.g. while this screen is
-    // still on the navigation stack), the ID card updates immediately —
-    // no need to re-open the screen to see the latest data.
     return AnimatedBuilder(
       animation: profile,
       builder: (context, _) {
@@ -864,10 +846,6 @@ class PersonalIdentityScreen extends StatelessWidget {
                     color: Colors.black,
                     fontWeight: FontWeight.w600,
                     fontSize: 18)),
-            bottom: PreferredSize(
-              preferredSize: const Size.fromHeight(2),
-              child: Container(height: 2, color: kOrange),
-            ),
           ),
           body: SingleChildScrollView(
             padding: const EdgeInsets.all(20),
@@ -908,7 +886,6 @@ class PersonalIdentityScreen extends StatelessWidget {
   }
 }
 
-// Small "FRONT" / "BACK" eyebrow label used above each card
 class _IdCardLabel extends StatelessWidget {
   final String text;
   const _IdCardLabel({required this.text});
@@ -922,10 +899,10 @@ class _IdCardLabel extends StatelessWidget {
         child: Text(
           text,
           style: TextStyle(
-            fontSize: 11,
-            fontWeight: FontWeight.w700,
-            letterSpacing: 1.0,
-            color: Colors.grey[600],
+            fontSize: 10,
+            fontWeight: FontWeight.w600,
+            letterSpacing: 1.6,
+            color: Colors.grey[400],
           ),
         ),
       ),
@@ -933,7 +910,7 @@ class _IdCardLabel extends StatelessWidget {
   }
 }
 
-// ── Download Preview Bottom Sheet — shows front & back stacked ──
+// ── Download Preview Bottom Sheet ──
 class _IdDownloadPreviewSheet extends StatelessWidget {
   final ProfileModel profile;
   const _IdDownloadPreviewSheet({required this.profile});
@@ -997,8 +974,47 @@ class _IdDownloadPreviewSheet extends StatelessWidget {
   }
 }
 
-// ── FRONT of ID: orange header banner, photo, last/first/middle name,
-//    student number, major/program ──
+// ─────────────────────────────────────────────────────────────
+// _HeaderBadge — now accepts custom size & imageSize so the
+// smaller UPRISE logo can be scaled up to match the BSU logo
+// ─────────────────────────────────────────────────────────────
+class _HeaderBadge extends StatelessWidget {
+  final String assetPath;
+  final IconData icon;
+  final double size;       // container (circle) diameter
+  final double imageSize;  // inner image size — increase for small assets
+
+  const _HeaderBadge({
+    required this.assetPath,
+    required this.icon,
+    this.size = 36,
+    this.imageSize = 36,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: const BoxDecoration(
+        color: Color(0xFFF5F5F5),
+        shape: BoxShape.circle,
+      ),
+      child: ClipOval(
+        child: Image.asset(
+          assetPath,
+          width: imageSize,
+          height: imageSize,
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) =>
+              Icon(icon, color: kOrange, size: size * 0.5),
+        ),
+      ),
+    );
+  }
+}
+
+// ── FRONT of ID ──
 class _IdCard1 extends StatelessWidget {
   final ProfileModel profile;
   const _IdCard1({required this.profile});
@@ -1009,27 +1025,30 @@ class _IdCard1 extends StatelessWidget {
       width: double.infinity,
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFEAEAEA), width: 1),
         boxShadow: [
           BoxShadow(
-              color: Colors.black.withOpacity(0.08),
-              blurRadius: 12,
-              offset: const Offset(0, 4))
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 18,
+              offset: const Offset(0, 6))
         ],
       ),
       clipBehavior: Clip.antiAlias,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // ── Orange header band ──
-          Container(
-            color: kOrange,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          // ── Header with both logos ──
+          Padding(
+            padding: const EdgeInsets.fromLTRB(18, 16, 18, 14),
             child: Row(
               children: [
+                // BSU logo — normal size
                 _HeaderBadge(
                   assetPath: 'assets/images/bsu_logo.png',
                   icon: Icons.school,
+                  size: 36,
+                  imageSize: 36,
                 ),
                 const SizedBox(width: 10),
                 const Expanded(
@@ -1039,56 +1058,64 @@ class _IdCard1 extends StatelessWidget {
                       Text('BULACAN STATE UNIVERSITY',
                           textAlign: TextAlign.center,
                           style: TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 12,
-                              letterSpacing: 0.4)),
+                              color: Colors.black87,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 11,
+                              letterSpacing: 0.5)),
                       SizedBox(height: 2),
                       Text('OFFICIAL STUDENT IDENTIFICATION',
                           textAlign: TextAlign.center,
                           style: TextStyle(
-                              color: Colors.white70,
+                              color: Colors.grey,
                               fontWeight: FontWeight.w500,
                               fontSize: 8,
-                              letterSpacing: 0.6)),
+                              letterSpacing: 0.8)),
                     ],
                   ),
                 ),
                 const SizedBox(width: 10),
+                // UPRISE logo — imageSize bumped up so it looks the
+                // same visual weight as the BSU logo despite being a
+                // smaller source asset
                 _HeaderBadge(
                   assetPath: 'assets/images/logo.png',
                   icon: Icons.local_fire_department,
+                  size: 36,
+                  imageSize: 52,  // ← increase/decrease to taste
                 ),
               ],
             ),
           ),
 
-          // ── Photo + name fields, each row paired with its
-          //    corresponding ID detail (last name/student no.,
-          //    first name/program, middle name/major) ──
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 18, 16, 20),
+            padding: const EdgeInsets.symmetric(horizontal: 18),
+            child: Divider(height: 1, color: Colors.grey.shade200),
+          ),
+
+          // ── Photo + name/ID fields ──
+          Padding(
+            padding: const EdgeInsets.fromLTRB(18, 18, 18, 20),
             child: Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 ClipRRect(
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: BorderRadius.circular(12),
                   child: profile.photoUrl.isNotEmpty
                       ? _ProfileImage(
                           photoUrl: profile.photoUrl,
-                          width: 84,
-                          height: 104,
+                          width: 86,
+                          height: 108,
                           errorBuilder: (_, __, ___) => _PhotoPlaceholder(),
                         )
                       : _PhotoPlaceholder(),
                 ),
-                const SizedBox(width: 16),
+                const SizedBox(width: 18),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Expanded(
                             child: _IdFieldWidget(
@@ -1097,7 +1124,7 @@ class _IdCard1 extends StatelessWidget {
                                     ? profile.lastName.toUpperCase()
                                     : '—'),
                           ),
-                          const SizedBox(width: 8),
+                          const SizedBox(width: 10),
                           Expanded(
                             child: _IdFieldWidget(
                                 label: 'STUDENT NO.',
@@ -1107,8 +1134,11 @@ class _IdCard1 extends StatelessWidget {
                           ),
                         ],
                       ),
-                      const SizedBox(height: 11),
+                      const SizedBox(height: 12),
+                      Divider(height: 1, color: Colors.grey.shade100),
+                      const SizedBox(height: 12),
                       Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Expanded(
                             child: _IdFieldWidget(
@@ -1117,7 +1147,7 @@ class _IdCard1 extends StatelessWidget {
                                     ? profile.firstName.toUpperCase()
                                     : '—'),
                           ),
-                          const SizedBox(width: 8),
+                          const SizedBox(width: 10),
                           Expanded(
                             child: _IdFieldWidget(
                                 label: 'PROGRAM',
@@ -1127,8 +1157,11 @@ class _IdCard1 extends StatelessWidget {
                           ),
                         ],
                       ),
-                      const SizedBox(height: 11),
+                      const SizedBox(height: 12),
+                      Divider(height: 1, color: Colors.grey.shade100),
+                      const SizedBox(height: 12),
                       Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Expanded(
                             child: _IdFieldWidget(
@@ -1137,7 +1170,7 @@ class _IdCard1 extends StatelessWidget {
                                     ? profile.middleName.toUpperCase()
                                     : '—'),
                           ),
-                          const SizedBox(width: 8),
+                          const SizedBox(width: 10),
                           Expanded(
                             child: _IdFieldWidget(
                                 label: 'MAJOR',
@@ -1159,7 +1192,7 @@ class _IdCard1 extends StatelessWidget {
   }
 }
 
-// ── BACK of ID: year level, college/department, QR code, validity strip ──
+// ── BACK of ID ──
 class _IdCard2 extends StatelessWidget {
   final ProfileModel profile;
   const _IdCard2({required this.profile});
@@ -1170,32 +1203,33 @@ class _IdCard2 extends StatelessWidget {
       width: double.infinity,
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFEAEAEA), width: 1),
         boxShadow: [
           BoxShadow(
-              color: Colors.black.withOpacity(0.08),
-              blurRadius: 12,
-              offset: const Offset(0, 4))
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 18,
+              offset: const Offset(0, 6))
         ],
       ),
       clipBehavior: Clip.antiAlias,
       child: Column(
         children: [
-          // ── Orange header band ──
-          Container(
-            color: kOrange,
-            padding: const EdgeInsets.symmetric(vertical: 12),
-            alignment: Alignment.center,
-            child: const Text('ACADEMIC INFORMATION',
-                style: TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 11,
-                    letterSpacing: 0.6)),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(18, 16, 18, 0),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Text('ACADEMIC INFORMATION',
+                  style: TextStyle(
+                      color: Colors.grey[500],
+                      fontWeight: FontWeight.w700,
+                      fontSize: 10,
+                      letterSpacing: 1.2)),
+            ),
           ),
 
           Padding(
-            padding: const EdgeInsets.all(18),
+            padding: const EdgeInsets.fromLTRB(18, 16, 18, 18),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
@@ -1208,7 +1242,9 @@ class _IdCard2 extends StatelessWidget {
                           value: profile.yearLevel.isNotEmpty
                               ? profile.yearLevel.toUpperCase()
                               : '—'),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 14),
+                      Divider(height: 1, color: Colors.grey.shade100),
+                      const SizedBox(height: 14),
                       _IdFieldWidget(
                           label: 'COLLEGE / DEPARTMENT',
                           value: profile.department.isNotEmpty
@@ -1217,15 +1253,15 @@ class _IdCard2 extends StatelessWidget {
                     ],
                   ),
                 ),
-                const SizedBox(width: 14),
+                const SizedBox(width: 18),
                 Container(
-                  width: 96,
-                  height: 96,
+                  width: 92,
+                  height: 92,
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
                     color: Colors.white,
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: Colors.grey.shade300),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.grey.shade200),
                   ),
                   child: QrImageView(
                     data: profile.studentId.isNotEmpty
@@ -1239,24 +1275,58 @@ class _IdCard2 extends StatelessWidget {
             ),
           ),
 
-          // ── Validity strip ──
-          Container(
-            width: double.infinity,
-            color: kOrangeLight,
-            padding: const EdgeInsets.symmetric(vertical: 9),
-            alignment: Alignment.center,
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 18),
+            child: Divider(height: 1, color: Colors.grey.shade200),
+          ),
+
+          // ── Validity note + logos at the bottom ──
+          Padding(
+            padding: const EdgeInsets.fromLTRB(18, 12, 18, 14),
             child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                Icon(Icons.verified_outlined, size: 14, color: Colors.green[700]),
-                const SizedBox(width: 6),
-                Text(
-                  'VALID FOR A.Y. ${_currentAcademicYear()} · NON-TRANSFERABLE',
-                  style: TextStyle(
-                      fontSize: 9,
-                      letterSpacing: 0.3,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.grey[700]),
+                Expanded(
+                  child: Row(
+                    children: [
+                      Icon(Icons.verified_outlined,
+                          size: 13, color: Colors.grey[400]),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          'VALID FOR A.Y. ${_currentAcademicYear()} · NON-TRANSFERABLE',
+                          style: TextStyle(
+                              fontSize: 9,
+                              letterSpacing: 0.3,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.grey[400]),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 10),
+                // BSU logo — base size
+                Image.asset(
+                  'assets/images/bsu_logo.png',
+                  width: 22,
+                  height: 22,
+                  fit: BoxFit.contain,
+                  errorBuilder: (_, __, ___) =>
+                      Icon(Icons.school, size: 18, color: Colors.grey[400]),
+                ),
+                const SizedBox(width: 4),
+                // UPRISE logo — slightly larger to compensate for
+                // the smaller source asset
+                Image.asset(
+                  'assets/images/logo.png',
+                  width: 32,   // ← bigger than BSU's 22 to look equal
+                  height: 32,
+                  fit: BoxFit.contain,
+                  errorBuilder: (_, __, ___) => Icon(
+                      Icons.local_fire_department,
+                      size: 18,
+                      color: Colors.grey[400]),
                 ),
               ],
             ),
@@ -1268,59 +1338,302 @@ class _IdCard2 extends StatelessWidget {
 
   String _currentAcademicYear() {
     final now = DateTime.now();
-    // Academic year starts around June/August in PH — adjust the cutoff
-    // month if your school year starts differently.
     final startYear = now.month >= 6 ? now.year : now.year - 1;
     return '$startYear-${startYear + 1}';
   }
 }
 
-// ── Small reusable bits used by the new ID card design ──
-
-class _HeaderBadge extends StatelessWidget {
-  final String assetPath;
-  final IconData icon;
-  const _HeaderBadge({required this.assetPath, required this.icon});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 30,
-      height: 30,
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.25),
-        shape: BoxShape.circle,
-      ),
-      child: ClipOval(
-        child: Image.asset(
-          assetPath,
-          width: 30,
-          height: 30,
-          fit: BoxFit.cover,
-          errorBuilder: (_, __, ___) => Icon(icon, color: Colors.white, size: 16),
-        ),
-      ),
-    );
-  }
-}
+// ─────────────────────────────────────────────────────────────
+// Reusable small widgets
+// ─────────────────────────────────────────────────────────────
 
 class _PhotoPlaceholder extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 84,
-      height: 104,
+      width: 86,
+      height: 108,
       decoration: BoxDecoration(
-        color: const Color(0xFFF5C8A0),
-        borderRadius: BorderRadius.circular(10),
+        color: const Color(0xFFF2F2F2),
+        borderRadius: BorderRadius.circular(12),
       ),
-      child: const Icon(Icons.person, size: 42, color: Colors.white),
+      child: Icon(Icons.person, size: 40, color: Colors.grey[400]),
+    );
+  }
+}
+
+class _EditField extends StatelessWidget {
+  final String label;
+  final TextEditingController controller;
+  final IconData icon;
+  final bool readOnly;
+  final TextInputType keyboardType;
+  final bool isPassword;
+  final bool showPassword;
+  final VoidCallback? onTogglePassword;
+
+  const _EditField({
+    required this.label,
+    required this.controller,
+    required this.icon,
+    this.readOnly = false,
+    this.keyboardType = TextInputType.text,
+    this.isPassword = false,
+    this.showPassword = false,
+    this.onTogglePassword,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label,
+            style: const TextStyle(
+                fontSize: 13,
+                color: Colors.black87,
+                fontWeight: FontWeight.w500)),
+        const SizedBox(height: 6),
+        TextFormField(
+          controller: controller,
+          readOnly: readOnly,
+          keyboardType: keyboardType,
+          obscureText: isPassword && !showPassword,
+          style: TextStyle(
+              fontSize: 14,
+              color: readOnly ? Colors.grey : Colors.black87),
+          decoration: InputDecoration(
+            prefixIcon: Icon(icon, size: 18, color: Colors.grey),
+            suffixIcon: isPassword
+                ? IconButton(
+                    icon: Icon(
+                        showPassword
+                            ? Icons.visibility_off_outlined
+                            : Icons.visibility_outlined,
+                        size: 18,
+                        color: Colors.grey),
+                    onPressed: onTogglePassword,
+                  )
+                : null,
+            filled: true,
+            fillColor: readOnly ? const Color(0xFFF8F8F8) : Colors.white,
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: BorderSide(color: Colors.grey.shade200),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: BorderSide(color: Colors.grey.shade200),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: const BorderSide(color: kOrange),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _MajorDropdownField extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final String? value;
+  final List<String> options;
+  final ValueChanged<String?> onChanged;
+
+  const _MajorDropdownField({
+    required this.label,
+    required this.icon,
+    required this.value,
+    required this.options,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label,
+            style: const TextStyle(
+                fontSize: 13,
+                color: Colors.black87,
+                fontWeight: FontWeight.w500)),
+        const SizedBox(height: 6),
+        DropdownButtonFormField<String>(
+          initialValue: value,
+          icon: const Icon(Icons.keyboard_arrow_down, size: 20),
+          style: const TextStyle(fontSize: 14, color: Colors.black87),
+          decoration: InputDecoration(
+            prefixIcon: Icon(icon, size: 18, color: Colors.grey),
+            hintText: 'Select major',
+            hintStyle:
+                TextStyle(fontSize: 14, color: Colors.grey.shade400),
+            filled: true,
+            fillColor: Colors.white,
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: BorderSide(color: Colors.grey.shade200),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: BorderSide(color: Colors.grey.shade200),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: const BorderSide(color: kOrange),
+            ),
+          ),
+          items: options
+              .map((option) => DropdownMenuItem<String>(
+                    value: option,
+                    child: Text(option),
+                  ))
+              .toList(),
+          onChanged: onChanged,
+        ),
+      ],
+    );
+  }
+}
+
+class _IdFieldWidget extends StatelessWidget {
+  final String label;
+  final String value;
+  const _IdFieldWidget({required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label,
+            style: TextStyle(
+                fontSize: 9,
+                color: Colors.grey[400],
+                letterSpacing: 0.6,
+                fontWeight: FontWeight.w600)),
+        const SizedBox(height: 3),
+        Text(value,
+            style: const TextStyle(
+                fontSize: 13.5,
+                fontWeight: FontWeight.w700,
+                color: Colors.black87,
+                height: 1.2)),
+      ],
+    );
+  }
+}
+
+class _ContactRow extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
+  const _ContactRow(
+      {required this.icon, required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, size: 20, color: Colors.grey),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(label,
+                  style: const TextStyle(
+                      fontSize: 11,
+                      color: Colors.grey,
+                      letterSpacing: 0.5,
+                      fontWeight: FontWeight.w500)),
+              const SizedBox(height: 2),
+              Text(value,
+                  style: const TextStyle(
+                      fontSize: 14, color: Colors.black87)),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _EventCard extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  final String badge;
+  final Color badgeColor;
+  final String imageUrl;
+
+  const _EventCard({
+    required this.title,
+    required this.subtitle,
+    required this.badge,
+    required this.badgeColor,
+    required this.imageUrl,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      contentPadding:
+          const EdgeInsets.symmetric(vertical: 8, horizontal: 0),
+      leading: ClipRRect(
+        borderRadius: BorderRadius.circular(8),
+        child: Image.network(
+          imageUrl,
+          width: 56,
+          height: 56,
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) => Container(
+            width: 56,
+            height: 56,
+            color: Colors.grey[300],
+            child: const Icon(Icons.event, color: Colors.grey),
+          ),
+        ),
+      ),
+      title: Text(title,
+          style: const TextStyle(
+              fontWeight: FontWeight.w600, fontSize: 14)),
+      subtitle: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(subtitle,
+              style: const TextStyle(fontSize: 12, color: Colors.grey)),
+          const SizedBox(height: 4),
+          Container(
+            padding:
+                const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+            decoration: BoxDecoration(
+              color: badgeColor.withOpacity(0.15),
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: Text(badge,
+                style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                    color: badgeColor)),
+          ),
+        ],
+      ),
+      trailing: const Icon(Icons.chevron_right, color: Colors.grey),
+      onTap: () {},
     );
   }
 }
 
 // ─────────────────────────────────────────────────────────────
-// Edit Profile Screen — now split into first / middle / last name
+// Edit Profile Screen
 // ─────────────────────────────────────────────────────────────
 class EditProfileScreen extends StatefulWidget {
   final ProfileModel profile;
@@ -1331,8 +1644,6 @@ class EditProfileScreen extends StatefulWidget {
 }
 
 class _EditProfileScreenState extends State<EditProfileScreen> {
-  // ── Fixed list of majors students can choose from. Add more here
-  //    if the program offers additional tracks. ──
   static const List<String> kMajorOptions = [
     'WMAD',
     'DBA',
@@ -1353,26 +1664,15 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   @override
   void initState() {
     super.initState();
-    _firstNameCtrl =
-        TextEditingController(text: widget.profile.firstName);
-    _middleNameCtrl =
-        TextEditingController(text: widget.profile.middleName);
-    _lastNameCtrl =
-        TextEditingController(text: widget.profile.lastName);
-    _emailCtrl =
-        TextEditingController(text: widget.profile.email);
-    _mobileCtrl =
-        TextEditingController(text: widget.profile.mobile);
-    _addressCtrl =
-        TextEditingController(text: widget.profile.address);
-    _courseCtrl =
-        TextEditingController(text: widget.profile.course);
-    _yearLevelCtrl =
-        TextEditingController(text: widget.profile.yearLevel);
-    _departmentCtrl =
-        TextEditingController(text: widget.profile.department);
-    // Only pre-select if it matches one of the known options —
-    // protects against stale/legacy free-text values in Firestore.
+    _firstNameCtrl = TextEditingController(text: widget.profile.firstName);
+    _middleNameCtrl = TextEditingController(text: widget.profile.middleName);
+    _lastNameCtrl = TextEditingController(text: widget.profile.lastName);
+    _emailCtrl = TextEditingController(text: widget.profile.email);
+    _mobileCtrl = TextEditingController(text: widget.profile.mobile);
+    _addressCtrl = TextEditingController(text: widget.profile.address);
+    _courseCtrl = TextEditingController(text: widget.profile.course);
+    _yearLevelCtrl = TextEditingController(text: widget.profile.yearLevel);
+    _departmentCtrl = TextEditingController(text: widget.profile.department);
     _selectedMajor = kMajorOptions.contains(widget.profile.major)
         ? widget.profile.major
         : null;
@@ -1410,7 +1710,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       department: _departmentCtrl.text.trim(),
     );
 
-    // Update Firebase Auth display name using the composed full name
     final user = FirebaseAuth.instance.currentUser;
     if (user != null) {
       final displayName =
@@ -1425,7 +1724,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       ),
     );
 
-    // Return the new full name when popping
     Navigator.pop(context, widget.profile.fullName);
   }
 
@@ -1450,7 +1748,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       body: SingleChildScrollView(
         child: Column(
           children: [
-            // ── Header preview (live from model) ──
             AnimatedBuilder(
               animation: widget.profile,
               builder: (_, __) => Container(
@@ -1519,7 +1816,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
             const SizedBox(height: 12),
 
-            // ── Personal Information ──
             Container(
               color: Colors.white,
               padding: const EdgeInsets.all(16),
@@ -1568,7 +1864,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
             const SizedBox(height: 12),
 
-            // ── ID Information ──
             Container(
               color: Colors.white,
               padding: const EdgeInsets.all(16),
@@ -1612,7 +1907,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
             const SizedBox(height: 12),
 
-            // ── Contact Information ──
             Container(
               color: Colors.white,
               padding: const EdgeInsets.all(16),
@@ -1707,24 +2001,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
       contentPadding:
           const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       leading: Icon(icon, color: kOrange),
-      title: Text(
-        title,
-        style: const TextStyle(
-          fontWeight: FontWeight.w600,
-          fontSize: 14,
-        ),
-      ),
-      subtitle: Text(
-        subtitle,
-        style: const TextStyle(
-          fontSize: 12,
-          color: Colors.grey,
-        ),
-      ),
-      trailing: const Icon(
-        Icons.chevron_right,
-        color: Colors.grey,
-      ),
+      title: Text(title,
+          style: const TextStyle(
+              fontWeight: FontWeight.w600, fontSize: 14)),
+      subtitle: Text(subtitle,
+          style: const TextStyle(fontSize: 12, color: Colors.grey)),
+      trailing: const Icon(Icons.chevron_right, color: Colors.grey),
       onTap: onTap,
     );
   }
@@ -1741,21 +2023,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
           icon: const Icon(Icons.arrow_back, color: Colors.black),
           onPressed: () => Navigator.pop(context),
         ),
-        title: const Text(
-          'Settings',
-          style: TextStyle(
-            color: Colors.black,
-            fontWeight: FontWeight.w600,
-            fontSize: 18,
-          ),
-        ),
+        title: const Text('Settings',
+            style: TextStyle(
+                color: Colors.black,
+                fontWeight: FontWeight.w600,
+                fontSize: 18)),
       ),
-
       body: SingleChildScrollView(
         child: Column(
           children: [
-
-            // ───────────────── Profile Card ─────────────────
             Container(
               width: double.infinity,
               color: Colors.white,
@@ -1775,29 +2051,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                 size: 42, color: kOrange)
                             : null,
                       ),
-
                       const SizedBox(height: 12),
-
-                      Text(
-                        widget.profile.fullName,
-                        style: const TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-
+                      Text(widget.profile.fullName,
+                          style: const TextStyle(
+                              fontSize: 18, fontWeight: FontWeight.bold)),
                       const SizedBox(height: 4),
-
-                      Text(
-                        widget.profile.email,
-                        style: const TextStyle(
-                          color: Colors.grey,
-                          fontSize: 13,
-                        ),
-                      ),
-
+                      Text(widget.profile.email,
+                          style: const TextStyle(
+                              color: Colors.grey, fontSize: 13)),
                       const SizedBox(height: 16),
-
                       SizedBox(
                         width: double.infinity,
                         child: ElevatedButton(
@@ -1806,8 +2068,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               context,
                               MaterialPageRoute(
                                 builder: (_) => EditProfileScreen(
-                                  profile: widget.profile,
-                                ),
+                                    profile: widget.profile),
                               ),
                             );
                           },
@@ -1815,20 +2076,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             backgroundColor: kOrange,
                             foregroundColor: Colors.white,
                             elevation: 0,
-                            padding: const EdgeInsets.symmetric(
-                              vertical: 14,
-                            ),
+                            padding:
+                                const EdgeInsets.symmetric(vertical: 14),
                             shape: RoundedRectangleBorder(
-                              borderRadius:
-                                  BorderRadius.circular(10),
-                            ),
+                                borderRadius: BorderRadius.circular(10)),
                           ),
-                          child: const Text(
-                            'Edit Profile',
-                            style: TextStyle(
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
+                          child: const Text('Edit Profile',
+                              style:
+                                  TextStyle(fontWeight: FontWeight.w600)),
                         ),
                       ),
                     ],
@@ -1839,12 +2094,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
             const SizedBox(height: 12),
 
-            // ───────────────── General Settings ─────────────────
             Container(
               color: Colors.white,
               child: Column(
                 children: [
-
                   _buildTile(
                     icon: Icons.person_outline,
                     title: 'Admin Profile',
@@ -1853,34 +2106,27 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (_) => EditProfileScreen(
-                            profile: widget.profile,
-                          ),
+                          builder: (_) =>
+                              EditProfileScreen(profile: widget.profile),
                         ),
                       );
                     },
                   ),
-
                   Divider(height: 1, color: Colors.grey.shade200),
-
                   _buildTile(
                     icon: Icons.tune_outlined,
                     title: 'System Preferences',
                     subtitle: 'App settings and behavior',
                     onTap: () {},
                   ),
-
                   Divider(height: 1, color: Colors.grey.shade200),
-
                   _buildTile(
                     icon: Icons.shield_outlined,
                     title: 'Security Settings',
                     subtitle: 'Privacy and protection',
                     onTap: () {},
                   ),
-
                   Divider(height: 1, color: Colors.grey.shade200),
-
                   _buildTile(
                     icon: Icons.history_outlined,
                     title: 'Audit Logs',
@@ -1893,25 +2139,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
             const SizedBox(height: 12),
 
-            // ───────────────── Password Section ─────────────────
             Container(
               color: Colors.white,
               padding: const EdgeInsets.all(16),
               child: Column(
-                crossAxisAlignment:
-                    CrossAxisAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-
-                  const Text(
-                    'Change Password',
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-
+                  const Text('Change Password',
+                      style: TextStyle(
+                          fontSize: 15, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 16),
-
                   _EditField(
                     label: 'Current Password',
                     controller: _currentPwCtrl,
@@ -1919,15 +2156,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     isPassword: true,
                     showPassword: _showCurrentPw,
                     onTogglePassword: () {
-                      setState(() {
-                        _showCurrentPw =
-                            !_showCurrentPw;
-                      });
+                      setState(() => _showCurrentPw = !_showCurrentPw);
                     },
                   ),
-
                   const SizedBox(height: 14),
-
                   _EditField(
                     label: 'New Password',
                     controller: _newPwCtrl,
@@ -1935,24 +2167,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     isPassword: true,
                     showPassword: _showNewPw,
                     onTogglePassword: () {
-                      setState(() {
-                        _showNewPw = !_showNewPw;
-                      });
+                      setState(() => _showNewPw = !_showNewPw);
                     },
                   ),
-
                   const SizedBox(height: 20),
-
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton(
                       onPressed: () {
-                        ScaffoldMessenger.of(context)
-                            .showSnackBar(
+                        ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
-                            content: Text(
-                              'Credentials updated!',
-                            ),
+                            content: Text('Credentials updated!'),
                             backgroundColor: kOrange,
                           ),
                         );
@@ -1962,20 +2187,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         foregroundColor: Colors.white,
                         elevation: 0,
                         padding:
-                            const EdgeInsets.symmetric(
-                          vertical: 15,
-                        ),
+                            const EdgeInsets.symmetric(vertical: 15),
                         shape: RoundedRectangleBorder(
-                          borderRadius:
-                              BorderRadius.circular(10),
-                        ),
+                            borderRadius: BorderRadius.circular(10)),
                       ),
-                      child: const Text(
-                        'Update Credentials',
-                        style: TextStyle(
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
+                      child: const Text('Update Credentials',
+                          style:
+                              TextStyle(fontWeight: FontWeight.w600)),
                     ),
                   ),
                 ],
@@ -1986,282 +2204,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ],
         ),
       ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────
-// Reusable small widgets
-// ─────────────────────────────────────────────────────────────
-
-class _EditField extends StatelessWidget {
-  final String label;
-  final TextEditingController controller;
-  final IconData icon;
-  final bool readOnly;
-  final TextInputType keyboardType;
-  final bool isPassword;
-  final bool showPassword;
-  final VoidCallback? onTogglePassword;
-
-  const _EditField({
-    required this.label,
-    required this.controller,
-    required this.icon,
-    this.readOnly = false,
-    this.keyboardType = TextInputType.text,
-    this.isPassword = false,
-    this.showPassword = false,
-    this.onTogglePassword,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(label,
-            style: const TextStyle(
-                fontSize: 13,
-                color: Colors.black87,
-                fontWeight: FontWeight.w500)),
-        const SizedBox(height: 6),
-        TextFormField(
-          controller: controller,
-          readOnly: readOnly,
-          keyboardType: keyboardType,
-          obscureText: isPassword && !showPassword,
-          style: TextStyle(
-              fontSize: 14,
-              color: readOnly ? Colors.grey : Colors.black87),
-          decoration: InputDecoration(
-            prefixIcon: Icon(icon, size: 18, color: Colors.grey),
-            suffixIcon: isPassword
-                ? IconButton(
-                    icon: Icon(
-                        showPassword
-                            ? Icons.visibility_off_outlined
-                            : Icons.visibility_outlined,
-                        size: 18,
-                        color: Colors.grey),
-                    onPressed: onTogglePassword,
-                  )
-                : null,
-            filled: true,
-            fillColor:
-                readOnly ? const Color(0xFFF8F8F8) : Colors.white,
-            contentPadding: const EdgeInsets.symmetric(
-                horizontal: 12, vertical: 14),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(10),
-              borderSide: BorderSide(color: Colors.grey.shade200),
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(10),
-              borderSide: BorderSide(color: Colors.grey.shade200),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(10),
-              borderSide: const BorderSide(color: kOrange),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-// ── Dropdown field for picking the student's major, styled to match
-//    _EditField above (same label style, icon, border, focus color) ──
-class _MajorDropdownField extends StatelessWidget {
-  final String label;
-  final IconData icon;
-  final String? value;
-  final List<String> options;
-  final ValueChanged<String?> onChanged;
-
-  const _MajorDropdownField({
-    required this.label,
-    required this.icon,
-    required this.value,
-    required this.options,
-    required this.onChanged,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(label,
-            style: const TextStyle(
-                fontSize: 13,
-                color: Colors.black87,
-                fontWeight: FontWeight.w500)),
-        const SizedBox(height: 6),
-        DropdownButtonFormField<String>(
-          initialValue: value,
-          icon: const Icon(Icons.keyboard_arrow_down, size: 20),
-          style: const TextStyle(fontSize: 14, color: Colors.black87),
-          decoration: InputDecoration(
-            prefixIcon: Icon(icon, size: 18, color: Colors.grey),
-            hintText: 'Select major',
-            hintStyle: TextStyle(fontSize: 14, color: Colors.grey.shade400),
-            filled: true,
-            fillColor: Colors.white,
-            contentPadding: const EdgeInsets.symmetric(
-                horizontal: 12, vertical: 14),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(10),
-              borderSide: BorderSide(color: Colors.grey.shade200),
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(10),
-              borderSide: BorderSide(color: Colors.grey.shade200),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(10),
-              borderSide: const BorderSide(color: kOrange),
-            ),
-          ),
-          items: options
-              .map((option) => DropdownMenuItem<String>(
-                    value: option,
-                    child: Text(option),
-                  ))
-              .toList(),
-          onChanged: onChanged,
-        ),
-      ],
-    );
-  }
-}
-
-class _IdFieldWidget extends StatelessWidget {
-  final String label;
-  final String value;
-  const _IdFieldWidget({required this.label, required this.value});
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(label,
-            style: const TextStyle(
-                fontSize: 9,
-                color: Colors.grey,
-                letterSpacing: 0.4,
-                fontWeight: FontWeight.w500)),
-        const SizedBox(height: 2),
-        Text(value,
-            style: const TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.bold,
-                color: Colors.black87)),
-      ],
-    );
-  }
-}
-
-class _ContactRow extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final String value;
-  const _ContactRow(
-      {required this.icon, required this.label, required this.value});
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Icon(icon, size: 20, color: Colors.grey),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(label,
-                  style: const TextStyle(
-                      fontSize: 11,
-                      color: Colors.grey,
-                      letterSpacing: 0.5,
-                      fontWeight: FontWeight.w500)),
-              const SizedBox(height: 2),
-              Text(value,
-                  style: const TextStyle(
-                      fontSize: 14, color: Colors.black87)),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _EventCard extends StatelessWidget {
-  final String title;
-  final String subtitle;
-  final String badge;
-  final Color badgeColor;
-  final String imageUrl;
-
-  const _EventCard({
-    required this.title,
-    required this.subtitle,
-    required this.badge,
-    required this.badgeColor,
-    required this.imageUrl,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return ListTile(
-      contentPadding:
-          const EdgeInsets.symmetric(vertical: 8, horizontal: 0),
-      leading: ClipRRect(
-        borderRadius: BorderRadius.circular(8),
-        child: Image.network(
-          imageUrl,
-          width: 56,
-          height: 56,
-          fit: BoxFit.cover,
-          errorBuilder: (_, __, ___) => Container(
-            width: 56,
-            height: 56,
-            color: Colors.grey[300],
-            child: const Icon(Icons.event, color: Colors.grey),
-          ),
-        ),
-      ),
-      title: Text(title,
-          style: const TextStyle(
-              fontWeight: FontWeight.w600, fontSize: 14)),
-      subtitle: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(subtitle,
-              style:
-                  const TextStyle(fontSize: 12, color: Colors.grey)),
-          const SizedBox(height: 4),
-          Container(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-            decoration: BoxDecoration(
-              color: badgeColor.withOpacity(0.15),
-              borderRadius: BorderRadius.circular(4),
-            ),
-            child: Text(badge,
-                style: TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.bold,
-                    color: badgeColor)),
-          ),
-        ],
-      ),
-      trailing: const Icon(Icons.chevron_right, color: Colors.grey),
-      onTap: () {},
     );
   }
 }
