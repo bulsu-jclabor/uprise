@@ -296,7 +296,7 @@ class OrganizationManagement extends StatefulWidget {
 }
 
 class _OrganizationManagementState extends State<OrganizationManagement> {
-  String _statusFilter = 'All';
+  String _statusFilter = 'Active';
   String _typeFilter = 'All Types';
   int _currentPage = 1;
   static const int _pageSize = 10;
@@ -562,7 +562,7 @@ class _OrganizationManagementState extends State<OrganizationManagement> {
                   children: [
                       Expanded(flex: 3, child: Align(alignment: Alignment.centerLeft, child: _headerCell('ORGANIZATION'))),
                     Expanded(flex: 2, child: Align(alignment: Alignment.centerLeft, child: _headerCell('ADVISERS'))),
-                    Expanded(flex: 1, child: Align(alignment: Alignment.centerLeft, child: _headerCell('TYPE'))),
+                    Expanded(flex: 2, child: Align(alignment: Alignment.centerLeft, child: _headerCell('TYPE'))),
                     Expanded(flex: 1, child: Align(alignment: Alignment.centerLeft, child: _headerCell('STATUS'))),
                     Expanded(flex: 1, child: Align(alignment: Alignment.centerLeft, child: _headerCell('CREATED'))),
                     Expanded(flex: 2, child: Align(alignment: Alignment.centerRight, child: _headerCell('ACTIONS'))),
@@ -748,7 +748,7 @@ class _OrganizationManagementState extends State<OrganizationManagement> {
                 ),
               ),
               Expanded(
-                flex: 1,
+                flex: 2,
                 child: Align(
                   alignment: Alignment.centerLeft,
                   child: _typeBadge(org.type),
@@ -1561,6 +1561,8 @@ class _ViewOrganizationDialog extends StatelessWidget {
 
   const _ViewOrganizationDialog({required this.organization, required this.onEdit, required this.onClose});
 
+
+
   @override
   Widget build(BuildContext context) {
     return Dialog(
@@ -1604,29 +1606,64 @@ class _ViewOrganizationDialog extends StatelessWidget {
               child: SingleChildScrollView(
                 padding: const EdgeInsets.all(28),
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    _OrgAvatar(logoUrl: organization.logoUrl, name: organization.name),
-                    const SizedBox(width: 18),
-                    Expanded(
-                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                        Text(organization.name,
-                            style: GoogleFonts.beVietnamPro(fontSize: 22, fontWeight: FontWeight.w700, color: const Color(0xFF1A202C))),
-                        if (organization.shortName.isNotEmpty)
-                          Padding(
-                            padding: const EdgeInsets.only(top: 6),
-                            child: Text(organization.shortName,
-                                style: GoogleFonts.beVietnamPro(fontSize: 13, color: UpriseColors.darkGray)),
-                          ),
-                        const SizedBox(height: 10),
-                        Wrap(spacing: 8, runSpacing: 8, children: [
-                          _statusBadge(organization.status),
-                          _infoPill('Type', organization.type),
-                          _infoPill('Created', organization.createdAt != null ? DateFormat('MMM d, yyyy').format(organization.createdAt!) : '—'),
-                          _infoPill('Email', organization.orgEmail.isNotEmpty ? organization.orgEmail : '—'),
-                        ]),
-                      ]),
-                    ),
-                  ]),
+                  Row(
+  crossAxisAlignment: CrossAxisAlignment.start,
+  children: [
+    // Left side: Large Logo
+    Container(
+      width: 120,
+      height: 120,
+      decoration: BoxDecoration(
+        color: const Color(0xFFF1F5F9),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE2E6EA)),
+      ),
+      child: _buildLargeLogo(organization.logoUrl, organization.name),
+    ),
+    const SizedBox(width: 24),
+    // Right side: Info
+    Expanded(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text(
+            organization.name,
+            style: GoogleFonts.beVietnamPro(
+              fontSize: 24,
+              fontWeight: FontWeight.w700,
+              color: const Color(0xFF1A202C),
+            ),
+          ),
+          if (organization.shortName.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Text(
+              organization.shortName,
+              style: GoogleFonts.beVietnamPro(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: UpriseColors.primaryDark,
+              ),
+            ),
+          ],
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _statusBadge(organization.status),
+              _typeBadge(organization.type),
+            ],
+          ),
+          const SizedBox(height: 12),
+          if (organization.orgEmail.isNotEmpty) _infoRow(Icons.email_outlined, organization.orgEmail),
+          if (organization.createdAt != null) 
+            _infoRow(Icons.calendar_today_rounded, DateFormat('MMMM d, yyyy').format(organization.createdAt!)),
+        ],
+      ),
+    ),
+  ],
+),
                   const SizedBox(height: 24),
                   _sectionLabel('Description', icon: Icons.description_rounded),
                   Text(
@@ -1736,7 +1773,73 @@ class _ViewOrganizationDialog extends StatelessWidget {
       ),
     );
   }
+
+  Widget _buildLargeLogo(String url, String name) {
+  if (url.isEmpty || url == 'null') return _logoPlaceholder(name);
+  if (url.startsWith('data:')) {
+    try {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(15),
+        child: Image.memory(
+          base64Decode(url.split(',').last),
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) => _logoPlaceholder(name),
+        ),
+      );
+    } catch (_) {
+      return _logoPlaceholder(name);
+    }
+  }
+  return ClipRRect(
+    borderRadius: BorderRadius.circular(15),
+    child: Image.network(
+      url,
+      fit: BoxFit.cover,
+      errorBuilder: (_, __, ___) => _logoPlaceholder(name),
+    ),
+  );
 }
+
+Widget _logoPlaceholder(String name) {
+  final parts = name.split(' ');
+  final initials = parts.length >= 2
+      ? '${parts[0][0]}${parts[1][0]}'.toUpperCase()
+      : (name.isNotEmpty ? name[0].toUpperCase() : '?');
+  return Center(
+    child: Text(
+      initials,
+      style: GoogleFonts.beVietnamPro(
+        fontSize: 32,
+        fontWeight: FontWeight.w700,
+        color: UpriseColors.primaryDark,
+      ),
+    ),
+  );
+}
+
+Widget _infoRow(IconData icon, String text) {
+  return Padding(
+    padding: const EdgeInsets.only(bottom: 6),
+    child: Row(
+      children: [
+        Icon(icon, size: 16, color: UpriseColors.darkGray),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text(
+            text,
+            style: GoogleFonts.beVietnamPro(
+              fontSize: 13,
+              color: const Color(0xFF374151),
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
+}
+}
+
+
 
 Widget _buildOrgImageWidget(String url, {double? width, double? height, BoxFit fit = BoxFit.cover}) {
   if (url.startsWith('data:')) {
