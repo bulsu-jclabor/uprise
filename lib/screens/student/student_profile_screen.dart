@@ -1264,9 +1264,15 @@ class _IdCard2 extends StatelessWidget {
                     border: Border.all(color: Colors.grey.shade200),
                   ),
                   child: QrImageView(
-                    data: profile.studentId.isNotEmpty
-                        ? profile.studentId
-                        : 'N/A',
+                    data: 'BULACAN STATE UNIVERSITY\n'
+                        'STUDENT IDENTIFICATION\n'
+                        '\n'
+                        'Full Name: ${profile.fullName.isNotEmpty ? profile.fullName : 'N/A'}\n'
+                        'Student No: ${profile.studentId.isNotEmpty ? profile.studentId : 'N/A'}\n'
+                        'Program: ${profile.course.isNotEmpty ? profile.course : 'N/A'}\n'
+                        'Major: ${profile.major.isNotEmpty ? profile.major : 'N/A'}\n'
+                        'Year Level: ${profile.yearLevel.isNotEmpty ? profile.yearLevel : 'N/A'}\n'
+                        'College/Department: ${profile.department.isNotEmpty ? profile.department : 'N/A'}',
                     version: QrVersions.auto,
                     backgroundColor: Colors.white,
                   ),
