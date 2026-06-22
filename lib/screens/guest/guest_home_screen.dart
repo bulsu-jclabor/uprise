@@ -102,7 +102,7 @@ class _GuestBottomNav extends StatelessWidget {
 
   static const _items = [
   _NavItem(Icons.home_outlined, Icons.home_rounded, 'Home'),
-  _NavItem(Icons.campaign_outlined, Icons.campaign_rounded, 'Announcements'),
+  _NavItem(Icons.campaign_outlined, Icons.campaign_rounded, 'Announcement'),
   _NavItem(Icons.calendar_today_outlined, Icons.calendar_today_rounded, 'Events'),
   _NavItem(Icons.calendar_month_outlined, Icons.calendar_month_rounded, 'Calendar'),
   _NavItem(Icons.person_outline, Icons.person, 'Profile'),
@@ -348,13 +348,21 @@ class _GuestHomeContentState extends State<_GuestHomeContent> {
 
   void _rebuildFeed() {
     if (!mounted) return;
-    final all = <_FeedItem>[..._annMap.values, ..._evtMap.values];
-    // Pinned announcements float to top, then sort by timestamp desc
-    all.sort((a, b) {
-      if (a.isPinned && !b.isPinned) return -1;
-      if (!a.isPinned && b.isPinned) return 1;
-      return b.timestamp.compareTo(a.timestamp);
-    });
+
+    // Keep events and announcements separate for the two-section layout
+    final evts = _evtMap.values.toList()
+      ..sort((a, b) => (a.eventDate ?? a.timestamp)
+          .compareTo(b.eventDate ?? b.timestamp)); // upcoming first
+
+    final anns = _annMap.values.toList()
+      ..sort((a, b) {
+        if (a.isPinned && !b.isPinned) return -1;
+        if (!a.isPinned && b.isPinned) return 1;
+        return b.timestamp.compareTo(a.timestamp); // newest first
+      });
+
+    // _feed is still used to gate the loading state
+    final all = <_FeedItem>[...evts, ...anns];
     setState(() {
       _feed
         ..clear()
@@ -362,6 +370,19 @@ class _GuestHomeContentState extends State<_GuestHomeContent> {
       _loadingFeed = false;
     });
   }
+
+  List<_FeedItem> get _events =>
+      _evtMap.values.toList()
+        ..sort((a, b) => (a.eventDate ?? a.timestamp)
+            .compareTo(b.eventDate ?? b.timestamp));
+
+  List<_FeedItem> get _announcements =>
+      _annMap.values.toList()
+        ..sort((a, b) {
+          if (a.isPinned && !b.isPinned) return -1;
+          if (!a.isPinned && b.isPinned) return 1;
+          return b.timestamp.compareTo(a.timestamp);
+        });
 
   String _timeAgo(DateTime dt) {
     final diff = DateTime.now().difference(dt);
@@ -390,11 +411,14 @@ class _GuestHomeContentState extends State<_GuestHomeContent> {
 
   @override
   Widget build(BuildContext context) {
+    final events       = _events;
+    final announcements = _announcements;
+
     return Scaffold(
       backgroundColor: const Color(0xFFF0F2F5),
       body: CustomScrollView(
         slivers: [
-          // ── Floating App Bar ──────────────────────────────
+          // ── App Bar ───────────────────────────────────────
           SliverAppBar(
             floating: true,
             snap: true,
@@ -475,7 +499,7 @@ class _GuestHomeContentState extends State<_GuestHomeContent> {
             ),
           ),
 
-          // ── Stories / Quick nav row ───────────────────────
+          // ── Quick nav chips ───────────────────────────────
           SliverToBoxAdapter(
             child: _QuickNavRow(
               isAuthenticated: _isAuthenticated,
@@ -486,48 +510,85 @@ class _GuestHomeContentState extends State<_GuestHomeContent> {
             ),
           ),
 
-          // ── Feed ─────────────────────────────────────────
-          if (_loadingFeed)
+          if (_loadingFeed) ...[
             const SliverFillRemaining(
               child: Center(
                   child: CircularProgressIndicator(color: _kPrimary)),
-            )
-          else if (_feed.isEmpty)
-            const SliverFillRemaining(child: _EmptyFeed())
-          else
-            SliverList(
-              delegate: SliverChildBuilderDelegate(
-                (context, i) {
-                  // Inject "See all events" divider after 4 items
-                  if (i == 4 && _feed.length > 4) {
-                    return _SeeAllBanner(
-                      label: 'See all public events',
-                      icon: Icons.calendar_today_rounded,
-                      color: _kPrimary,
-                      onTap: () => _switchTab(2),
-                    );
-                  }
-                  final idx = i > 4 ? i - 1 : i;
-                  if (idx >= _feed.length) return null;
-                  final item = _feed[idx];
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    child: item.type == _FeedType.announcement
-                        ? _AnnouncementCard(
-                            item: item,
-                            timeAgo: _timeAgo(item.timestamp),
-                            onOrgTap: () => _switchTab(1),
-                          )
-                        : _EventCard(
-                            item: item,
-                            timeAgo: _timeAgo(item.timestamp),
-                            onTap: () => _switchTab(2),
-                          ),
-                  );
-                },
-                childCount: _feed.length + (_feed.length > 4 ? 1 : 0),
+            ),
+          ] else ...[
+
+            // ════════════════════════════════════════════════
+            //  SECTION 1 — UPCOMING EVENTS (horizontal scroll)
+            // ════════════════════════════════════════════════
+            SliverToBoxAdapter(
+              child: _SectionHeader(
+                title: 'Upcoming Events',
+                actionLabel: 'View all',
+                onAction: () => _switchTab(2),
               ),
             ),
+
+            SliverToBoxAdapter(
+              child: events.isEmpty
+                  ? const _EmptySection(
+                      icon: Icons.calendar_today_outlined,
+                      message: 'No upcoming events right now.',
+                    )
+                  : SizedBox(
+                      // card height: 190 image + ~130 content = 320
+                      height: 320,
+                      child: ListView.builder(
+                        scrollDirection: Axis.horizontal,
+                        padding: const EdgeInsets.fromLTRB(14, 0, 14, 12),
+                        itemCount: events.length,
+                        itemBuilder: (_, i) => Padding(
+                          padding: const EdgeInsets.only(right: 14),
+                          child: SizedBox(
+                            width: 260,
+                            child: _EventCard(
+                              item:    events[i],
+                              timeAgo: _timeAgo(events[i].timestamp),
+                              onTap:   () => _switchTab(2),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+            ),
+
+            // ════════════════════════════════════════════════
+            //  SECTION 2 — ANNOUNCEMENTS (vertical feed)
+            // ════════════════════════════════════════════════
+            SliverToBoxAdapter(
+              child: _SectionHeader(
+                title: 'Announcements',
+                actionLabel: 'See all',
+                onAction: () => _switchTab(1),
+              ),
+            ),
+
+            if (announcements.isEmpty)
+              const SliverToBoxAdapter(
+                child: _EmptySection(
+                  icon: Icons.campaign_outlined,
+                  message: 'No announcements yet.',
+                ),
+              )
+            else
+              SliverList(
+                delegate: SliverChildBuilderDelegate(
+                  (_, i) => Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: _AnnouncementCard(
+                      item:     announcements[i],
+                      timeAgo:  _timeAgo(announcements[i].timestamp),
+                      onOrgTap: () => _switchTab(1),
+                    ),
+                  ),
+                  childCount: announcements.length,
+                ),
+              ),
+          ],
 
           const SliverToBoxAdapter(child: SizedBox(height: 90)),
         ],
@@ -1016,7 +1077,18 @@ class _EventCard extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        color: Colors.white,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.09),
+              blurRadius: 10,
+              offset: const Offset(0, 3),
+            ),
+          ],
+        ),
+        clipBehavior: Clip.antiAlias,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -1147,8 +1219,6 @@ class _EventCard extends StatelessWidget {
                 ],
               ),
             ),
-
-            const Divider(height: 1, color: Color(0xFFE4E6EA)),
           ],
         ),
       ),
@@ -1194,56 +1264,6 @@ class _DetailRow extends StatelessWidget {
   }
 }
 
-// ─────────────────────────────────────────────────────────────
-//  SEE ALL BANNER  (feed divider)
-// ─────────────────────────────────────────────────────────────
-class _SeeAllBanner extends StatelessWidget {
-  final String       label;
-  final IconData     icon;
-  final Color        color;
-  final VoidCallback onTap;
-
-  const _SeeAllBanner({
-    required this.label,
-    required this.icon,
-    required this.color,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 8),
-        color: Colors.white,
-        padding: const EdgeInsets.symmetric(
-            horizontal: 16, vertical: 14),
-        child: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: color.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Icon(icon, size: 16, color: color),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(label,
-                  style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
-                      color: color)),
-            ),
-            Icon(Icons.arrow_forward_rounded, size: 18, color: color),
-          ],
-        ),
-      ),
-    );
-  }
-}
 
 // ─────────────────────────────────────────────────────────────
 //  MINI CHIP  (audience badge)
@@ -1275,34 +1295,82 @@ class _MiniChip extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────
-//  EMPTY FEED
+//  SECTION HEADER  (title + "View all" action)
 // ─────────────────────────────────────────────────────────────
-class _EmptyFeed extends StatelessWidget {
-  const _EmptyFeed();
+class _SectionHeader extends StatelessWidget {
+  final String       title;
+  final String       actionLabel;
+  final VoidCallback onAction;
+
+  const _SectionHeader({
+    required this.title,
+    required this.actionLabel,
+    required this.onAction,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
+    return Container(
+      color: const Color(0xFFF0F2F5),
+      padding: const EdgeInsets.fromLTRB(16, 20, 12, 10),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Container(
-            padding: const EdgeInsets.all(24),
-            decoration: const BoxDecoration(
-                color: _kPrimaryBg, shape: BoxShape.circle),
-            child: const Icon(Icons.dynamic_feed_outlined,
-                size: 48, color: _kPrimary),
+          Text(
+            title,
+            style: const TextStyle(
+              fontSize: 17,
+              fontWeight: FontWeight.w800,
+              color: Colors.black87,
+            ),
           ),
-          const SizedBox(height: 20),
-          const Text('No posts yet',
-              style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
-                  color: Colors.black54)),
-          const SizedBox(height: 6),
-          const Text('Events & announcements will appear here.',
-              style:
-                  TextStyle(fontSize: 13, color: Colors.black38)),
+          GestureDetector(
+            onTap: onAction,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  actionLabel,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: _kPrimary,
+                  ),
+                ),
+                const SizedBox(width: 2),
+                const Icon(Icons.arrow_forward_ios_rounded,
+                    size: 11, color: _kPrimary),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+//  EMPTY SECTION  (inline placeholder row)
+// ─────────────────────────────────────────────────────────────
+class _EmptySection extends StatelessWidget {
+  final IconData icon;
+  final String   message;
+
+  const _EmptySection({required this.icon, required this.message});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 28, horizontal: 16),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(icon, size: 22, color: Colors.black26),
+          const SizedBox(width: 10),
+          Text(
+            message,
+            style: const TextStyle(fontSize: 13, color: Colors.black38),
+          ),
         ],
       ),
     );

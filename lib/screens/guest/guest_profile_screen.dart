@@ -30,7 +30,7 @@ import 'guest_participated_events_screen.dart';
 import 'guest_profile_information_screen.dart';
 import 'guest_registered_events_screen.dart';
 import 'guest_settings_screen.dart';
-
+import '../student/student_login.dart';
 // ─────────────────────────────────────────────────────────────
 //  THEME
 // ─────────────────────────────────────────────────────────────
@@ -64,7 +64,8 @@ class _GuestProfileScreenState extends State<GuestProfileScreen> {
   @override
   void initState() {
     super.initState();
-    // Re-render whenever the auth singleton notifies (login / logout).
+    // Re-evaluate whenever GuestAuthService logs in or out so the
+    // Profile tab updates instantly without requiring a hot-restart.
     GuestAuthService().addListener(_onAuthChanged);
     _checkSavedApplication();
   }
@@ -79,11 +80,12 @@ class _GuestProfileScreenState extends State<GuestProfileScreen> {
     if (mounted) _checkSavedApplication();
   }
 
-  /// Priority order:
-  ///   1. GuestAuthService (authenticated login via GuestLoginScreen)
-  ///      → docId is persisted under 'guest_auth_doc_id'
-  ///   2. Legacy visitor self-registration key ('external_request_doc_id')
-  ///      → set when a visitor submits the RegistrationScreen form
+  /// Resolution priority:
+  ///  1. GuestAuthService  — set when the guest logs in via GuestLoginScreen
+  ///                         (persisted under 'guest_auth_doc_id')
+  ///  2. Legacy pref key   — set when a visitor submits the RegistrationScreen
+  ///                         form without logging in (persisted under
+  ///                         'external_request_doc_id')
   Future<void> _checkSavedApplication() async {
     if (mounted) setState(() => _checking = true);
 
@@ -107,6 +109,8 @@ class _GuestProfileScreenState extends State<GuestProfileScreen> {
   }
 
   Future<void> _onWithdraw() async {
+    // Always clear the auth service on any withdraw/logout action so both
+    // storage keys are cleaned up at once.
     await GuestAuthService.clearSession();
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_kPrefKey);
@@ -122,16 +126,17 @@ class _GuestProfileScreenState extends State<GuestProfileScreen> {
       );
     }
 
-    // Not registered yet → show the "no account" landing
+    // Not registered (visitor mode) → show the "no account" landing
     if (_savedDocId == null) {
       return _NotRegisteredScreen(onApply: () => _openRegistration(context));
     }
 
-    // Has a doc ID → stream from Firestore to determine status
+    // Has a doc ID → stream Firestore to determine approval status
     return _ProfileRouter(
       docId:      _savedDocId!,
       onWithdraw: _onWithdraw,
       onApply:    () => _openRegistration(context),
+      onLogout:   _logout,
     );
   }
 
@@ -143,20 +148,35 @@ class _GuestProfileScreenState extends State<GuestProfileScreen> {
       ),
     );
   }
+
+  Future<void> _logout() async {
+  await GuestAuthService.clearSession();
+
+  if (!mounted) return;
+
+  Navigator.of(context).pushAndRemoveUntil(
+    MaterialPageRoute(
+      builder: (_) => const StudentLogin(),
+    ),
+    (route) => false,
+  );
+}
 }
 
 // ─────────────────────────────────────────────────────────────
 //  PROFILE ROUTER  (streams status from Firestore)
 // ─────────────────────────────────────────────────────────────
 class _ProfileRouter extends StatelessWidget {
-  final String       docId;
+  final String docId;
   final VoidCallback onWithdraw;
   final VoidCallback onApply;
+  final VoidCallback onLogout;
 
   const _ProfileRouter({
     required this.docId,
     required this.onWithdraw,
     required this.onApply,
+    required this.onLogout,
   });
 
   @override
@@ -190,6 +210,7 @@ class _ProfileRouter extends StatelessWidget {
             docId:      docId,
             data:       data,
             onWithdraw: onWithdraw,
+            onLogout:   onLogout,
           );
         }
 
@@ -688,11 +709,13 @@ class _ApprovedProfileScreen extends StatelessWidget {
   final String               docId;
   final Map<String, dynamic> data;
   final VoidCallback         onWithdraw;
+  final VoidCallback         onLogout;
 
   const _ApprovedProfileScreen({
     required this.docId,
     required this.data,
     required this.onWithdraw,
+    required this.onLogout,
   });
 
   String get _fullName  => (data['userName']   as String?) ?? 'Guest';
@@ -923,8 +946,7 @@ class _ApprovedProfileScreen extends StatelessWidget {
           ElevatedButton(
             onPressed: () async {
               Navigator.pop(context);
-              await GuestAuthService.clearSession();
-              onWithdraw(); // clears this screen's own pref → back to not-registered state
+              onLogout(); // clears this screen's own pref → back to not-registered state
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: _kOrange,
@@ -1028,7 +1050,6 @@ class RegistrationScreenState extends State<RegistrationScreen>
   final _schoolCtrl    = TextEditingController();
   final _courseCtrl    = TextEditingController();
   final _reasonCtrl    = TextEditingController();
-  String? _classification; // 'BulSUan' or 'Outsider' — determines which events this guest can see
 
   bool _isLoading   = false;
   int  _currentStep = 0;
@@ -1075,10 +1096,6 @@ class RegistrationScreenState extends State<RegistrationScreen>
       }
       if (_reasonCtrl.text.trim().length < 20) {
         _snack('Please describe your purpose in at least 20 characters.');
-        return;
-      }
-      if (_classification == null) {
-        _snack('Please select whether you are a BulSUan or an Outsider.');
         return;
       }
     }
@@ -1150,7 +1167,6 @@ class RegistrationScreenState extends State<RegistrationScreen>
         'phone'       : _phoneCtrl.text.trim(),
         'course'      : _courseCtrl.text.trim(),
         'type'        : 'guest',
-        'classification': _classification,
       });
 
       if (mounted) {
@@ -1225,8 +1241,6 @@ class RegistrationScreenState extends State<RegistrationScreen>
           schoolCtrl: _schoolCtrl,
           courseCtrl: _courseCtrl,
           reasonCtrl: _reasonCtrl,
-          classification: _classification,
-          onClassificationChanged: (v) => setState(() => _classification = v),
           onNext:     _nextStep,
           onBack:     _prevStep,
         );
@@ -1290,14 +1304,10 @@ class _PersonalStep extends StatelessWidget {
 
 class _DetailsStep extends StatelessWidget {
   final TextEditingController schoolCtrl, courseCtrl, reasonCtrl;
-  final String? classification;
-  final ValueChanged<String> onClassificationChanged;
   final VoidCallback onNext, onBack;
   const _DetailsStep({
     required this.schoolCtrl, required this.courseCtrl,
-    required this.reasonCtrl, required this.classification,
-    required this.onClassificationChanged,
-    required this.onNext, required this.onBack,
+    required this.reasonCtrl, required this.onNext, required this.onBack,
   });
 
   @override
@@ -1312,34 +1322,6 @@ class _DetailsStep extends StatelessWidget {
             _Field(label: 'Program / Course', controller: courseCtrl,
                 hint: 'e.g. BSIT, BSCS, BSCPE',
                 icon: Icons.menu_book_outlined, isRequired: false),
-          ]),
-      const SizedBox(height: 14),
-      _FormCard(title: 'Affiliation Type', icon: Icons.badge_outlined,
-          children: [
-            Text(
-              'Are you a BulSUan (BSU student/affiliate) or an Outsider? This determines which events you can see.',
-              style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF6B7280), height: 1.4),
-            ),
-            const SizedBox(height: 12),
-            Row(children: [
-              Expanded(
-                child: _ClassificationOption(
-                  label: 'BulSUan',
-                  icon: Icons.school_rounded,
-                  selected: classification == 'BulSUan',
-                  onTap: () => onClassificationChanged('BulSUan'),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: _ClassificationOption(
-                  label: 'Outsider',
-                  icon: Icons.public_rounded,
-                  selected: classification == 'Outsider',
-                  onTap: () => onClassificationChanged('Outsider'),
-                ),
-              ),
-            ]),
           ]),
       const SizedBox(height: 14),
       _FormCard(title: 'Purpose', icon: Icons.description_outlined,
@@ -1850,39 +1832,6 @@ class _PrimaryBtn extends StatelessWidget {
                     strokeWidth: 2.5, color: Colors.white))
             : Text(label, style: GoogleFonts.beVietnamPro(
                 fontSize: 15, fontWeight: FontWeight.w700)),
-      ),
-    );
-  }
-}
-
-class _ClassificationOption extends StatelessWidget {
-  final String label;
-  final IconData icon;
-  final bool selected;
-  final VoidCallback onTap;
-  const _ClassificationOption({
-    required this.label, required this.icon, required this.selected, required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 160),
-        padding: const EdgeInsets.symmetric(vertical: 14),
-        decoration: BoxDecoration(
-          color: selected ? _kOrangeLight : Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: selected ? _kOrange : const Color(0xFFE2E8F0), width: selected ? 1.5 : 1),
-        ),
-        child: Column(children: [
-          Icon(icon, size: 22, color: selected ? _kOrange : Colors.grey),
-          const SizedBox(height: 6),
-          Text(label, style: GoogleFonts.beVietnamPro(
-              fontSize: 13, fontWeight: FontWeight.w700,
-              color: selected ? _kOrange : Colors.black54)),
-        ]),
       ),
     );
   }
