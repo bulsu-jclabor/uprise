@@ -2773,7 +2773,7 @@ class _ActivityBarChart extends StatelessWidget {
             BarChartRodData(
               toY: data[i].toDouble(),
               color: isSelected ? UpriseColors.primaryDark : UpriseColors.primaryDark.withAlpha(110),
-              width: 14,
+              width: 35,
               borderRadius: BorderRadius.circular(4),
             ),
           ]);
