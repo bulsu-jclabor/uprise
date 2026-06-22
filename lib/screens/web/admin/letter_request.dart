@@ -987,51 +987,83 @@ class _AdminLetterRequestScreenState extends State<AdminLetterRequestScreen> {
   }
 
   void _showViewDialog(Map<String, dynamic> data, String docId) {
-    final status = (data['status'] ?? 'pending').toString();
-    final timestamp = data['timestamp'] as Timestamp?;
-    final date = timestamp != null ? DateFormat('MMM dd, yyyy • hh:mm a').format(timestamp.toDate()) : 'Unknown';
-    final hasAttachment = data['attachmentBase64'] != null && data['attachmentBase64'].toString().isNotEmpty;
-    final fileName = data['attachmentName'] ?? 'attachment';
-    final revisionNote = data['revisionNote'];
-    final message = data['message'];
-    final orgId = data['orgId'] ?? '';
-    final orgName = data['orgName'] ?? 'Unknown';
-    final letterId = data['letterId'] ?? 'N/A';
-    final subject = data['subject'] ?? 'No subject';
+  final status = (data['status'] ?? 'pending').toString();
+  final timestamp = data['timestamp'] as Timestamp?;
+  final date = timestamp != null ? DateFormat('MMM dd, yyyy • hh:mm a').format(timestamp.toDate()) : 'Unknown';
+  final hasAttachment = data['attachmentBase64'] != null && data['attachmentBase64'].toString().isNotEmpty;
+  final fileName = data['attachmentName'] ?? 'attachment';
+  final revisionNote = data['revisionNote'];
+  final message = data['message'];
+  final orgId = data['orgId'] ?? '';
+  final orgName = data['orgName'] ?? 'Unknown';
+  final letterId = data['letterId'] ?? 'N/A';
+  final subject = data['subject'] ?? 'No subject';
 
-    showDialog(
-      context: context,
-      builder: (ctx) => FutureBuilder<String>(
-        future: _fetchOrgLogo(orgId),
-        builder: (context, logoSnapshot) {
-          final logoUrl = logoSnapshot.data ?? '';
-          
-          return Dialog(
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-            child: SizedBox(
-              width: 540,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.fromLTRB(24, 20, 20, 20),
-                    decoration: BoxDecoration(
-                      color: AdminColors.primaryDark,
-                      borderRadius: const BorderRadius.vertical(top: Radius.circular(18)),
-                    ),
-                    child: Row(children: [
+  showDialog(
+    context: context,
+    builder: (ctx) => FutureBuilder<String>(
+      future: _fetchOrgLogo(orgId),
+      builder: (context, logoSnapshot) {
+        final logoUrl = logoSnapshot.data ?? '';
+
+        return Dialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+          child: Container(
+            width: 600,
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.of(context).size.height * 0.88,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // ─── HEADER ──────────────────────────────────────────
+                Container(
+                  padding: const EdgeInsets.fromLTRB(24, 20, 20, 20),
+                  decoration: BoxDecoration(
+                    color: AdminColors.primaryDark,
+                    borderRadius: const BorderRadius.vertical(top: Radius.circular(18)),
+                  ),
+                  child: Row(
+                    children: [
                       Container(
-                        width: 38, height: 38,
-                        decoration: BoxDecoration(color: Colors.white.withAlpha(38), borderRadius: BorderRadius.circular(10)),
-                        child: const Icon(Icons.mail_outline_rounded, color: Colors.white, size: 18),
+                        width: 44,
+                        height: 44,
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: const Icon(Icons.mail_outline_rounded, color: Colors.white, size: 20),
                       ),
                       const SizedBox(width: 14),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(letterId, style: GoogleFonts.beVietnamPro(fontSize: 16, fontWeight: FontWeight.w700, color: Colors.white)),
-                            Text(subject, style: GoogleFonts.beVietnamPro(fontSize: 12, color: Colors.white.withAlpha(166))),
+                            Row(
+                              children: [
+                                Flexible(
+                                  child: Text(
+                                    letterId,
+                                    style: GoogleFonts.beVietnamPro(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w700,
+                                      color: Colors.white,
+                                    ),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                                const SizedBox(width: 10),
+                                _buildStatusBadge(status),
+                              ],
+                            ),
+                            Text(
+                              subject,
+                              style: GoogleFonts.beVietnamPro(
+                                fontSize: 12,
+                                color: Colors.white.withOpacity(0.7),
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
                           ],
                         ),
                       ),
@@ -1039,34 +1071,46 @@ class _AdminLetterRequestScreenState extends State<AdminLetterRequestScreen> {
                         icon: const Icon(Icons.close_rounded, color: Colors.white, size: 20),
                         onPressed: () => Navigator.pop(ctx),
                       ),
-                    ]),
+                    ],
                   ),
-                  SingleChildScrollView(
+                ),
+
+                // ─── BODY ────────────────────────────────────────────
+                Expanded(
+                  child: SingleChildScrollView(
                     padding: const EdgeInsets.all(24),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Row(children: [
-                          _buildStatusBadge(status),
-                          const SizedBox(width: 12),
-                          Icon(Icons.calendar_today_outlined, size: 13, color: const Color(0xFF9AA5B4)),
-                          const SizedBox(width: 4),
-                          Text(date, style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF64748B))),
-                        ]),
+                        // ── Submitted date ──────────────────────────
+                        Row(
+                          children: [
+                            Icon(Icons.calendar_today_outlined, size: 14, color: const Color(0xFF9AA5B4)),
+                            const SizedBox(width: 6),
+                            Text(
+                              date,
+                              style: GoogleFonts.beVietnamPro(
+                                fontSize: 12,
+                                color: const Color(0xFF64748B),
+                              ),
+                            ),
+                          ],
+                        ),
                         const SizedBox(height: 20),
+
+                        // ── Organization card ────────────────────────
                         Container(
-                          width: double.infinity,
                           padding: const EdgeInsets.all(14),
                           decoration: BoxDecoration(
                             color: const Color(0xFFF8F9FB),
-                            borderRadius: BorderRadius.circular(8),
+                            borderRadius: BorderRadius.circular(10),
                             border: Border.all(color: const Color(0xFFE2E6EA)),
                           ),
                           child: Row(
                             children: [
                               Container(
-                                width: 40,
-                                height: 40,
+                                width: 44,
+                                height: 44,
                                 decoration: BoxDecoration(
                                   shape: BoxShape.circle,
                                   border: Border.all(color: const Color(0xFFE2E6EA)),
@@ -1075,15 +1119,15 @@ class _AdminLetterRequestScreenState extends State<AdminLetterRequestScreen> {
                                     ? ClipOval(
                                         child: Image.network(
                                           logoUrl,
-                                          width: 40,
-                                          height: 40,
+                                          width: 44,
+                                          height: 44,
                                           fit: BoxFit.cover,
                                           errorBuilder: (_, __, ___) => _defaultAvatar(),
                                         ),
                                       )
                                     : _defaultAvatar(),
                               ),
-                              const SizedBox(width: 12),
+                              const SizedBox(width: 14),
                               Expanded(
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -1096,13 +1140,14 @@ class _AdminLetterRequestScreenState extends State<AdminLetterRequestScreen> {
                                         color: const Color(0xFF1A202C),
                                       ),
                                     ),
-                                    Text(
-                                      data['orgEmail'] ?? '',
-                                      style: GoogleFonts.beVietnamPro(
-                                        fontSize: 12,
-                                        color: const Color(0xFF64748B),
+                                    if (data['orgEmail'] != null && data['orgEmail'].toString().isNotEmpty)
+                                      Text(
+                                        data['orgEmail'].toString(),
+                                        style: GoogleFonts.beVietnamPro(
+                                          fontSize: 12,
+                                          color: const Color(0xFF64748B),
+                                        ),
                                       ),
-                                    ),
                                   ],
                                 ),
                               ),
@@ -1110,108 +1155,212 @@ class _AdminLetterRequestScreenState extends State<AdminLetterRequestScreen> {
                           ),
                         ),
                         const SizedBox(height: 16),
+
+                        // ── Subject ──────────────────────────────────
                         Container(
-                          width: double.infinity,
                           padding: const EdgeInsets.all(14),
                           decoration: BoxDecoration(
                             color: const Color(0xFFF8F9FB),
-                            borderRadius: BorderRadius.circular(8),
+                            borderRadius: BorderRadius.circular(10),
                             border: Border.all(color: const Color(0xFFE2E6EA)),
                           ),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text('Subject', style: GoogleFonts.beVietnamPro(fontSize: 11, fontWeight: FontWeight.w600, color: const Color(0xFF64748B))),
-                              const SizedBox(height: 6),
-                              Text(subject, style: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF374151))),
+                              Text(
+                                'Subject',
+                                style: GoogleFonts.beVietnamPro(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                  color: const Color(0xFF64748B),
+                                  letterSpacing: 0.4,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                subject,
+                                style: GoogleFonts.beVietnamPro(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w500,
+                                  color: const Color(0xFF1A202C),
+                                ),
+                              ),
                             ],
                           ),
                         ),
+                        const SizedBox(height: 12),
+
+                        // ── Message ──────────────────────────────────
                         if (message != null && message.toString().isNotEmpty) ...[
-                          const SizedBox(height: 12),
                           Container(
-                            width: double.infinity,
                             padding: const EdgeInsets.all(14),
                             decoration: BoxDecoration(
                               color: const Color(0xFFF8F9FB),
-                              borderRadius: BorderRadius.circular(8),
+                              borderRadius: BorderRadius.circular(10),
                               border: Border.all(color: const Color(0xFFE2E6EA)),
                             ),
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text('Message', style: GoogleFonts.beVietnamPro(fontSize: 11, fontWeight: FontWeight.w600, color: const Color(0xFF64748B))),
-                                const SizedBox(height: 6),
-                                Text(message.toString(), style: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF374151))),
+                                Text(
+                                  'Message',
+                                  style: GoogleFonts.beVietnamPro(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                    color: const Color(0xFF64748B),
+                                    letterSpacing: 0.4,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  message.toString(),
+                                  style: GoogleFonts.beVietnamPro(
+                                    fontSize: 13,
+                                    color: const Color(0xFF374151),
+                                    height: 1.5,
+                                  ),
+                                ),
                               ],
                             ),
                           ),
-                        ],
-                        if (revisionNote != null) ...[
                           const SizedBox(height: 12),
+                        ],
+
+                        // ── Revision notes ──────────────────────────
+                        if (revisionNote != null && revisionNote.toString().isNotEmpty) ...[
                           Container(
-                            width: double.infinity,
                             padding: const EdgeInsets.all(14),
                             decoration: BoxDecoration(
-                              color: AdminColors.info.withAlpha(13),
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: AdminColors.info.withAlpha(76)),
+                              color: AdminColors.info.withOpacity(0.06),
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(
+                                color: AdminColors.info.withOpacity(0.2),
+                              ),
                             ),
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text('REVISION NOTES', style: GoogleFonts.beVietnamPro(fontSize: 11, fontWeight: FontWeight.w700, color: AdminColors.info)),
+                                Row(
+                                  children: [
+                                    Icon(Icons.edit_note_rounded, size: 14, color: AdminColors.info),
+                                    const SizedBox(width: 6),
+                                    Text(
+                                      'REVISION NOTES',
+                                      style: GoogleFonts.beVietnamPro(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w700,
+                                        color: AdminColors.info,
+                                        letterSpacing: 0.6,
+                                      ),
+                                    ),
+                                  ],
+                                ),
                                 const SizedBox(height: 6),
-                                Text(revisionNote, style: GoogleFonts.beVietnamPro(fontSize: 13, color: AdminColors.charcoal)),
+                                Text(
+                                  revisionNote.toString(),
+                                  style: GoogleFonts.beVietnamPro(
+                                    fontSize: 13,
+                                    color: const Color(0xFF1A202C),
+                                    height: 1.5,
+                                  ),
+                                ),
                               ],
                             ),
                           ),
+                          const SizedBox(height: 12),
                         ],
+
+                        // ── Attachment ──────────────────────────────
                         if (hasAttachment) ...[
-                          const SizedBox(height: 16),
                           Container(
-                            padding: const EdgeInsets.all(12),
+                            padding: const EdgeInsets.all(14),
                             decoration: BoxDecoration(
-                              color: AdminColors.primaryDark.withAlpha(13),
+                              color: AdminColors.primaryDark.withOpacity(0.04),
                               borderRadius: BorderRadius.circular(10),
-                              border: Border.all(color: AdminColors.primaryDark.withAlpha(51)),
+                              border: Border.all(
+                                color: AdminColors.primaryDark.withOpacity(0.15),
+                              ),
                             ),
-                            child: Row(children: [
-                              Container(
-                                width: 40, height: 40,
-                                decoration: BoxDecoration(color: AdminColors.primaryDark.withAlpha(26), borderRadius: BorderRadius.circular(8)),
-                                child: Icon(_getFileIcon(fileName), color: AdminColors.primaryDark, size: 20),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                                  Text(fileName, style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600, color: AdminColors.charcoal), overflow: TextOverflow.ellipsis),
-                                  if (data['attachmentSize'] != null) Text(data['attachmentSize'], style: GoogleFonts.beVietnamPro(fontSize: 11, color: AdminColors.darkGray)),
-                                ]),
-                              ),
-                              ElevatedButton.icon(
-                                onPressed: () => _viewAttachment(data),
-                                icon: const Icon(Icons.visibility, size: 16),
-                                label: const Text('View'),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: AdminColors.primaryDark,
-                                  foregroundColor: Colors.white,
-                                  elevation: 0,
-                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                            child: Row(
+                              children: [
+                                Container(
+                                  width: 44,
+                                  height: 44,
+                                  decoration: BoxDecoration(
+                                    color: AdminColors.primaryDark.withOpacity(0.10),
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  child: Icon(
+                                    _getFileIcon(fileName),
+                                    color: AdminColors.primaryDark,
+                                    size: 20,
+                                  ),
                                 ),
-                              ),
-                            ]),
+                                const SizedBox(width: 14),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        fileName,
+                                        style: GoogleFonts.beVietnamPro(
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w600,
+                                          color: const Color(0xFF1A202C),
+                                        ),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                      if (data['attachmentSize'] != null)
+                                        Text(
+                                          data['attachmentSize'].toString(),
+                                          style: GoogleFonts.beVietnamPro(
+                                            fontSize: 11,
+                                            color: const Color(0xFF64748B),
+                                          ),
+                                        ),
+                                    ],
+                                  ),
+                                ),
+                                ElevatedButton.icon(
+                                  onPressed: () => _viewAttachment(data),
+                                  icon: const Icon(Icons.open_in_new_rounded, size: 14),
+                                  label: Text(
+                                    'View',
+                                    style: GoogleFonts.beVietnamPro(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: AdminColors.primaryDark,
+                                    foregroundColor: Colors.white,
+                                    elevation: 0,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
                         ],
                       ],
                     ),
                   ),
-                  // Footer buttons sa dialog (View mode) - keep as is
-                  if (status == 'pending' || status == 'revision' || status == 'resubmitted')
-                    Container(
-                      padding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
-                      child: Row(children: [
+                ),
+
+                // ─── FOOTER ──────────────────────────────────────────
+                if (status == 'pending' || status == 'revision' || status == 'resubmitted')
+                  Container(
+                    padding: const EdgeInsets.fromLTRB(24, 16, 24, 20),
+                    decoration: const BoxDecoration(
+                      border: Border(top: BorderSide(color: Color(0xFFE8ECF0))),
+                      color: Color(0xFFF8F9FB),
+                      borderRadius: BorderRadius.vertical(bottom: Radius.circular(18)),
+                    ),
+                    child: Row(
+                      children: [
                         Expanded(
                           child: OutlinedButton.icon(
                             onPressed: () {
@@ -1219,16 +1368,19 @@ class _AdminLetterRequestScreenState extends State<AdminLetterRequestScreen> {
                               _updateStatus(docId, 'rejected', orgName);
                             },
                             icon: const Icon(Icons.cancel_rounded, size: 15),
-                            label: Text('Reject', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600)),
+                            label: Text(
+                              'Reject',
+                              style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600),
+                            ),
                             style: OutlinedButton.styleFrom(
                               foregroundColor: AdminColors.error,
-                              side: BorderSide(color: AdminColors.error),
+                              side: const BorderSide(color: AdminColors.error),
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                               padding: const EdgeInsets.symmetric(vertical: 11),
                             ),
                           ),
                         ),
-                        const SizedBox(width: 8),
+                        const SizedBox(width: 10),
                         Expanded(
                           child: OutlinedButton.icon(
                             onPressed: () {
@@ -1236,16 +1388,19 @@ class _AdminLetterRequestScreenState extends State<AdminLetterRequestScreen> {
                               _requestRevision(data, docId);
                             },
                             icon: const Icon(Icons.edit_note_rounded, size: 15),
-                            label: Text('Revise', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600)),
+                            label: Text(
+                              'Revise',
+                              style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600),
+                            ),
                             style: OutlinedButton.styleFrom(
                               foregroundColor: AdminColors.info,
-                              side: BorderSide(color: AdminColors.info),
+                              side: const BorderSide(color: AdminColors.info),
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                               padding: const EdgeInsets.symmetric(vertical: 11),
                             ),
                           ),
                         ),
-                        const SizedBox(width: 8),
+                        const SizedBox(width: 10),
                         Expanded(
                           child: ElevatedButton.icon(
                             onPressed: () {
@@ -1253,7 +1408,10 @@ class _AdminLetterRequestScreenState extends State<AdminLetterRequestScreen> {
                               _approveWithSigningSchedule(docId, orgName);
                             },
                             icon: const Icon(Icons.check_circle_rounded, size: 15),
-                            label: Text('Approve', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600)),
+                            label: Text(
+                              'Approve',
+                              style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600),
+                            ),
                             style: ElevatedButton.styleFrom(
                               backgroundColor: AdminColors.success,
                               foregroundColor: Colors.white,
@@ -1263,16 +1421,49 @@ class _AdminLetterRequestScreenState extends State<AdminLetterRequestScreen> {
                             ),
                           ),
                         ),
-                      ]),
+                      ],
                     ),
-                ],
-              ),
+                  )
+                else
+                  // Just a close button for approved/rejected/archived
+                  Container(
+                    padding: const EdgeInsets.fromLTRB(24, 16, 24, 20),
+                    decoration: const BoxDecoration(
+                      border: Border(top: BorderSide(color: Color(0xFFE8ECF0))),
+                      color: Color(0xFFF8F9FB),
+                      borderRadius: BorderRadius.vertical(bottom: Radius.circular(18)),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        ElevatedButton(
+                          onPressed: () => Navigator.pop(ctx),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AdminColors.primaryDark,
+                            foregroundColor: Colors.white,
+                            elevation: 0,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 11),
+                          ),
+                          child: Text(
+                            'Close',
+                            style: GoogleFonts.beVietnamPro(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
             ),
-          );
-        },
-      ),
-    );
-  }
+          ),
+        );
+      },
+    ),
+  );
+}
 
   IconData _getFileIcon(String fileName) {
     final extension = fileName.toLowerCase().split('.').last;
