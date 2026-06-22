@@ -5,7 +5,7 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
 class OrgExportPdf {
-  static const PdfColor _accent = PdfColor.fromInt(0xFFEA580C);
+  static const PdfColor _accent = PdfColor.fromInt(0xFFBE4700);
 
   /// Letterhead: UPRISE + CICT + BSU logos, plus the org's own logo when
   /// supplied, sitting above a brand accent rule and a small-caps

@@ -65,8 +65,8 @@ class AdviserInfo {
 // Design Tokens — identical to StudentAccounts / OrgAnnouncements
 // ─────────────────────────────────────────────────────────────────────────────
 class _C {
-  static const Color primaryDark  = Color(0xFFEA580C);
-  static const Color accent       = Color(0xFFF97316);
+  static const Color primaryDark  = Color(0xFFBE4700);
+  static const Color accent       = Color(0xFFDA6937);
 
   static const Color white        = Color(0xFFFFFFFF);
   static const Color surface      = Color(0xFFF8F9FB);

@@ -20,8 +20,8 @@ import '../../../utils/platform_file_utils.dart' as platform_file_utils;
 // Design Tokens
 // ─────────────────────────────────────────────────────────────────────────────
 class _C {
-  static const Color primaryDark = Color(0xFFEA580C);
-  static const Color accent = Color(0xFFF97316);
+  static const Color primaryDark = Color(0xFFBE4700);
+  static const Color accent = Color(0xFFDA6937);
   static const Color white = Color(0xFFFFFFFF);
   static const Color surface = Color(0xFFF8F9FB);
   static const Color pageBg = Color(0xFFFBFCFE);

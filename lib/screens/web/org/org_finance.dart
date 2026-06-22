@@ -13,9 +13,9 @@ import '../../../theme/app_theme.dart';
 
 // ============ COLOR SCHEME ============
 class OrgColors {
-  static const Color primaryDark  = Color(0xFFEA580C);
-  static const Color primaryLight = Color(0xFFFB923C);
-  static const Color accent       = Color(0xFFF97316);
+  static const Color primaryDark  = Color(0xFFBE4700);
+  static const Color primaryLight = Color(0xFFD47A00);
+  static const Color accent       = Color(0xFFDA6937);
   static const Color white        = Color(0xFFFFFFFF);
   static const Color lightGray    = Color(0xFFF8F9FB);
   static const Color mediumGray   = Color(0xFFE8ECF0);

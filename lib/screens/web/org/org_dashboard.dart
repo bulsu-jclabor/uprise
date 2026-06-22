@@ -10,6 +10,7 @@
 //  - Unified "org" role — no officer/adviser split
 
 import 'dart:async';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -41,7 +42,7 @@ class _DS {
   static const double radiusLg = 16;
   static const double radiusPill = 100;
 
-  static const Color primary = Color(0xFFEA580C);
+  static const Color primary = Color(0xFFBE4700);
   static const Color primaryBg = Color(0xFFFEF3C7);
 
   static final cardShadow = [
@@ -1553,14 +1554,18 @@ class _OrgDashboardHomeState extends State<_OrgDashboardHome> {
 
   @override
   Widget build(BuildContext context) {
+    final width = MediaQuery.of(context).size.width;
+    final isMobile = width < 720;
+    final isTablet = width >= 720 && width < 1200;
+
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(28, 24, 28, 32),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildWelcomeHeader(),
+          _buildWelcomeHeader(isMobile),
           const SizedBox(height: 20),
-          _buildStatCards(),
+          _buildStatCards(isMobile, isTablet),
           const SizedBox(height: 20),
           _buildChartCard(),
           const SizedBox(height: 20),
@@ -1587,7 +1592,41 @@ class _OrgDashboardHomeState extends State<_OrgDashboardHome> {
   }
 
   // ── Welcome header ────────────────────────────────────────────────
-  Widget _buildWelcomeHeader() {
+  Widget _buildLivePill() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: Colors.white.withAlpha(22),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.white.withAlpha(45)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 6,
+            height: 6,
+            decoration: const BoxDecoration(
+              color: Color(0xFF4ADE80),
+              shape: BoxShape.circle,
+            ),
+          ),
+          const SizedBox(width: 6),
+          Text(
+            'Live Dashboard',
+            style: GoogleFonts.beVietnamPro(
+              color: Colors.white.withAlpha(220),
+              fontSize: 10,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 0.5,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildWelcomeHeader(bool isMobile) {
     return ClipRRect(
       borderRadius: BorderRadius.circular(16),
       child: Container(
@@ -1641,52 +1680,16 @@ class _OrgDashboardHomeState extends State<_OrgDashboardHome> {
             ),
             Padding(
               padding: const EdgeInsets.fromLTRB(24, 22, 24, 22),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  Expanded(
-                    child: Column(
+              child: isMobile
+                  ? Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 10,
-                            vertical: 5,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withAlpha(22),
-                            borderRadius: BorderRadius.circular(20),
-                            border: Border.all(color: Colors.white.withAlpha(45)),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Container(
-                                width: 6,
-                                height: 6,
-                                decoration: const BoxDecoration(
-                                  color: Color(0xFF4ADE80),
-                                  shape: BoxShape.circle,
-                                ),
-                              ),
-                              const SizedBox(width: 6),
-                              Text(
-                                'Live Dashboard',
-                                style: GoogleFonts.beVietnamPro(
-                                  color: Colors.white.withAlpha(220),
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.w600,
-                                  letterSpacing: 0.5,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
+                        _buildLivePill(),
                         const SizedBox(height: 10),
                         Text(
                           widget.orgName,
                           style: GoogleFonts.beVietnamPro(
-                            fontSize: 24,
+                            fontSize: 22,
                             fontWeight: FontWeight.w800,
                             color: Colors.white,
                             height: 1.1,
@@ -1701,25 +1704,68 @@ class _OrgDashboardHomeState extends State<_OrgDashboardHome> {
                             height: 1.5,
                           ),
                         ),
+                        const SizedBox(height: 16),
+                        Container(
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withAlpha(20),
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(color: Colors.white.withAlpha(35)),
+                          ),
+                          child: const Icon(
+                            Icons.business_rounded,
+                            color: Colors.white,
+                            size: 36,
+                          ),
+                        ),
+                      ],
+                    )
+                  : Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              _buildLivePill(),
+                              const SizedBox(height: 10),
+                              Text(
+                                widget.orgName,
+                                style: GoogleFonts.beVietnamPro(
+                                  fontSize: 24,
+                                  fontWeight: FontWeight.w800,
+                                  color: Colors.white,
+                                  height: 1.1,
+                                ),
+                              ),
+                              const SizedBox(height: 5),
+                              Text(
+                                'Organization Dashboard  •  Welcome back.',
+                                style: GoogleFonts.beVietnamPro(
+                                  fontSize: 12.5,
+                                  color: Colors.white.withAlpha(180),
+                                  height: 1.5,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 20),
+                        Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withAlpha(20),
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(color: Colors.white.withAlpha(35)),
+                          ),
+                          child: const Icon(
+                            Icons.business_rounded,
+                            color: Colors.white,
+                            size: 34,
+                          ),
+                        ),
                       ],
                     ),
-                  ),
-                  const SizedBox(width: 20),
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withAlpha(20),
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: Colors.white.withAlpha(35)),
-                    ),
-                    child: const Icon(
-                      Icons.business_rounded,
-                      color: Colors.white,
-                      size: 34,
-                    ),
-                  ),
-                ],
-              ),
             ),
           ],
         ),
@@ -1728,7 +1774,7 @@ class _OrgDashboardHomeState extends State<_OrgDashboardHome> {
   }
 
   // ── Stat cards ────────────────────────────────────────────────────
-  Widget _buildStatCards() {
+  Widget _buildStatCards(bool isMobile, bool isTablet) {
     Widget streamCard({
       required String label,
       required IconData icon,
@@ -1751,45 +1797,73 @@ class _OrgDashboardHomeState extends State<_OrgDashboardHome> {
       );
     }
 
+    final cardWidgets = [
+      streamCard(
+        label: 'Active Events',
+        icon: Icons.event_rounded,
+        color: OrgColors.info,
+        stream: _approvedEventsStream,
+      ),
+      streamCard(
+        label: 'Pending Proposals',
+        icon: Icons.pending_actions_rounded,
+        color: OrgColors.warning,
+        stream: _pendingProposalsStream,
+      ),
+      streamCard(
+        label: 'Members',
+        icon: Icons.people_rounded,
+        color: OrgColors.success,
+        stream: _membersStream,
+      ),
+      streamCard(
+        label: 'Upcoming Events',
+        icon: Icons.upcoming_rounded,
+        color: OrgColors.primaryDark,
+        stream: _upcomingEventsStream,
+      ),
+      _MerchSalesStatCard(orgId: widget.orgId),
+    ];
+
+    if (isMobile) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          for (var card in cardWidgets) ...[card, const SizedBox(height: 10)],
+        ],
+      );
+    }
+
+    if (isTablet) {
+      final width = MediaQuery.of(context).size.width;
+      return SizedBox(
+        width: double.infinity,
+        child: SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          physics: const BouncingScrollPhysics(),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              for (var i = 0; i < cardWidgets.length; i++) ...[
+                SizedBox(
+                  width: math.min(320.0, width * 0.45),
+                  child: cardWidgets[i],
+                ),
+                if (i != cardWidgets.length - 1) const SizedBox(width: 10),
+              ],
+            ],
+          ),
+        ),
+      );
+    }
+
     return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Expanded(
-          child: streamCard(
-            label: 'Active Events',
-            icon: Icons.event_rounded,
-            color: OrgColors.info,
-            stream: _approvedEventsStream,
-          ),
-        ),
-        const SizedBox(width: 14),
-        Expanded(
-          child: streamCard(
-            label: 'Pending Proposals',
-            icon: Icons.pending_actions_rounded,
-            color: OrgColors.warning,
-            stream: _pendingProposalsStream,
-          ),
-        ),
-        const SizedBox(width: 14),
-        Expanded(
-          child: streamCard(
-            label: 'Members',
-            icon: Icons.people_rounded,
-            color: OrgColors.success,
-            stream: _membersStream,
-          ),
-        ),
-        const SizedBox(width: 14),
-        Expanded(
-          child: streamCard(
-            label: 'Upcoming Events',
-            icon: Icons.upcoming_rounded,
-            color: OrgColors.primaryDark,
-            stream: _upcomingEventsStream,
-          ),
-        ),
-        const SizedBox(width: 14),
-        Expanded(child: _MerchSalesStatCard(orgId: widget.orgId)),
+        for (var i = 0; i < cardWidgets.length; i++) ...[
+          Expanded(child: cardWidgets[i]),
+          if (i != cardWidgets.length - 1) const SizedBox(width: 14),
+        ],
       ],
     );
   }

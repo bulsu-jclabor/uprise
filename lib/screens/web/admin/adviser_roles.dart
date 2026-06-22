@@ -198,26 +198,30 @@ class _OrgAvatar extends StatelessWidget {
   }
 }
 
+// Compact colored chip — matches the icon actions in org_event_proposals.dart
+// / organization_management.dart / student_accounts.dart, instead of a bare
+// unstyled icon.
 class _ActionIcon extends StatelessWidget {
   final IconData icon;
   final String tooltip;
-  final VoidCallback? onTap;
-  final Color? color;
-  const _ActionIcon({required this.icon, required this.tooltip, this.onTap, this.color});
+  final VoidCallback onTap;
+  final Color color;
+  const _ActionIcon({required this.icon, required this.tooltip, required this.onTap, required this.color});
 
   @override
   Widget build(BuildContext context) => Tooltip(
         message: tooltip,
+        waitDuration: const Duration(milliseconds: 400),
         child: InkWell(
           onTap: onTap,
-          borderRadius: BorderRadius.circular(6),
-          child: Padding(
-            padding: const EdgeInsets.all(5),
-            child: Icon(icon,
-                size: 16,
-                color: onTap == null
-                    ? const Color(0xFFD1D5DB)
-                    : (color ?? const Color(0xFF64748B))),
+          borderRadius: BorderRadius.circular(8),
+          child: Container(
+            padding: const EdgeInsets.all(7),
+            decoration: BoxDecoration(
+              color: color.withAlpha(26),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(icon, size: 14, color: color),
           ),
         ),
       );
@@ -685,7 +689,7 @@ class _AdviserRolesState extends State<AdviserRoles> {
       Expanded(flex: 2, child: _headerCell('EMAIL')),
       Expanded(flex: 1, child: _headerCell('PHONE')),
       Expanded(flex: 1, child: _headerCell('POSITION')),
-      Expanded(flex: 1, child: Align(alignment: Alignment.centerRight, child: _headerCell('ACTIONS'))),
+      Expanded(flex: 2, child: Align(alignment: Alignment.centerRight, child: _headerCell('ACTIONS'))),
     ]),
   );
 }
@@ -760,44 +764,55 @@ class _AdviserRolesState extends State<AdviserRoles> {
         ),
         
         // POSITION column
-        // POSITION column
-Expanded(
-  flex: 1,
-  child: Text(position,
-      style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.w500, color: const Color(0xFF374151)),
-      overflow: TextOverflow.ellipsis),
-),
+        Expanded(
+          flex: 1,
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: UpriseColors.primaryDark.withAlpha(18),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Text(position,
+                  style: GoogleFonts.beVietnamPro(
+                      fontSize: 11, fontWeight: FontWeight.w700, color: UpriseColors.primaryDark, letterSpacing: 0.2),
+                  overflow: TextOverflow.ellipsis),
+            ),
+          ),
+        ),
         
         // ACTIONS column
-        // ACTIONS column
-Expanded(
-  flex: 1,
-  child: Row(mainAxisAlignment: MainAxisAlignment.end, children: [
-    _ActionIcon(
-      icon: Icons.visibility_outlined,
-      tooltip: 'View Details',
-      onTap: () => _showViewDialog(data, docId),
-    ),
-    const SizedBox(width: 2),
-    // Only show Edit button if NOT archived
-    if (!archived)
-      _ActionIcon(
-        icon: Icons.edit_outlined,
-        tooltip: 'Edit',
-        color: UpriseColors.primaryDark,
-        onTap: () => _showEditDialog(data, docId),
-      ),
-    if (!archived) const SizedBox(width: 2),
-    _ActionIcon(
-      icon: archived ? Icons.unarchive_outlined : Icons.archive_outlined,
-      tooltip: archived ? 'Restore' : 'Archive',
-      color: const Color(0xFF64748B),
-      onTap: archived
-          ? () => _restoreRecord(docId, data['orgName'] ?? '')
-          : () => _confirmArchive(docId, data['orgName'] ?? ''),
-    ),
-  ]),
-),
+        Expanded(
+          flex: 2,
+          child: Row(mainAxisAlignment: MainAxisAlignment.end, children: [
+            _ActionIcon(
+              icon: Icons.visibility_outlined,
+              tooltip: 'View Details',
+              color: const Color(0xFF3B82F6),
+              onTap: () => _showViewDialog(data, docId),
+            ),
+            // Only show Edit button if NOT archived
+            if (!archived) ...[
+              const SizedBox(width: 6),
+              _ActionIcon(
+                icon: Icons.edit_outlined,
+                tooltip: 'Edit',
+                color: UpriseColors.primaryDark,
+                onTap: () => _showEditDialog(data, docId),
+              ),
+            ],
+            const SizedBox(width: 6),
+            _ActionIcon(
+              icon: archived ? Icons.unarchive_outlined : Icons.archive_outlined,
+              tooltip: archived ? 'Restore' : 'Archive',
+              color: archived ? const Color(0xFF059669) : const Color(0xFF6B7280),
+              onTap: archived
+                  ? () => _restoreRecord(docId, data['orgName'] ?? '')
+                  : () => _confirmArchive(docId, data['orgName'] ?? ''),
+            ),
+          ]),
+        ),
       ]),
     ),
   );
@@ -1475,7 +1490,10 @@ const SizedBox(height: 20),
       onConfirm: () async {
         await FirebaseFirestore.instance.collection('adviser_roles').doc(docId).update({'archived': true});
         await activity_log.ActivityLogger.log(
-            action: 'Archived adviser role for $orgName', module: 'Adviser Roles', severity: 'info');
+            action: 'Archived adviser role for $orgName',
+            module: 'Adviser Roles',
+            severity: 'warning',
+            details: {'docId': docId, 'orgName': orgName});
         _loadMeta();
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -1492,7 +1510,10 @@ const SizedBox(height: 20),
   Future<void> _restoreRecord(String docId, String orgName) async {
     await FirebaseFirestore.instance.collection('adviser_roles').doc(docId).update({'archived': false});
     await activity_log.ActivityLogger.log(
-        action: 'Restored adviser role for $orgName', module: 'Adviser Roles', severity: 'info');
+        action: 'Restored adviser role for $orgName',
+        module: 'Adviser Roles',
+        severity: 'info',
+        details: {'docId': docId, 'orgName': orgName});
     _loadMeta();
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(

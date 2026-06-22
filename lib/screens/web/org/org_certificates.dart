@@ -1074,54 +1074,55 @@ class _CanvasElement {
   );
 }
 
-// Default element sets for each preset
-List<_CanvasElement> _defaultElementsFor(String templateType) {
-  Color accent, textCol;
-  switch (templateType) {
-    case 'Modern Workshop':
-      accent  = const Color(0xFF2563EB);
-      textCol = Colors.white;
-      break;
-    case 'Vibrant Event':
-      accent  = const Color(0xFF10B981);
-      textCol = const Color(0xFFECFDF5);
-      break;
-    default: // Formal Academic
-      accent  = const Color(0xFFEA580C);
-      textCol = const Color(0xFF1A202C);
-  }
+// Default element set, seeded from the same data + theme colors the Live
+// Preview pane already shows — so opening the editor doesn't reset the
+// certificate back to generic placeholder copy and an unrelated palette.
+List<_CanvasElement> _defaultElementsFor({
+  required String orgName,
+  required String eventTitle,
+  required String eventDate,
+  required String signatoryLine,
+  required Color accent,
+  required Color textCol,
+}) {
   return [
     _CanvasElement(id: 'border', type: 'rect',    x: 8,   y: 8,   w: 584, h: 408, fillColor: Colors.transparent, strokeColor: accent, strokeWidth: 2),
-    _CanvasElement(id: 'seal',   type: 'circle',  x: 245, y: 28,  w: 110, h: 110, fillColor: accent.withOpacity(0.12), strokeColor: accent, strokeWidth: 2.5),
-    _CanvasElement(id: 'org',    type: 'text',    x: 0,   y: 44,  w: 600, h: 28,  text: 'ORGANIZATION NAME', fontSize: 11, fontWeight: FontWeight.w700, color: accent, letterSpacing: 3),
-    _CanvasElement(id: 'certof', type: 'text',    x: 0,   y: 148, w: 600, h: 22,  text: 'Certificate of', fontSize: 13, fontWeight: FontWeight.w300, color: textCol.withOpacity(0.75)),
-    _CanvasElement(id: 'certty', type: 'text',    x: 0,   y: 170, w: 600, h: 44,  text: 'PARTICIPATION', fontSize: 30, fontWeight: FontWeight.w800, color: accent, letterSpacing: 2),
-    _CanvasElement(id: 'certfy', type: 'text',    x: 0,   y: 222, w: 600, h: 20,  text: 'This is to certify that', fontSize: 11, color: textCol.withOpacity(0.6)),
+    _CanvasElement(id: 'seal',   type: 'circle',  x: 245, y: 28,  w: 110, h: 110, fillColor: accent.withAlpha(31), strokeColor: accent, strokeWidth: 2.5),
+    _CanvasElement(id: 'org',    type: 'text',    x: 0,   y: 44,  w: 600, h: 28,  text: orgName.toUpperCase(), fontSize: 11, fontWeight: FontWeight.w700, color: accent, letterSpacing: 3),
+    _CanvasElement(id: 'certty', type: 'text',    x: 0,   y: 148, w: 600, h: 34,  text: 'CERTIFICATE', fontSize: 26, fontWeight: FontWeight.w900, color: textCol, letterSpacing: 1),
+    _CanvasElement(id: 'certof', type: 'text',    x: 0,   y: 184, w: 600, h: 20,  text: 'OF PARTICIPATION', fontSize: 13, fontWeight: FontWeight.w700, color: accent, letterSpacing: 3),
+    _CanvasElement(id: 'certfy', type: 'text',    x: 0,   y: 222, w: 600, h: 20,  text: 'This certificate is proudly presented to', fontSize: 11, color: textCol.withAlpha(166)),
     _CanvasElement(id: 'recip',  type: 'text',    x: 0,   y: 244, w: 600, h: 36,  text: '[Recipient Name]', fontSize: 24, fontWeight: FontWeight.w700, color: textCol, italic: true),
-    _CanvasElement(id: 'div1',   type: 'divider', x: 80,  y: 286, w: 440, h: 1,   strokeColor: accent.withOpacity(0.4), strokeWidth: 1),
-    _CanvasElement(id: 'parti',  type: 'text',    x: 0,   y: 295, w: 600, h: 20,  text: 'has successfully participated in', fontSize: 11, color: textCol.withOpacity(0.6)),
-    _CanvasElement(id: 'evtit',  type: 'text',    x: 0,   y: 317, w: 600, h: 28,  text: 'Event Title Here', fontSize: 16, fontWeight: FontWeight.w700, color: textCol),
-    _CanvasElement(id: 'evdat',  type: 'text',    x: 0,   y: 347, w: 600, h: 20,  text: 'held on January 1, 2025', fontSize: 11, color: textCol.withOpacity(0.6)),
+    _CanvasElement(id: 'div1',   type: 'divider', x: 80,  y: 286, w: 440, h: 1,   strokeColor: accent.withAlpha(102), strokeWidth: 1),
+    _CanvasElement(id: 'parti',  type: 'text',    x: 0,   y: 295, w: 600, h: 20,  text: 'for successfully participating in', fontSize: 11, color: textCol.withAlpha(153)),
+    _CanvasElement(id: 'evtit',  type: 'text',    x: 0,   y: 317, w: 600, h: 28,  text: eventTitle, fontSize: 16, fontWeight: FontWeight.w700, color: textCol),
+    _CanvasElement(id: 'evdat',  type: 'text',    x: 0,   y: 347, w: 600, h: 20,  text: 'held on $eventDate', fontSize: 11, color: textCol.withAlpha(153)),
     _CanvasElement(id: 'div2',   type: 'divider', x: 190, y: 375, w: 220, h: 1,   strokeColor: accent, strokeWidth: 1),
-    _CanvasElement(id: 'signa',  type: 'text',    x: 0,   y: 382, w: 600, h: 18,  text: 'Authorized Signatory', fontSize: 10, color: textCol.withOpacity(0.5)),
+    _CanvasElement(id: 'signa',  type: 'text',    x: 0,   y: 382, w: 600, h: 18,  text: signatoryLine, fontSize: 10, color: textCol.withAlpha(128)),
   ];
-}
-
-Color _bgColorFor(String templateType) {
-  switch (templateType) {
-    case 'Modern Workshop': return const Color(0xFF0F172A);
-    case 'Vibrant Event':   return const Color(0xFF065F46);
-    default:                return const Color(0xFFFDF6EC);
-  }
 }
 
 class _CanvaTemplateEditor extends StatefulWidget {
   final String orgId;
   final String initialTemplateType;
+  final String orgName;
+  final String eventTitle;
+  final String eventDate;
+  final String signatoryLine;
+  final Color themeBg;
+  final Color themeAccent;
+  final Color themeText;
   final void Function(String? savedUrl) onSave;
   const _CanvaTemplateEditor({
     required this.orgId,
     required this.initialTemplateType,
+    required this.orgName,
+    required this.eventTitle,
+    required this.eventDate,
+    required this.signatoryLine,
+    required this.themeBg,
+    required this.themeAccent,
+    required this.themeText,
     required this.onSave,
   });
 
@@ -1151,8 +1152,15 @@ class _CanvaTemplateEditorState extends State<_CanvaTemplateEditor> {
   @override
   void initState() {
     super.initState();
-    _elements = _defaultElementsFor(widget.initialTemplateType);
-    _bgColor  = _bgColorFor(widget.initialTemplateType);
+    _elements = _defaultElementsFor(
+      orgName: widget.orgName,
+      eventTitle: widget.eventTitle,
+      eventDate: widget.eventDate,
+      signatoryLine: widget.signatoryLine,
+      accent: widget.themeAccent,
+      textCol: widget.themeText,
+    );
+    _bgColor = widget.themeBg;
   }
 
   _CanvasElement? get _selected =>
@@ -1745,6 +1753,14 @@ class _PropertiesPanel extends StatelessWidget {
             if (sel.type == 'text') ...[
               const SizedBox(height: 16),
               _propTitle(context, 'TEXT'),
+              Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: _ContentField(
+                  key: ValueKey(sel.id),
+                  value: sel.text,
+                  onChanged: (v) => onUpdate(sel.copyWith(text: v)),
+                ),
+              ),
               _PropRow(label: 'Size',    child: _NumField(value: sel.fontSize, onChanged: (v) => onUpdate(sel.copyWith(fontSize: v)))),
               _PropRow(label: 'Color',   child: _ColorSwatch(color: sel.color, onChanged: (c) => onUpdate(sel.copyWith(color: c)))),
               _PropRow(label: 'Align',   child: _AlignDropdown(value: sel.align, onChanged: (a) => onUpdate(sel.copyWith(align: a)))),
@@ -1794,6 +1810,54 @@ class _PropRow extends StatelessWidget {
         Text(label, style: GoogleFonts.beVietnamPro(fontSize: 11, color: colorScheme.onSurfaceVariant)),
         child,
       ]),
+    );
+  }
+}
+
+// Editable text content for the selected canvas element — the actual
+// "fill in the details" field a cert maker needs (recipient name, org
+// name, event title, signatory, etc.), instead of relying on double-
+// clicking the element on the canvas to discover it's editable.
+// Keyed by element id from the parent so switching the selection swaps
+// in a fresh controller, while typing in the same element doesn't reset
+// the cursor on every keystroke rebuild.
+class _ContentField extends StatefulWidget {
+  final String value;
+  final ValueChanged<String> onChanged;
+  const _ContentField({super.key, required this.value, required this.onChanged});
+
+  @override
+  State<_ContentField> createState() => _ContentFieldState();
+}
+
+class _ContentFieldState extends State<_ContentField> {
+  late final TextEditingController _ctrl = TextEditingController(text: widget.value);
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return TextField(
+      controller: _ctrl,
+      maxLines: 3,
+      minLines: 1,
+      style: GoogleFonts.beVietnamPro(fontSize: 12, color: colorScheme.onSurface),
+      onChanged: widget.onChanged,
+      decoration: InputDecoration(
+        isDense: true,
+        hintText: 'Text content…',
+        contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+        filled: true,
+        fillColor: colorScheme.surfaceVariant,
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(4), borderSide: BorderSide(color: colorScheme.outline)),
+        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(4), borderSide: BorderSide(color: colorScheme.outline)),
+        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(4), borderSide: BorderSide(color: colorScheme.primary)),
+      ),
     );
   }
 }
@@ -2046,8 +2110,10 @@ class _GenerateCertificateModalState extends State<_GenerateCertificateModal> {
   String  _certType    = 'Formal Academic';
   bool    _isSubmitting = false;
 
-  // Stream pre-filters to only approved proposals that issue certificates
-  Stream<QuerySnapshot> get _eventsStream => FirebaseFirestore.instance
+  // Pre-filters to only approved proposals that issue certificates. Created
+  // once (not a getter) — re-evaluating .snapshots() on every keystroke was
+  // re-subscribing to Firestore on every rebuild and is what caused the lag.
+  late final Stream<QuerySnapshot> _eventsStream = FirebaseFirestore.instance
       .collection('event_proposals')
       .where('orgId', isEqualTo: widget.orgId)
       .where('status', isEqualTo: 'approved')
@@ -2142,7 +2208,22 @@ class _GenerateCertificateModalState extends State<_GenerateCertificateModal> {
   // Opens the Canva-like editor for the currently selected template type.
   // The editor returns an optional custom templateUrl (if the user saved an
   // image from the canvas); if null is returned the preset name is kept.
+  //
+  // Seeded with exactly what the Live Preview pane is already showing (same
+  // org name / title / date / signatory / theme colors) so the editor opens
+  // on the certificate the user is actually looking at, not a generic preset.
   void _openCanvaEditor() {
+    final theme = _previewTheme;
+    String signatoryLine = 'Authorized Signatory';
+    for (final s in _signatories) {
+      final name = s.nameCtrl.text.trim();
+      if (name.isNotEmpty) {
+        final title = s.titleCtrl.text.trim();
+        signatoryLine = title.isNotEmpty ? '$name, $title' : name;
+        break;
+      }
+    }
+
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -2150,6 +2231,13 @@ class _GenerateCertificateModalState extends State<_GenerateCertificateModal> {
       builder: (_) => _CanvaTemplateEditor(
         orgId: widget.orgId,
         initialTemplateType: _certType,
+        orgName: _orgCtrl.text.trim().isNotEmpty ? _orgCtrl.text.trim() : 'Your Organization',
+        eventTitle: _titleCtrl.text.trim().isNotEmpty ? _titleCtrl.text.trim() : 'Certificate of Participation',
+        eventDate: _dateCtrl.text.trim().isNotEmpty ? _dateCtrl.text.trim() : DateFormat('MMMM dd, yyyy').format(DateTime.now()),
+        signatoryLine: signatoryLine,
+        themeBg: theme['bg'] as Color,
+        themeAccent: theme['accent'] as Color,
+        themeText: theme['text'] as Color,
         onSave: (savedUrl) {
           Navigator.pop(context);
           if (savedUrl != null) setState(() => _selectedTemplateUrl = savedUrl);
@@ -2672,22 +2760,36 @@ class _GenerateCertificateModalState extends State<_GenerateCertificateModal> {
                                 ),
                               ),
                             )
-                          : _CertPreview(
-                              bg:        theme['bg'] as Color,
-                              accent:    theme['accent'] as Color,
-                              textColor: theme['text'] as Color,
-                              orgName:   _orgCtrl.text.isNotEmpty  ? _orgCtrl.text  : 'Your Organization',
-                              eventTitle: _titleCtrl.text.isNotEmpty ? _titleCtrl.text : 'Certificate of Participation',
-                              eventDate:  _dateCtrl.text.isNotEmpty  ? _dateCtrl.text  : DateFormat('MMMM dd, yyyy').format(DateTime.now()),
-                              recipient: '[Recipient Name]',
-                              signatories: _signatories
-                                  .where((s) => s.nameCtrl.text.trim().isNotEmpty)
-                                  .map((s) => _SignatoryPreviewData(
-                                        name: s.nameCtrl.text.trim(),
-                                        title: s.titleCtrl.text.trim(),
-                                        signatureImageBase64: s.signatureImageBase64,
-                                      ))
-                                  .toList(),
+                          // Rendered at its true 600×424 design size (same logical
+                          // canvas size Customize opens to) then scaled as a whole
+                          // via FittedBox — so the proportions always match the
+                          // editor exactly, with nothing cropped off at narrow widths.
+                          : AspectRatio(
+                              aspectRatio: 600 / 424,
+                              child: FittedBox(
+                                fit: BoxFit.contain,
+                                child: SizedBox(
+                                  width: 600,
+                                  height: 424,
+                                  child: _CertPreview(
+                                    bg:        theme['bg'] as Color,
+                                    accent:    theme['accent'] as Color,
+                                    textColor: theme['text'] as Color,
+                                    orgName:   _orgCtrl.text.isNotEmpty  ? _orgCtrl.text  : 'Your Organization',
+                                    eventTitle: _titleCtrl.text.isNotEmpty ? _titleCtrl.text : 'Certificate of Participation',
+                                    eventDate:  _dateCtrl.text.isNotEmpty  ? _dateCtrl.text  : DateFormat('MMMM dd, yyyy').format(DateTime.now()),
+                                    recipient: '[Recipient Name]',
+                                    signatories: _signatories
+                                        .where((s) => s.nameCtrl.text.trim().isNotEmpty)
+                                        .map((s) => _SignatoryPreviewData(
+                                              name: s.nameCtrl.text.trim(),
+                                              title: s.titleCtrl.text.trim(),
+                                              signatureImageBase64: s.signatureImageBase64,
+                                            ))
+                                        .toList(),
+                                  ),
+                                ),
+                              ),
                             ),
                     ]),
                   ),
@@ -2880,22 +2982,9 @@ class _CertPreview extends StatelessWidget {
         boxShadow: [BoxShadow(color: accent.withOpacity(0.08), blurRadius: 12, offset: const Offset(0, 4))],
       ),
       child: Stack(children: [
-        // Decorative corner ribbon, like a real institutional certificate.
         Positioned(
-          top: 27, right: -29,
-          child: Transform.rotate(
-            angle: 0.7853981634, // 45°
-            alignment: Alignment.center,
-            child: Container(
-              width: 56, height: 56,
-              color: accent.withOpacity(0.85),
-            ),
-          ),
-        ),
-        Positioned(
-          top: 12, right: 12,
-          // Sits on the ribbon, so contrast against accent, not the card background.
-          child: Icon(Icons.workspace_premium_rounded, size: 18, color: accent.computeLuminance() > 0.5 ? UpriseColors.charcoal : Colors.white),
+          top: 14, right: 14,
+          child: Icon(Icons.workspace_premium_rounded, size: 20, color: accent.withOpacity(0.55)),
         ),
         Padding(
           padding: const EdgeInsets.fromLTRB(22, 22, 38, 18),
@@ -2954,23 +3043,34 @@ class _CertPreview extends StatelessWidget {
                         runSpacing: 10,
                         children: signatories.map((s) => SizedBox(
                           width: 92,
-                          child: Column(children: [
-                            SizedBox(
-                              height: 26,
-                              child: s.signatureImageBase64 != null
-                                  ? Image.memory(base64Decode(s.signatureImageBase64!), fit: BoxFit.contain)
-                                  : null,
-                            ),
-                            Divider(color: accent.withOpacity(0.4), thickness: 0.8),
-                            const SizedBox(height: 2),
-                            Text(s.name,
-                                style: GoogleFonts.beVietnamPro(fontSize: 9, fontWeight: FontWeight.w700, color: textColor),
-                                textAlign: TextAlign.center, overflow: TextOverflow.ellipsis),
-                            if (s.title.isNotEmpty)
-                              Text(s.title,
-                                  style: GoogleFonts.beVietnamPro(fontSize: 8, color: textColor.withOpacity(0.55)),
-                                  textAlign: TextAlign.center, overflow: TextOverflow.ellipsis),
-                          ]),
+                          // Signature ink sits on top of — overlapping down into —
+                          // the divider and the printed name beneath it, like a
+                          // real signed certificate, instead of in its own box.
+                          child: Stack(
+                            clipBehavior: Clip.none,
+                            alignment: Alignment.topCenter,
+                            children: [
+                              Padding(
+                                padding: const EdgeInsets.only(top: 16),
+                                child: Column(children: [
+                                  Divider(color: accent.withOpacity(0.4), thickness: 0.8),
+                                  const SizedBox(height: 2),
+                                  Text(s.name,
+                                      style: GoogleFonts.beVietnamPro(fontSize: 9, fontWeight: FontWeight.w700, color: textColor),
+                                      textAlign: TextAlign.center, overflow: TextOverflow.ellipsis),
+                                  if (s.title.isNotEmpty)
+                                    Text(s.title,
+                                        style: GoogleFonts.beVietnamPro(fontSize: 8, color: textColor.withOpacity(0.55)),
+                                        textAlign: TextAlign.center, overflow: TextOverflow.ellipsis),
+                                ]),
+                              ),
+                              if (s.signatureImageBase64 != null)
+                                Positioned(
+                                  top: -6,
+                                  child: Image.memory(base64Decode(s.signatureImageBase64!), height: 30, fit: BoxFit.contain),
+                                ),
+                            ],
+                          ),
                         )).toList(),
                       ),
               ),

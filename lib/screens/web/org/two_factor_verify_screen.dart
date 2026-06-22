@@ -85,7 +85,7 @@ class _TwoFactorVerifyScreenState extends State<TwoFactorVerifyScreen> {
                       color: const Color(0xFFFFF3EB),
                       borderRadius: BorderRadius.circular(16),
                     ),
-                    child: const Icon(Icons.shield_outlined, color: Color(0xFFEA580C), size: 32),
+                    child: const Icon(Icons.shield_outlined, color: Color(0xFFBE4700), size: 32),
                   ),
                   const SizedBox(height: 20),
                   Text('Two-Factor Verification',
@@ -121,7 +121,7 @@ class _TwoFactorVerifyScreenState extends State<TwoFactorVerifyScreen> {
                     child: ElevatedButton(
                       onPressed: _verifying ? null : _verify,
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFFEA580C),
+                        backgroundColor: const Color(0xFFBE4700),
                         foregroundColor: Colors.white,
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(11)),
                       ),

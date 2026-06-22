@@ -573,22 +573,25 @@ class _StudentAccountsState extends State<StudentAccounts> {
             ),
             Expanded(
               flex: 2,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: isArchived 
-                      ? const Color(0xFFF3F4F6)
-                      : UpriseColors.primaryDark.withOpacity(0.07),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: Text(
-                  data['course'] ?? '—',
-                  style: GoogleFonts.beVietnamPro(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: isArchived ? const Color(0xFF6B7280) : UpriseColors.primaryDark,
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: isArchived
+                        ? const Color(0xFFF3F4F6)
+                        : UpriseColors.primaryDark.withAlpha(18),
+                    borderRadius: BorderRadius.circular(6),
                   ),
-                  overflow: TextOverflow.ellipsis,
+                  child: Text(
+                    data['course'] ?? '—',
+                    style: GoogleFonts.beVietnamPro(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: isArchived ? const Color(0xFF6B7280) : UpriseColors.primaryDark,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
               ),
             ),
@@ -632,6 +635,7 @@ class _StudentAccountsState extends State<StudentAccounts> {
                     _ActionIconButton(
                       icon: Icons.key_rounded,
                       tooltip: 'View Credentials',
+                      color: const Color(0xFF3B82F6),
                       onTap: () => _showPasswordDialog(
                           data['studentId'] ?? '',
                           data['tempPassword']),
@@ -640,6 +644,7 @@ class _StudentAccountsState extends State<StudentAccounts> {
                     _ActionIconButton(
                       icon: Icons.email_outlined,
                       tooltip: 'Resend Credentials',
+                      color: const Color(0xFF7C3AED),
                       onTap: () => _confirmResendCredentials(
                         docId,
                         data['email'] ?? '',
@@ -1299,7 +1304,8 @@ class _StudentAccountsState extends State<StudentAccounts> {
       await activity_log.ActivityLogger.log(
         action: '${isArchived ? 'Restored' : 'Archived'} student: $studentId ($email)',
         module: 'User Directory',
-        severity: 'info',
+        severity: isArchived ? 'info' : 'warning',
+        details: {'studentDocId': docId, 'studentId': studentId, 'email': email},
       );
       
       if (mounted) {
@@ -1673,7 +1679,7 @@ class _StudentAccountsState extends State<StudentAccounts> {
                     ),
                   ]),
                 ),
-                Expanded(
+                Flexible(
                   child: SingleChildScrollView(
                     padding: const EdgeInsets.all(24),
                     child: Form(
@@ -2346,32 +2352,35 @@ class _StudentAvatar extends StatelessWidget {
   }
 }
 
+// Compact colored chip — matches the icon actions in org_event_proposals.dart
+// (_IconChip) / organization_management.dart, instead of a bare unstyled icon.
 class _ActionIconButton extends StatelessWidget {
   final IconData icon;
   final String tooltip;
-  final VoidCallback? onTap;
-  final Color? color;
+  final VoidCallback onTap;
+  final Color color;
   const _ActionIconButton({
     required this.icon,
     required this.tooltip,
     required this.onTap,
-    this.color,
+    required this.color,
   });
 
   @override
   Widget build(BuildContext context) {
     return Tooltip(
       message: tooltip,
+      waitDuration: const Duration(milliseconds: 400),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(6),
-        child: Padding(
-          padding: const EdgeInsets.all(5),
-          child: Icon(icon,
-              size: 16,
-              color: onTap == null
-                  ? const Color(0xFFD1D5DB)
-                  : (color ?? const Color(0xFF64748B))),
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+          padding: const EdgeInsets.all(7),
+          decoration: BoxDecoration(
+            color: color.withAlpha(26),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Icon(icon, size: 14, color: color),
         ),
       ),
     );

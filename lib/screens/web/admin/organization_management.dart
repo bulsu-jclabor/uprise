@@ -262,6 +262,31 @@ class _BadgeStyle {
   const _BadgeStyle(this.bg, this.fg, this.label);
 }
 
+// Wraps the org type in a highlighted chip instead of plain text — same
+// pattern as the category chip in org_event_proposals.dart.
+Widget _typeBadge(String type) {
+  if (type.isEmpty) {
+    return Text('—', style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFFD1D5DB)));
+  }
+  return Container(
+    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+    decoration: BoxDecoration(
+      color: UpriseColors.primaryDark.withAlpha(18),
+      borderRadius: BorderRadius.circular(6),
+    ),
+    child: Text(
+      type,
+      style: GoogleFonts.beVietnamPro(
+        fontSize: 11,
+        fontWeight: FontWeight.w700,
+        color: UpriseColors.primaryDark,
+        letterSpacing: 0.2,
+      ),
+      overflow: TextOverflow.ellipsis,
+    ),
+  );
+}
+
 // ============ MAIN ORGANIZATION MANAGEMENT WIDGET ============
 class OrganizationManagement extends StatefulWidget {
   const OrganizationManagement({super.key});
@@ -540,7 +565,7 @@ class _OrganizationManagementState extends State<OrganizationManagement> {
                     Expanded(flex: 1, child: Align(alignment: Alignment.centerLeft, child: _headerCell('TYPE'))),
                     Expanded(flex: 1, child: Align(alignment: Alignment.centerLeft, child: _headerCell('STATUS'))),
                     Expanded(flex: 1, child: Align(alignment: Alignment.centerLeft, child: _headerCell('CREATED'))),
-                    SizedBox(width: 140, child: Align(alignment: Alignment.centerRight, child: _headerCell('ACTIONS'))),
+                    Expanded(flex: 2, child: Align(alignment: Alignment.centerRight, child: _headerCell('ACTIONS'))),
                   ],
                 ),
               ),
@@ -726,11 +751,7 @@ class _OrganizationManagementState extends State<OrganizationManagement> {
                 flex: 1,
                 child: Align(
                   alignment: Alignment.centerLeft,
-                  child: Text(
-                    org.type,
-                    style: GoogleFonts.beVietnamPro(fontSize: 12, color: UpriseColors.darkGray),
-                    overflow: TextOverflow.ellipsis,
-                  ),
+                  child: _typeBadge(org.type),
                 ),
               ),
               Expanded(
@@ -750,8 +771,8 @@ class _OrganizationManagementState extends State<OrganizationManagement> {
                   ),
                 ),
               ),
-              SizedBox(
-                width: 140,
+              Expanded(
+                flex: 2,
                 child: Align(
                   alignment: Alignment.centerRight,
                   child: Row(
@@ -762,19 +783,21 @@ class _OrganizationManagementState extends State<OrganizationManagement> {
                         icon: Icons.open_in_new_rounded,
                         tooltip: 'View Details',
                         onTap: () => _showViewOrganizationDialog(org),
+                        color: const Color(0xFF3B82F6),
                       ),
                       const SizedBox(width: 6),
                       _ActionIconButton(
                         icon: Icons.edit_rounded,
                         tooltip: 'Edit',
                         onTap: () => _showEditOrganizationDialog(org),
+                        color: UpriseColors.primaryDark,
                       ),
                       const SizedBox(width: 6),
                       _ActionIconButton(
                         icon: org.status == 'archived' ? Icons.restore_rounded : Icons.archive_rounded,
                         tooltip: org.status == 'archived' ? 'Restore' : 'Archive',
                         onTap: () => _toggleArchiveOrganization(org),
-                        color: org.status == 'archived' ? const Color(0xFF059669) : const Color(0xFF9AA5B4),
+                        color: org.status == 'archived' ? const Color(0xFF059669) : const Color(0xFF6B7280),
                       ),
                     ],
                   ),
@@ -837,10 +860,7 @@ class _OrganizationManagementState extends State<OrganizationManagement> {
                         children: [
                           _statusBadge(org.status),
                           const SizedBox(width: 8),
-                          Text(
-                            org.type,
-                            style: GoogleFonts.beVietnamPro(fontSize: 12, color: UpriseColors.darkGray),
-                          ),
+                          _typeBadge(org.type),
                         ],
                       ),
                     ],
@@ -883,19 +903,21 @@ class _OrganizationManagementState extends State<OrganizationManagement> {
                       icon: Icons.open_in_new_rounded,
                       tooltip: 'View Details',
                       onTap: () => _showViewOrganizationDialog(org),
+                      color: const Color(0xFF3B82F6),
                     ),
                     const SizedBox(width: 6),
                     _ActionIconButton(
                       icon: Icons.edit_rounded,
                       tooltip: 'Edit',
                       onTap: () => _showEditOrganizationDialog(org),
+                      color: UpriseColors.primaryDark,
                     ),
                     const SizedBox(width: 6),
                     _ActionIconButton(
                       icon: org.status == 'archived' ? Icons.restore_rounded : Icons.archive_rounded,
                       tooltip: org.status == 'archived' ? 'Restore' : 'Archive',
                       onTap: () => _toggleArchiveOrganization(org),
-                      color: org.status == 'archived' ? const Color(0xFF059669) : const Color(0xFF9AA5B4),
+                      color: org.status == 'archived' ? const Color(0xFF059669) : const Color(0xFF6B7280),
                     ),
                   ],
                 ),
@@ -1013,6 +1035,8 @@ class _OrganizationManagementState extends State<OrganizationManagement> {
           await ActivityLogger.log(
             action: '${isArchived ? 'Restored' : 'Archived'} organization: ${org.name}',
             module: 'Organizations',
+            severity: isArchived ? 'info' : 'warning',
+            details: {'orgId': org.id, 'orgName': org.name, 'newStatus': newStatus},
           );
           setState(() {});
           ScaffoldMessenger.of(context).showSnackBar(
@@ -1371,63 +1395,31 @@ class _OrgAvatar extends StatelessWidget {
 }
 
 // ============ ACTION ICON BUTTON ============
+// Compact colored chip — same size/shape as the icon actions in
+// org_event_proposals.dart (_IconChip), instead of the old 36×36
+// mostly-neutral button that barely fit 3-in-a-row in the actions column.
 class _ActionIconButton extends StatelessWidget {
   final IconData icon;
   final String tooltip;
   final VoidCallback onTap;
-  final Color? color;
-  const _ActionIconButton({required this.icon, required this.tooltip, required this.onTap, this.color});
+  final Color color;
+  const _ActionIconButton({required this.icon, required this.tooltip, required this.onTap, required this.color});
 
   @override
   Widget build(BuildContext context) {
-    final bool isAccent = color != null;
-    final Color baseColor = isAccent ? color! : const Color(0xFF475569);
-    final Color background = isAccent ? baseColor.withOpacity(0.16) : const Color(0xFFF7F9FC);
-    final Color iconColor = isAccent ? baseColor : const Color(0xFF334155);
-    final Color borderColor = isAccent ? baseColor.withOpacity(0.18) : const Color(0xFFD1D9E2);
-
     return Tooltip(
       message: tooltip,
-      waitDuration: const Duration(milliseconds: 250),
-      showDuration: const Duration(seconds: 2),
-      textStyle: GoogleFonts.beVietnamPro(fontSize: 12, color: Colors.white, fontWeight: FontWeight.w500),
-      decoration: BoxDecoration(
-        color: UpriseColors.primaryDark,
+      waitDuration: const Duration(milliseconds: 400),
+      child: InkWell(
+        onTap: onTap,
         borderRadius: BorderRadius.circular(8),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.15),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
+        child: Container(
+          padding: const EdgeInsets.all(7),
+          decoration: BoxDecoration(
+            color: color.withAlpha(26),
+            borderRadius: BorderRadius.circular(8),
           ),
-        ],
-      ),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(14),
-          splashColor: iconColor.withOpacity(0.12),
-          hoverColor: iconColor.withOpacity(0.08),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 180),
-            width: 36,
-            height: 36,
-            decoration: BoxDecoration(
-              color: background,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: borderColor, width: 1.1),
-              boxShadow: [
-                BoxShadow(
-                  color: const Color(0xFF334155).withOpacity(0.05),
-                  blurRadius: 8,
-                  offset: const Offset(0, 3),
-                ),
-              ],
-            ),
-            child: Center(child: Icon(icon, size: 14, color: iconColor)),
-          ),
+          child: Icon(icon, size: 14, color: color),
         ),
       ),
     );

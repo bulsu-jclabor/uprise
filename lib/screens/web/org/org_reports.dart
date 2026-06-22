@@ -31,7 +31,7 @@ class _DS {
   static const double radiusPill = 100;
 
   // Brand amber
-  static const Color primary = Color(0xFFEA580C);
+  static const Color primary = Color(0xFFBE4700);
   static const Color primaryBg = Color(0xFFFEF3C7);
 
   static final cardShadow = [

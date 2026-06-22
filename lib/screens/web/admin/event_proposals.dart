@@ -605,23 +605,26 @@ class _EventProposalsState extends State<EventProposals> {
                   ],
                 ),
               ),
-              // CATEGORY column (unchanged)
+              // CATEGORY column
               Expanded(
                 flex: 2,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: UpriseColors.primaryDark.withOpacity(0.07),
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: Text(
-                    data['category'] ?? '—',
-                    style: GoogleFonts.beVietnamPro(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: UpriseColors.primaryDark,
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: UpriseColors.primaryDark.withAlpha(18),
+                      borderRadius: BorderRadius.circular(6),
                     ),
-                    overflow: TextOverflow.ellipsis,
+                    child: Text(
+                      data['category'] ?? '—',
+                      style: GoogleFonts.beVietnamPro(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: UpriseColors.primaryDark,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
                 ),
               ),
@@ -657,6 +660,7 @@ class _EventProposalsState extends State<EventProposals> {
                     _ActionIconButton(
                       icon: Icons.visibility_outlined,
                       tooltip: 'View Details',
+                      color: const Color(0xFF3B82F6),
                       onTap: () => _showProposalDetailDialog(docId, data),
                     ),
                     const SizedBox(width: 4),
@@ -2248,32 +2252,36 @@ class _ExportProposalsButton extends StatelessWidget {
   }
 }
 
+// Compact colored chip — matches the icon actions in org_event_proposals.dart
+// / organization_management.dart / student_accounts.dart / adviser_roles.dart,
+// instead of a bare unstyled icon.
 class _ActionIconButton extends StatelessWidget {
   final IconData icon;
   final String tooltip;
-  final VoidCallback? onTap;
-  final Color? color;
+  final VoidCallback onTap;
+  final Color color;
   const _ActionIconButton({
     required this.icon,
     required this.tooltip,
     required this.onTap,
-    this.color,
+    required this.color,
   });
 
   @override
   Widget build(BuildContext context) {
     return Tooltip(
       message: tooltip,
+      waitDuration: const Duration(milliseconds: 400),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(6),
-        child: Padding(
-          padding: const EdgeInsets.all(5),
-          child: Icon(icon,
-              size: 16,
-              color: onTap == null
-                  ? const Color(0xFFD1D5DB)
-                  : (color ?? const Color(0xFF64748B))),
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+          padding: const EdgeInsets.all(7),
+          decoration: BoxDecoration(
+            color: color.withAlpha(26),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Icon(icon, size: 14, color: color),
         ),
       ),
     );

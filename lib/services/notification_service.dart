@@ -3,6 +3,25 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 class NotificationService {
   static final _db = FirebaseFirestore.instance;
 
+  // Respects the recipient's `users/{uid}/settings/notifications` document
+  // (the same doc org_settings.dart / student settings write to). Users who
+  // never opened settings have no doc yet, so default to enabled.
+  static Future<bool> _isEnabledFor(String userId) async {
+    try {
+      final doc = await _db
+          .collection('users')
+          .doc(userId)
+          .collection('settings')
+          .doc('notifications')
+          .get();
+      final data = doc.data();
+      if (data == null) return true;
+      return (data['push_notifications'] ?? true) as bool;
+    } catch (_) {
+      return true;
+    }
+  }
+
   // Send a single notification to a specific user
   static Future<void> sendToUser({
     required String userId,
@@ -12,6 +31,7 @@ class NotificationService {
     String orgId = '',
     Map<String, dynamic>? data,
   }) async {
+    if (!await _isEnabledFor(userId)) return;
     await _db.collection('notifications').add({
       'userId': userId,
       'orgId': orgId,
@@ -37,8 +57,14 @@ class NotificationService {
         .where('orgId', isEqualTo: orgId)
         .get();
 
+    final enabledFlags = await Future.wait(
+      membersSnap.docs.map((doc) => _isEnabledFor(doc.id)),
+    );
+
     final batch = _db.batch();
-    for (final doc in membersSnap.docs) {
+    for (var i = 0; i < membersSnap.docs.length; i++) {
+      if (!enabledFlags[i]) continue;
+      final doc = membersSnap.docs[i];
       final ref = _db.collection('notifications').doc();
       batch.set(ref, {
         'userId': doc.id,
@@ -68,8 +94,14 @@ class NotificationService {
         .collection('attendees')
         .get();
 
+    final enabledFlags = await Future.wait(
+      attendeesSnap.docs.map((doc) => _isEnabledFor(doc.id)),
+    );
+
     final batch = _db.batch();
-    for (final doc in attendeesSnap.docs) {
+    for (var i = 0; i < attendeesSnap.docs.length; i++) {
+      if (!enabledFlags[i]) continue;
+      final doc = attendeesSnap.docs[i];
       final ref = _db.collection('notifications').doc();
       batch.set(ref, {
         'userId': doc.id,

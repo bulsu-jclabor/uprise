@@ -21,7 +21,7 @@ class _DS {
 
   static final cardShadow = [
     BoxShadow(
-      color: Colors.black.withOpacity(0.06),
+      color: Colors.black.withAlpha(15),
       blurRadius: 12,
       offset: const Offset(0, 4),
     ),
@@ -118,51 +118,41 @@ class _OrgSettingsScreenState extends State<OrgSettingsScreen>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // ── Page header ──────────────────────────────────────
-        Padding(
-          padding: EdgeInsets.fromLTRB(horizontalPadding, 24, horizontalPadding, 0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Settings',
-                style: GoogleFonts.beVietnamPro(
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                    color: UpriseColors.accent),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                'Manage your account and notification preferences',
-                style: GoogleFonts.beVietnamPro(
-                    fontSize: 13, color: const Color(0xFF64748B)),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 24),
+        const SizedBox(height: 20),
 
-        // ── Tab bar (standard bottom border, consistent colors) ──
+        // ── Tab bar (rounded pill, smooth sliding indicator) ──
         Padding(
           padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
           child: Container(
-            decoration: const BoxDecoration(
-              border: Border(
-                  bottom: BorderSide(color: UpriseColors.primaryLight)),
+            padding: const EdgeInsets.all(4),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF8F9FB),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xFFE2E6EA)),
             ),
             child: TabBar(
               controller: _tabController,
-              labelColor: UpriseColors.primaryDark,
+              indicator: BoxDecoration(
+                color: UpriseColors.primaryDark,
+                borderRadius: BorderRadius.circular(9),
+              ),
+              indicatorSize: TabBarIndicatorSize.tab,
+              dividerColor: Colors.transparent,
+              splashBorderRadius: BorderRadius.circular(9),
+              labelColor: Colors.white,
               unselectedLabelColor: const Color(0xFF64748B),
-              indicatorColor: UpriseColors.primaryDark,
+              labelStyle: GoogleFonts.beVietnamPro(
+                  fontSize: 13, fontWeight: FontWeight.w600),
+              unselectedLabelStyle: GoogleFonts.beVietnamPro(
+                  fontSize: 13, fontWeight: FontWeight.w500),
               tabs: const [
-                Tab(text: 'Notifications'),
-                Tab(text: 'Security'),
+                Tab(height: 38, text: 'Notifications'),
+                Tab(height: 38, text: 'Security'),
               ],
             ),
           ),
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 20),
 
         // ── Tab views ────────────────────────────────────────
         Expanded(
@@ -307,7 +297,7 @@ class _NotificationsTabState extends State<_NotificationsTab> {
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(8)),
                   ),
-                  child: const Text('Restore Defaults'),
+                  child: Text('Restore Defaults', style: GoogleFonts.beVietnamPro(fontSize: 13)),
                 ),
                 const SizedBox(width: 12),
                 ElevatedButton(
@@ -318,7 +308,9 @@ class _NotificationsTabState extends State<_NotificationsTab> {
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(8)),
                   ),
-                  child: const Text('Save Changes'),
+                  child: Text('Save Changes',
+                      style: GoogleFonts.beVietnamPro(
+                          fontSize: 13, fontWeight: FontWeight.w600)),
                 ),
               ],
             ),
@@ -573,7 +565,7 @@ class _SecurityTabState extends State<_SecurityTab> {
                     children: [
                       TextButton(
                         onPressed: verifying ? null : () => Navigator.pop(ctx, false),
-                        child: const Text('Cancel'),
+                        child: Text('Cancel', style: GoogleFonts.beVietnamPro()),
                       ),
                       const SizedBox(width: 8),
                       ElevatedButton(
@@ -586,7 +578,7 @@ class _SecurityTabState extends State<_SecurityTab> {
                             ? const SizedBox(
                                 width: 16, height: 16,
                                 child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                            : const Text('Verify & Enable'),
+                            : Text('Verify & Enable', style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.w600)),
                       ),
                     ],
                   ),
@@ -669,7 +661,7 @@ class _SecurityTabState extends State<_SecurityTab> {
             ],
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text('Cancel', style: GoogleFonts.beVietnamPro())),
             ElevatedButton(
               style: ElevatedButton.styleFrom(backgroundColor: UpriseColors.error, foregroundColor: Colors.white),
               onPressed: () {
@@ -679,7 +671,7 @@ class _SecurityTabState extends State<_SecurityTab> {
                   setDialogState(() => error = 'Incorrect code');
                 }
               },
-              child: const Text('Disable'),
+              child: Text('Disable', style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.w600)),
             ),
           ],
         ),
@@ -824,7 +816,9 @@ class _SecurityTabState extends State<_SecurityTab> {
                                   child: CircularProgressIndicator(
                                       strokeWidth: 2, color: Colors.white))
                               : const Icon(Icons.lock_outline, size: 16),
-                          label: const Text('Update Password'),
+                          label: Text('Update Password',
+                              style: GoogleFonts.beVietnamPro(
+                                  fontSize: 13, fontWeight: FontWeight.w600)),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: UpriseColors.primaryDark,
                             foregroundColor: Colors.white,
@@ -893,10 +887,10 @@ class _SecurityTabState extends State<_SecurityTab> {
                 Container(
                   padding: const EdgeInsets.all(14),
                   decoration: BoxDecoration(
-                    color: UpriseColors.info.withOpacity(0.08),
+                    color: UpriseColors.info.withAlpha(20),
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(
-                        color: UpriseColors.info.withOpacity(0.2)),
+                        color: UpriseColors.info.withAlpha(51)),
                   ),
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -938,21 +932,38 @@ class _SecurityTabState extends State<_SecurityTab> {
                         color: const Color(0xFF1A202C))),
                 const SizedBox(height: 16),
                 StreamBuilder<QuerySnapshot>(
+                  // Filtered by orgId (matches the existing orgId+timestamp
+                  // composite index) instead of user+severity, which has no
+                  // index and previously made this query fail silently and
+                  // spin forever.
                   stream: FirebaseFirestore.instance
                       .collection('activity_logs')
-                      .where('user',
-                          isEqualTo:
-                              FirebaseAuth.instance.currentUser?.email ?? '')
-                      .where('severity', isEqualTo: 'security')
+                      .where('orgId', isEqualTo: widget.orgId)
                       .orderBy('timestamp', descending: true)
-                      .limit(10)
+                      .limit(50)
                       .snapshots(),
                   builder: (context, snap) {
+                    if (snap.hasError) {
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 24),
+                        child: Center(
+                          child: Text('Could not load security activity',
+                              style: GoogleFonts.beVietnamPro(
+                                  color: UpriseColors.error, fontSize: 13)),
+                        ),
+                      );
+                    }
                     if (!snap.hasData) {
                       return const Center(
                           child: CircularProgressIndicator());
                     }
-                    final docs = snap.data!.docs;
+                    final currentEmail =
+                        FirebaseAuth.instance.currentUser?.email ?? '';
+                    final docs = snap.data!.docs.where((d) {
+                      final data = d.data() as Map<String, dynamic>;
+                      return data['user'] == currentEmail &&
+                          data['severity'] == 'security';
+                    }).take(10).toList();
                     if (docs.isEmpty) {
                       return Padding(
                         padding: const EdgeInsets.symmetric(vertical: 24),
