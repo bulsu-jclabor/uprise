@@ -16,6 +16,8 @@ import '../../../theme/app_theme.dart';
 import '../../../widgets/admin_export_button.dart';
 import '../admin/export_util.dart';
 import '../admin/export_pdf.dart';
+import 'export_pdf.dart' show OrgExportPdf;
+import 'export_util.dart' show OrgExportUtil;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Design tokens (mirrors student accounts)
@@ -4612,6 +4614,50 @@ class _SalesReportModal extends StatelessWidget {
     html.Url.revokeObjectUrl(url);
   }
 
+  Future<void> _exportReportPdf(BuildContext context, List<OrderModel> orders) async {
+    try {
+      String orgName = 'Organization';
+      String orgLogoUrl = '';
+      final orgDoc = await FirebaseFirestore.instance.collection('organizations').doc(orgId).get();
+      if (orgDoc.exists) {
+        orgName = orgDoc.data()?['name'] ?? orgName;
+        orgLogoUrl = orgDoc.data()?['logoUrl'] ?? '';
+      }
+
+      final headers = ['Order ID', 'Customer', 'Items', 'Total', 'Status', 'Date'];
+      final rows = orders.map((o) {
+        final itemsSummary = o.items.map((it) => '${it.quantity}× ${it.name}').join(', ');
+        return [
+          o.orderId,
+          o.customerName,
+          itemsSummary,
+          '₱${o.total.toStringAsFixed(2)}',
+          o.status,
+          DateFormat('MM/dd/yyyy').format(o.createdAt.toDate()),
+        ];
+      }).toList();
+
+      final pdfBytes = await OrgExportPdf.generateTablePdf(
+        title: 'Merchandise Sales Report',
+        subtitle: '$orgName — Merchandise Performance',
+        headers: headers,
+        rows: rows,
+        orgLogoUrl: orgLogoUrl,
+      );
+      await OrgExportUtil.saveBytes(
+        pdfBytes,
+        'sales_report_${DateFormat('yyyyMMdd').format(DateTime.now())}.pdf',
+        mimeType: 'application/pdf',
+      );
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('PDF export failed: $e'), backgroundColor: UpriseColors.error),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Dialog(
@@ -4727,6 +4773,29 @@ class _SalesReportModal extends StatelessWidget {
                             style: OutlinedButton.styleFrom(
                               foregroundColor: UpriseColors.primaryDark,
                               side: BorderSide(color: UpriseColors.primaryDark),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 8,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          ElevatedButton.icon(
+                            onPressed: orders.isEmpty
+                                ? null
+                                : () => _exportReportPdf(context, orders),
+                            icon: const Icon(Icons.picture_as_pdf_outlined, size: 15),
+                            label: Text(
+                              'Export PDF',
+                              style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.w600),
+                            ),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: UpriseColors.primaryDark,
+                              foregroundColor: Colors.white,
+                              elevation: 0,
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(8),
                               ),

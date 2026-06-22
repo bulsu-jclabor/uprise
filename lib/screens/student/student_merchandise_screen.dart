@@ -897,17 +897,19 @@ class _ProductCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final fmt = NumberFormat('#,##0.00');
+    final hasVariants = product.variants.isNotEmpty;
     return GestureDetector(
       onTap: () => _showDetails(context),
       child: Container(
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: const Color(0xFFF0F0F0)),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.06),
-              blurRadius: 8,
-              offset: const Offset(0, 3),
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
             ),
           ],
         ),
@@ -916,7 +918,7 @@ class _ProductCard extends StatelessWidget {
           children: [
             ClipRRect(
               borderRadius:
-                  const BorderRadius.vertical(top: Radius.circular(14)),
+                  const BorderRadius.vertical(top: Radius.circular(16)),
               child: Stack(
                 children: [
                   _buildProductImage(),
@@ -967,59 +969,107 @@ class _ProductCard extends StatelessWidget {
             ),
 
             Padding(
-              padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
+              padding: const EdgeInsets.fromLTRB(11, 9, 11, 10),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: Colors.orange.withOpacity(0.08),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(
+                      product.category.toUpperCase(),
+                      style: const TextStyle(
+                          fontSize: 8.5,
+                          color: Colors.orange,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 0.4),
+                    ),
+                  ),
+                  const SizedBox(height: 6),
                   Text(
                     product.name,
                     style: const TextStyle(
-                        fontSize: 13, fontWeight: FontWeight.bold),
+                        fontSize: 13.5, fontWeight: FontWeight.w700, color: Colors.black87),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
-                  const SizedBox(height: 2),
-                  Text(
-                    product.category,
-                    style: const TextStyle(
-                        fontSize: 10, color: Colors.black38),
-                  ),
-                  const SizedBox(height: 6),
+                  const SizedBox(height: 7),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
-                      Text(
-                        '₱${fmt.format(product.price)}',
-                        style: const TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w700,
-                            color: Colors.orange),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            if (hasVariants)
+                              Text('Starts at',
+                                  style: TextStyle(fontSize: 9, color: Colors.grey.shade500)),
+                            Text(
+                              '₱${fmt.format(product.price)}',
+                              style: const TextStyle(
+                                  fontSize: 15.5,
+                                  fontWeight: FontWeight.w800,
+                                  color: Colors.deepOrange),
+                            ),
+                          ],
+                        ),
                       ),
                       if (product.inStock && product.status != 'discontinued')
                         GestureDetector(
                           onTap: () => _triggerAdd(context),
                           child: Container(
-                            padding: const EdgeInsets.all(6),
-                            decoration: const BoxDecoration(
-                              color: Colors.orange,
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              gradient: const LinearGradient(
+                                  colors: [Colors.deepOrange, Colors.orange]),
                               shape: BoxShape.circle,
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.orange.withOpacity(0.35),
+                                  blurRadius: 8,
+                                  offset: const Offset(0, 3),
+                                ),
+                              ],
                             ),
-                            child: const Icon(Icons.add,
-                                size: 14, color: Colors.white),
+                            child: const Icon(Icons.add_shopping_cart_rounded,
+                                size: 15, color: Colors.white),
                           ),
                         ),
                     ],
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    product.inStock
-                        ? '${product.variants.isNotEmpty ? product.variants.fold<int>(0, (sum, v) => sum + v.stock) : product.stock} left'
-                        : 'Out of stock',
-                    style: TextStyle(
-                      fontSize: 10,
+                  const SizedBox(height: 7),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                    decoration: BoxDecoration(
                       color: product.inStock
-                          ? Colors.green.shade600
-                          : Colors.redAccent,
+                          ? Colors.green.withOpacity(0.1)
+                          : Colors.red.withOpacity(0.08),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          product.inStock ? Icons.inventory_2_outlined : Icons.block_rounded,
+                          size: 10,
+                          color: product.inStock ? Colors.green.shade700 : Colors.redAccent,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          product.inStock
+                              ? '${product.variants.isNotEmpty ? product.variants.fold<int>(0, (sum, v) => sum + v.stock) : product.stock} in stock'
+                              : 'Out of stock',
+                          style: TextStyle(
+                            fontSize: 9.5,
+                            fontWeight: FontWeight.w600,
+                            color: product.inStock ? Colors.green.shade700 : Colors.redAccent,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ],

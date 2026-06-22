@@ -1,10 +1,12 @@
 ﻿import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../auth_service.dart';
 import '../../auth/change_password_screen.dart';
 import 'org_dashboard.dart';
+import 'two_factor_verify_screen.dart';
 
 class OrganizationLogin extends StatefulWidget {
   const OrganizationLogin({super.key});
@@ -95,12 +97,44 @@ class _OrganizationLoginState extends State<OrganizationLogin>
       AuthService.cacheRole(user.uid, role);
       await _saveEmail(email);
       final needsChange = await _auth.needsPasswordChange(user.uid);
+
+      Widget destination() => needsChange
+          ? ChangePasswordScreen(userId: user.uid, isFirstLogin: true)
+          : OrgDashboard();
+
+      // Password auth succeeded — now check whether this account has TOTP
+      // 2FA enabled (set up under Settings > Security) and gate access
+      // behind a live code if so, before granting the dashboard/change-
+      // password destination.
+      String? twoFactorSecret;
+      try {
+        final securityDoc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .collection('settings')
+            .doc('security')
+            .get();
+        if (securityDoc.data()?['twoFactorEnabled'] == true) {
+          twoFactorSecret = securityDoc.data()?['twoFactorSecret'] as String?;
+        }
+      } catch (_) {}
+
       if (mounted) {
         setState(() => _isLoading = false);
-        Navigator.of(context).pushReplacement(MaterialPageRoute(
-          builder: (_) => needsChange
-              ? ChangePasswordScreen(userId: user.uid, isFirstLogin: true)
-              : OrgDashboard()));
+        if (twoFactorSecret != null && twoFactorSecret.isNotEmpty) {
+          Navigator.of(context).pushReplacement(MaterialPageRoute(
+            builder: (_) => TwoFactorVerifyScreen(
+              secret: twoFactorSecret!,
+              onVerified: () {
+                Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => destination()));
+              },
+              onCancel: () => Navigator.of(context).pushReplacement(
+                  MaterialPageRoute(builder: (_) => const OrganizationLogin())),
+            ),
+          ));
+        } else {
+          Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => destination()));
+        }
       }
     } on FirebaseAuthException catch (e) {
       String msg;

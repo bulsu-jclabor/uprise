@@ -8,7 +8,9 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 import '../../../services/activity_logger.dart' as activity_log;
+import '../../../services/totp_service.dart';
 import '../../../theme/app_theme.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -465,27 +467,244 @@ class _SecurityTabState extends State<_SecurityTab> {
   }
 
   Future<void> _toggle2FA(bool value) async {
+    if (value) {
+      await _startTwoFactorSetup();
+    } else {
+      await _confirmAndDisableTwoFactor();
+    }
+  }
+
+  /// Real TOTP setup: generates a secret, shows the QR code for an
+  /// authenticator app, and requires the user to prove they actually set
+  /// it up by entering a live code before it's persisted as enabled.
+  Future<void> _startTwoFactorSetup() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
-    await FirebaseFirestore.instance
+    final secret = TotpService.generateSecret();
+    final uri = TotpService.buildOtpAuthUri(
+      secret: secret,
+      accountName: user.email ?? widget.orgId,
+    );
+    final codeCtrl = TextEditingController();
+    String? error;
+    bool verifying = false;
+
+    final enabled = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) {
+          Future<void> verify() async {
+            final code = codeCtrl.text.trim();
+            if (code.length != 6) {
+              setDialogState(() => error = 'Enter the 6-digit code from your app');
+              return;
+            }
+            setDialogState(() { verifying = true; error = null; });
+            final ok = TotpService.verifyCode(secret, code);
+            if (!ok) {
+              setDialogState(() { verifying = false; error = 'Incorrect code. Check the time on your device and try again.'; });
+              return;
+            }
+            await FirebaseFirestore.instance
+                .collection('users')
+                .doc(user.uid)
+                .collection('settings')
+                .doc('security')
+                .set({'twoFactorEnabled': true, 'twoFactorSecret': secret}, SetOptions(merge: true));
+            if (ctx.mounted) Navigator.pop(ctx, true);
+          }
+
+          return Dialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            child: Container(
+              width: 420,
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Set Up Two-Factor Authentication',
+                      style: GoogleFonts.beVietnamPro(fontSize: 16, fontWeight: FontWeight.w700)),
+                  const SizedBox(height: 6),
+                  Text(
+                    'Scan this QR code with Google Authenticator, Authy, or any TOTP app.',
+                    style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF64748B)),
+                  ),
+                  const SizedBox(height: 18),
+                  Center(
+                    child: Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        border: Border.all(color: const Color(0xFFE2E6EA)),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: QrImageView(data: uri, size: 180),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Text("Can't scan? Enter this code manually:",
+                      style: GoogleFonts.beVietnamPro(fontSize: 11, color: const Color(0xFF64748B))),
+                  const SizedBox(height: 4),
+                  SelectableText(
+                    TotpService.formatSecretForDisplay(secret),
+                    style: const TextStyle(
+                        fontSize: 13, fontWeight: FontWeight.w700, letterSpacing: 1.2, fontFamily: 'monospace'),
+                  ),
+                  const SizedBox(height: 18),
+                  TextField(
+                    controller: codeCtrl,
+                    keyboardType: TextInputType.number,
+                    maxLength: 6,
+                    style: GoogleFonts.beVietnamPro(fontSize: 18, letterSpacing: 4),
+                    textAlign: TextAlign.center,
+                    decoration: InputDecoration(
+                      counterText: '',
+                      hintText: '000000',
+                      errorText: error,
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                    ),
+                    onSubmitted: (_) => verify(),
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      TextButton(
+                        onPressed: verifying ? null : () => Navigator.pop(ctx, false),
+                        child: const Text('Cancel'),
+                      ),
+                      const SizedBox(width: 8),
+                      ElevatedButton(
+                        onPressed: verifying ? null : verify,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: UpriseColors.primaryDark,
+                          foregroundColor: Colors.white,
+                        ),
+                        child: verifying
+                            ? const SizedBox(
+                                width: 16, height: 16,
+                                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                            : const Text('Verify & Enable'),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+
+    if (enabled == true && mounted) {
+      setState(() => _twoFactorEnabled = true);
+      await activity_log.ActivityLogger.log(
+        action: 'enable_2fa',
+        module: 'settings',
+        severity: 'security',
+        details: {'orgId': widget.orgId},
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Two-factor authentication enabled'), backgroundColor: UpriseColors.success),
+        );
+      }
+    }
+  }
+
+  /// Disabling 2FA requires a live code too — otherwise anyone at an
+  /// unlocked, already-authenticated session could just flip it off.
+  Future<void> _confirmAndDisableTwoFactor() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+    final doc = await FirebaseFirestore.instance
         .collection('users')
         .doc(user.uid)
         .collection('settings')
         .doc('security')
-        .set({'twoFactorEnabled': value}, SetOptions(merge: true));
-    setState(() => _twoFactorEnabled = value);
-    await activity_log.ActivityLogger.log(
-      action: value ? 'enable_2fa' : 'disable_2fa',
-      module: 'settings',
-      severity: 'security',
-      details: {'orgId': widget.orgId},
+        .get();
+    final secret = doc.data()?['twoFactorSecret'] as String?;
+    if (secret == null || secret.isEmpty) {
+      // No secret on record (shouldn't normally happen) — just clear the flag.
+      await FirebaseFirestore.instance
+          .collection('users').doc(user.uid).collection('settings').doc('security')
+          .set({'twoFactorEnabled': false}, SetOptions(merge: true));
+      if (mounted) setState(() => _twoFactorEnabled = false);
+      return;
+    }
+
+    final codeCtrl = TextEditingController();
+    String? error;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Text('Disable Two-Factor Authentication',
+              style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.w700)),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Enter your current 6-digit code to confirm.',
+                  style: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF64748B))),
+              const SizedBox(height: 12),
+              TextField(
+                controller: codeCtrl,
+                keyboardType: TextInputType.number,
+                maxLength: 6,
+                autofocus: true,
+                textAlign: TextAlign.center,
+                style: GoogleFonts.beVietnamPro(fontSize: 18, letterSpacing: 4),
+                decoration: InputDecoration(
+                  counterText: '',
+                  hintText: '000000',
+                  errorText: error,
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: UpriseColors.error, foregroundColor: Colors.white),
+              onPressed: () {
+                if (TotpService.verifyCode(secret, codeCtrl.text.trim())) {
+                  Navigator.pop(ctx, true);
+                } else {
+                  setDialogState(() => error = 'Incorrect code');
+                }
+              },
+              child: const Text('Disable'),
+            ),
+          ],
+        ),
+      ),
     );
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-            content: Text(value ? '2FA enabled' : '2FA disabled'),
-            backgroundColor: UpriseColors.success),
+
+    if (confirmed == true) {
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .collection('settings')
+          .doc('security')
+          .set({'twoFactorEnabled': false, 'twoFactorSecret': FieldValue.delete()}, SetOptions(merge: true));
+      if (mounted) setState(() => _twoFactorEnabled = false);
+      await activity_log.ActivityLogger.log(
+        action: 'disable_2fa',
+        module: 'settings',
+        severity: 'security',
+        details: {'orgId': widget.orgId},
       );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Two-factor authentication disabled'), backgroundColor: UpriseColors.warning),
+        );
+      }
     }
   }
 
