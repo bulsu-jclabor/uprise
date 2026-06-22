@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../../services/activity_logger.dart' as activity_log;
 
 class ForgotPasswordScreen extends StatefulWidget {
   const ForgotPasswordScreen({super.key});
@@ -36,6 +37,12 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     setState(() => _isLoading = true);
     try {
       await FirebaseAuth.instance.sendPasswordResetEmail(email: email);
+      await activity_log.ActivityLogger.log(
+        action: 'Password reset requested',
+        module: 'Authentication',
+        severity: 'security',
+        details: {'email': email},
+      );
       if (!mounted) return;
       setState(() => _sent = true);
     } on FirebaseAuthException catch (e) {

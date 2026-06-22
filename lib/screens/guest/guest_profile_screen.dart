@@ -22,6 +22,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../services/activity_logger.dart' as activity_log;
 import 'guest_auth_service.dart';
 import 'guest_certificate_repository_screen.dart';
 import 'guest_digital_id_screen.dart';
@@ -1168,6 +1169,13 @@ class RegistrationScreenState extends State<RegistrationScreen>
         'course'      : _courseCtrl.text.trim(),
         'type'        : 'guest',
       });
+
+      await activity_log.ActivityLogger.log(
+        action: 'Guest access requested: $userName',
+        module: 'Authentication',
+        severity: 'info',
+        details: {'requestId': docRef.id, 'email': email},
+      );
 
       if (mounted) {
         setState(() => _isLoading = false);

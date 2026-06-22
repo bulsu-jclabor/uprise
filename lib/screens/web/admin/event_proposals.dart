@@ -1284,8 +1284,8 @@ class _EventProposalsState extends State<EventProposals> {
       await activity_log.ActivityLogger.log(
         action: '${newStatus.toUpperCase()} proposal: $title',
         module: 'Event Management',
-        severity: newStatus == 'rejected' ? 'warning' : 'info',
-        details: {'proposalId': docId},
+        severity: (newStatus == 'rejected' || newStatus == 'archived') ? 'warning' : 'info',
+        details: {'proposalId': docId, 'title': title},
       );
       if (_isMounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -1682,119 +1682,129 @@ class _EventProposalsState extends State<EventProposals> {
                   ),
                 ),
               ),
-              // Dialog footer buttons
+              // Dialog footer buttons — pending-review actions get their own
+              // full-width row so 3 buttons in a 540px dialog don't have to
+              // compete with Archive/Close for space and wrap mid-word.
               Container(
-                padding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
+                padding: const EdgeInsets.fromLTRB(24, 16, 24, 20),
                 decoration: const BoxDecoration(
                   border: Border(top: BorderSide(color: Color(0xFFE8ECF0))),
                   color: Color(0xFFF8F9FB),
                   borderRadius: BorderRadius.vertical(bottom: Radius.circular(18)),
                 ),
-                child: Row(children: [
+                child: Column(children: [
                   if (status == 'pending') ...[
-                    Expanded(
-                      child: ElevatedButton.icon(
+                    Row(children: [
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          onPressed: () {
+                            Navigator.pop(ctx);
+                            _confirmSetStatus(docId, data['title'] ?? 'this event', 'approved');
+                          },
+                          icon: const Icon(Icons.check_circle_rounded, size: 15),
+                          label: Text('Approve',
+                              style: GoogleFonts.beVietnamPro(
+                                  fontSize: 13, fontWeight: FontWeight.w600)),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF059669),
+                            foregroundColor: Colors.white,
+                            elevation: 0,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                            padding: const EdgeInsets.symmetric(vertical: 11),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          // CHANGE: use rejection reason dialog
+                          onPressed: () {
+                            Navigator.pop(ctx);
+                            _showRejectReasonDialog(docId, data['title'] ?? 'this event');
+                          },
+                          icon: const Icon(Icons.cancel_outlined, size: 15),
+                          label: Text('Reject',
+                              style: GoogleFonts.beVietnamPro(fontSize: 13)),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: const Color(0xFFDC2626),
+                            side: const BorderSide(color: Color(0xFFDC2626)),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                            padding: const EdgeInsets.symmetric(vertical: 11),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: () => _showRevisionDialog(ctx, docId, data['title'] ?? 'this event'),
+                          icon: const Icon(Icons.rate_review_rounded, size: 15),
+                          label: Text('Request Revision',
+                              style: GoogleFonts.beVietnamPro(fontSize: 13),
+                              overflow: TextOverflow.ellipsis),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: const Color(0xFF7C3AED),
+                            side: const BorderSide(color: Color(0xFF7C3AED)),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                            padding: const EdgeInsets.symmetric(vertical: 11),
+                          ),
+                        ),
+                      ),
+                    ]),
+                    const SizedBox(height: 10),
+                  ],
+                  Row(children: [
+                    if (status == 'approved') ...[
+                      Padding(
+                        padding: const EdgeInsets.only(right: 10),
+                        child: Row(mainAxisSize: MainAxisSize.min, children: [
+                          Icon(
+                            isPublished ? Icons.check_circle_rounded : Icons.hourglass_top_rounded,
+                            size: 15,
+                            color: isPublished ? const Color(0xFF2563EB) : const Color(0xFF9AA5B4),
+                          ),
+                          const SizedBox(width: 6),
+                          Flexible(
+                            child: Text(
+                              isPublished ? 'Published to students' : 'Awaiting org to publish',
+                              style: GoogleFonts.beVietnamPro(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: isPublished ? const Color(0xFF2563EB) : const Color(0xFF9AA5B4)),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ]),
+                      ),
+                    ],
+                    if (status != 'archived')
+                      OutlinedButton.icon(
                         onPressed: () {
                           Navigator.pop(ctx);
-                          _confirmSetStatus(docId, data['title'] ?? 'this event', 'approved');
+                          _confirmSetStatus(docId, data['title'] ?? 'this event', 'archived');
                         },
-                        icon: const Icon(Icons.check_circle_rounded, size: 15),
-                        label: Text('Approve',
-                            style: GoogleFonts.beVietnamPro(
-                                fontSize: 13, fontWeight: FontWeight.w600)),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF059669),
-                          foregroundColor: Colors.white,
-                          elevation: 0,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                          padding: const EdgeInsets.symmetric(vertical: 11),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        // CHANGE: use rejection reason dialog
-                        onPressed: () {
-                          Navigator.pop(ctx);
-                          _showRejectReasonDialog(docId, data['title'] ?? 'this event');
-                        },
-                        icon: const Icon(Icons.cancel_outlined, size: 15),
-                        label: Text('Reject',
+                        icon: const Icon(Icons.archive_outlined, size: 15),
+                        label: Text('Archive',
                             style: GoogleFonts.beVietnamPro(fontSize: 13)),
                         style: OutlinedButton.styleFrom(
-                          foregroundColor: const Color(0xFFDC2626),
-                          side: const BorderSide(color: Color(0xFFDC2626)),
+                          side: const BorderSide(color: Color(0xFFE2E6EA)),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                          padding: const EdgeInsets.symmetric(vertical: 11),
+                          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 11),
                         ),
                       ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: () => _showRevisionDialog(ctx, docId, data['title'] ?? 'this event'),
-                        icon: const Icon(Icons.rate_review_rounded, size: 15),
-                        label: Text('Request Revision',
-                            style: GoogleFonts.beVietnamPro(fontSize: 13)),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: const Color(0xFF7C3AED),
-                          side: const BorderSide(color: Color(0xFF7C3AED)),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                          padding: const EdgeInsets.symmetric(vertical: 11),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                  ],
-                  if (status == 'approved') ...[
-                    Padding(
-                      padding: const EdgeInsets.only(right: 10),
-                      child: Row(mainAxisSize: MainAxisSize.min, children: [
-                        Icon(
-                          isPublished ? Icons.check_circle_rounded : Icons.hourglass_top_rounded,
-                          size: 15,
-                          color: isPublished ? const Color(0xFF2563EB) : const Color(0xFF9AA5B4),
-                        ),
-                        const SizedBox(width: 6),
-                        Text(
-                          isPublished ? 'Published to students' : 'Awaiting org to publish',
-                          style: GoogleFonts.beVietnamPro(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                              color: isPublished ? const Color(0xFF2563EB) : const Color(0xFF9AA5B4)),
-                        ),
-                      ]),
-                    ),
-                  ],
-                  if (status != 'archived')
-                    OutlinedButton.icon(
-                      onPressed: () {
-                        Navigator.pop(ctx);
-                        _confirmSetStatus(docId, data['title'] ?? 'this event', 'archived');
-                      },
-                      icon: const Icon(Icons.archive_outlined, size: 15),
-                      label: Text('Archive',
-                          style: GoogleFonts.beVietnamPro(fontSize: 13)),
-                      style: OutlinedButton.styleFrom(
-                        side: const BorderSide(color: Color(0xFFE2E6EA)),
+                    const Spacer(),
+                    ElevatedButton(
+                      onPressed: () => Navigator.pop(ctx),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: UpriseColors.primaryDark,
+                        foregroundColor: Colors.white,
+                        elevation: 0,
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 11),
+                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 11),
                       ),
+                      child: Text('Close',
+                          style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600)),
                     ),
-                  const Spacer(),
-                  ElevatedButton(
-                    onPressed: () => Navigator.pop(ctx),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: UpriseColors.primaryDark,
-                      foregroundColor: Colors.white,
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 11),
-                    ),
-                    child: Text('Close',
-                        style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600)),
-                  ),
+                  ]),
                 ]),
               ),
             ],
@@ -1922,7 +1932,7 @@ class _EventProposalsState extends State<EventProposals> {
                 TextButton(
                   onPressed: () {
                     Navigator.pop(ctx);
-                    platform_file_utils.saveBytesToTempAndOpen(bytes, fileName);
+                    platform_file_utils.saveBytesToTempAndOpen(bytes, fileName, mimeType: mime);
                   },
                   child: const Text('Download'),
                 ),
@@ -1964,7 +1974,7 @@ class _EventProposalsState extends State<EventProposals> {
                       TextButton(
                         onPressed: () {
                           Navigator.pop(ctx);
-                          platform_file_utils.saveBytesToTempAndOpen(bytes, fileName);
+                          platform_file_utils.saveBytesToTempAndOpen(bytes, fileName, mimeType: mime);
                         },
                         child: const Text('Download'),
                       ),
@@ -1978,8 +1988,8 @@ class _EventProposalsState extends State<EventProposals> {
         return;
       }
       
-      await platform_file_utils.saveBytesToTempAndOpen(bytes, fileName);
-      
+      await platform_file_utils.saveBytesToTempAndOpen(bytes, fileName, mimeType: mime);
+
     } catch (e) {
       print('❌ Error opening attachment: $e');
       if (_isMounted) {

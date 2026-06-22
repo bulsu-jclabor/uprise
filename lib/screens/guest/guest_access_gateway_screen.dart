@@ -17,6 +17,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../../services/activity_logger.dart' as activity_log;
 import 'guest_auth_service.dart'; // GuestAuthService.saveSession() + GuestMode enum
 import 'guest_home_screen.dart' hide GuestMode; // GuestHomeScreen only — GuestMode comes from guest_auth_service
 import 'guest_profile_screen.dart'; // exposes RegistrationScreen via re-export
@@ -502,6 +503,13 @@ class _GuestLoginScreenState extends State<GuestLoginScreen> {
         fullName : fullName,
       );
 
+      await activity_log.ActivityLogger.log(
+        action: 'Guest login',
+        module: 'Authentication',
+        severity: 'security',
+        details: {'uid': uid, 'docId': docId, 'email': email},
+      );
+
       if (!mounted) return;
 
       // ── Step 4: First-login password change prompt ────────────────
@@ -540,6 +548,12 @@ class _GuestLoginScreenState extends State<GuestLoginScreen> {
         'too-many-requests' => 'Too many attempts. Please try again later.',
         _                 => e.message ?? 'Login failed.',
       };
+      await activity_log.ActivityLogger.log(
+        action: 'Failed guest login attempt',
+        module: 'Authentication',
+        severity: 'warning',
+        details: {'email': email, 'reason': e.code},
+      );
       _snack(msg);
       setState(() => _isLoading = false);
     } catch (e) {

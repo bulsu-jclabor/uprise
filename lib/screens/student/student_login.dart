@@ -9,6 +9,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../auth_service.dart';
+import '../../services/activity_logger.dart' as activity_log;
 import '../guest/guest_access_gateway_screen.dart';
 import '../student/student_home_screen.dart';
 import 'student_change_password_screen.dart';
@@ -58,8 +59,12 @@ class _StudentLoginState extends State<StudentLogin> {
 
   if (user != null) {
     final role = await _auth.getUserRole(user.uid);
-    print('UID: ${user.uid}');
-    print('ROLE: $role');
+    await activity_log.ActivityLogger.log(
+      action: 'Student login',
+      module: 'Authentication',
+      severity: 'security',
+      details: {'uid': user.uid, 'email': email, 'role': role},
+    );
   }
 
   if (!mounted) return;
@@ -104,6 +109,14 @@ class _StudentLoginState extends State<StudentLogin> {
           message = 'Too many attempts. Please wait and try again.';
           break;
       }
+      // currentUser is null on a failed sign-in, so ActivityLogger would log
+      // 'Unknown' as the user — record the attempted email in details instead.
+      await activity_log.ActivityLogger.log(
+        action: 'Failed student login attempt',
+        module: 'Authentication',
+        severity: 'warning',
+        details: {'email': email, 'reason': e.code},
+      );
       _showError(message);
     } catch (_) {
       if (mounted) _showError('An error occurred. Please try again.');

@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:uprise/widgets/admin_export_button.dart';
 import 'package:intl/intl.dart';
@@ -286,8 +287,9 @@ class _AdminLetterRequestScreenState extends State<AdminLetterRequestScreen> {
         Expanded(flex: 2, child: _headerCell('LETTER ID')),
         Expanded(flex: 3, child: _headerCell('SUBJECT')),
         Expanded(flex: 2, child: _headerCell('DATE SUBMITTED')),
+        Expanded(flex: 2, child: _headerCell('SIGNING DATE')),
         Expanded(flex: 1, child: _headerCell('STATUS')),
-        Expanded(flex: 2, child: _headerCell('ACTIONS')),
+        Expanded(flex: 2, child: Align(alignment: Alignment.centerRight, child: _headerCell('ACTIONS'))),
       ]),
     );
   }
@@ -310,6 +312,16 @@ class _AdminLetterRequestScreenState extends State<AdminLetterRequestScreen> {
     final subject = data['subject'] ?? 'No subject';
     final letterId = data['letterId'] ?? 'N/A';
     final message = data['message'];
+
+    // Signing appointment, if one was scheduled on approval — same
+    // wetSignSchedule-style display as admin/org event_proposals.dart, so
+    // it's easy to confirm the org actually received a signing date.
+    final signingSchedule = data['signingSchedule'] as Map<String, dynamic>?;
+    final signingTs = signingSchedule?['startDateTime'] as Timestamp?;
+    final signingStr = signingTs != null
+        ? DateFormat('MMM dd, yyyy').format(signingTs.toDate())
+        : '—';
+    final hasSigningDate = signingTs != null;
     
     return FutureBuilder<String>(
       future: _fetchOrgLogo(orgId),
@@ -365,14 +377,25 @@ class _AdminLetterRequestScreenState extends State<AdminLetterRequestScreen> {
               ),
               Expanded(
                 flex: 2,
-                child: Text(
-                  letterId,
-                  style: GoogleFonts.beVietnamPro(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: AdminColors.primaryDark,
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: AdminColors.primaryDark.withAlpha(18),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(
+                      letterId,
+                      style: GoogleFonts.beVietnamPro(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: AdminColors.primaryDark,
+                        letterSpacing: 0.2,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
-                  overflow: TextOverflow.ellipsis,
                 ),
               ),
               Expanded(
@@ -416,57 +439,62 @@ class _AdminLetterRequestScreenState extends State<AdminLetterRequestScreen> {
                   ),
                 ),
               ),
+              Expanded(
+                flex: 2,
+                child: hasSigningDate
+                    ? Row(mainAxisSize: MainAxisSize.min, children: [
+                        Container(
+                          padding: const EdgeInsets.all(4),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF059669).withAlpha(20),
+                            borderRadius: BorderRadius.circular(5),
+                          ),
+                          child: const Icon(Icons.edit_calendar_rounded, size: 11, color: Color(0xFF059669)),
+                        ),
+                        const SizedBox(width: 5),
+                        Flexible(child: Text(signingStr,
+                            style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF059669), fontWeight: FontWeight.w500))),
+                      ])
+                    : Text('—', style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFFD1D5DB))),
+              ),
               Expanded(flex: 1, child: _buildStatusBadge(status)),
-              // ============ ACTIONS - CORRECTED LOGIC ============
+              // ============ ACTIONS ============
+              // "Request Revision" lives in the View dialog only (matches
+              // admin/event_proposals.dart) — keeping it out of the row
+              // frees up room so icons stop crowding/overlapping each other.
               Expanded(
                 flex: 2,
                 child: Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
                   children: [
                     // View button - always visible
                     _ActionIconButton(
                       icon: Icons.visibility_outlined,
                       tooltip: 'View Details',
+                      color: const Color(0xFF3B82F6),
                       onTap: () => _showViewDialog(data, docId),
                     ),
-                    const SizedBox(width: 4),
-                    
-                    // For PENDING or RESUBMITTED: Show Approve, Reject, Revise
+
+                    // For PENDING or RESUBMITTED: Show Approve, Reject
                     if (status == 'pending' || status == 'resubmitted') ...[
+                      const SizedBox(width: 6),
                       _ActionIconButton(
                         icon: Icons.check_circle_outline,
                         tooltip: 'Approve',
                         color: AdminColors.success,
-                        onTap: () => _updateStatus(docId, 'approved', data['orgName'] ?? 'Request'),
+                        onTap: () => _approveWithSigningSchedule(docId, data['orgName'] ?? 'Request'),
                       ),
-                      const SizedBox(width: 4),
+                      const SizedBox(width: 6),
                       _ActionIconButton(
                         icon: Icons.cancel_outlined,
                         tooltip: 'Reject',
                         color: AdminColors.error,
                         onTap: () => _updateStatus(docId, 'rejected', data['orgName'] ?? 'Request'),
                       ),
-                      const SizedBox(width: 4),
-                      _ActionIconButton(
-                        icon: Icons.edit_note_rounded,
-                        tooltip: 'Request Revision',
-                        color: AdminColors.info,
-                        onTap: () => _requestRevision(data, docId),
-                      ),
-                      const SizedBox(width: 4),
                     ],
-                    
-                    // For REVISION only: Show Revise button ONLY (walang Approve/Reject)
-                    if (status == 'revision') ...[
-                      _ActionIconButton(
-                        icon: Icons.edit_note_rounded,
-                        tooltip: 'Request Revision',
-                        color: AdminColors.info,
-                        onTap: () => _requestRevision(data, docId),
-                      ),
-                      const SizedBox(width: 4),
-                    ],
-                    
+
                     // Archive button - always visible for all statuses
+                    const SizedBox(width: 6),
                     _ActionIconButton(
                       icon: Icons.archive_outlined,
                       tooltip: 'Archive',
@@ -666,6 +694,7 @@ class _AdminLetterRequestScreenState extends State<AdminLetterRequestScreen> {
       await activity_log.ActivityLogger.log(
         action: 'archive_letter_request',
         module: 'Letter Request',
+        severity: 'warning',
         details: {'docId': docId, 'orgName': orgName},
       );
       if (mounted) {
@@ -710,6 +739,249 @@ class _AdminLetterRequestScreenState extends State<AdminLetterRequestScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: AdminColors.error));
+      }
+    }
+  }
+
+  // ── Approve + schedule signing appointment, same flow as the wet-sign
+  // scheduling popup in admin/event_proposals.dart's proposal approval. ──
+  void _approveWithSigningSchedule(String docId, String orgName) {
+    final dateCtrl = TextEditingController();
+    final startTimeCtrl = TextEditingController();
+    final endTimeCtrl = TextEditingController();
+    final locationCtrl = TextEditingController(text: "Dean's Office");
+    DateTime? selectedDate;
+    TimeOfDay? startTime;
+    TimeOfDay? endTime;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) {
+          return Dialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+            child: Container(
+              width: 500,
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(children: [
+                    Container(
+                      width: 42, height: 42,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFECFDF5),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Icon(Icons.edit_calendar_rounded, color: Color(0xFF059669), size: 20),
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Text(
+                        'Schedule Signing Appointment',
+                        style: GoogleFonts.beVietnamPro(fontSize: 17, fontWeight: FontWeight.w700, color: const Color(0xFF1A202C)),
+                      ),
+                    ),
+                  ]),
+                  const SizedBox(height: 20),
+                  Text(
+                    'Set your office availability for $orgName to sign the letter.',
+                    style: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF64748B)),
+                  ),
+                  const SizedBox(height: 20),
+
+                  TextFormField(
+                    controller: dateCtrl,
+                    readOnly: true,
+                    decoration: InputDecoration(
+                      labelText: 'Select Date *',
+                      hintText: 'MM/DD/YYYY',
+                      prefixIcon: const Icon(Icons.calendar_today_outlined, size: 18),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                    onTap: () async {
+                      final picked = await showDatePicker(
+                        context: ctx,
+                        initialDate: DateTime.now(),
+                        firstDate: DateTime.now(),
+                        lastDate: DateTime.now().add(const Duration(days: 30)),
+                      );
+                      if (picked != null) {
+                        selectedDate = picked;
+                        dateCtrl.text = DateFormat('MM/dd/yyyy').format(picked);
+                        setDialogState(() {});
+                      }
+                    },
+                  ),
+                  const SizedBox(height: 14),
+
+                  TextFormField(
+                    controller: startTimeCtrl,
+                    readOnly: true,
+                    decoration: InputDecoration(
+                      labelText: 'Start Time *',
+                      hintText: '-- : --',
+                      prefixIcon: const Icon(Icons.access_time_rounded, size: 18),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                    onTap: () async {
+                      final picked = await showTimePicker(context: ctx, initialTime: TimeOfDay.now());
+                      if (picked != null) {
+                        startTime = picked;
+                        startTimeCtrl.text = picked.format(ctx);
+                        setDialogState(() {});
+                      }
+                    },
+                  ),
+                  const SizedBox(height: 14),
+
+                  TextFormField(
+                    controller: endTimeCtrl,
+                    readOnly: true,
+                    decoration: InputDecoration(
+                      labelText: 'End Time *',
+                      hintText: '-- : --',
+                      prefixIcon: const Icon(Icons.access_time_rounded, size: 18),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                    onTap: () async {
+                      final picked = await showTimePicker(
+                        context: ctx,
+                        initialTime: startTime ?? TimeOfDay.now(),
+                      );
+                      if (picked != null) {
+                        endTime = picked;
+                        endTimeCtrl.text = picked.format(ctx);
+                        setDialogState(() {});
+                      }
+                    },
+                  ),
+                  const SizedBox(height: 14),
+
+                  TextFormField(
+                    controller: locationCtrl,
+                    decoration: InputDecoration(
+                      labelText: 'Office Location *',
+                      hintText: "e.g., Dean's Office Room 101",
+                      prefixIcon: const Icon(Icons.location_on_outlined, size: 18),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      OutlinedButton(
+                        onPressed: () {
+                          Navigator.pop(ctx);
+                          _updateStatus(docId, 'approved', orgName);
+                        },
+                        style: OutlinedButton.styleFrom(
+                          side: const BorderSide(color: Color(0xFFE2E6EA)),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 11),
+                        ),
+                        child: Text('Skip', style: GoogleFonts.beVietnamPro(fontSize: 13)),
+                      ),
+                      const SizedBox(width: 10),
+                      ElevatedButton(
+                        onPressed: () async {
+                          if (selectedDate == null || startTime == null || endTime == null) {
+                            ScaffoldMessenger.of(ctx).showSnackBar(
+                              const SnackBar(content: Text('Please fill all required fields'), backgroundColor: Colors.orange),
+                            );
+                            return;
+                          }
+
+                          final startDateTime = DateTime(
+                            selectedDate!.year, selectedDate!.month, selectedDate!.day,
+                            startTime!.hour, startTime!.minute,
+                          );
+                          final endDateTime = DateTime(
+                            selectedDate!.year, selectedDate!.month, selectedDate!.day,
+                            endTime!.hour, endTime!.minute,
+                          );
+
+                          await _saveSigningSchedule(
+                            docId: docId,
+                            orgName: orgName,
+                            startDateTime: startDateTime,
+                            endDateTime: endDateTime,
+                            location: locationCtrl.text.trim(),
+                          );
+
+                          Navigator.pop(ctx);
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF059669),
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 11),
+                        ),
+                        child: Text('Save Schedule', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600)),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Future<void> _saveSigningSchedule({
+    required String docId,
+    required String orgName,
+    required DateTime startDateTime,
+    required DateTime endDateTime,
+    required String location,
+  }) async {
+    try {
+      final signingSchedule = {
+        'startDateTime': Timestamp.fromDate(startDateTime),
+        'endDateTime': Timestamp.fromDate(endDateTime),
+        'location': location,
+        'status': 'scheduled',
+        'scheduledBy': FirebaseAuth.instance.currentUser?.uid ?? '',
+        'scheduledAt': FieldValue.serverTimestamp(),
+      };
+
+      await FirestoreCollections.letterRequests.doc(docId).update({
+        'status': 'approved',
+        'signingSchedule': signingSchedule,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+
+      await activity_log.ActivityLogger.log(
+        action: 'schedule_letter_signing',
+        module: 'Letter Request',
+        details: {
+          'docId': docId,
+          'orgName': orgName,
+          'startDateTime': startDateTime.toIso8601String(),
+          'location': location,
+        },
+      );
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Approved and signing appointment scheduled!'),
+            backgroundColor: AdminColors.success,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e'), backgroundColor: AdminColors.error),
+        );
       }
     }
   }
@@ -978,7 +1250,7 @@ class _AdminLetterRequestScreenState extends State<AdminLetterRequestScreen> {
                           child: ElevatedButton.icon(
                             onPressed: () {
                               Navigator.pop(ctx);
-                              _updateStatus(docId, 'approved', orgName);
+                              _approveWithSigningSchedule(docId, orgName);
                             },
                             icon: const Icon(Icons.check_circle_rounded, size: 15),
                             label: Text('Approve', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600)),
@@ -1048,7 +1320,7 @@ class _AdminLetterRequestScreenState extends State<AdminLetterRequestScreen> {
                 TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Close')),
                 TextButton(onPressed: () {
                   Navigator.pop(ctx);
-                  platform_file_utils.saveBytesToTempAndOpen(bytes, fileName);
+                  platform_file_utils.saveBytesToTempAndOpen(bytes, fileName, mimeType: mime);
                 }, child: const Text('Download')),
               ],
             ),
@@ -1072,7 +1344,7 @@ class _AdminLetterRequestScreenState extends State<AdminLetterRequestScreen> {
                     TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Close')),
                     TextButton(onPressed: () {
                       Navigator.pop(ctx);
-                      platform_file_utils.saveBytesToTempAndOpen(bytes, fileName);
+                      platform_file_utils.saveBytesToTempAndOpen(bytes, fileName, mimeType: mime);
                     }, child: const Text('Download')),
                   ],
                 ),
@@ -1083,7 +1355,7 @@ class _AdminLetterRequestScreenState extends State<AdminLetterRequestScreen> {
         return;
       }
       
-      await platform_file_utils.saveBytesToTempAndOpen(bytes, fileName);
+      await platform_file_utils.saveBytesToTempAndOpen(bytes, fileName, mimeType: mime);
     } catch (e) {
       debugPrint('Error opening file: $e');
       if (!mounted) return;
@@ -1264,21 +1536,32 @@ class _ExportButton extends StatelessWidget {
 }
 
 // ============ ACTION ICON BUTTON ============
+// Compact colored chip — matches the icon actions in org_event_proposals.dart
+// / organization_management.dart / student_accounts.dart / adviser_roles.dart
+// / event_proposals.dart, instead of a bare unstyled icon.
 class _ActionIconButton extends StatelessWidget {
   final IconData icon;
   final String tooltip;
-  final VoidCallback? onTap;
-  final Color? color;
-  const _ActionIconButton({required this.icon, required this.tooltip, this.onTap, this.color});
+  final VoidCallback onTap;
+  final Color color;
+  const _ActionIconButton({required this.icon, required this.tooltip, required this.onTap, required this.color});
 
   @override
   Widget build(BuildContext context) {
     return Tooltip(
       message: tooltip,
+      waitDuration: const Duration(milliseconds: 400),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(6),
-        child: Padding(padding: const EdgeInsets.all(5), child: Icon(icon, size: 16, color: onTap == null ? const Color(0xFFD1D5DB) : (color ?? const Color(0xFF64748B)))),
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+          padding: const EdgeInsets.all(7),
+          decoration: BoxDecoration(
+            color: color.withAlpha(26),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Icon(icon, size: 14, color: color),
+        ),
       ),
     );
   }

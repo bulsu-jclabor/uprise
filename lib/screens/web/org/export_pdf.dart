@@ -257,7 +257,9 @@ class OrgExportPdf {
     final upriseLogo = await _loadImage('assets/images/logo.png');
     final orgLogo = _decodeOrgLogo(orgLogoUrl);
     final now = DateFormat('MMMM d, yyyy \'at\' h:mm a').format(DateTime.now());
-    final currency = NumberFormat.currency(locale: 'en_PH', symbol: '₱');
+    // The default PDF font has no glyph for the ₱ symbol — it renders as a
+    // missing-character box. 'PHP ' renders correctly in every font.
+    final currency = NumberFormat.currency(locale: 'en_PH', symbol: 'PHP ');
     final netFlow = totalInflow - totalOutflow;
 
     const colHeaders = ['Date', 'Event', 'Category', 'Description', 'Amount'];

@@ -780,7 +780,7 @@ class _OrganizationManagementState extends State<OrganizationManagement> {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       _ActionIconButton(
-                        icon: Icons.open_in_new_rounded,
+                        icon: Icons.visibility_outlined,
                         tooltip: 'View Details',
                         onTap: () => _showViewOrganizationDialog(org),
                         color: const Color(0xFF3B82F6),
@@ -1622,17 +1622,10 @@ class _ViewOrganizationDialog extends StatelessWidget {
                           _statusBadge(organization.status),
                           _infoPill('Type', organization.type),
                           _infoPill('Created', organization.createdAt != null ? DateFormat('MMM d, yyyy').format(organization.createdAt!) : '—'),
+                          _infoPill('Email', organization.orgEmail.isNotEmpty ? organization.orgEmail : '—'),
                         ]),
                       ]),
                     ),
-                  ]),
-                  const SizedBox(height: 24),
-                  Wrap(spacing: 12, runSpacing: 12, children: [
-                    _infoPill('Email', organization.orgEmail.isNotEmpty ? organization.orgEmail : '—'),
-                    _infoPill('Short Name', organization.shortName.isNotEmpty ? organization.shortName : '—'),
-                    _infoPill('Acronym', organization.shortName.isNotEmpty ? organization.shortName : '—'),
-                    _infoPill('Status', organization.status),
-                    _infoPill('Created', organization.createdAt != null ? DateFormat('MMM d, yyyy').format(organization.createdAt!) : '—'),
                   ]),
                   const SizedBox(height: 24),
                   _sectionLabel('Description', icon: Icons.description_rounded),

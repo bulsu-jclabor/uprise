@@ -133,112 +133,122 @@ class _EventCalendarState extends State<EventCalendar> {
   @override
   Widget build(BuildContext context) {
     final width = MediaQuery.of(context).size.width;
-    final isMobile = width < 720;
-    final isTablet = width >= 720 && width < 1200;
+    final horizontalPadding = width < 720 ? 16.0 : (width < 1200 ? 22.0 : 28.0);
 
     return Scaffold(
       backgroundColor: const Color(0xFFFBFCFE),
-      body: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _buildToolbar(isMobile, isTablet),
-          const SizedBox(height: 16),
-          Expanded(
-            child: SingleChildScrollView(
-              child: Column(
-                children: [
-                  _buildCalendarStream(),
-                  const SizedBox(height: 24),
-                ],
+      body: SingleChildScrollView(
+        padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(0, 24, 0, 0),
+              child: Text(
+                'Showing all CICT approved events',
+                style: GoogleFonts.beVietnamPro(fontSize: 11, color: const Color(0xFF64748B), fontStyle: FontStyle.italic),
               ),
             ),
-          ),
-        ],
+            _buildToolbar(horizontalPadding),
+            const SizedBox(height: 16),
+            _buildCalendarStream(),
+            const SizedBox(height: 28),
+          ],
+        ),
       ),
     );
   }
 
   // ── Toolbar (no status filter) ───────────────────────────────────
-  Widget _buildToolbar(bool isMobile, bool isTablet) {
-    final navAndToday = Row(children: [
-      InkWell(
-        onTap: () => setState(() => _currentMonth = DateTime.now()),
-        borderRadius: BorderRadius.circular(10),
-        child: Container(
-          height: 40,
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          decoration: BoxDecoration(
-            color: UpriseColors.primaryDark,
+  Widget _buildToolbar(double horizontalPadding) {
+    return Padding(
+      padding: EdgeInsets.fromLTRB(horizontalPadding, 20, horizontalPadding, 0),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final canUseRow = constraints.maxWidth > 800;
+
+          final todayButton = InkWell(
+            onTap: () => setState(() => _currentMonth = DateTime.now()),
             borderRadius: BorderRadius.circular(10),
-            boxShadow: [BoxShadow(color: UpriseColors.primaryDark.withAlpha(70), blurRadius: 10, offset: const Offset(0, 3))],
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.today_rounded, size: 15, color: Colors.white),
-              const SizedBox(width: 7),
-              Text('Today', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.white)),
-            ],
-          ),
-        ),
-      ),
-      const SizedBox(width: 10),
-      Container(
-        height: 40,
-        constraints: const BoxConstraints(minWidth: 200),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: const Color(0xFFE2E6EA)),
-          boxShadow: _DS.cardShadow,
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _NavButton(
-              icon: Icons.chevron_left_rounded,
-              onTap: () => setState(() {
-                _currentMonth = DateTime(_currentMonth.year, _currentMonth.month - 1);
-              }),
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              child: Text(
-                DateFormat('MMMM yyyy').format(_currentMonth),
-                style: GoogleFonts.beVietnamPro(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w700,
-                  color: const Color(0xFF1A202C),
-                ),
+            child: Container(
+              height: 40,
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              decoration: BoxDecoration(
+                color: UpriseColors.primaryDark,
+                borderRadius: BorderRadius.circular(10),
+                boxShadow: [BoxShadow(color: UpriseColors.primaryDark.withAlpha(70), blurRadius: 10, offset: const Offset(0, 3))],
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.today_rounded, size: 15, color: Colors.white),
+                  const SizedBox(width: 7),
+                  Text('Today', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.white)),
+                ],
               ),
             ),
-            _NavButton(
-              icon: Icons.chevron_right_rounded,
-              onTap: () => setState(() {
-                _currentMonth = DateTime(_currentMonth.year, _currentMonth.month + 1);
-              }),
-            ),
-          ],
-        ),
-      ),
-    ]);
+          );
 
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(28, 24, 28, 0),
-      child: isMobile
-          ? Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
+          final dateControl = Container(
+            height: 40,
+            constraints: const BoxConstraints(minWidth: 200),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: const Color(0xFFE2E6EA)),
+              boxShadow: _DS.cardShadow,
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                navAndToday,
-                const SizedBox(height: 10),
+                _NavButton(
+                  icon: Icons.chevron_left_rounded,
+                  onTap: () => setState(() {
+                    _currentMonth = DateTime(_currentMonth.year, _currentMonth.month - 1);
+                  }),
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  child: Text(
+                    DateFormat('MMMM yyyy').format(_currentMonth),
+                    style: GoogleFonts.beVietnamPro(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: const Color(0xFF1A202C),
+                    ),
+                  ),
+                ),
+                _NavButton(
+                  icon: Icons.chevron_right_rounded,
+                  onTap: () => setState(() {
+                    _currentMonth = DateTime(_currentMonth.year, _currentMonth.month + 1);
+                  }),
+                ),
+              ],
+            ),
+          );
+
+          if (canUseRow) {
+            return Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                todayButton,
+                const SizedBox(width: 10),
+                dateControl,
+                const Spacer(),
                 _ExportEventsButton(),
               ],
-            )
-          : Row(children: [
-              navAndToday,
-              const Spacer(),
-              _ExportEventsButton(),
-            ]),
+            );
+          }
+
+          return Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [todayButton, dateControl, _ExportEventsButton()],
+          );
+        },
+      ),
     );
   }
 
@@ -333,8 +343,9 @@ class _EventCalendarState extends State<EventCalendar> {
 
     const weekdays = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
 
+    final horizontalPadding = MediaQuery.of(context).size.width < 720 ? 16.0 : 28.0;
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 28),
+      margin: EdgeInsets.symmetric(horizontal: horizontalPadding),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(14),

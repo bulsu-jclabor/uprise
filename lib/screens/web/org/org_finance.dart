@@ -119,18 +119,32 @@ class _OrgFinanceScreenState extends State<OrgFinanceScreen> {
     }).toList();
   }
 
+  // 'event' mode filters by a specific event and excludes archived
+  // transactions, same as the rest of the page. 'dateRange' mode filters by
+  // date only and deliberately includes archived transactions that fall
+  // within the range — these are mutually exclusive report modes, not
+  // combinable filters.
   List<TransactionModel> _applyReportFilters(
     List<TransactionModel> list, {
+    required String mode,
     String eventFilter = 'All Events',
     DateTime? startDate,
     DateTime? endDate,
   }) {
+    if (mode == 'dateRange') {
+      final inclusiveEnd = endDate == null
+          ? null
+          : DateTime(endDate.year, endDate.month, endDate.day, 23, 59, 59, 999);
+      return list.where((t) {
+        final txnDate = t.date.toDate();
+        final startMatch = startDate == null || !txnDate.isBefore(startDate);
+        final endMatch = inclusiveEnd == null || !txnDate.isAfter(inclusiveEnd);
+        return startMatch && endMatch;
+      }).toList();
+    }
     return list.where((t) {
       if (t.isArchived) return false;
-      final eventMatch = eventFilter == 'All Events' || t.eventName == eventFilter;
-      final startMatch = startDate == null || !t.date.toDate().isBefore(startDate);
-      final endMatch = endDate == null || !t.date.toDate().isAfter(endDate);
-      return eventMatch && startMatch && endMatch;
+      return eventFilter == 'All Events' || t.eventName == eventFilter;
     }).toList();
   }
 
@@ -198,105 +212,6 @@ class _OrgFinanceScreenState extends State<OrgFinanceScreen> {
         setState(() {});
       }
     });
-  }
-
-  Future<void> _deleteTransaction(TransactionModel transaction) async {
-    final confirm = await showDialog<bool>(
-      context: context,
-      barrierColor: Colors.black54,
-      builder: (ctx) => Dialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        child: Container(
-          width: 420,
-          padding: const EdgeInsets.all(28),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(children: [
-                Container(
-                  width: 42,
-                  height: 42,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFFEF2F2),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: const Icon(Icons.delete_outline_rounded,
-                      color: OrgColors.error, size: 20),
-                ),
-                const SizedBox(width: 14),
-                Text('Delete Transaction',
-                    style: GoogleFonts.beVietnamPro(
-                        fontSize: 17, fontWeight: FontWeight.w700,
-                        color: OrgColors.charcoal)),
-              ]),
-              const SizedBox(height: 16),
-              Text(
-                'Are you sure you want to delete "${transaction.segment.isNotEmpty ? transaction.segment : transaction.eventName}"? This cannot be undone.',
-                style: GoogleFonts.beVietnamPro(
-                    fontSize: 14, color: OrgColors.darkGray, height: 1.5),
-              ),
-              const SizedBox(height: 24),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  OutlinedButton(
-                    onPressed: () => Navigator.pop(ctx, false),
-                    style: OutlinedButton.styleFrom(
-                      side: const BorderSide(color: OrgColors.mediumGray),
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8)),
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 18, vertical: 11),
-                    ),
-                    child: Text('Cancel',
-                        style: GoogleFonts.beVietnamPro(
-                            fontSize: 13, color: OrgColors.charcoal)),
-                  ),
-                  const SizedBox(width: 10),
-                  ElevatedButton(
-                    onPressed: () => Navigator.pop(ctx, true),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: OrgColors.error,
-                      foregroundColor: Colors.white,
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8)),
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 18, vertical: 11),
-                    ),
-                    child: Text('Delete',
-                        style: GoogleFonts.beVietnamPro(
-                            fontSize: 13, fontWeight: FontWeight.w600)),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-    if (confirm != true) return;
-    try {
-      await FirebaseFirestore.instance
-          .collection('transactions')
-          .doc(transaction.id)
-          .delete();
-      await activity_log.ActivityLogger.log(
-        action: 'delete_transaction',
-        module: 'finance',
-        details: {
-          'orgId': widget.orgId,
-          'transactionId': transaction.id,
-          'amount': transaction.amount
-        },
-      );
-      if (mounted) {
-        _showSnack('Transaction deleted successfully', OrgColors.success);
-      }
-    } catch (e) {
-      if (mounted) _showSnack('Error: $e', OrgColors.error);
-    }
   }
 
   Future<void> _archiveTransaction(TransactionModel transaction) async {
@@ -548,6 +463,11 @@ class _OrgFinanceScreenState extends State<OrgFinanceScreen> {
     DateTime? startDate;
     DateTime? endDate;
     String selectedFormat = 'pdf';
+    // Either filter by a specific event, or by a date range — not both at
+    // once. Date-range mode also pulls in archived transactions that fall
+    // within the range, since "export everything from this period" should
+    // include records the org has since archived.
+    String reportMode = 'event';
 
     await showDialog<void>(
       context: context,
@@ -578,9 +498,13 @@ class _OrgFinanceScreenState extends State<OrgFinanceScreen> {
           }
 
           final filtered = _applyReportFilters(transactions,
+              mode: reportMode,
               eventFilter: selectedEvent,
               startDate: startDate,
               endDate: endDate);
+          final archivedIncluded = reportMode == 'dateRange'
+              ? filtered.where((t) => t.isArchived).length
+              : 0;
 
           return Dialog(
             backgroundColor: Colors.transparent,
@@ -632,60 +556,100 @@ class _OrgFinanceScreenState extends State<OrgFinanceScreen> {
                   child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                    _FieldLabel('FILTER BY EVENT'),
-                    const SizedBox(height: 6),
-                    _StyledDropdown<String>(
-                      value: selectedEvent,
-                      items: events
-                          .map((e) => DropdownMenuItem(value: e, child: Text(e)))
-                          .toList(),
-                      onChanged: (v) =>
-                          setDialogState(() => selectedEvent = v ?? 'All Events'),
-                    ),
-                    const SizedBox(height: 16),
-                    _FieldLabel('FILTER BY DATE'),
-                    const SizedBox(height: 6),
+                    _FieldLabel('REPORT BY'),
+                    const SizedBox(height: 8),
                     Row(children: [
-                      Expanded(
-                        child: OutlinedButton(
-                          onPressed: () => pickDate(true),
-                          style: OutlinedButton.styleFrom(
-                            backgroundColor: OrgColors.lightGray,
-                            side: const BorderSide(color: OrgColors.mediumGray),
-                            shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(8)),
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                          ),
-                          child: Text(
-                            startDate == null
-                                ? 'Start date'
-                                : DateFormat('MMM d, yyyy').format(startDate!),
-                            style: GoogleFonts.beVietnamPro(
-                                color: OrgColors.charcoal, fontSize: 13),
-                          ),
-                        ),
+                      _FormatChip(
+                        label: 'Specific Event',
+                        icon: Icons.event_outlined,
+                        selected: reportMode == 'event',
+                        onTap: () => setDialogState(() {
+                          reportMode = 'event';
+                          startDate = null;
+                          endDate = null;
+                        }),
                       ),
                       const SizedBox(width: 10),
-                      Expanded(
-                        child: OutlinedButton(
-                          onPressed: () => pickDate(false),
-                          style: OutlinedButton.styleFrom(
-                            backgroundColor: OrgColors.lightGray,
-                            side: const BorderSide(color: OrgColors.mediumGray),
-                            shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(8)),
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                          ),
-                          child: Text(
-                            endDate == null
-                                ? 'End date'
-                                : DateFormat('MMM d, yyyy').format(endDate!),
-                            style: GoogleFonts.beVietnamPro(
-                                color: OrgColors.charcoal, fontSize: 13),
-                          ),
-                        ),
+                      _FormatChip(
+                        label: 'Date Range',
+                        icon: Icons.date_range_outlined,
+                        selected: reportMode == 'dateRange',
+                        onTap: () => setDialogState(() {
+                          reportMode = 'dateRange';
+                          selectedEvent = 'All Events';
+                        }),
                       ),
                     ]),
+                    const SizedBox(height: 16),
+                    if (reportMode == 'event') ...[
+                      _FieldLabel('FILTER BY EVENT'),
+                      const SizedBox(height: 6),
+                      _StyledDropdown<String>(
+                        value: selectedEvent,
+                        items: events
+                            .map((e) => DropdownMenuItem(value: e, child: Text(e)))
+                            .toList(),
+                        onChanged: (v) =>
+                            setDialogState(() => selectedEvent = v ?? 'All Events'),
+                      ),
+                    ] else ...[
+                      _FieldLabel('FILTER BY DATE'),
+                      const SizedBox(height: 6),
+                      Row(children: [
+                        Expanded(
+                          child: OutlinedButton(
+                            onPressed: () => pickDate(true),
+                            style: OutlinedButton.styleFrom(
+                              backgroundColor: OrgColors.lightGray,
+                              side: const BorderSide(color: OrgColors.mediumGray),
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(8)),
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                            ),
+                            child: Text(
+                              startDate == null
+                                  ? 'Start date'
+                                  : DateFormat('MMM d, yyyy').format(startDate!),
+                              style: GoogleFonts.beVietnamPro(
+                                  color: OrgColors.charcoal, fontSize: 13),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: OutlinedButton(
+                            onPressed: () => pickDate(false),
+                            style: OutlinedButton.styleFrom(
+                              backgroundColor: OrgColors.lightGray,
+                              side: const BorderSide(color: OrgColors.mediumGray),
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(8)),
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                            ),
+                            child: Text(
+                              endDate == null
+                                  ? 'End date'
+                                  : DateFormat('MMM d, yyyy').format(endDate!),
+                              style: GoogleFonts.beVietnamPro(
+                                  color: OrgColors.charcoal, fontSize: 13),
+                            ),
+                          ),
+                        ),
+                      ]),
+                      const SizedBox(height: 6),
+                      Row(children: [
+                        const Icon(Icons.inventory_2_outlined,
+                            size: 13, color: OrgColors.darkGray),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            'Includes archived transactions that fall within this range.',
+                            style: GoogleFonts.beVietnamPro(
+                                fontSize: 11, color: OrgColors.darkGray),
+                          ),
+                        ),
+                      ]),
+                    ],
                     const SizedBox(height: 16),
                     _FieldLabel('FORMAT'),
                     const SizedBox(height: 8),
@@ -716,10 +680,14 @@ class _OrgFinanceScreenState extends State<OrgFinanceScreen> {
                         const Icon(Icons.info_outline_rounded,
                             size: 15, color: Color(0xFF2563EB)),
                         const SizedBox(width: 8),
-                        Text(
-                          '${filtered.length} transaction(s) will be included',
-                          style: GoogleFonts.beVietnamPro(
-                              fontSize: 12, color: const Color(0xFF1D4ED8)),
+                        Expanded(
+                          child: Text(
+                            archivedIncluded > 0
+                                ? '${filtered.length} transaction(s) will be included ($archivedIncluded archived)'
+                                : '${filtered.length} transaction(s) will be included',
+                            style: GoogleFonts.beVietnamPro(
+                                fontSize: 12, color: const Color(0xFF1D4ED8)),
+                          ),
                         ),
                       ]),
                     ),
@@ -758,6 +726,7 @@ class _OrgFinanceScreenState extends State<OrgFinanceScreen> {
                                 Navigator.pop(ctx);
                                 await _generateFinancialReport(
                                     selectedFormat, transactions,
+                                    mode: reportMode,
                                     eventFilter: selectedEvent,
                                     startDate: startDate,
                                     endDate: endDate);
@@ -787,16 +756,26 @@ class _OrgFinanceScreenState extends State<OrgFinanceScreen> {
 
   Future<void> _generateFinancialReport(
       String choice, List<TransactionModel> transactions,
-      {String eventFilter = 'All Events',
+      {required String mode,
+      String eventFilter = 'All Events',
       DateTime? startDate,
       DateTime? endDate}) async {
     final filtered = _applyReportFilters(transactions,
-        eventFilter: eventFilter, startDate: startDate, endDate: endDate);
+        mode: mode, eventFilter: eventFilter, startDate: startDate, endDate: endDate);
     if (filtered.isEmpty) {
       _showSnack('No transactions match the selected filters', OrgColors.warning);
       return;
     }
-    final headers = ['Date', 'Event', 'Category', 'Description', 'Type', 'Amount'];
+    if (choice == 'pdf') {
+      // PDF generation is CPU-bound and blocks the UI thread for a moment —
+      // show feedback right away so it doesn't look like the page froze.
+      _showSnack('Generating PDF…', UpriseColors.primaryDark);
+    }
+    final includeStatusColumn = mode == 'dateRange';
+    final headers = [
+      'Date', 'Event', 'Category', 'Description', 'Type', 'Amount',
+      if (includeStatusColumn) 'Status',
+    ];
     final rows = filtered
         .map((t) => [
               DateFormat('MM/dd/yyyy').format(t.date.toDate()),
@@ -805,6 +784,7 @@ class _OrgFinanceScreenState extends State<OrgFinanceScreen> {
               t.segment,
               t.type,
               t.amount.toStringAsFixed(2),
+              if (includeStatusColumn) (t.isArchived ? 'Archived' : 'Active'),
             ])
         .toList();
     final fileName =
@@ -817,16 +797,22 @@ class _OrgFinanceScreenState extends State<OrgFinanceScreen> {
         await OrgExportUtil.saveText(csv, '$fileName.csv', mimeType: 'text/csv');
       } else {
         final filters = <String>[];
-        if (eventFilter != 'All Events') filters.add('Event: $eventFilter');
-        if (startDate != null)
+        if (mode == 'event' && eventFilter != 'All Events') filters.add('Event: $eventFilter');
+        if (mode == 'dateRange' && startDate != null)
           filters.add('From: ${DateFormat('MMM d, yyyy').format(startDate)}');
-        if (endDate != null)
+        if (mode == 'dateRange' && endDate != null)
           filters.add('To: ${DateFormat('MMM d, yyyy').format(endDate)}');
+        if (mode == 'dateRange') {
+          final archivedCount = filtered.where((t) => t.isArchived).length;
+          if (archivedCount > 0) filters.add('Includes $archivedCount archived');
+        }
         final periodLabel = filters.isEmpty ? 'All time' : filters.join(' | ');
 
         final inflow = filtered.where((t) => t.type == 'income').toList();
         final outflow = filtered.where((t) => t.type == 'expense').toList();
-        final currency = NumberFormat.currency(locale: 'en_PH', symbol: '₱');
+        // 'PHP ' instead of '₱' — the PDF's default font has no glyph for the
+        // peso symbol and renders it as a missing-character box.
+        final currency = NumberFormat.currency(locale: 'en_PH', symbol: 'PHP ');
         List<List<String>> toRows(List<TransactionModel> list) => list
             .map((t) => [
                   DateFormat('MM/dd/yyyy').format(t.date.toDate()),
@@ -1407,13 +1393,6 @@ class _OrgFinanceScreenState extends State<OrgFinanceScreen> {
                     tooltip: 'Archive',
                     color: const Color(0xFF6B7280),
                     onTap: () => _archiveTransaction(transaction),
-                  ),
-                  const SizedBox(width: 6),
-                  _ActionIconButton(
-                    icon: Icons.delete_outline_rounded,
-                    tooltip: 'Delete',
-                    color: OrgColors.error,
-                    onTap: () => _deleteTransaction(transaction),
                   ),
                 ],
               ),

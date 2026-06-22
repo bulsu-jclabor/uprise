@@ -15,11 +15,32 @@ class _DS {
 
   static final cardShadow = [
     BoxShadow(
-      color: Colors.black.withOpacity(0.06),
+      color: Colors.black.withAlpha(15),
       blurRadius: 12,
       offset: const Offset(0, 4),
     ),
   ];
+}
+
+// Best-effort icon for the action column, parsed from the action string so
+// similar entries (archive/delete/approve/etc.) are visually scannable at a
+// glance instead of being a wall of plain text.
+IconData _iconForAction(String action) {
+  final a = action.toLowerCase();
+  if (a.contains('archiv')) return Icons.archive_outlined;
+  if (a.contains('restor') || a.contains('unarchiv')) return Icons.restore_rounded;
+  if (a.contains('delet') || a.contains('remov')) return Icons.delete_outline_rounded;
+  if (a.contains('reject') || a.contains('declin') || a.contains('disable')) return Icons.cancel_outlined;
+  if (a.contains('approv') || a.contains('enable')) return Icons.check_circle_outline_rounded;
+  if (a.contains('login') || a.contains('log in') || a.contains('sign in')) return Icons.login_rounded;
+  if (a.contains('logout') || a.contains('log out') || a.contains('sign out')) return Icons.logout_rounded;
+  if (a.contains('password') || a.contains('2fa') || a.contains('security')) return Icons.lock_outline_rounded;
+  if (a.contains('export') || a.contains('download')) return Icons.download_outlined;
+  if (a.contains('publish')) return Icons.publish_rounded;
+  if (a.contains('schedul')) return Icons.edit_calendar_outlined;
+  if (a.contains('creat') || a.contains('add') || a.contains('register')) return Icons.add_circle_outline_rounded;
+  if (a.contains('edit') || a.contains('updat') || a.contains('revis')) return Icons.edit_outlined;
+  return Icons.bolt_rounded;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -47,6 +68,13 @@ class _SeverityBadge extends StatelessWidget {
         const Color(0xFFFDF2F8),
         const Color(0xFF9333EA),
         'CRITICAL',
+      ),
+      // Written by org_settings.dart for password/2FA changes — gets its
+      // own look instead of falling through to the generic gray badge.
+      'security': _Style(
+        const Color(0xFFF0FDFA),
+        const Color(0xFF0D9488),
+        'SECURITY',
       ),
     };
     final s =
@@ -92,6 +120,24 @@ class _Style {
   const _Style(this.bg, this.fg, this.label);
 }
 
+// Same palette as _SeverityBadge — used for the left accent bar on each row.
+Color _severityColor(String severity) {
+  switch (severity.toLowerCase()) {
+    case 'warning':
+      return const Color(0xFFFB923C);
+    case 'error':
+      return const Color(0xFFDC2626);
+    case 'critical':
+      return const Color(0xFF9333EA);
+    case 'security':
+      return const Color(0xFF0D9488);
+    case 'info':
+      return const Color(0xFF2563EB);
+    default:
+      return const Color(0xFF6B7280);
+  }
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Main Widget
 // ─────────────────────────────────────────────────────────────────────────────
@@ -114,6 +160,9 @@ class _ActivityLogsState extends State<ActivityLogs> {
   static const List<String> _modules = [
     'All Modules',
     'System',
+    'Authentication',
+    'Student Mobile',
+    'Guest Mobile',
     'Admin Dashboard',
     'User Directory',
     'Organizations',
@@ -151,6 +200,7 @@ class _ActivityLogsState extends State<ActivityLogs> {
     'warning',
     'error',
     'critical',
+    'security',
   ];
 
   @override
@@ -197,7 +247,7 @@ class _ActivityLogsState extends State<ActivityLogs> {
             width: 44,
             height: 44,
             decoration: BoxDecoration(
-              color: UpriseColors.primaryDark.withOpacity(0.10),
+              color: UpriseColors.primaryDark.withAlpha(26),
               borderRadius: BorderRadius.circular(12),
             ),
             child: Icon(
@@ -211,17 +261,50 @@ class _ActivityLogsState extends State<ActivityLogs> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  'System Activity Audit Logs',
-                  style: GoogleFonts.beVietnamPro(
-                    fontSize: 22,
-                    fontWeight: FontWeight.w700,
-                    color: UpriseColors.accent,
-                  ),
+                Row(
+                  children: [
+                    Text(
+                      'System Activity Audit Logs',
+                      style: GoogleFonts.beVietnamPro(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w700,
+                        color: UpriseColors.accent,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFECFDF5),
+                        borderRadius: BorderRadius.circular(_DS.radiusPill),
+                        border: Border.all(color: const Color(0xFF6EE7B7)),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            width: 6,
+                            height: 6,
+                            decoration: const BoxDecoration(color: Color(0xFF059669), shape: BoxShape.circle),
+                          ),
+                          const SizedBox(width: 5),
+                          Text(
+                            'LIVE',
+                            style: GoogleFonts.beVietnamPro(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w700,
+                              color: const Color(0xFF059669),
+                              letterSpacing: 0.6,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 3),
                 Text(
-                  'Track and monitor all administrative changes across the UPRISE platform.',
+                  'Track and monitor every significant action across web and mobile.',
                   style: GoogleFonts.beVietnamPro(
                     fontSize: 13,
                     color: const Color(0xFF64748B),
@@ -594,12 +677,15 @@ class _ActivityLogsState extends State<ActivityLogs> {
         data: data,
       ),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
         decoration: BoxDecoration(
-          border: isLast
-              ? null
-              : const Border(bottom: BorderSide(color: Color(0xFFF1F5F9))),
+          border: Border(
+            left: BorderSide(color: _severityColor(severity), width: 3),
+            bottom: isLast
+                ? BorderSide.none
+                : const BorderSide(color: Color(0xFFF1F5F9)),
+          ),
         ),
+        padding: const EdgeInsets.fromLTRB(17, 14, 20, 14),
         child: Row(
           children: [
             // User
@@ -626,14 +712,23 @@ class _ActivityLogsState extends State<ActivityLogs> {
             // Action
             Expanded(
               flex: 5,
-              child: Text(
-                action,
-                style: GoogleFonts.beVietnamPro(
-                  fontSize: 13,
-                  color: const Color(0xFF374151),
-                ),
-                overflow: TextOverflow.ellipsis,
-                maxLines: 2,
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(_iconForAction(action), size: 14, color: const Color(0xFF9AA5B4)),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      action,
+                      style: GoogleFonts.beVietnamPro(
+                        fontSize: 13,
+                        color: const Color(0xFF374151),
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                      maxLines: 2,
+                    ),
+                  ),
+                ],
               ),
             ),
             // Org
@@ -651,20 +746,23 @@ class _ActivityLogsState extends State<ActivityLogs> {
             // Module
             Expanded(
               flex: 3,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: UpriseColors.primaryDark.withOpacity(0.07),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: Text(
-                  module,
-                  style: GoogleFonts.beVietnamPro(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    color: UpriseColors.primaryDark,
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: UpriseColors.primaryDark.withAlpha(18),
+                    borderRadius: BorderRadius.circular(6),
                   ),
-                  overflow: TextOverflow.ellipsis,
+                  child: Text(
+                    module,
+                    style: GoogleFonts.beVietnamPro(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: UpriseColors.primaryDark,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
               ),
             ),
@@ -848,7 +946,7 @@ class _ActivityLogsState extends State<ActivityLogs> {
                       width: 38,
                       height: 38,
                       decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.15),
+                        color: Colors.white.withAlpha(38),
                         borderRadius: BorderRadius.circular(10),
                       ),
                       child: const Icon(
@@ -874,7 +972,7 @@ class _ActivityLogsState extends State<ActivityLogs> {
                             module,
                             style: GoogleFonts.beVietnamPro(
                               fontSize: 12,
-                              color: Colors.white.withOpacity(0.7),
+                              color: Colors.white.withAlpha(179),
                             ),
                           ),
                         ],
@@ -1079,7 +1177,7 @@ class _StatCard extends StatelessWidget {
             width: 44,
             height: 44,
             decoration: BoxDecoration(
-              color: color.withOpacity(0.10),
+              color: color.withAlpha(26),
               borderRadius: BorderRadius.circular(12),
             ),
             child: Icon(icon, color: color, size: 22),
@@ -1316,7 +1414,7 @@ class _UserAvatar extends StatelessWidget {
       width: 32,
       height: 32,
       decoration: BoxDecoration(
-        color: UpriseColors.primaryDark.withOpacity(0.1),
+        color: UpriseColors.primaryDark.withAlpha(26),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Center(

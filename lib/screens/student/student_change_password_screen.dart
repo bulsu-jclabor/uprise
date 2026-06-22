@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../../services/activity_logger.dart' as activity_log;
 import 'student_login.dart';
 
 class StudentChangePasswordScreen extends StatefulWidget {
@@ -66,6 +67,13 @@ class _StudentChangePasswordScreenState
         }),
       ];
       await Future.wait(futures);
+
+      await activity_log.ActivityLogger.log(
+        action: 'Student changed password',
+        module: 'Authentication',
+        severity: 'security',
+        details: {'uid': uid},
+      );
 
       // ✅ Sign out and go back to login
       await FirebaseAuth.instance.signOut();

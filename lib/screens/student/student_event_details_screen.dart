@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
+import '../../services/activity_logger.dart' as activity_log;
 
 // ─────────────────────────────────────────────────────────────
 //  CUSTOM COLORS - UNIFORM (ORANGE)
@@ -1374,6 +1375,13 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
           'registeredAt': FieldValue.serverTimestamp(),
         });
       });
+
+      await activity_log.ActivityLogger.log(
+        action: 'Student registered for event: ${widget.event.title}',
+        module: 'Student Mobile',
+        severity: 'info',
+        details: {'eventId': widget.event.id, 'uid': user.uid, 'organizer': widget.event.organizer},
+      );
 
       widget.onRegistered();
       if (mounted) {
