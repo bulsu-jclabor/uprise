@@ -3,6 +3,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
 import '../../models/event_model.dart';
+import 'student_certificates_screen.dart' show CertificatesContent;  // <- NEW
+ 
 
 // ─── Custom Colors (Orange theme) ──────────────────────────────────────────
 class AppColors {
@@ -30,9 +32,9 @@ class _StudentEventsScreenState extends State<StudentEventsScreen>
   void initState() {
     super.initState();
     _tabController = TabController(
-      length: 2, // Calendar + Upcoming only
+      length: 3, // Calendar, Upcoming, Certificates
       vsync: this,
-      initialIndex: widget.initialTabIndex.clamp(0, 1),
+      initialIndex: widget.initialTabIndex.clamp(0, 2),
     );
   }
 
@@ -94,6 +96,7 @@ class _StudentEventsScreenState extends State<StudentEventsScreen>
           tabs: const [
             Tab(text: 'Calendar'),
             Tab(text: 'Upcoming'),
+            Tab(text: 'Certificates'),
           ],
         ),
       ),
@@ -102,6 +105,7 @@ class _StudentEventsScreenState extends State<StudentEventsScreen>
         children: [
           _buildCalendarTab(),
           _buildUpcomingTab(),
+          const CertificatesContent(),  // <- NEW third tab
         ],
       ),
     );

@@ -7,14 +7,40 @@ import 'package:qr_flutter/qr_flutter.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/certificate_preview.dart';
 
-class StudentCertificatesScreen extends StatefulWidget {
+// ─────────────────────────────────────────────────────────────
+//  STANDALONE SCREEN (uses CertificatesContent)
+// ─────────────────────────────────────────────────────────────
+class StudentCertificatesScreen extends StatelessWidget {
   const StudentCertificatesScreen({super.key});
 
   @override
-  State<StudentCertificatesScreen> createState() => _StudentCertificatesScreenState();
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.white,
+      appBar: AppBar(
+        title: const Text('Certificates',
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.black)),
+        backgroundColor: Colors.white,
+        elevation: 0,
+        centerTitle: true,
+        iconTheme: const IconThemeData(color: Colors.black),
+      ),
+      body: const CertificatesContent(),
+    );
+  }
 }
 
-class _StudentCertificatesScreenState extends State<StudentCertificatesScreen> {
+// ─────────────────────────────────────────────────────────────
+//  SHARED CONTENT WIDGET (used both standalone and as tab)
+// ─────────────────────────────────────────────────────────────
+class CertificatesContent extends StatefulWidget {
+  const CertificatesContent({super.key});
+
+  @override
+  State<CertificatesContent> createState() => _CertificatesContentState();
+}
+
+class _CertificatesContentState extends State<CertificatesContent> {
   String selectedFilter = 'All';
   final List<String> filters = ['All', 'Academic', 'Workshops', 'Events'];
 
@@ -43,11 +69,6 @@ class _StudentCertificatesScreenState extends State<StudentCertificatesScreen> {
       var docs = snapshot.docs;
 
       if (_currentUid != null) {
-        // Every certificate this app generates always sets recipientUid to
-        // a specific person (see org_certificates.dart) — there's no
-        // legitimate "broadcast to everyone" certificate type, so a missing
-        // recipientUid should never match anyone, not fall through to
-        // showing the certificate to every student.
         docs = docs.where((doc) => doc.data()['recipientUid'] == _currentUid).toList();
       }
 
@@ -81,9 +102,6 @@ class _StudentCertificatesScreenState extends State<StudentCertificatesScreen> {
       'category'    : data['type'] ?? data['templateType'] ?? 'General',
       'organization': data['organization'] ?? '',
       'recipientName': data['recipientName'] ?? '',
-      // A custom design (from Customize or Import Template) is a flattened
-      // image stored as templateFileUrl. `imageUrl` is only ever set by the
-      // legacy/manual-upload path below — they're never both populated.
       'signatories' : data['signatories'] is List ? data['signatories'] : const [],
       'status'      : data['status'] ?? 'draft',
       'recipients'  : data['recipients'] ?? 0,
@@ -152,7 +170,7 @@ class _StudentCertificatesScreenState extends State<StudentCertificatesScreen> {
     );
   }
 
-  // ── Feedback Dialog (unchanged) ──────────────────────────────────
+  // ── Feedback Dialog ──────────────────────────────────────────────
   Future<void> _showFeedbackDialog(Map<String, dynamic> cert) async {
     int selectedRating = 0;
     final commentCtrl = TextEditingController();
@@ -532,12 +550,7 @@ class _StudentCertificatesScreenState extends State<StudentCertificatesScreen> {
     );
   }
 
-  // Certificates that weren't built from a custom-designed/imported
-  // template have no flattened image at all — there's nothing per-recipient
-  // to flatten consistently. Rendered live here instead, straight from the
-  // same fields the org filled in, using the exact widget the org sees in
-  // their own Generate/Customize/View flows — so it always carries this
-  // student's actual name, not a shared placeholder graphic.
+  // ── Live preview for non‑uploaded certificates ──────────────────
   Widget _buildLivePreview(Map<String, dynamic> cert) {
     final signatories = (cert['signatories'] as List)
         .whereType<Map>()
@@ -624,107 +637,95 @@ class _StudentCertificatesScreenState extends State<StudentCertificatesScreen> {
         ? _allCertificates
         : _allCertificates.where((c) => c['category'] == selectedFilter).toList();
 
-    return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
-        title: const Text('Certificates',
-            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.black)),
-        backgroundColor: Colors.white,
-        elevation: 0,
-        centerTitle: true,
-        iconTheme: const IconThemeData(color: Colors.black),
-      ),
-      // No floatingActionButton
-      body: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // ── FILTER CHIPS ──
-          SizedBox(
-            height: 48,
-            child: ListView.builder(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              itemCount: filters.length,
-              itemBuilder: (context, index) {
-                final filter = filters[index];
-                final isSelected = selectedFilter == filter;
-                return GestureDetector(
-                  onTap: () => setState(() => selectedFilter = filter),
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 200),
-                    margin: const EdgeInsets.only(right: 8, top: 6, bottom: 6),
-                    padding: const EdgeInsets.symmetric(horizontal: 18),
-                    decoration: BoxDecoration(
-                      color: isSelected ? Colors.orange : Colors.white,
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(
-                        color: isSelected ? Colors.orange : Colors.grey.shade300,
-                      ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // ── FILTER CHIPS ──
+        SizedBox(
+          height: 48,
+          child: ListView.builder(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            itemCount: filters.length,
+            itemBuilder: (context, index) {
+              final filter = filters[index];
+              final isSelected = selectedFilter == filter;
+              return GestureDetector(
+                onTap: () => setState(() => selectedFilter = filter),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  margin: const EdgeInsets.only(right: 8, top: 6, bottom: 6),
+                  padding: const EdgeInsets.symmetric(horizontal: 18),
+                  decoration: BoxDecoration(
+                    color: isSelected ? Colors.orange : Colors.white,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: isSelected ? Colors.orange : Colors.grey.shade300,
                     ),
-                    alignment: Alignment.center,
-                    child: Text(filter,
-                        style: TextStyle(
-                            color: isSelected ? Colors.white : Colors.grey.shade600,
-                            fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
-                            fontSize: 13)),
                   ),
-                );
-              },
-            ),
+                  alignment: Alignment.center,
+                  child: Text(filter,
+                      style: TextStyle(
+                          color: isSelected ? Colors.white : Colors.grey.shade600,
+                          fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
+                          fontSize: 13)),
+                ),
+              );
+            },
           ),
-          const SizedBox(height: 8),
+        ),
+        const SizedBox(height: 8),
 
-          // ── CONTENT ──
-          Expanded(
-            child: _isLoading
-                ? const Center(child: CircularProgressIndicator(color: Colors.orange))
-                : _error != null
-                    ? Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            const Icon(Icons.error_outline, color: Colors.red, size: 48),
-                            const SizedBox(height: 12),
-                            Text('Failed to load certificates',
-                                style: TextStyle(color: Colors.grey.shade700, fontWeight: FontWeight.w600)),
-                            const SizedBox(height: 6),
-                            Text(_error!, style: const TextStyle(color: Colors.red, fontSize: 12), textAlign: TextAlign.center),
-                            const SizedBox(height: 12),
-                            ElevatedButton(
-                              onPressed: () {
-                                setState(() { _isLoading = true; _error = null; });
-                                _fetchCertificates();
-                              },
-                              style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
-                              child: const Text('Retry', style: TextStyle(color: Colors.white)),
-                            ),
-                          ],
-                        ),
-                      )
-                    : filtered.isEmpty
-                        ? Center(
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(Icons.workspace_premium_outlined, size: 64, color: Colors.grey.shade300),
-                                const SizedBox(height: 12),
-                                Text('No certificates found',
-                                    style: TextStyle(color: Colors.grey.shade500, fontSize: 16)),
-                              ],
-                            ),
-                          )
-                        : RefreshIndicator(
-                            color: Colors.orange,
-                            onRefresh: _fetchCertificates,
-                            child: ListView.builder(
-                              padding: const EdgeInsets.only(left: 16, right: 16, top: 4, bottom: 90),
-                              itemCount: filtered.length,
-                              itemBuilder: (context, index) => _buildCertificateCard(filtered[index]),
-                            ),
+        // ── CONTENT ──
+        Expanded(
+          child: _isLoading
+              ? const Center(child: CircularProgressIndicator(color: Colors.orange))
+              : _error != null
+                  ? Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(Icons.error_outline, color: Colors.red, size: 48),
+                          const SizedBox(height: 12),
+                          Text('Failed to load certificates',
+                              style: TextStyle(color: Colors.grey.shade700, fontWeight: FontWeight.w600)),
+                          const SizedBox(height: 6),
+                          Text(_error!, style: const TextStyle(color: Colors.red, fontSize: 12), textAlign: TextAlign.center),
+                          const SizedBox(height: 12),
+                          ElevatedButton(
+                            onPressed: () {
+                              setState(() { _isLoading = true; _error = null; });
+                              _fetchCertificates();
+                            },
+                            style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
+                            child: const Text('Retry', style: TextStyle(color: Colors.white)),
                           ),
-          ),
-        ],
-      ),
+                        ],
+                      ),
+                    )
+                  : filtered.isEmpty
+                      ? Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.workspace_premium_outlined, size: 64, color: Colors.grey.shade300),
+                              const SizedBox(height: 12),
+                              Text('No certificates found',
+                                  style: TextStyle(color: Colors.grey.shade500, fontSize: 16)),
+                            ],
+                          ),
+                        )
+                      : RefreshIndicator(
+                          color: Colors.orange,
+                          onRefresh: _fetchCertificates,
+                          child: ListView.builder(
+                            padding: const EdgeInsets.only(left: 16, right: 16, top: 4, bottom: 16),
+                            itemCount: filtered.length,
+                            itemBuilder: (context, index) => _buildCertificateCard(filtered[index]),
+                          ),
+                        ),
+        ),
+      ],
     );
   }
 }
