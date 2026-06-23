@@ -10,6 +10,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../../services/activity_logger.dart' as activity_log;
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -993,20 +994,20 @@ class _OrgAnnouncementsScreenState extends State<OrgAnnouncementsScreen> {
         const Divider(height: 1, color: _C.borderSoft),
         const SizedBox(height: 10),
         Row(children: [
-          _composerQuickAction(Icons.image_outlined, 'Photo', _C.success),
+          _composerQuickAction(Icons.image_outlined, 'Photo', _C.success, 'photo'),
           const SizedBox(width: 8),
-          _composerQuickAction(Icons.videocam_outlined, 'Video', _C.error),
+          _composerQuickAction(Icons.videocam_outlined, 'Video', _C.error, 'video'),
           const SizedBox(width: 8),
-          _composerQuickAction(Icons.event_outlined, 'Event', _C.warning),
+          _composerQuickAction(Icons.event_outlined, 'Event', _C.warning, 'event'),
         ]),
       ]),
     );
   }
 
-  Widget _composerQuickAction(IconData icon, String label, Color color) {
+  Widget _composerQuickAction(IconData icon, String label, Color color, String focusSection) {
     return Expanded(
       child: InkWell(
-        onTap: () => _showAnnouncementDialog(),
+        onTap: () => _showAnnouncementDialog(focusSection: focusSection),
         borderRadius: BorderRadius.circular(8),
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 8),
@@ -1128,11 +1129,15 @@ class _OrgAnnouncementsScreenState extends State<OrgAnnouncementsScreen> {
   // ==========================================================================
   // CREATE / EDIT DIALOG
   // ==========================================================================
-  void _showAnnouncementDialog({AnnouncementModel? existing}) {
+  void _showAnnouncementDialog({AnnouncementModel? existing, String? focusSection}) {
     final isEdit = existing != null;
     final formKey    = GlobalKey<FormState>();
     final titleCtrl  = TextEditingController(text: existing?.title ?? '');
     final contentCtrl= TextEditingController(text: existing?.content ?? '');
+    final videoUrlCtrl = TextEditingController(text: existing?.videoUrl ?? '');
+    final imageSectionKey = GlobalKey();
+    final videoSectionKey = GlobalKey();
+    final eventSectionKey = GlobalKey();
     bool isPinned    = existing?.isPinned ?? false;
     String? imageBase64 = existing?.imageBase64;
     List<AttachmentBase64> attachments = List.from(existing?.attachmentsBase64 ?? []);
@@ -1152,11 +1157,32 @@ class _OrgAnnouncementsScreenState extends State<OrgAnnouncementsScreen> {
       scheduledTime = TimeOfDay.fromDateTime(scheduledDate);
     }
 
+    bool hasScrolledToFocus = false;
+
     showDialog(
       context: context,
       barrierDismissible: false,
       builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setDlg) => Dialog(
+        builder: (ctx, setDlg) {
+          if (!hasScrolledToFocus && focusSection != null) {
+            hasScrolledToFocus = true;
+            final targetKey = switch (focusSection) {
+              'photo' => imageSectionKey,
+              'video' => videoSectionKey,
+              'event' => eventSectionKey,
+              _ => null,
+            };
+            if (targetKey != null) {
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                final targetContext = targetKey.currentContext;
+                if (targetContext != null) {
+                  Scrollable.ensureVisible(targetContext,
+                      duration: const Duration(milliseconds: 300), alignment: 0.1);
+                }
+              });
+            }
+          }
+          return Dialog(
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
           child: Container(
             width: 620,
@@ -1279,11 +1305,19 @@ class _OrgAnnouncementsScreenState extends State<OrgAnnouncementsScreen> {
                           ),
                           const SizedBox(height: 20),
 
-                          _sectionLabel('Banner Image', icon: Icons.image_outlined),
-                          _buildImagePicker(
-                              imageBase64,
-                              (v) => setDlg(() => imageBase64 = v),
-                              () => setDlg(() => imageBase64 = null)),
+                          KeyedSubtree(
+                            key: imageSectionKey,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                _sectionLabel('Banner Image', icon: Icons.image_outlined),
+                                _buildImagePicker(
+                                    imageBase64,
+                                    (v) => setDlg(() => imageBase64 = v),
+                                    () => setDlg(() => imageBase64 = null)),
+                              ],
+                            ),
+                          ),
                           const SizedBox(height: 20),
 
                           _sectionLabel('Attachments', icon: Icons.attach_file_rounded),
@@ -1291,6 +1325,36 @@ class _OrgAnnouncementsScreenState extends State<OrgAnnouncementsScreen> {
                               attachments, (v) => setDlg(() => attachments = v)),
                           const SizedBox(height: 20),
 
+                          KeyedSubtree(
+                            key: videoSectionKey,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                _sectionLabel('Video Link', icon: Icons.videocam_outlined),
+                                TextFormField(
+                                  controller: videoUrlCtrl,
+                                  decoration: _DS.inputDecoration('Video URL (optional)',
+                                      hint: 'Paste a YouTube, Drive, or Facebook video link',
+                                      icon: Icons.link_rounded),
+                                  style: GoogleFonts.beVietnamPro(fontSize: 13),
+                                  validator: (v) {
+                                    final value = v?.trim() ?? '';
+                                    if (value.isEmpty) return null;
+                                    final uri = Uri.tryParse(value);
+                                    if (uri == null || !uri.isAbsolute) return 'Enter a valid URL';
+                                    return null;
+                                  },
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 20),
+
+                          KeyedSubtree(
+                            key: eventSectionKey,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
                           _sectionLabel('Link to Event', icon: Icons.event_available_rounded),
                           FutureBuilder<List<_LinkableEvent>>(
                             future: linkableEventsFuture,
@@ -1355,6 +1419,9 @@ class _OrgAnnouncementsScreenState extends State<OrgAnnouncementsScreen> {
                                 ),
                               );
                             },
+                          ),
+                              ],
+                            ),
                           ),
                           const SizedBox(height: 20),
 
@@ -1631,6 +1698,7 @@ class _OrgAnnouncementsScreenState extends State<OrgAnnouncementsScreen> {
                                             })
                                         .toList(),
                                     'imageBase64': imageBase64 ?? '',
+                                    'videoUrl': videoUrlCtrl.text.trim(),
                                     'pinned': isPinned,
                                     'targetAudience': targetAudience,
                                     'category': category,
@@ -1702,7 +1770,8 @@ class _OrgAnnouncementsScreenState extends State<OrgAnnouncementsScreen> {
               ],
             ),
           ),
-        ),
+        );
+        },
       ),
     );
   }
@@ -1898,6 +1967,18 @@ class _PostCardState extends State<_PostCard> {
     if (diff.inDays < 7)     return '${diff.inDays}d ago';
     if (diff.inDays < 30)    return '${(diff.inDays / 7).floor()}w ago';
     return DateFormat('MMM dd, yyyy').format(ts.toDate());
+  }
+
+  Future<void> _openVideoLink(String url) async {
+    final uri = Uri.tryParse(url);
+    final opened = uri != null && await canLaunchUrl(uri)
+        ? await launchUrl(uri, mode: LaunchMode.externalApplication)
+        : false;
+    if (!opened && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not open video link')),
+      );
+    }
   }
 
   @override
@@ -2144,6 +2225,38 @@ class _PostCardState extends State<_PostCard> {
           ),
         ],
 
+        // ── Linked video ───────────────────────────────────────────────────────
+        if (a.videoUrl.isNotEmpty) ...[
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
+            child: InkWell(
+              onTap: () => _openVideoLink(a.videoUrl),
+              borderRadius: BorderRadius.circular(_DS.radiusSm),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                decoration: BoxDecoration(
+                  color: _C.errorBg,
+                  borderRadius: BorderRadius.circular(_DS.radiusSm),
+                  border: Border.all(color: _C.error.withAlpha(64)),
+                ),
+                child: Row(children: [
+                  Container(
+                    width: 32, height: 32,
+                    decoration: BoxDecoration(color: _C.error.withAlpha(38), borderRadius: BorderRadius.circular(8)),
+                    child: const Icon(Icons.play_arrow_rounded, color: _C.error, size: 18),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text('Watch Video',
+                        style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600, color: _C.error)),
+                  ),
+                  const Icon(Icons.open_in_new_rounded, size: 15, color: _C.error),
+                ]),
+              ),
+            ),
+          ),
+        ],
+
         // ── Attachments ──────────────────────────────────────────────────────
         if (a.attachmentsBase64.isNotEmpty) ...[
           Padding(
@@ -2291,6 +2404,7 @@ class AnnouncementModel {
   final String linkedEventId;
   final String linkedProposalId;
   final String linkedEventTitle;
+  final String videoUrl;
 
   const AnnouncementModel({
     required this.id,
@@ -2310,6 +2424,7 @@ class AnnouncementModel {
     this.linkedEventId = '',
     this.linkedProposalId = '',
     this.linkedEventTitle = '',
+    this.videoUrl = '',
   });
 
   factory AnnouncementModel.fromFirestore(DocumentSnapshot doc) {
@@ -2343,6 +2458,7 @@ class AnnouncementModel {
       linkedEventId: d['linkedEventId'] as String? ?? '',
       linkedProposalId: d['linkedProposalId'] as String? ?? '',
       linkedEventTitle: d['linkedEventTitle'] as String? ?? '',
+      videoUrl: d['videoUrl'] as String? ?? '',
     );
   }
 }

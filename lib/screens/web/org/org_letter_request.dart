@@ -128,6 +128,8 @@ Widget _statusBadge(String status) {
     ),
     child: Text(
       s.label,
+      softWrap: false,
+      overflow: TextOverflow.visible,
       style: GoogleFonts.beVietnamPro(
         fontSize: 10,
         fontWeight: FontWeight.w700,
@@ -534,7 +536,8 @@ class _OrgLetterRequestScreenState extends State<OrgLetterRequestScreen> {
         Expanded(flex: 3, child: _headerCell('SUBJECT')),
         Expanded(flex: 2, child: _headerCell('MESSAGE')),
         Expanded(flex: 2, child: _headerCell('DATE SUBMITTED')),
-        Expanded(flex: 1, child: _headerCell('STATUS')),
+        Expanded(flex: 2, child: _headerCell('E-SIGNED')),
+        Expanded(flex: 2, child: _headerCell('STATUS')),
         Expanded(
           flex: 2,
           child: Align(
@@ -626,8 +629,20 @@ class _OrgLetterRequestScreenState extends State<OrgLetterRequestScreen> {
               ),
             ),
             Expanded(
-              flex: 1,
-              child: Row(children: [_statusBadge(request.status)]),
+              flex: 2,
+              child: request.signedAt != null
+                  ? Row(mainAxisSize: MainAxisSize.min, children: [
+                      const Icon(Icons.draw_rounded, size: 12, color: Color(0xFF059669)),
+                      const SizedBox(width: 5),
+                      Flexible(child: Text(
+                          DateFormat('MMM dd, yyyy').format(request.signedAt!.toDate()),
+                          style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF059669), fontWeight: FontWeight.w500))),
+                    ])
+                  : Text('—', style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFFD1D5DB))),
+            ),
+            Expanded(
+              flex: 2,
+              child: Align(alignment: Alignment.centerLeft, child: _statusBadge(request.status)),
             ),
             Expanded(
               flex: 2,
@@ -1115,6 +1130,20 @@ class _RequestDetailsDialog extends StatelessWidget {
     }
   }
 
+  void _openSignedDocument(BuildContext context) async {
+    final base64 = request.signedDocumentBase64;
+    if (base64 == null || base64.isEmpty) return;
+    try {
+      final bytes = base64Decode(base64);
+      await platform_file_utils.saveBytesToTempAndOpen(
+          bytes, '${request.letterId}-signed.pdf', mimeType: 'application/pdf');
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error opening signed copy: $e'), backgroundColor: Colors.red),
+      );
+    }
+  }
+
   String _getMimeTypeFromExtension(String ext) {
     switch (ext.toLowerCase()) {
       case 'txt': return 'text/plain';
@@ -1254,6 +1283,50 @@ class _RequestDetailsDialog extends StatelessWidget {
                     _detailItem('Attachment',
                         '${request.attachmentName}${request.attachmentSize != null ? ' (${request.attachmentSize})' : ''}',
                         Icons.attach_file_rounded),
+                  ],
+                  if (request.signedDocumentBase64 != null && request.signedDocumentBase64!.isNotEmpty) ...[
+                    const SizedBox(height: 14),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF059669).withAlpha(15),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: const Color(0xFF059669).withAlpha(38)),
+                      ),
+                      child: Row(children: [
+                        Container(
+                          width: 40, height: 40,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF059669).withAlpha(26),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Icon(Icons.verified_rounded, color: Color(0xFF059669), size: 20),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                            Text('Digitally Signed Copy',
+                                style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600, color: const Color(0xFF1A202C))),
+                            if (request.signedBy != null)
+                              Text('Signed by ${request.signedBy}',
+                                  style: GoogleFonts.beVietnamPro(fontSize: 11, color: const Color(0xFF64748B))),
+                          ]),
+                        ),
+                        ElevatedButton.icon(
+                          onPressed: () => _openSignedDocument(context),
+                          icon: const Icon(Icons.visibility, size: 16),
+                          label: const Text('View'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF059669),
+                            foregroundColor: Colors.white,
+                            elevation: 0,
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                          ),
+                        ),
+                      ]),
+                    ),
                   ],
                   if (request.revisionNote != null) ...[
                     const SizedBox(height: 14),
@@ -2341,6 +2414,9 @@ class LetterRequestModel {
   final Timestamp? resubmittedAt;
   final bool isArchived;
   final Timestamp timestamp;
+  final String? signedDocumentBase64;
+  final Timestamp? signedAt;
+  final String? signedBy;
 
   LetterRequestModel({
     required this.id,
@@ -2361,6 +2437,9 @@ class LetterRequestModel {
     this.resubmittedAt,
     required this.isArchived,
     required this.timestamp,
+    this.signedDocumentBase64,
+    this.signedAt,
+    this.signedBy,
   });
 
   factory LetterRequestModel.fromFirestore(DocumentSnapshot doc) {
@@ -2384,6 +2463,9 @@ class LetterRequestModel {
       resubmittedAt:    d['resubmittedAt'] as Timestamp?,
       isArchived:       d['isArchived'] ?? false,
       timestamp:        d['timestamp'] as Timestamp? ?? Timestamp.now(),
+      signedDocumentBase64: d['signedDocumentBase64'],
+      signedAt:         d['signedAt'] as Timestamp?,
+      signedBy:         d['signedBy'],
     );
   }
 }

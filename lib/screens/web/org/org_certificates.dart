@@ -17,6 +17,7 @@ import 'dart:math' as math;
 import 'package:image/image.dart' as img;
 import 'package:qr_flutter/qr_flutter.dart';
 import '../../theme/app_theme.dart';
+import '../../../widgets/certificate_preview.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Design tokens — identical to student_accounts / org_event_proposals
@@ -1085,20 +1086,27 @@ List<_CanvasElement> _defaultElementsFor({
   required Color accent,
   required Color textCol,
 }) {
+  // Positions approximate CertificatePreview's actual flow (lib/widgets/
+  // certificate_preview.dart) — a small square logo badge sitting just
+  // above the org name, not a large decorative seal, since that's what the
+  // real design has. There's no element type for the small workspace_premium
+  // corner icon or the inline badge+name row (this canvas only supports
+  // text/rect/circle/divider, all absolutely positioned), so this is the
+  // closest practical approximation, not a pixel-exact copy.
   return [
     _CanvasElement(id: 'border', type: 'rect',    x: 8,   y: 8,   w: 584, h: 408, fillColor: Colors.transparent, strokeColor: accent, strokeWidth: 2),
-    _CanvasElement(id: 'seal',   type: 'circle',  x: 245, y: 28,  w: 110, h: 110, fillColor: accent.withAlpha(31), strokeColor: accent, strokeWidth: 2.5),
-    _CanvasElement(id: 'org',    type: 'text',    x: 0,   y: 44,  w: 600, h: 28,  text: orgName.toUpperCase(), fontSize: 11, fontWeight: FontWeight.w700, color: accent, letterSpacing: 3),
-    _CanvasElement(id: 'certty', type: 'text',    x: 0,   y: 148, w: 600, h: 34,  text: 'CERTIFICATE', fontSize: 26, fontWeight: FontWeight.w900, color: textCol, letterSpacing: 1),
-    _CanvasElement(id: 'certof', type: 'text',    x: 0,   y: 184, w: 600, h: 20,  text: 'OF PARTICIPATION', fontSize: 13, fontWeight: FontWeight.w700, color: accent, letterSpacing: 3),
-    _CanvasElement(id: 'certfy', type: 'text',    x: 0,   y: 222, w: 600, h: 20,  text: 'This certificate is proudly presented to', fontSize: 11, color: textCol.withAlpha(166)),
-    _CanvasElement(id: 'recip',  type: 'text',    x: 0,   y: 244, w: 600, h: 36,  text: '[Recipient Name]', fontSize: 24, fontWeight: FontWeight.w700, color: textCol, italic: true),
-    _CanvasElement(id: 'div1',   type: 'divider', x: 80,  y: 286, w: 440, h: 1,   strokeColor: accent.withAlpha(102), strokeWidth: 1),
-    _CanvasElement(id: 'parti',  type: 'text',    x: 0,   y: 295, w: 600, h: 20,  text: 'for successfully participating in', fontSize: 11, color: textCol.withAlpha(153)),
-    _CanvasElement(id: 'evtit',  type: 'text',    x: 0,   y: 317, w: 600, h: 28,  text: eventTitle, fontSize: 16, fontWeight: FontWeight.w700, color: textCol),
-    _CanvasElement(id: 'evdat',  type: 'text',    x: 0,   y: 347, w: 600, h: 20,  text: 'held on $eventDate', fontSize: 11, color: textCol.withAlpha(153)),
-    _CanvasElement(id: 'div2',   type: 'divider', x: 190, y: 375, w: 220, h: 1,   strokeColor: accent, strokeWidth: 1),
-    _CanvasElement(id: 'signa',  type: 'text',    x: 0,   y: 382, w: 600, h: 18,  text: signatoryLine, fontSize: 10, color: textCol.withAlpha(128)),
+    _CanvasElement(id: 'badge',  type: 'rect',    x: 287, y: 26,  w: 26,  h: 26,  fillColor: accent, strokeColor: accent, strokeWidth: 0),
+    _CanvasElement(id: 'org',    type: 'text',    x: 0,   y: 58,  w: 600, h: 20,  text: orgName.toUpperCase(), fontSize: 11, fontWeight: FontWeight.w700, color: accent, letterSpacing: 3),
+    _CanvasElement(id: 'certty', type: 'text',    x: 0,   y: 92,  w: 600, h: 34,  text: 'CERTIFICATE', fontSize: 26, fontWeight: FontWeight.w900, color: textCol, letterSpacing: 1),
+    _CanvasElement(id: 'certof', type: 'text',    x: 0,   y: 128, w: 600, h: 20,  text: 'OF PARTICIPATION', fontSize: 13, fontWeight: FontWeight.w700, color: accent, letterSpacing: 3),
+    _CanvasElement(id: 'certfy', type: 'text',    x: 0,   y: 162, w: 600, h: 20,  text: 'This certificate is proudly presented to', fontSize: 11, color: textCol.withAlpha(166)),
+    _CanvasElement(id: 'recip',  type: 'text',    x: 0,   y: 184, w: 600, h: 36,  text: '[Recipient Name]', fontSize: 24, fontWeight: FontWeight.w700, color: textCol, italic: true),
+    _CanvasElement(id: 'div1',   type: 'divider', x: 230, y: 226, w: 140, h: 1,   strokeColor: accent.withAlpha(102), strokeWidth: 1),
+    _CanvasElement(id: 'parti',  type: 'text',    x: 0,   y: 240, w: 600, h: 20,  text: 'for successfully participating in', fontSize: 11, color: textCol.withAlpha(153)),
+    _CanvasElement(id: 'evtit',  type: 'text',    x: 0,   y: 262, w: 600, h: 28,  text: eventTitle, fontSize: 16, fontWeight: FontWeight.w700, color: textCol),
+    _CanvasElement(id: 'evdat',  type: 'text',    x: 0,   y: 292, w: 600, h: 20,  text: 'held on $eventDate', fontSize: 11, color: textCol.withAlpha(153)),
+    _CanvasElement(id: 'div2',   type: 'divider', x: 190, y: 330, w: 220, h: 1,   strokeColor: accent, strokeWidth: 1),
+    _CanvasElement(id: 'signa',  type: 'text',    x: 0,   y: 338, w: 600, h: 18,  text: signatoryLine, fontSize: 10, color: textCol.withAlpha(128)),
   ];
 }
 
@@ -1237,6 +1245,23 @@ class _CanvaTemplateEditorState extends State<_CanvaTemplateEditor> {
       } catch (_) {
         // Canvas export not available on this platform — continue without url.
       }
+
+      if (downloadUrl == null) {
+        // Capture genuinely failed (or the repaint boundary wasn't ready) —
+        // closing the dialog here would silently discard everything the org
+        // just designed with no way to recover it. Keep the editor open and
+        // tell them plainly instead.
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Could not capture your customization as an image. Your edits are still here — try again, or use Import Template instead.'),
+              backgroundColor: Color(0xFFDC2626),
+            ),
+          );
+        }
+        return;
+      }
+
       await activity_log.ActivityLogger.log(
         action: 'customize_certificate_template',
         module: 'certificates',
@@ -1280,14 +1305,16 @@ class _CanvaTemplateEditorState extends State<_CanvaTemplateEditor> {
               Text('Template Editor', style: GoogleFonts.beVietnamPro(fontSize: 15, fontWeight: FontWeight.w700, color: headerText)),
               const SizedBox(width: 20),
               // ── Add element buttons ────────────────────────────────
-              _EditorTopBtn(label: '＋ Text',   onTap: _addText),
-              const SizedBox(width: 6),
-              _EditorTopBtn(label: '⬜ Rect',   onTap: _addRect),
-              const SizedBox(width: 6),
-              _EditorTopBtn(label: '⭕ Circle', onTap: _addCircle),
+              _EditorTopBtn(icon: Icons.text_fields_rounded, label: 'Text', onTap: _addText),
+              const SizedBox(width: 8),
+              _EditorTopBtn(icon: Icons.crop_square_rounded, label: 'Rectangle', onTap: _addRect),
+              const SizedBox(width: 8),
+              _EditorTopBtn(icon: Icons.circle_outlined, label: 'Circle', onTap: _addCircle),
               if (_selectedId != null) ...[
-                const SizedBox(width: 6),
-                _EditorTopBtn(label: '🗑 Delete', onTap: _deleteSelected, danger: true),
+                const SizedBox(width: 8),
+                Container(width: 1, height: 22, color: borderColor),
+                const SizedBox(width: 8),
+                _EditorTopBtn(icon: Icons.delete_outline_rounded, label: 'Delete', onTap: _deleteSelected, danger: true),
               ],
               const Spacer(),
               IconButton(
@@ -2037,23 +2064,33 @@ class _Toggle extends StatelessWidget {
 }
 
 class _EditorTopBtn extends StatelessWidget {
+  final IconData icon;
   final String label;
   final VoidCallback onTap;
   final bool danger;
-  const _EditorTopBtn({required this.label, required this.onTap, this.danger = false});
+  const _EditorTopBtn({required this.icon, required this.label, required this.onTap, this.danger = false});
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(6),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-        decoration: BoxDecoration(
-          color: danger ? const Color(0xFFEF4444) : UpriseColors.primaryLight,
-          borderRadius: BorderRadius.circular(6),
+    final fg = danger ? const Color(0xFFEF4444) : UpriseColors.primaryDark;
+    return Tooltip(
+      message: label,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            color: danger ? const Color(0xFFEF4444).withAlpha(18) : UpriseColors.white,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: danger ? const Color(0xFFEF4444).withAlpha(64) : UpriseColors.primaryDark.withAlpha(38)),
+          ),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            Icon(icon, size: 15, color: fg),
+            const SizedBox(width: 6),
+            Text(label, style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.w600, color: fg)),
+          ]),
         ),
-        child: Text(label, style: GoogleFonts.beVietnamPro(fontSize: 11, fontWeight: FontWeight.w600, color: danger ? UpriseColors.white : UpriseColors.primaryDark)),
       ),
     );
   }
@@ -2188,16 +2225,8 @@ class _GenerateCertificateModalState extends State<_GenerateCertificateModal> {
     }
   }
 
-  Map<String, dynamic> get _previewTheme {
-    switch (_certType) {
-      case 'Modern Workshop':
-        return {'bg': UpriseColors.primaryDark, 'accent': UpriseColors.primaryLight, 'text': Colors.white};
-      case 'Vibrant Event':
-        return {'bg': UpriseColors.accent, 'accent': UpriseColors.primaryDark, 'text': Colors.white};
-      default:
-        return {'bg': UpriseColors.white, 'accent': UpriseColors.primaryDark, 'text': UpriseColors.charcoal};
-    }
-  }
+  CertTheme get _previewTheme => CertTheme.forType(_certType,
+      primaryDark: UpriseColors.primaryDark, primaryLight: UpriseColors.primaryLight, accentColor: UpriseColors.accent);
 
   String _generateVerificationCode() {
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
@@ -2235,9 +2264,9 @@ class _GenerateCertificateModalState extends State<_GenerateCertificateModal> {
         eventTitle: _titleCtrl.text.trim().isNotEmpty ? _titleCtrl.text.trim() : 'Certificate of Participation',
         eventDate: _dateCtrl.text.trim().isNotEmpty ? _dateCtrl.text.trim() : DateFormat('MMMM dd, yyyy').format(DateTime.now()),
         signatoryLine: signatoryLine,
-        themeBg: theme['bg'] as Color,
-        themeAccent: theme['accent'] as Color,
-        themeText: theme['text'] as Color,
+        themeBg: theme.bg,
+        themeAccent: theme.accent,
+        themeText: theme.text,
         onSave: (savedUrl) {
           Navigator.pop(context);
           if (savedUrl != null) setState(() => _selectedTemplateUrl = savedUrl);
@@ -2257,6 +2286,93 @@ class _GenerateCertificateModalState extends State<_GenerateCertificateModal> {
         _selectedTemplateUrl = result['url'];
       });
     }
+  }
+
+  // Single source of truth for what "the certificate" currently looks like —
+  // used both inline in the modal and in the full-size preview dialog, so
+  // the two can never show something different from each other.
+  Widget _buildPreviewVisual(CertTheme theme) {
+    // Once a template has been customized or imported, the preview shows
+    // that actual design — not the generic preset layout — since that
+    // image is exactly what gets issued.
+    if (_selectedTemplateUrl != null) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(12),
+        child: Image.network(
+          _selectedTemplateUrl!,
+          fit: BoxFit.cover,
+          loadingBuilder: (context, child, progress) => progress == null
+              ? child
+              : Container(color: const Color(0xFFF1F4F8), child: const Center(child: CircularProgressIndicator())),
+          errorBuilder: (_, __, ___) => Container(
+            color: const Color(0xFFF1F4F8),
+            padding: const EdgeInsets.all(16),
+            child: Text('Could not load the custom template image.',
+                style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF94A3B8)), textAlign: TextAlign.center),
+          ),
+        ),
+      );
+    }
+    // Rendered at its true 600×424 design size (same logical canvas size
+    // Customize opens to) then scaled as a whole via FittedBox — so the
+    // proportions always match the editor exactly, with nothing cropped
+    // off at narrow widths.
+    return FittedBox(
+      fit: BoxFit.contain,
+      child: SizedBox(
+        width: 600,
+        height: 424,
+        child: CertificatePreview(
+          theme: theme,
+          orgName:   _orgCtrl.text.isNotEmpty  ? _orgCtrl.text  : 'Your Organization',
+          eventTitle: _titleCtrl.text.isNotEmpty ? _titleCtrl.text : 'Certificate of Participation',
+          eventDate:  _dateCtrl.text.isNotEmpty  ? _dateCtrl.text  : DateFormat('MMMM dd, yyyy').format(DateTime.now()),
+          recipient: '[Recipient Name]',
+          signatories: _signatories
+              .where((s) => s.nameCtrl.text.trim().isNotEmpty)
+              .map((s) => CertSignatory(
+                    name: s.nameCtrl.text.trim(),
+                    title: s.titleCtrl.text.trim(),
+                    signatureImageBase64: s.signatureImageBase64,
+                  ))
+              .toList(),
+        ),
+      ),
+    );
+  }
+
+  void _showPreviewFullscreen(CertTheme theme) {
+    showDialog(
+      context: context,
+      barrierColor: Colors.black87,
+      builder: (ctx) => Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: const EdgeInsets.all(40),
+        child: Stack(clipBehavior: Clip.none, children: [
+          Container(
+            constraints: const BoxConstraints(maxWidth: 1000),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: const [BoxShadow(color: Colors.black54, blurRadius: 32, offset: Offset(0, 12))],
+            ),
+            padding: const EdgeInsets.all(20),
+            child: AspectRatio(
+              aspectRatio: 600 / 424,
+              child: _buildPreviewVisual(theme),
+            ),
+          ),
+          Positioned(
+            top: -16, right: -16,
+            child: IconButton(
+              icon: const Icon(Icons.close_rounded, color: Colors.white),
+              style: IconButton.styleFrom(backgroundColor: Colors.black54, shape: const CircleBorder()),
+              onPressed: () => Navigator.pop(ctx),
+            ),
+          ),
+        ]),
+      ),
+    );
   }
 
   Future<void> _submit({required bool distribute}) async {
@@ -2303,13 +2419,15 @@ class _GenerateCertificateModalState extends State<_GenerateCertificateModal> {
             'recipients':       1,
             'recipientName':    r['recipientName'],
             'isGuest':          isGuest,
-            // Guests have no Firebase-uid-keyed doc, so recipientId/recipientUid
-            // are deliberately left unset for them — student_certificates_screen.dart
-            // treats a missing recipientUid as "broadcast to every student", so
-            // writing a guest's email into that field would leak their certificate
-            // into every student's certificate list.
-            if (isGuest) 'recipientEmail': key
-            else ...{'recipientId': key, 'recipientUid': key},
+            // recipientUid must always be set, guest or not — the student
+            // viewer matches certificates by exact recipientUid equality, so
+            // a guest's email here will simply never match any real
+            // student's uid. Leaving it unset is what actually causes a
+            // leak: this collection has no other "broadcast to everyone"
+            // certificate type, so a missing recipientUid has no legitimate
+            // meaning here and should never be relied on by a reader.
+            'recipientId': key, 'recipientUid': key,
+            if (isGuest) 'recipientEmail': key,
             'signatories':      signatoriesPayload,
             'verificationCode': _generateVerificationCode(),
             'autoGenerated':    false,
@@ -2442,7 +2560,7 @@ class _GenerateCertificateModalState extends State<_GenerateCertificateModal> {
       insetPadding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
       child: Container(
-        width: 820,
+        width: 960,
         constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.90),
         child: Form(
           key: _formKey,
@@ -2724,12 +2842,19 @@ class _GenerateCertificateModalState extends State<_GenerateCertificateModal> {
                     ]),
                   ),
                   const SizedBox(width: 24),
-                  // Right — live preview — unchanged
+                  // Right — live preview
                   Expanded(
                     flex: 2,
                     child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                       Row(children: [
                         Expanded(child: _sectionLabel('Live Preview', icon: Icons.preview_outlined)),
+                        IconButton(
+                          icon: const Icon(Icons.zoom_out_map_rounded, size: 16, color: UpriseColors.darkGray),
+                          tooltip: 'View larger',
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                          onPressed: () => _showPreviewFullscreen(theme),
+                        ),
                         if (_selectedTemplateUrl != null)
                           TextButton(
                             onPressed: () => setState(() => _selectedTemplateUrl = null),
@@ -2737,60 +2862,11 @@ class _GenerateCertificateModalState extends State<_GenerateCertificateModal> {
                             child: Text('Use preset instead', style: GoogleFonts.beVietnamPro(fontSize: 11.5, color: UpriseColors.primaryDark)),
                           ),
                       ]),
-                      // Once a template has been customized or imported, the preview
-                      // shows that actual design — not the generic preset layout —
-                      // since that image is exactly what gets issued.
-                      _selectedTemplateUrl != null
-                          ? ClipRRect(
-                              borderRadius: BorderRadius.circular(12),
-                              child: AspectRatio(
-                                aspectRatio: 600 / 424,
-                                child: Image.network(
-                                  _selectedTemplateUrl!,
-                                  fit: BoxFit.cover,
-                                  loadingBuilder: (context, child, progress) => progress == null
-                                      ? child
-                                      : Container(color: const Color(0xFFF1F4F8), child: const Center(child: CircularProgressIndicator())),
-                                  errorBuilder: (_, __, ___) => Container(
-                                    color: const Color(0xFFF1F4F8),
-                                    padding: const EdgeInsets.all(16),
-                                    child: Text('Could not load the custom template image.',
-                                        style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF94A3B8)), textAlign: TextAlign.center),
-                                  ),
-                                ),
-                              ),
-                            )
-                          // Rendered at its true 600×424 design size (same logical
-                          // canvas size Customize opens to) then scaled as a whole
-                          // via FittedBox — so the proportions always match the
-                          // editor exactly, with nothing cropped off at narrow widths.
-                          : AspectRatio(
-                              aspectRatio: 600 / 424,
-                              child: FittedBox(
-                                fit: BoxFit.contain,
-                                child: SizedBox(
-                                  width: 600,
-                                  height: 424,
-                                  child: _CertPreview(
-                                    bg:        theme['bg'] as Color,
-                                    accent:    theme['accent'] as Color,
-                                    textColor: theme['text'] as Color,
-                                    orgName:   _orgCtrl.text.isNotEmpty  ? _orgCtrl.text  : 'Your Organization',
-                                    eventTitle: _titleCtrl.text.isNotEmpty ? _titleCtrl.text : 'Certificate of Participation',
-                                    eventDate:  _dateCtrl.text.isNotEmpty  ? _dateCtrl.text  : DateFormat('MMMM dd, yyyy').format(DateTime.now()),
-                                    recipient: '[Recipient Name]',
-                                    signatories: _signatories
-                                        .where((s) => s.nameCtrl.text.trim().isNotEmpty)
-                                        .map((s) => _SignatoryPreviewData(
-                                              name: s.nameCtrl.text.trim(),
-                                              title: s.titleCtrl.text.trim(),
-                                              signatureImageBase64: s.signatureImageBase64,
-                                            ))
-                                        .toList(),
-                                  ),
-                                ),
-                              ),
-                            ),
+                      const SizedBox(height: 4),
+                      AspectRatio(
+                        aspectRatio: 600 / 424,
+                        child: _buildPreviewVisual(theme),
+                      ),
                     ]),
                   ),
                 ]),
@@ -2949,150 +3025,6 @@ class _SignatoryRow extends StatelessWidget {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Certificate Live Preview Widget — unchanged
-// ─────────────────────────────────────────────────────────────────────────────
-class _SignatoryPreviewData {
-  final String name;
-  final String title;
-  final String? signatureImageBase64;
-  const _SignatoryPreviewData({required this.name, this.title = '', this.signatureImageBase64});
-}
-
-class _CertPreview extends StatelessWidget {
-  final Color bg, accent, textColor;
-  final String orgName, eventTitle, eventDate, recipient;
-  final List<_SignatoryPreviewData> signatories;
-  final String? verificationCode;
-  const _CertPreview({
-    required this.bg, required this.accent, required this.textColor,
-    required this.orgName, required this.eventTitle, required this.eventDate, required this.recipient,
-    this.signatories = const [],
-    this.verificationCode,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      clipBehavior: Clip.antiAlias,
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: accent.withOpacity(0.3), width: 1.5),
-        boxShadow: [BoxShadow(color: accent.withOpacity(0.08), blurRadius: 12, offset: const Offset(0, 4))],
-      ),
-      child: Stack(children: [
-        Positioned(
-          top: 14, right: 14,
-          child: Icon(Icons.workspace_premium_rounded, size: 20, color: accent.withOpacity(0.55)),
-        ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(22, 22, 38, 18),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.center, children: [
-            Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-              Container(
-                width: 26, height: 26,
-                decoration: BoxDecoration(color: accent, borderRadius: BorderRadius.circular(7)),
-                alignment: Alignment.center,
-                child: Text(orgName.isNotEmpty ? orgName[0].toUpperCase() : '?',
-                    style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w800, color: Colors.white)),
-              ),
-              const SizedBox(width: 8),
-              Text(
-                orgName.toUpperCase(),
-                style: GoogleFonts.beVietnamPro(fontSize: 11, fontWeight: FontWeight.w800, color: accent, letterSpacing: 2),
-                textAlign: TextAlign.center,
-              ),
-            ]),
-            const SizedBox(height: 14),
-            Text('CERTIFICATE', style: GoogleFonts.beVietnamPro(fontSize: 24, fontWeight: FontWeight.w900, color: textColor, letterSpacing: 1)),
-            Text('OF PARTICIPATION', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w700, color: accent, letterSpacing: 3)),
-            const SizedBox(height: 14),
-            Text('This certificate is proudly presented to',
-                style: GoogleFonts.beVietnamPro(fontSize: 10, color: textColor.withOpacity(0.65))),
-            const SizedBox(height: 6),
-            Text(recipient,
-                style: GoogleFonts.beVietnamPro(fontSize: 19, fontWeight: FontWeight.w700, color: textColor, fontStyle: FontStyle.italic),
-                textAlign: TextAlign.center),
-            const SizedBox(height: 4),
-            SizedBox(width: 140, child: Divider(color: accent.withOpacity(0.4), thickness: 0.8)),
-            const SizedBox(height: 10),
-            Text('for successfully participating in',
-                style: GoogleFonts.beVietnamPro(fontSize: 10, color: textColor.withOpacity(0.6)),
-                textAlign: TextAlign.center),
-            const SizedBox(height: 4),
-            Text(eventTitle,
-                style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.w700, color: textColor),
-                textAlign: TextAlign.center),
-            const SizedBox(height: 2),
-            Text('held on $eventDate',
-                style: GoogleFonts.beVietnamPro(fontSize: 10, color: textColor.withOpacity(0.6))),
-            const SizedBox(height: 18),
-            Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
-              Expanded(
-                child: signatories.isEmpty
-                    ? Column(children: [
-                        Divider(color: accent.withOpacity(0.4), thickness: 0.8, indent: 30, endIndent: 30),
-                        const SizedBox(height: 2),
-                        Text('Authorized Signatory',
-                            style: GoogleFonts.beVietnamPro(fontSize: 9, color: textColor.withOpacity(0.45), fontStyle: FontStyle.italic)),
-                      ])
-                    : Wrap(
-                        alignment: WrapAlignment.center,
-                        spacing: 14,
-                        runSpacing: 10,
-                        children: signatories.map((s) => SizedBox(
-                          width: 92,
-                          // Signature ink sits on top of — overlapping down into —
-                          // the divider and the printed name beneath it, like a
-                          // real signed certificate, instead of in its own box.
-                          child: Stack(
-                            clipBehavior: Clip.none,
-                            alignment: Alignment.topCenter,
-                            children: [
-                              Padding(
-                                padding: const EdgeInsets.only(top: 16),
-                                child: Column(children: [
-                                  Divider(color: accent.withOpacity(0.4), thickness: 0.8),
-                                  const SizedBox(height: 2),
-                                  Text(s.name,
-                                      style: GoogleFonts.beVietnamPro(fontSize: 9, fontWeight: FontWeight.w700, color: textColor),
-                                      textAlign: TextAlign.center, overflow: TextOverflow.ellipsis),
-                                  if (s.title.isNotEmpty)
-                                    Text(s.title,
-                                        style: GoogleFonts.beVietnamPro(fontSize: 8, color: textColor.withOpacity(0.55)),
-                                        textAlign: TextAlign.center, overflow: TextOverflow.ellipsis),
-                                ]),
-                              ),
-                              if (s.signatureImageBase64 != null)
-                                Positioned(
-                                  top: -6,
-                                  child: Image.memory(base64Decode(s.signatureImageBase64!), height: 30, fit: BoxFit.contain),
-                                ),
-                            ],
-                          ),
-                        )).toList(),
-                      ),
-              ),
-              if (verificationCode != null) ...[
-                const SizedBox(width: 10),
-                Column(children: [
-                  Container(
-                    padding: const EdgeInsets.all(4),
-                    decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(4)),
-                    child: QrImageView(data: verificationCode!, version: QrVersions.auto, size: 44, backgroundColor: Colors.white),
-                  ),
-                  const SizedBox(height: 2),
-                  Text('Verify', style: GoogleFonts.beVietnamPro(fontSize: 7.5, color: textColor.withOpacity(0.5))),
-                ]),
-              ],
-            ]),
-          ]),
-        ),
-      ]),
-    );
-  }
-}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Certificate Preview Dialog (view mode) — unchanged
@@ -3139,22 +3071,21 @@ class _CertPreviewDialog extends StatelessWidget {
           ),
           Padding(
             padding: const EdgeInsets.all(24),
-            child: _CertPreview(
-              bg:        const Color(0xFFFDF6EC),
-              accent:    UpriseColors.primaryDark,
-              textColor: const Color(0xFF1A202C),
+            child: CertificatePreview(
+              theme: CertTheme.forType(record.templateType,
+                  primaryDark: UpriseColors.primaryDark, primaryLight: UpriseColors.primaryLight, accentColor: UpriseColors.accent),
               orgName:   record.organization,
               eventTitle: record.eventName,
               eventDate:  DateFormat('MMMM dd, yyyy').format(record.date),
               recipient:  record.recipientName ?? '[Recipient Name]',
               signatories: record.signatories.isNotEmpty
-                  ? record.signatories.map((s) => _SignatoryPreviewData(
+                  ? record.signatories.map((s) => CertSignatory(
                         name: (s['name'] ?? '').toString(),
                         title: (s['title'] ?? '').toString(),
                         signatureImageBase64: s['signatureImage'] as String?,
                       )).toList()
                   : (record.signatureImage != null
-                      ? [_SignatoryPreviewData(name: 'Authorized Signatory', signatureImageBase64: record.signatureImage)]
+                      ? [CertSignatory(name: 'Authorized Signatory', signatureImageBase64: record.signatureImage)]
                       : const []),
               verificationCode: record.verificationCode,
             ),

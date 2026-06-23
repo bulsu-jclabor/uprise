@@ -1,9 +1,11 @@
 ﻿// ignore_for_file: unused_element_parameter
 
+import 'dart:async';
 import 'dart:typed_data';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:csv/csv.dart';
@@ -14,6 +16,7 @@ import '../../../widgets/admin_export_button.dart';
 import 'export_pdf.dart';
 import '../../../services/activity_logger.dart' as activity_log;
 import '../../../services/notification_service.dart';
+import '../../../services/webinar_attendance_service.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // DESIGN TOKENS
@@ -810,7 +813,8 @@ class _AttendanceTabState extends State<AttendanceTab> with AutomaticKeepAliveCl
                 const SizedBox(height: 14),
                 if (_inputMode == 0) _buildQRPanel(active, attSnap.data)
                 else if (_inputMode == 1) _buildManualPanel(active)
-                else _buildRollCallPanel(attSnap.data),
+                else if (_inputMode == 2) _buildRollCallPanel(attSnap.data)
+                else _buildWebinarPanel(),
                 const SizedBox(height: 24),
                 _buildSubTabToolbar(attDocs.cast()),
                 const SizedBox(height: 12),
@@ -914,6 +918,7 @@ class _AttendanceTabState extends State<AttendanceTab> with AutomaticKeepAliveCl
         (0, 'QR Scan', Icons.qr_code_scanner_rounded),
         (1, 'Manual Entry', Icons.badge_outlined),
         (2, 'Roll Call', Icons.list_alt_rounded),
+        (3, 'Webinar Code', Icons.podcasts_rounded),
       ])
         Padding(
           padding: const EdgeInsets.only(right: 8),
@@ -921,6 +926,25 @@ class _AttendanceTabState extends State<AttendanceTab> with AutomaticKeepAliveCl
               onTap: () => setState(() => _inputMode = i)),
         ),
     ]);
+  }
+
+  Widget _buildWebinarPanel() {
+    if (widget.eventDocId == null) {
+      return Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(_DS.radiusLg),
+          border: Border.all(color: const Color(0xFFEBEEF3)),
+          boxShadow: _DS.cardShadow,
+        ),
+        child: Center(
+          child: Text('Select an event to manage webinar attendance',
+              style: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF94A3B8))),
+        ),
+      );
+    }
+    return _WebinarCodePanel(orgId: widget.orgId, eventDocId: widget.eventDocId!);
   }
 
   Widget _buildQRPanel(bool active, QuerySnapshot? attSnap) {
@@ -1711,5 +1735,372 @@ class _PrimaryButton extends StatelessWidget {
       Text(label, style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600)),
     ]),
   );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// WEBINAR ATTENDANCE PANEL — rotating check-in/check-out codes for online
+// events. The rotation timer only runs while this widget is mounted (i.e.
+// while an organizer has this tab open); on (re)mount it resumes from
+// whatever the session doc already says instead of assuming a fresh start,
+// so refreshing the page or reopening the tab doesn't reset/duplicate it.
+// ─────────────────────────────────────────────────────────────────────────────
+class _WebinarCodePanel extends StatefulWidget {
+  final String orgId;
+  final String eventDocId;
+  const _WebinarCodePanel({required this.orgId, required this.eventDocId});
+
+  @override
+  State<_WebinarCodePanel> createState() => _WebinarCodePanelState();
+}
+
+class _WebinarCodePanelState extends State<_WebinarCodePanel> {
+  Timer? _rotationTimer;
+  int _intervalMinutes = 5;
+  bool _requireCheckOut = false;
+  bool _busy = false;
+
+  @override
+  void dispose() {
+    _rotationTimer?.cancel();
+    super.dispose();
+  }
+
+  void _scheduleRotation(String type, int intervalMinutes) {
+    _rotationTimer?.cancel();
+    _rotationTimer = Timer.periodic(Duration(minutes: intervalMinutes), (_) {
+      WebinarAttendanceService.rotateCode(widget.eventDocId, type, intervalMinutes);
+    });
+  }
+
+  // Idempotent — called on every build while a session is active, but only
+  // actually schedules something the first time (guarded by _rotationTimer).
+  void _ensureRotationRunning(Map<String, dynamic> session, Map<String, dynamic>? currentCode) {
+    if (_rotationTimer != null || session['isActive'] != true) return;
+    final phase = session['phase'] as String? ?? 'checkin';
+    final intervalMinutes = (session['intervalMinutes'] as num?)?.toInt() ?? 5;
+
+    if (currentCode == null) {
+      WebinarAttendanceService.rotateCode(widget.eventDocId, phase, intervalMinutes);
+      _scheduleRotation(phase, intervalMinutes);
+      return;
+    }
+    final expiresAt = (currentCode['expiresAt'] as Timestamp).toDate();
+    final remaining = expiresAt.difference(DateTime.now());
+    if (remaining.isNegative) {
+      WebinarAttendanceService.rotateCode(widget.eventDocId, phase, intervalMinutes);
+      _scheduleRotation(phase, intervalMinutes);
+    } else {
+      _rotationTimer = Timer(remaining, () {
+        WebinarAttendanceService.rotateCode(widget.eventDocId, phase, intervalMinutes);
+        _scheduleRotation(phase, intervalMinutes);
+      });
+    }
+  }
+
+  Future<void> _start() async {
+    setState(() => _busy = true);
+    try {
+      await WebinarAttendanceService.startSession(
+        eventDocId: widget.eventDocId,
+        startedBy: FirebaseAuth.instance.currentUser?.uid ?? '',
+        intervalMinutes: _intervalMinutes,
+        requireCheckOut: _requireCheckOut,
+      );
+      _scheduleRotation('checkin', _intervalMinutes);
+      await activity_log.ActivityLogger.log(
+        action: 'start_webinar_attendance',
+        module: 'attendance',
+        details: {'orgId': widget.orgId, 'eventId': widget.eventDocId, 'intervalMinutes': _intervalMinutes},
+      );
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _startCheckOut(int intervalMinutes) async {
+    setState(() => _busy = true);
+    try {
+      _rotationTimer?.cancel();
+      _rotationTimer = null;
+      await WebinarAttendanceService.startCheckOutPhase(widget.eventDocId, intervalMinutes);
+      _scheduleRotation('checkout', intervalMinutes);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _end() async {
+    setState(() => _busy = true);
+    try {
+      _rotationTimer?.cancel();
+      _rotationTimer = null;
+      await WebinarAttendanceService.endSession(widget.eventDocId);
+      await activity_log.ActivityLogger.log(
+        action: 'end_webinar_attendance',
+        module: 'attendance',
+        details: {'orgId': widget.orgId, 'eventId': widget.eventDocId},
+      );
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(_DS.radiusLg),
+        border: Border.all(color: const Color(0xFFEBEEF3)),
+        boxShadow: _DS.cardShadow,
+      ),
+      child: StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+        stream: WebinarAttendanceService.sessionStream(widget.eventDocId),
+        builder: (context, sessionSnap) {
+          final session = sessionSnap.data?.data();
+          final isActive = session != null && session['isActive'] == true;
+
+          if (!isActive) {
+            return _buildStartForm();
+          }
+
+          final phase = session['phase'] as String? ?? 'checkin';
+          final intervalMinutes = (session['intervalMinutes'] as num?)?.toInt() ?? 5;
+          final requireCheckOut = session['requireCheckOut'] == true;
+
+          return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+            stream: WebinarAttendanceService.codeStream(widget.eventDocId, phase),
+            builder: (context, codeSnap) {
+              final currentCode = codeSnap.data?.docs.isNotEmpty == true ? codeSnap.data!.docs.first.data() : null;
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (mounted) _ensureRotationRunning(session, currentCode);
+              });
+              return _buildActiveSession(phase, intervalMinutes, requireCheckOut, currentCode);
+            },
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildStartForm() {
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Row(children: [
+        Container(
+          width: 44, height: 44,
+          decoration: BoxDecoration(color: UpriseColors.primaryDark.withAlpha(23), borderRadius: BorderRadius.circular(12)),
+          child: Icon(Icons.podcasts_rounded, size: 22, color: UpriseColors.primaryDark),
+        ),
+        const SizedBox(width: 14),
+        Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('Webinar Attendance', style: GoogleFonts.beVietnamPro(fontSize: 14.5, fontWeight: FontWeight.w700, color: const Color(0xFF1A202C))),
+            const SizedBox(height: 3),
+            Text('Students self-check-in by entering a rotating code shown on this screen.',
+                style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF94A3B8))),
+          ]),
+        ),
+      ]),
+      const SizedBox(height: 20),
+      Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('Code rotates every', style: GoogleFonts.beVietnamPro(fontSize: 12.5, fontWeight: FontWeight.w600, color: const Color(0xFF64748B))),
+            const SizedBox(height: 8),
+            Container(
+              decoration: BoxDecoration(
+                color: const Color(0xFFF7F8FA),
+                borderRadius: BorderRadius.circular(_DS.radiusSm),
+                border: Border.all(color: const Color(0xFFE4E8EF)),
+              ),
+              child: DropdownButtonHideUnderline(
+                child: DropdownButton<int>(
+                  value: _intervalMinutes,
+                  isExpanded: true,
+                  padding: const EdgeInsets.symmetric(horizontal: 14),
+                  items: const [1, 2, 5, 10, 15].map((m) => DropdownMenuItem(value: m, child: Text('Every $m minute${m == 1 ? '' : 's'}'))).toList(),
+                  onChanged: (v) { if (v != null) setState(() => _intervalMinutes = v); },
+                ),
+              ),
+            ),
+          ]),
+        ),
+        const SizedBox(width: 20),
+        Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('Check-out code', style: GoogleFonts.beVietnamPro(fontSize: 12.5, fontWeight: FontWeight.w600, color: const Color(0xFF64748B))),
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF7F8FA),
+                borderRadius: BorderRadius.circular(_DS.radiusSm),
+                border: Border.all(color: const Color(0xFFE4E8EF)),
+              ),
+              child: Row(children: [
+                Expanded(child: Text('Require check-out at the end', style: GoogleFonts.beVietnamPro(fontSize: 12.5, color: const Color(0xFF64748B)))),
+                Switch(
+                  value: _requireCheckOut,
+                  activeThumbColor: UpriseColors.primaryDark,
+                  onChanged: (v) => setState(() => _requireCheckOut = v),
+                ),
+              ]),
+            ),
+          ]),
+        ),
+      ]),
+      const SizedBox(height: 20),
+      _PrimaryButton(
+        label: 'Start Check-In Session',
+        icon: Icons.play_circle_outline_rounded,
+        color: UpriseColors.primaryDark,
+        loading: _busy,
+        onPressed: _busy ? null : _start,
+      ),
+    ]);
+  }
+
+  Widget _buildActiveSession(String phase, int intervalMinutes, bool requireCheckOut, Map<String, dynamic>? currentCode) {
+    final isCheckOut = phase == 'checkout';
+    final code = currentCode?['code'] as String? ?? '——————';
+    final expiresAt = currentCode != null ? (currentCode['expiresAt'] as Timestamp).toDate() : null;
+
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Row(children: [
+        Container(width: 7, height: 7, decoration: BoxDecoration(color: const Color(0xFF059669), shape: BoxShape.circle,
+            boxShadow: [BoxShadow(color: const Color(0xFF059669).withAlpha(128), blurRadius: 4)])),
+        const SizedBox(width: 8),
+        Text(isCheckOut ? 'CHECK-OUT IN PROGRESS' : 'CHECK-IN IN PROGRESS',
+            style: GoogleFonts.beVietnamPro(fontSize: 11, fontWeight: FontWeight.w700, color: const Color(0xFF059669), letterSpacing: 0.6)),
+        const Spacer(),
+        OutlinedButton.icon(
+          onPressed: _busy ? null : _end,
+          icon: const Icon(Icons.stop_circle_outlined, size: 14),
+          label: Text('End Session', style: GoogleFonts.beVietnamPro(fontSize: 12.5, fontWeight: FontWeight.w600)),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: const Color(0xFFDC2626),
+            side: const BorderSide(color: Color(0xFFFECACA)),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          ),
+        ),
+      ]),
+      const SizedBox(height: 18),
+      Center(
+        child: Column(children: [
+          Text(isCheckOut ? 'Check-out code' : 'Check-in code',
+              style: GoogleFonts.beVietnamPro(fontSize: 12.5, color: const Color(0xFF94A3B8))),
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 18),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(colors: [UpriseColors.primaryDark, UpriseColors.primaryLight]),
+              borderRadius: BorderRadius.circular(_DS.radiusLg),
+            ),
+            child: Text(code,
+                style: GoogleFonts.beVietnamPro(fontSize: 40, fontWeight: FontWeight.w800, color: Colors.white, letterSpacing: 8)),
+          ),
+          const SizedBox(height: 10),
+          if (expiresAt != null) _CodeCountdown(expiresAt: expiresAt, intervalMinutes: intervalMinutes),
+        ]),
+      ),
+      const SizedBox(height: 20),
+      if (!isCheckOut && requireCheckOut) ...[
+        _PrimaryButton(
+          label: 'End Check-In, Start Check-Out',
+          icon: Icons.logout_rounded,
+          color: const Color(0xFF2563EB),
+          loading: _busy,
+          onPressed: _busy ? null : () => _startCheckOut(intervalMinutes),
+        ),
+        const SizedBox(height: 16),
+      ],
+      _sectionLabel('Recent Code Submissions', icon: Icons.history_rounded),
+      StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+        stream: WebinarAttendanceService.submissionsStream(widget.eventDocId),
+        builder: (context, subSnap) {
+          final docs = subSnap.data?.docs ?? [];
+          if (docs.isEmpty) {
+            return Text('No submissions yet.', style: GoogleFonts.beVietnamPro(fontSize: 12.5, color: const Color(0xFF94A3B8)));
+          }
+          return Column(
+            children: docs.take(10).map((d) {
+              final m = d.data();
+              final result = (m['result'] as String?) ?? 'error';
+              final isSuccess = result == 'success';
+              final ts = (m['timestamp'] as Timestamp?)?.toDate();
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Row(children: [
+                  Icon(isSuccess ? Icons.check_circle_rounded : Icons.error_outline_rounded,
+                      size: 15, color: isSuccess ? const Color(0xFF059669) : const Color(0xFFDC2626)),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text((m['studentName'] as String?) ?? 'Unknown',
+                        style: GoogleFonts.beVietnamPro(fontSize: 12.5, color: const Color(0xFF1A202C)),
+                        overflow: TextOverflow.ellipsis),
+                  ),
+                  Text('${m['type'] ?? ''} · ${_submissionResultLabel(result)}',
+                      style: GoogleFonts.beVietnamPro(fontSize: 11.5, color: isSuccess ? const Color(0xFF059669) : const Color(0xFFDC2626))),
+                  const SizedBox(width: 10),
+                  Text(ts != null ? DateFormat('h:mm a').format(ts) : '—',
+                      style: GoogleFonts.beVietnamPro(fontSize: 11.5, color: const Color(0xFF94A3B8))),
+                ]),
+              );
+            }).toList(),
+          );
+        },
+      ),
+    ]);
+  }
+
+  String _submissionResultLabel(String result) {
+    switch (result) {
+      case 'success': return 'Success';
+      case 'invalid_code': return 'Wrong code';
+      case 'expired': return 'Code expired';
+      case 'session_inactive': return 'Session closed';
+      case 'no_active_code': return 'No active code';
+      case 'duplicate': return 'Already submitted';
+      case 'not_checked_in': return 'Not checked in';
+      case 'not_registered': return 'Not registered';
+      default: return 'Error';
+    }
+  }
+}
+
+// Live "expires in Xs" countdown for the currently displayed code.
+class _CodeCountdown extends StatefulWidget {
+  final DateTime expiresAt;
+  final int intervalMinutes;
+  const _CodeCountdown({required this.expiresAt, required this.intervalMinutes});
+
+  @override
+  State<_CodeCountdown> createState() => _CodeCountdownState();
+}
+
+class _CodeCountdownState extends State<_CodeCountdown> {
+  Timer? _ticker;
+
+  @override
+  void initState() {
+    super.initState();
+    _ticker = Timer.periodic(const Duration(seconds: 1), (_) { if (mounted) setState(() {}); });
+  }
+
+  @override
+  void dispose() {
+    _ticker?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final remaining = widget.expiresAt.difference(DateTime.now());
+    final secs = remaining.isNegative ? 0 : remaining.inSeconds;
+    return Text('New code in ${secs}s',
+        style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF94A3B8)));
+  }
 }
 

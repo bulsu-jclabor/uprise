@@ -1,10 +1,12 @@
 // lib/screens/student/student_events_screen.dart
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
 import '../../services/activity_logger.dart' as activity_log;
+import '../../services/webinar_attendance_service.dart';
 
 // ─────────────────────────────────────────────────────────────
 //  CUSTOM COLORS - UNIFORM (ORANGE)
@@ -1561,6 +1563,10 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                           ),
                         ),
                       ),
+                    if (widget.event.isRegistered && !widget.isPastEvent) ...[
+                      const SizedBox(height: 16),
+                      _WebinarCodeEntry(eventDocId: widget.event.id),
+                    ],
                     if (widget.isPastEvent)
                       Container(
                         width: double.infinity,
@@ -1837,6 +1843,185 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
       ),
     );
   }
+}
+
+// ─────────────────────────────────────────────────────────────
+// WEBINAR CODE ENTRY — only renders something when an organizer has an
+// active webinar attendance session open for this event. Mirrors the
+// check-in/check-out phase the org side is currently running, so the
+// student always knows exactly which code they're being asked for.
+// ─────────────────────────────────────────────────────────────
+class _WebinarCodeEntry extends StatefulWidget {
+  final String eventDocId;
+  const _WebinarCodeEntry({required this.eventDocId});
+
+  @override
+  State<_WebinarCodeEntry> createState() => _WebinarCodeEntryState();
+}
+
+class _WebinarCodeEntryState extends State<_WebinarCodeEntry> {
+  final _codeCtrl = TextEditingController();
+  bool _submitting = false;
+
+  @override
+  void dispose() {
+    _codeCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit(String type) async {
+    final user = FirebaseAuth.instance.currentUser;
+    final code = _codeCtrl.text.trim();
+    if (user == null || code.isEmpty) return;
+
+    setState(() => _submitting = true);
+    try {
+      final result = await WebinarAttendanceService.submitCode(
+        eventDocId: widget.eventDocId,
+        studentUid: user.uid,
+        submittedCode: code,
+        type: type,
+      );
+      if (!mounted) return;
+      if (result == 'success') {
+        _codeCtrl.clear();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(type == 'checkout' ? 'Checked out successfully!' : 'Checked in successfully!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(_resultMessage(result)), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _submitting = false);
+    }
+  }
+
+  String _resultMessage(String result) {
+    switch (result) {
+      case 'invalid_code': return 'That code is incorrect — check the screen and try again.';
+      case 'expired': return 'That code has expired — a new one should be showing now.';
+      case 'session_inactive': return 'Attendance is not currently open for this event.';
+      case 'no_active_code': return 'No code has been generated yet — try again in a moment.';
+      case 'duplicate': return 'You have already submitted this.';
+      case 'not_checked_in': return 'You need to check in before you can check out.';
+      case 'not_registered': return 'Your account could not be verified.';
+      default: return 'Something went wrong — please try again.';
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return const SizedBox.shrink();
+
+    return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+      stream: WebinarAttendanceService.sessionStream(widget.eventDocId),
+      builder: (context, sessionSnap) {
+        final session = sessionSnap.data?.data();
+        if (session == null || session['isActive'] != true) return const SizedBox.shrink();
+        final phase = session['phase'] as String? ?? 'checkin';
+
+        return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+          stream: FirebaseFirestore.instance
+              .collection('events')
+              .doc(widget.eventDocId)
+              .collection('attendances')
+              .where('studentId', isEqualTo: user.uid)
+              .limit(1)
+              .snapshots(),
+          builder: (context, attSnap) {
+            final attData = attSnap.data?.docs.isNotEmpty == true ? attSnap.data!.docs.first.data() : null;
+            return _buildCard(phase, attData);
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildCard(String phase, Map<String, dynamic>? attData) {
+    final hasCheckedIn = attData != null;
+    final hasCheckedOut = hasCheckedIn && attData['checkOutAt'] != null;
+
+    if (phase == 'checkin' && hasCheckedIn) {
+      return _statusBanner('✓ You are checked in', AppColors.primaryDark);
+    }
+    if (phase == 'checkout') {
+      if (hasCheckedOut) return _statusBanner('✓ You are checked out', AppColors.primaryDark);
+      if (!hasCheckedIn) {
+        return _statusBanner('Check-out is open, but you never checked in', Colors.orange);
+      }
+    }
+
+    final isCheckOut = phase == 'checkout';
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.primaryDark.withAlpha(13),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.primaryDark.withAlpha(64)),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Icon(Icons.podcasts_rounded, size: 18, color: AppColors.primaryDark),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              isCheckOut ? 'Enter the check-out code shown on screen' : 'Enter the check-in code shown on screen',
+              style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700, color: AppColors.primaryDark),
+            ),
+          ),
+        ]),
+        const SizedBox(height: 12),
+        Row(children: [
+          Expanded(
+            child: TextField(
+              controller: _codeCtrl,
+              textCapitalization: TextCapitalization.characters,
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, letterSpacing: 4),
+              decoration: InputDecoration(
+                hintText: 'CODE',
+                filled: true,
+                fillColor: Colors.white,
+                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: Colors.grey.shade300)),
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          ElevatedButton(
+            onPressed: _submitting ? null : () => _submit(phase),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primaryDark,
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+            child: _submitting
+                ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                : const Text('Submit', style: TextStyle(fontWeight: FontWeight.w700)),
+          ),
+        ]),
+      ]),
+    );
+  }
+
+  Widget _statusBanner(String text, Color color) => Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(vertical: 14),
+        decoration: BoxDecoration(
+          color: color.withAlpha(20),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: color.withAlpha(64)),
+        ),
+        child: Center(
+          child: Text(text, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: color)),
+        ),
+      );
 }
 
 class _InfoRow extends StatelessWidget {

@@ -293,6 +293,19 @@ class _OrgEventProposalsScreenState extends State<OrgEventProposalsScreen> {
     );
   }
 
+  void _openLiveTrackerModal(Map<String, dynamic> data) {
+    final eventDocId = (data['publishedEventId'] ?? '').toString();
+    if (eventDocId.isEmpty) return;
+    showDialog(
+      context: context,
+      barrierColor: Colors.black54,
+      builder: (_) => _LiveTrackerModal(
+        eventDocId: eventDocId,
+        eventTitle: (data['title'] ?? 'Event').toString(),
+      ),
+    );
+  }
+
   // ── Archive logic ────────────────────────────────────────────────
   void _confirmArchive(String docId, String title) {
     showDialog(
@@ -1156,6 +1169,7 @@ class _OrgEventProposalsScreenState extends State<OrgEventProposalsScreen> {
                 onPublish: (status == 'approved' && !isPublished)
                     ? () => _confirmPublish(docId, data)
                     : null,
+                onLiveTracker: isPublished ? () => _openLiveTrackerModal(data) : null,
                 onArchive: (status == 'approved' || status == 'rejected')
                     ? () => _confirmArchive(docId, data['title'] ?? 'Proposal')
                     : null,
@@ -1387,8 +1401,9 @@ class _ActionPopupButton extends StatelessWidget {
   final VoidCallback? onRevise;
   final VoidCallback? onFormBuilder;
   final VoidCallback? onPublish;
+  final VoidCallback? onLiveTracker;
   final VoidCallback? onArchive;
-  const _ActionPopupButton({required this.onView, this.onEdit, this.onRevise, this.onFormBuilder, this.onPublish, this.onArchive});
+  const _ActionPopupButton({required this.onView, this.onEdit, this.onRevise, this.onFormBuilder, this.onPublish, this.onLiveTracker, this.onArchive});
 
   @override
   Widget build(BuildContext context) {
@@ -1442,6 +1457,16 @@ class _ActionPopupButton extends StatelessWidget {
             onTap: onPublish!,
           ),
         ],
+        if (onLiveTracker != null) ...[
+          const SizedBox(width: 6),
+          _IconChip(
+            icon: Icons.insights_rounded,
+            bg: const Color(0xFFECFDF5),
+            fg: const Color(0xFF059669),
+            tooltip: 'Live Participants',
+            onTap: onLiveTracker!,
+          ),
+        ],
         if (onArchive != null) ...[
           const SizedBox(width: 6),
           _IconChip(
@@ -1453,6 +1478,178 @@ class _ActionPopupButton extends StatelessWidget {
           ),
         ],
       ],
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Live Participants Tracker — real-time registrations vs. check-ins for a
+// published event. Reads the same `registrations` and
+// `events/{id}/attendances` collections org_attendance_qr.dart writes to, so
+// it stays in sync with whatever the QR/manual check-in flow records.
+// ─────────────────────────────────────────────────────────────────────────────
+class _LiveTrackerModal extends StatelessWidget {
+  final String eventDocId;
+  final String eventTitle;
+  const _LiveTrackerModal({required this.eventDocId, required this.eventTitle});
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+      child: SizedBox(
+        width: 480,
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.85),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            Container(
+              padding: const EdgeInsets.fromLTRB(24, 20, 20, 20),
+              decoration: BoxDecoration(
+                color: UpriseColors.primaryDark,
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(18)),
+              ),
+              child: Row(children: [
+                Container(
+                  width: 38, height: 38,
+                  decoration: BoxDecoration(color: Colors.white.withAlpha(38), borderRadius: BorderRadius.circular(10)),
+                  child: const Icon(Icons.insights_rounded, color: Colors.white, size: 18),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text(eventTitle,
+                        style: GoogleFonts.beVietnamPro(fontSize: 16, fontWeight: FontWeight.w700, color: Colors.white),
+                        maxLines: 1, overflow: TextOverflow.ellipsis),
+                    const SizedBox(height: 3),
+                    Row(mainAxisSize: MainAxisSize.min, children: [
+                      Container(
+                        width: 7, height: 7,
+                        decoration: const BoxDecoration(color: Color(0xFF4ADE80), shape: BoxShape.circle),
+                      ),
+                      const SizedBox(width: 6),
+                      Text('LIVE',
+                          style: GoogleFonts.beVietnamPro(
+                              fontSize: 11, fontWeight: FontWeight.w700, color: Colors.white.withAlpha(204), letterSpacing: 0.6)),
+                    ]),
+                  ]),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.close_rounded, color: Colors.white, size: 20),
+                  onPressed: () => Navigator.pop(context),
+                ),
+              ]),
+            ),
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(24),
+                child: StreamBuilder<QuerySnapshot>(
+                  stream: FirebaseFirestore.instance
+                      .collection('registrations')
+                      .where('eventId', isEqualTo: eventDocId)
+                      .snapshots(),
+                  builder: (context, regSnap) {
+                    final registered = regSnap.data?.docs.length ?? 0;
+                    return StreamBuilder<QuerySnapshot>(
+                      stream: FirebaseFirestore.instance
+                          .collection('events')
+                          .doc(eventDocId)
+                          .collection('attendances')
+                          .orderBy('timestamp', descending: true)
+                          .snapshots(),
+                      builder: (context, attSnap) {
+                        final attDocs = attSnap.data?.docs ?? [];
+                        final present = attDocs.where((d) => (d.data() as Map)['status'] == 'present').length;
+                        final late = attDocs.where((d) => (d.data() as Map)['status'] == 'late').length;
+                        final checkedIn = present + late;
+                        final pct = registered == 0 ? 0.0 : (checkedIn / registered).clamp(0.0, 1.0);
+
+                        return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                          Row(children: [
+                            Expanded(child: _statTile('Registered', '$registered', Icons.how_to_reg_rounded, const Color(0xFF2563EB))),
+                            const SizedBox(width: 10),
+                            Expanded(child: _statTile('Checked In', '$checkedIn', Icons.verified_rounded, const Color(0xFF059669))),
+                            const SizedBox(width: 10),
+                            Expanded(child: _statTile('Late', '$late', Icons.schedule_rounded, const Color(0xFFFB923C))),
+                          ]),
+                          const SizedBox(height: 20),
+                          Text('Check-in Progress',
+                              style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.w700, color: const Color(0xFF64748B))),
+                          const SizedBox(height: 8),
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(8),
+                            child: LinearProgressIndicator(
+                              value: pct,
+                              minHeight: 10,
+                              backgroundColor: const Color(0xFFF1F5F9),
+                              color: UpriseColors.primaryDark,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Text('${(pct * 100).toStringAsFixed(0)}% of registrants checked in',
+                              style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF9AA5B4))),
+                          const SizedBox(height: 24),
+                          Text('Recent Check-ins',
+                              style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.w700, color: const Color(0xFF64748B))),
+                          const SizedBox(height: 10),
+                          if (attDocs.isEmpty)
+                            Text('No check-ins yet.', style: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF9AA5B4)))
+                          else
+                            ...attDocs.take(5).map((d) {
+                              final m = d.data() as Map<String, dynamic>;
+                              final name = (m['studentName'] ?? m['guestEmail'] ?? 'Participant').toString();
+                              final ts = m['timestamp'] as Timestamp?;
+                              final timeStr = ts != null ? DateFormat('h:mm a').format(ts.toDate()) : '—';
+                              final isLate = m['status'] == 'late';
+                              return Padding(
+                                padding: const EdgeInsets.only(bottom: 8),
+                                child: Row(children: [
+                                  Container(
+                                    width: 28, height: 28,
+                                    decoration: BoxDecoration(
+                                      color: (isLate ? const Color(0xFFFB923C) : const Color(0xFF059669)).withAlpha(26),
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: Icon(isLate ? Icons.schedule_rounded : Icons.check_rounded,
+                                        size: 14, color: isLate ? const Color(0xFFFB923C) : const Color(0xFF059669)),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: Text(name,
+                                        style: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF1A202C)),
+                                        overflow: TextOverflow.ellipsis),
+                                  ),
+                                  Text(timeStr, style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF9AA5B4))),
+                                ]),
+                              );
+                            }),
+                        ]);
+                      },
+                    );
+                  },
+                ),
+              ),
+            ),
+          ]),
+        ),
+      ),
+    );
+  }
+
+  Widget _statTile(String label, String value, IconData icon, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+      decoration: BoxDecoration(
+        color: color.withAlpha(15),
+        borderRadius: BorderRadius.circular(_DS.radiusMd),
+        border: Border.all(color: color.withAlpha(38)),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Icon(icon, size: 16, color: color),
+        const SizedBox(height: 8),
+        Text(value, style: GoogleFonts.beVietnamPro(fontSize: 20, fontWeight: FontWeight.w800, color: color)),
+        const SizedBox(height: 2),
+        Text(label, style: GoogleFonts.beVietnamPro(fontSize: 11, color: const Color(0xFF64748B))),
+      ]),
     );
   }
 }
