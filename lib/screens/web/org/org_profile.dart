@@ -1048,7 +1048,7 @@ class _OrgProfileScreenState extends State<OrgProfileScreen> {
             style: GoogleFonts.beVietnamPro(
                 fontSize: 12, color: _C.darkGray)),
         const SizedBox(height: 20),
-        _HierarchyTree(orgId: widget.orgId),
+        _HierarchyTree(orgId: widget.orgId, orgName: _orgName),
       ]),
     );
   }
@@ -1339,9 +1339,19 @@ class _OfficerTileState extends State<_OfficerTile> {
 // ─────────────────────────────────────────────────────────────────────────────
 // Hierarchy Tree
 // ─────────────────────────────────────────────────────────────────────────────
+String _currentAcademicYearLabel() {
+  final now = DateTime.now();
+  final startYear = now.month >= 8 ? now.year : now.year - 1;
+  return '$startYear - ${startYear + 1}';
+}
+
 class _HierarchyTree extends StatelessWidget {
   final String orgId;
-  const _HierarchyTree({required this.orgId});
+  final String orgName;
+  const _HierarchyTree({required this.orgId, required this.orgName});
+
+  static const double _boxWidth = 112;
+  static const double _spacing = 18;
 
   @override
   Widget build(BuildContext context) {
@@ -1379,6 +1389,7 @@ class _HierarchyTree extends StatelessWidget {
         final tier1 = officers.where((o) => o.positionRank <= 1).toList();
         final tier2 = officers.where((o) => o.positionRank == 2).toList();
         final tier3 = officers.where((o) => o.positionRank >= 3).toList();
+        final tiers = [tier1, tier2, tier3].where((t) => t.isNotEmpty).toList();
 
         return FutureBuilder<QuerySnapshot>(
           future: FirebaseFirestore.instance
@@ -1389,21 +1400,36 @@ class _HierarchyTree extends StatelessWidget {
               .get(),
           builder: (context, memberSnap) {
             final members = memberSnap.data?.docs ?? [];
-            return Column(children: [
-              if (tier1.isNotEmpty) ...[
-                _tierRow(tier1, isTop: true),
-                _connector(),
-              ],
-              if (tier2.isNotEmpty) ...[
-                _tierRow(tier2),
-                _connector(),
-              ],
-              if (tier3.isNotEmpty) ...[
-                _tierRow(tier3),
-                _connector(),
-              ],
-              _MembersRow(members: members),
-            ]);
+            return Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 28, horizontal: 16),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(_DS.radiusLg),
+                gradient: LinearGradient(
+                  colors: [_C.primaryDark.withAlpha(15), _C.accent.withAlpha(10)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+              ),
+              child: Column(children: [
+                Text('${orgName.toUpperCase()} OFFICERS',
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.beVietnamPro(
+                        fontSize: 20, fontWeight: FontWeight.w800, color: _C.charcoal, letterSpacing: 0.4)),
+                const SizedBox(height: 4),
+                Text('A.Y. ${_currentAcademicYearLabel()}',
+                    style: GoogleFonts.beVietnamPro(fontSize: 13, color: _C.darkGray)),
+                const SizedBox(height: 28),
+                for (var i = 0; i < tiers.length; i++) ...[
+                  _tierRow(tiers[i], isTop: i == 0),
+                  if (i < tiers.length - 1) _TierConnector(childCount: tiers[i + 1].length),
+                ],
+                if (members.isNotEmpty) ...[
+                  _TierConnector(childCount: 1),
+                  _MembersRow(members: members),
+                ],
+              ]),
+            );
           },
         );
       },
@@ -1411,115 +1437,168 @@ class _HierarchyTree extends StatelessWidget {
   }
 
   Widget _tierRow(List<OfficerModel> officers, {bool isTop = false}) {
+    // A bus-style connector (drawn in _TierConnector) assumes a single,
+    // non-wrapping row laid out with _boxWidth/_spacing — fall back to a
+    // plain Wrap for unusually large tiers where that assumption breaks.
+    if (officers.length <= 6) {
+      return Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          for (var i = 0; i < officers.length; i++) ...[
+            if (i > 0) const SizedBox(width: _spacing),
+            _HierarchyBox(officer: officers[i], isTop: isTop, width: _boxWidth),
+          ],
+        ],
+      );
+    }
     return Center(
       child: Wrap(
         alignment: WrapAlignment.center,
         spacing: 12,
         runSpacing: 12,
         children: officers
-            .map((o) => _HierarchyBox(officer: o, isTop: isTop))
+            .map((o) => _HierarchyBox(officer: o, isTop: isTop, width: _boxWidth))
             .toList(),
       ),
     );
   }
+}
 
-  Widget _connector() => Center(
-        child: Container(
-          width: 2,
-          height: 24,
-          margin: const EdgeInsets.symmetric(vertical: 0),
-          decoration: BoxDecoration(
-            color: _C.primaryDark.withOpacity(0.3),
-            borderRadius: BorderRadius.circular(1),
-          ),
+// Draws a trunk-and-bus connector between two tiers: a single vertical line
+// down from the parent row's center, a horizontal bus, and a vertical stub
+// down into each box of the next tier — closer to a real org chart than a
+// single straight line, without needing per-officer parent/child data.
+class _TierConnector extends StatelessWidget {
+  final int childCount;
+  const _TierConnector({required this.childCount});
+
+  static const double _boxWidth = _HierarchyTree._boxWidth;
+  static const double _spacing = _HierarchyTree._spacing;
+  static const double _height = 28;
+
+  @override
+  Widget build(BuildContext context) {
+    if (childCount <= 1) {
+      return SizedBox(
+        height: _height,
+        child: Center(
+          child: Container(width: 2, color: _C.primaryDark.withAlpha(76)),
         ),
       );
+    }
+    final count = childCount.clamp(1, 6);
+    final totalWidth = count * _boxWidth + (count - 1) * _spacing;
+    return SizedBox(
+      height: _height,
+      width: totalWidth,
+      child: CustomPaint(
+        painter: _BusConnectorPainter(
+          childCount: count,
+          boxWidth: _boxWidth,
+          spacing: _spacing,
+          color: _C.primaryDark.withAlpha(76),
+        ),
+      ),
+    );
+  }
+}
+
+class _BusConnectorPainter extends CustomPainter {
+  final int childCount;
+  final double boxWidth;
+  final double spacing;
+  final Color color;
+  _BusConnectorPainter({
+    required this.childCount,
+    required this.boxWidth,
+    required this.spacing,
+    required this.color,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..strokeWidth = 2;
+    final busY = size.height * 0.45;
+    final centerX = size.width / 2;
+
+    canvas.drawLine(Offset(centerX, 0), Offset(centerX, busY), paint);
+
+    final firstCenter = boxWidth / 2;
+    final lastCenter = size.width - boxWidth / 2;
+    canvas.drawLine(Offset(firstCenter, busY), Offset(lastCenter, busY), paint);
+
+    for (var i = 0; i < childCount; i++) {
+      final cx = i * (boxWidth + spacing) + boxWidth / 2;
+      canvas.drawLine(Offset(cx, busY), Offset(cx, size.height), paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _BusConnectorPainter oldDelegate) =>
+      oldDelegate.childCount != childCount || oldDelegate.color != color;
 }
 
 class _HierarchyBox extends StatelessWidget {
   final OfficerModel officer;
   final bool isTop;
-  const _HierarchyBox({required this.officer, this.isTop = false});
+  final double width;
+  const _HierarchyBox({required this.officer, this.isTop = false, this.width = 112});
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: isTop ? 160 : 140,
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-      decoration: BoxDecoration(
-        gradient: isTop
-            ? const LinearGradient(
-                colors: [_C.primaryDark, _C.accent],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight)
-            : null,
-        color: isTop ? null : _C.primaryDark.withOpacity(0.07),
-        borderRadius: BorderRadius.circular(_DS.radiusMd),
-        border: Border.all(
-          color: isTop
-              ? Colors.transparent
-              : _C.primaryDark.withOpacity(0.2),
-        ),
-        boxShadow: isTop ? _DS.cardShadow : null,
-      ),
+    return SizedBox(
+      width: width,
       child: Column(children: [
+        // Portrait-style photo frame, matching a printed org-chart card
+        // rather than a small circular avatar.
         Container(
-          width: 44, height: 44,
+          width: width,
+          height: width * 1.15,
           decoration: BoxDecoration(
-            color: isTop
-                ? Colors.white.withOpacity(0.22)
-                : _C.primaryDark.withOpacity(0.12),
-            shape: BoxShape.circle,
+            color: _C.primaryDark.withAlpha(18),
+            borderRadius: BorderRadius.circular(_DS.radiusSm),
+            border: Border.all(color: isTop ? _C.primaryDark : _C.borderSoft, width: isTop ? 1.6 : 1.2),
+            boxShadow: _DS.cardShadow,
           ),
           clipBehavior: Clip.antiAlias,
           child: officer.photoUrl.isNotEmpty
-              ? _buildImageWidget(officer.photoUrl,
-                  fit: BoxFit.cover,
-                  errorWidget: _initials(isTop))
-              : _initials(isTop),
+              ? _buildImageWidget(officer.photoUrl, fit: BoxFit.cover, errorWidget: _initials())
+              : _initials(),
         ),
-        const SizedBox(height: 8),
-        Text(officer.name,
-            style: GoogleFonts.beVietnamPro(
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
-                color: isTop ? Colors.white : _C.charcoal),
-            textAlign: TextAlign.center,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis),
-        const SizedBox(height: 2),
-        Text(officer.position,
-            style: GoogleFonts.beVietnamPro(
-                fontSize: 10,
-                color: isTop
-                    ? Colors.white.withOpacity(0.85)
-                    : _C.primaryDark),
-            textAlign: TextAlign.center,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis),
-        if (officer.email.isNotEmpty) ...[
-          const SizedBox(height: 2),
-          Text(officer.email,
-              style: GoogleFonts.beVietnamPro(
-                  fontSize: 9,
-                  color: isTop
-                      ? Colors.white.withOpacity(0.65)
-                      : _C.darkGray),
-              textAlign: TextAlign.center,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis),
-        ],
+        const SizedBox(height: 6),
+        Container(
+          width: width,
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+          decoration: BoxDecoration(
+            color: _C.white,
+            borderRadius: BorderRadius.circular(_DS.radiusSm),
+            border: Border.all(color: _C.borderSoft),
+          ),
+          child: Column(children: [
+            Text(officer.name,
+                style: GoogleFonts.beVietnamPro(fontSize: 11.5, fontWeight: FontWeight.w800, color: _C.primaryDark),
+                textAlign: TextAlign.center,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis),
+            const SizedBox(height: 1),
+            Text(officer.position,
+                style: GoogleFonts.beVietnamPro(fontSize: 10, color: _C.darkGray),
+                textAlign: TextAlign.center,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis),
+          ]),
+        ),
       ]),
     );
   }
 
-  Widget _initials(bool isTop) => Center(
+  Widget _initials() => Center(
         child: Text(
           officer.name.isNotEmpty ? officer.name[0].toUpperCase() : '?',
-          style: GoogleFonts.beVietnamPro(
-              fontSize: 16,
-              fontWeight: FontWeight.w700,
-              color: isTop ? Colors.white : _C.primaryDark),
+          style: GoogleFonts.beVietnamPro(fontSize: 22, fontWeight: FontWeight.w700, color: _C.primaryDark),
         ),
       );
 }

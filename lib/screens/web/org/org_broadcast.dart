@@ -115,17 +115,21 @@ class _OrgBroadcastScreenState extends State<OrgBroadcastScreen> {
   String? _channelName;
   String? _channelPhotoUrl;
   _ThemePreset _theme = _kThemePresets.first;
-  // Also a ValueNotifier — same reason as _uploadingChannelPhoto above.
-  final ValueNotifier<bool> _membersExpanded = ValueNotifier(false);
   StreamSubscription<DocumentSnapshot>? _orgSettingsSub;
 
   Stream<DocumentSnapshot> get _orgDocStream =>
       FirebaseFirestore.instance.collection('organizations').doc(widget.orgId).snapshots();
 
+  // Fetched once and reused on every send instead of re-reading the user
+  // doc on each message — that round trip was adding a visible delay before
+  // the message could even be created.
+  String? _authorName;
+
   @override
   void initState() {
     super.initState();
     _fetchMemberCount();
+    _fetchAuthorName();
     _orgSettingsSub = _orgDocStream.listen((doc) {
       if (!mounted) return;
       final d = doc.data() as Map<String, dynamic>?;
@@ -137,6 +141,15 @@ class _OrgBroadcastScreenState extends State<OrgBroadcastScreen> {
     });
   }
 
+  Future<void> _fetchAuthorName() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+    try {
+      final userDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+      _authorName = userDoc.data()?['name'] ?? user.email ?? 'Unknown';
+    } catch (_) {}
+  }
+
   @override
   void dispose() {
     _messageCtrl.dispose();
@@ -145,7 +158,6 @@ class _OrgBroadcastScreenState extends State<OrgBroadcastScreen> {
     _inputFocus.dispose();
     _orgSettingsSub?.cancel();
     _uploadingChannelPhoto.dispose();
-    _membersExpanded.dispose();
     super.dispose();
   }
 
@@ -291,8 +303,7 @@ class _OrgBroadcastScreenState extends State<OrgBroadcastScreen> {
   try {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) throw 'No user logged in';
-    final userDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
-    final authorName = userDoc.data()?['name'] ?? user.email ?? 'Unknown';
+    final authorName = _authorName ?? user.email ?? 'Unknown';
 
     final data = <String, dynamic>{
       'orgId': widget.orgId,
@@ -311,25 +322,28 @@ class _OrgBroadcastScreenState extends State<OrgBroadcastScreen> {
 
     final docRef = await FirebaseFirestore.instance.collection('broadcasts').add(data);
 
-    // --- NEW: Create notifications for all students ---
-    await _createNotificationsForBroadcast(docRef.id, widget.orgId, text);
-
-    await activity_log.ActivityLogger.log(
-      action: 'send_broadcast',
-      module: 'broadcast',
-      details: {'orgId': widget.orgId},
-    );
-
+    // The message is already live (the broadcasts stream picks it up as
+    // soon as Firestore confirms the write above) — clear the composer and
+    // unlock sending right away instead of waiting on the notification
+    // fan-out and audit log below, which can take a while with many
+    // students and have nothing to do with the message being visible.
     _messageCtrl.clear();
     setState(() {
       _pendingAttachments = [];
       _pendingImageUrl = null;
+      _isSending = false;
     });
     _inputFocus.requestFocus();
     Future.delayed(const Duration(milliseconds: 500), _scrollToBottom);
+
+    unawaited(_createNotificationsForBroadcast(docRef.id, widget.orgId, text));
+    unawaited(activity_log.ActivityLogger.log(
+      action: 'send_broadcast',
+      module: 'broadcast',
+      details: {'orgId': widget.orgId},
+    ));
   } catch (e) {
     _snack('Failed to send: $e', isError: true);
-  } finally {
     if (mounted) setState(() => _isSending = false);
   }
 }
@@ -726,31 +740,6 @@ class _OrgBroadcastScreenState extends State<OrgBroadcastScreen> {
         const SizedBox(height: 18),
         const Divider(color: _C.borderSoft),
         const SizedBox(height: 10),
-        ValueListenableBuilder<bool>(
-          valueListenable: _membersExpanded,
-          builder: (_, expanded, __) => Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              InkWell(
-                onTap: () => _membersExpanded.value = !_membersExpanded.value,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 6),
-                  child: Row(
-                    children: [
-                      Expanded(child: Text('Channel Members', style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.w700, color: _C.darkGray, letterSpacing: 0.4))),
-                      Icon(expanded ? Icons.keyboard_arrow_up_rounded : Icons.keyboard_arrow_down_rounded, size: 18, color: _C.textFaint),
-                    ],
-                  ),
-                ),
-              ),
-              if (expanded) _buildMembersList(),
-            ],
-          ),
-        ),
-
-        const SizedBox(height: 18),
-        const Divider(color: _C.borderSoft),
-        const SizedBox(height: 10),
         _InfoSectionLabel('Media, Files & Links'),
         const SizedBox(height: 8),
         Text('Media', style: GoogleFonts.beVietnamPro(fontSize: 11.5, fontWeight: FontWeight.w700, color: _C.textMid)),
@@ -828,60 +817,6 @@ class _OrgBroadcastScreenState extends State<OrgBroadcastScreen> {
     );
   }
 
-  Widget _buildMembersList() {
-    return Padding(
-      padding: const EdgeInsets.only(top: 4, bottom: 4),
-      child: StreamBuilder<QuerySnapshot>(
-        stream: FirebaseFirestore.instance
-            .collection('users')
-            .where('orgId', isEqualTo: widget.orgId)
-            .where('role', isEqualTo: 'org')
-            .snapshots(),
-        builder: (context, snap) {
-          if (!snap.hasData) {
-            return const Padding(padding: EdgeInsets.symmetric(vertical: 8), child: SizedBox(height: 16, width: 16, child: CircularProgressIndicator(strokeWidth: 2)));
-          }
-          final docs = snap.data!.docs;
-          if (docs.isEmpty) {
-            return Text('No officer accounts yet.', style: GoogleFonts.beVietnamPro(fontSize: 12, color: _C.textFaint));
-          }
-          return Column(
-            children: docs.map((d) {
-              final m = d.data() as Map<String, dynamic>;
-              final name = (m['fullName'] as String?)?.trim();
-              final displayName = (name?.isNotEmpty ?? false) ? name! : (m['email'] ?? 'Officer').toString();
-              final photoUrl = (m['photoUrl'] ?? m['profilePicture']) as String?;
-              return Padding(
-                padding: const EdgeInsets.symmetric(vertical: 6),
-                child: Row(
-                  children: [
-                    ClipOval(
-                      child: Container(
-                        width: 28, height: 28,
-                        color: _theme.primary.withValues(alpha: 0.12),
-                        child: (photoUrl != null && photoUrl.isNotEmpty)
-                            ? Image(image: _imageProviderFromUrl(photoUrl), fit: BoxFit.cover, errorBuilder: (_, __, ___) => _initialAvatar(displayName))
-                            : _initialAvatar(displayName),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(child: Text(displayName, style: GoogleFonts.beVietnamPro(fontSize: 12.5, color: _C.charcoal), overflow: TextOverflow.ellipsis)),
-                  ],
-                ),
-              );
-            }).toList(),
-          );
-        },
-      ),
-    );
-  }
-
-  Widget _initialAvatar(String name) {
-    return Center(
-      child: Text(name.isNotEmpty ? name[0].toUpperCase() : '?',
-          style: GoogleFonts.beVietnamPro(fontSize: 11, fontWeight: FontWeight.w800, color: _theme.primary)),
-    );
-  }
 
   void _viewPinnedMessages() {
     showDialog(
