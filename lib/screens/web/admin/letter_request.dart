@@ -55,6 +55,29 @@ class AdminColors {
   static const Color purple = Color(0xFF7C3AED);
 }
 
+Widget _sectionLabel(String text, {IconData? icon}) {
+  return Padding(
+    padding: const EdgeInsets.only(bottom: 12),
+    child: Row(children: [
+      if (icon != null) ...[
+        Icon(icon, size: 16, color: AdminColors.primaryDark),
+        const SizedBox(width: 8),
+      ],
+      Text(
+        text,
+        style: GoogleFonts.beVietnamPro(
+          fontSize: 13,
+          fontWeight: FontWeight.w700,
+          color: AdminColors.primaryDark,
+          letterSpacing: 0.3,
+        ),
+      ),
+      const SizedBox(width: 12),
+      Expanded(child: Divider(color: const Color(0xFFE2E6EA), thickness: 1)),
+    ]),
+  );
+}
+
 // ============ MAIN WIDGET ============
 class AdminLetterRequestScreen extends StatefulWidget {
   const AdminLetterRequestScreen({super.key});
@@ -114,6 +137,38 @@ class _AdminLetterRequestScreenState extends State<AdminLetterRequestScreen> {
       ),
     );
   }
+
+  Widget _detailItem(String label, String value, IconData icon, {Color? valueColor}) {
+  return Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Row(
+        children: [
+          Icon(icon, size: 13, color: const Color(0xFF9AA5B4)),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: GoogleFonts.beVietnamPro(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: const Color(0xFF64748B),
+              letterSpacing: 0.4,
+            ),
+          ),
+        ],
+      ),
+      const SizedBox(height: 4),
+      Text(
+        value,
+        style: GoogleFonts.beVietnamPro(
+          fontSize: 13,
+          fontWeight: FontWeight.w500,
+          color: valueColor ?? const Color(0xFF1A202C),
+        ),
+      ),
+    ],
+  );
+}
 
   Widget _buildStatsRow(bool isMobile, bool isTablet) {
     return StreamBuilder<QuerySnapshot>(
@@ -1096,6 +1151,8 @@ class _AdminLetterRequestScreenState extends State<AdminLetterRequestScreen> {
   final orgName = data['orgName'] ?? 'Unknown';
   final letterId = data['letterId'] ?? 'N/A';
   final subject = data['subject'] ?? 'No subject';
+  // Requestor – could be a specific person's name or the org name
+  final requestor = data['requestedBy'] ?? data['submittedBy'] ?? orgName;
 
   showDialog(
     context: context,
@@ -1180,22 +1237,6 @@ class _AdminLetterRequestScreenState extends State<AdminLetterRequestScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // ── Submitted date ──────────────────────────
-                        Row(
-                          children: [
-                            Icon(Icons.calendar_today_outlined, size: 14, color: const Color(0xFF9AA5B4)),
-                            const SizedBox(width: 6),
-                            Text(
-                              date,
-                              style: GoogleFonts.beVietnamPro(
-                                fontSize: 12,
-                                color: const Color(0xFF64748B),
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 20),
-
                         // ── Organization card ────────────────────────
                         Container(
                           padding: const EdgeInsets.all(14),
@@ -1252,13 +1293,68 @@ class _AdminLetterRequestScreenState extends State<AdminLetterRequestScreen> {
                             ],
                           ),
                         ),
-                        const SizedBox(height: 16),
+                        const SizedBox(height: 20),
 
-                        // Subject is already shown in the header right under
-                        // the letter ID — no need to repeat it here.
+                        // ── Request Details ──────────────────────────
+                        _sectionLabel('Request Details', icon: Icons.info_outline_rounded),
+                        Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF8F9FB),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: const Color(0xFFE2E6EA)),
+                          ),
+                          child: Column(
+                            children: [
+                              Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Expanded(
+                                    child: _detailItem(
+                                      'Requestor',
+                                      requestor,
+                                      Icons.person_outline_rounded,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 16),
+                                  Expanded(
+                                    child: _detailItem(
+                                      'Date Submitted',
+                                      date,
+                                      Icons.calendar_today_outlined,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 12),
+                              Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Expanded(
+                                    child: _detailItem(
+                                      'Letter ID',
+                                      letterId,
+                                      Icons.numbers_rounded,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 16),
+                                  Expanded(
+                                    child: _detailItem(
+                                      'Subject',
+                                      subject,
+                                      Icons.subject_rounded,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 20),
 
                         // ── Message ──────────────────────────────────
                         if (message != null && message.toString().isNotEmpty) ...[
+                          _sectionLabel('Message', icon: Icons.message_outlined),
                           Container(
                             padding: const EdgeInsets.all(14),
                             decoration: BoxDecoration(
@@ -1266,41 +1362,21 @@ class _AdminLetterRequestScreenState extends State<AdminLetterRequestScreen> {
                               borderRadius: BorderRadius.circular(10),
                               border: Border.all(color: const Color(0xFFE2E6EA)),
                             ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  children: [
-                                    Icon(Icons.message_outlined, size: 14, color: const Color(0xFF64748B)),
-                                    const SizedBox(width: 6),
-                                    Text(
-                                      'MESSAGE',
-                                      style: GoogleFonts.beVietnamPro(
-                                        fontSize: 10,
-                                        fontWeight: FontWeight.w700,
-                                        color: const Color(0xFF64748B),
-                                        letterSpacing: 0.6,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 6),
-                                Text(
-                                  message.toString(),
-                                  style: GoogleFonts.beVietnamPro(
-                                    fontSize: 13,
-                                    color: const Color(0xFF374151),
-                                    height: 1.5,
-                                  ),
-                                ),
-                              ],
+                            child: Text(
+                              message.toString(),
+                              style: GoogleFonts.beVietnamPro(
+                                fontSize: 13,
+                                color: const Color(0xFF374151),
+                                height: 1.6,
+                              ),
                             ),
                           ),
-                          const SizedBox(height: 12),
+                          const SizedBox(height: 20),
                         ],
 
                         // ── Revision notes ──────────────────────────
                         if (revisionNote != null && revisionNote.toString().isNotEmpty) ...[
+                          _sectionLabel('Revision Notes', icon: Icons.edit_note_rounded),
                           Container(
                             padding: const EdgeInsets.all(14),
                             decoration: BoxDecoration(
@@ -1310,41 +1386,21 @@ class _AdminLetterRequestScreenState extends State<AdminLetterRequestScreen> {
                                 color: AdminColors.info.withOpacity(0.2),
                               ),
                             ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  children: [
-                                    Icon(Icons.edit_note_rounded, size: 14, color: AdminColors.info),
-                                    const SizedBox(width: 6),
-                                    Text(
-                                      'REVISION NOTES',
-                                      style: GoogleFonts.beVietnamPro(
-                                        fontSize: 10,
-                                        fontWeight: FontWeight.w700,
-                                        color: AdminColors.info,
-                                        letterSpacing: 0.6,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 6),
-                                Text(
-                                  revisionNote.toString(),
-                                  style: GoogleFonts.beVietnamPro(
-                                    fontSize: 13,
-                                    color: const Color(0xFF1A202C),
-                                    height: 1.5,
-                                  ),
-                                ),
-                              ],
+                            child: Text(
+                              revisionNote.toString(),
+                              style: GoogleFonts.beVietnamPro(
+                                fontSize: 13,
+                                color: const Color(0xFF1A202C),
+                                height: 1.6,
+                              ),
                             ),
                           ),
-                          const SizedBox(height: 12),
+                          const SizedBox(height: 20),
                         ],
 
                         // ── Attachment ──────────────────────────────
                         if (hasAttachment) ...[
+                          _sectionLabel('Attachment', icon: Icons.attach_file_rounded),
                           Container(
                             padding: const EdgeInsets.all(14),
                             decoration: BoxDecoration(
@@ -1417,17 +1473,20 @@ class _AdminLetterRequestScreenState extends State<AdminLetterRequestScreen> {
                               ],
                             ),
                           ),
+                          const SizedBox(height: 20),
                         ],
 
-                        // ── Signed certificate, if approved with e-sign ──
+                        // ── Signed Certificate ──────────────────────
                         if (data['signedDocumentBase64'] != null && data['signedDocumentBase64'].toString().isNotEmpty) ...[
-                          const SizedBox(height: 12),
+                          _sectionLabel('Digitally Signed', icon: Icons.verified_rounded),
                           Container(
                             padding: const EdgeInsets.all(14),
                             decoration: BoxDecoration(
-                              color: const Color(0xFF059669).withAlpha(15),
+                              color: const Color(0xFF059669).withOpacity(0.06),
                               borderRadius: BorderRadius.circular(10),
-                              border: Border.all(color: const Color(0xFF059669).withAlpha(38)),
+                              border: Border.all(
+                                color: const Color(0xFF059669).withOpacity(0.2),
+                              ),
                             ),
                             child: Row(
                               children: [
@@ -1435,7 +1494,7 @@ class _AdminLetterRequestScreenState extends State<AdminLetterRequestScreen> {
                                   width: 44,
                                   height: 44,
                                   decoration: BoxDecoration(
-                                    color: const Color(0xFF059669).withAlpha(26),
+                                    color: const Color(0xFF059669).withOpacity(0.12),
                                     borderRadius: BorderRadius.circular(10),
                                   ),
                                   child: const Icon(Icons.verified_rounded, color: Color(0xFF059669), size: 20),
@@ -1446,13 +1505,28 @@ class _AdminLetterRequestScreenState extends State<AdminLetterRequestScreen> {
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
                                       Text(
-                                        'Digitally Signed Copy',
-                                        style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600, color: const Color(0xFF1A202C)),
+                                        'Signed Approval Certificate',
+                                        style: GoogleFonts.beVietnamPro(
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w600,
+                                          color: const Color(0xFF1A202C),
+                                        ),
                                       ),
+                                      if (data['signedAt'] != null)
+                                        Text(
+                                          'Signed on ${DateFormat('MMM dd, yyyy').format((data['signedAt'] as Timestamp).toDate())}',
+                                          style: GoogleFonts.beVietnamPro(
+                                            fontSize: 11,
+                                            color: const Color(0xFF64748B),
+                                          ),
+                                        ),
                                       if (data['signedBy'] != null)
                                         Text(
-                                          'Signed by ${data['signedBy']}',
-                                          style: GoogleFonts.beVietnamPro(fontSize: 11, color: const Color(0xFF64748B)),
+                                          'By ${data['signedBy']}',
+                                          style: GoogleFonts.beVietnamPro(
+                                            fontSize: 11,
+                                            color: const Color(0xFF64748B),
+                                          ),
                                         ),
                                     ],
                                   ),
@@ -1460,18 +1534,27 @@ class _AdminLetterRequestScreenState extends State<AdminLetterRequestScreen> {
                                 ElevatedButton.icon(
                                   onPressed: () => _viewSignedCertificate(data),
                                   icon: const Icon(Icons.open_in_new_rounded, size: 14),
-                                  label: Text('View', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600)),
+                                  label: Text(
+                                    'View',
+                                    style: GoogleFonts.beVietnamPro(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
                                   style: ElevatedButton.styleFrom(
                                     backgroundColor: const Color(0xFF059669),
                                     foregroundColor: Colors.white,
                                     elevation: 0,
-                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
                                     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                                   ),
                                 ),
                               ],
                             ),
                           ),
+                          const SizedBox(height: 20),
                         ],
                       ],
                     ),
@@ -1553,7 +1636,6 @@ class _AdminLetterRequestScreenState extends State<AdminLetterRequestScreen> {
                     ),
                   )
                 else
-                  // Just a close button for approved/rejected/archived
                   Container(
                     padding: const EdgeInsets.fromLTRB(24, 16, 24, 20),
                     decoration: const BoxDecoration(

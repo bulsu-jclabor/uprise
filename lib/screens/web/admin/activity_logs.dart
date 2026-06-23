@@ -221,8 +221,9 @@ class _ActivityLogsState extends State<ActivityLogs> {
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildHeader(),
+
           _buildStatsRow(isMobile, isTablet),
+         
           _buildToolbar(isMobile, isTablet),
           const SizedBox(height: 16),
           Expanded(child: _buildTable(isMobile, isTablet)),
@@ -626,10 +627,9 @@ class _ActivityLogsState extends State<ActivityLogs> {
       ),
       child: Row(
         children: [
-          Expanded(flex: 3, child: _headerCell('USER')),
-          Expanded(flex: 5, child: _headerCell('ACTION')),
-          Expanded(flex: 2, child: _headerCell('ORG')),
-          Expanded(flex: 3, child: _headerCell('MODULE')),
+          Expanded(flex: 4, child: _headerCell('USER')),
+          Expanded(flex: 4, child: _headerCell('ACTION')),
+          Expanded(flex: 4, child: _headerCell('MODULE')),
           Expanded(flex: 2, child: _headerCell('SEVERITY')),
           Expanded(flex: 3, child: _headerCell('TIMESTAMP')),
         ],
@@ -690,11 +690,11 @@ class _ActivityLogsState extends State<ActivityLogs> {
           children: [
             // User
             Expanded(
-              flex: 3,
+              flex: 4,
               child: Row(
                 children: [
                   _UserAvatar(name: user),
-                  const SizedBox(width: 10),
+                  const SizedBox(width: 14),
                   Expanded(
                     child: Text(
                       user,
@@ -710,42 +710,36 @@ class _ActivityLogsState extends State<ActivityLogs> {
               ),
             ),
             // Action
-            Expanded(
-              flex: 5,
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Icon(_iconForAction(action), size: 14, color: const Color(0xFF9AA5B4)),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      action,
-                      style: GoogleFonts.beVietnamPro(
-                        fontSize: 13,
-                        color: const Color(0xFF374151),
-                      ),
-                      overflow: TextOverflow.ellipsis,
-                      maxLines: 2,
-                    ),
-                  ),
-                ],
-              ),
+            // Action
+Expanded(
+  flex: 4,
+  child: Padding(
+    padding: const EdgeInsets.only(left: 8), // ← adds space on left
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(_iconForAction(action), size: 14, color: const Color(0xFF9AA5B4)),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Text(
+            action,
+            style: GoogleFonts.beVietnamPro(
+              fontSize: 13,
+              color: const Color(0xFF374151),
             ),
-            // Org
-            Expanded(
-              flex: 2,
-              child: Text(
-                orgId.isNotEmpty ? orgId : '—',
-                style: GoogleFonts.beVietnamPro(
-                  fontSize: 12,
-                  color: const Color(0xFF64748B),
-                ),
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
+            overflow: TextOverflow.ellipsis,
+            maxLines: 2,
+          ),
+        ),
+      ],
+    ),
+  ),
+),
+            
+            
             // Module
             Expanded(
-              flex: 3,
+              flex: 4,
               child: Align(
                 alignment: Alignment.centerLeft,
                 child: Container(
@@ -767,7 +761,14 @@ class _ActivityLogsState extends State<ActivityLogs> {
               ),
             ),
             // Severity
-            Expanded(flex: 2, child: _SeverityBadge(severity)),
+            // Severity
+Expanded(
+  flex: 2,
+  child: Align(
+    alignment: Alignment.centerLeft, // ← shift left
+    child: _SeverityBadge(severity),
+  ),
+),
             // Timestamp
             Expanded(
               flex: 3,

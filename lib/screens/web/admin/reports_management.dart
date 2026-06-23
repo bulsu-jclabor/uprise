@@ -1077,39 +1077,7 @@ class _ReportsManagementState extends State<ReportsManagement>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(28, 24, 28, 0),
-          child: Row(
-            children: [
-              Container(
-                width: 44,
-                height: 44,
-                decoration: BoxDecoration(
-                  color: UpriseColors.primaryDark.withAlpha(26),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(Icons.summarize_rounded, color: UpriseColors.primaryDark, size: 22),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Reports Management',
-                      style: GoogleFonts.beVietnamPro(fontSize: 22, fontWeight: FontWeight.w700, color: UpriseColors.primaryDark),
-                    ),
-                    const SizedBox(height: 3),
-                    Text(
-                      _tabSubtitles[_tabController.index],
-                      style: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF64748B)),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
+      
         const SizedBox(height: 16),
         _buildTabBar(),
         const SizedBox(height: 16),
