@@ -15,8 +15,24 @@ import '../../theme/app_theme.dart';
 import 'package:intl/intl.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Helper functions for image handling (base64)
+// Helper: get user full name from UID
 // ─────────────────────────────────────────────────────────────────────────────
+Future<String> _getUserName(String uid) async {
+  if (uid.isEmpty) return '—';
+  try {
+    final doc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
+    if (doc.exists) {
+      final data = doc.data();
+      // Try various possible field names
+      final name = data?['fullName'] ?? data?['displayName'] ?? data?['name'];
+      if (name != null && name.toString().isNotEmpty) {
+        return name.toString();
+      }
+    }
+  } catch (_) {}
+  return uid; // fallback to UID
+}
+
 bool _isImageAttachment(Map<String, dynamic> data) {
   final name = data['attachmentName'] as String?;
   if (name == null) return false;
@@ -108,11 +124,12 @@ Widget _statusBadge(String status) {
     'pending':  _BadgeStyle(Color(0xFFFFFBEB), Color(0xFFFB923C), 'PENDING'),
     'rejected': _BadgeStyle(Color(0xFFFEF2F2), Color(0xFFDC2626), 'REJECTED'),
     'archived': _BadgeStyle(Color(0xFFF3F4F6), Color(0xFF6B7280), 'ARCHIVED'),
+    'for_review': _BadgeStyle(const Color(0xFFFFF7ED), const Color(0xFFBE4700), 'NEEDS REVISION'),
   };
   final s = styles[status.toLowerCase()] ??
       const _BadgeStyle(Color(0xFFF3F4F6), Color(0xFF6B7280), '—');
   return Container(
-    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3), // reduced padding
     decoration: BoxDecoration(
       color: s.bg,
       borderRadius: BorderRadius.circular(_DS.radiusPill),
@@ -120,10 +137,10 @@ Widget _statusBadge(String status) {
     child: Text(
       s.label,
       style: GoogleFonts.beVietnamPro(
-        fontSize: 10,
+        fontSize: 9, // smaller font
         fontWeight: FontWeight.w700,
         color: s.fg,
-        letterSpacing: 0.8,
+        letterSpacing: 0.6,
       ),
     ),
   );
@@ -256,7 +273,7 @@ class _EventProposalsState extends State<EventProposals> {
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance.collection('event_proposals').snapshots(),
       builder: (context, snapshot) {
-        int total = 0, pending = 0, approved = 0, rejected = 0, archived = 0;
+        int total = 0, pending = 0, approved = 0, rejected = 0, archived = 0, forReview = 0;
         if (snapshot.hasData) {
           total = snapshot.data!.docs.length;
           for (final doc in snapshot.data!.docs) {
@@ -265,6 +282,7 @@ class _EventProposalsState extends State<EventProposals> {
             if (status == 'approved') approved++;
             if (status == 'rejected') rejected++;
             if (status == 'archived') archived++;
+            if (status == 'for_review') forReview++;
           }
         }
         final horizontalPadding = isMobile ? 16.0 : (isTablet ? 20.0 : 28.0);
@@ -300,6 +318,12 @@ class _EventProposalsState extends State<EventProposals> {
             icon: Icons.archive_rounded,
             color: const Color(0xFF6B7280),
           ),
+          _StatCard(
+  label: 'For Review',
+  value: '$forReview',
+  icon: Icons.rate_review_rounded,
+  color: const Color(0xFFBE4700),
+),
         ];
 
         return Padding(
@@ -369,7 +393,7 @@ class _EventProposalsState extends State<EventProposals> {
                 SizedBox(height: itemGap),
                 _FilterDropdown(
                   value: _statusFilter,
-                  items: const ['All', 'Pending', 'Approved', 'Rejected', 'Archived'],
+                  items: const ['All', 'Pending', 'Approved', 'Rejected', 'For Review', 'Archived'],
                   hint: 'Status',
                   icon: Icons.tune_rounded,
                   onChanged: (v) => setState(() {
@@ -492,29 +516,35 @@ class _EventProposalsState extends State<EventProposals> {
 
   // NEW HEADER: Organization first, then Event Title
   Widget _buildTableHeader() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 13),
-      decoration: const BoxDecoration(
-        color: Color(0xFFFFF7ED),
-        borderRadius: BorderRadius.vertical(top: Radius.circular(14)),
-        border: Border(bottom: BorderSide(color: Color(0xFFFB923C), width: 1)),
-      ),
-      child: Row(children: [
-        Expanded(flex: 2, child: _headerCell('ORGANIZATION')),
-        Expanded(flex: 3, child: _headerCell('EVENT TITLE')),
-        Expanded(flex: 2, child: _headerCell('CATEGORY')),
-        Expanded(flex: 2, child: _headerCell('DATE')),
-        Expanded(flex: 1, child: _headerCell('STATUS')),
-        Expanded(
-          flex: 2,
-          child: Align(
-            alignment: Alignment.centerRight,
-            child: _headerCell('ACTIONS'),
-          ),
+  return Container(
+    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 13),
+    decoration: const BoxDecoration(
+      color: Color(0xFFFFF7ED),
+      borderRadius: BorderRadius.vertical(top: Radius.circular(14)),
+      border: Border(bottom: BorderSide(color: Color(0xFFFB923C), width: 1)),
+    ),
+    child: Row(children: [
+      Expanded(flex: 2, child: _headerCell('ORGANIZATION')),
+      Expanded(flex: 3, child: _headerCell('EVENT TITLE')),
+      Expanded(flex: 2, child: _headerCell('CATEGORY')),          // back to 2
+      Expanded(flex: 2, child: _headerCell('DATE')),              // back to 2
+      Expanded(
+        flex: 1,                                                  // back to 1
+        child: Align(
+          alignment: Alignment.centerRight,                       // right‑align header
+          child: _headerCell('STATUS'),
         ),
-      ]),
-    );
-  }
+      ),
+      Expanded(
+        flex: 2,                                                  // back to 2
+        child: Align(
+          alignment: Alignment.centerRight,
+          child: _headerCell('ACTIONS'),
+        ),
+      ),
+    ]),
+  );
+}
 
   Widget _headerCell(String text) => Text(
         text,
@@ -563,135 +593,140 @@ class _EventProposalsState extends State<EventProposals> {
                   : const Border(bottom: BorderSide(color: Color(0xFFF1F5F9))),
             ),
             child: Row(children: [
-              // ORGANIZATION column (unchanged)
-              Expanded(
-                flex: 2,
-                child: Row(children: [
-                  _OrgAvatar(name: orgName, logoUrl: logoUrl),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      orgName,
-                      style: GoogleFonts.beVietnamPro(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: const Color(0xFF1A202C),
-                      ),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                ]),
-              ),
-              // EVENT TITLE column – with image thumbnail if present
-              Expanded(
-                flex: 3,
-                child: Row(
-                  children: [
-                    if (imageThumbnail != null) ...[
-                      imageThumbnail,
-                      const SizedBox(width: 10),
-                    ],
-                    Expanded(
-                      child: Text(
-                        data['title'] ?? '—',
-                        style: GoogleFonts.beVietnamPro(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          color: const Color(0xFF1A202C),
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              // CATEGORY column
-              Expanded(
-                flex: 2,
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: UpriseColors.primaryDark.withAlpha(18),
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: Text(
-                      data['category'] ?? '—',
-                      style: GoogleFonts.beVietnamPro(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: UpriseColors.primaryDark,
-                      ),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                ),
-              ),
-              // DATE column (unchanged)
-              Expanded(
-                flex: 2,
-                child: Text(
-                  dateStr,
-                  style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF64748B)),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-              // STATUS column
-              Expanded(
-                flex: 1,
-                child: Row(children: [
-                  _statusBadge(status),
-                  if (isPublished) ...[
-                    const SizedBox(width: 4),
-                    const Tooltip(
-                      message: 'Published to students',
-                      child: Icon(Icons.circle, size: 8, color: Color(0xFF2563EB)),
-                    ),
-                  ],
-                ]),
-              ),
-              // ACTIONS column
-              Expanded(
-                flex: 2,
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    _ActionIconButton(
-                      icon: Icons.visibility_outlined,
-                      tooltip: 'View Details',
-                      color: const Color(0xFF3B82F6),
-                      onTap: () => _showProposalDetailDialog(docId, data),
-                    ),
-                    const SizedBox(width: 4),
-                    if (status == 'pending') ...[
-                      _ActionIconButton(
-                        icon: Icons.check_circle_outline_rounded,
-                        tooltip: 'Approve',
-                        color: const Color(0xFF059669),
-                        onTap: () => _confirmSetStatus(docId, data['title'] ?? 'this event', 'approved'),
-                      ),
-                      const SizedBox(width: 4),
-                      _ActionIconButton(
-                        icon: Icons.cancel_outlined,
-                        tooltip: 'Reject',
-                        color: const Color(0xFFDC2626),
-                        // CHANGE: call rejection reason dialog instead of _confirmSetStatus
-                        onTap: () => _showRejectReasonDialog(docId, data['title'] ?? 'this event'),
-                      ),
-                      const SizedBox(width: 4),
-                    ],
-                    if (status != 'archived')
-                      _ActionIconButton(
-                        icon: Icons.archive_outlined,
-                        tooltip: 'Archive',
-                        color: const Color(0xFF6B7280),
-                        onTap: () => _confirmSetStatus(docId, data['title'] ?? 'this event', 'archived'),
-                      ),
-                  ],
-                ),
-              ),
-            ]),
+  // ORGANIZATION – unchanged
+  Expanded(
+    flex: 2,
+    child: Row(children: [
+      _OrgAvatar(name: orgName, logoUrl: logoUrl),
+      const SizedBox(width: 10),
+      Expanded(
+        child: Text(
+          orgName,
+          style: GoogleFonts.beVietnamPro(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: const Color(0xFF1A202C),
+          ),
+          overflow: TextOverflow.ellipsis,
+        ),
+      ),
+    ]),
+  ),
+  // EVENT TITLE – unchanged
+  Expanded(
+    flex: 3,
+    child: Row(
+      children: [
+        if (imageThumbnail != null) ...[
+          imageThumbnail,
+          const SizedBox(width: 10),
+        ],
+        Expanded(
+          child: Text(
+            data['title'] ?? '—',
+            style: GoogleFonts.beVietnamPro(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: const Color(0xFF1A202C),
+            ),
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      ],
+    ),
+  ),
+  // CATEGORY – flex back to 2
+  Expanded(
+    flex: 2,
+    child: Align(
+      alignment: Alignment.centerLeft,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+        decoration: BoxDecoration(
+          color: UpriseColors.primaryDark.withAlpha(18),
+          borderRadius: BorderRadius.circular(6),
+        ),
+        child: Text(
+          data['category'] ?? '—',
+          style: GoogleFonts.beVietnamPro(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: UpriseColors.primaryDark,
+          ),
+          overflow: TextOverflow.ellipsis,
+        ),
+      ),
+    ),
+  ),
+  // DATE – flex back to 2
+  Expanded(
+    flex: 2,
+    child: Text(
+      dateStr,
+      style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF64748B)),
+      overflow: TextOverflow.ellipsis,
+    ),
+  ),
+  // STATUS – flex back to 1, but right‑aligned
+  Expanded(
+    flex: 1,
+    child: Align(
+      alignment: Alignment.centerRight,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _statusBadge(status),
+          if (isPublished) ...[
+            const SizedBox(width: 4),
+            const Tooltip(
+              message: 'Published to students',
+              child: Icon(Icons.circle, size: 8, color: Color(0xFF2563EB)),
+            ),
+          ],
+        ],
+      ),
+    ),
+  ),
+  // ACTIONS – flex back to 2, right‑aligned (unchanged)
+  Expanded(
+    flex: 2,
+    child: Row(
+      mainAxisAlignment: MainAxisAlignment.end,
+      children: [
+        _ActionIconButton(
+          icon: Icons.visibility_outlined,
+          tooltip: 'View Details',
+          color: const Color(0xFF3B82F6),
+          onTap: () => _showProposalDetailDialog(docId, data),
+        ),
+        const SizedBox(width: 4),
+        if (status == 'pending') ...[
+          _ActionIconButton(
+            icon: Icons.check_circle_outline_rounded,
+            tooltip: 'Approve',
+            color: const Color(0xFF059669),
+            onTap: () => _confirmSetStatus(docId, data['title'] ?? 'this event', 'approved'),
+          ),
+          const SizedBox(width: 4),
+          _ActionIconButton(
+            icon: Icons.cancel_outlined,
+            tooltip: 'Reject',
+            color: const Color(0xFFDC2626),
+            onTap: () => _showRejectReasonDialog(docId, data['title'] ?? 'this event'),
+          ),
+          const SizedBox(width: 4),
+        ],
+        if (status != 'archived')
+          _ActionIconButton(
+            icon: Icons.archive_outlined,
+            tooltip: 'Archive',
+            color: const Color(0xFF6B7280),
+            onTap: () => _confirmSetStatus(docId, data['title'] ?? 'this event', 'archived'),
+          ),
+      ],
+    ),
+  ),
+]),
           ),
         );
       },
@@ -1355,10 +1390,10 @@ class _EventProposalsState extends State<EventProposals> {
           child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
             Row(children: [
               Container(
-                width: 38, height: 38,
-                decoration: BoxDecoration(color: const Color(0xFFF3E8FF), borderRadius: BorderRadius.circular(10)),
-                child: const Icon(Icons.rate_review_rounded, color: Color(0xFF7C3AED), size: 18),
-              ),
+  width: 38, height: 38,
+  decoration: BoxDecoration(color: const Color(0xFFFFF7ED), borderRadius: BorderRadius.circular(10)),
+  child: Icon(Icons.rate_review_rounded, color: UpriseColors.primaryDark, size: 18),
+),
               const SizedBox(width: 12),
               Expanded(child: Text('Request Revision',
                   style: GoogleFonts.beVietnamPro(fontSize: 16, fontWeight: FontWeight.w700, color: const Color(0xFF1A202C)))),
@@ -1405,7 +1440,7 @@ class _EventProposalsState extends State<EventProposals> {
                 icon: const Icon(Icons.send_rounded, size: 14),
                 label: Text('Send Feedback', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600)),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF7C3AED),
+                  backgroundColor: UpriseColors.primaryDark,
                   foregroundColor: Colors.white,
                   elevation: 0,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
@@ -1575,7 +1610,15 @@ class _EventProposalsState extends State<EventProposals> {
                         if (data['reviewedAt'] != null) ...[
                           const SizedBox(height: 12),
                           Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                            Expanded(child: _detailItem('Reviewed By', data['reviewedBy'] ?? '—', Icons.rate_review_outlined)),
+                            Expanded(
+  child: FutureBuilder<String>(
+    future: _getUserName(data['reviewedBy'] ?? ''),
+    builder: (context, snapshot) {
+      final name = snapshot.hasData ? snapshot.data! : 'Loading...';
+      return _detailItem('Reviewed By', name, Icons.rate_review_outlined);
+    },
+  ),
+),
                             Expanded(child: _detailItem('Reviewed At', _formatTimestamp(data['reviewedAt']), Icons.access_time_rounded)),
                           ]),
                         ],

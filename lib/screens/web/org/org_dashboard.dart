@@ -1164,64 +1164,6 @@ class _OrgDashboardState extends State<OrgDashboard> {
             ),
             const SizedBox(width: 12),
           ],
-          if (screenWidth >= 600)
-            SizedBox(
-              width: 220,
-              height: 36,
-              child: TextField(
-                controller: _searchController,
-                style: GoogleFonts.beVietnamPro(fontSize: 13),
-                decoration: InputDecoration(
-                  hintText: 'Search…',
-                  hintStyle: GoogleFonts.beVietnamPro(fontSize: 13, color: OrgColors.textFaint),
-                  prefixIcon: const Icon(Icons.search_rounded, size: 16, color: OrgColors.textFaint),
-                  filled: true,
-                  fillColor: OrgColors.lightGray,
-                  contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(20),
-                    borderSide: const BorderSide(color: OrgColors.border),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(20),
-                    borderSide: const BorderSide(color: OrgColors.border),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(20),
-                    borderSide: const BorderSide(color: OrgColors.primaryDark, width: 1.5),
-                  ),
-                ),
-              ),
-            )
-          else if (screenWidth >= 480)
-            SizedBox(
-              width: 110,
-              height: 36,
-              child: TextField(
-                controller: _searchController,
-                style: GoogleFonts.beVietnamPro(fontSize: 12),
-                decoration: InputDecoration(
-                  hintText: 'Search',
-                  hintStyle: GoogleFonts.beVietnamPro(fontSize: 12, color: OrgColors.textFaint),
-                  prefixIcon: const Icon(Icons.search_rounded, size: 15, color: OrgColors.textFaint),
-                  filled: true,
-                  fillColor: OrgColors.lightGray,
-                  contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 12),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(20),
-                    borderSide: const BorderSide(color: OrgColors.border),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(20),
-                    borderSide: const BorderSide(color: OrgColors.border),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(20),
-                    borderSide: const BorderSide(color: OrgColors.primaryDark, width: 1.5),
-                  ),
-                ),
-              ),
-            ),
           if (screenWidth >= 480) const SizedBox(width: 12),
           PopupMenuButton<String>(
             offset: const Offset(-318, 54),
@@ -1421,7 +1363,6 @@ class _OrgDashboardHomeState extends State<_OrgDashboardHome> {
   // Existing streams
   late final Stream<QuerySnapshot> _approvedEventsStream;
   late final Stream<QuerySnapshot> _pendingProposalsStream;
-  late final Stream<QuerySnapshot> _membersStream;
   late final Stream<QuerySnapshot> _upcomingEventsStream;
   StreamSubscription<QuerySnapshot>? _chartDataSubscription;
 
@@ -1454,11 +1395,6 @@ class _OrgDashboardHomeState extends State<_OrgDashboardHome> {
         .where('status', isEqualTo: 'pending')
         .snapshots();
 
-    _membersStream = FirebaseFirestore.instance
-        .collection('users')
-        .where('orgId', isEqualTo: widget.orgId)
-        .where('role', isEqualTo: 'org')
-        .snapshots();
 
     _upcomingEventsStream = FirebaseFirestore.instance
         .collection('event_proposals')
@@ -1809,12 +1745,6 @@ class _OrgDashboardHomeState extends State<_OrgDashboardHome> {
         icon: Icons.pending_actions_rounded,
         color: OrgColors.warning,
         stream: _pendingProposalsStream,
-      ),
-      streamCard(
-        label: 'Members',
-        icon: Icons.people_rounded,
-        color: OrgColors.success,
-        stream: _membersStream,
       ),
       streamCard(
         label: 'Upcoming Events',
@@ -2613,7 +2543,7 @@ class _ActivityBarChart extends StatelessWidget {
             BarChartRodData(
               toY: data[i].toDouble(),
               color: isSelected ? OrgColors.primaryDark : OrgColors.primaryDark.withAlpha(110),
-              width: 14,
+              width: 35,
               borderRadius: BorderRadius.circular(4),
             ),
           ]);
