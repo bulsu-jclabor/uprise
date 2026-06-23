@@ -1066,9 +1066,51 @@ class _ReportsManagementState extends State<ReportsManagement>
     );
   }
 
+  static const List<String> _tabSubtitles = [
+    'Build a custom analytics report filtered by organization, event type, and semester.',
+    'Accomplishment reports submitted by organizations, for your review.',
+    'Financial reports submitted by organizations, for your review.',
+    'Track which organizations have met their financial and accomplishment report deadlines.',
+  ];
+
   Widget _buildMainView() {
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(28, 24, 28, 0),
+          child: Row(
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: UpriseColors.primaryDark.withAlpha(26),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(Icons.summarize_rounded, color: UpriseColors.primaryDark, size: 22),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Reports Management',
+                      style: GoogleFonts.beVietnamPro(fontSize: 22, fontWeight: FontWeight.w700, color: UpriseColors.primaryDark),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      _tabSubtitles[_tabController.index],
+                      style: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF64748B)),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
         _buildTabBar(),
         const SizedBox(height: 16),
         Expanded(
@@ -1136,10 +1178,11 @@ class _ReportsManagementState extends State<ReportsManagement>
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _buildReportTable(reportType, reports, loading),
-          if (reportType == 'Financial') ...[
-            const SizedBox(height: 24),
-            _buildRecentReportsBar(),
-          ],
+          // Shown on both tabs — this is a generic feed of every exported
+          // report (any type), not financial-specific, so it shouldn't only
+          // appear under "Financial".
+          const SizedBox(height: 24),
+          _buildRecentReportsBar(),
         ],
       ),
     );
@@ -2462,6 +2505,19 @@ class _ReportsManagementState extends State<ReportsManagement>
         .where((s) => s.submittedAt != null)
         .length;
     final total = _financialSubs.length;
+
+    // An org counts as pending if it's missing EITHER submission type.
+    // Summing the two "missing" counts separately would double-count any
+    // org that's missing both — this counts each org at most once.
+    final accSubmittedByOrg = {
+      for (final s in _accomplishmentSubs) s.orgId: s.submittedAt != null,
+    };
+    final pendingOrgCount = _financialSubs.where((s) {
+      final finMissing = s.submittedAt == null;
+      final accMissing = !(accSubmittedByOrg[s.orgId] ?? false);
+      return finMissing || accMissing;
+    }).length;
+
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
       child: Row(
@@ -2488,8 +2544,8 @@ class _ReportsManagementState extends State<ReportsManagement>
           ),
           const SizedBox(width: 14),
           _StatCard(
-            label: 'Pending',
-            value: '${(total - finSubmitted) + (total - accSubmitted)}',
+            label: 'Orgs with Pending Items',
+            value: '$pendingOrgCount',
             icon: Icons.pending_actions_rounded,
             color: UpriseColors.warning,
           ),
@@ -2660,7 +2716,10 @@ class _ReportsManagementState extends State<ReportsManagement>
                       child: isSubmitted
                           ? _statusBadge('submitted')
                           : !sub.hasApprovedEvent
-                          ? _statusBadge('no events')
+                          ? Tooltip(
+                              message: 'Not a submission status — this org has no approved events yet, so no report is due.',
+                              child: _statusBadge('no events'),
+                            )
                           : isOverdue
                           ? _statusBadge('overdue')
                           : Row(

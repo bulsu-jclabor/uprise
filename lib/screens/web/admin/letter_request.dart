@@ -2,7 +2,9 @@
 
 import 'dart:convert';
 import 'dart:typed_data';
+import 'dart:ui' show ImageByteFormat;
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show RenderRepaintBoundary;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -287,8 +289,8 @@ class _AdminLetterRequestScreenState extends State<AdminLetterRequestScreen> {
         Expanded(flex: 2, child: _headerCell('LETTER ID')),
         Expanded(flex: 3, child: _headerCell('SUBJECT')),
         Expanded(flex: 2, child: _headerCell('DATE SUBMITTED')),
-        Expanded(flex: 2, child: _headerCell('SIGNING DATE')),
-        Expanded(flex: 1, child: _headerCell('STATUS')),
+        Expanded(flex: 2, child: _headerCell('E-SIGNED')),
+        Expanded(flex: 2, child: _headerCell('STATUS')),
         Expanded(flex: 2, child: Align(alignment: Alignment.centerRight, child: _headerCell('ACTIONS'))),
       ]),
     );
@@ -313,11 +315,9 @@ class _AdminLetterRequestScreenState extends State<AdminLetterRequestScreen> {
     final letterId = data['letterId'] ?? 'N/A';
     final message = data['message'];
 
-    // Signing appointment, if one was scheduled on approval — same
-    // wetSignSchedule-style display as admin/org event_proposals.dart, so
-    // it's easy to confirm the org actually received a signing date.
-    final signingSchedule = data['signingSchedule'] as Map<String, dynamic>?;
-    final signingTs = signingSchedule?['startDateTime'] as Timestamp?;
+    // E-signature, if the letter was digitally signed on approval — lets
+    // admin confirm at a glance whether a signed copy actually exists.
+    final signingTs = data['signedAt'] as Timestamp?;
     final signingStr = signingTs != null
         ? DateFormat('MMM dd, yyyy').format(signingTs.toDate())
         : '—';
@@ -449,7 +449,7 @@ class _AdminLetterRequestScreenState extends State<AdminLetterRequestScreen> {
                             color: const Color(0xFF059669).withAlpha(20),
                             borderRadius: BorderRadius.circular(5),
                           ),
-                          child: const Icon(Icons.edit_calendar_rounded, size: 11, color: Color(0xFF059669)),
+                          child: const Icon(Icons.draw_rounded, size: 11, color: Color(0xFF059669)),
                         ),
                         const SizedBox(width: 5),
                         Flexible(child: Text(signingStr,
@@ -457,7 +457,7 @@ class _AdminLetterRequestScreenState extends State<AdminLetterRequestScreen> {
                       ])
                     : Text('—', style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFFD1D5DB))),
               ),
-              Expanded(flex: 1, child: _buildStatusBadge(status)),
+              Expanded(flex: 2, child: Align(alignment: Alignment.centerLeft, child: _buildStatusBadge(status))),
               // ============ ACTIONS ============
               // "Request Revision" lives in the View dialog only (matches
               // admin/event_proposals.dart) — keeping it out of the row
@@ -482,7 +482,7 @@ class _AdminLetterRequestScreenState extends State<AdminLetterRequestScreen> {
                         icon: Icons.check_circle_outline,
                         tooltip: 'Approve',
                         color: AdminColors.success,
-                        onTap: () => _approveWithSigningSchedule(docId, data['orgName'] ?? 'Request'),
+                        onTap: () => _approveWithESignature(docId, data),
                       ),
                       const SizedBox(width: 6),
                       _ActionIconButton(
@@ -594,6 +594,8 @@ class _AdminLetterRequestScreenState extends State<AdminLetterRequestScreen> {
       decoration: BoxDecoration(color: style['bg'] as Color, borderRadius: BorderRadius.circular(20)),
       child: Text(
         style['label'] as String,
+        softWrap: false,
+        overflow: TextOverflow.visible,
         style: GoogleFonts.beVietnamPro(fontSize: 10, fontWeight: FontWeight.w700, color: style['fg'] as Color, letterSpacing: 0.8),
       ),
     );
@@ -743,26 +745,31 @@ class _AdminLetterRequestScreenState extends State<AdminLetterRequestScreen> {
     }
   }
 
-  // ── Approve + schedule signing appointment, same flow as the wet-sign
-  // scheduling popup in admin/event_proposals.dart's proposal approval. ──
-  void _approveWithSigningSchedule(String docId, String orgName) {
-    final dateCtrl = TextEditingController();
-    final startTimeCtrl = TextEditingController();
-    final endTimeCtrl = TextEditingController();
-    final locationCtrl = TextEditingController(text: "Dean's Office");
-    DateTime? selectedDate;
-    TimeOfDay? startTime;
-    TimeOfDay? endTime;
+  // ── Approve + e-sign. Replaces the old wet-sign appointment scheduling —
+  // the admin draws a signature here and now, and a signed approval
+  // certificate PDF is generated immediately instead of booking an
+  // in-person office visit. ──
+  void _approveWithESignature(String docId, Map<String, dynamic> data) {
+    final orgName = (data['orgName'] ?? 'Request').toString();
+    final letterId = (data['letterId'] ?? 'N/A').toString();
+    final subject = (data['subject'] ?? 'No subject').toString();
+    final requestorName =
+        (data['requestedBy'] ?? data['submittedBy'] ?? orgName).toString();
+
+    final List<Offset?> signaturePoints = [];
+    final signatureKey = GlobalKey();
+    bool isSaving = false;
 
     showDialog(
       context: context,
       barrierDismissible: false,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDialogState) {
+          final strokeCount = signaturePoints.where((p) => p != null).length;
           return Dialog(
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
             child: Container(
-              width: 500,
+              width: 480,
               padding: const EdgeInsets.all(24),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -775,107 +782,70 @@ class _AdminLetterRequestScreenState extends State<AdminLetterRequestScreen> {
                         color: const Color(0xFFECFDF5),
                         borderRadius: BorderRadius.circular(10),
                       ),
-                      child: const Icon(Icons.edit_calendar_rounded, color: Color(0xFF059669), size: 20),
+                      child: const Icon(Icons.draw_rounded, color: Color(0xFF059669), size: 20),
                     ),
                     const SizedBox(width: 14),
                     Expanded(
                       child: Text(
-                        'Schedule Signing Appointment',
+                        'E-Sign & Approve',
                         style: GoogleFonts.beVietnamPro(fontSize: 17, fontWeight: FontWeight.w700, color: const Color(0xFF1A202C)),
                       ),
                     ),
                   ]),
                   const SizedBox(height: 20),
                   Text(
-                    'Set your office availability for $orgName to sign the letter.',
+                    'Draw your signature below to digitally sign and approve this letter for $orgName.',
                     style: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF64748B)),
                   ),
+                  const SizedBox(height: 18),
+                  Container(
+                    height: 160,
+                    width: double.infinity,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      border: Border.all(color: const Color(0xFFE2E6EA)),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(10),
+                      child: RepaintBoundary(
+                        key: signatureKey,
+                        child: GestureDetector(
+                          onPanStart: (d) => setDialogState(() => signaturePoints.add(d.localPosition)),
+                          onPanUpdate: (d) => setDialogState(() => signaturePoints.add(d.localPosition)),
+                          onPanEnd: (_) => setDialogState(() => signaturePoints.add(null)),
+                          child: Container(
+                            color: Colors.white,
+                            width: double.infinity,
+                            height: double.infinity,
+                            child: CustomPaint(painter: _SignaturePainter(signaturePoints)),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Row(children: [
+                    const Icon(Icons.info_outline_rounded, size: 13, color: Color(0xFF9AA5B4)),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        'Stamped directly onto the submitted PDF\'s last page.',
+                        style: GoogleFonts.beVietnamPro(fontSize: 11, color: const Color(0xFF9AA5B4)),
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: signaturePoints.isEmpty ? null : () => setDialogState(() => signaturePoints.clear()),
+                      style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 8)),
+                      child: Text('Clear', style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.w600)),
+                    ),
+                  ]),
                   const SizedBox(height: 20),
-
-                  TextFormField(
-                    controller: dateCtrl,
-                    readOnly: true,
-                    decoration: InputDecoration(
-                      labelText: 'Select Date *',
-                      hintText: 'MM/DD/YYYY',
-                      prefixIcon: const Icon(Icons.calendar_today_outlined, size: 18),
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                    ),
-                    onTap: () async {
-                      final picked = await showDatePicker(
-                        context: ctx,
-                        initialDate: DateTime.now(),
-                        firstDate: DateTime.now(),
-                        lastDate: DateTime.now().add(const Duration(days: 30)),
-                      );
-                      if (picked != null) {
-                        selectedDate = picked;
-                        dateCtrl.text = DateFormat('MM/dd/yyyy').format(picked);
-                        setDialogState(() {});
-                      }
-                    },
-                  ),
-                  const SizedBox(height: 14),
-
-                  TextFormField(
-                    controller: startTimeCtrl,
-                    readOnly: true,
-                    decoration: InputDecoration(
-                      labelText: 'Start Time *',
-                      hintText: '-- : --',
-                      prefixIcon: const Icon(Icons.access_time_rounded, size: 18),
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                    ),
-                    onTap: () async {
-                      final picked = await showTimePicker(context: ctx, initialTime: TimeOfDay.now());
-                      if (picked != null) {
-                        startTime = picked;
-                        startTimeCtrl.text = picked.format(ctx);
-                        setDialogState(() {});
-                      }
-                    },
-                  ),
-                  const SizedBox(height: 14),
-
-                  TextFormField(
-                    controller: endTimeCtrl,
-                    readOnly: true,
-                    decoration: InputDecoration(
-                      labelText: 'End Time *',
-                      hintText: '-- : --',
-                      prefixIcon: const Icon(Icons.access_time_rounded, size: 18),
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                    ),
-                    onTap: () async {
-                      final picked = await showTimePicker(
-                        context: ctx,
-                        initialTime: startTime ?? TimeOfDay.now(),
-                      );
-                      if (picked != null) {
-                        endTime = picked;
-                        endTimeCtrl.text = picked.format(ctx);
-                        setDialogState(() {});
-                      }
-                    },
-                  ),
-                  const SizedBox(height: 14),
-
-                  TextFormField(
-                    controller: locationCtrl,
-                    decoration: InputDecoration(
-                      labelText: 'Office Location *',
-                      hintText: "e.g., Dean's Office Room 101",
-                      prefixIcon: const Icon(Icons.location_on_outlined, size: 18),
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-
                   Row(
                     mainAxisAlignment: MainAxisAlignment.end,
                     children: [
                       OutlinedButton(
-                        onPressed: () {
+                        onPressed: isSaving ? null : () {
                           Navigator.pop(ctx);
                           _updateStatus(docId, 'approved', orgName);
                         },
@@ -884,44 +854,48 @@ class _AdminLetterRequestScreenState extends State<AdminLetterRequestScreen> {
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                           padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 11),
                         ),
-                        child: Text('Skip', style: GoogleFonts.beVietnamPro(fontSize: 13)),
+                        child: Text('Skip e-sign', style: GoogleFonts.beVietnamPro(fontSize: 13)),
                       ),
                       const SizedBox(width: 10),
-                      ElevatedButton(
-                        onPressed: () async {
-                          if (selectedDate == null || startTime == null || endTime == null) {
-                            ScaffoldMessenger.of(ctx).showSnackBar(
-                              const SnackBar(content: Text('Please fill all required fields'), backgroundColor: Colors.orange),
+                      ElevatedButton.icon(
+                        onPressed: (isSaving || strokeCount < 2) ? null : () async {
+                          setDialogState(() => isSaving = true);
+                          try {
+                            final boundary = signatureKey.currentContext!.findRenderObject() as RenderRepaintBoundary;
+                            final image = await boundary.toImage(pixelRatio: 3.0);
+                            final byteData = await image.toByteData(format: ImageByteFormat.png);
+                            final bytes = byteData!.buffer.asUint8List();
+
+                            await _saveESignature(
+                              docId: docId,
+                              data: data,
+                              orgName: orgName,
+                              letterId: letterId,
+                              subject: subject,
+                              requestorName: requestorName,
+                              signatureBytes: bytes,
                             );
-                            return;
+
+                            if (ctx.mounted) Navigator.pop(ctx);
+                          } catch (e) {
+                            setDialogState(() => isSaving = false);
+                            if (ctx.mounted) {
+                              ScaffoldMessenger.of(ctx).showSnackBar(
+                                SnackBar(content: Text('Signing failed: $e'), backgroundColor: AdminColors.error),
+                              );
+                            }
                           }
-
-                          final startDateTime = DateTime(
-                            selectedDate!.year, selectedDate!.month, selectedDate!.day,
-                            startTime!.hour, startTime!.minute,
-                          );
-                          final endDateTime = DateTime(
-                            selectedDate!.year, selectedDate!.month, selectedDate!.day,
-                            endTime!.hour, endTime!.minute,
-                          );
-
-                          await _saveSigningSchedule(
-                            docId: docId,
-                            orgName: orgName,
-                            startDateTime: startDateTime,
-                            endDateTime: endDateTime,
-                            location: locationCtrl.text.trim(),
-                          );
-
-                          Navigator.pop(ctx);
                         },
+                        icon: isSaving
+                            ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                            : const Icon(Icons.check_circle_rounded, size: 16),
+                        label: Text(isSaving ? 'Signing…' : 'Sign & Approve', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600)),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xFF059669),
                           foregroundColor: Colors.white,
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 11),
                         ),
-                        child: Text('Save Schedule', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600)),
                       ),
                     ],
                   ),
@@ -934,44 +908,67 @@ class _AdminLetterRequestScreenState extends State<AdminLetterRequestScreen> {
     );
   }
 
-  Future<void> _saveSigningSchedule({
+  Future<void> _saveESignature({
     required String docId,
+    required Map<String, dynamic> data,
     required String orgName,
-    required DateTime startDateTime,
-    required DateTime endDateTime,
-    required String location,
+    required String letterId,
+    required String subject,
+    required String requestorName,
+    required Uint8List signatureBytes,
   }) async {
     try {
-      final signingSchedule = {
-        'startDateTime': Timestamp.fromDate(startDateTime),
-        'endDateTime': Timestamp.fromDate(endDateTime),
-        'location': location,
-        'status': 'scheduled',
-        'scheduledBy': FirebaseAuth.instance.currentUser?.uid ?? '',
-        'scheduledAt': FieldValue.serverTimestamp(),
-      };
+      final signedByName = FirebaseAuth.instance.currentUser?.email ?? 'Admin';
+      final signedAt = DateTime.now();
+
+      // Stamp the signature onto the org's actual submitted PDF when
+      // possible — only falls back to a standalone certificate when the
+      // attachment isn't a real PDF (e.g. a Word doc or image), since
+      // there's no way to "stamp" those page-for-page the same way.
+      final attachmentBase64 = data['attachmentBase64']?.toString() ?? '';
+      final attachmentName = (data['attachmentName'] ?? '').toString();
+      final ext = attachmentName.contains('.') ? attachmentName.split('.').last.toLowerCase() : '';
+      final isPdfAttachment = attachmentBase64.isNotEmpty && ext == 'pdf';
+
+      final Uint8List pdfBytes;
+      if (isPdfAttachment) {
+        pdfBytes = await AdminExportPdf.stampSignatureOnPdf(
+          originalPdfBytes: base64Decode(attachmentBase64),
+          signatureBytes: signatureBytes,
+          signedByName: signedByName,
+          signedAt: signedAt,
+        );
+      } else {
+        pdfBytes = await AdminExportPdf.generateSignedLetterPdf(
+          letterId: letterId,
+          subject: subject,
+          orgName: orgName,
+          requestorName: requestorName,
+          signatureBytes: signatureBytes,
+          signedByName: signedByName,
+          signedAt: signedAt,
+        );
+      }
 
       await FirestoreCollections.letterRequests.doc(docId).update({
         'status': 'approved',
-        'signingSchedule': signingSchedule,
+        'signedDocumentBase64': base64Encode(pdfBytes),
+        'signedAt': Timestamp.fromDate(signedAt),
+        'signedBy': signedByName,
         'updatedAt': FieldValue.serverTimestamp(),
       });
 
       await activity_log.ActivityLogger.log(
-        action: 'schedule_letter_signing',
+        action: 'E-signed and approved letter request from $orgName',
         module: 'Letter Request',
-        details: {
-          'docId': docId,
-          'orgName': orgName,
-          'startDateTime': startDateTime.toIso8601String(),
-          'location': location,
-        },
+        severity: 'security',
+        details: {'docId': docId, 'letterId': letterId, 'signedBy': signedByName},
       );
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Approved and signing appointment scheduled!'),
+            content: Text('Letter approved and digitally signed!'),
             backgroundColor: AdminColors.success,
             behavior: SnackBarBehavior.floating,
           ),
@@ -983,6 +980,7 @@ class _AdminLetterRequestScreenState extends State<AdminLetterRequestScreen> {
           SnackBar(content: Text('Error: $e'), backgroundColor: AdminColors.error),
         );
       }
+      rethrow;
     }
   }
 
@@ -1345,6 +1343,61 @@ class _AdminLetterRequestScreenState extends State<AdminLetterRequestScreen> {
                             ),
                           ),
                         ],
+
+                        // ── Signed certificate, if approved with e-sign ──
+                        if (data['signedDocumentBase64'] != null && data['signedDocumentBase64'].toString().isNotEmpty) ...[
+                          const SizedBox(height: 12),
+                          Container(
+                            padding: const EdgeInsets.all(14),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF059669).withAlpha(15),
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(color: const Color(0xFF059669).withAlpha(38)),
+                            ),
+                            child: Row(
+                              children: [
+                                Container(
+                                  width: 44,
+                                  height: 44,
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF059669).withAlpha(26),
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  child: const Icon(Icons.verified_rounded, color: Color(0xFF059669), size: 20),
+                                ),
+                                const SizedBox(width: 14),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        'Digitally Signed Copy',
+                                        style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600, color: const Color(0xFF1A202C)),
+                                      ),
+                                      if (data['signedBy'] != null)
+                                        Text(
+                                          'Signed by ${data['signedBy']}',
+                                          style: GoogleFonts.beVietnamPro(fontSize: 11, color: const Color(0xFF64748B)),
+                                        ),
+                                    ],
+                                  ),
+                                ),
+                                ElevatedButton.icon(
+                                  onPressed: () => _viewSignedCertificate(data),
+                                  icon: const Icon(Icons.open_in_new_rounded, size: 14),
+                                  label: Text('View', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600)),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: const Color(0xFF059669),
+                                    foregroundColor: Colors.white,
+                                    elevation: 0,
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
                       ],
                     ),
                   ),
@@ -1405,7 +1458,7 @@ class _AdminLetterRequestScreenState extends State<AdminLetterRequestScreen> {
                           child: ElevatedButton.icon(
                             onPressed: () {
                               Navigator.pop(ctx);
-                              _approveWithSigningSchedule(docId, orgName);
+                              _approveWithESignature(docId, data);
                             },
                             icon: const Icon(Icons.check_circle_rounded, size: 15),
                             label: Text(
@@ -1485,6 +1538,18 @@ class _AdminLetterRequestScreenState extends State<AdminLetterRequestScreen> {
       return;
     }
     _openFileFromBase64(base64, data['attachmentName'] ?? 'attachment');
+  }
+
+  void _viewSignedCertificate(Map<String, dynamic> data) {
+    final base64 = data['signedDocumentBase64'];
+    if (base64 == null || base64.toString().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No signed certificate found'), backgroundColor: AdminColors.error),
+      );
+      return;
+    }
+    final letterId = (data['letterId'] ?? 'letter').toString();
+    _openFileFromBase64(base64, '$letterId-signed.pdf');
   }
 
   Future<void> _openFileFromBase64(String base64String, String fileName) async {
@@ -1724,6 +1789,33 @@ class _ExportButton extends StatelessWidget {
       );
     }
   }
+}
+
+// ============ SIGNATURE PAINTER ============
+// Draws the freehand strokes captured by the GestureDetector in the e-sign
+// dialog. A null entry in the points list marks a pen-up — the gap between
+// the points before and after it should not be connected with a line.
+class _SignaturePainter extends CustomPainter {
+  final List<Offset?> points;
+  const _SignaturePainter(this.points);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = Colors.black
+      ..strokeWidth = 2.4
+      ..strokeCap = StrokeCap.round;
+    for (var i = 0; i < points.length - 1; i++) {
+      final p1 = points[i];
+      final p2 = points[i + 1];
+      if (p1 != null && p2 != null) {
+        canvas.drawLine(p1, p2, paint);
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _SignaturePainter oldDelegate) => true;
 }
 
 // ============ ACTION ICON BUTTON ============

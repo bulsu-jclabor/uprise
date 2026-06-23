@@ -2,6 +2,7 @@ import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
 
 class AdminExportPdf {
   static const PdfColor _accent = PdfColor.fromInt(0xFFB45309);
@@ -201,6 +202,184 @@ class AdminExportPdf {
               ),
             ),
         ],
+      ),
+    );
+
+    return pdf.save();
+  }
+
+  /// Stamps the admin's drawn signature onto the actual last page of the
+  /// org's submitted PDF, instead of producing a separate certificate.
+  ///
+  /// There's no package in this project that can load and edit an existing
+  /// PDF's pages directly (`pdf`/`pw.Document` only builds new documents
+  /// from scratch). Instead, this rasterizes every page of the original PDF
+  /// to an image via `printing`'s `Printing.raster()` (already a dependency,
+  /// works on web via a bundled pdf.js) and rebuilds a new PDF where each
+  /// page is that image at full bleed — with the signature overlaid on the
+  /// last page. Visually identical to the original, but with a real stamp
+  /// on the actual document instead of a bolted-on cover sheet.
+  static Future<Uint8List> stampSignatureOnPdf({
+    required Uint8List originalPdfBytes,
+    required Uint8List signatureBytes,
+    required String signedByName,
+    required DateTime signedAt,
+  }) async {
+    const dpi = 144.0;
+    final rasterPages = await Printing.raster(originalPdfBytes, dpi: dpi).toList();
+    if (rasterPages.isEmpty) {
+      throw Exception('Could not read the original document pages.');
+    }
+
+    final pdf = pw.Document();
+    final signatureImage = pw.MemoryImage(signatureBytes);
+    final stampLabel =
+        'Digitally signed by $signedByName on ${DateFormat('MMM d, yyyy h:mm a').format(signedAt)}';
+
+    for (var i = 0; i < rasterPages.length; i++) {
+      final raster = rasterPages[i];
+      final pageImage = pw.MemoryImage(await raster.toPng());
+      final pageFormat = PdfPageFormat(
+        raster.width / dpi * PdfPageFormat.inch,
+        raster.height / dpi * PdfPageFormat.inch,
+      );
+      final isLastPage = i == rasterPages.length - 1;
+
+      pdf.addPage(
+        pw.Page(
+          pageFormat: pageFormat,
+          margin: pw.EdgeInsets.zero,
+          build: (context) => pw.Stack(
+            children: [
+              pw.Positioned.fill(child: pw.Image(pageImage, fit: pw.BoxFit.fill)),
+              if (isLastPage)
+                pw.Positioned(
+                  right: 36,
+                  bottom: 48,
+                  child: pw.Column(
+                    crossAxisAlignment: pw.CrossAxisAlignment.end,
+                    children: [
+                      pw.Container(
+                        padding: const pw.EdgeInsets.all(6),
+                        decoration: pw.BoxDecoration(
+                          border: pw.Border.all(color: PdfColors.green700, width: 1.2),
+                          borderRadius: pw.BorderRadius.circular(4),
+                        ),
+                        child: pw.SizedBox(
+                          height: 60,
+                          width: 160,
+                          child: pw.Image(signatureImage, fit: pw.BoxFit.contain),
+                        ),
+                      ),
+                      pw.SizedBox(height: 3),
+                      pw.Text(
+                        stampLabel,
+                        style: pw.TextStyle(fontSize: 7, color: PdfColors.green700, fontStyle: pw.FontStyle.italic),
+                      ),
+                    ],
+                  ),
+                ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return pdf.save();
+  }
+
+  static pw.Widget _signedRow(String label, String value) => pw.Padding(
+        padding: const pw.EdgeInsets.symmetric(vertical: 4),
+        child: pw.Row(children: [
+          pw.SizedBox(
+            width: 110,
+            child: pw.Text(label,
+                style: pw.TextStyle(fontSize: 10, color: PdfColors.grey600, fontWeight: pw.FontWeight.bold)),
+          ),
+          pw.Expanded(child: pw.Text(value, style: const pw.TextStyle(fontSize: 10, color: PdfColors.grey900))),
+        ]),
+      );
+
+  /// One-page certificate proving a letter request was reviewed and
+  /// digitally signed — the drawn signature is embedded as an image, plus
+  /// who signed it and when. This is what "e-sign" produces in place of the
+  /// old in-person wet-sign appointment scheduling.
+  static Future<Uint8List> generateSignedLetterPdf({
+    required String letterId,
+    required String subject,
+    required String orgName,
+    required String requestorName,
+    required Uint8List signatureBytes,
+    required String signedByName,
+    required DateTime signedAt,
+  }) async {
+    final pdf = pw.Document();
+    final bsuLogo = await _loadImage('assets/images/bsu_logo.png');
+    final cictLogo = await _loadImage('assets/images/cict_logo.png');
+    final upriseLogo = await _loadImage('assets/images/logo.png');
+    final signatureImage = pw.MemoryImage(signatureBytes);
+    final now = DateFormat('MMMM d, yyyy \'at\' h:mm a').format(signedAt);
+
+    pdf.addPage(
+      pw.Page(
+        pageFormat: PdfPageFormat.a4,
+        margin: const pw.EdgeInsets.fromLTRB(36, 32, 36, 32),
+        build: (context) => pw.Column(
+          crossAxisAlignment: pw.CrossAxisAlignment.start,
+          children: [
+            _brandHeader(upriseLogo: upriseLogo, cictLogo: cictLogo, bsuLogo: bsuLogo),
+            pw.Center(
+              child: _titleBlock(
+                eyebrow: 'LETTER APPROVAL',
+                title: 'E-Signature Certificate',
+                subtitle: 'This certifies that the letter request below has been reviewed and approved.',
+                generatedAt: now,
+              ),
+            ),
+            pw.SizedBox(height: 24),
+            pw.Container(
+              padding: const pw.EdgeInsets.all(16),
+              decoration: pw.BoxDecoration(
+                color: PdfColors.grey50,
+                border: pw.Border.all(color: PdfColors.grey300),
+                borderRadius: pw.BorderRadius.circular(8),
+              ),
+              child: pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
+                _signedRow('Letter ID', letterId),
+                _signedRow('Subject', subject),
+                _signedRow('Organization', orgName),
+                _signedRow('Requested by', requestorName),
+              ]),
+            ),
+            pw.SizedBox(height: 40),
+            pw.Row(
+              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+              crossAxisAlignment: pw.CrossAxisAlignment.end,
+              children: [
+                pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
+                  pw.SizedBox(height: 70, width: 200, child: pw.Image(signatureImage, fit: pw.BoxFit.contain)),
+                  pw.Container(width: 200, height: 1, color: PdfColors.grey700),
+                  pw.SizedBox(height: 4),
+                  pw.Text(signedByName, style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 11)),
+                  pw.Text('Authorized Signatory', style: pw.TextStyle(fontSize: 9, color: PdfColors.grey600)),
+                ]),
+                pw.Container(
+                  padding: const pw.EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  decoration: pw.BoxDecoration(
+                    border: pw.Border.all(color: PdfColors.green700, width: 2),
+                    borderRadius: pw.BorderRadius.circular(6),
+                  ),
+                  child: pw.Text('APPROVED',
+                      style: pw.TextStyle(
+                          color: PdfColors.green700, fontWeight: pw.FontWeight.bold, fontSize: 16, letterSpacing: 2)),
+                ),
+              ],
+            ),
+            pw.SizedBox(height: 10),
+            pw.Text('Digitally signed on $now',
+                style: pw.TextStyle(fontSize: 9, color: PdfColors.grey500, fontStyle: pw.FontStyle.italic)),
+          ],
+        ),
       ),
     );
 

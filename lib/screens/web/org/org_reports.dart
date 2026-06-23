@@ -1497,6 +1497,11 @@ class _ReportModalState extends State<_ReportModal> {
       return;
     }
 
+    if (_fileBase64 == null || _fileBase64!.isEmpty) {
+      setState(() => _errorMsg = 'Please attach a file before submitting');
+      return;
+    }
+
     final isEdit = widget.existingReport != null;
 
     final dupSnap = await FirebaseFirestore.instance
@@ -1766,7 +1771,7 @@ class _ReportModalState extends State<_ReportModal> {
                       ),
                       const SizedBox(height: 20),
                       _sectionLabel(
-                        'File Attachment',
+                        'File Attachment *',
                         icon: Icons.attach_file_rounded,
                       ),
                       _buildFileZone(hasFile),
