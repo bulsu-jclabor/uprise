@@ -233,8 +233,6 @@ class AdminExportPdf {
 
     final pdf = pw.Document();
     final signatureImage = pw.MemoryImage(signatureBytes);
-    final stampLabel =
-        'Digitally signed by $signedByName on ${DateFormat('MMM d, yyyy h:mm a').format(signedAt)}';
 
     for (var i = 0; i < rasterPages.length; i++) {
       final raster = rasterPages[i];
@@ -250,33 +248,17 @@ class AdminExportPdf {
           pageFormat: pageFormat,
           margin: pw.EdgeInsets.zero,
           build: (context) => pw.Stack(
+            overflow: pw.Overflow.visible,
             children: [
               pw.Positioned.fill(child: pw.Image(pageImage, fit: pw.BoxFit.fill)),
               if (isLastPage)
                 pw.Positioned(
                   right: 36,
                   bottom: 48,
-                  child: pw.Column(
-                    crossAxisAlignment: pw.CrossAxisAlignment.end,
-                    children: [
-                      pw.Container(
-                        padding: const pw.EdgeInsets.all(6),
-                        decoration: pw.BoxDecoration(
-                          border: pw.Border.all(color: PdfColors.green700, width: 1.2),
-                          borderRadius: pw.BorderRadius.circular(4),
-                        ),
-                        child: pw.SizedBox(
-                          height: 60,
-                          width: 160,
-                          child: pw.Image(signatureImage, fit: pw.BoxFit.contain),
-                        ),
-                      ),
-                      pw.SizedBox(height: 3),
-                      pw.Text(
-                        stampLabel,
-                        style: pw.TextStyle(fontSize: 7, color: PdfColors.green700, fontStyle: pw.FontStyle.italic),
-                      ),
-                    ],
+                  child: _signatureOverName(
+                    signatureImage: signatureImage,
+                    signedByName: signedByName,
+                    signedAt: signedAt,
                   ),
                 ),
             ],
@@ -286,6 +268,50 @@ class AdminExportPdf {
     }
 
     return pdf.save();
+  }
+
+  /// Signature ink rendered overlapping down onto the printed name beneath
+  /// it — like a real signed document — instead of sitting in its own
+  /// separate box above a line.
+  static pw.Widget _signatureOverName({
+    required pw.MemoryImage signatureImage,
+    required String signedByName,
+    required DateTime signedAt,
+    String role = 'Admin, Uprise',
+    double width = 170,
+    bool showTimestamp = true,
+  }) {
+    return pw.SizedBox(
+      width: width,
+      child: pw.Stack(
+        alignment: pw.Alignment.topCenter,
+        overflow: pw.Overflow.visible,
+        children: [
+          pw.Padding(
+            padding: const pw.EdgeInsets.only(top: 28),
+            child: pw.Column(children: [
+              pw.Container(height: 0.8, width: width - 10, color: PdfColors.grey500),
+              pw.SizedBox(height: 3),
+              pw.Text(signedByName,
+                  style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold, color: PdfColors.grey900),
+                  textAlign: pw.TextAlign.center),
+              pw.Text(role, style: pw.TextStyle(fontSize: 8, color: PdfColors.grey600)),
+              if (showTimestamp) ...[
+                pw.SizedBox(height: 2),
+                pw.Text(
+                  'Digitally signed on ${DateFormat('MMM d, yyyy h:mm a').format(signedAt)}',
+                  style: pw.TextStyle(fontSize: 6.5, color: PdfColors.grey500, fontStyle: pw.FontStyle.italic),
+                ),
+              ],
+            ]),
+          ),
+          pw.Positioned(
+            top: -8,
+            child: pw.SizedBox(height: 48, width: width - 20, child: pw.Image(signatureImage, fit: pw.BoxFit.contain)),
+          ),
+        ],
+      ),
+    );
   }
 
   static pw.Widget _signedRow(String label, String value) => pw.Padding(
@@ -356,13 +382,14 @@ class AdminExportPdf {
               mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
               crossAxisAlignment: pw.CrossAxisAlignment.end,
               children: [
-                pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
-                  pw.SizedBox(height: 70, width: 200, child: pw.Image(signatureImage, fit: pw.BoxFit.contain)),
-                  pw.Container(width: 200, height: 1, color: PdfColors.grey700),
-                  pw.SizedBox(height: 4),
-                  pw.Text(signedByName, style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 11)),
-                  pw.Text('Authorized Signatory', style: pw.TextStyle(fontSize: 9, color: PdfColors.grey600)),
-                ]),
+                _signatureOverName(
+                  signatureImage: signatureImage,
+                  signedByName: signedByName,
+                  signedAt: signedAt,
+                  role: 'Authorized Signatory',
+                  width: 200,
+                  showTimestamp: false,
+                ),
                 pw.Container(
                   padding: const pw.EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                   decoration: pw.BoxDecoration(

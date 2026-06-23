@@ -2,12 +2,13 @@
 
 import 'dart:convert';
 import 'dart:typed_data';
-import 'dart:ui' show ImageByteFormat;
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart' show RenderRepaintBoundary;
+import 'package:flutter/foundation.dart' show compute;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:image/image.dart' as img;
 import 'package:uprise/widgets/admin_export_button.dart';
 import 'package:intl/intl.dart';
 import 'export_util.dart';
@@ -15,6 +16,27 @@ import 'export_pdf.dart';
 import '../../../services/activity_logger.dart' as activity_log;
 import '../../../services/firestore_collections.dart';
 import '../../../utils/platform_file_utils.dart' as platform_file_utils;
+
+// Strips a near-white background from an imported signature photo/scan so it
+// overlays cleanly on a document instead of showing as an opaque white box.
+// Runs on a background isolate via compute() so the UI doesn't freeze.
+Uint8List _removeSignatureBackground(Uint8List bytes) {
+  var decoded = img.decodeImage(bytes);
+  if (decoded == null) throw Exception('Unsupported image format');
+  if (decoded.width > 800) {
+    decoded = img.copyResize(decoded, width: 800);
+  }
+  const threshold = 235;
+  for (final pixel in decoded) {
+    final luminance = (pixel.r + pixel.g + pixel.b) / 3;
+    if (luminance >= threshold) {
+      pixel.a = 0;
+    } else if (luminance > threshold - 40) {
+      pixel.a = (255 * (threshold - luminance) / 40).clamp(0, 255).toInt();
+    }
+  }
+  return img.encodePng(decoded);
+}
 
 // ============ COLOR SCHEME ============
 class AdminColors {
@@ -132,9 +154,9 @@ class _AdminLetterRequestScreenState extends State<AdminLetterRequestScreen> {
                   ],
                 )
               : Row(children: [
-                  for (var card in cards) ...[
-                    Expanded(child: card),
-                    const SizedBox(width: 14),
+                  for (var i = 0; i < cards.length; i++) ...[
+                    Expanded(child: cards[i]),
+                    if (i < cards.length - 1) const SizedBox(width: 14),
                   ],
                 ]),
         );
@@ -755,17 +777,42 @@ class _AdminLetterRequestScreenState extends State<AdminLetterRequestScreen> {
     final subject = (data['subject'] ?? 'No subject').toString();
     final requestorName =
         (data['requestedBy'] ?? data['submittedBy'] ?? orgName).toString();
+    final signedByName = FirebaseAuth.instance.currentUser?.email ?? 'Admin';
 
-    final List<Offset?> signaturePoints = [];
-    final signatureKey = GlobalKey();
+    Uint8List? signatureBytes;
+    bool isProcessing = false;
     bool isSaving = false;
+    String? error;
 
     showDialog(
       context: context,
       barrierDismissible: false,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDialogState) {
-          final strokeCount = signaturePoints.where((p) => p != null).length;
+          Future<void> pickSignature() async {
+            final res = await FilePicker.platform.pickFiles(withData: true, type: FileType.image);
+            if (res == null || res.files.isEmpty) return;
+            final bytes = res.files.first.bytes;
+            if (bytes == null) return;
+
+            setDialogState(() {
+              isProcessing = true;
+              error = null;
+            });
+            try {
+              final pngBytes = await compute(_removeSignatureBackground, bytes);
+              setDialogState(() {
+                signatureBytes = pngBytes;
+                isProcessing = false;
+              });
+            } catch (e) {
+              setDialogState(() {
+                isProcessing = false;
+                error = 'Could not process that image: $e';
+              });
+            }
+          }
+
           return Dialog(
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
             child: Container(
@@ -794,7 +841,7 @@ class _AdminLetterRequestScreenState extends State<AdminLetterRequestScreen> {
                   ]),
                   const SizedBox(height: 20),
                   Text(
-                    'Draw your signature below to digitally sign and approve this letter for $orgName.',
+                    'Import your signature image to digitally sign and approve this letter for $orgName.',
                     style: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF64748B)),
                   ),
                   const SizedBox(height: 18),
@@ -802,28 +849,90 @@ class _AdminLetterRequestScreenState extends State<AdminLetterRequestScreen> {
                     height: 160,
                     width: double.infinity,
                     decoration: BoxDecoration(
-                      color: Colors.white,
+                      color: const Color(0xFFFAFBFC),
                       border: Border.all(color: const Color(0xFFE2E6EA)),
                       borderRadius: BorderRadius.circular(10),
                     ),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(10),
-                      child: RepaintBoundary(
-                        key: signatureKey,
-                        child: GestureDetector(
-                          onPanStart: (d) => setDialogState(() => signaturePoints.add(d.localPosition)),
-                          onPanUpdate: (d) => setDialogState(() => signaturePoints.add(d.localPosition)),
-                          onPanEnd: (_) => setDialogState(() => signaturePoints.add(null)),
-                          child: Container(
-                            color: Colors.white,
-                            width: double.infinity,
-                            height: double.infinity,
-                            child: CustomPaint(painter: _SignaturePainter(signaturePoints)),
-                          ),
-                        ),
-                      ),
-                    ),
+                    child: isProcessing
+                        ? const Center(child: CircularProgressIndicator(strokeWidth: 2))
+                        : signatureBytes == null
+                            ? InkWell(
+                                onTap: pickSignature,
+                                borderRadius: BorderRadius.circular(10),
+                                child: Center(
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      const Icon(Icons.upload_file_rounded, size: 28, color: Color(0xFF9AA5B4)),
+                                      const SizedBox(height: 8),
+                                      Text(
+                                        'Import Signature Image',
+                                        style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600, color: const Color(0xFF64748B)),
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        'Photo or scan of your signature on plain paper',
+                                        style: GoogleFonts.beVietnamPro(fontSize: 11, color: const Color(0xFF9AA5B4)),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              )
+                            : Stack(
+                                clipBehavior: Clip.none,
+                                alignment: Alignment.topCenter,
+                                children: [
+                                  // Live preview of the signature-over-printed-name stamp.
+                                  Padding(
+                                    padding: const EdgeInsets.only(top: 44),
+                                    child: Column(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        SizedBox(
+                                          width: 200,
+                                          child: Divider(color: const Color(0xFF059669).withAlpha(120), thickness: 1),
+                                        ),
+                                        const SizedBox(height: 3),
+                                        Text(
+                                          signedByName,
+                                          style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.w700, color: const Color(0xFF1A202C)),
+                                        ),
+                                        Text(
+                                          'Admin, Uprise',
+                                          style: GoogleFonts.beVietnamPro(fontSize: 10, color: const Color(0xFF64748B)),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  Positioned(
+                                    top: 6,
+                                    child: Image.memory(signatureBytes!, height: 56, fit: BoxFit.contain),
+                                  ),
+                                  Positioned(
+                                    right: 6,
+                                    top: 6,
+                                    child: IconButton(
+                                      icon: const Icon(Icons.close_rounded, size: 16, color: Color(0xFF9AA5B4)),
+                                      tooltip: 'Remove',
+                                      onPressed: () => setDialogState(() => signatureBytes = null),
+                                    ),
+                                  ),
+                                ],
+                              ),
                   ),
+                  if (signatureBytes != null) ...[
+                    const SizedBox(height: 8),
+                    TextButton.icon(
+                      onPressed: pickSignature,
+                      icon: const Icon(Icons.refresh_rounded, size: 14),
+                      label: Text('Replace image', style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.w600)),
+                      style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 4)),
+                    ),
+                  ],
+                  if (error != null) ...[
+                    const SizedBox(height: 6),
+                    Text(error!, style: GoogleFonts.beVietnamPro(fontSize: 11, color: AdminColors.error)),
+                  ],
                   const SizedBox(height: 8),
                   Row(children: [
                     const Icon(Icons.info_outline_rounded, size: 13, color: Color(0xFF9AA5B4)),
@@ -833,11 +942,6 @@ class _AdminLetterRequestScreenState extends State<AdminLetterRequestScreen> {
                         'Stamped directly onto the submitted PDF\'s last page.',
                         style: GoogleFonts.beVietnamPro(fontSize: 11, color: const Color(0xFF9AA5B4)),
                       ),
-                    ),
-                    TextButton(
-                      onPressed: signaturePoints.isEmpty ? null : () => setDialogState(() => signaturePoints.clear()),
-                      style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 8)),
-                      child: Text('Clear', style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.w600)),
                     ),
                   ]),
                   const SizedBox(height: 20),
@@ -858,14 +962,9 @@ class _AdminLetterRequestScreenState extends State<AdminLetterRequestScreen> {
                       ),
                       const SizedBox(width: 10),
                       ElevatedButton.icon(
-                        onPressed: (isSaving || strokeCount < 2) ? null : () async {
+                        onPressed: (isSaving || signatureBytes == null) ? null : () async {
                           setDialogState(() => isSaving = true);
                           try {
-                            final boundary = signatureKey.currentContext!.findRenderObject() as RenderRepaintBoundary;
-                            final image = await boundary.toImage(pixelRatio: 3.0);
-                            final byteData = await image.toByteData(format: ImageByteFormat.png);
-                            final bytes = byteData!.buffer.asUint8List();
-
                             await _saveESignature(
                               docId: docId,
                               data: data,
@@ -873,7 +972,8 @@ class _AdminLetterRequestScreenState extends State<AdminLetterRequestScreen> {
                               letterId: letterId,
                               subject: subject,
                               requestorName: requestorName,
-                              signatureBytes: bytes,
+                              signedByName: signedByName,
+                              signatureBytes: signatureBytes!,
                             );
 
                             if (ctx.mounted) Navigator.pop(ctx);
@@ -915,10 +1015,10 @@ class _AdminLetterRequestScreenState extends State<AdminLetterRequestScreen> {
     required String letterId,
     required String subject,
     required String requestorName,
+    required String signedByName,
     required Uint8List signatureBytes,
   }) async {
     try {
-      final signedByName = FirebaseAuth.instance.currentUser?.email ?? 'Admin';
       final signedAt = DateTime.now();
 
       // Stamp the signature onto the org's actual submitted PDF when
@@ -1154,39 +1254,8 @@ class _AdminLetterRequestScreenState extends State<AdminLetterRequestScreen> {
                         ),
                         const SizedBox(height: 16),
 
-                        // ── Subject ──────────────────────────────────
-                        Container(
-                          padding: const EdgeInsets.all(14),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFF8F9FB),
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(color: const Color(0xFFE2E6EA)),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Subject',
-                                style: GoogleFonts.beVietnamPro(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w600,
-                                  color: const Color(0xFF64748B),
-                                  letterSpacing: 0.4,
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                subject,
-                                style: GoogleFonts.beVietnamPro(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w500,
-                                  color: const Color(0xFF1A202C),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 12),
+                        // Subject is already shown in the header right under
+                        // the letter ID — no need to repeat it here.
 
                         // ── Message ──────────────────────────────────
                         if (message != null && message.toString().isNotEmpty) ...[
@@ -1200,16 +1269,22 @@ class _AdminLetterRequestScreenState extends State<AdminLetterRequestScreen> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text(
-                                  'Message',
-                                  style: GoogleFonts.beVietnamPro(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w600,
-                                    color: const Color(0xFF64748B),
-                                    letterSpacing: 0.4,
-                                  ),
+                                Row(
+                                  children: [
+                                    Icon(Icons.message_outlined, size: 14, color: const Color(0xFF64748B)),
+                                    const SizedBox(width: 6),
+                                    Text(
+                                      'MESSAGE',
+                                      style: GoogleFonts.beVietnamPro(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w700,
+                                        color: const Color(0xFF64748B),
+                                        letterSpacing: 0.6,
+                                      ),
+                                    ),
+                                  ],
                                 ),
-                                const SizedBox(height: 4),
+                                const SizedBox(height: 6),
                                 Text(
                                   message.toString(),
                                   style: GoogleFonts.beVietnamPro(
@@ -1789,33 +1864,6 @@ class _ExportButton extends StatelessWidget {
       );
     }
   }
-}
-
-// ============ SIGNATURE PAINTER ============
-// Draws the freehand strokes captured by the GestureDetector in the e-sign
-// dialog. A null entry in the points list marks a pen-up — the gap between
-// the points before and after it should not be connected with a line.
-class _SignaturePainter extends CustomPainter {
-  final List<Offset?> points;
-  const _SignaturePainter(this.points);
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = Colors.black
-      ..strokeWidth = 2.4
-      ..strokeCap = StrokeCap.round;
-    for (var i = 0; i < points.length - 1; i++) {
-      final p1 = points[i];
-      final p2 = points[i + 1];
-      if (p1 != null && p2 != null) {
-        canvas.drawLine(p1, p2, paint);
-      }
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _SignaturePainter oldDelegate) => true;
 }
 
 // ============ ACTION ICON BUTTON ============
