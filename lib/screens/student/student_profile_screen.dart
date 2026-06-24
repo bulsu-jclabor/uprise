@@ -2083,7 +2083,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 }
 
 // ─────────────────────────────────────────────────────────────
-// Settings Screen
+// Settings Screen - Redesigned
 // ─────────────────────────────────────────────────────────────
 class SettingsScreen extends StatefulWidget {
   final ProfileModel profile;
@@ -2098,36 +2098,238 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
-  final _currentPwCtrl = TextEditingController(text: '••••••');
-  final _newPwCtrl = TextEditingController(text: '••••••');
+  final _currentPwCtrl = TextEditingController();
+  final _newPwCtrl = TextEditingController();
+  final _confirmPwCtrl = TextEditingController();
 
   bool _showCurrentPw = false;
   bool _showNewPw = false;
+  bool _showConfirmPw = false;
+  bool _isLoading = false;
 
   @override
   void dispose() {
     _currentPwCtrl.dispose();
     _newPwCtrl.dispose();
+    _confirmPwCtrl.dispose();
     super.dispose();
   }
 
-  Widget _buildTile({
+  Future<void> _changePassword() async {
+    final current = _currentPwCtrl.text.trim();
+    final newPw = _newPwCtrl.text.trim();
+    final confirm = _confirmPwCtrl.text.trim();
+
+    if (current.isEmpty || newPw.isEmpty || confirm.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please fill in all password fields'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    if (newPw.length < 6) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('New password must be at least 6 characters'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    if (newPw != confirm) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('New passwords do not match'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    setState(() => _isLoading = true);
+
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) {
+        throw Exception('User not logged in');
+      }
+
+      // Re-authenticate user
+      final credential = EmailAuthProvider.credential(
+        email: user.email!,
+        password: current,
+      );
+      await user.reauthenticateWithCredential(credential);
+
+      // Update password
+      await user.updatePassword(newPw);
+
+      // Clear fields
+      _currentPwCtrl.clear();
+      _newPwCtrl.clear();
+      _confirmPwCtrl.clear();
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Password updated successfully!'),
+            backgroundColor: kOrange,
+          ),
+        );
+      }
+    } on FirebaseAuthException catch (e) {
+      String message = 'Failed to update password';
+      if (e.code == 'wrong-password') {
+        message = 'Current password is incorrect';
+      } else if (e.code == 'requires-recent-login') {
+        message = 'Please log out and log in again to change password';
+      }
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(message),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  Widget _buildSectionHeader(String title) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+      child: Text(
+        title,
+        style: TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.w700,
+          letterSpacing: 1.2,
+          color: Colors.grey[500],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSettingsTile({
     required IconData icon,
     required String title,
     required String subtitle,
     required VoidCallback onTap,
+    Color? iconColor,
+    Widget? trailing,
   }) {
-    return ListTile(
-      contentPadding:
-          const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      leading: Icon(icon, color: kOrange),
-      title: Text(title,
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.grey.withOpacity(0.04),
+            blurRadius: 4,
+            offset: const Offset(0, 1),
+          ),
+        ],
+      ),
+      child: ListTile(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+        leading: Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: (iconColor ?? kOrange).withOpacity(0.12),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Icon(icon, color: iconColor ?? kOrange, size: 20),
+        ),
+        title: Text(
+          title,
           style: const TextStyle(
-              fontWeight: FontWeight.w600, fontSize: 14)),
-      subtitle: Text(subtitle,
-          style: const TextStyle(fontSize: 12, color: Colors.grey)),
-      trailing: const Icon(Icons.chevron_right, color: Colors.grey),
-      onTap: onTap,
+            fontWeight: FontWeight.w600,
+            fontSize: 14,
+            color: Colors.black87,
+          ),
+        ),
+        subtitle: Text(
+          subtitle,
+          style: TextStyle(
+            fontSize: 12,
+            color: Colors.grey[500],
+          ),
+        ),
+        trailing: trailing ??
+            const Icon(Icons.chevron_right, color: Colors.grey, size: 20),
+        onTap: onTap,
+      ),
+    );
+  }
+
+  Widget _buildPasswordField({
+    required String label,
+    required TextEditingController controller,
+    required bool showPassword,
+    required VoidCallback onToggle,
+    String? hintText,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: Colors.black87,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: Colors.grey.shade200),
+          ),
+          child: TextFormField(
+            controller: controller,
+            obscureText: !showPassword,
+            style: const TextStyle(fontSize: 14),
+            decoration: InputDecoration(
+              hintText: hintText ?? 'Enter password',
+              hintStyle: TextStyle(color: Colors.grey[400], fontSize: 13),
+              border: InputBorder.none,
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 14,
+                vertical: 14,
+              ),
+              suffixIcon: IconButton(
+                icon: Icon(
+                  showPassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                  size: 20,
+                  color: Colors.grey[400],
+                ),
+                onPressed: onToggle,
+                padding: const EdgeInsets.all(8),
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -2140,189 +2342,427 @@ class _SettingsScreenState extends State<SettingsScreen> {
         elevation: 0,
         centerTitle: true,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.black),
+          icon: const Icon(Icons.arrow_back, color: Colors.black87),
           onPressed: () => Navigator.pop(context),
+          padding: const EdgeInsets.all(8),
         ),
-        title: const Text('Settings',
-            style: TextStyle(
-                color: Colors.black,
-                fontWeight: FontWeight.w600,
-                fontSize: 18)),
+        title: const Text(
+          'Settings',
+          style: TextStyle(
+            color: Colors.black87,
+            fontWeight: FontWeight.w700,
+            fontSize: 18,
+          ),
+        ),
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(1),
+          child: Container(
+            height: 1,
+            color: Colors.grey.shade100,
+          ),
+        ),
       ),
-      body: SingleChildScrollView(
-        child: Column(
-          children: [
-            Container(
-              width: double.infinity,
-              color: Colors.white,
-              padding: const EdgeInsets.all(20),
-              child: AnimatedBuilder(
-                animation: widget.profile,
-                builder: (_, __) {
-                  return Column(
+      body: AnimatedBuilder(
+        animation: widget.profile,
+        builder: (context, _) {
+          return SingleChildScrollView(
+            padding: const EdgeInsets.only(bottom: 32),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // ── Profile Card ──
+                Container(
+                  margin: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.grey.withOpacity(0.06),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Row(
+                      children: [
+                        // Profile Image
+                        Container(
+                          width: 64,
+                          height: 64,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: kOrangeLight,
+                            border: Border.all(
+                              color: kOrange.withOpacity(0.2),
+                              width: 2,
+                            ),
+                          ),
+                          child: ClipOval(
+                            child: widget.profile.photoUrl.isNotEmpty
+                                ? _ProfileImage(
+                                    photoUrl: widget.profile.photoUrl,
+                                    errorBuilder: (_, __, ___) => const Icon(
+                                      Icons.person,
+                                      size: 32,
+                                      color: kOrange,
+                                    ),
+                                  )
+                                : const Icon(
+                                    Icons.person,
+                                    size: 32,
+                                    color: kOrange,
+                                  ),
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                widget.profile.fullName,
+                                style: const TextStyle(
+                                  fontSize: 17,
+                                  fontWeight: FontWeight.w700,
+                                  color: Colors.black87,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                widget.profile.email,
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: Colors.grey[600],
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              if (widget.profile.studentId.isNotEmpty) ...[
+                                const SizedBox(height: 2),
+                                Text(
+                                  'ID: ${widget.profile.studentId}',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: Colors.grey[500],
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                        // Edit Button
+                        Container(
+                          decoration: BoxDecoration(
+                            color: kOrange.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: IconButton(
+                            icon: const Icon(Icons.edit_outlined, size: 20),
+                            color: kOrange,
+                            onPressed: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => EditProfileScreen(
+                                    profile: widget.profile,
+                                  ),
+                                ),
+                              );
+                            },
+                            padding: const EdgeInsets.all(8),
+                            constraints: const BoxConstraints(
+                              minWidth: 36,
+                              minHeight: 36,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+
+                // ── Account Settings ──
+                _buildSectionHeader('ACCOUNT SETTINGS'),
+                _buildSettingsTile(
+                  icon: Icons.person_outline,
+                  title: 'Edit Profile',
+                  subtitle: 'Update your personal information',
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => EditProfileScreen(
+                          profile: widget.profile,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+                const SizedBox(height: 8),
+
+                _buildSettingsTile(
+                  icon: Icons.shield_outlined,
+                  title: 'Privacy & Security',
+                  subtitle: 'Manage your security preferences',
+                  onTap: () {},
+                ),
+                const SizedBox(height: 8),
+
+                // ── Password Change Section ──
+                Container(
+                  margin: const EdgeInsets.all(16),
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.grey.withOpacity(0.04),
+                        blurRadius: 4,
+                        offset: const Offset(0, 1),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      CircleAvatar(
-                        radius: 42,
-                        backgroundColor: kOrangeLight,
-                        backgroundImage:
-                            _profileImageProvider(widget.profile.photoUrl),
-                        child: widget.profile.photoUrl.isEmpty
-                            ? const Icon(Icons.person,
-                                size: 42, color: kOrange)
-                            : null,
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: Colors.orange.withOpacity(0.12),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: const Icon(
+                              Icons.lock_outline,
+                              color: kOrange,
+                              size: 18,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          const Text(
+                            'Change Password',
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w700,
+                              color: Colors.black87,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      _buildPasswordField(
+                        label: 'Current Password',
+                        controller: _currentPwCtrl,
+                        showPassword: _showCurrentPw,
+                        onToggle: () {
+                          setState(() => _showCurrentPw = !_showCurrentPw);
+                        },
+                        hintText: 'Enter current password',
                       ),
                       const SizedBox(height: 12),
-                      Text(widget.profile.fullName,
-                          style: const TextStyle(
-                              fontSize: 18, fontWeight: FontWeight.bold)),
-                      const SizedBox(height: 4),
-                      Text(widget.profile.email,
-                          style: const TextStyle(
-                              color: Colors.grey, fontSize: 13)),
+                      _buildPasswordField(
+                        label: 'New Password',
+                        controller: _newPwCtrl,
+                        showPassword: _showNewPw,
+                        onToggle: () {
+                          setState(() => _showNewPw = !_showNewPw);
+                        },
+                        hintText: 'Enter new password (min 6 chars)',
+                      ),
+                      const SizedBox(height: 12),
+                      _buildPasswordField(
+                        label: 'Confirm New Password',
+                        controller: _confirmPwCtrl,
+                        showPassword: _showConfirmPw,
+                        onToggle: () {
+                          setState(() => _showConfirmPw = !_showConfirmPw);
+                        },
+                        hintText: 'Confirm your new password',
+                      ),
                       const SizedBox(height: 16),
                       SizedBox(
                         width: double.infinity,
                         child: ElevatedButton(
-                          onPressed: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => EditProfileScreen(
-                                    profile: widget.profile),
-                              ),
-                            );
-                          },
+                          onPressed: _isLoading ? null : _changePassword,
                           style: ElevatedButton.styleFrom(
                             backgroundColor: kOrange,
                             foregroundColor: Colors.white,
                             elevation: 0,
-                            padding:
-                                const EdgeInsets.symmetric(vertical: 14),
+                            padding: const EdgeInsets.symmetric(
+                              vertical: 14,
+                            ),
                             shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(10)),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            disabledBackgroundColor: kOrange.withOpacity(0.5),
                           ),
-                          child: const Text('Edit Profile',
-                              style:
-                                  TextStyle(fontWeight: FontWeight.w600)),
+                          child: _isLoading
+                              ? const SizedBox(
+                                  height: 20,
+                                  width: 20,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2.4,
+                                    color: Colors.white,
+                                  ),
+                                )
+                              : const Text(
+                                  'Update Password',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 15,
+                                  ),
+                                ),
                         ),
                       ),
                     ],
-                  );
-                },
-              ),
-            ),
-
-            const SizedBox(height: 12),
-
-            Container(
-              color: Colors.white,
-              child: Column(
-                children: [
-                  _buildTile(
-                    icon: Icons.person_outline,
-                    title: 'Admin Profile',
-                    subtitle: 'Manage your information',
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) =>
-                              EditProfileScreen(profile: widget.profile),
-                        ),
-                      );
-                    },
                   ),
-                  Divider(height: 1, color: Colors.grey.shade200),
-                  _buildTile(
-                    icon: Icons.tune_outlined,
-                    title: 'System Preferences',
-                    subtitle: 'App settings and behavior',
-                    onTap: () {},
-                  ),
-                  Divider(height: 1, color: Colors.grey.shade200),
-                  _buildTile(
-                    icon: Icons.shield_outlined,
-                    title: 'Security Settings',
-                    subtitle: 'Privacy and protection',
-                    onTap: () {},
-                  ),
-                  Divider(height: 1, color: Colors.grey.shade200),
-                  _buildTile(
-                    icon: Icons.history_outlined,
-                    title: 'Audit Logs',
-                    subtitle: 'Recent activities',
-                    onTap: () {},
-                  ),
-                ],
-              ),
-            ),
+                ),
 
-            const SizedBox(height: 12),
+                // ── App Preferences ──
+                _buildSectionHeader('PREFERENCES'),
+                _buildSettingsTile(
+                  icon: Icons.notifications_outlined,
+                  title: 'Notifications',
+                  subtitle: 'Manage your notification preferences',
+                  onTap: () {},
+                ),
+                const SizedBox(height: 8),
 
-            Container(
-              color: Colors.white,
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('Change Password',
+                _buildSettingsTile(
+                  icon: Icons.palette_outlined,
+                  title: 'Appearance',
+                  subtitle: 'Theme and display settings',
+                  onTap: () {},
+                ),
+                const SizedBox(height: 8),
+
+                // ── Support ──
+                _buildSectionHeader('SUPPORT'),
+                _buildSettingsTile(
+                  icon: Icons.help_outline,
+                  title: 'Help & Support',
+                  subtitle: 'Get assistance and FAQs',
+                  onTap: () {},
+                ),
+                const SizedBox(height: 8),
+
+                _buildSettingsTile(
+                  icon: Icons.feedback_outlined,
+                  title: 'Send Feedback',
+                  subtitle: 'Help us improve the app',
+                  onTap: () {},
+                  iconColor: Colors.purple,
+                ),
+                const SizedBox(height: 8),
+
+                // ── About ──
+                _buildSettingsTile(
+                  icon: Icons.info_outline,
+                  title: 'About',
+                  subtitle: 'Version 2.0.0',
+                  onTap: () {},
+                  trailing: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: kOrange.withOpacity(0.12),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(
+                      'v2.0.0',
                       style: TextStyle(
-                          fontSize: 15, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 16),
-                  _EditField(
-                    label: 'Current Password',
-                    controller: _currentPwCtrl,
-                    icon: Icons.lock_outline,
-                    isPassword: true,
-                    showPassword: _showCurrentPw,
-                    onTogglePassword: () {
-                      setState(() => _showCurrentPw = !_showCurrentPw);
-                    },
-                  ),
-                  const SizedBox(height: 14),
-                  _EditField(
-                    label: 'New Password',
-                    controller: _newPwCtrl,
-                    icon: Icons.lock_reset_outlined,
-                    isPassword: true,
-                    showPassword: _showNewPw,
-                    onTogglePassword: () {
-                      setState(() => _showNewPw = !_showNewPw);
-                    },
-                  ),
-                  const SizedBox(height: 20),
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Credentials updated!'),
-                            backgroundColor: kOrange,
-                          ),
-                        );
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: kOrange,
-                        foregroundColor: Colors.white,
-                        elevation: 0,
-                        padding:
-                            const EdgeInsets.symmetric(vertical: 15),
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10)),
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: kOrange,
                       ),
-                      child: const Text('Update Credentials',
-                          style:
-                              TextStyle(fontWeight: FontWeight.w600)),
                     ),
                   ),
-                ],
-              ),
-            ),
+                ),
+                const SizedBox(height: 8),
 
-            const SizedBox(height: 24),
-          ],
-        ),
+                // ── Logout Button ──
+                Container(
+                  margin: const EdgeInsets.symmetric(horizontal: 16),
+                  child: ElevatedButton.icon(
+                    onPressed: () async {
+                      final confirm = await showDialog<bool>(
+                        context: context,
+                        builder: (context) => AlertDialog(
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          title: const Text('Logout'),
+                          content: const Text(
+                            'Are you sure you want to logout?',
+                            style: TextStyle(fontSize: 14),
+                          ),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.pop(context, false),
+                              child: Text(
+                                'Cancel',
+                                style: TextStyle(color: Colors.grey[600]),
+                              ),
+                            ),
+                            TextButton(
+                              onPressed: () => Navigator.pop(context, true),
+                              style: TextButton.styleFrom(
+                                foregroundColor: Colors.red,
+                              ),
+                              child: const Text('Logout'),
+                            ),
+                          ],
+                        ),
+                      );
+
+                      if (confirm != true) return;
+
+                      await FirebaseAuth.instance.signOut();
+                      if (context.mounted) {
+                        Navigator.of(context).pushAndRemoveUntil(
+                          MaterialPageRoute(
+                            builder: (_) => const StudentLogin(),
+                          ),
+                          (route) => false,
+                        );
+                      }
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.red.shade50,
+                      foregroundColor: Colors.red,
+                      elevation: 0,
+                      padding: const EdgeInsets.symmetric(
+                        vertical: 16,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    icon: const Icon(Icons.logout, size: 20),
+                    label: const Text(
+                      'Log Out',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 15,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+              ],
+            ),
+          );
+        },
       ),
     );
   }
