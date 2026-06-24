@@ -3,9 +3,20 @@ import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
 
 class OrgExportPdf {
   static const PdfColor _accent = PdfColor.fromInt(0xFFBE4700);
+
+  // The default PDF base font (Helvetica) has no ₱ glyph, so it silently
+  // drops the peso sign — fall back to Noto Sans (which does have it) only
+  // for characters Helvetica can't draw, so normal text is unaffected.
+  static Future<pw.ThemeData>? _themeFuture;
+  static Future<pw.ThemeData> _loadTheme() {
+    return _themeFuture ??= PdfGoogleFonts.notoSansRegular().then(
+      (font) => pw.ThemeData.withFont(fontFallback: [font]),
+    );
+  }
 
   /// Letterhead: UPRISE + CICT + BSU logos, plus the org's own logo when
   /// supplied, sitting above a brand accent rule and a small-caps
@@ -139,7 +150,7 @@ class OrgExportPdf {
     String subtitle = 'Official organization records export',
     String? orgLogoUrl,
   }) async {
-    final pdf = pw.Document();
+    final pdf = pw.Document(theme: await _loadTheme());
     final bsuLogo = await _loadImage('assets/images/bsu_logo.png');
     final cictLogo = await _loadImage('assets/images/cict_logo.png');
     final upriseLogo = await _loadImage('assets/images/logo.png');
@@ -251,7 +262,7 @@ class OrgExportPdf {
     required double totalOutflow,
     String? orgLogoUrl,
   }) async {
-    final pdf = pw.Document();
+    final pdf = pw.Document(theme: await _loadTheme());
     final bsuLogo = await _loadImage('assets/images/bsu_logo.png');
     final cictLogo = await _loadImage('assets/images/cict_logo.png');
     final upriseLogo = await _loadImage('assets/images/logo.png');

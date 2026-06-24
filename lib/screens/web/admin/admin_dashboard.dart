@@ -111,6 +111,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
       const ExternalAccount(),
       const ReportsManagement(),
       const ActivityLogs(),
+      AdminSettings(onProfileUpdated: _fetchAdminData), // index 10 — settings
     ];
   }
 
@@ -198,6 +199,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                 'message': d.data()['body'] ?? d.data()['message'] ?? '',
                 'timestamp': d.data()['createdAt'],
                 'isRead': d.data()['isRead'] ?? false,
+                'type': d.data()['type'],
               })
           .toList();
       all.sort((a, b) {
@@ -260,6 +262,40 @@ class _AdminDashboardState extends State<AdminDashboard> {
         });
       }
     } catch (_) {}
+  }
+
+  // Maps a notification's type to the sidebar tab it's about, so clicking
+  // one takes the admin straight to where it happened.
+  static const Map<String, int> _notificationTypeToTabIndex = {
+    'proposal_submission': 4, // EventProposals
+    'letter_submission': 6, // AdminLetterRequestScreen
+    'letter_resubmission': 6,
+    'report_submission': 8, // ReportsManagement
+  };
+
+  void _handleNotificationTap(Map<String, dynamic> n) {
+    final index = _notificationTypeToTabIndex[n['type']?.toString()];
+    if (index != null) setState(() => _selectedIndex = index);
+  }
+
+  void _showAllNotificationsDialog() {
+    showDialog(
+      context: context,
+      barrierColor: Colors.black54,
+      builder: (ctx) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 420, maxHeight: 600),
+          child: _AdminNotificationPanel(
+            notifications: List.from(_notifications),
+            onMarkRead: _markNotificationAsRead,
+            onMarkAllRead: _markAllNotificationsAsRead,
+            onNotificationTap: _handleNotificationTap,
+            listMaxHeight: 480,
+          ),
+        ),
+      ),
+    );
   }
 
   Future<void> _logout() async {
@@ -410,9 +446,14 @@ class _AdminDashboardState extends State<AdminDashboard> {
               children: [
                 _buildTopBar(),
                 Expanded(
-                  child: _selectedIndex == -1
-                      ? AdminSettings(onProfileUpdated: _fetchAdminData)
-                      : _screens[_selectedIndex],
+                  // IndexedStack keeps every screen's state alive instead of
+                  // tearing it down and re-fetching Firestore data from
+                  // scratch on every tab switch — that re-fetch was the
+                  // cause of the lag on every click.
+                  child: IndexedStack(
+                    index: _selectedIndex == -1 ? 10 : _selectedIndex,
+                    children: _screens,
+                  ),
                 ),
               ],
             ),
@@ -749,6 +790,8 @@ class _AdminDashboardState extends State<AdminDashboard> {
                   notifications: List.from(_notifications),
                   onMarkRead: _markNotificationAsRead,
                   onMarkAllRead: _markAllNotificationsAsRead,
+                  onNotificationTap: _handleNotificationTap,
+                  onViewAll: _showAllNotificationsDialog,
                 ),
               ),
             ],
@@ -2370,11 +2413,17 @@ class _AdminNotificationPanel extends StatefulWidget {
   final List<Map<String, dynamic>> notifications;
   final Future<void> Function(String id) onMarkRead;
   final Future<void> Function() onMarkAllRead;
+  final void Function(Map<String, dynamic> n) onNotificationTap;
+  final VoidCallback? onViewAll;
+  final double listMaxHeight;
 
   const _AdminNotificationPanel({
     required this.notifications,
     required this.onMarkRead,
     required this.onMarkAllRead,
+    required this.onNotificationTap,
+    this.onViewAll,
+    this.listMaxHeight = 400,
   });
 
   @override
@@ -2445,9 +2494,13 @@ class _AdminNotificationPanelState extends State<_AdminNotificationPanel> {
   Widget _buildNotifItem(Map<String, dynamic> n) {
     final isRead = n['isRead'] as bool? ?? false;
     return MouseRegion(
-      cursor: isRead ? SystemMouseCursors.basic : SystemMouseCursors.click,
+      cursor: SystemMouseCursors.click,
       child: GestureDetector(
-        onTap: isRead ? null : () => _markRead(n['id'] as String),
+        onTap: () {
+          if (!isRead) _markRead(n['id'] as String);
+          widget.onNotificationTap(n);
+          Navigator.of(context).pop();
+        },
         child: Container(
           width: double.infinity,
           padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
@@ -2664,7 +2717,7 @@ class _AdminNotificationPanelState extends State<_AdminNotificationPanel> {
             )
           else
             ConstrainedBox(
-              constraints: const BoxConstraints(maxHeight: 400),
+              constraints: BoxConstraints(maxHeight: widget.listMaxHeight),
               child: SingleChildScrollView(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -2673,9 +2726,12 @@ class _AdminNotificationPanelState extends State<_AdminNotificationPanel> {
               ),
             ),
           // Footer
-          if (_notifs.isNotEmpty)
+          if (_notifs.isNotEmpty && widget.onViewAll != null)
             InkWell(
-              onTap: () => Navigator.of(context).maybePop(),
+              onTap: () {
+                Navigator.of(context).pop();
+                widget.onViewAll!();
+              },
               child: Container(
                 width: double.infinity,
                 padding: const EdgeInsets.symmetric(vertical: 13),

@@ -1199,19 +1199,9 @@ class _EventProposalsState extends State<EventProposals> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.end,
                     children: [
-                      OutlinedButton(
-                        onPressed: () {
-                          Navigator.pop(ctx);
-                          _setStatus(proposalId, title, 'approved');
-                        },
-                        style: OutlinedButton.styleFrom(
-                          side: const BorderSide(color: Color(0xFFE2E6EA)),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 11),
-                        ),
-                        child: Text('Skip', style: GoogleFonts.beVietnamPro(fontSize: 13)),
-                      ),
-                      const SizedBox(width: 10),
+                      // No "Skip" here on purpose — scheduling the wet-sign
+                      // appointment is required before a proposal counts as
+                      // approved, it can't be bypassed.
                       ElevatedButton(
                         onPressed: () async {
                           if (selectedDate == null || startTime == null || endTime == null) {

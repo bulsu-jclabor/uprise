@@ -7,6 +7,16 @@ import 'package:printing/printing.dart';
 class AdminExportPdf {
   static const PdfColor _accent = PdfColor.fromInt(0xFFB45309);
 
+  // The default PDF base font (Helvetica) has no ₱ glyph, so it silently
+  // drops the peso sign — fall back to Noto Sans (which does have it) only
+  // for characters Helvetica can't draw, so normal text is unaffected.
+  static Future<pw.ThemeData>? _themeFuture;
+  static Future<pw.ThemeData> _loadTheme() {
+    return _themeFuture ??= PdfGoogleFonts.notoSansRegular().then(
+      (font) => pw.ThemeData.withFont(fontFallback: [font]),
+    );
+  }
+
   /// Letterhead: UPRISE + CICT + BSU logos above a brand accent rule and a
   /// small-caps institution line. Admin exports span multiple orgs, so no
   /// single org logo is shown here (see OrgExportPdf for the org-scoped
@@ -115,7 +125,7 @@ class AdminExportPdf {
     required List<List<String>> rows,
     String subtitle = 'Official administrative records export',
   }) async {
-    final pdf = pw.Document();
+    final pdf = pw.Document(theme: await _loadTheme());
     final bsuLogo = await _loadImage('assets/images/bsu_logo.png');
     final cictLogo = await _loadImage('assets/images/cict_logo.png');
     final upriseLogo = await _loadImage('assets/images/logo.png');
@@ -234,7 +244,7 @@ class AdminExportPdf {
       throw Exception('Could not read the original document pages.');
     }
 
-    final pdf = pw.Document();
+    final pdf = pw.Document(theme: await _loadTheme());
     final signatureImage = pw.MemoryImage(signatureBytes);
 
     for (var i = 0; i < rasterPages.length; i++) {
@@ -342,7 +352,7 @@ class AdminExportPdf {
     required String signedByName,
     required DateTime signedAt,
   }) async {
-    final pdf = pw.Document();
+    final pdf = pw.Document(theme: await _loadTheme());
     final bsuLogo = await _loadImage('assets/images/bsu_logo.png');
     final cictLogo = await _loadImage('assets/images/cict_logo.png');
     final upriseLogo = await _loadImage('assets/images/logo.png');

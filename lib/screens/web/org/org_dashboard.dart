@@ -465,6 +465,12 @@ class _OrgDashboardState extends State<OrgDashboard> {
       OrgReportsScreen(orgId: _orgId),
       OrgFinanceScreen(orgId: _orgId),
       OrgMerchandiseScreen(orgId: _orgId),
+      OrgSettingsScreen(
+        orgId: _orgId,
+        orgName: _orgName,
+        orgShortName: _orgShortName,
+        orgEmail: _orgEmail,
+      ), // index 13 — settings
     ];
     _screensBuilt = true;
   }
@@ -530,28 +536,49 @@ class _OrgDashboardState extends State<OrgDashboard> {
     }
   }
 
-  // Financial/accomplishment report deadlines set by admin in
-  // reports_management.dart — remind the org as the date approaches.
+  // Report deadlines are per-org: this org's own override (set by admin
+  // via the "Edit Deadline" icon in reports_management.dart) beats the
+  // automatic 7-days-after-event default. There's no blanket deadline.
   Future<void> _checkReportDeadlineReminders() async {
-    final deadlinesDoc = await FirebaseFirestore.instance
-        .collection('report_deadlines')
-        .doc('deadlines')
+    final eventsSnap = await FirebaseFirestore.instance
+        .collection('events')
+        .where('orgId', isEqualTo: _orgId)
+        .where('status', isEqualTo: 'approved')
         .get();
-    if (!deadlinesDoc.exists) return;
-    final deadlines = deadlinesDoc.data()!;
+    final now = DateTime.now();
+    DateTime? lastFinishedEventDate;
+    for (final doc in eventsSnap.docs) {
+      final date = (doc.data()['date'] as Timestamp?)?.toDate();
+      if (date == null || !date.isBefore(now)) continue;
+      if (lastFinishedEventDate == null || date.isAfter(lastFinishedEventDate)) {
+        lastFinishedEventDate = date;
+      }
+    }
+    if (lastFinishedEventDate == null) return;
 
     final orgDoc = await FirebaseFirestore.instance.collection('organizations').doc(_orgId).get();
     final orgData = orgDoc.data() ?? {};
-    final now = DateTime.now();
 
-    Future<void> checkOne(String key, String label) async {
-      final deadline = (deadlines[key] as Timestamp?)?.toDate();
-      if (deadline == null) return;
+    Future<void> checkOne(String key, String label, String submissionsCollection) async {
+      final overrideDoc = await FirebaseFirestore.instance
+          .collection('report_deadline_overrides')
+          .doc('${_orgId}_$key')
+          .get();
+      final deadline = (overrideDoc.data()?['deadline'] as Timestamp?)?.toDate() ??
+          lastFinishedEventDate!.add(const Duration(days: 7));
+
       final daysUntil = deadline.difference(now);
       if (daysUntil > _deadlineNearWindow || daysUntil.isNegative) return;
 
       final lastSentField = 'last${key[0].toUpperCase()}${key.substring(1)}DeadlineReminderAt';
       if (!_cooldownElapsed(orgData[lastSentField] as Timestamp?)) return;
+
+      final subSnap = await FirebaseFirestore.instance
+          .collection(submissionsCollection)
+          .where('orgId', isEqualTo: _orgId)
+          .limit(1)
+          .get();
+      if (subSnap.docs.isNotEmpty) return;
 
       final daysLabel = daysUntil.inDays <= 0 ? 'today' : 'in ${daysUntil.inDays} day${daysUntil.inDays == 1 ? '' : 's'}';
       await NotificationService.sendToOrgMembers(
@@ -565,8 +592,8 @@ class _OrgDashboardState extends State<OrgDashboard> {
       });
     }
 
-    await checkOne('financial', 'Financial');
-    await checkOne('accomplishment', 'Accomplishment');
+    await checkOne('financial', 'Financial', 'financial_submissions');
+    await checkOne('accomplishment', 'Accomplishment', 'accomplishment_submissions');
   }
 
   Future<void> _fetchUnreadNotifications() async {
@@ -585,6 +612,7 @@ class _OrgDashboardState extends State<OrgDashboard> {
                   'message': d.data()['body'] ?? d.data()['message'] ?? '',
                   'isRead': d.data()['isRead'] ?? false,
                   'timestamp': d.data()['createdAt'],
+                  'type': d.data()['type'],
                 })
             .toList();
         all.sort((a, b) {
@@ -648,6 +676,21 @@ class _OrgDashboardState extends State<OrgDashboard> {
         });
       }
     } catch (_) {}
+  }
+
+  // Maps a notification's type to the sidebar tab it's about, so clicking
+  // one takes the org straight to where it happened.
+  static const Map<String, int> _notificationTypeToTabIndex = {
+    'proposal_status': 1, // OrgEventProposalsScreen
+    'proposal_revision': 1,
+    'publish_reminder': 1,
+    'letter_status': 9, // OrgLetterRequestScreen
+    'deadline_reminder': 10, // OrgReportsScreen
+  };
+
+  void _handleNotificationTap(Map<String, dynamic> n) {
+    final index = _notificationTypeToTabIndex[n['type']?.toString()];
+    if (index != null) setState(() => _selectedIndex = index);
   }
 
   Future<void> _logout() async => FirebaseAuth.instance.signOut();
@@ -929,16 +972,16 @@ class _OrgDashboardState extends State<OrgDashboard> {
                   children: [
                     _buildTopBar(isMobile),
                     Expanded(
-                      child: _selectedIndex == -1
-                          ? OrgSettingsScreen(
-                              orgId: _orgId,
-                              orgName: _orgName,
-                              orgShortName: _orgShortName,
-                              orgEmail: _orgEmail,
-                            )
-                          : (_screensBuilt
-                                ? _screens[_selectedIndex]
-                                : const SizedBox()),
+                      // IndexedStack keeps every screen's state alive
+                      // instead of tearing it down and re-fetching Firestore
+                      // data from scratch on every tab switch — that
+                      // re-fetch was the cause of the lag on every click.
+                      child: !_screensBuilt
+                          ? const SizedBox()
+                          : IndexedStack(
+                              index: _selectedIndex == -1 ? 13 : _selectedIndex,
+                              children: _screens,
+                            ),
                     ),
                   ],
                 ),
@@ -1289,6 +1332,7 @@ class _OrgDashboardState extends State<OrgDashboard> {
                   notifications: List.from(_notifications),
                   onMarkRead: _markNotificationAsRead,
                   onMarkAllRead: _markAllNotificationsAsRead,
+                  onNotificationTap: _handleNotificationTap,
                 ),
               ),
             ],
@@ -2971,11 +3015,13 @@ class _OrgNotificationPanel extends StatefulWidget {
   final List<Map<String, dynamic>> notifications;
   final Future<void> Function(String id) onMarkRead;
   final Future<void> Function() onMarkAllRead;
+  final void Function(Map<String, dynamic> n) onNotificationTap;
 
   const _OrgNotificationPanel({
     required this.notifications,
     required this.onMarkRead,
     required this.onMarkAllRead,
+    required this.onNotificationTap,
   });
 
   @override
@@ -3104,9 +3150,13 @@ class _OrgNotificationPanelState extends State<_OrgNotificationPanel> {
   Widget _buildNotifItem(Map<String, dynamic> n) {
     final isRead = n['isRead'] as bool? ?? false;
     return MouseRegion(
-      cursor: isRead ? SystemMouseCursors.basic : SystemMouseCursors.click,
+      cursor: SystemMouseCursors.click,
       child: GestureDetector(
-        onTap: isRead ? null : () => _markRead(n['id'] as String),
+        onTap: () {
+          if (!isRead) _markRead(n['id'] as String);
+          widget.onNotificationTap(n);
+          Navigator.of(context).pop();
+        },
         child: Container(
           width: double.infinity,
           padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),

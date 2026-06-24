@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-class AdminExportButton extends StatelessWidget {
-  final void Function(String) onSelected;
+class AdminExportButton extends StatefulWidget {
+  // Accepts either a sync `void Function(String)` or an
+  // `async`/`Future<void> Function(String)` callback — whichever the
+  // caller already wrote. Typed loosely on purpose so every existing call
+  // site keeps compiling unchanged.
+  final dynamic Function(String) onSelected;
   final bool enabled;
   final String label;
 
@@ -14,7 +18,30 @@ class AdminExportButton extends StatelessWidget {
   });
 
   @override
+  State<AdminExportButton> createState() => _AdminExportButtonState();
+}
+
+class _AdminExportButtonState extends State<AdminExportButton> {
+  bool _busy = false;
+
+  // The actual PDF/CSV generation this triggers is CPU-bound and runs on
+  // the UI thread, so without this the app just freezes with no feedback
+  // for however long that takes — this at least shows a spinner and gives
+  // the engine one frame to paint it before the heavy work blocks.
+  Future<void> _handleSelected(String value) async {
+    setState(() => _busy = true);
+    await Future.delayed(Duration.zero);
+    try {
+      final result = widget.onSelected(value);
+      if (result is Future) await result;
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final enabled = widget.enabled && !_busy;
     final iconColor = enabled ? const Color(0xFF374151) : const Color(0xFF9AA5B4);
     final textColor = enabled ? const Color(0xFF374151) : const Color(0xFF9AA5B4);
     return Container(
@@ -26,7 +53,7 @@ class AdminExportButton extends StatelessWidget {
       ),
       child: PopupMenuButton<String>(
         enabled: enabled,
-        onSelected: onSelected,
+        onSelected: _handleSelected,
         itemBuilder: (_) => [
           _item('csv', Icons.table_chart_rounded, 'Export as CSV'),
           _item('pdf', Icons.picture_as_pdf_rounded, 'Export as PDF'),
@@ -34,9 +61,15 @@ class AdminExportButton extends StatelessWidget {
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 14),
           child: Row(children: [
-            Icon(Icons.download_rounded, size: 16, color: iconColor),
+            _busy
+                ? SizedBox(
+                    width: 14,
+                    height: 14,
+                    child: CircularProgressIndicator(strokeWidth: 2, color: iconColor),
+                  )
+                : Icon(Icons.download_rounded, size: 16, color: iconColor),
             const SizedBox(width: 6),
-            Text(label,
+            Text(_busy ? 'Exporting…' : widget.label,
                 style: GoogleFonts.beVietnamPro(
                     fontSize: 13, fontWeight: FontWeight.w500, color: textColor)),
             const SizedBox(width: 4),
