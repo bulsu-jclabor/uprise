@@ -1,12 +1,13 @@
+// lib/screens/student/student_events_screen.dart
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
 import '../../models/event_model.dart';
-import 'student_certificates_screen.dart' show CertificatesContent;  // <- NEW
- 
+import 'student_certificates_screen.dart' show CertificatesContent;
 
-// ─── Custom Colors (Orange theme) ──────────────────────────────────────────
+// ─── CUSTOM COLORS ─────────────────────────────────────────────
 class AppColors {
   static const Color primaryDark = Colors.orange;
   static const Color primaryLight = Color(0xFFFFCC80);
@@ -14,7 +15,121 @@ class AppColors {
   static const Color background = Color(0xFFF5F5F5);
 }
 
-// ─── Main Screen ──────────────────────────────────────────────────────────
+// ─── EVENT IMAGE WIDGET ────────────────────────────────────────
+class EventImage extends StatelessWidget {
+  final String imageUrl;
+  final double? height;
+  final double? width;
+  final BoxFit fit;
+  final bool showLoadingIndicator;
+
+  const EventImage({
+    super.key,
+    required this.imageUrl,
+    this.height,
+    this.width,
+    this.fit = BoxFit.cover,
+    this.showLoadingIndicator = true,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (imageUrl.isEmpty) return _buildFallbackImage();
+    if (_isBase64Image(imageUrl)) return _buildBase64Image();
+    if (_isValidImageUrl(imageUrl)) return _buildNetworkImage();
+    return _buildFallbackImage();
+  }
+
+  bool _isBase64Image(String url) =>
+      url.startsWith('data:image') ||
+      (url.isNotEmpty && !url.startsWith('http') && !url.startsWith('assets'));
+
+  bool _isValidImageUrl(String url) =>
+      url.startsWith('http://') ||
+      url.startsWith('https://') ||
+      url.startsWith('assets/');
+
+  Widget _buildBase64Image() {
+    try {
+      String base64String = imageUrl;
+      if (imageUrl.contains(',')) base64String = imageUrl.split(',').last;
+      final bytes = base64Decode(base64String);
+      return Image.memory(
+        bytes,
+        height: height,
+        width: width,
+        fit: fit,
+        errorBuilder: (_, __, ___) => _buildFallbackImage(),
+      );
+    } catch (_) {
+      return _buildFallbackImage();
+    }
+  }
+
+  Widget _buildNetworkImage() {
+    return Image.network(
+      imageUrl,
+      height: height,
+      width: width,
+      fit: fit,
+      loadingBuilder: (context, child, loadingProgress) {
+        if (loadingProgress == null) return child;
+        if (!showLoadingIndicator) return child;
+        return Container(
+          height: height,
+          width: width,
+          color: Colors.grey[200],
+          child: Center(
+            child: SizedBox(
+              width: 30,
+              height: 30,
+              child: CircularProgressIndicator(
+                value: loadingProgress.expectedTotalBytes != null
+                    ? loadingProgress.cumulativeBytesLoaded /
+                        loadingProgress.expectedTotalBytes!
+                    : null,
+                strokeWidth: 2,
+                color: AppColors.primaryDark,
+              ),
+            ),
+          ),
+        );
+      },
+      errorBuilder: (_, __, ___) => _buildFallbackImage(),
+    );
+  }
+
+  Widget _buildFallbackImage() {
+    return Container(
+      height: height,
+      width: width,
+      color: Colors.grey[300],
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            Icons.image_not_supported,
+            size: (height ?? 100) * 0.4,
+            color: Colors.grey[600],
+          ),
+          if ((height ?? 0) > 80)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(
+                'Image not available',
+                style: TextStyle(
+                  fontSize: (height ?? 100) * 0.08,
+                  color: Colors.grey[600],
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── MAIN SCREEN ──────────────────────────────────────────────
 class StudentEventsScreen extends StatefulWidget {
   final int initialTabIndex;
   const StudentEventsScreen({super.key, this.initialTabIndex = 0});
@@ -32,7 +147,7 @@ class _StudentEventsScreenState extends State<StudentEventsScreen>
   void initState() {
     super.initState();
     _tabController = TabController(
-      length: 3, // Calendar, Upcoming, Certificates
+      length: 3,
       vsync: this,
       initialIndex: widget.initialTabIndex.clamp(0, 2),
     );
@@ -45,12 +160,11 @@ class _StudentEventsScreenState extends State<StudentEventsScreen>
   }
 
   void _previousMonth() => setState(() {
-    _selectedDate = DateTime(_selectedDate.year, _selectedDate.month - 1);
-  });
-
+        _selectedDate = DateTime(_selectedDate.year, _selectedDate.month - 1);
+      });
   void _nextMonth() => setState(() {
-    _selectedDate = DateTime(_selectedDate.year, _selectedDate.month + 1);
-  });
+        _selectedDate = DateTime(_selectedDate.year, _selectedDate.month + 1);
+      });
 
   void _openDetail(EventModel event) {
     Navigator.push(
@@ -105,13 +219,12 @@ class _StudentEventsScreenState extends State<StudentEventsScreen>
         children: [
           _buildCalendarTab(),
           _buildUpcomingTab(),
-          const CertificatesContent(),  // <- NEW third tab
+          const CertificatesContent(),
         ],
       ),
     );
   }
 
-  // ── Calendar Tab ──────────────────────────────────────────────────────────
   Widget _buildCalendarTab() {
     return Column(
       children: [
@@ -196,7 +309,9 @@ class _StudentEventsScreenState extends State<StudentEventsScreen>
                     .snapshots(),
                 builder: (context, snap) {
                   if (!snap.hasData) {
-                    return const Center(child: CircularProgressIndicator(color: AppColors.primaryDark));
+                    return const Center(
+                      child: CircularProgressIndicator(color: AppColors.primaryDark),
+                    );
                   }
                   final todayEvents = snap.data!.docs
                       .map((d) => EventModel.fromFirestore(d))
@@ -245,7 +360,6 @@ class _StudentEventsScreenState extends State<StudentEventsScreen>
     );
   }
 
-  // ── Upcoming Tab ──────────────────────────────────────────────────────────
   Widget _buildUpcomingTab() {
     return FutureBuilder<Set<String>>(
       future: _getRegisteredEventIds(),
@@ -258,7 +372,9 @@ class _StudentEventsScreenState extends State<StudentEventsScreen>
               .snapshots(),
           builder: (context, snap) {
             if (!snap.hasData) {
-              return const Center(child: CircularProgressIndicator(color: AppColors.primaryDark));
+              return const Center(
+                child: CircularProgressIndicator(color: AppColors.primaryDark),
+              );
             }
 
             final allEvents = snap.data!.docs
@@ -287,10 +403,12 @@ class _StudentEventsScreenState extends State<StudentEventsScreen>
               itemCount: allEvents.length,
               itemBuilder: (context, index) {
                 final event = allEvents[index];
+                final isRegistered = regIds.contains(event.id);
                 return Padding(
                   padding: const EdgeInsets.only(bottom: 16),
                   child: _UpcomingEventCard(
                     event: event,
+                    isRegistered: isRegistered,
                     onTap: () => _openDetail(event),
                   ),
                 );
@@ -303,7 +421,7 @@ class _StudentEventsScreenState extends State<StudentEventsScreen>
   }
 }
 
-// ─── Calendar Grid ─────────────────────────────────────────────────────────
+// ─── CALENDAR GRID ─────────────────────────────────────────────
 class _CalendarGrid extends StatelessWidget {
   final DateTime selectedDate;
   final Function(DateTime) onDateSelected;
@@ -322,11 +440,7 @@ class _CalendarGrid extends StatelessWidget {
       dayWidgets.add(Center(
         child: Text(
           day,
-          style: TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.w600,
-            color: Colors.grey.shade600,
-          ),
+          style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.grey.shade600),
         ),
       ));
     }
@@ -354,8 +468,8 @@ class _CalendarGrid extends StatelessWidget {
               color: isSelected
                   ? AppColors.primaryDark
                   : isToday
-                  ? Colors.grey.shade200
-                  : Colors.transparent,
+                      ? Colors.grey.shade200
+                      : Colors.transparent,
             ),
             child: Center(
               child: Text(
@@ -366,8 +480,8 @@ class _CalendarGrid extends StatelessWidget {
                   color: isSelected
                       ? Colors.white
                       : isToday
-                      ? AppColors.primaryDark
-                      : Colors.black87,
+                          ? AppColors.primaryDark
+                          : Colors.black87,
                 ),
               ),
             ),
@@ -386,7 +500,7 @@ class _CalendarGrid extends StatelessWidget {
   }
 }
 
-// ─── Compact Event Card ────────────────────────────────────────────────────
+// ─── COMPACT EVENT CARD ────────────────────────────────────────
 class _CompactEventCard extends StatelessWidget {
   final EventModel event;
   final VoidCallback onTap;
@@ -497,12 +611,17 @@ class _CompactEventCard extends StatelessWidget {
   }
 }
 
-// ─── Upcoming Event Card ──────────────────────────────────────────────────
+// ─── UPCOMING EVENT CARD (with registration status) ────────────
 class _UpcomingEventCard extends StatelessWidget {
   final EventModel event;
+  final bool isRegistered;
   final VoidCallback onTap;
 
-  const _UpcomingEventCard({required this.event, required this.onTap});
+  const _UpcomingEventCard({
+    required this.event,
+    required this.isRegistered,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -524,18 +643,11 @@ class _UpcomingEventCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Placeholder image (could be replaced with actual network image)
-            Container(
+            EventImage(
+              imageUrl: event.bannerUrl ?? '',
               height: 160,
               width: double.infinity,
-              color: AppColors.primaryDark.withOpacity(0.1),
-              child: Center(
-                child: Icon(
-                  Icons.event,
-                  color: AppColors.primaryDark,
-                  size: 48,
-                ),
-              ),
+              fit: BoxFit.cover,
             ),
             Padding(
               padding: const EdgeInsets.all(12),
@@ -546,7 +658,29 @@ class _UpcomingEventCard extends StatelessWidget {
                     children: [
                       _CategoryBadge(category: event.category),
                       const Spacer(),
-                      // Registration badge (if needed)
+                      if (isRegistered)
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: Colors.green.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.check_circle, size: 12, color: Colors.green),
+                              SizedBox(width: 4),
+                              Text(
+                                'Registered',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.green,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                     ],
                   ),
                   const SizedBox(height: 8),
@@ -597,13 +731,17 @@ class _UpcomingEventCard extends StatelessWidget {
                     child: ElevatedButton(
                       onPressed: onTap,
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.primaryDark,
+                        backgroundColor: isRegistered ? Colors.green : AppColors.primaryDark,
                         padding: const EdgeInsets.symmetric(vertical: 10),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25)),
                       ),
-                      child: const Text(
-                        'View Details',
-                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.white),
+                      child: Text(
+                        isRegistered ? 'Registered ✓' : 'View Details',
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.white,
+                        ),
                       ),
                     ),
                   ),
@@ -617,7 +755,7 @@ class _UpcomingEventCard extends StatelessWidget {
   }
 }
 
-// ─── Category Badge ──────────────────────────────────────────────────────
+// ─── CATEGORY BADGE ─────────────────────────────────────────────
 class _CategoryBadge extends StatelessWidget {
   final String category;
   const _CategoryBadge({required this.category});
@@ -656,8 +794,7 @@ class _CategoryBadge extends StatelessWidget {
   }
 }
 
-// ─── Event Detail Screen ──────────────────────────────────────────────────
-// (This is the same as the original but uses EventModel; only minor adjustments)
+// ─── EVENT DETAIL SCREEN ──────────────────────────────────────
 class EventDetailScreen extends StatefulWidget {
   final EventModel event;
   final VoidCallback onRegistered;
@@ -676,145 +813,391 @@ class EventDetailScreen extends StatefulWidget {
 
 class _EventDetailScreenState extends State<EventDetailScreen> {
   bool _isLoading = false;
-  bool _showRegistrationForm = false;
-
-  final _formKey = GlobalKey<FormState>();
-  final _fullNameCtrl = TextEditingController();
-  final _studentIdCtrl = TextEditingController();
-  final _emailCtrl = TextEditingController();
-  final _contactCtrl = TextEditingController();
+  bool _loadingForm = true;
+  bool _isRegistered = false; // added
+  Map<String, dynamic>? _formDef;
+  final Map<String, TextEditingController> _fieldControllers = {};
+  final Map<String, String?> _singleChoice = {};
+  final Map<String, Set<String>> _multiChoice = {};
 
   @override
   void initState() {
     super.initState();
-    _loadUserData();
+    _loadRegistrationForm();
+    _checkRegistrationStatus();
   }
 
   @override
   void dispose() {
-    _fullNameCtrl.dispose();
-    _studentIdCtrl.dispose();
-    _emailCtrl.dispose();
-    _contactCtrl.dispose();
+    for (final c in _fieldControllers.values) {
+      c.dispose();
+    }
     super.dispose();
   }
 
-  Future<void> _loadUserData() async {
+  Future<void> _checkRegistrationStatus() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
+    final snap = await FirebaseFirestore.instance
+        .collection('registrations')
+        .where('userId', isEqualTo: user.uid)
+        .where('eventId', isEqualTo: widget.event.id)
+        .get();
+    if (mounted) {
+      setState(() => _isRegistered = snap.docs.isNotEmpty);
+    }
+  }
+
+  Future<void> _loadRegistrationForm() async {
+    final proposalId = widget.event.createdFromProposalId ?? '';
+    if (proposalId.isEmpty) {
+      if (mounted) setState(() => _loadingForm = false);
+      return;
+    }
 
     try {
-      final userDoc = await FirebaseFirestore.instance
-          .collection('students')
-          .where('uid', isEqualTo: user.uid)
-          .limit(1)
+      final doc = await FirebaseFirestore.instance
+          .collection('registration_forms')
+          .doc(proposalId)
           .get();
 
-      if (userDoc.docs.isNotEmpty) {
-        final data = userDoc.docs.first.data();
-        _fullNameCtrl.text = data['fullName'] ?? '';
-        _studentIdCtrl.text = data['studentId'] ?? '';
-        _emailCtrl.text = data['email'] ?? user.email ?? '';
-        _contactCtrl.text = data['mobile'] ?? '';
-      } else {
-        _emailCtrl.text = user.email ?? '';
+      if (doc.exists) {
+        final d = doc.data()!;
+        final fields = (d['fields'] as List? ?? [])
+            .map((e) => Map<String, dynamic>.from(e as Map))
+            .toList();
+        if (d['isPublished'] == true && fields.isNotEmpty) {
+          for (final f in fields) {
+            final id = f['id'] as String;
+            final type = (f['type'] ?? 'short_text') as String;
+            if (type == 'multiple_choice' || type == 'dropdown') {
+              _singleChoice[id] = null;
+            } else if (type == 'checkboxes') {
+              _multiChoice[id] = {};
+            } else {
+              _fieldControllers[id] = TextEditingController();
+            }
+          }
+          _formDef = {...d, 'fields': fields};
+        }
       }
-    } catch (_) {}
+    } catch (_) {
+      // fall through
+    }
+    if (mounted) setState(() => _loadingForm = false);
+  }
+
+  String? _validateDynamicFields() {
+    if (_formDef == null) return null;
+    final fields = (_formDef!['fields'] as List).cast<Map<String, dynamic>>();
+    for (final f in fields) {
+      if (f['required'] != true) continue;
+      final id = f['id'] as String;
+      final type = (f['type'] ?? 'short_text') as String;
+      final label = (f['label'] ?? 'This question').toString();
+      if (type == 'multiple_choice' || type == 'dropdown') {
+        if (_singleChoice[id] == null) return 'Please answer: $label';
+      } else if (type == 'checkboxes') {
+        if ((_multiChoice[id] ?? {}).isEmpty) return 'Please answer: $label';
+      } else {
+        if ((_fieldControllers[id]?.text ?? '').trim().isEmpty) {
+          return 'Please answer: $label';
+        }
+      }
+    }
+    return null;
+  }
+
+  Map<String, dynamic> _collectFormResponses() {
+    if (_formDef == null) return {};
+    final fields = (_formDef!['fields'] as List).cast<Map<String, dynamic>>();
+    final out = <String, dynamic>{};
+    for (final f in fields) {
+      final id = f['id'] as String;
+      final type = (f['type'] ?? 'short_text') as String;
+      final label = f['label'] ?? '';
+      if (type == 'multiple_choice' || type == 'dropdown') {
+        out[id] = {'label': label, 'value': _singleChoice[id]};
+      } else if (type == 'checkboxes') {
+        out[id] = {'label': label, 'value': (_multiChoice[id] ?? {}).toList()};
+      } else {
+        out[id] = {'label': label, 'value': _fieldControllers[id]?.text.trim() ?? ''};
+      }
+    }
+    return out;
   }
 
   Future<void> _registerForEvent() async {
-    if (widget.isPastEvent) return;
-
+    if (widget.isPastEvent) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Cannot register for past events'),
+        backgroundColor: Colors.red,
+      ));
+      return;
+    }
+    if (widget.event.slotsLeft <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Event is full! No slots available.'),
+        backgroundColor: Colors.red,
+      ));
+      return;
+    }
+    final formError = _validateDynamicFields();
+    if (formError != null) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(formError),
+        backgroundColor: Colors.red,
+      ));
+      return;
+    }
+    setState(() => _isLoading = true);
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please login to register')),
       );
+      setState(() => _isLoading = false);
       return;
     }
-
-    final existingReg = await FirebaseFirestore.instance
-        .collection('registrations')
-        .where('userId', isEqualTo: user.uid)
-        .where('eventId', isEqualTo: widget.event.id)
-        .get();
-
-    if (existingReg.docs.isNotEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('You are already registered!')),
-      );
-      return;
-    }
-
-    if (!_formKey.currentState!.validate()) return;
-
-    setState(() => _isLoading = true);
-
     try {
-      final registrationRef = FirebaseFirestore.instance
+      final formResponses = _collectFormResponses();
+      final regRef = FirebaseFirestore.instance
           .collection('registrations')
           .doc('${user.uid}_${widget.event.id}');
-
-      await FirebaseFirestore.instance.runTransaction((transaction) async {
-        final regDoc = await transaction.get(registrationRef);
-        if (regDoc.exists) {
-          throw Exception('Already registered');
-        }
-
-        final eventRef = FirebaseFirestore.instance
-            .collection('events')
-            .doc(widget.event.id);
-        final eventDoc = await transaction.get(eventRef);
-
-        if (!eventDoc.exists) {
-          throw Exception('Event not found');
-        }
-
-        final eventData = eventDoc.data()!;
-        final currentSlotsLeft = (eventData['slotsLeft'] ?? 0) as int;
-
-        if (currentSlotsLeft <= 0) {
-          throw Exception('No slots available');
-        }
-
-        transaction.update(eventRef, {
-          'slotsLeft': currentSlotsLeft - 1,
-        });
-
-        transaction.set(registrationRef, {
+      await FirebaseFirestore.instance.runTransaction((tx) async {
+        final regDoc = await tx.get(regRef);
+        if (regDoc.exists) throw Exception('You are already registered for this event');
+        final evRef = FirebaseFirestore.instance.collection('events').doc(widget.event.id);
+        final evDoc = await tx.get(evRef);
+        if (!evDoc.exists) throw Exception('Event not found');
+        final slots = evDoc.data()!['slotsLeft'] as int? ?? 0;
+        if (slots <= 0) throw Exception('No slots available for this event');
+        tx.update(evRef, {'slotsLeft': slots - 1});
+        tx.set(regRef, {
           'userId': user.uid,
           'eventId': widget.event.id,
-          'fullName': _fullNameCtrl.text.trim(),
-          'studentId': _studentIdCtrl.text.trim(),
-          'email': _emailCtrl.text.trim(),
-          'contact': _contactCtrl.text.trim(),
           'registeredAt': FieldValue.serverTimestamp(),
+          'status': 'registered',
+          if (formResponses.isNotEmpty) 'formResponses': formResponses,
         });
       });
-
+      setState(() => _isRegistered = true);
       widget.onRegistered();
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Successfully registered for event!'),
-            backgroundColor: AppColors.primaryDark,
-          ),
-        );
-        setState(() => _showRegistrationForm = false);
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Successfully registered for event!'),
+          backgroundColor: Colors.green,
+        ));
         Navigator.pop(context);
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(e.toString().replaceAll('Exception: ', '')),
-            backgroundColor: Colors.red,
-          ),
-        );
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(e.toString().replaceAll('Exception: ', '')),
+          backgroundColor: Colors.red,
+        ));
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+  InputDecoration _fieldDecoration(String hint) => InputDecoration(
+        hintText: hint,
+        filled: true,
+        fillColor: Colors.grey.shade50,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: BorderSide(color: Colors.grey.shade300),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: BorderSide(color: Colors.grey.shade300),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: const BorderSide(color: AppColors.primaryDark, width: 1.5),
+        ),
+      );
+
+  Widget _buildDynamicField(Map<String, dynamic> field) {
+    final id = field['id'] as String;
+    final type = (field['type'] ?? 'short_text') as String;
+    final label = (field['label'] ?? '').toString();
+    final desc = (field['description'] ?? '').toString();
+    final required = field['required'] == true;
+    final options = (field['options'] as List?)?.map((o) => o.toString()).toList() ?? [];
+
+    Widget input;
+    switch (type) {
+      case 'paragraph':
+        input = TextField(
+          controller: _fieldControllers[id],
+          maxLines: 4,
+          decoration: _fieldDecoration('Your answer'),
+        );
+        break;
+      case 'email':
+        input = TextField(
+          controller: _fieldControllers[id],
+          keyboardType: TextInputType.emailAddress,
+          decoration: _fieldDecoration('someone@email.com'),
+        );
+        break;
+      case 'number':
+        input = TextField(
+          controller: _fieldControllers[id],
+          keyboardType: TextInputType.number,
+          decoration: _fieldDecoration('0'),
+        );
+        break;
+      case 'date':
+        input = TextField(
+          controller: _fieldControllers[id],
+          readOnly: true,
+          decoration: _fieldDecoration('Select date').copyWith(
+            suffixIcon: const Icon(Icons.calendar_today_outlined, size: 18),
+          ),
+          onTap: () async {
+            final picked = await showDatePicker(
+              context: context,
+              initialDate: DateTime.now(),
+              firstDate: DateTime(2020),
+              lastDate: DateTime(2100),
+            );
+            if (picked != null) {
+              setState(() => _fieldControllers[id]!.text =
+                  DateFormat('MMM dd, yyyy').format(picked));
+            }
+          },
+        );
+        break;
+      case 'multiple_choice':
+        input = Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: options
+              .map((o) => RadioListTile<String>(
+                    value: o,
+                    groupValue: _singleChoice[id],
+                    title: Text(o, style: const TextStyle(fontSize: 13)),
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                    onChanged: (v) => setState(() => _singleChoice[id] = v),
+                  ))
+              .toList(),
+        );
+        break;
+      case 'dropdown':
+        input = DropdownButtonFormField<String>(
+          initialValue: _singleChoice[id],
+          decoration: _fieldDecoration('Select an option'),
+          items: options
+              .map((o) => DropdownMenuItem(
+                    value: o,
+                    child: Text(o, style: const TextStyle(fontSize: 13)),
+                  ))
+              .toList(),
+          onChanged: (v) => setState(() => _singleChoice[id] = v),
+        );
+        break;
+      case 'checkboxes':
+        input = Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: options
+              .map((o) => CheckboxListTile(
+                    value: _multiChoice[id]?.contains(o) ?? false,
+                    title: Text(o, style: const TextStyle(fontSize: 13)),
+                    controlAffinity: ListTileControlAffinity.leading,
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                    onChanged: (v) => setState(() {
+                      _multiChoice.putIfAbsent(id, () => {});
+                      if (v == true) {
+                        _multiChoice[id]!.add(o);
+                      } else {
+                        _multiChoice[id]!.remove(o);
+                      }
+                    }),
+                  ))
+              .toList(),
+        );
+        break;
+      default:
+        input = TextField(
+          controller: _fieldControllers[id],
+          decoration: _fieldDecoration('Your answer'),
+        );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          RichText(
+            text: TextSpan(children: [
+              TextSpan(
+                text: label,
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.black87,
+                ),
+              ),
+              if (required)
+                const TextSpan(
+                  text: ' *',
+                  style: TextStyle(color: Colors.red, fontWeight: FontWeight.w700),
+                ),
+            ]),
+          ),
+          if (desc.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 2, bottom: 6),
+              child: Text(
+                desc,
+                style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+              ),
+            )
+          else
+            const SizedBox(height: 6),
+          input,
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRegistrationFormSection() {
+    if (_formDef == null) return const SizedBox.shrink();
+    final fields = (_formDef!['fields'] as List).cast<Map<String, dynamic>>();
+    final title = (_formDef!['title'] ?? 'Registration Form').toString();
+    final desc = (_formDef!['description'] ?? '').toString();
+    return Container(
+      margin: const EdgeInsets.only(bottom: 24),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade50,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+          if (desc.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text(
+                desc,
+                style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
+              ),
+            ),
+          const SizedBox(height: 14),
+          ...fields.map(_buildDynamicField),
+        ],
+      ),
+    );
   }
 
   @override
@@ -828,44 +1211,18 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
           icon: const Icon(Icons.arrow_back, color: Colors.black87),
           onPressed: () => Navigator.pop(context),
         ),
-        title: const Text(
-          'Event Details',
-          style: TextStyle(color: Colors.black87),
-        ),
+        title: const Text('Event Details', style: TextStyle(color: Colors.black87)),
         centerTitle: true,
-        actions: [
-          if (!widget.isPastEvent)
-            TextButton.icon(
-              onPressed: () {
-                setState(() => _showRegistrationForm = !_showRegistrationForm);
-              },
-              icon: Icon(
-                _showRegistrationForm ? Icons.close : Icons.edit_note,
-                color: AppColors.primaryDark,
-              ),
-              label: Text(
-                _showRegistrationForm ? 'Close' : 'Register',
-                style: TextStyle(color: AppColors.primaryDark),
-              ),
-            ),
-        ],
       ),
       body: SingleChildScrollView(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Placeholder banner (can be replaced with actual image)
-            Container(
+            EventImage(
+              imageUrl: widget.event.bannerUrl ?? '',
               height: 220,
               width: double.infinity,
-              color: AppColors.primaryDark.withOpacity(0.1),
-              child: Center(
-                child: Icon(
-                  Icons.event,
-                  color: AppColors.primaryDark,
-                  size: 64,
-                ),
-              ),
+              fit: BoxFit.cover,
             ),
             Padding(
               padding: const EdgeInsets.all(16),
@@ -915,48 +1272,94 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                   ),
                   const SizedBox(height: 30),
 
-                  // Registration form (if shown)
-                  if (_showRegistrationForm && !widget.isPastEvent)
-                    _buildRegistrationForm(),
+                  // Dynamic registration form
+                  if (!widget.isPastEvent && !_isRegistered && _loadingForm)
+                    const Center(
+                      child: Padding(
+                        padding: EdgeInsets.symmetric(vertical: 12),
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                    ),
+                  if (!widget.isPastEvent && !_isRegistered && !_loadingForm)
+                    _buildRegistrationFormSection(),
 
-                  // Status buttons
-                  if (!_showRegistrationForm) ...[
-                    if (!widget.isPastEvent)
-                      SizedBox(
-                        width: double.infinity,
-                        child: ElevatedButton(
-                          onPressed: () {
-                            setState(() => _showRegistrationForm = true);
-                          },
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: AppColors.primaryDark,
-                            padding: const EdgeInsets.symmetric(vertical: 14),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
+                  // Register / status button
+                  if (!widget.isPastEvent && !_isRegistered)
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: _isLoading || _loadingForm ? null : _registerForEvent,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor:
+                              widget.event.slotsLeft > 0 ? AppColors.primaryDark : Colors.grey,
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
                           ),
-                          child: const Text(
-                            'Register Now',
-                            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                        ),
+                        child: _isLoading
+                            ? const SizedBox(
+                                height: 20,
+                                width: 20,
+                                child: CircularProgressIndicator(
+                                  color: Colors.white,
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : Text(
+                                widget.event.slotsLeft > 0
+                                    ? 'Register Now (${widget.event.slotsLeft} slots left)'
+                                    : 'Event Full',
+                                style: const TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w700,
+                                  color: Colors.white,
+                                ),
+                              ),
+                      ),
+                    ),
+
+                  if (_isRegistered && !widget.isPastEvent)
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      decoration: BoxDecoration(
+                        color: Colors.green.shade50,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.green.shade200),
+                      ),
+                      child: const Center(
+                        child: Text(
+                          '✓ You are registered',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.green,
                           ),
                         ),
                       ),
-                    if (widget.isPastEvent)
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        decoration: BoxDecoration(
-                          color: Colors.grey.shade100,
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: const Center(
-                          child: Text(
-                            'Past Event',
-                            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Colors.grey),
+                    ),
+
+                  if (widget.isPastEvent)
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade100,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Center(
+                        child: Text(
+                          'Past Event',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.grey,
                           ),
                         ),
                       ),
-                  ],
+                    ),
+
                   const SizedBox(height: 30),
                 ],
               ),
@@ -966,115 +1369,13 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
       ),
     );
   }
-
-  Widget _buildRegistrationForm() {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF8F9FA),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.grey.shade200),
-      ),
-      child: Form(
-        key: _formKey,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'EVENT REGISTRATION',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Colors.black87),
-            ),
-            const SizedBox(height: 16),
-            TextFormField(
-              controller: _fullNameCtrl,
-              decoration: InputDecoration(
-                labelText: 'Full Name *',
-                filled: true,
-                fillColor: Colors.white,
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-              ),
-              validator: (value) => value?.trim().isEmpty ?? true ? 'Required' : null,
-            ),
-            const SizedBox(height: 14),
-            TextFormField(
-              controller: _studentIdCtrl,
-              decoration: InputDecoration(
-                labelText: 'Student Number *',
-                filled: true,
-                fillColor: Colors.white,
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-              ),
-              validator: (value) => value?.trim().isEmpty ?? true ? 'Required' : null,
-            ),
-            const SizedBox(height: 14),
-            TextFormField(
-              controller: _emailCtrl,
-              keyboardType: TextInputType.emailAddress,
-              decoration: InputDecoration(
-                labelText: 'Email Address *',
-                filled: true,
-                fillColor: Colors.white,
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-              ),
-              validator: (value) {
-                if (value?.trim().isEmpty ?? true) return 'Required';
-                if (!value!.contains('@')) return 'Enter a valid email';
-                return null;
-              },
-            ),
-            const SizedBox(height: 14),
-            TextFormField(
-              controller: _contactCtrl,
-              keyboardType: TextInputType.phone,
-              decoration: InputDecoration(
-                labelText: 'Contact Number *',
-                filled: true,
-                fillColor: Colors.white,
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-              ),
-              validator: (value) {
-                if (value?.trim().isEmpty ?? true) return 'Required';
-                if (value!.length < 11) return 'Enter a valid number';
-                return null;
-              },
-            ),
-            const SizedBox(height: 20),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: _isLoading ? null : _registerForEvent,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primaryDark,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                ),
-                child: _isLoading
-                    ? const SizedBox(
-                        height: 20,
-                        width: 20,
-                        child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
-                      )
-                    : const Text(
-                        'Complete Registration',
-                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
-                      ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 }
 
+// ─── INFO ROW ──────────────────────────────────────────────────
 class _InfoRow extends StatelessWidget {
   final IconData icon;
   final String text;
+
   const _InfoRow({required this.icon, required this.text});
 
   @override

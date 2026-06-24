@@ -15,9 +15,10 @@ class EventModel {
   final String audience;
   final int capacity;
   final int slotsLeft;
-  final String? proposalId;         // createdFromProposalId
+  final String? proposalId;          // createdFromProposalId alias
   final String? createdFromProposalId;
   final String? orgLogoUrl;
+  final String? bannerUrl;           // ADDED – HTTPS URL from Firebase Storage
 
   EventModel({
     required this.id,
@@ -36,6 +37,7 @@ class EventModel {
     this.proposalId,
     this.createdFromProposalId,
     this.orgLogoUrl,
+    this.bannerUrl,                  // ADDED
   });
 
   factory EventModel.fromFirestore(DocumentSnapshot doc) {
@@ -62,6 +64,7 @@ class EventModel {
       proposalId: d['createdFromProposalId'] as String?,
       createdFromProposalId: d['createdFromProposalId'] as String?,
       orgLogoUrl: d['logoUrl'] as String?,
+      bannerUrl: d['bannerUrl'] as String?,   // ADDED
     );
   }
 
@@ -80,6 +83,7 @@ class EventModel {
     'slotsLeft': slotsLeft,
     'createdFromProposalId': proposalId,
     'logoUrl': orgLogoUrl,
+    'bannerUrl': bannerUrl,          // ADDED
   };
 
   bool get isPast => date.isBefore(DateTime.now());

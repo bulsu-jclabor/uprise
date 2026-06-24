@@ -1,12 +1,9 @@
 // lib/screens/student/student_events_screen.dart
-import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
-import '../../services/activity_logger.dart' as activity_log;
-import '../../services/webinar_attendance_service.dart';
 
 // ─────────────────────────────────────────────────────────────
 //  CUSTOM COLORS - UNIFORM (ORANGE)
@@ -171,6 +168,7 @@ class EventData {
   final bool isPublic;
   final bool isPast;
   final DateTime rawDate;
+  final String? createdFromProposalId;   // ← ADD THIS LINE
 
   const EventData({
     required this.id,
@@ -191,6 +189,7 @@ class EventData {
     this.isPublic = true,
     required this.isPast,
     required this.rawDate,
+    this.createdFromProposalId,          // ← ADD THIS LINE
   });
 
   factory EventData.fromFirestore(DocumentSnapshot doc,
@@ -226,6 +225,7 @@ class EventData {
       isPublic: d['isPublic'] ?? true,
       isPast: isPast,
       rawDate: dateTime,
+      createdFromProposalId: d['createdFromProposalId'] as String?, // ← ADD THIS LINE
     );
   }
 }
@@ -1242,7 +1242,7 @@ class _CategoryBadge extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────
-//  EVENT DETAIL SCREEN (WITH REGISTRATION FORM)
+//  EVENT DETAIL SCREEN
 // ─────────────────────────────────────────────
 class EventDetailScreen extends StatefulWidget {
   final EventData event;
@@ -1262,152 +1262,373 @@ class EventDetailScreen extends StatefulWidget {
 
 class _EventDetailScreenState extends State<EventDetailScreen> {
   bool _isLoading = false;
-  bool _showRegistrationForm = false;
-
-  final _formKey = GlobalKey<FormState>();
-  final _fullNameCtrl = TextEditingController();
-  final _studentIdCtrl = TextEditingController();
-  final _emailCtrl = TextEditingController();
-  final _contactCtrl = TextEditingController();
+  // Dynamic registration form state
+  bool _loadingForm = true;
+  Map<String, dynamic>? _formDef;
+  final Map<String, TextEditingController> _fieldControllers = {};
+  final Map<String, String?> _singleChoice = {};
+  final Map<String, Set<String>> _multiChoice = {};
 
   @override
   void initState() {
     super.initState();
-    _loadUserData();
+    _loadRegistrationForm();
   }
 
   @override
   void dispose() {
-    _fullNameCtrl.dispose();
-    _studentIdCtrl.dispose();
-    _emailCtrl.dispose();
-    _contactCtrl.dispose();
+    for (final c in _fieldControllers.values) {
+      c.dispose();
+    }
     super.dispose();
   }
 
-  Future<void> _loadUserData() async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
+  /// Fetches the org-defined registration form from
+  /// `registration_forms/{proposalId}` (written by the org's Form Builder).
+  /// Falls back gracefully: if no form is published, _formDef stays null
+  /// and the Register button works without any extra fields.
+  Future<void> _loadRegistrationForm() async {
+  final proposalId = widget.event.createdFromProposalId ?? '';
+  if (proposalId.isEmpty) {
+    if (mounted) setState(() => _loadingForm = false);
+    return;
+  }
 
-    try {
-      final userDoc = await FirebaseFirestore.instance
-          .collection('students')
-          .where('uid', isEqualTo: user.uid)
-          .limit(1)
-          .get();
+  try {
+    final doc = await FirebaseFirestore.instance
+        .collection('registration_forms')
+        .doc(proposalId)
+        .get();
 
-      if (userDoc.docs.isNotEmpty) {
-        final data = userDoc.docs.first.data();
-        _fullNameCtrl.text = data['fullName'] ?? '';
-        _studentIdCtrl.text = data['studentId'] ?? '';
-        _emailCtrl.text = data['email'] ?? user.email ?? '';
-        _contactCtrl.text = data['mobile'] ?? '';
-      } else {
-        _emailCtrl.text = user.email ?? '';
+    if (doc.exists) {
+      final d = doc.data()!;
+      final fields = (d['fields'] as List? ?? [])
+          .map((e) => Map<String, dynamic>.from(e as Map))
+          .toList();
+      if (d['isPublished'] == true && fields.isNotEmpty) {
+        for (final f in fields) {
+          final id = f['id'] as String;
+          final type = (f['type'] ?? 'short_text') as String;
+          if (type == 'multiple_choice' || type == 'dropdown') {
+            _singleChoice[id] = null;
+          } else if (type == 'checkboxes') {
+            _multiChoice[id] = {};
+          }
+        }
       }
-    } catch (_) {}
+    }
+  } catch (e) {
+    if (mounted) setState(() => _loadingForm = false);
+  }
+}
+  String? _validateDynamicFields() {
+    if (_formDef == null) return null;
+    final fields = (_formDef!['fields'] as List).cast<Map<String, dynamic>>();
+    for (final f in fields) {
+      if (f['required'] != true) continue;
+      final id = f['id'] as String;
+      final type = (f['type'] ?? 'short_text') as String;
+      final label = (f['label'] ?? 'This question').toString();
+      if (type == 'multiple_choice' || type == 'dropdown') {
+        if (_singleChoice[id] == null) return 'Please answer: $label';
+      } else if (type == 'checkboxes') {
+        if ((_multiChoice[id] ?? {}).isEmpty) return 'Please answer: $label';
+      } else {
+        if ((_fieldControllers[id]?.text ?? '').trim().isEmpty) return 'Please answer: $label';
+      }
+    }
+    return null;
+  }
+
+  Map<String, dynamic> _collectFormResponses() {
+    if (_formDef == null) return {};
+    final fields = (_formDef!['fields'] as List).cast<Map<String, dynamic>>();
+    final out = <String, dynamic>{};
+    for (final f in fields) {
+      final id = f['id'] as String;
+      final type = (f['type'] ?? 'short_text') as String;
+      final label = f['label'] ?? '';
+      if (type == 'multiple_choice' || type == 'dropdown') {
+        out[id] = {'label': label, 'value': _singleChoice[id]};
+      } else if (type == 'checkboxes') {
+        out[id] = {'label': label, 'value': (_multiChoice[id] ?? {}).toList()};
+      } else {
+        out[id] = {'label': label, 'value': _fieldControllers[id]?.text.trim() ?? ''};
+      }
+    }
+    return out;
   }
 
   Future<void> _registerForEvent() async {
-    if (widget.isPastEvent) return;
-
+    if (widget.isPastEvent) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Cannot register for past events'),
+        backgroundColor: Colors.red,
+      ));
+      return;
+    }
+    if (widget.event.slotsLeft <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Event is full! No slots available.'),
+        backgroundColor: Colors.red,
+      ));
+      return;
+    }
+    final formError = _validateDynamicFields();
+    if (formError != null) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(formError),
+        backgroundColor: Colors.red,
+      ));
+      return;
+    }
+    setState(() => _isLoading = true);
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please login to register')),
       );
+      setState(() => _isLoading = false);
       return;
     }
-
-    final existingReg = await FirebaseFirestore.instance
-        .collection('registrations')
-        .where('userId', isEqualTo: user.uid)
-        .where('eventId', isEqualTo: widget.event.id)
-        .get();
-
-    if (existingReg.docs.isNotEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('You are already registered!')),
-      );
-      return;
-    }
-
-    if (!_formKey.currentState!.validate()) return;
-
-    setState(() => _isLoading = true);
-
     try {
-      final registrationRef = FirebaseFirestore.instance
+      final formResponses = _collectFormResponses();
+      final regRef = FirebaseFirestore.instance
           .collection('registrations')
           .doc('${user.uid}_${widget.event.id}');
-
-      await FirebaseFirestore.instance.runTransaction((transaction) async {
-        final regDoc = await transaction.get(registrationRef);
-        if (regDoc.exists) {
-          throw Exception('Already registered');
-        }
-
-        final eventRef = FirebaseFirestore.instance
-            .collection('events')
-            .doc(widget.event.id);
-        final eventDoc = await transaction.get(eventRef);
-
-        if (!eventDoc.exists) {
-          throw Exception('Event not found');
-        }
-
-        final eventData = eventDoc.data()!;
-        final currentSlotsLeft = (eventData['slotsLeft'] ?? 0) as int;
-
-        if (currentSlotsLeft <= 0) {
-          throw Exception('No slots available');
-        }
-
-        transaction.update(eventRef, {
-          'slotsLeft': currentSlotsLeft - 1,
-        });
-
-        transaction.set(registrationRef, {
+      await FirebaseFirestore.instance.runTransaction((tx) async {
+        final regDoc = await tx.get(regRef);
+        if (regDoc.exists) throw Exception('You are already registered for this event');
+        final evRef = FirebaseFirestore.instance.collection('events').doc(widget.event.id);
+        final evDoc = await tx.get(evRef);
+        if (!evDoc.exists) throw Exception('Event not found');
+        final slots = evDoc.data()!['slotsLeft'] as int? ?? 0;
+        if (slots <= 0) throw Exception('No slots available for this event');
+        tx.update(evRef, {'slotsLeft': slots - 1});
+        tx.set(regRef, {
           'userId': user.uid,
           'eventId': widget.event.id,
-          'fullName': _fullNameCtrl.text.trim(),
-          'studentId': _studentIdCtrl.text.trim(),
-          'email': _emailCtrl.text.trim(),
-          'contact': _contactCtrl.text.trim(),
           'registeredAt': FieldValue.serverTimestamp(),
+          'status': 'registered',
+          if (formResponses.isNotEmpty) 'formResponses': formResponses,
         });
       });
-
-      await activity_log.ActivityLogger.log(
-        action: 'Student registered for event: ${widget.event.title}',
-        module: 'Student Mobile',
-        severity: 'info',
-        details: {'eventId': widget.event.id, 'uid': user.uid, 'organizer': widget.event.organizer},
-      );
-
       widget.onRegistered();
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Successfully registered for event!'),
-            backgroundColor: AppColors.primaryDark,
-          ),
-        );
-        setState(() => _showRegistrationForm = false);
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Successfully registered for event!'),
+          backgroundColor: Colors.green,
+        ));
         Navigator.pop(context);
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(e.toString().replaceAll('Exception: ', '')),
-            backgroundColor: Colors.red,
-          ),
-        );
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(e.toString().replaceAll('Exception: ', '')),
+          backgroundColor: Colors.red,
+        ));
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+  InputDecoration _fieldDecoration(String hint) => InputDecoration(
+    hintText: hint,
+    filled: true,
+    fillColor: Colors.grey.shade50,
+    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+    border: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(10),
+      borderSide: BorderSide(color: Colors.grey.shade300),
+    ),
+    enabledBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(10),
+      borderSide: BorderSide(color: Colors.grey.shade300),
+    ),
+    focusedBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(10),
+      borderSide: const BorderSide(color: AppColors.primaryDark, width: 1.5),
+    ),
+  );
+
+  Widget _buildDynamicField(Map<String, dynamic> field) {
+    final id = field['id'] as String;
+    final type = (field['type'] ?? 'short_text') as String;
+    final label = (field['label'] ?? '').toString();
+    final desc = (field['description'] ?? '').toString();
+    final required = field['required'] == true;
+    final options = (field['options'] as List?)?.map((o) => o.toString()).toList() ?? [];
+
+    Widget input;
+    switch (type) {
+      case 'paragraph':
+        input = TextField(
+          controller: _fieldControllers[id],
+          maxLines: 4,
+          decoration: _fieldDecoration('Your answer'),
+        );
+        break;
+      case 'email':
+        input = TextField(
+          controller: _fieldControllers[id],
+          keyboardType: TextInputType.emailAddress,
+          decoration: _fieldDecoration('someone@email.com'),
+        );
+        break;
+      case 'number':
+        input = TextField(
+          controller: _fieldControllers[id],
+          keyboardType: TextInputType.number,
+          decoration: _fieldDecoration('0'),
+        );
+        break;
+      case 'date':
+        input = TextField(
+          controller: _fieldControllers[id],
+          readOnly: true,
+          decoration: _fieldDecoration('Select date').copyWith(
+            suffixIcon: const Icon(Icons.calendar_today_outlined, size: 18),
+          ),
+          onTap: () async {
+            final picked = await showDatePicker(
+              context: context,
+              initialDate: DateTime.now(),
+              firstDate: DateTime(2020),
+              lastDate: DateTime(2100),
+            );
+            if (picked != null) {
+              setState(() => _fieldControllers[id]!.text =
+                  DateFormat('MMM dd, yyyy').format(picked));
+            }
+          },
+        );
+        break;
+      case 'multiple_choice':
+        input = Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: options
+              .map((o) => RadioListTile<String>(
+                    value: o,
+                    groupValue: _singleChoice[id],
+                    title: Text(o, style: const TextStyle(fontSize: 13)),
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                    onChanged: (v) => setState(() => _singleChoice[id] = v),
+                  ))
+              .toList(),
+        );
+        break;
+      case 'dropdown':
+        input = DropdownButtonFormField<String>(
+          initialValue: _singleChoice[id],
+          decoration: _fieldDecoration('Select an option'),
+          items: options
+              .map((o) => DropdownMenuItem(
+                    value: o,
+                    child: Text(o, style: const TextStyle(fontSize: 13)),
+                  ))
+              .toList(),
+          onChanged: (v) => setState(() => _singleChoice[id] = v),
+        );
+        break;
+      case 'checkboxes':
+        input = Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: options
+              .map((o) => CheckboxListTile(
+                    value: _multiChoice[id]?.contains(o) ?? false,
+                    title: Text(o, style: const TextStyle(fontSize: 13)),
+                    controlAffinity: ListTileControlAffinity.leading,
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                    onChanged: (v) => setState(() {
+                      _multiChoice.putIfAbsent(id, () => {});
+                      if (v == true) {
+                        _multiChoice[id]!.add(o);
+                      } else {
+                        _multiChoice[id]!.remove(o);
+                      }
+                    }),
+                  ))
+              .toList(),
+        );
+        break;
+      default:
+        input = TextField(
+          controller: _fieldControllers[id],
+          decoration: _fieldDecoration('Your answer'),
+        );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          RichText(
+            text: TextSpan(children: [
+              TextSpan(
+                text: label,
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.black87,
+                ),
+              ),
+              if (required)
+                const TextSpan(
+                  text: ' *',
+                  style: TextStyle(color: Colors.red, fontWeight: FontWeight.w700),
+                ),
+            ]),
+          ),
+          if (desc.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 2, bottom: 6),
+              child: Text(
+                desc,
+                style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+              ),
+            )
+          else
+            const SizedBox(height: 6),
+          input,
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRegistrationFormSection() {
+    if (_formDef == null) return const SizedBox.shrink();
+    final fields = (_formDef!['fields'] as List).cast<Map<String, dynamic>>();
+    final title = (_formDef!['title'] ?? 'Registration Form').toString();
+    final desc = (_formDef!['description'] ?? '').toString();
+    return Container(
+      margin: const EdgeInsets.only(bottom: 24),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade50,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+          if (desc.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text(
+                desc,
+                style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
+              ),
+            ),
+          const SizedBox(height: 14),
+          ...fields.map(_buildDynamicField),
+        ],
+      ),
+    );
   }
 
   @override
@@ -1421,27 +1642,8 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
           icon: const Icon(Icons.arrow_back, color: Colors.black87),
           onPressed: () => Navigator.pop(context),
         ),
-        title: const Text(
-          'Event Details',
-          style: TextStyle(color: Colors.black87),
-        ),
+        title: const Text('Event Details', style: TextStyle(color: Colors.black87)),
         centerTitle: true,
-        actions: [
-          if (!widget.isPastEvent && !widget.event.isRegistered)
-            TextButton.icon(
-              onPressed: () {
-                setState(() => _showRegistrationForm = !_showRegistrationForm);
-              },
-              icon: Icon(
-                _showRegistrationForm ? Icons.close : Icons.edit_note,
-                color: AppColors.primaryDark,
-              ),
-              label: Text(
-                _showRegistrationForm ? 'Close' : 'Register',
-                style: TextStyle(color: AppColors.primaryDark),
-              ),
-            ),
-        ],
       ),
       body: SingleChildScrollView(
         child: Column(
@@ -1462,34 +1664,19 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                   const SizedBox(height: 12),
                   Text(
                     widget.event.title,
-                    style: const TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.w800,
-                    ),
+                    style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800),
                   ),
                   const SizedBox(height: 4),
                   Text(
                     widget.event.subtitle,
-                    style: const TextStyle(
-                      fontSize: 14,
-                      color: Colors.grey,
-                    ),
+                    style: const TextStyle(fontSize: 14, color: Colors.grey),
                   ),
                   const SizedBox(height: 20),
-                  _InfoRow(
-                    icon: Icons.calendar_today_outlined,
-                    text: widget.event.date,
-                  ),
+                  _InfoRow(icon: Icons.calendar_today_outlined, text: widget.event.date),
                   const SizedBox(height: 12),
-                  _InfoRow(
-                    icon: Icons.access_time,
-                    text: widget.event.time,
-                  ),
+                  _InfoRow(icon: Icons.access_time, text: widget.event.time),
                   const SizedBox(height: 12),
-                  _InfoRow(
-                    icon: Icons.location_on_outlined,
-                    text: widget.event.location,
-                  ),
+                  _InfoRow(icon: Icons.location_on_outlined, text: widget.event.location),
                   const SizedBox(height: 12),
                   _InfoRow(
                     icon: Icons.people_outline,
@@ -1498,95 +1685,103 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                   const SizedBox(height: 20),
                   const Text(
                     'Description',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w700,
-                    ),
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
                   ),
                   const SizedBox(height: 8),
                   Text(
                     widget.event.description,
-                    style: const TextStyle(
-                      fontSize: 14,
-                      color: Colors.black87,
-                      height: 1.4,
-                    ),
+                    style: const TextStyle(fontSize: 14, color: Colors.black87, height: 1.4),
                   ),
                   const SizedBox(height: 30),
 
-                  // ── REGISTRATION FORM ──
-                  if (_showRegistrationForm && !widget.isPastEvent && !widget.event.isRegistered)
-                    _buildRegistrationForm(),
+                  // ── Dynamic registration form (loading spinner while fetching) ──
+                  if (!widget.isPastEvent && !widget.event.isRegistered && _loadingForm)
+                    const Center(
+                      child: Padding(
+                        padding: EdgeInsets.symmetric(vertical: 12),
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                    ),
+                  if (!widget.isPastEvent && !widget.event.isRegistered && !_loadingForm)
+                    _buildRegistrationFormSection(),
 
-                  // ── STATUS BUTTONS ──
-                  if (!_showRegistrationForm) ...[
-                    if (!widget.isPastEvent && !widget.event.isRegistered)
-                      SizedBox(
-                        width: double.infinity,
-                        child: ElevatedButton(
-                          onPressed: () {
-                            setState(() => _showRegistrationForm = true);
-                          },
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: AppColors.primaryDark,
-                            padding: const EdgeInsets.symmetric(vertical: 14),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
+                  // ── Register / status button ──
+                  if (!widget.isPastEvent && !widget.event.isRegistered)
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: _isLoading || _loadingForm ? null : _registerForEvent,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor:
+                              widget.event.slotsLeft > 0 ? AppColors.primaryDark : Colors.grey,
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
                           ),
-                          child: const Text(
-                            'Register Now',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w700,
-                            ),
+                        ),
+                        child: _isLoading
+                            ? const SizedBox(
+                                height: 20,
+                                width: 20,
+                                child: CircularProgressIndicator(
+                                  color: Colors.white,
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : Text(
+                                widget.event.slotsLeft > 0
+                                    ? 'Register Now (${widget.event.slotsLeft} slots left)'
+                                    : 'Event Full',
+                                style: const TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w700,
+                                  color: Colors.white,
+                                ),
+                              ),
+                      ),
+                    ),
+
+                  if (widget.event.isRegistered && !widget.isPastEvent)
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      decoration: BoxDecoration(
+                        color: Colors.green.shade50,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.green.shade200),
+                      ),
+                      child: const Center(
+                        child: Text(
+                          '✓ You are registered',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.green,
                           ),
                         ),
                       ),
-                    if (widget.event.isRegistered && !widget.isPastEvent)
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        decoration: BoxDecoration(
-                          color: Colors.green.shade50,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: Colors.green.shade200),
-                        ),
-                        child: const Center(
-                          child: Text(
-                            '✓ You are registered',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w700,
-                              color: Colors.green,
-                            ),
+                    ),
+
+                  if (widget.isPastEvent)
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade100,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Center(
+                        child: Text(
+                          'Past Event',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.grey,
                           ),
                         ),
                       ),
-                    if (widget.event.isRegistered && !widget.isPastEvent) ...[
-                      const SizedBox(height: 16),
-                      _WebinarCodeEntry(eventDocId: widget.event.id),
-                    ],
-                    if (widget.isPastEvent)
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        decoration: BoxDecoration(
-                          color: Colors.grey.shade100,
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: const Center(
-                          child: Text(
-                            'Past Event',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w700,
-                              color: Colors.grey,
-                            ),
-                          ),
-                        ),
-                      ),
-                  ],
+                    ),
+
                   const SizedBox(height: 30),
                 ],
               ),
@@ -1597,431 +1792,12 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     );
   }
 
+  // ── Kept as a private stub so nothing else in the file breaks ──
   Widget _buildRegistrationForm() {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF8F9FA),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.grey.shade200),
-      ),
-      child: Form(
-        key: _formKey,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'EVENT REGISTRATION',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w700,
-                color: Colors.black87,
-              ),
-            ),
-            const SizedBox(height: 16),
-
-            const Text(
-              'Full Name',
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                color: Colors.black87,
-              ),
-            ),
-            const SizedBox(height: 6),
-            TextFormField(
-              controller: _fullNameCtrl,
-              decoration: InputDecoration(
-                hintText: 'Full Name',
-                filled: true,
-                fillColor: Colors.white,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  borderSide: BorderSide.none,
-                ),
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 14,
-                  vertical: 12,
-                ),
-              ),
-              validator: (value) =>
-                  value?.trim().isEmpty ?? true ? 'Full Name is required' : null,
-            ),
-            const SizedBox(height: 14),
-
-            const Text(
-              'Student Number',
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                color: Colors.black87,
-              ),
-            ),
-            const SizedBox(height: 6),
-            TextFormField(
-              controller: _studentIdCtrl,
-              decoration: InputDecoration(
-                hintText: 'e.g. 2023-12345',
-                filled: true,
-                fillColor: Colors.white,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  borderSide: BorderSide.none,
-                ),
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 14,
-                  vertical: 12,
-                ),
-              ),
-              validator: (value) =>
-                  value?.trim().isEmpty ?? true ? 'Student Number is required' : null,
-            ),
-            const SizedBox(height: 14),
-
-            const Text(
-              'Email Address',
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                color: Colors.black87,
-              ),
-            ),
-            const SizedBox(height: 6),
-            TextFormField(
-              controller: _emailCtrl,
-              keyboardType: TextInputType.emailAddress,
-              decoration: InputDecoration(
-                hintText: 'john.doe@cict.edu.ph',
-                filled: true,
-                fillColor: Colors.white,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  borderSide: BorderSide.none,
-                ),
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 14,
-                  vertical: 12,
-                ),
-              ),
-              validator: (value) {
-                if (value?.trim().isEmpty ?? true) return 'Email is required';
-                if (!value!.contains('@')) return 'Enter a valid email';
-                return null;
-              },
-            ),
-            const SizedBox(height: 14),
-
-            const Text(
-              'Contact Number',
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                color: Colors.black87,
-              ),
-            ),
-            const SizedBox(height: 6),
-            TextFormField(
-              controller: _contactCtrl,
-              keyboardType: TextInputType.phone,
-              decoration: InputDecoration(
-                hintText: '09xx xxx xxxx',
-                filled: true,
-                fillColor: Colors.white,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  borderSide: BorderSide.none,
-                ),
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 14,
-                  vertical: 12,
-                ),
-              ),
-              validator: (value) {
-                if (value?.trim().isEmpty ?? true) return 'Contact number is required';
-                if (value!.length < 11) return 'Enter a valid contact number';
-                return null;
-              },
-            ),
-            const SizedBox(height: 20),
-
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: Colors.grey.shade200),
-              ),
-              child: Column(
-                children: [
-                  Row(
-                    children: [
-                      Icon(Icons.upload_file, color: AppColors.primaryDark),
-                      const SizedBox(width: 8),
-                      const Text(
-                        'Upload ID (School or Government)',
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(vertical: 20),
-                    decoration: BoxDecoration(
-                      color: Colors.grey.shade50,
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(
-                        color: Colors.grey.shade300,
-                        width: 1,
-                      ),
-                    ),
-                    child: Column(
-                      children: [
-                        Icon(
-                          Icons.cloud_upload_outlined,
-                          size: 32,
-                          color: Colors.grey.shade400,
-                        ),
-                        const SizedBox(height: 8),
-                        const Text(
-                          'Click to upload or drag and drop',
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: Colors.grey,
-                          ),
-                        ),
-                        const Text(
-                          'PNG, JPG or PDF (MAX. 5MB)',
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: Colors.grey,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 20),
-
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: _isLoading ? null : _registerForEvent,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primaryDark,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-                child: _isLoading
-                    ? const SizedBox(
-                        height: 20,
-                        width: 20,
-                        child: CircularProgressIndicator(
-                          color: Colors.white,
-                          strokeWidth: 2,
-                        ),
-                      )
-                    : const Text(
-                        'Complete Registration',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
+    // Intentionally empty — dynamic form is now rendered via
+    // _buildRegistrationFormSection() above.
+    return const SizedBox.shrink();
   }
-}
-
-// ─────────────────────────────────────────────────────────────
-// WEBINAR CODE ENTRY — only renders something when an organizer has an
-// active webinar attendance session open for this event. Mirrors the
-// check-in/check-out phase the org side is currently running, so the
-// student always knows exactly which code they're being asked for.
-// ─────────────────────────────────────────────────────────────
-class _WebinarCodeEntry extends StatefulWidget {
-  final String eventDocId;
-  const _WebinarCodeEntry({required this.eventDocId});
-
-  @override
-  State<_WebinarCodeEntry> createState() => _WebinarCodeEntryState();
-}
-
-class _WebinarCodeEntryState extends State<_WebinarCodeEntry> {
-  final _codeCtrl = TextEditingController();
-  bool _submitting = false;
-
-  @override
-  void dispose() {
-    _codeCtrl.dispose();
-    super.dispose();
-  }
-
-  Future<void> _submit(String type) async {
-    final user = FirebaseAuth.instance.currentUser;
-    final code = _codeCtrl.text.trim();
-    if (user == null || code.isEmpty) return;
-
-    setState(() => _submitting = true);
-    try {
-      final result = await WebinarAttendanceService.submitCode(
-        eventDocId: widget.eventDocId,
-        studentUid: user.uid,
-        submittedCode: code,
-        type: type,
-      );
-      if (!mounted) return;
-      if (result == 'success') {
-        _codeCtrl.clear();
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(type == 'checkout' ? 'Checked out successfully!' : 'Checked in successfully!'),
-            backgroundColor: Colors.green,
-          ),
-        );
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(_resultMessage(result)), backgroundColor: Colors.red),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _submitting = false);
-    }
-  }
-
-  String _resultMessage(String result) {
-    switch (result) {
-      case 'invalid_code': return 'That code is incorrect — check the screen and try again.';
-      case 'expired': return 'That code has expired — a new one should be showing now.';
-      case 'session_inactive': return 'Attendance is not currently open for this event.';
-      case 'no_active_code': return 'No code has been generated yet — try again in a moment.';
-      case 'duplicate': return 'You have already submitted this.';
-      case 'not_checked_in': return 'You need to check in before you can check out.';
-      case 'not_registered': return 'Your account could not be verified.';
-      default: return 'Something went wrong — please try again.';
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return const SizedBox.shrink();
-
-    return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-      stream: WebinarAttendanceService.sessionStream(widget.eventDocId),
-      builder: (context, sessionSnap) {
-        final session = sessionSnap.data?.data();
-        if (session == null || session['isActive'] != true) return const SizedBox.shrink();
-        final phase = session['phase'] as String? ?? 'checkin';
-
-        return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-          stream: FirebaseFirestore.instance
-              .collection('events')
-              .doc(widget.eventDocId)
-              .collection('attendances')
-              .where('studentId', isEqualTo: user.uid)
-              .limit(1)
-              .snapshots(),
-          builder: (context, attSnap) {
-            final attData = attSnap.data?.docs.isNotEmpty == true ? attSnap.data!.docs.first.data() : null;
-            return _buildCard(phase, attData);
-          },
-        );
-      },
-    );
-  }
-
-  Widget _buildCard(String phase, Map<String, dynamic>? attData) {
-    final hasCheckedIn = attData != null;
-    final hasCheckedOut = hasCheckedIn && attData['checkOutAt'] != null;
-
-    if (phase == 'checkin' && hasCheckedIn) {
-      return _statusBanner('✓ You are checked in', AppColors.primaryDark);
-    }
-    if (phase == 'checkout') {
-      if (hasCheckedOut) return _statusBanner('✓ You are checked out', AppColors.primaryDark);
-      if (!hasCheckedIn) {
-        return _statusBanner('Check-out is open, but you never checked in', Colors.orange);
-      }
-    }
-
-    final isCheckOut = phase == 'checkout';
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppColors.primaryDark.withAlpha(13),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.primaryDark.withAlpha(64)),
-      ),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(children: [
-          Icon(Icons.podcasts_rounded, size: 18, color: AppColors.primaryDark),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              isCheckOut ? 'Enter the check-out code shown on screen' : 'Enter the check-in code shown on screen',
-              style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700, color: AppColors.primaryDark),
-            ),
-          ),
-        ]),
-        const SizedBox(height: 12),
-        Row(children: [
-          Expanded(
-            child: TextField(
-              controller: _codeCtrl,
-              textCapitalization: TextCapitalization.characters,
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, letterSpacing: 4),
-              decoration: InputDecoration(
-                hintText: 'CODE',
-                filled: true,
-                fillColor: Colors.white,
-                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: Colors.grey.shade300)),
-              ),
-            ),
-          ),
-          const SizedBox(width: 10),
-          ElevatedButton(
-            onPressed: _submitting ? null : () => _submit(phase),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primaryDark,
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-            ),
-            child: _submitting
-                ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                : const Text('Submit', style: TextStyle(fontWeight: FontWeight.w700)),
-          ),
-        ]),
-      ]),
-    );
-  }
-
-  Widget _statusBanner(String text, Color color) => Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(vertical: 14),
-        decoration: BoxDecoration(
-          color: color.withAlpha(20),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: color.withAlpha(64)),
-        ),
-        child: Center(
-          child: Text(text, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: color)),
-        ),
-      );
 }
 
 class _InfoRow extends StatelessWidget {
