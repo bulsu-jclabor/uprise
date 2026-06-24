@@ -500,85 +500,55 @@ class _OrgEventProposalsScreenState extends State<OrgEventProposalsScreen> {
   }
 
   Future<void> _publishProposal(String proposalId) async {
-  // Prevent double-tap
   if (_publishingIds.contains(proposalId)) return;
   _publishingIds.add(proposalId);
 
   try {
-    // 1. Check authentication
     final user = FirebaseAuth.instance.currentUser;
-    if (user == null) {
-      throw Exception('You must be logged in to publish.');
-    }
+    if (user == null) throw Exception('You must be logged in to publish.');
 
-    // 2. Get the proposal document
     final doc = await FirebaseFirestore.instance
         .collection('event_proposals')
         .doc(proposalId)
         .get();
-    if (!doc.exists) {
-      throw Exception('Proposal not found.');
-    }
-
+    if (!doc.exists) throw Exception('Proposal not found.');
     final data = doc.data() as Map<String, dynamic>;
 
-    // 3. Verify status is 'approved'
     if (data['status'] != 'approved') {
-      throw Exception('Proposal is not approved (status: ${data['status']}).');
+      throw Exception('Proposal is not approved.');
     }
 
-    // 4. Validate required fields
+    // Validate required fields...
     final title = (data['title'] ?? '').toString().trim();
     final description = (data['description'] ?? '').toString().trim();
     final location = (data['location'] ?? '').toString().trim();
     final proposalDate = data['date'] as Timestamp?;
-
     if (title.isEmpty) throw Exception('Missing event title.');
     if (description.isEmpty) throw Exception('Missing description.');
     if (location.isEmpty) throw Exception('Missing location.');
     if (proposalDate == null) throw Exception('Missing event date.');
 
-    // 5. Upload image if present (base64)
-    String bannerUrl = '';
-    final imgB64 = data['imageBase64'] as String?;
-    if (imgB64 != null && imgB64.isNotEmpty) {
-      try {
-        final bytes = base64Decode(imgB64);
-        final imageName = (data['imageName'] ?? 'banner.jpg').toString();
-        final ext = imageName.contains('.') ? imageName.split('.').last.toLowerCase() : 'jpg';
-        const contentTypes = {'png': 'image/png', 'gif': 'image/gif', 'webp': 'image/webp'};
-        final contentType = contentTypes[ext] ?? 'image/jpeg';
-        final ref = FirebaseStorage.instance.ref().child('event_banners/$proposalId.$ext');
-        await ref.putData(bytes, SettableMetadata(contentType: contentType));
-        bannerUrl = await ref.getDownloadURL();
-      } catch (e) {
-        debugPrint('⚠️ Image upload failed: $e');
-        // Continue without image – it's not critical
-      }
-    }
-
-    // 6. Get org name & logo if needed
+    // Get org details
     String orgName = (data['orgName'] ?? '').toString();
     String logoUrl = (data['orgLogoUrl'] as String?) ?? '';
     try {
-      final orgDoc = await FirebaseFirestore.instance.collection('organizations').doc(widget.orgId).get();
+      final orgDoc = await FirebaseFirestore.instance
+          .collection('organizations')
+          .doc(widget.orgId)
+          .get();
       if (orgDoc.exists) {
         final orgData = orgDoc.data() ?? {};
-        if (orgName.isEmpty) orgName = (orgData['name'] ?? orgData['orgName'] ?? '').toString();
+        if (orgName.isEmpty) orgName = (orgData['name'] ?? '').toString();
         if (logoUrl.isEmpty) logoUrl = (orgData['logoUrl'] ?? '').toString();
       }
     } catch (_) {}
 
-    // 7. Build event data
+    // Prepare event data (without bannerUrl yet)
     final date = proposalDate.toDate();
-    final startTime = (data['startTime'] ?? data['time'] ?? '').toString();
+    final startTime = (data['startTime'] ?? '').toString();
     final endTime = (data['endTime'] ?? '').toString();
     final capacity = (data['capacity'] is num) ? (data['capacity'] as num).toInt() : 0;
     final audience = (data['audience'] ?? 'Public').toString();
-    final guestSpeaker = (data['guestSpeaker'] ?? '').toString();
-    final resources = (data['resources'] is List) ? List<String>.from(data['resources']) : [];
-    final labPreparation = (data['labPreparation'] is List) ? List<String>.from(data['labPreparation']) : [];
-    final tags = (data['tags'] is List) ? List<String>.from(data['tags']) : [];
 
     final eventData = {
       'orgId': widget.orgId,
@@ -593,34 +563,27 @@ class _OrgEventProposalsScreenState extends State<OrgEventProposalsScreen> {
       'endTime': endTime,
       'capacity': capacity,
       'slotsLeft': capacity,
-      'guestSpeaker': guestSpeaker,
-      'resources': resources,
-      'labPreparation': labPreparation,
-      'tags': tags,
       'status': 'approved',
       'isPublic': true,
-      if (bannerUrl.isNotEmpty) 'bannerUrl': bannerUrl,
       'logoUrl': logoUrl,
       'createdFromProposalId': proposalId,
+      // bannerUrl will be added later
     };
 
-    // 8. Publish – either update existing event or create new one
+    // ─── NOW SAVE EVENT IMMEDIATELY (no image yet) ───
     final existingEventId = (data['publishedEventId'] ?? '').toString();
     String eventId;
 
     if (existingEventId.isNotEmpty) {
-      // Update existing event
       eventId = existingEventId;
       await FirebaseFirestore.instance.collection('events').doc(eventId).update(eventData);
     } else {
-      // Create new event
       final eventRef = FirebaseFirestore.instance.collection('events').doc();
       eventId = eventRef.id;
       await eventRef.set({
         ...eventData,
         'createdAt': FieldValue.serverTimestamp(),
       });
-      // Link proposal to event
       await FirebaseFirestore.instance
           .collection('event_proposals')
           .doc(proposalId)
@@ -631,19 +594,14 @@ class _OrgEventProposalsScreenState extends State<OrgEventProposalsScreen> {
       });
     }
 
-    // 9. Log activity
-    await activity_log.ActivityLogger.log(
-      action: existingEventId.isNotEmpty ? 'update_published_event' : 'publish_event_from_proposal',
-      module: 'event_proposals',
-      details: {
-        'orgId': widget.orgId,
-        'proposalId': proposalId,
-        'eventId': eventId,
-        'eventTitle': title,
-      },
-    );
+    // ─── UPLOAD IMAGE IN BACKGROUND ──────────────────────────────
+    final imgB64 = data['imageBase64'] as String?;
+    if (imgB64 != null && imgB64.isNotEmpty) {
+      // Run upload in the background (don't await unless you want to update after)
+      unawaited(_uploadEventImage(imgB64, data['imageName'], eventId));
+    }
 
-    // 10. Show success
+    // Show success immediately
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -655,12 +613,16 @@ class _OrgEventProposalsScreenState extends State<OrgEventProposalsScreen> {
         ),
       );
     }
+
+    // Log activity (optional)
+    await activity_log.ActivityLogger.log(
+      action: existingEventId.isNotEmpty ? 'update_published_event' : 'publish_event_from_proposal',
+      module: 'event_proposals',
+      details: {'orgId': widget.orgId, 'proposalId': proposalId, 'eventId': eventId},
+    );
   } catch (e, stack) {
-    // 11. Print full error to console (very important!)
     debugPrint('❌ PUBLISH ERROR: $e');
     debugPrint('Stack trace: $stack');
-
-    // Show detailed error to user
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -673,6 +635,31 @@ class _OrgEventProposalsScreenState extends State<OrgEventProposalsScreen> {
     }
   } finally {
     _publishingIds.remove(proposalId);
+  }
+}
+
+// Separate function for image upload
+Future<void> _uploadEventImage(String base64Image, String? imageName, String eventId) async {
+  try {
+    final bytes = base64Decode(base64Image);
+    final ext = (imageName?.contains('.') ?? false)
+        ? imageName!.split('.').last.toLowerCase()
+        : 'jpg';
+    const contentTypes = {'png': 'image/png', 'gif': 'image/gif', 'webp': 'image/webp'};
+    final contentType = contentTypes[ext] ?? 'image/jpeg';
+    final ref = FirebaseStorage.instance
+        .ref()
+        .child('event_banners/$eventId.$ext');
+    await ref.putData(bytes, SettableMetadata(contentType: contentType));
+    final bannerUrl = await ref.getDownloadURL();
+
+    // Update the event document with the banner URL
+    await FirebaseFirestore.instance
+        .collection('events')
+        .doc(eventId)
+        .update({'bannerUrl': bannerUrl});
+  } catch (e) {
+    debugPrint('⚠️ Background image upload failed: $e');
   }
 }
 
@@ -1216,9 +1203,9 @@ class _OrgEventProposalsScreenState extends State<OrgEventProposalsScreen> {
                 onEdit: status == 'pending' ? () => _openEditModal(docId, data) : null,
                 onRevise: status == 'for_review' ? () => _openEditModal(docId, data) : null,
                 onFormBuilder: status == 'approved' ? () => _openFormBuilder(docId, data) : null,
-                onPublish: status == 'approved'
-                    ? () => _confirmPublish(docId, data)
-                    : null,
+                onPublish: (status == 'approved' && !isPublished)
+    ? () => _confirmPublish(docId, data)
+    : null,
                 onLiveTracker: isPublished ? () => _openLiveTrackerModal(data) : null,
                 onArchive: (status == 'approved' || status == 'rejected')
                     ? () => _confirmArchive(docId, data['title'] ?? 'Proposal')
