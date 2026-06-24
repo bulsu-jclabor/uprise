@@ -794,7 +794,7 @@ class _CategoryBadge extends StatelessWidget {
   }
 }
 
-// ─── EVENT DETAIL SCREEN ──────────────────────────────────────
+// ─── EVENT DETAIL SCREEN (with registration popup) ────────────
 class EventDetailScreen extends StatefulWidget {
   final EventModel event;
   final VoidCallback onRegistered;
@@ -814,7 +814,7 @@ class EventDetailScreen extends StatefulWidget {
 class _EventDetailScreenState extends State<EventDetailScreen> {
   bool _isLoading = false;
   bool _loadingForm = true;
-  bool _isRegistered = false; // added
+  bool _isRegistered = false;
   Map<String, dynamic>? _formDef;
   final Map<String, TextEditingController> _fieldControllers = {};
   final Map<String, String?> _singleChoice = {};
@@ -935,13 +935,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
       ));
       return;
     }
-    if (widget.event.slotsLeft <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('Event is full! No slots available.'),
-        backgroundColor: Colors.red,
-      ));
-      return;
-    }
+    // No slot check – org does not enforce capacity limits.
     final formError = _validateDynamicFields();
     if (formError != null) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -970,9 +964,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
         final evRef = FirebaseFirestore.instance.collection('events').doc(widget.event.id);
         final evDoc = await tx.get(evRef);
         if (!evDoc.exists) throw Exception('Event not found');
-        final slots = evDoc.data()!['slotsLeft'] as int? ?? 0;
-        if (slots <= 0) throw Exception('No slots available for this event');
-        tx.update(evRef, {'slotsLeft': slots - 1});
+        // No slot decrement – org does not enforce limits.
         tx.set(regRef, {
           'userId': user.uid,
           'eventId': widget.event.id,
@@ -1021,7 +1013,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
         ),
       );
 
-  Widget _buildDynamicField(Map<String, dynamic> field) {
+  Widget _buildDynamicField(Map<String, dynamic> field, {VoidCallback? onStateChanged}) {
     final id = field['id'] as String;
     final type = (field['type'] ?? 'short_text') as String;
     final label = (field['label'] ?? '').toString();
@@ -1067,8 +1059,8 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
               lastDate: DateTime(2100),
             );
             if (picked != null) {
-              setState(() => _fieldControllers[id]!.text =
-                  DateFormat('MMM dd, yyyy').format(picked));
+              _fieldControllers[id]!.text = DateFormat('MMM dd, yyyy').format(picked);
+              if (onStateChanged != null) onStateChanged();
             }
           },
         );
@@ -1083,7 +1075,14 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                     title: Text(o, style: const TextStyle(fontSize: 13)),
                     dense: true,
                     contentPadding: EdgeInsets.zero,
-                    onChanged: (v) => setState(() => _singleChoice[id] = v),
+                    onChanged: (v) {
+                      _singleChoice[id] = v;
+                      if (onStateChanged != null) {
+                        onStateChanged();
+                      } else {
+                        setState(() {});
+                      }
+                    },
                   ))
               .toList(),
         );
@@ -1098,7 +1097,14 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                     child: Text(o, style: const TextStyle(fontSize: 13)),
                   ))
               .toList(),
-          onChanged: (v) => setState(() => _singleChoice[id] = v),
+          onChanged: (v) {
+            _singleChoice[id] = v;
+            if (onStateChanged != null) {
+              onStateChanged();
+            } else {
+              setState(() {});
+            }
+          },
         );
         break;
       case 'checkboxes':
@@ -1111,14 +1117,19 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                     controlAffinity: ListTileControlAffinity.leading,
                     dense: true,
                     contentPadding: EdgeInsets.zero,
-                    onChanged: (v) => setState(() {
+                    onChanged: (v) {
                       _multiChoice.putIfAbsent(id, () => {});
                       if (v == true) {
                         _multiChoice[id]!.add(o);
                       } else {
                         _multiChoice[id]!.remove(o);
                       }
-                    }),
+                      if (onStateChanged != null) {
+                        onStateChanged();
+                      } else {
+                        setState(() {});
+                      }
+                    },
                   ))
               .toList(),
         );
@@ -1168,37 +1179,97 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     );
   }
 
-  Widget _buildRegistrationFormSection() {
-    if (_formDef == null) return const SizedBox.shrink();
-    final fields = (_formDef!['fields'] as List).cast<Map<String, dynamic>>();
-    final title = (_formDef!['title'] ?? 'Registration Form').toString();
-    final desc = (_formDef!['description'] ?? '').toString();
-    return Container(
-      margin: const EdgeInsets.only(bottom: 24),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.grey.shade50,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey.shade200),
+  List<Widget> _buildDialogFields(VoidCallback setDialogState) {
+  if (_formDef == null) return [];
+  final fields = (_formDef!['fields'] as List).cast<Map<String, dynamic>>();
+  final title = (_formDef!['title'] ?? 'Registration Form').toString();
+  final desc = (_formDef!['description'] ?? '').toString();
+
+  return [
+    Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+    if (desc.isNotEmpty)
+      Padding(
+        padding: const EdgeInsets.only(top: 4),
+        child: Text(
+          desc,
+          style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
+        ),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
-          if (desc.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.only(top: 4),
-              child: Text(
-                desc,
-                style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
+    const SizedBox(height: 16),
+    ...fields.map((f) => _buildDynamicField(f, onStateChanged: setDialogState)),
+  ];
+}
+
+void _showRegistrationDialog() {
+  if (_formDef == null) {
+    _registerForEvent();
+    return;
+  }
+  showDialog(
+    context: context,
+    barrierDismissible: false,
+    builder: (ctx) {
+      return StatefulBuilder(
+        builder: (ctx, setDialogState) {
+          // Here we pass a VoidCallback that calls setDialogState to trigger rebuild
+          return AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+            title: Row(
+              children: [
+                const Icon(Icons.edit_note, color: AppColors.primaryDark),
+                const SizedBox(width: 10),
+                const Text('Register for Event'),
+              ],
+            ),
+            content: SingleChildScrollView(
+              child: Container(
+                width: 450,
+                constraints: BoxConstraints(
+                  maxHeight: MediaQuery.of(ctx).size.height * 0.7,
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: _buildDialogFields(() => setDialogState(() {})),
+                ),
               ),
             ),
-          const SizedBox(height: 14),
-          ...fields.map(_buildDynamicField),
-        ],
-      ),
-    );
-  }
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton(
+                onPressed: _isLoading
+                    ? null
+                    : () async {
+                        final formError = _validateDynamicFields();
+                        if (formError != null) {
+                          ScaffoldMessenger.of(ctx).showSnackBar(
+                            SnackBar(
+                              content: Text(formError),
+                              backgroundColor: Colors.red,
+                            ),
+                          );
+                          return;
+                        }
+                        Navigator.pop(ctx);
+                        await _registerForEvent();
+                      },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primaryDark,
+                  foregroundColor: Colors.white,
+                ),
+                child: const Text('Submit Registration'),
+              ),
+            ],
+          );
+        },
+      );
+    },
+  );
+}
 
   @override
   Widget build(BuildContext context) {
@@ -1255,11 +1326,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                     icon: Icons.location_on_outlined,
                     text: widget.event.location,
                   ),
-                  const SizedBox(height: 12),
-                  _InfoRow(
-                    icon: Icons.people_outline,
-                    text: '${widget.event.slotsLeft} / ${widget.event.capacity} slots remaining',
-                  ),
+                  // ─── Slots info removed ──────────────────────────
                   const SizedBox(height: 20),
                   const Text(
                     'Description',
@@ -1272,52 +1339,34 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                   ),
                   const SizedBox(height: 30),
 
-                  // Dynamic registration form
-                  if (!widget.isPastEvent && !_isRegistered && _loadingForm)
-                    const Center(
-                      child: Padding(
-                        padding: EdgeInsets.symmetric(vertical: 12),
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      ),
-                    ),
-                  if (!widget.isPastEvent && !_isRegistered && !_loadingForm)
-                    _buildRegistrationFormSection(),
-
-                  // Register / status button
-                  if (!widget.isPastEvent && !_isRegistered)
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton(
-                        onPressed: _isLoading || _loadingForm ? null : _registerForEvent,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor:
-                              widget.event.slotsLeft > 0 ? AppColors.primaryDark : Colors.grey,
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
+                  // ─── Register / status buttons ────────────────────
+                  if (!widget.isPastEvent && !_isRegistered) ...[
+                    if (_loadingForm)
+                      const Center(
+                        child: Padding(
+                          padding: EdgeInsets.symmetric(vertical: 12),
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                      )
+                    else
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton(
+                          onPressed: _showRegistrationDialog,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.primaryDark,
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          child: const Text(
+                            'Register Now',
+                            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
                           ),
                         ),
-                        child: _isLoading
-                            ? const SizedBox(
-                                height: 20,
-                                width: 20,
-                                child: CircularProgressIndicator(
-                                  color: Colors.white,
-                                  strokeWidth: 2,
-                                ),
-                              )
-                            : Text(
-                                widget.event.slotsLeft > 0
-                                    ? 'Register Now (${widget.event.slotsLeft} slots left)'
-                                    : 'Event Full',
-                                style: const TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w700,
-                                  color: Colors.white,
-                                ),
-                              ),
                       ),
-                    ),
+                  ],
 
                   if (_isRegistered && !widget.isPastEvent)
                     Container(
