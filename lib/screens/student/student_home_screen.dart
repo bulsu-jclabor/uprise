@@ -4,10 +4,13 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 import 'package:uprise/models/event_model.dart';
+import '../../providers/event_provider.dart';
 import '../../widgets/common/loading_widget.dart';
 import '../../widgets/student/announcements_feed.dart';
 import '../../widgets/student/profile_summary.dart';
+import '../../widgets/student/countdown_widget.dart';
 import 'student_events_screen.dart';
 import 'student_organizations_screen.dart';
 import 'student_certificates_screen.dart';
@@ -239,6 +242,13 @@ class _HomeContentState extends State<_HomeContent> {
         setState(() => _isOffline = snap.metadata.isFromCache);
       }
     });
+    
+    // ⭐ LOAD REGISTERED EVENTS FOR COUNTDOWN ⭐
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        Provider.of<EventProvider>(context, listen: false).loadRegisteredEvents();
+      }
+    });
   }
 
   @override
@@ -252,6 +262,8 @@ class _HomeContentState extends State<_HomeContent> {
     setState(() {
       // This will trigger a rebuild with the new userName from parent
     });
+    // ⭐ REFRESH REGISTERED EVENTS ⭐
+    Provider.of<EventProvider>(context, listen: false).refreshRegisteredEvents();
   }
 
   Future<void> _loadOrgData() async {
@@ -300,7 +312,7 @@ class _HomeContentState extends State<_HomeContent> {
           event: event,
           onRegistered: () {
             // Refresh the home screen when registered
-            setState(() {});
+            refreshData();
           },
           isPastEvent: event.isPast,
         ),
@@ -515,64 +527,99 @@ class _HomeContentState extends State<_HomeContent> {
           ),
 
           // Quick Access Icons
-SliverToBoxAdapter(
-  child: Padding(
-    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-    child: Row(
-      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-      children: [
-        _QuickAccessItem(
-          icon: Icons.calendar_today,
-          label: 'Calendar',
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => const StudentEventsScreen(initialTabIndex: 0),
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  _QuickAccessItem(
+                    icon: Icons.calendar_today,
+                    label: 'Calendar',
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const StudentEventsScreen(initialTabIndex: 0),
+                        ),
+                      );
+                    },
+                  ),
+                  _QuickAccessItem(
+                    icon: Icons.card_membership,
+                    label: 'Certificates',
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const StudentCertificatesScreen(),
+                        ),
+                      );
+                    },
+                  ),
+                  _QuickAccessItem(
+                    icon: Icons.groups,
+                    label: 'Orgs',
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const StudentOrganizationsScreen(),
+                        ),
+                      );
+                    },
+                  ),
+                  _QuickAccessItem(
+                    icon: Icons.person,
+                    label: 'Profile',
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const StudentProfileScreen(),
+                        ),
+                      );
+                    },
+                  ),
+                ],
               ),
-            );
-          },
-        ),
-        _QuickAccessItem(
-          icon: Icons.card_membership,
-          label: 'Certificates',
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => const StudentCertificatesScreen(),
+            ),
+          ),
+
+          // ⭐ COUNTDOWN SECTION ⭐
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Consumer<EventProvider>(
+                builder: (context, provider, child) {
+                  if (provider.isLoading) {
+                    return Container(
+                      height: 180,
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: const Center(
+                        child: SizedBox(
+                          height: 30,
+                          width: 30,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.orange,
+                          ),
+                        ),
+                      ),
+                    );
+                  }
+                  
+                  // Display countdown for the EARLIEST registered event
+                  return CountdownWidget(
+                    event: provider.earliestEvent,
+                  );
+                },
               ),
-            );
-          },
-        ),
-        _QuickAccessItem(
-          icon: Icons.groups,
-          label: 'Orgs',
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => const StudentOrganizationsScreen(),
-              ),
-            );
-          },
-        ),
-        _QuickAccessItem(
-          icon: Icons.person,
-          label: 'Profile',
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => const StudentProfileScreen(),
-              ),
-            );
-          },
-        ),
-      ],
-    ),
-  ),
-),
+            ),
+          ),
 
           // Upcoming Events Section Header
           SliverToBoxAdapter(

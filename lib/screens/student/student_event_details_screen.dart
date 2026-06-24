@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
+import '../../providers/event_provider.dart';
 
 // ─────────────────────────────────────────────────────────────
 //  CUSTOM COLORS - UNIFORM (ORANGE)
@@ -168,7 +170,7 @@ class EventData {
   final bool isPublic;
   final bool isPast;
   final DateTime rawDate;
-  final String? createdFromProposalId;   // ← ADD THIS LINE
+  final String? createdFromProposalId;
 
   const EventData({
     required this.id,
@@ -189,7 +191,7 @@ class EventData {
     this.isPublic = true,
     required this.isPast,
     required this.rawDate,
-    this.createdFromProposalId,          // ← ADD THIS LINE
+    this.createdFromProposalId,
   });
 
   factory EventData.fromFirestore(DocumentSnapshot doc,
@@ -225,7 +227,7 @@ class EventData {
       isPublic: d['isPublic'] ?? true,
       isPast: isPast,
       rawDate: dateTime,
-      createdFromProposalId: d['createdFromProposalId'] as String?, // ← ADD THIS LINE
+      createdFromProposalId: d['createdFromProposalId'] as String?,
     );
   }
 }
@@ -1262,8 +1264,8 @@ class EventDetailScreen extends StatefulWidget {
 
 class _EventDetailScreenState extends State<EventDetailScreen> {
   bool _isLoading = false;
-  // Dynamic registration form state
   bool _loadingForm = true;
+  bool _isRegistered = false; // ⭐ ADDED: Track registration status
   Map<String, dynamic>? _formDef;
   final Map<String, TextEditingController> _fieldControllers = {};
   final Map<String, String?> _singleChoice = {};
@@ -1273,6 +1275,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
   void initState() {
     super.initState();
     _loadRegistrationForm();
+    _checkRegistrationStatus(); // ⭐ ADDED: Check if already registered
   }
 
   @override
@@ -1281,6 +1284,20 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
       c.dispose();
     }
     super.dispose();
+  }
+
+  // ⭐ ADDED: Check if user is already registered for this event
+  Future<void> _checkRegistrationStatus() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+    final snap = await FirebaseFirestore.instance
+        .collection('registrations')
+        .where('userId', isEqualTo: user.uid)
+        .where('eventId', isEqualTo: widget.event.id)
+        .get();
+    if (mounted) {
+      setState(() => _isRegistered = snap.docs.isNotEmpty);
+    }
   }
 
   /// Fetches the org-defined registration form from
@@ -1359,6 +1376,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     return out;
   }
 
+  // ⭐ UPDATED: Added refresh for countdown
   Future<void> _registerForEvent() async {
     if (widget.isPastEvent) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
@@ -1413,7 +1431,18 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
           if (formResponses.isNotEmpty) 'formResponses': formResponses,
         });
       });
+      
+      setState(() => _isRegistered = true); // ⭐ ADDED
       widget.onRegistered();
+
+      // ⭐ ADDED: Refresh the countdown
+      try {
+        final eventProvider = context.read<EventProvider>();
+        await eventProvider.refreshRegisteredEvents();
+      } catch (e) {
+        print('Could not refresh event provider: $e');
+      }
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
           content: Text('Successfully registered for event!'),
@@ -1695,18 +1724,20 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                   const SizedBox(height: 30),
 
                   // ── Dynamic registration form (loading spinner while fetching) ──
-                  if (!widget.isPastEvent && !widget.event.isRegistered && _loadingForm)
+                  // ⭐ UPDATED: Use _isRegistered instead of widget.event.isRegistered
+                  if (!widget.isPastEvent && !_isRegistered && _loadingForm)
                     const Center(
                       child: Padding(
                         padding: EdgeInsets.symmetric(vertical: 12),
                         child: CircularProgressIndicator(strokeWidth: 2),
                       ),
                     ),
-                  if (!widget.isPastEvent && !widget.event.isRegistered && !_loadingForm)
+                  if (!widget.isPastEvent && !_isRegistered && !_loadingForm)
                     _buildRegistrationFormSection(),
 
                   // ── Register / status button ──
-                  if (!widget.isPastEvent && !widget.event.isRegistered)
+                  // ⭐ UPDATED: Use _isRegistered instead of widget.event.isRegistered
+                  if (!widget.isPastEvent && !_isRegistered)
                     SizedBox(
                       width: double.infinity,
                       child: ElevatedButton(
@@ -1741,7 +1772,8 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                       ),
                     ),
 
-                  if (widget.event.isRegistered && !widget.isPastEvent)
+                  // ⭐ UPDATED: Use _isRegistered instead of widget.event.isRegistered
+                  if (_isRegistered && !widget.isPastEvent)
                     Container(
                       width: double.infinity,
                       padding: const EdgeInsets.symmetric(vertical: 14),

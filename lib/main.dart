@@ -2,9 +2,11 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:provider/provider.dart'; // ⭐ IDAGDAG ITO
 import 'role_router.dart'; // RoleRouter handles login vs home
 import 'utils/theme.dart';
 import 'firebase_options.dart';
+import 'providers/event_provider.dart'; // ⭐ IDAGDAG ITO
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -39,11 +41,17 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'UPRISE',
-      theme: appTheme,
-      debugShowCheckedModeBanner: false,
-      home: const RoleRouter(), // ✅ Always start here
+    return MultiProvider( // ⭐ I-WRAP ANG APP SA MultiProvider
+      providers: [
+        ChangeNotifierProvider(create: (_) => EventProvider()), // ⭐ IDAGDAG ITO
+        // Add other providers here if needed
+      ],
+      child: MaterialApp(
+        title: 'UPRISE',
+        theme: appTheme,
+        debugShowCheckedModeBanner: false,
+        home: const RoleRouter(), // ✅ Always start here
+      ),
     );
   }
 }
