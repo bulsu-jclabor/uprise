@@ -47,10 +47,10 @@ class EventModel {
       final timeParts = startTime.split(':');
       int hour = int.parse(timeParts[0]);
       int minute = 0;
-
+      
       if (timeParts.length > 1) {
         // Check if may AM/PM
-        if (startTime.toLowerCase().contains('am') ||
+        if (startTime.toLowerCase().contains('am') || 
             startTime.toLowerCase().contains('pm')) {
           // Handle 12-hour format
           final cleanTime = startTime.replaceAll(RegExp(r'[AP]M', caseSensitive: false), '').trim();
@@ -68,7 +68,7 @@ class EventModel {
           minute = int.parse(timeParts[1].replaceAll(RegExp(r'[^0-9]'), ''));
         }
       }
-
+      
       return DateTime(
         date.year,
         date.month,
@@ -89,27 +89,6 @@ class EventModel {
         ? timestamp.toDate()
         : DateTime.tryParse(d['date']?.toString() ?? '') ?? DateTime.now();
 
-    // ── IMAGE RESOLUTION ─────────────────────────────────────────
-    // Different parts of the app have historically saved the event
-    // picture under different field names ('bannerUrl' for a hosted
-    // URL, 'imageUrl' as an alias, or 'imageBase64' when the admin
-    // uploaded a raw image with no separate storage upload step).
-    // We check all three, in priority order, so whichever one the
-    // publish step actually wrote to still shows up on mobile.
-    String? resolvedBanner = d['bannerUrl'] as String?;
-    if (resolvedBanner == null || resolvedBanner.isEmpty) {
-      resolvedBanner = d['imageUrl'] as String?;
-    }
-    if (resolvedBanner == null || resolvedBanner.isEmpty) {
-      final base64Image = d['imageBase64'] as String?;
-      if (base64Image != null && base64Image.isNotEmpty) {
-        // EventImage already knows how to render a raw base64 string
-        // (it checks for non-http, non-assets prefixes), so we can
-        // just pass it straight through as the "bannerUrl".
-        resolvedBanner = base64Image;
-      }
-    }
-
     return EventModel(
       id: doc.id,
       title: d['title'] ?? '',
@@ -127,7 +106,7 @@ class EventModel {
       proposalId: d['createdFromProposalId'] as String?,
       createdFromProposalId: d['createdFromProposalId'] as String?,
       orgLogoUrl: d['logoUrl'] as String?,
-      bannerUrl: resolvedBanner,
+      bannerUrl: d['bannerUrl'] as String?,
     );
   }
 
