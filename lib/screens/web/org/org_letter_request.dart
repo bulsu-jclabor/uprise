@@ -9,6 +9,7 @@ import 'package:intl/intl.dart';
 import 'package:file_picker/file_picker.dart';
 import '../../../services/activity_logger.dart' as activity_log;
 import '../../../services/firestore_collections.dart';
+import '../../../services/notification_service.dart';
 import '../../../utils/platform_file_utils.dart' as platform_file_utils;
 import '../../../widgets/admin_export_button.dart';
 import '../../theme/app_theme.dart';
@@ -1678,6 +1679,14 @@ class _LetterRequestModalState
           module:  'letter_request',
           details: {'orgId': widget.orgId, 'requestId': widget.existingRequest!.id},
         );
+        if (widget.existingRequest!.status == 'revision') {
+          NotificationService.sendToAllAdmins(
+            title: 'Letter request resubmitted',
+            body: '${widget.orgName} resubmitted "${data['subject']}" after revision.',
+            type: 'letter_resubmission',
+            orgId: widget.orgId,
+          );
+        }
         _showMsg('Letter request updated successfully!');
       } else {
         final letterId =
@@ -1691,6 +1700,12 @@ class _LetterRequestModalState
           action:  'create_letter_request',
           module:  'letter_request',
           details: {'orgId': widget.orgId, 'subject': data['subject']},
+        );
+        NotificationService.sendToAllAdmins(
+          title: 'New letter request submitted',
+          body: '${widget.orgName} submitted a letter request: "${data['subject']}".',
+          type: 'letter_submission',
+          orgId: widget.orgId,
         );
         _showMsg('Letter request submitted successfully!');
       }

@@ -32,6 +32,7 @@ import 'org_reports.dart';
 import 'org_finance.dart';
 import 'org_merchandise.dart';
 import 'org_settings.dart';
+import '../../../services/notification_service.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Design tokens (copied from report.dart for the countdown)
@@ -430,6 +431,7 @@ class _OrgDashboardState extends State<OrgDashboard> {
           _isLoading = false;
         });
         _fetchUnreadNotifications();
+        _checkReminders();
       }
     } catch (e, st) {
       debugPrint('OrgDashboard load error: $e\n$st');
@@ -465,6 +467,106 @@ class _OrgDashboardState extends State<OrgDashboard> {
       OrgMerchandiseScreen(orgId: _orgId),
     ];
     _screensBuilt = true;
+  }
+
+  // ── Reminder checks (run once per dashboard load) ──────────────────
+  //
+  // Date-based reminders (an approaching event, an approaching report
+  // deadline) have no natural "action" to hang a notification off of, so
+  // they're checked here instead — whenever the org opens their dashboard.
+  // Each reminder is throttled to roughly once per day via a timestamp
+  // field so reopening the dashboard repeatedly doesn't spam them.
+  static const _reminderCooldown = Duration(hours: 20);
+  static const _eventNearWindow = Duration(days: 3);
+  static const _deadlineNearWindow = Duration(days: 3);
+
+  bool _cooldownElapsed(Timestamp? last) {
+    if (last == null) return true;
+    return DateTime.now().difference(last.toDate()) > _reminderCooldown;
+  }
+
+  Future<void> _checkReminders() async {
+    if (_orgId.isEmpty) return;
+    try {
+      await _checkUnpublishedEventReminders();
+      await _checkReportDeadlineReminders();
+    } catch (e) {
+      debugPrint('Reminder check failed: $e');
+    }
+  }
+
+  // Approved proposals whose event date is coming up but were never
+  // published to students still need the org to hit "Publish".
+  Future<void> _checkUnpublishedEventReminders() async {
+    final snap = await FirebaseFirestore.instance
+        .collection('event_proposals')
+        .where('orgId', isEqualTo: _orgId)
+        .where('status', isEqualTo: 'approved')
+        .get();
+
+    final now = DateTime.now();
+    for (final doc in snap.docs) {
+      final data = doc.data();
+      final publishedEventId = (data['publishedEventId'] ?? '').toString();
+      if (publishedEventId.isNotEmpty) continue;
+
+      final eventDate = (data['date'] as Timestamp?)?.toDate();
+      if (eventDate == null) continue;
+      final daysUntil = eventDate.difference(now);
+      if (daysUntil > _eventNearWindow || daysUntil.isNegative) continue;
+
+      if (!_cooldownElapsed(data['lastPublishReminderAt'] as Timestamp?)) continue;
+
+      final title = (data['title'] ?? 'Your event').toString();
+      final daysLabel = daysUntil.inDays <= 0 ? 'today' : 'in ${daysUntil.inDays} day${daysUntil.inDays == 1 ? '' : 's'}';
+      await NotificationService.sendToOrgMembers(
+        orgId: _orgId,
+        title: 'Event not yet published',
+        body: '"$title" is happening $daysLabel and still hasn\'t been published to students. Publish it from Event Proposals.',
+        type: 'publish_reminder',
+        data: {'proposalId': doc.id},
+      );
+      await doc.reference.update({'lastPublishReminderAt': FieldValue.serverTimestamp()});
+    }
+  }
+
+  // Financial/accomplishment report deadlines set by admin in
+  // reports_management.dart — remind the org as the date approaches.
+  Future<void> _checkReportDeadlineReminders() async {
+    final deadlinesDoc = await FirebaseFirestore.instance
+        .collection('report_deadlines')
+        .doc('deadlines')
+        .get();
+    if (!deadlinesDoc.exists) return;
+    final deadlines = deadlinesDoc.data()!;
+
+    final orgDoc = await FirebaseFirestore.instance.collection('organizations').doc(_orgId).get();
+    final orgData = orgDoc.data() ?? {};
+    final now = DateTime.now();
+
+    Future<void> checkOne(String key, String label) async {
+      final deadline = (deadlines[key] as Timestamp?)?.toDate();
+      if (deadline == null) return;
+      final daysUntil = deadline.difference(now);
+      if (daysUntil > _deadlineNearWindow || daysUntil.isNegative) return;
+
+      final lastSentField = 'last${key[0].toUpperCase()}${key.substring(1)}DeadlineReminderAt';
+      if (!_cooldownElapsed(orgData[lastSentField] as Timestamp?)) return;
+
+      final daysLabel = daysUntil.inDays <= 0 ? 'today' : 'in ${daysUntil.inDays} day${daysUntil.inDays == 1 ? '' : 's'}';
+      await NotificationService.sendToOrgMembers(
+        orgId: _orgId,
+        title: '$label report deadline approaching',
+        body: 'The $label report deadline is $daysLabel. Submit it from Reports if you haven\'t already.',
+        type: 'deadline_reminder',
+      );
+      await FirebaseFirestore.instance.collection('organizations').doc(_orgId).update({
+        lastSentField: FieldValue.serverTimestamp(),
+      });
+    }
+
+    await checkOne('financial', 'Financial');
+    await checkOne('accomplishment', 'Accomplishment');
   }
 
   Future<void> _fetchUnreadNotifications() async {

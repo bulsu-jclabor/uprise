@@ -13,6 +13,7 @@ import 'package:file_picker/file_picker.dart';
 // Firebase Storage is no longer needed for uploads
 // import 'package:firebase_storage/firebase_storage.dart';
 import '../../../services/activity_logger.dart' as activity_log;
+import '../../../services/notification_service.dart';
 import 'export_util.dart';
 import 'export_pdf.dart';
 import 'dart:io';
@@ -1591,6 +1592,7 @@ class _ReportModalState extends State<_ReportModal> {
           module: 'reports',
           details: {'orgId': widget.orgId, 'title': data['title']},
         );
+        _notifyAdminsOfReportSubmission(eventTitle);
       }
       if (mounted) Navigator.pop(context);
     } catch (e) {
@@ -1599,6 +1601,29 @@ class _ReportModalState extends State<_ReportModal> {
         _isSubmitting = false;
       });
     }
+  }
+
+  // Fire-and-forget — admins should hear about a new submission even if
+  // the org's own UI flow (closing this dialog) finishes first.
+  Future<void> _notifyAdminsOfReportSubmission(String eventTitle) async {
+    try {
+      String orgName = widget.orgId;
+      final orgDoc = await FirebaseFirestore.instance
+          .collection('organizations')
+          .doc(widget.orgId)
+          .get();
+      if (orgDoc.exists) {
+        orgName = (orgDoc.data()?['name'] ?? orgDoc.data()?['orgName'] ?? widget.orgId).toString();
+      }
+      final reportLabel = _type == 'financial' ? 'financial report' : 'accomplishment report';
+      await NotificationService.sendToAllAdmins(
+        title: 'New $reportLabel submitted',
+        body: '$orgName submitted a $reportLabel for "$eventTitle".',
+        type: 'report_submission',
+        orgId: widget.orgId,
+        data: {'orgId': widget.orgId, 'reportType': _type},
+      );
+    } catch (_) {}
   }
 
   void _snack(String msg, {bool error = false}) {

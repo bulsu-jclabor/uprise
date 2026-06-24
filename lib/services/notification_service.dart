@@ -80,6 +80,43 @@ class NotificationService {
     await batch.commit();
   }
 
+  // Send a notification to every admin account. Admin notifications are
+  // queried per-uid (see admin_dashboard.dart), so an org action that any
+  // admin needs to see (a new submission, a resubmission, etc.) has to be
+  // fanned out to each admin individually rather than sent once.
+  static Future<void> sendToAllAdmins({
+    required String title,
+    required String body,
+    String type = 'general',
+    String orgId = '',
+    Map<String, dynamic>? data,
+  }) async {
+    final adminsSnap =
+        await _db.collection('users').where('role', isEqualTo: 'admin').get();
+
+    final enabledFlags = await Future.wait(
+      adminsSnap.docs.map((doc) => _isEnabledFor(doc.id)),
+    );
+
+    final batch = _db.batch();
+    for (var i = 0; i < adminsSnap.docs.length; i++) {
+      if (!enabledFlags[i]) continue;
+      final doc = adminsSnap.docs[i];
+      final ref = _db.collection('notifications').doc();
+      batch.set(ref, {
+        'userId': doc.id,
+        'orgId': orgId,
+        'title': title,
+        'body': body,
+        'type': type,
+        'isRead': false,
+        'createdAt': FieldValue.serverTimestamp(),
+        'data': data ?? {},
+      });
+    }
+    await batch.commit();
+  }
+
   // Send an event notification to all registered attendees
   static Future<void> sendEventNotification({
     required String eventId,

@@ -69,7 +69,7 @@ Widget _statusBadge(String status) {
   final label = s?.$3 ?? status.toUpperCase();
 
   return Container(
-    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
     decoration: BoxDecoration(
       color: bg,
       borderRadius: BorderRadius.circular(_DS.radiusPill),
@@ -77,10 +77,10 @@ Widget _statusBadge(String status) {
     child: Text(
       label,
       style: GoogleFonts.beVietnamPro(
-        fontSize: 10,
+        fontSize: 9,
         fontWeight: FontWeight.w700,
         color: fg,
-        letterSpacing: 0.8,
+        letterSpacing: 0.6,
       ),
     ),
   );
@@ -393,7 +393,12 @@ class _ExternalAccountState extends State<ExternalAccount> {
         Expanded(flex: 3, child: _headerCell('EMAIL')),
         Expanded(flex: 2, child: _headerCell('UNIVERSITY / ORG')),
         Expanded(flex: 2, child: _headerCell('REQUEST DATE')),
-        Expanded(flex: 1, child: _headerCell('STATUS')),
+        Expanded(
+          flex: 1,
+          child: Align(
+              alignment: Alignment.centerRight,
+              child: _headerCell('STATUS')),
+        ),
         Expanded(
           flex: 3,
           child: Align(
@@ -488,22 +493,25 @@ class _ExternalAccountState extends State<ExternalAccount> {
           Expanded(
             flex: 2,
             child: req.university.isNotEmpty
-                ? Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 8, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: UpriseColors.primaryDark
-                          .withOpacity(0.07),
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: Text(
-                      req.university,
-                      style: GoogleFonts.beVietnamPro(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: UpriseColors.primaryDark,
+                ? Align(
+                    alignment: Alignment.centerLeft,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: UpriseColors.primaryDark
+                            .withOpacity(0.07),
+                        borderRadius: BorderRadius.circular(6),
                       ),
-                      overflow: TextOverflow.ellipsis,
+                      child: Text(
+                        req.university,
+                        style: GoogleFonts.beVietnamPro(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: UpriseColors.primaryDark,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
                   )
                 : Text('—',
@@ -521,7 +529,13 @@ class _ExternalAccountState extends State<ExternalAccount> {
             ),
           ),
           // Status
-          Expanded(flex: 1, child: Row(children: [_statusBadge(req.status)])),
+          Expanded(
+            flex: 1,
+            child: Align(
+              alignment: Alignment.centerRight,
+              child: _statusBadge(req.status),
+            ),
+          ),
           // Actions
           Expanded(
             flex: 3,
@@ -531,6 +545,7 @@ class _ExternalAccountState extends State<ExternalAccount> {
                 _ActionIconButton(
                   icon: Icons.visibility_outlined,
                   tooltip: 'View Details',
+                  color: const Color(0xFF3B82F6),
                   onTap: () => _showDetails(req),
                 ),
                 if (req.status == 'pending') ...[
@@ -556,12 +571,14 @@ class _ExternalAccountState extends State<ExternalAccount> {
                   _ActionIconButton(
                     icon: Icons.key_rounded,
                     tooltip: 'View Credentials',
+                    color: UpriseColors.primaryDark,
                     onTap: () => _showCredentialsDialog(req),
                   ),
                   const SizedBox(width: 4),
                   _ActionIconButton(
                     icon: Icons.email_outlined,
                     tooltip: 'Resend Credentials',
+                    color: const Color(0xFFEA580C),
                     onTap: () => _confirmResendCredentials(req),
                   ),
                 ],
@@ -869,9 +886,9 @@ class _ExternalAccountState extends State<ExternalAccount> {
 
     // Send credentials (falls back to a queued email doc on failure)
     final sent = await _sendGuestCredentialsEmail(
-        resolvedEmail, userName, password);
+        resolvedEmail, userName, password, university);
     if (!sent) {
-      await _queueGuestCredentialEmail(resolvedEmail, userName, password);
+      await _queueGuestCredentialEmail(resolvedEmail, userName, password, university);
     }
 
     await activity_log.ActivityLogger.log(
@@ -904,8 +921,14 @@ class _ExternalAccountState extends State<ExternalAccount> {
     return 'GST-${List.generate(6, (_) => chars[rng.nextInt(chars.length)]).join()}';
   }
 
+  // Dedicated EmailJS service for guest credentials (separate from the
+  // student_accounts.dart service/template).
+  static const String _guestEmailServiceId = 'service_3qnx8cs';
+  static const String _guestEmailUserId = 'h6tBNFtWohoZr_B18';
+  static const String _guestCredentialsTemplateId = 'template_kqryg75';
+
   Future<bool> _sendGuestCredentialsEmail(
-      String email, String fullName, String password) async {
+      String email, String fullName, String password, [String university = '']) async {
     const int maxAttempts = 3;
     for (int attempt = 1; attempt <= maxAttempts; attempt++) {
       try {
@@ -916,12 +939,13 @@ class _ExternalAccountState extends State<ExternalAccount> {
             'origin': 'http://localhost',
           },
           body: jsonEncode({
-            'service_id'  : 'service_s3ke8zd',
-            'template_id' : 'template_76fn2md',
-            'user_id'     : 'tmx47wQJmb1uMNUpr',
+            'service_id'  : _guestEmailServiceId,
+            'template_id' : _guestCredentialsTemplateId,
+            'user_id'     : _guestEmailUserId,
             'template_params': {
               'to_email'   : email,
-              'student_id' : fullName, // reused template field for guest name
+              'guest_name' : fullName,
+              'university' : university,
               'password'   : password,
             },
           }),
@@ -940,11 +964,12 @@ class _ExternalAccountState extends State<ExternalAccount> {
   }
 
   Future<void> _queueGuestCredentialEmail(
-      String email, String fullName, String password) async {
+      String email, String fullName, String password, [String university = '']) async {
     try {
       await FirebaseFirestore.instance.collection('email_queue').add({
         'to_email'   : email,
-        'student_id' : fullName,
+        'guest_name' : fullName,
+        'university' : university,
         'password'   : password,
         'type'       : 'guest_credentials',
         'attempts'   : 0,
@@ -957,16 +982,15 @@ class _ExternalAccountState extends State<ExternalAccount> {
   }
 
   // ── Resend credentials (for already-approved guests) ────────────────
+  //
+  // We can't recover or fabricate the guest's real Firebase Auth password
+  // from the client (no Admin SDK here), so a brand-new random string can't
+  // be emailed as a working password when none is on file. Instead, fall
+  // back to Firebase's own secure password-reset email — same mechanism
+  // already used by admin/org "Forgot password?".
   Future<void> _confirmResendCredentials(ExternalRequest req) async {
     if (req.tempPassword == null || req.tempPassword!.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: const Text(
-            'No stored password for this guest. Approve again is not possible — '
-            'ask the guest to use "Forgot Password" once available.'),
-        backgroundColor: const Color(0xFFF97316),
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-      ));
+      await _sendPasswordResetFallback(req);
       return;
     }
 
@@ -1076,10 +1100,10 @@ class _ExternalAccountState extends State<ExternalAccount> {
 
     if (confirmed == true) {
       final sent = await _sendGuestCredentialsEmail(
-          req.email, req.userName, req.tempPassword!);
+          req.email, req.userName, req.tempPassword!, req.university);
       if (!sent) {
         await _queueGuestCredentialEmail(
-            req.email, req.userName, req.tempPassword!);
+            req.email, req.userName, req.tempPassword!, req.university);
       }
       await activity_log.ActivityLogger.log(
         action: 'Resent credentials for guest: ${req.userName} (${req.email})',
@@ -1093,6 +1117,68 @@ class _ExternalAccountState extends State<ExternalAccount> {
               : 'Credentials queued but sending failed for ${req.email}.'),
           backgroundColor:
               sent ? const Color(0xFF059669) : const Color(0xFFF97316),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        ));
+      }
+    }
+  }
+
+  Future<void> _sendPasswordResetFallback(ExternalRequest req) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      barrierColor: Colors.black54,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text('Send Password Reset Link',
+            style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.w700)),
+        content: Text(
+          'No temporary password is on file for ${req.userName}, so we can\'t '
+          'resend the original credentials. Send a Firebase password-reset '
+          'link to ${req.email} instead?',
+          style: GoogleFonts.beVietnamPro(fontSize: 13, height: 1.5),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text('Cancel',
+                style: GoogleFonts.beVietnamPro(color: const Color(0xFF94A3B8))),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFEA580C),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+            child: Text('Send Link',
+                style: GoogleFonts.beVietnamPro(
+                    color: Colors.white, fontWeight: FontWeight.w700)),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    try {
+      await FirebaseAuth.instance.sendPasswordResetEmail(email: req.email);
+      await activity_log.ActivityLogger.log(
+        action: 'Sent password reset link to guest: ${req.userName} (${req.email})',
+        module: 'External Account',
+        severity: 'info',
+        details: {'requestId': req.id},
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Password reset link sent to ${req.email}.'),
+          backgroundColor: const Color(0xFF059669),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        ));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Failed to send reset link: $e'),
+          backgroundColor: const Color(0xFFDC2626),
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         ));
@@ -1547,31 +1633,40 @@ class _ExternalAccountState extends State<ExternalAccount> {
   }
 
   Widget _infoGrid(List<(String, String)> items) {
-    return Wrap(
-      spacing: 0,
-      runSpacing: 12,
-      children: items
-          .map((item) => SizedBox(
-                width: 210,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(item.$1,
-                        style: GoogleFonts.beVietnamPro(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600,
-                            color: const Color(0xFF64748B),
-                            letterSpacing: 0.4)),
-                    const SizedBox(height: 3),
-                    Text(item.$2,
-                        style: GoogleFonts.beVietnamPro(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w500,
-                            color: const Color(0xFF1A202C))),
-                  ],
-                ),
-              ))
-          .toList(),
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8F9FB),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE2E6EA)),
+      ),
+      child: Wrap(
+        spacing: 0,
+        runSpacing: 12,
+        children: items
+            .map((item) => SizedBox(
+                  width: 210,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(item.$1,
+                          style: GoogleFonts.beVietnamPro(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: const Color(0xFF64748B),
+                              letterSpacing: 0.4)),
+                      const SizedBox(height: 3),
+                      Text(item.$2,
+                          style: GoogleFonts.beVietnamPro(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w500,
+                              color: const Color(0xFF1A202C))),
+                    ],
+                  ),
+                ))
+            .toList(),
+      ),
     );
   }
 
@@ -1947,18 +2042,22 @@ class _ActionIconButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final effectiveColor = onTap == null
+        ? const Color(0xFFD1D5DB)
+        : (color ?? const Color(0xFF64748B));
     return Tooltip(
       message: tooltip,
+      waitDuration: const Duration(milliseconds: 400),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(6),
-        child: Padding(
-          padding: const EdgeInsets.all(5),
-          child: Icon(icon,
-              size: 16,
-              color: onTap == null
-                  ? const Color(0xFFD1D5DB)
-                  : (color ?? const Color(0xFF64748B))),
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+          padding: const EdgeInsets.all(7),
+          decoration: BoxDecoration(
+            color: effectiveColor.withAlpha(26),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Icon(icon, size: 14, color: effectiveColor),
         ),
       ),
     );

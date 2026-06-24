@@ -11,6 +11,7 @@ import 'package:uprise/widgets/admin_export_button.dart';
 import 'export_util.dart';
 import 'export_pdf.dart';
 import '../../../services/activity_logger.dart' as activity_log;
+import '../../../services/notification_service.dart';
 import '../../theme/app_theme.dart';
 import 'package:intl/intl.dart';
 
@@ -1028,7 +1029,9 @@ class _EventProposalsState extends State<EventProposals> {
   // ── NEW: Reject with reason ──────────────────────────────────────
   Future<void> _rejectProposalWithReason(String docId, String title, String reason) async {
     try {
-      await FirebaseFirestore.instance.collection('event_proposals').doc(docId).update({
+      final docRef = FirebaseFirestore.instance.collection('event_proposals').doc(docId);
+      final orgId = (await docRef.get()).data()?['orgId']?.toString() ?? '';
+      await docRef.update({
         'status': 'rejected',
         'adminFeedback': reason, // store rejection reason in adminFeedback
         'reviewedAt': FieldValue.serverTimestamp(),
@@ -1040,6 +1043,14 @@ class _EventProposalsState extends State<EventProposals> {
         severity: 'warning',
         details: {'proposalId': docId, 'reason': reason},
       );
+      if (orgId.isNotEmpty) {
+        NotificationService.sendToOrgMembers(
+          orgId: orgId,
+          title: 'Proposal rejected',
+          body: 'Your event proposal "$title" was rejected. Reason: $reason',
+          type: 'proposal_status',
+        );
+      }
       if (_isMounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text('Proposal rejected. Reason sent to organization.'),
@@ -1311,7 +1322,9 @@ class _EventProposalsState extends State<EventProposals> {
 
   Future<void> _setStatus(String docId, String title, String newStatus) async {
     try {
-      await FirebaseFirestore.instance.collection('event_proposals').doc(docId).update({
+      final docRef = FirebaseFirestore.instance.collection('event_proposals').doc(docId);
+      final orgId = (await docRef.get()).data()?['orgId']?.toString() ?? '';
+      await docRef.update({
         'status':     newStatus,
         'reviewedAt': FieldValue.serverTimestamp(),
         'reviewedBy': FirebaseAuth.instance.currentUser?.uid ?? '',
@@ -1322,6 +1335,16 @@ class _EventProposalsState extends State<EventProposals> {
         severity: (newStatus == 'rejected' || newStatus == 'archived') ? 'warning' : 'info',
         details: {'proposalId': docId, 'title': title},
       );
+      if (orgId.isNotEmpty && (newStatus == 'approved' || newStatus == 'rejected')) {
+        NotificationService.sendToOrgMembers(
+          orgId: orgId,
+          title: newStatus == 'approved' ? 'Proposal approved' : 'Proposal rejected',
+          body: newStatus == 'approved'
+              ? 'Your event proposal "$title" was approved. You can now publish it.'
+              : 'Your event proposal "$title" was rejected.',
+          type: 'proposal_status',
+        );
+      }
       if (_isMounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text('Proposal ${newStatus[0].toUpperCase()}${newStatus.substring(1)}'),
@@ -1347,7 +1370,9 @@ class _EventProposalsState extends State<EventProposals> {
 
   Future<void> _requestRevision(String docId, String title, String feedback) async {
     try {
-      await FirebaseFirestore.instance.collection('event_proposals').doc(docId).update({
+      final docRef = FirebaseFirestore.instance.collection('event_proposals').doc(docId);
+      final orgId = (await docRef.get()).data()?['orgId']?.toString() ?? '';
+      await docRef.update({
         'status': 'for_review',
         'adminFeedback': feedback,
         'reviewedAt': FieldValue.serverTimestamp(),
@@ -1359,6 +1384,14 @@ class _EventProposalsState extends State<EventProposals> {
         severity: 'info',
         details: {'proposalId': docId},
       );
+      if (orgId.isNotEmpty) {
+        NotificationService.sendToOrgMembers(
+          orgId: orgId,
+          title: 'Revision requested',
+          body: 'Admin requested a revision for "$title": $feedback',
+          type: 'proposal_revision',
+        );
+      }
       if (_isMounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: const Text('Revision request sent to organization'),
@@ -1462,6 +1495,11 @@ class _EventProposalsState extends State<EventProposals> {
   final hasAttachment = data['attachmentBase64'] != null &&
       data['attachmentBase64'].toString().isNotEmpty;
   final issuesCertificate = data['issuesCertificate'] == true;
+  final startTime = (data['startTime'] ?? data['time'] ?? '').toString();
+  final endTime = (data['endTime'] ?? '').toString();
+  final timeStr = startTime.isEmpty
+      ? '—'
+      : (endTime.isEmpty ? startTime : '$startTime – $endTime');
 
   showDialog(
     context: context,
@@ -1559,7 +1597,7 @@ class _EventProposalsState extends State<EventProposals> {
                         const SizedBox(height: 12),
                         Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
                           Expanded(child: _detailItem('Date', _formatDate(data['date']), Icons.calendar_today_outlined)),
-                          Expanded(child: _detailItem('Time', data['time'] ?? '—', Icons.access_time_rounded)),
+                          Expanded(child: _detailItem('Time', timeStr, Icons.access_time_rounded)),
                         ]),
                         const SizedBox(height: 12),
                         Row(crossAxisAlignment: CrossAxisAlignment.start, children: [

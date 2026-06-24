@@ -10,6 +10,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:file_picker/file_picker.dart';
 import '../../../services/activity_logger.dart' as activity_log;
+import '../../../services/notification_service.dart';
 import '../../../widgets/admin_export_button.dart';
 import 'export_util.dart';
 import 'export_pdf.dart';
@@ -428,6 +429,7 @@ class _OrgEventProposalsScreenState extends State<OrgEventProposalsScreen> {
   // at approve/reject/archive. ──────────────────────────────────────────
   void _confirmPublish(String docId, Map<String, dynamic> data) {
     final title = data['title'] ?? 'this event';
+    final isPublished = (data['publishedEventId'] ?? '').toString().isNotEmpty;
     showDialog(
       context: context,
       barrierColor: Colors.black54,
@@ -449,14 +451,16 @@ class _OrgEventProposalsScreenState extends State<OrgEventProposalsScreen> {
                 ),
                 const SizedBox(width: 14),
                 Expanded(
-                  child: Text('Publish Event',
+                  child: Text(isPublished ? 'Update Published Event' : 'Publish Event',
                       style: GoogleFonts.beVietnamPro(
                           fontSize: 17, fontWeight: FontWeight.w700, color: const Color(0xFF1A202C))),
                 ),
               ]),
               const SizedBox(height: 16),
               Text(
-                'Publish "$title" to the student events page? Students will be able to view its full details and register immediately.',
+                isPublished
+                    ? 'Push the latest details of "$title" to its existing entry on the student events page. This will not create a second listing.'
+                    : 'Publish "$title" to the student events page? Students will be able to view its full details and register immediately.',
                 style: GoogleFonts.beVietnamPro(fontSize: 14, color: const Color(0xFF64748B), height: 1.5),
               ),
               const SizedBox(height: 24),
@@ -484,7 +488,7 @@ class _OrgEventProposalsScreenState extends State<OrgEventProposalsScreen> {
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                     padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 11),
                   ),
-                  child: Text('Publish',
+                  child: Text(isPublished ? 'Update' : 'Publish',
                       style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600)),
                 ),
               ]),
@@ -516,16 +520,10 @@ class _OrgEventProposalsScreenState extends State<OrgEventProposalsScreen> {
         }
         return;
       }
-      if ((data['publishedEventId'] ?? '').toString().isNotEmpty) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text('This event has already been published.'),
-            backgroundColor: Colors.orange,
-            behavior: SnackBarBehavior.floating,
-          ));
-        }
-        return;
-      }
+      // If this proposal was published before (e.g. it went through a revision
+      // cycle and got re-approved), keep syncing the SAME events doc instead of
+      // creating a second one — one proposal must always map to one event.
+      final existingEventId = (data['publishedEventId'] ?? '').toString();
 
       final title = data['title'] ?? 'Untitled Event';
       final description = data['description'] ?? '';
@@ -592,36 +590,67 @@ class _OrgEventProposalsScreenState extends State<OrgEventProposalsScreen> {
         'tags': tags,
         'status': 'approved',
         'isPublic': true,
-        'bannerUrl': bannerUrl,
+        if (bannerUrl.isNotEmpty) 'bannerUrl': bannerUrl,
         'logoUrl': logoUrl,
-        'createdAt': FieldValue.serverTimestamp(),
         'createdFromProposalId': proposalId,
       };
 
-      final eventRef = await FirebaseFirestore.instance.collection('events').add(eventData);
+      String eventId;
+      if (existingEventId.isNotEmpty) {
+        // Already published once — sync the existing event doc instead of
+        // creating a duplicate, so a revised/re-approved proposal always
+        // stays mapped to the single event it originally published.
+        eventId = existingEventId;
+        await FirebaseFirestore.instance.collection('events').doc(eventId).update(eventData);
+      } else {
+        final eventRef = FirebaseFirestore.instance.collection('events').doc();
+        eventId = eventRef.id;
+        // Run inside a transaction so a slow/duplicate publish tap (or a
+        // stale widget retrying after a network delay) can never create a
+        // second event doc for the same proposal.
+        await FirebaseFirestore.instance.runTransaction((tx) async {
+          final proposalRef = FirebaseFirestore.instance.collection('event_proposals').doc(proposalId);
+          final freshSnap = await tx.get(proposalRef);
+          final freshPublishedId = (freshSnap.data()?['publishedEventId'] ?? '').toString();
+          if (freshPublishedId.isNotEmpty) {
+            // Another publish call already won the race — adopt its event id.
+            eventId = freshPublishedId;
+            return;
+          }
+          tx.set(eventRef, {...eventData, 'createdAt': FieldValue.serverTimestamp()});
+          tx.update(proposalRef, {
+            'publishedEventId': eventRef.id,
+            'publishedAt': FieldValue.serverTimestamp(),
+            'publishedBy': FirebaseAuth.instance.currentUser?.uid ?? '',
+          });
+        });
+      }
 
-      await FirebaseFirestore.instance.collection('event_proposals').doc(proposalId).update({
-        'publishedEventId': eventRef.id,
-        'publishedAt': FieldValue.serverTimestamp(),
-        'publishedBy': FirebaseAuth.instance.currentUser?.uid ?? '',
-      });
+      if (existingEventId.isNotEmpty) {
+        await FirebaseFirestore.instance.collection('event_proposals').doc(proposalId).update({
+          'publishedAt': FieldValue.serverTimestamp(),
+          'publishedBy': FirebaseAuth.instance.currentUser?.uid ?? '',
+        });
+      }
 
       await activity_log.ActivityLogger.log(
-        action: 'publish_event_from_proposal',
+        action: existingEventId.isNotEmpty ? 'update_published_event' : 'publish_event_from_proposal',
         module: 'event_proposals',
         details: {
           'orgId': widget.orgId,
           'proposalId': proposalId,
-          'eventId': eventRef.id,
+          'eventId': eventId,
           'eventTitle': title,
         },
       );
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('✅ Event published to the student events page!'),
-            backgroundColor: Color(0xFF059669),
+          SnackBar(
+            content: Text(existingEventId.isNotEmpty
+                ? '✅ Event updated on the student events page!'
+                : '✅ Event published to the student events page!'),
+            backgroundColor: const Color(0xFF059669),
             behavior: SnackBarBehavior.floating,
           ),
         );
@@ -1182,7 +1211,7 @@ class _OrgEventProposalsScreenState extends State<OrgEventProposalsScreen> {
                 onEdit: status == 'pending' ? () => _openEditModal(docId, data) : null,
                 onRevise: status == 'for_review' ? () => _openEditModal(docId, data) : null,
                 onFormBuilder: status == 'approved' ? () => _openFormBuilder(docId, data) : null,
-                onPublish: (status == 'approved' && !isPublished)
+                onPublish: status == 'approved'
                     ? () => _confirmPublish(docId, data)
                     : null,
                 onLiveTracker: isPublished ? () => _openLiveTrackerModal(data) : null,
@@ -1998,6 +2027,12 @@ class _SubmitProposalModalState extends State<_SubmitProposalModal> {
           module: 'event_proposals',
           details: {'orgId': widget.orgId, 'proposalId': widget.editDocId},
         );
+        if (wasForReview) {
+          _notifyAdminsOfProposal(
+            title: payload['title'] as String,
+            verb: 'resubmitted',
+          );
+        }
       } else {
         payload['status'] = 'pending';
         payload['createdAt'] = FieldValue.serverTimestamp();
@@ -2006,6 +2041,10 @@ class _SubmitProposalModalState extends State<_SubmitProposalModal> {
         await activity_log.ActivityLogger.log(
           action: 'submit_proposal', module: 'event_proposals',
           details: {'orgId': widget.orgId, 'proposalId': ref.id},
+        );
+        _notifyAdminsOfProposal(
+          title: payload['title'] as String,
+          verb: 'submitted',
         );
       }
 
@@ -2021,6 +2060,24 @@ class _SubmitProposalModalState extends State<_SubmitProposalModal> {
     } catch (e) {
       setState(() { _errorMsg = e.toString(); _isSubmitting = false; });
     }
+  }
+
+  // Fire-and-forget — runs after the snackbar/pop so it never blocks the
+  // org's own submit flow.
+  Future<void> _notifyAdminsOfProposal({required String title, required String verb}) async {
+    try {
+      String orgName = widget.orgId;
+      final orgDoc = await FirebaseFirestore.instance.collection('organizations').doc(widget.orgId).get();
+      if (orgDoc.exists) {
+        orgName = (orgDoc.data()?['name'] ?? orgDoc.data()?['orgName'] ?? widget.orgId).toString();
+      }
+      await NotificationService.sendToAllAdmins(
+        title: 'Event proposal $verb',
+        body: '$orgName $verb the proposal "$title" for review.',
+        type: 'proposal_submission',
+        orgId: widget.orgId,
+      );
+    } catch (_) {}
   }
 
   @override

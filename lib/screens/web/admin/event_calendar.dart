@@ -7,6 +7,7 @@ import 'package:intl/intl.dart';
 import 'export_util.dart';
 import 'export_pdf.dart';
 import '../../theme/app_theme.dart';
+import '../../../services/activity_logger.dart' as activity_log;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Category Colors - matching the submission form categories
@@ -253,6 +254,30 @@ class _EventCalendarState extends State<EventCalendar> {
             ),
           );
 
+          final fixDuplicatesButton = InkWell(
+            onTap: _confirmMergeDuplicates,
+            borderRadius: BorderRadius.circular(10),
+            child: Container(
+              height: 40,
+              padding: const EdgeInsets.symmetric(horizontal: 14),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: const Color(0xFFE2E6EA)),
+                boxShadow: _DS.cardShadow,
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.cleaning_services_outlined, size: 15, color: UpriseColors.primaryDark),
+                  const SizedBox(width: 7),
+                  Text('Fix Duplicates',
+                      style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600, color: const Color(0xFF374151))),
+                ],
+              ),
+            ),
+          );
+
           if (canUseRow) {
             return Row(
               crossAxisAlignment: CrossAxisAlignment.center,
@@ -261,6 +286,8 @@ class _EventCalendarState extends State<EventCalendar> {
                 const SizedBox(width: 10),
                 dateControl,
                 const Spacer(),
+                fixDuplicatesButton,
+                const SizedBox(width: 10),
                 _ExportEventsButton(),
               ],
             );
@@ -270,11 +297,190 @@ class _EventCalendarState extends State<EventCalendar> {
             spacing: 10,
             runSpacing: 10,
             crossAxisAlignment: WrapCrossAlignment.center,
-            children: [todayButton, dateControl, _ExportEventsButton()],
+            children: [todayButton, dateControl, fixDuplicatesButton, _ExportEventsButton()],
           );
         },
       ),
     );
+  }
+
+  // ── Duplicate-event cleanup ────────────────────────────────────────
+  //
+  // One-off safety net for events created before the publish flow was
+  // guarded against duplicates (see org_event_proposals.dart): scans for
+  // events that share the same non-empty createdFromProposalId — a proposal
+  // can only ever map to one real event — and removes the extras, keeping
+  // whichever doc the proposal's own publishedEventId already points to
+  // (or the oldest one if that field is stale/missing).
+  Future<void> _confirmMergeDuplicates() async {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(child: CircularProgressIndicator()),
+    );
+
+    Map<String, List<QueryDocumentSnapshot<Map<String, dynamic>>>> groups = {};
+    try {
+      final snap = await FirebaseFirestore.instance.collection('events').get();
+      for (final doc in snap.docs) {
+        final proposalId = (doc.data()['createdFromProposalId'] ?? '').toString();
+        if (proposalId.isEmpty) continue;
+        groups.putIfAbsent(proposalId, () => []).add(doc);
+      }
+    } finally {
+      if (mounted) Navigator.of(context, rootNavigator: true).pop();
+    }
+
+    final duplicateGroups = groups.entries.where((e) => e.value.length > 1).toList();
+    if (duplicateGroups.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('No duplicate events found.'),
+          behavior: SnackBarBehavior.floating,
+        ));
+      }
+      return;
+    }
+
+    final extraCount = duplicateGroups.fold<int>(0, (total, e) => total + e.value.length - 1);
+    if (!mounted) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      barrierColor: Colors.black54,
+      builder: (ctx) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        child: Container(
+          width: 460,
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(children: [
+                Container(
+                  width: 40, height: 40,
+                  decoration: BoxDecoration(color: const Color(0xFFFEF2F2), borderRadius: BorderRadius.circular(10)),
+                  child: const Icon(Icons.cleaning_services_outlined, color: Color(0xFFDC2626), size: 20),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text('Found ${duplicateGroups.length} duplicate event${duplicateGroups.length == 1 ? '' : 's'}',
+                      style: GoogleFonts.beVietnamPro(fontSize: 16, fontWeight: FontWeight.w700, color: const Color(0xFF1A202C))),
+                ),
+              ]),
+              const SizedBox(height: 16),
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxHeight: 220),
+                child: SingleChildScrollView(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: duplicateGroups.map((e) {
+                      final title = (e.value.first.data()['title'] ?? 'Untitled').toString();
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: Text('• $title — ${e.value.length} copies, will keep 1',
+                            style: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF374151))),
+                      );
+                    }).toList(),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text('This will permanently delete $extraCount extra event document${extraCount == 1 ? '' : 's'}. This cannot be undone.',
+                  style: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFFDC2626), height: 1.5)),
+              const SizedBox(height: 20),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  OutlinedButton(
+                    onPressed: () => Navigator.pop(ctx, false),
+                    style: OutlinedButton.styleFrom(
+                      side: const BorderSide(color: Color(0xFFE2E6EA)),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                    ),
+                    child: Text('Cancel', style: GoogleFonts.beVietnamPro(fontSize: 13)),
+                  ),
+                  const SizedBox(width: 10),
+                  ElevatedButton(
+                    onPressed: () => Navigator.pop(ctx, true),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFFDC2626),
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                    ),
+                    child: Text('Delete Duplicates', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600)),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    if (confirmed != true) return;
+    await _mergeDuplicates(duplicateGroups);
+  }
+
+  Future<void> _mergeDuplicates(
+    List<MapEntry<String, List<QueryDocumentSnapshot<Map<String, dynamic>>>>> duplicateGroups,
+  ) async {
+    int deleted = 0;
+    final firestore = FirebaseFirestore.instance;
+    for (final entry in duplicateGroups) {
+      final proposalId = entry.key;
+      final docs = entry.value;
+
+      // Prefer the doc the proposal already points to via publishedEventId;
+      // otherwise keep whichever was created first.
+      String? keepId;
+      try {
+        final propSnap = await firestore.collection('event_proposals').doc(proposalId).get();
+        final publishedEventId = (propSnap.data()?['publishedEventId'] ?? '').toString();
+        if (docs.any((d) => d.id == publishedEventId)) keepId = publishedEventId;
+      } catch (_) {}
+
+      if (keepId == null) {
+        final sorted = List<QueryDocumentSnapshot<Map<String, dynamic>>>.from(docs)
+          ..sort((a, b) {
+            final ta = a.data()['createdAt'];
+            final tb = b.data()['createdAt'];
+            if (ta is Timestamp && tb is Timestamp) return ta.compareTo(tb);
+            return 0;
+          });
+        keepId = sorted.first.id;
+      }
+
+      final batch = firestore.batch();
+      for (final doc in docs) {
+        if (doc.id == keepId) continue;
+        batch.delete(doc.reference);
+        deleted++;
+      }
+      batch.update(firestore.collection('event_proposals').doc(proposalId), {
+        'publishedEventId': keepId,
+      });
+      await batch.commit();
+    }
+
+    await activity_log.ActivityLogger.log(
+      action: 'Merged duplicate events',
+      module: 'Event Management',
+      severity: 'warning',
+      details: {'groups': duplicateGroups.length, 'deleted': deleted},
+    );
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Cleaned up $deleted duplicate event${deleted == 1 ? '' : 's'}.'),
+        backgroundColor: const Color(0xFF059669),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      ));
+    }
   }
 
   // ── Calendar stream (only approved events) ───────────────────────

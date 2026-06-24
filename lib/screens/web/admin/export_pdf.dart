@@ -225,7 +225,10 @@ class AdminExportPdf {
     required String signedByName,
     required DateTime signedAt,
   }) async {
-    const dpi = 144.0;
+    // 110 DPI keeps the stamped copy legible while meaningfully cutting the
+    // raster + re-encode work for multi-page documents (this whole pipeline
+    // runs on the UI thread on web, so fewer pixels = less visible freeze).
+    const dpi = 110.0;
     final rasterPages = await Printing.raster(originalPdfBytes, dpi: dpi).toList();
     if (rasterPages.isEmpty) {
       throw Exception('Could not read the original document pages.');
