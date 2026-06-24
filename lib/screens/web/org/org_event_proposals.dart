@@ -500,176 +500,181 @@ class _OrgEventProposalsScreenState extends State<OrgEventProposalsScreen> {
   }
 
   Future<void> _publishProposal(String proposalId) async {
-    if (_publishingIds.contains(proposalId)) return;
-    _publishingIds.add(proposalId);
+  // Prevent double-tap
+  if (_publishingIds.contains(proposalId)) return;
+  _publishingIds.add(proposalId);
+
+  try {
+    // 1. Check authentication
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      throw Exception('You must be logged in to publish.');
+    }
+
+    // 2. Get the proposal document
+    final doc = await FirebaseFirestore.instance
+        .collection('event_proposals')
+        .doc(proposalId)
+        .get();
+    if (!doc.exists) {
+      throw Exception('Proposal not found.');
+    }
+
+    final data = doc.data() as Map<String, dynamic>;
+
+    // 3. Verify status is 'approved'
+    if (data['status'] != 'approved') {
+      throw Exception('Proposal is not approved (status: ${data['status']}).');
+    }
+
+    // 4. Validate required fields
+    final title = (data['title'] ?? '').toString().trim();
+    final description = (data['description'] ?? '').toString().trim();
+    final location = (data['location'] ?? '').toString().trim();
+    final proposalDate = data['date'] as Timestamp?;
+
+    if (title.isEmpty) throw Exception('Missing event title.');
+    if (description.isEmpty) throw Exception('Missing description.');
+    if (location.isEmpty) throw Exception('Missing location.');
+    if (proposalDate == null) throw Exception('Missing event date.');
+
+    // 5. Upload image if present (base64)
+    String bannerUrl = '';
+    final imgB64 = data['imageBase64'] as String?;
+    if (imgB64 != null && imgB64.isNotEmpty) {
+      try {
+        final bytes = base64Decode(imgB64);
+        final imageName = (data['imageName'] ?? 'banner.jpg').toString();
+        final ext = imageName.contains('.') ? imageName.split('.').last.toLowerCase() : 'jpg';
+        const contentTypes = {'png': 'image/png', 'gif': 'image/gif', 'webp': 'image/webp'};
+        final contentType = contentTypes[ext] ?? 'image/jpeg';
+        final ref = FirebaseStorage.instance.ref().child('event_banners/$proposalId.$ext');
+        await ref.putData(bytes, SettableMetadata(contentType: contentType));
+        bannerUrl = await ref.getDownloadURL();
+      } catch (e) {
+        debugPrint('⚠️ Image upload failed: $e');
+        // Continue without image – it's not critical
+      }
+    }
+
+    // 6. Get org name & logo if needed
+    String orgName = (data['orgName'] ?? '').toString();
+    String logoUrl = (data['orgLogoUrl'] as String?) ?? '';
     try {
-      final doc = await FirebaseFirestore.instance
+      final orgDoc = await FirebaseFirestore.instance.collection('organizations').doc(widget.orgId).get();
+      if (orgDoc.exists) {
+        final orgData = orgDoc.data() ?? {};
+        if (orgName.isEmpty) orgName = (orgData['name'] ?? orgData['orgName'] ?? '').toString();
+        if (logoUrl.isEmpty) logoUrl = (orgData['logoUrl'] ?? '').toString();
+      }
+    } catch (_) {}
+
+    // 7. Build event data
+    final date = proposalDate.toDate();
+    final startTime = (data['startTime'] ?? data['time'] ?? '').toString();
+    final endTime = (data['endTime'] ?? '').toString();
+    final capacity = (data['capacity'] is num) ? (data['capacity'] as num).toInt() : 0;
+    final audience = (data['audience'] ?? 'Public').toString();
+    final guestSpeaker = (data['guestSpeaker'] ?? '').toString();
+    final resources = (data['resources'] is List) ? List<String>.from(data['resources']) : [];
+    final labPreparation = (data['labPreparation'] is List) ? List<String>.from(data['labPreparation']) : [];
+    final tags = (data['tags'] is List) ? List<String>.from(data['tags']) : [];
+
+    final eventData = {
+      'orgId': widget.orgId,
+      'orgName': orgName,
+      'title': title,
+      'description': description,
+      'location': location,
+      'category': data['category'] ?? 'Other',
+      'audience': audience,
+      'date': Timestamp.fromDate(date),
+      'startTime': startTime,
+      'endTime': endTime,
+      'capacity': capacity,
+      'slotsLeft': capacity,
+      'guestSpeaker': guestSpeaker,
+      'resources': resources,
+      'labPreparation': labPreparation,
+      'tags': tags,
+      'status': 'approved',
+      'isPublic': true,
+      if (bannerUrl.isNotEmpty) 'bannerUrl': bannerUrl,
+      'logoUrl': logoUrl,
+      'createdFromProposalId': proposalId,
+    };
+
+    // 8. Publish – either update existing event or create new one
+    final existingEventId = (data['publishedEventId'] ?? '').toString();
+    String eventId;
+
+    if (existingEventId.isNotEmpty) {
+      // Update existing event
+      eventId = existingEventId;
+      await FirebaseFirestore.instance.collection('events').doc(eventId).update(eventData);
+    } else {
+      // Create new event
+      final eventRef = FirebaseFirestore.instance.collection('events').doc();
+      eventId = eventRef.id;
+      await eventRef.set({
+        ...eventData,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+      // Link proposal to event
+      await FirebaseFirestore.instance
           .collection('event_proposals')
           .doc(proposalId)
-          .get();
-      if (!doc.exists) return;
-      final data = doc.data() as Map<String, dynamic>;
-
-      if (data['status'] != 'approved') {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text('Only admin-approved proposals can be published.'),
-            backgroundColor: Colors.orange,
-            behavior: SnackBarBehavior.floating,
-          ));
-        }
-        return;
-      }
-      // If this proposal was published before (e.g. it went through a revision
-      // cycle and got re-approved), keep syncing the SAME events doc instead of
-      // creating a second one — one proposal must always map to one event.
-      final existingEventId = (data['publishedEventId'] ?? '').toString();
-
-      final title = data['title'] ?? 'Untitled Event';
-      final description = data['description'] ?? '';
-      final location = data['location'] ?? 'TBA';
-      final category = data['category'] ?? 'Other';
-      final proposalDate = data['date'] as Timestamp?;
-      final date = proposalDate?.toDate() ?? DateTime.now();
-      final String startTime = (data['startTime'] ?? data['time'] ?? '').toString();
-      final String endTime = (data['endTime'] ?? '').toString();
-
-      final int capacity = (data['capacity'] is num) ? (data['capacity'] as num).toInt() : 0;
-      final String guestSpeaker = (data['guestSpeaker'] ?? '').toString();
-      final List<String> resources = (data['resources'] is List) ? List<String>.from(data['resources']) : [];
-      final List<String> labPreparation = (data['labPreparation'] is List) ? List<String>.from(data['labPreparation']) : [];
-      final List<String> tags = (data['tags'] is List) ? List<String>.from(data['tags']) : [];
-      final audience = (data['audience'] ?? 'Public').toString();
-
-      // Upload the proposal's banner image (stored as base64) to Storage so the
-      // student app — which only renders http(s)/asset URLs, not base64 — can show it.
-      String bannerUrl = '';
-      final imgB64 = data['imageBase64'] as String?;
-      if (imgB64 != null && imgB64.isNotEmpty) {
-        try {
-          final bytes = base64Decode(imgB64);
-          final imageName = (data['imageName'] ?? 'banner.jpg').toString();
-          final ext = imageName.contains('.') ? imageName.split('.').last.toLowerCase() : 'jpg';
-          const contentTypes = {'png': 'image/png', 'gif': 'image/gif', 'webp': 'image/webp'};
-          final contentType = contentTypes[ext] ?? 'image/jpeg';
-          final ref = FirebaseStorage.instance.ref().child('event_banners/$proposalId.$ext');
-          await ref.putData(bytes, SettableMetadata(contentType: contentType));
-          bannerUrl = await ref.getDownloadURL();
-        } catch (e) {
-          debugPrint('Error uploading event banner: $e');
-        }
-      }
-
-      String orgName = (data['orgName'] ?? '').toString();
-      String logoUrl = (data['orgLogoUrl'] as String?) ?? '';
-      try {
-        final orgDoc = await FirebaseFirestore.instance.collection('organizations').doc(widget.orgId).get();
-        if (orgDoc.exists) {
-          final orgData = orgDoc.data() ?? {};
-          if (orgName.isEmpty) orgName = (orgData['name'] ?? orgData['orgName'] ?? '').toString();
-          if (logoUrl.isEmpty) logoUrl = (orgData['logoUrl'] ?? '').toString();
-        }
-      } catch (_) {}
-
-      final eventData = {
-        'orgId': widget.orgId,
-        'orgName': orgName,
-        'title': title,
-        'description': description,
-        'location': location,
-        'category': category,
-        'audience': audience,
-        'date': Timestamp.fromDate(date),
-        'startTime': startTime,
-        'endTime': endTime,
-        'capacity': capacity,
-        'slotsLeft': capacity,
-        'guestSpeaker': guestSpeaker,
-        'resources': resources,
-        'labPreparation': labPreparation,
-        'tags': tags,
-        'status': 'approved',
-        'isPublic': true,
-        if (bannerUrl.isNotEmpty) 'bannerUrl': bannerUrl,
-        'logoUrl': logoUrl,
-        'createdFromProposalId': proposalId,
-      };
-
-      String eventId;
-      if (existingEventId.isNotEmpty) {
-        // Already published once — sync the existing event doc instead of
-        // creating a duplicate, so a revised/re-approved proposal always
-        // stays mapped to the single event it originally published.
-        eventId = existingEventId;
-        await FirebaseFirestore.instance.collection('events').doc(eventId).update(eventData);
-      } else {
-        final eventRef = FirebaseFirestore.instance.collection('events').doc();
-        eventId = eventRef.id;
-        // Run inside a transaction so a slow/duplicate publish tap (or a
-        // stale widget retrying after a network delay) can never create a
-        // second event doc for the same proposal.
-        await FirebaseFirestore.instance.runTransaction((tx) async {
-          final proposalRef = FirebaseFirestore.instance.collection('event_proposals').doc(proposalId);
-          final freshSnap = await tx.get(proposalRef);
-          final freshPublishedId = (freshSnap.data()?['publishedEventId'] ?? '').toString();
-          if (freshPublishedId.isNotEmpty) {
-            // Another publish call already won the race — adopt its event id.
-            eventId = freshPublishedId;
-            return;
-          }
-          tx.set(eventRef, {...eventData, 'createdAt': FieldValue.serverTimestamp()});
-          tx.update(proposalRef, {
-            'publishedEventId': eventRef.id,
-            'publishedAt': FieldValue.serverTimestamp(),
-            'publishedBy': FirebaseAuth.instance.currentUser?.uid ?? '',
-          });
-        });
-      }
-
-      if (existingEventId.isNotEmpty) {
-        await FirebaseFirestore.instance.collection('event_proposals').doc(proposalId).update({
-          'publishedAt': FieldValue.serverTimestamp(),
-          'publishedBy': FirebaseAuth.instance.currentUser?.uid ?? '',
-        });
-      }
-
-      await activity_log.ActivityLogger.log(
-        action: existingEventId.isNotEmpty ? 'update_published_event' : 'publish_event_from_proposal',
-        module: 'event_proposals',
-        details: {
-          'orgId': widget.orgId,
-          'proposalId': proposalId,
-          'eventId': eventId,
-          'eventTitle': title,
-        },
-      );
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(existingEventId.isNotEmpty
-                ? '✅ Event updated on the student events page!'
-                : '✅ Event published to the student events page!'),
-            backgroundColor: const Color(0xFF059669),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
-    } catch (e) {
-      debugPrint('Error publishing event from proposal: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('⚠️ Publish failed: $e'),
-            backgroundColor: Colors.orange,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
-    } finally {
-      _publishingIds.remove(proposalId);
+          .update({
+        'publishedEventId': eventId,
+        'publishedAt': FieldValue.serverTimestamp(),
+        'publishedBy': user.uid,
+      });
     }
+
+    // 9. Log activity
+    await activity_log.ActivityLogger.log(
+      action: existingEventId.isNotEmpty ? 'update_published_event' : 'publish_event_from_proposal',
+      module: 'event_proposals',
+      details: {
+        'orgId': widget.orgId,
+        'proposalId': proposalId,
+        'eventId': eventId,
+        'eventTitle': title,
+      },
+    );
+
+    // 10. Show success
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(existingEventId.isNotEmpty
+              ? '✅ Event updated on the student events page!'
+              : '✅ Event published to the student events page!'),
+          backgroundColor: const Color(0xFF059669),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  } catch (e, stack) {
+    // 11. Print full error to console (very important!)
+    debugPrint('❌ PUBLISH ERROR: $e');
+    debugPrint('Stack trace: $stack');
+
+    // Show detailed error to user
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('⚠️ Publish failed: $e'),
+          backgroundColor: Colors.red,
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 5),
+        ),
+      );
+    }
+  } finally {
+    _publishingIds.remove(proposalId);
   }
+}
 
   // ── Export ────────────────────────────────────────────────────────
   Future<void> _exportProposals(String format) async {
