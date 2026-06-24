@@ -526,31 +526,6 @@ class _EventCalendarState extends State<EventCalendar> {
     );
   }
 
-  Widget _buildInfoChip(IconData icon, String text) {
-  return Container(
-    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-    decoration: BoxDecoration(
-      color: const Color(0xFFF1F5F9),
-      borderRadius: BorderRadius.circular(20),
-    ),
-    child: Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, size: 14, color: UpriseColors.primaryDark),
-        const SizedBox(width: 6),
-        Text(
-          text,
-          style: GoogleFonts.beVietnamPro(
-            fontSize: 12,
-            fontWeight: FontWeight.w500,
-            color: const Color(0xFF1A202C),
-          ),
-        ),
-      ],
-    ),
-  );
-}
-
   // ── Calendar grid ─────────────────────────────────────────────────
   int get _totalRows {
     final firstDay = DateTime(_currentMonth.year, _currentMonth.month, 1);
@@ -1051,57 +1026,10 @@ class _EventCalendarState extends State<EventCalendar> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // ── Info Chips ──────────────────────────────────
-                    Wrap(
-                      spacing: 10,
-                      runSpacing: 10,
-                      children: [
-                        _buildInfoChip(
-                          Icons.calendar_today_rounded,
-                          DateFormat('MMM d, yyyy').format(event.date),
-                        ),
-                        if (time.isNotEmpty && time != 'TBD')
-                          _buildInfoChip(
-                            Icons.access_time_rounded,
-                            time,
-                          ),
-                        if (event.location.isNotEmpty)
-                          _buildInfoChip(
-                            Icons.location_on_rounded,
-                            event.location,
-                          ),
-                        if (capacity > 0)
-                          _buildInfoChip(
-                            Icons.group_rounded,
-                            '$capacity capacity',
-                          ),
-                      ],
-                    ),
-                    const SizedBox(height: 24),
-
-                    // ── Description ──────────────────────────────────
-                    if (event.description.isNotEmpty) ...[
-                      _sectionLabel('Description', icon: Icons.description_outlined),
-                      Container(
-                        padding: const EdgeInsets.all(14),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFF8F9FB),
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(color: const Color(0xFFE2E6EA)),
-                        ),
-                        child: Text(
-                          event.description,
-                          style: GoogleFonts.beVietnamPro(
-                            fontSize: 13,
-                            color: const Color(0xFF374151),
-                            height: 1.6,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 20),
-                    ],
-
-                    // ── Event Details ────────────────────────────────
+                    // ── Event Details ──────────────────────────────────
+                    // Single source of truth for date/time/location/capacity —
+                    // category and organization already live in the header
+                    // badges above, so they aren't repeated here.
                     _sectionLabel('Event Details', icon: Icons.info_outline_rounded),
                     Container(
                       padding: const EdgeInsets.all(16),
@@ -1112,28 +1040,6 @@ class _EventCalendarState extends State<EventCalendar> {
                       ),
                       child: Column(
                         children: [
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Expanded(
-                                child: _detailItem(
-                                  'Category',
-                                  event.category,
-                                  Icons.category_outlined,
-                                  valueColor: catColor,
-                                ),
-                              ),
-                              const SizedBox(width: 16),
-                              Expanded(
-                                child: _detailItem(
-                                  'Organization',
-                                  event.organization,
-                                  Icons.business_center,
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 12),
                           Row(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
@@ -1179,6 +1085,28 @@ class _EventCalendarState extends State<EventCalendar> {
                       ),
                     ),
                     const SizedBox(height: 20),
+
+                    // ── Description ──────────────────────────────────
+                    if (event.description.isNotEmpty) ...[
+                      _sectionLabel('Description', icon: Icons.description_outlined),
+                      Container(
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF8F9FB),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: const Color(0xFFE2E6EA)),
+                        ),
+                        child: Text(
+                          event.description,
+                          style: GoogleFonts.beVietnamPro(
+                            fontSize: 13,
+                            color: const Color(0xFF374151),
+                            height: 1.6,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                    ],
 
                     // ── Guest Speaker ────────────────────────────────
                     if (guestSpeaker.isNotEmpty) ...[

@@ -176,7 +176,12 @@ Widget _sectionLabel(String text, {IconData? icon}) {
 // Main Widget
 // ─────────────────────────────────────────────────────────────────────────────
 class AdminSettings extends StatefulWidget {
-  const AdminSettings({super.key});
+  // Settings renders inside the dashboard's persistent shell (the top bar
+  // with the admin's name/avatar stays mounted), so a profile save here
+  // needs to tell that shell to re-fetch — otherwise the name/photo only
+  // updates after navigating away and back.
+  final VoidCallback? onProfileUpdated;
+  const AdminSettings({super.key, this.onProfileUpdated});
 
   @override
   _AdminSettingsState createState() => _AdminSettingsState();
@@ -199,20 +204,12 @@ class _AdminSettingsState extends State<AdminSettings>
   bool _showNewPassword            = false;
   bool _showConfirmPassword        = false;
 
-  // Notification settings
-  bool _emailNotifications = true;
-  bool _desktopAlerts      = true;
-  bool _dailySummary       = true;
-  bool _urgentAlerts       = true;
-  bool _eventReminders     = true;
-
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 4, vsync: this);
+    _tabController = TabController(length: 3, vsync: this);
     _currentUser   = FirebaseAuth.instance.currentUser;
     _loadUserData();
-    _loadSettings();
     _loadProfileImage();
   }
 
@@ -307,25 +304,6 @@ class _AdminSettingsState extends State<AdminSettings>
     }
   }
 
-  Future<void> _loadSettings() async {
-    final doc = await FirebaseFirestore.instance
-        .collection('user_settings')
-        .doc(_currentUser?.uid)
-        .get();
-    if (doc.exists) {
-      final data = doc.data();
-      if (data != null) {
-        setState(() {
-          _emailNotifications = data['emailNotifications'] ?? true;
-          _desktopAlerts      = data['desktopAlerts']      ?? true;
-          _dailySummary       = data['dailySummary']       ?? true;
-          _urgentAlerts       = data['urgentAlerts']       ?? true;
-          _eventReminders     = data['eventReminders']     ?? true;
-        });
-      }
-    }
-  }
-
   // ── Actions ───────────────────────────────────────────────────────
   Future<void> _pickAndUploadImage() async {
     final picker = ImagePicker();
@@ -342,29 +320,13 @@ class _AdminSettingsState extends State<AdminSettings>
       setState(() => _profileImageBase64 = base64String);
       await ActivityLogger.log(
           action: 'Updated profile picture', module: 'Admin Settings');
+      widget.onProfileUpdated?.call();
       _showSnack('Profile picture updated', success: true);
     } catch (e) {
       _showSnack('Error saving picture: $e', success: false);
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
-  }
-
-  Future<void> _saveNotificationSettings() async {
-    await FirebaseFirestore.instance
-        .collection('user_settings')
-        .doc(_currentUser?.uid)
-        .set({
-      'emailNotifications': _emailNotifications,
-      'desktopAlerts':      _desktopAlerts,
-      'dailySummary':       _dailySummary,
-      'urgentAlerts':       _urgentAlerts,
-      'eventReminders':     _eventReminders,
-      'updatedAt':          FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
-    await ActivityLogger.log(
-        action: 'Updated notification preferences', module: 'Admin Settings');
-    _showSnack('Preferences saved', success: true);
   }
 
   Future<void> _updateProfile() async {
@@ -386,6 +348,7 @@ class _AdminSettingsState extends State<AdminSettings>
       await ActivityLogger.log(
           action: 'Updated profile name to ${_fullNameController.text.trim()}',
           module: 'Admin Settings');
+      widget.onProfileUpdated?.call();
       _showSnack('Profile updated successfully', success: true);
     } catch (e) {
       _showSnack('Error: $e', success: false);
@@ -437,14 +400,12 @@ class _AdminSettingsState extends State<AdminSettings>
       color: const Color(0xFFFBFCFE),
       child: Column(
         children: [
-          _buildHeader(),
           _buildTabBar(),
           Expanded(
             child: TabBarView(
               controller: _tabController,
               children: [
                 _buildProfileTab(),
-                _buildPreferencesTab(),
                 _buildSecurityTab(),
                 _buildAuditLogsTab(),
               ],
@@ -455,59 +416,16 @@ class _AdminSettingsState extends State<AdminSettings>
     );
   }
 
-  Widget _buildHeader() {
+  Widget _buildTabBar() {
     return Container(
-      padding: const EdgeInsets.fromLTRB(28, 28, 28, 20),
       decoration: const BoxDecoration(
         color: Colors.white,
         border: Border(bottom: BorderSide(color: Color(0xFFE8ECF0))),
       ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              color: UpriseColors.primaryDark.withOpacity(0.10),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Icon(Icons.settings_rounded, color: UpriseColors.primaryDark, size: 22),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Admin System Settings',
-                  style: GoogleFonts.beVietnamPro(
-                    fontSize: 22,
-                    fontWeight: FontWeight.w700,
-                    color: UpriseColors.accent,
-                  ),
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  'Manage your profile, security, and notification preferences.',
-                  style: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF64748B)),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildTabBar() {
-    return Container(
-      color: Colors.white,
       child: TabBar(
         controller: _tabController,
         tabs: const [
           Tab(text: 'Profile'),
-          Tab(text: 'Preferences'),
           Tab(text: 'Security'),
           Tab(text: 'Audit Logs'),
         ],
@@ -710,91 +628,6 @@ class _AdminSettingsState extends State<AdminSettings>
                 ),
               ),
             ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  // ═══════════════════════════════════════════════════════════════════
-  // PREFERENCES TAB
-  // ═══════════════════════════════════════════════════════════════════
-  Widget _buildPreferencesTab() {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(28),
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 680),
-          child: Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(24),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(_DS.radiusLg),
-              border: Border.all(color: const Color(0xFFE8ECF0)),
-              boxShadow: _DS.cardShadow,
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _sectionLabel('Notification Settings', icon: Icons.notifications_outlined),
-                _notificationTile(
-                  title: 'Email Notifications',
-                  subtitle: 'Receive daily summary of pending approvals via email',
-                  icon: Icons.email_outlined,
-                  value: _emailNotifications,
-                  onChanged: (v) => setState(() => _emailNotifications = v),
-                ),
-                _notificationTile(
-                  title: 'Desktop Alerts',
-                  subtitle: 'In-browser push notifications for urgent alerts',
-                  icon: Icons.desktop_windows_outlined,
-                  value: _desktopAlerts,
-                  onChanged: (v) => setState(() => _desktopAlerts = v),
-                ),
-                const SizedBox(height: 8),
-                _sectionLabel('Advanced Notifications', icon: Icons.tune_rounded),
-                _notificationTile(
-                  title: 'Daily Summary',
-                  subtitle: 'Get a daily digest of all system activities',
-                  icon: Icons.summarize_outlined,
-                  value: _dailySummary,
-                  onChanged: (v) => setState(() => _dailySummary = v),
-                ),
-                _notificationTile(
-                  title: 'Urgent Alerts',
-                  subtitle: 'Receive immediate notifications for critical issues',
-                  icon: Icons.warning_amber_rounded,
-                  value: _urgentAlerts,
-                  onChanged: (v) => setState(() => _urgentAlerts = v),
-                ),
-                _notificationTile(
-                  title: 'Event Reminders',
-                  subtitle: 'Get reminded about upcoming events and deadlines',
-                  icon: Icons.event_rounded,
-                  value: _eventReminders,
-                  onChanged: (v) => setState(() => _eventReminders = v),
-                ),
-                const SizedBox(height: 20),
-                ElevatedButton.icon(
-                  onPressed: _saveNotificationSettings,
-                  icon: const Icon(Icons.save_rounded, size: 16),
-                  label: Text(
-                    'Save Preferences',
-                    style: GoogleFonts.beVietnamPro(
-                        fontSize: 13, fontWeight: FontWeight.w600),
-                  ),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: UpriseColors.primaryDark,
-                    foregroundColor: Colors.white,
-                    elevation: 0,
-                    minimumSize: const Size(double.infinity, 44),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(_DS.radiusSm)),
-                  ),
-                ),
-              ],
-            ),
           ),
         ),
       ),

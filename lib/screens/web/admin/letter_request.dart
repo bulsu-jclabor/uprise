@@ -720,9 +720,8 @@ class _AdminLetterRequestScreenState extends State<AdminLetterRequestScreen> {
                           icon: Icons.cancel_outlined,
                           tooltip: 'Reject',
                           color: AdminColors.error,
-                          onTap: () => _updateStatus(
+                          onTap: () => _confirmRejectLetter(
                             docId,
-                            'rejected',
                             data['orgName'] ?? 'Request',
                           ),
                         ),
@@ -733,7 +732,7 @@ class _AdminLetterRequestScreenState extends State<AdminLetterRequestScreen> {
                       _ActionIconButton(
                         icon: Icons.archive_outlined,
                         tooltip: 'Archive',
-                        color: AdminColors.warning,
+                        color: const Color(0xFF6B7280),
                         onTap: () => _archiveRequest(
                           docId,
                           data['orgName'] ?? 'Request',
@@ -1048,6 +1047,35 @@ class _AdminLetterRequestScreenState extends State<AdminLetterRequestScreen> {
           ),
         );
       }
+    }
+  }
+
+  Future<void> _confirmRejectLetter(String docId, String orgName) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      barrierColor: Colors.black54,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text('Reject Letter Request', style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.w700)),
+        content: Text(
+          'Reject the letter request from "$orgName"? The organization will be notified.',
+          style: GoogleFonts.beVietnamPro(fontSize: 14, color: const Color(0xFF64748B), height: 1.5),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text('Cancel', style: GoogleFonts.beVietnamPro(color: const Color(0xFF374151))),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(backgroundColor: AdminColors.error, foregroundColor: Colors.white),
+            child: Text('Reject', style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.w600)),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true) {
+      await _updateStatus(docId, 'rejected', orgName);
     }
   }
 
@@ -1623,12 +1651,10 @@ class _AdminLetterRequestScreenState extends State<AdminLetterRequestScreen> {
                         mainAxisAlignment: MainAxisAlignment.end,
                         children: [
                           OutlinedButton(
-                            onPressed: isSaving
-                                ? null
-                                : () {
-                                    Navigator.pop(ctx);
-                                    _updateStatus(docId, 'approved', orgName);
-                                  },
+                            // Approval always requires a signature now — this
+                            // just closes the dialog without approving
+                            // anything, it never skips signing.
+                            onPressed: isSaving ? null : () => Navigator.pop(ctx),
                             style: OutlinedButton.styleFrom(
                               side: const BorderSide(color: Color(0xFFE2E6EA)),
                               shape: RoundedRectangleBorder(
@@ -1640,8 +1666,8 @@ class _AdminLetterRequestScreenState extends State<AdminLetterRequestScreen> {
                               ),
                             ),
                             child: Text(
-                              'Skip e-sign',
-                              style: GoogleFonts.beVietnamPro(fontSize: 13),
+                              'Cancel',
+                              style: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF374151)),
                             ),
                           ),
                           const SizedBox(width: 10),
@@ -2384,7 +2410,7 @@ class _AdminLetterRequestScreenState extends State<AdminLetterRequestScreen> {
                             child: OutlinedButton.icon(
                               onPressed: () {
                                 Navigator.pop(ctx);
-                                _updateStatus(docId, 'rejected', orgName);
+                                _confirmRejectLetter(docId, orgName);
                               },
                               icon: const Icon(Icons.cancel_rounded, size: 15),
                               label: Text(

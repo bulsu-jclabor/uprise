@@ -956,7 +956,7 @@ class _AdviserRolesState extends State<AdviserRoles> {
               tooltip: archived ? 'Restore' : 'Archive',
               color: archived ? const Color(0xFF059669) : const Color(0xFF6B7280),
               onTap: archived
-                  ? () => _restoreRecord(docId, data['orgName'] ?? '')
+                  ? () => _confirmRestoreRecord(docId, data['orgName'] ?? '')
                   : () => _confirmArchive(docId, data['orgName'] ?? ''),
             ),
           ]),
@@ -1152,7 +1152,7 @@ class _AdviserRolesState extends State<AdviserRoles> {
                     OutlinedButton.icon(
                       onPressed: () {
                         Navigator.pop(ctx);
-                        _restoreRecord(docId, orgName);
+                        _confirmRestoreRecord(docId, orgName);
                       },
                       icon: const Icon(Icons.unarchive_outlined, size: 15, color: Color(0xFF059669)),
                       label: Text('Restore', style: GoogleFonts.beVietnamPro(fontSize: 13, color: Color(0xFF059669))),
@@ -1717,22 +1717,32 @@ const SizedBox(height: 20),
     );
   }
 
-  Future<void> _restoreRecord(String docId, String orgName) async {
-    await FirebaseFirestore.instance.collection('adviser_roles').doc(docId).update({'archived': false});
-    await activity_log.ActivityLogger.log(
-        action: 'Restored adviser role for $orgName',
-        module: 'Adviser Roles',
-        severity: 'info',
-        details: {'docId': docId, 'orgName': orgName});
-    _loadMeta();
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: const Text('Record restored.'),
-        backgroundColor: const Color(0xFF059669),
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-      ));
-    }
+  void _confirmRestoreRecord(String docId, String orgName) {
+    _confirmAction(
+      title: 'Restore Record',
+      message: 'Restore "$orgName" back to the active list?',
+      confirmLabel: 'Restore',
+      confirmColor: const Color(0xFF059669),
+      icon: Icons.unarchive_outlined,
+      iconBg: const Color(0xFFECFDF5),
+      onConfirm: () async {
+        await FirebaseFirestore.instance.collection('adviser_roles').doc(docId).update({'archived': false});
+        await activity_log.ActivityLogger.log(
+            action: 'Restored adviser role for $orgName',
+            module: 'Adviser Roles',
+            severity: 'info',
+            details: {'docId': docId, 'orgName': orgName});
+        _loadMeta();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: const Text('Record restored.'),
+            backgroundColor: const Color(0xFF059669),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          ));
+        }
+      },
+    );
   }
 
   void _confirmAction({

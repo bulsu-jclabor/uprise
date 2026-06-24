@@ -1,4 +1,5 @@
-﻿import 'dart:math' as math;
+﻿import 'dart:convert';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -16,6 +17,7 @@ import 'event_calendar.dart';
 import 'letter_request.dart';
 import 'external_account.dart';
 import '../../../services/activity_logger.dart' as activity_log;
+import '../../../services/notification_service.dart';
 import 'reports_management.dart';
 import 'settings.dart';
 
@@ -87,6 +89,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
   String _adminRole = 'Administrator';
   String _currentDateTime = '';
   String? _adminPhotoUrl;
+  String? _adminPhotoBase64;
   late final List<Widget> _screens;
 
   @override
@@ -122,30 +125,56 @@ class _AdminDashboardState extends State<AdminDashboard> {
     });
   }
 
+  Widget _buildAdminAvatar() {
+    final initial = Text(
+      _adminName.isNotEmpty ? _adminName[0].toUpperCase() : 'A',
+      style: GoogleFonts.beVietnamPro(
+        fontSize: 14,
+        fontWeight: FontWeight.w700,
+        color: UpriseColors.primaryDark,
+      ),
+    );
+    if (_adminPhotoBase64 != null && _adminPhotoBase64!.isNotEmpty) {
+      try {
+        return Image.memory(
+          base64Decode(_adminPhotoBase64!),
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) => Center(child: initial),
+        );
+      } catch (_) {
+        return Center(child: initial);
+      }
+    }
+    if (_adminPhotoUrl != null && _adminPhotoUrl!.isNotEmpty) {
+      return Image.network(
+        _adminPhotoUrl!,
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => Center(child: initial),
+      );
+    }
+    return Center(child: initial);
+  }
+
   Future<void> _fetchAdminData() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
     try {
-      final doc = await FirebaseFirestore.instance
-          .collection('admins')
+      // Matches the fields admin_settings.dart actually writes to
+      // users/{uid}: 'fullName' and 'photoBase64' (there is no separate
+      // 'admins' collection anywhere else in the app).
+      final uDoc = await FirebaseFirestore.instance
+          .collection('users')
           .doc(user.uid)
           .get();
-      if (doc.exists) {
-        setState(() {
-          _adminName = doc.data()!['name'] ?? user.displayName ?? 'Admin User';
-          _adminRole = doc.data()!['role'] ?? 'Administrator';
-          _adminPhotoUrl = doc.data()!['photoUrl'] as String? ?? user.photoURL;
-        });
-      } else {
-        final uDoc = await FirebaseFirestore.instance
-            .collection('users')
-            .doc(user.uid)
-            .get();
-        setState(() {
-          _adminName = uDoc.data()?['name'] ?? user.displayName ?? 'Admin User';
-          _adminPhotoUrl = uDoc.data()?['photoUrl'] as String? ?? user.photoURL;
-        });
-      }
+      final data = uDoc.data();
+      setState(() {
+        _adminName = (data?['fullName'] as String?)?.trim().isNotEmpty == true
+            ? data!['fullName'] as String
+            : (user.displayName ?? 'Admin User');
+        _adminRole = data?['role'] ?? 'Administrator';
+        _adminPhotoBase64 = data?['photoBase64'] as String?;
+        _adminPhotoUrl = data?['photoUrl'] as String? ?? user.photoURL;
+      });
     } catch (_) {
       setState(
         () => _adminName =
@@ -166,7 +195,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
           .map((d) => {
                 'id': d.id,
                 'title': d.data()['title'] ?? 'New Notification',
-                'message': d.data()['message'] ?? '',
+                'message': d.data()['body'] ?? d.data()['message'] ?? '',
                 'timestamp': d.data()['createdAt'],
                 'isRead': d.data()['isRead'] ?? false,
               })
@@ -382,7 +411,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                 _buildTopBar(),
                 Expanded(
                   child: _selectedIndex == -1
-                      ? const AdminSettings()
+                      ? AdminSettings(onProfileUpdated: _fetchAdminData)
                       : _screens[_selectedIndex],
                 ),
               ],
@@ -723,34 +752,44 @@ class _AdminDashboardState extends State<AdminDashboard> {
                 ),
               ),
             ],
-            child: Stack(
+            child: StreamBuilder<int>(
+              // Live count so a new notification updates the badge
+              // immediately, without needing to reopen the dropdown.
+              stream: FirebaseAuth.instance.currentUser != null
+                  ? NotificationService.unreadCountStream(
+                      FirebaseAuth.instance.currentUser!.uid)
+                  : const Stream<int>.empty(),
+              initialData: _unreadNotifications,
+              builder: (context, snapshot) {
+                final unread = snapshot.data ?? _unreadNotifications;
+                return Stack(
               clipBehavior: Clip.none,
               children: [
                 Container(
                   width: 38,
                   height: 38,
                   decoration: BoxDecoration(
-                    color: _unreadNotifications > 0
+                    color: unread > 0
                         ? UpriseColors.primaryDark.withAlpha(12)
                         : const Color(0xFFF8F9FB),
                     borderRadius: BorderRadius.circular(10),
                     border: Border.all(
-                      color: _unreadNotifications > 0
+                      color: unread > 0
                           ? UpriseColors.primaryDark.withAlpha(60)
                           : const Color(0xFFE8ECF0),
                     ),
                   ),
                   child: Icon(
-                    _unreadNotifications > 0
+                    unread > 0
                         ? Icons.notifications_rounded
                         : Icons.notifications_none_rounded,
-                    color: _unreadNotifications > 0
+                    color: unread > 0
                         ? UpriseColors.primaryDark
                         : const Color(0xFF64748B),
                     size: 18,
                   ),
                 ),
-                if (_unreadNotifications > 0)
+                if (unread > 0)
                   Positioned(
                     right: -3,
                     top: -3,
@@ -763,7 +802,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                         shape: BoxShape.circle,
                       ),
                       child: Text(
-                        _unreadNotifications > 9 ? '9+' : '$_unreadNotifications',
+                        unread > 9 ? '9+' : '$unread',
                         style: GoogleFonts.beVietnamPro(
                           color: Colors.white,
                           fontSize: 9,
@@ -773,6 +812,8 @@ class _AdminDashboardState extends State<AdminDashboard> {
                     ),
                   ),
               ],
+            );
+              },
             ),
           ),
           const SizedBox(width: 10),
@@ -793,31 +834,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                   border: Border.all(color: UpriseColors.primaryDark.withAlpha(50)),
                 ),
                 clipBehavior: Clip.antiAlias,
-                child: _adminPhotoUrl != null
-                    ? Image.network(
-                        _adminPhotoUrl!,
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => Center(
-                          child: Text(
-                            _adminName.isNotEmpty ? _adminName[0].toUpperCase() : 'A',
-                            style: GoogleFonts.beVietnamPro(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w700,
-                              color: UpriseColors.primaryDark,
-                            ),
-                          ),
-                        ),
-                      )
-                    : Center(
-                        child: Text(
-                          _adminName.isNotEmpty ? _adminName[0].toUpperCase() : 'A',
-                          style: GoogleFonts.beVietnamPro(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w700,
-                            color: UpriseColors.primaryDark,
-                          ),
-                        ),
-                      ),
+                child: _buildAdminAvatar(),
               ),
               const SizedBox(width: 10),
               Column(

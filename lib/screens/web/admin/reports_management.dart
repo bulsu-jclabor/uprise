@@ -135,6 +135,16 @@ Widget _statusBadge(String status) {
       UpriseColors.success,
       'SUBMITTED',
     ),
+    'on time': _BadgeStyle(
+      UpriseColors.successBg,
+      UpriseColors.success,
+      'ON TIME',
+    ),
+    'late': _BadgeStyle(
+      UpriseColors.warningBg,
+      UpriseColors.warning,
+      'LATE',
+    ),
     'pending': _BadgeStyle(
       UpriseColors.warningBg,
       UpriseColors.warning,
@@ -267,6 +277,9 @@ class OrgSubmission {
   final String? fileUrl, submissionId;
   final String? eventId, eventTitle;
   final DateTime? eventDate;
+  // Admin override for this specific org's deadline, if they ever edited it.
+  // Falls back to the automatic 7-day rule when null.
+  final DateTime? deadlineOverride;
 
   OrgSubmission({
     required this.orgId,
@@ -277,14 +290,20 @@ class OrgSubmission {
     this.eventId,
     this.eventTitle,
     this.eventDate,
+    this.deadlineOverride,
   });
 
   bool get hasApprovedEvent => eventDate != null && eventTitle != null;
 
-  // Submission deadline rule: automatically 1 week AFTER the event date.
-  // No manual deadline setting is required for this — it's derived purely
-  // from the event date.
-  DateTime? get eventDeadline => eventDate?.add(const Duration(days: 7));
+  // Submission deadline rule: automatically 1 week AFTER the event date,
+  // unless an admin has set a per-org override for this report type.
+  DateTime? get eventDeadline =>
+      deadlineOverride ?? eventDate?.add(const Duration(days: 7));
+
+  bool get isLate =>
+      submittedAt != null &&
+      eventDeadline != null &&
+      submittedAt!.isAfter(eventDeadline!);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -310,6 +329,9 @@ class _ReportsManagementState extends State<ReportsManagement>
     return org['logoUrl'] as String?;
   }
 
+  final TextEditingController _eventSearchController = TextEditingController();
+  final TextEditingController _reportSearchController = TextEditingController();
+
   String _filterOrg = 'All Organizations';
   String _filterType = 'All Types';
   String _filterRange = 'All Time';
@@ -328,9 +350,6 @@ class _ReportsManagementState extends State<ReportsManagement>
   List<EventReport> _events = [];
   List<Map<String, dynamic>> _organizations = [];
   bool _loadingEvents = true;
-
-  // Event Summary tab — only shows results after "Generate Reports" is tapped
-  bool _summaryGenerated = false;
 
   // Admin reports for financial and accomplishment
   List<AdminReport> _financialReports = [];
@@ -372,6 +391,8 @@ class _ReportsManagementState extends State<ReportsManagement>
   @override
   void dispose() {
     _tabController.dispose();
+    _eventSearchController.dispose();
+    _reportSearchController.dispose();
     super.dispose();
   }
 
@@ -664,8 +685,11 @@ class _ReportsManagementState extends State<ReportsManagement>
     );
   }
 
+  // Reports are only due once an event has actually happened, so the
+  // tracker is keyed off each org's most recently FINISHED approved event
+  // (not an upcoming one — there's nothing to report on yet for those).
   Future<Map<String, Map<String, dynamic>>>
-  _loadNextApprovedEventsByOrg() async {
+  _loadLastFinishedEventsByOrg() async {
     final now = DateTime.now();
     final eventsSnap = await FirebaseFirestore.instance
         .collection('events')
@@ -677,12 +701,13 @@ class _ReportsManagementState extends State<ReportsManagement>
       final data = doc.data() as Map<String, dynamic>;
       final orgId = data['orgId']?.toString();
       final date = (data['date'] as Timestamp?)?.toDate();
-      if (orgId == null || orgId.isEmpty || date == null || date.isBefore(now))
+      if (orgId == null || orgId.isEmpty || date == null || !date.isBefore(now)) {
         continue;
+      }
 
       final existing = eventInfo[orgId];
       if (existing == null ||
-          date.isBefore(existing['eventDate'] as DateTime)) {
+          date.isAfter(existing['eventDate'] as DateTime)) {
         eventInfo[orgId] = {
           'eventId': doc.id,
           'eventTitle': data['title']?.toString() ?? 'Untitled Event',
@@ -751,6 +776,159 @@ class _ReportsManagementState extends State<ReportsManagement>
     ]);
   }
 
+  // Per-org/type deadline overrides an admin has set, keyed '{orgId}_{type}'.
+  Future<Map<String, DateTime>> _loadDeadlineOverrides(String type) async {
+    final snap = await FirebaseFirestore.instance
+        .collection('report_deadline_overrides')
+        .where('type', isEqualTo: type)
+        .get();
+    final map = <String, DateTime>{};
+    for (final doc in snap.docs) {
+      final data = doc.data();
+      final orgId = data['orgId']?.toString();
+      final deadline = (data['deadline'] as Timestamp?)?.toDate();
+      if (orgId != null && deadline != null) map[orgId] = deadline;
+    }
+    return map;
+  }
+
+  Future<void> _saveDeadlineOverride(
+    OrgSubmission sub,
+    String type,
+    DateTime? deadline,
+  ) async {
+    final docId = '${sub.orgId}_$type';
+    final ref = FirebaseFirestore.instance
+        .collection('report_deadline_overrides')
+        .doc(docId);
+    if (deadline == null) {
+      await ref.delete();
+    } else {
+      await ref.set({
+        'orgId': sub.orgId,
+        'type': type,
+        'deadline': Timestamp.fromDate(deadline),
+        'eventId': sub.eventId,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+    }
+    await activity_log.ActivityLogger.log(
+      action: deadline == null
+          ? 'Cleared $type report deadline override for ${sub.orgName}'
+          : 'Set $type report deadline for ${sub.orgName} to ${DateFormat('yyyy-MM-dd').format(deadline)}',
+      module: 'Reports',
+      severity: 'info',
+      details: {'orgId': sub.orgId, 'type': type},
+    );
+    if (type == 'financial') {
+      await _loadFinancialSubmissions();
+    } else {
+      await _loadAccomplishmentSubmissions();
+    }
+  }
+
+  Future<void> _showEditDeadlineDialog(OrgSubmission sub, String type) async {
+    DateTime? picked = sub.deadlineOverride;
+    final autoDeadline = sub.eventDate?.add(const Duration(days: 7));
+    await showDialog(
+      context: context,
+      barrierColor: Colors.black54,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDlg) => Dialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          child: Container(
+            width: 380,
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Edit ${type == 'financial' ? 'Financial' : 'Accomplishment'} Deadline',
+                  style: GoogleFonts.beVietnamPro(fontSize: 16, fontWeight: FontWeight.w700),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  sub.orgName,
+                  style: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF64748B)),
+                ),
+                const SizedBox(height: 16),
+                if (autoDeadline != null)
+                  Text(
+                    'Default (7 days after event): ${DateFormat('MMM dd, yyyy').format(autoDeadline)}',
+                    style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF9AA5B4)),
+                  ),
+                const SizedBox(height: 10),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF8F9FB),
+                    borderRadius: BorderRadius.circular(_DS.radiusSm),
+                    border: Border.all(color: const Color(0xFFE2E6EA)),
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          picked != null
+                              ? DateFormat('MMMM dd, yyyy').format(picked!)
+                              : 'Using default',
+                          style: GoogleFonts.beVietnamPro(fontSize: 13),
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.calendar_today_rounded, size: 18, color: UpriseColors.primaryDark),
+                        onPressed: () async {
+                          final result = await showDatePicker(
+                            context: ctx,
+                            initialDate: picked ?? autoDeadline ?? DateTime.now(),
+                            firstDate: DateTime(2020),
+                            lastDate: DateTime.now().add(const Duration(days: 730)),
+                          );
+                          if (result != null) setDlg(() => picked = result);
+                        },
+                      ),
+                      if (picked != null)
+                        IconButton(
+                          icon: const Icon(Icons.clear_rounded, size: 18, color: Color(0xFF9AA5B4)),
+                          tooltip: 'Reset to default',
+                          onPressed: () => setDlg(() => picked = null),
+                        ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 20),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(ctx),
+                      child: Text('Cancel', style: GoogleFonts.beVietnamPro(fontSize: 13)),
+                    ),
+                    const SizedBox(width: 8),
+                    ElevatedButton(
+                      onPressed: () async {
+                        Navigator.pop(ctx);
+                        await _saveDeadlineOverride(sub, type, picked);
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: UpriseColors.primaryDark,
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      ),
+                      child: Text('Save', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600)),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   // Keep these for submission tracker tab
   Future<void> _loadFinancialSubmissions() async {
     if (!mounted) return;
@@ -767,7 +945,8 @@ class _ReportsManagementState extends State<ReportsManagement>
             },
           )
           .toList();
-      final eventInfo = await _loadNextApprovedEventsByOrg();
+      final eventInfo = await _loadLastFinishedEventsByOrg();
+      final overrides = await _loadDeadlineOverrides('financial');
       final subsSnap = await FirebaseFirestore.instance
           .collection('financial_submissions')
           .get();
@@ -793,6 +972,7 @@ class _ReportsManagementState extends State<ReportsManagement>
             eventId: info?['eventId'] as String?,
             eventTitle: info?['eventTitle'] as String?,
             eventDate: info?['eventDate'] as DateTime?,
+            deadlineOverride: overrides[org['id']],
           );
         }).toList();
       });
@@ -818,7 +998,8 @@ class _ReportsManagementState extends State<ReportsManagement>
             },
           )
           .toList();
-      final eventInfo = await _loadNextApprovedEventsByOrg();
+      final eventInfo = await _loadLastFinishedEventsByOrg();
+      final overrides = await _loadDeadlineOverrides('accomplishment');
       final subsSnap = await FirebaseFirestore.instance
           .collection('accomplishment_submissions')
           .get();
@@ -844,6 +1025,7 @@ class _ReportsManagementState extends State<ReportsManagement>
             eventId: info?['eventId'] as String?,
             eventTitle: info?['eventTitle'] as String?,
             eventDate: info?['eventDate'] as DateTime?,
+            deadlineOverride: overrides[org['id']],
           );
         }).toList();
       });
@@ -1073,11 +1255,60 @@ class _ReportsManagementState extends State<ReportsManagement>
     'Track which organizations have met their financial and accomplishment report deadlines.',
   ];
 
+  // Page-level overview, visible regardless of which tab is active — same
+  // pattern as the stats row on event_proposals.dart / external_account.dart.
+  Widget _buildPageStatsRow() {
+    final trackedFin = _financialSubs.where((s) => s.hasApprovedEvent).toList();
+    final trackedAcc = _accomplishmentSubs.where((s) => s.hasApprovedEvent).toList();
+    final overdue = trackedFin.where((s) => s.submittedAt == null && s.eventDeadline != null && DateTime.now().isAfter(s.eventDeadline!)).length +
+        trackedAcc.where((s) => s.submittedAt == null && s.eventDeadline != null && DateTime.now().isAfter(s.eventDeadline!)).length;
+    final late = trackedFin.where((s) => s.isLate).length + trackedAcc.where((s) => s.isLate).length;
+
+    final cards = [
+      _StatCard(
+        label: 'Financial Reports',
+        value: '${_financialReports.length}',
+        icon: Icons.attach_money_rounded,
+        color: UpriseColors.success,
+      ),
+      _StatCard(
+        label: 'Accomplishment Reports',
+        value: '${_accomplishmentReports.length}',
+        icon: Icons.assignment_rounded,
+        color: UpriseColors.info,
+      ),
+      _StatCard(
+        label: 'Late Submissions',
+        value: '$late',
+        icon: Icons.history_toggle_off_rounded,
+        color: UpriseColors.warning,
+      ),
+      _StatCard(
+        label: 'Overdue (Not Submitted)',
+        value: '$overdue',
+        icon: Icons.error_outline_rounded,
+        color: UpriseColors.error,
+      ),
+    ];
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(28, 20, 28, 0),
+      child: Row(
+        children: [
+          for (var i = 0; i < cards.length; i++) ...[
+            if (i > 0) const SizedBox(width: 14),
+            cards[i],
+          ],
+        ],
+      ),
+    );
+  }
+
   Widget _buildMainView() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-      
+        _buildPageStatsRow(),
         const SizedBox(height: 16),
         _buildTabBar(),
         const SizedBox(height: 16),
@@ -1139,21 +1370,118 @@ class _ReportsManagementState extends State<ReportsManagement>
   }
 
   // ── Report Tab (Accomplishment / Financial) ──────────────────────
+  // Pure viewing of whatever orgs have uploaded — filters apply live, no
+  // "generate" step needed since the data already exists.
   Widget _buildReportTab(String reportType, List<AdminReport> reports, bool loading) {
+    final filtered = _applyReportFilters(reports);
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(28, 8, 28, 24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildReportTable(reportType, reports, loading),
-          // Shown on both tabs — this is a generic feed of every exported
-          // report (any type), not financial-specific, so it shouldn't only
-          // appear under "Financial".
-          const SizedBox(height: 24),
-          _buildRecentReportsBar(),
+          _buildReportFilterRow(),
+          const SizedBox(height: 16),
+          _buildReportTable(reportType, filtered, loading),
         ],
       ),
     );
+  }
+
+  List<AdminReport> _applyReportFilters(List<AdminReport> reports) {
+    var filtered = reports;
+    final term = _reportSearchController.text.trim().toLowerCase();
+    if (term.isNotEmpty) {
+      filtered = filtered
+          .where((r) =>
+              r.orgName.toLowerCase().contains(term) ||
+              r.eventTitle.toLowerCase().contains(term))
+          .toList();
+    }
+    if (_filterOrg != 'All Organizations') {
+      filtered = filtered.where((r) => r.orgName == _filterOrg).toList();
+    }
+    final (start, end) = _computeDateRange();
+    if (start != null) {
+      filtered = filtered.where((r) => !r.submittedAt.isBefore(start)).toList();
+    }
+    if (end != null) {
+      filtered = filtered.where((r) => !r.submittedAt.isAfter(end)).toList();
+    }
+    return filtered;
+  }
+
+  // Same bare search-field-plus-dropdowns layout as the other admin
+  // tables — no card wrapper, no section label.
+  Widget _buildReportFilterRow() {
+    final orgNames = [
+      'All Organizations',
+      ..._organizations.map((o) => o['name'] as String),
+    ];
+
+    final searchField = SizedBox(
+      height: 40,
+      child: TextField(
+        controller: _reportSearchController,
+        style: GoogleFonts.beVietnamPro(fontSize: 13),
+        decoration: InputDecoration(
+          hintText: 'Search by event or organization…',
+          hintStyle: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF9AA5B4)),
+          prefixIcon: const Icon(Icons.search_rounded, size: 18, color: Color(0xFF9AA5B4)),
+          filled: true,
+          fillColor: Colors.white,
+          contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE2E6EA))),
+          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE2E6EA))),
+          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: UpriseColors.primaryDark, width: 1.5)),
+        ),
+        onChanged: (_) => setState(() {}),
+      ),
+    );
+
+    final filters = Wrap(
+      spacing: 10,
+      runSpacing: 10,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        _FilterDropdown(
+          value: _filterOrg,
+          items: orgNames,
+          hint: 'Organization',
+          icon: Icons.business_rounded,
+          onChanged: (v) => setState(() => _filterOrg = v!),
+        ),
+        _FilterDropdown(
+          value: _filterAcademicYear,
+          items: _academicYears,
+          hint: 'Academic Year',
+          icon: Icons.school_rounded,
+          onChanged: (v) => setState(() => _filterAcademicYear = v!),
+        ),
+        _FilterDropdown(
+          value: _filterSemester,
+          items: _semesters,
+          hint: 'Semester',
+          icon: Icons.calendar_view_month_rounded,
+          onChanged: (v) => setState(() => _filterSemester = v!),
+        ),
+      ],
+    );
+
+    return LayoutBuilder(builder: (context, constraints) {
+      if (constraints.maxWidth < 760) {
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [searchField, const SizedBox(height: 10), filters],
+        );
+      }
+      return Row(
+        children: [
+          Expanded(child: searchField),
+          const SizedBox(width: 10),
+          filters,
+        ],
+      );
+    });
   }
 
   // ── Report Table ─────────────────────────────────────────────────
@@ -1373,193 +1701,146 @@ class _ReportsManagementState extends State<ReportsManagement>
 
   // ── Event Summary Tab ─────────────────────────────────────────────
   Widget _buildEventSummaryTab() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(28, 8, 28, 0),
-          child: _buildEventSummaryConfigCard(),
-        ),
-        const SizedBox(height: 16),
-        Expanded(
-          child: !_summaryGenerated
-              ? _buildEventSummaryEmptyState()
-              : _loadingEvents
-                  ? const Center(child: CircularProgressIndicator())
-                  : _buildEventSummaryResults(),
-        ),
-      ],
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(28, 8, 28, 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildEventSummaryToolbar(),
+          const SizedBox(height: 16),
+          _loadingEvents
+              ? const Padding(
+                  padding: EdgeInsets.all(48),
+                  child: Center(child: CircularProgressIndicator()),
+                )
+              : _buildEventSummaryResults(),
+        ],
+      ),
     );
   }
 
-  Widget _buildEventSummaryConfigCard() {
+  List<EventReport> get _filteredEvents {
+    final term = _eventSearchController.text.trim().toLowerCase();
+    if (term.isEmpty) return _events;
+    return _events
+        .where((e) =>
+            e.title.toLowerCase().contains(term) ||
+            e.orgName.toLowerCase().contains(term))
+        .toList();
+  }
+
+  // Live analytics, filtered as you go — same idea as the org-side Event
+  // Analytics screen, but aggregated across every organization instead of
+  // just one. No "generate" step: each filter re-queries immediately. Same
+  // bare search-field-plus-dropdowns layout as the other admin tables
+  // (no card wrapper, no section label).
+  Widget _buildEventSummaryToolbar() {
     final orgNames = [
       'All Organizations',
       ..._organizations.map((o) => o['name'] as String),
     ];
 
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFE8ECF0)),
-        boxShadow: _DS.cardShadow,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _sectionLabel('Report Configuration', icon: Icons.tune_rounded),
-          Wrap(
-            spacing: 10,
-            runSpacing: 10,
-            children: [
-              _FilterDropdown(
-                value: _filterOrg,
-                items: orgNames,
-                hint: 'Organization',
-                icon: Icons.business_rounded,
-                onChanged: (v) => setState(() {
-                  _filterOrg = v!;
-                  _summaryGenerated = false;
-                }),
-              ),
-              _FilterDropdown(
-                value: _filterType,
-                items: const [
-                  'All Types', 'Seminar', 'Workshop', 'Exhibition',
-                  'Social', 'Cultural', 'Competition',
-                ],
-                hint: 'Event Type',
-                icon: Icons.category_rounded,
-                onChanged: (v) => setState(() {
-                  _filterType = v!;
-                  _summaryGenerated = false;
-                }),
-              ),
-              _FilterDropdown(
-                value: _filterAcademicYear,
-                items: _academicYears,
-                hint: 'Academic Year',
-                icon: Icons.school_rounded,
-                onChanged: (v) => setState(() {
-                  _filterAcademicYear = v!;
-                  _summaryGenerated = false;
-                }),
-              ),
-              _FilterDropdown(
-                value: _filterSemester,
-                items: _semesters,
-                hint: 'Semester',
-                icon: Icons.calendar_view_month_rounded,
-                onChanged: (v) => setState(() {
-                  _filterSemester = v!;
-                  _summaryGenerated = false;
-                }),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              ElevatedButton.icon(
-                onPressed: _generateEventSummary,
-                icon: const Icon(Icons.insert_chart_outlined_rounded, size: 16),
-                label: Text(
-                  'Generate Reports',
-                  style: GoogleFonts.beVietnamPro(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: UpriseColors.primaryDark,
-                  foregroundColor: Colors.white,
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-                ),
-              ),
-              if (_summaryGenerated) ...[
-                const SizedBox(width: 10),
-                _ExportButton(
-                  onExportCsv: _exportFinancialCSV,
-                  onExportPdf: _generatePDFReport,
-                ),
-              ],
-            ],
-          ),
-        ],
+    final searchField = SizedBox(
+      height: 40,
+      child: TextField(
+        controller: _eventSearchController,
+        style: GoogleFonts.beVietnamPro(fontSize: 13),
+        decoration: InputDecoration(
+          hintText: 'Search by event or organization…',
+          hintStyle: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF9AA5B4)),
+          prefixIcon: const Icon(Icons.search_rounded, size: 18, color: Color(0xFF9AA5B4)),
+          filled: true,
+          fillColor: Colors.white,
+          contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE2E6EA))),
+          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE2E6EA))),
+          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: UpriseColors.primaryDark, width: 1.5)),
+        ),
+        onChanged: (_) => setState(() {}),
       ),
     );
-  }
 
-  Future<void> _generateEventSummary() async {
-    setState(() {
-      _summaryGenerated = true;
-      _currentPage = 1;
+    final filters = Wrap(
+      spacing: 10,
+      runSpacing: 10,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        _FilterDropdown(
+          value: _filterOrg,
+          items: orgNames,
+          hint: 'Organization',
+          icon: Icons.business_rounded,
+          onChanged: (v) {
+            setState(() => _filterOrg = v!);
+            _loadEvents();
+          },
+        ),
+        _FilterDropdown(
+          value: _filterType,
+          items: const [
+            'All Types', 'Seminar', 'Workshop', 'Exhibition',
+            'Social', 'Cultural', 'Competition',
+          ],
+          hint: 'Event Type',
+          icon: Icons.category_rounded,
+          onChanged: (v) {
+            setState(() => _filterType = v!);
+            _loadEvents();
+          },
+        ),
+        _FilterDropdown(
+          value: _filterAcademicYear,
+          items: _academicYears,
+          hint: 'Academic Year',
+          icon: Icons.school_rounded,
+          onChanged: (v) {
+            setState(() => _filterAcademicYear = v!);
+            _loadEvents();
+          },
+        ),
+        _FilterDropdown(
+          value: _filterSemester,
+          items: _semesters,
+          hint: 'Semester',
+          icon: Icons.calendar_view_month_rounded,
+          onChanged: (v) {
+            setState(() => _filterSemester = v!);
+            _loadEvents();
+          },
+        ),
+        _ExportButton(
+          onExportCsv: _exportFinancialCSV,
+          onExportPdf: _generatePDFReport,
+        ),
+      ],
+    );
+
+    return LayoutBuilder(builder: (context, constraints) {
+      if (constraints.maxWidth < 760) {
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [searchField, const SizedBox(height: 10), filters],
+        );
+      }
+      return Row(
+        children: [
+          Expanded(child: searchField),
+          const SizedBox(width: 10),
+          filters,
+        ],
+      );
     });
-    await _loadEvents();
-  }
-
-  Widget _buildEventSummaryEmptyState() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Container(
-            width: 80,
-            height: 80,
-            decoration: BoxDecoration(
-              color: const Color(0xFFF1F5F9),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: const Icon(
-              Icons.insert_chart_outlined_rounded,
-              size: 40,
-              color: Color(0xFF9AA5B4),
-            ),
-          ),
-          const SizedBox(height: 16),
-          Text(
-            'No summary generated yet',
-            style: GoogleFonts.beVietnamPro(
-              fontSize: 15,
-              fontWeight: FontWeight.w600,
-              color: const Color(0xFF374151),
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            'Choose your filters above, then tap "Generate Reports" to view the summary.',
-            style: GoogleFonts.beVietnamPro(
-              fontSize: 13,
-              color: const Color(0xFF64748B),
-            ),
-          ),
-        ],
-      ),
-    );
   }
 
   Widget _buildEventSummaryResults() {
+    final events = _filteredEvents;
     final typeCount = <String, int>{};
     final orgCount = <String, int>{};
-    int totalAttendees = 0;
-    int totalRegistrants = 0;
 
-    for (final e in _events) {
+    for (final e in events) {
       typeCount[e.type] = (typeCount[e.type] ?? 0) + 1;
       orgCount[e.orgName] = (orgCount[e.orgName] ?? 0) + 1;
-      totalAttendees += e.attendees;
-      totalRegistrants += e.registrants;
     }
-
-    final avgRate = totalRegistrants > 0
-        ? (totalAttendees / totalRegistrants * 100).round()
-        : 0;
 
     final sortedTypes = typeCount.entries.toList()
       ..sort((a, b) => b.value.compareTo(a.value));
@@ -1576,16 +1857,6 @@ class _ReportsManagementState extends State<ReportsManagement>
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(children: [
-                _summaryAnalyticCard('Total Events', '${_events.length}', Icons.event_rounded, UpriseColors.primaryDark),
-                const SizedBox(width: 14),
-                _summaryAnalyticCard('Avg Attendance', '$avgRate%', Icons.people_rounded, UpriseColors.success),
-                const SizedBox(width: 14),
-                _summaryAnalyticCard('Total Attendees', '$totalAttendees', Icons.how_to_reg_rounded, UpriseColors.info),
-                const SizedBox(width: 14),
-                _summaryAnalyticCard('Active Orgs', '${orgCount.length}', Icons.business_rounded, UpriseColors.warning),
-              ]),
-              const SizedBox(height: 14),
               Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Expanded(
                   child: Container(
@@ -1661,53 +1932,27 @@ class _ReportsManagementState extends State<ReportsManagement>
             ],
           ),
         ),
-        Expanded(child: _buildEventsTable(showFinancial: false, showCountdown: false)),
+        _buildEventsTable(events, showFinancial: false, showCountdown: false),
       ],
     );
   }
 
-  Widget _summaryAnalyticCard(String label, String value, IconData icon, Color color) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: const Color(0xFFE8ECF0)),
-          boxShadow: _DS.cardShadow,
-        ),
-        child: Row(children: [
-          Container(
-            width: 38, height: 38,
-            decoration: BoxDecoration(color: color.withAlpha(26), borderRadius: BorderRadius.circular(10)),
-            child: Icon(icon, color: color, size: 18),
-          ),
-          const SizedBox(width: 10),
-          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(label, style: GoogleFonts.beVietnamPro(fontSize: 10, color: const Color(0xFF64748B), fontWeight: FontWeight.w500)),
-            const SizedBox(height: 1),
-            Text(value, style: GoogleFonts.beVietnamPro(fontSize: 18, fontWeight: FontWeight.w700, color: const Color(0xFF1A202C))),
-          ])),
-        ]),
-      ),
-    );
-  }
-
   // ── Events Table ──────────────────────────────────────────────────
-  Widget _buildEventsTable({
+  // Plain Column of mapped rows, no ListView/Expanded — same structural
+  // pattern as _buildReportTable/_buildSubmissionTable elsewhere in this
+  // file, so it doesn't need a height-bounded ancestor (that mismatch was
+  // the cause of the bottom overflow).
+  Widget _buildEventsTable(
+    List<EventReport> events, {
     required bool showFinancial,
     required bool showCountdown,
   }) {
     if (_loadingEvents) return const Center(child: CircularProgressIndicator());
-    final totalPages = _events.isEmpty
-        ? 1
-        : (_events.length / _pageSize).ceil();
+    final totalPages = events.isEmpty ? 1 : (events.length / _pageSize).ceil();
     final safePage = _currentPage.clamp(1, totalPages);
     final start = (safePage - 1) * _pageSize;
-    final end = (start + _pageSize).clamp(0, _events.length);
-    final pageItems = _events.isEmpty
-        ? <EventReport>[]
-        : _events.sublist(start, end);
+    final end = (start + _pageSize).clamp(0, events.length);
+    final pageItems = events.isEmpty ? <EventReport>[] : events.sublist(start, end);
 
     return Container(
       margin: const EdgeInsets.fromLTRB(28, 0, 28, 0),
@@ -1723,20 +1968,16 @@ class _ReportsManagementState extends State<ReportsManagement>
             showFinancial: showFinancial,
             showCountdown: showCountdown,
           ),
-          Expanded(
-            child: _events.isEmpty
-                ? _buildEmptyState()
-                : ListView.builder(
-                    itemCount: pageItems.length,
-                    itemBuilder: (_, i) => _buildEventRow(
-                      event: pageItems[i],
-                      isLast: i == pageItems.length - 1,
-                      showFinancial: showFinancial,
-                      showCountdown: showCountdown,
-                    ),
-                  ),
-          ),
-          _buildTableFooter(_events.length, totalPages, start, end),
+          if (events.isEmpty)
+            _buildEmptyState()
+          else
+            ...pageItems.asMap().entries.map((entry) => _buildEventRow(
+                  event: entry.value,
+                  isLast: entry.key == pageItems.length - 1,
+                  showFinancial: showFinancial,
+                  showCountdown: showCountdown,
+                )),
+          _buildTableFooter(events.length, totalPages, start, end),
         ],
       ),
     );
@@ -1904,21 +2145,24 @@ class _ReportsManagementState extends State<ReportsManagement>
                   if (showCountdown)
                     Expanded(
                       flex: 2,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 3,
-                        ),
-                        decoration: BoxDecoration(
-                          color: countdownColor.withAlpha(20),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Text(
-                          countdownText,
-                          style: GoogleFonts.beVietnamPro(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: countdownColor,
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 3,
+                          ),
+                          decoration: BoxDecoration(
+                            color: countdownColor.withAlpha(20),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            countdownText,
+                            style: GoogleFonts.beVietnamPro(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: countdownColor,
+                            ),
                           ),
                         ),
                       ),
@@ -1967,7 +2211,13 @@ class _ReportsManagementState extends State<ReportsManagement>
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
-                  Expanded(flex: 2, child: _TypeBadge(type: event.type)),
+                  Expanded(
+                    flex: 2,
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: _EventCategoryChip(type: event.type),
+                    ),
+                  ),
                   Expanded(
                     flex: 2,
                     child: Text(
@@ -2154,169 +2404,6 @@ class _ReportsManagementState extends State<ReportsManagement>
     );
   }
 
-  // ── Recent Reports Bar ────────────────────────────────────────────
-  Widget _buildRecentReportsBar() {
-    return Container(
-      margin: const EdgeInsets.fromLTRB(28, 16, 28, 24),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFE8ECF0)),
-        boxShadow: _DS.cardShadow,
-      ),
-      child: Column(
-        children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 13),
-            decoration: const BoxDecoration(
-        color: Color(0xFFFFF7ED),
-        borderRadius: BorderRadius.vertical(top: Radius.circular(14)),
-        border: Border(bottom: BorderSide(color: Color(0xFFFB923C))),
-            ),
-            child: Row(
-              children: [
-                const Icon(
-                  Icons.history_rounded,
-                  size: 16,
-                  color: UpriseColors.primaryDark,
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  'Recently Generated Reports',
-                  style: GoogleFonts.beVietnamPro(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    color: UpriseColors.primaryDark,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          StreamBuilder<QuerySnapshot>(
-            stream: FirebaseFirestore.instance
-                .collection('generated_reports')
-                .orderBy('generatedAt', descending: true)
-                .limit(5)
-                .snapshots(),
-            builder: (ctx, snap) {
-              if (!snap.hasData) {
-                return const Padding(
-                  padding: EdgeInsets.all(20),
-                  child: Center(child: CircularProgressIndicator()),
-                );
-              }
-              if (snap.data!.docs.isEmpty) {
-                return Padding(
-                  padding: const EdgeInsets.all(20),
-                  child: Text(
-                    'No reports generated yet.',
-                    style: GoogleFonts.beVietnamPro(
-                      color: const Color(0xFF64748B),
-                      fontSize: 13,
-                    ),
-                  ),
-                );
-              }
-              return Column(
-                children: snap.data!.docs.asMap().entries.map((entry) {
-                  final i = entry.key;
-                  final doc = entry.value;
-                  final d = doc.data() as Map<String, dynamic>;
-                  final generatedAt = (d['generatedAt'] as Timestamp?)
-                      ?.toDate();
-                  final isPdf = d['format'] == 'PDF';
-                  final isLast = i == snap.data!.docs.length - 1;
-                  return Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 20,
-                      vertical: 12,
-                    ),
-                    decoration: BoxDecoration(
-                      border: isLast
-                          ? null
-                          : const Border(
-                              bottom: BorderSide(color: Color(0xFFF1F5F9)),
-                            ),
-                    ),
-                    child: Row(
-                      children: [
-                        Container(
-                          width: 32,
-                          height: 32,
-                          decoration: BoxDecoration(
-                            color: isPdf
-                                ? UpriseColors.errorBg
-                                : UpriseColors.successBg,
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Icon(
-                            isPdf
-                                ? Icons.picture_as_pdf_rounded
-                                : Icons.table_chart_rounded,
-                            size: 16,
-                            color: isPdf
-                                ? UpriseColors.error
-                                : UpriseColors.success,
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Text(
-                            d['fileName'] ?? 'Report',
-                            style: GoogleFonts.beVietnamPro(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w500,
-                              color: const Color(0xFF1A202C),
-                            ),
-                          ),
-                        ),
-                        Text(
-                          generatedAt != null
-                              ? DateFormat(
-                                  'MMM dd, yyyy hh:mm a',
-                                ).format(generatedAt)
-                              : '—',
-                          style: GoogleFonts.beVietnamPro(
-                            fontSize: 12,
-                            color: const Color(0xFF64748B),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 3,
-                          ),
-                          decoration: BoxDecoration(
-                            color: isPdf
-                                ? UpriseColors.errorBg
-                                : UpriseColors.successBg,
-                            borderRadius: BorderRadius.circular(_DS.radiusPill),
-                          ),
-                          child: Text(
-                            d['format'] ?? '',
-                            style: GoogleFonts.beVietnamPro(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w700,
-                              color: isPdf
-                                  ? UpriseColors.error
-                                  : UpriseColors.success,
-                              letterSpacing: 0.8,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  );
-                }).toList(),
-              );
-            },
-          ),
-        ],
-      ),
-    );
-  }
-
   // ── Submission Tracker Tab ─────────────────────────────────────────
   Widget _buildSubmissionTrackerTab() {
     return SingleChildScrollView(
@@ -2373,33 +2460,43 @@ class _ReportsManagementState extends State<ReportsManagement>
         border: Border.all(color: const Color(0xFFE8ECF0)),
         boxShadow: _DS.cardShadow,
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(
-            Icons.timer_outlined,
-            color: UpriseColors.primaryDark,
-            size: 18,
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Wrap(
-              spacing: 24,
-              runSpacing: 8,
-              children: [
-                _deadlineInfo('Financial Deadline', _financialDeadline),
-                _deadlineInfo(
-                  'Accomplishment Deadline',
-                  _accomplishmentDeadline,
+          Row(
+            children: [
+              const Icon(
+                Icons.timer_outlined,
+                color: UpriseColors.primaryDark,
+                size: 18,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Wrap(
+                  spacing: 24,
+                  runSpacing: 8,
+                  children: [
+                    _deadlineInfo('Financial Deadline', _financialDeadline),
+                    _deadlineInfo(
+                      'Accomplishment Deadline',
+                      _accomplishmentDeadline,
+                    ),
+                  ],
                 ),
-              ],
-            ),
+              ),
+              const SizedBox(width: 16),
+              _ToolbarButton(
+                label: 'Edit Deadlines',
+                icon: Icons.edit_calendar_rounded,
+                onPressed: _showDeadlineDialog,
+                outlined: true,
+              ),
+            ],
           ),
-          const SizedBox(width: 16),
-          _ToolbarButton(
-            label: 'Edit Deadlines',
-            icon: Icons.edit_calendar_rounded,
-            onPressed: _showDeadlineDialog,
-            outlined: true,
+          const SizedBox(height: 8),
+          Text(
+            'Defaults to 7 days after each event unless set here, or overridden for a specific organization using the "Edit Deadline" icon in its row below.',
+            style: GoogleFonts.beVietnamPro(fontSize: 11, color: const Color(0xFF9AA5B4)),
           ),
         ],
       ),
@@ -2465,57 +2562,49 @@ class _ReportsManagementState extends State<ReportsManagement>
     );
   }
 
+  // Orgs with no finished event yet have nothing due, so they're excluded
+  // from every count here — matches what _buildSubmissionTable shows.
   Widget _buildTrackerStats() {
-    final finSubmitted = _financialSubs
-        .where((s) => s.submittedAt != null)
-        .length;
-    final accSubmitted = _accomplishmentSubs
-        .where((s) => s.submittedAt != null)
-        .length;
-    final total = _financialSubs.length;
+    final fin = _financialSubs.where((s) => s.hasApprovedEvent).toList();
+    final acc = _accomplishmentSubs.where((s) => s.hasApprovedEvent).toList();
+    final tracked = fin.length;
 
-    // An org counts as pending if it's missing EITHER submission type.
-    // Summing the two "missing" counts separately would double-count any
-    // org that's missing both — this counts each org at most once.
-    final accSubmittedByOrg = {
-      for (final s in _accomplishmentSubs) s.orgId: s.submittedAt != null,
-    };
-    final pendingOrgCount = _financialSubs.where((s) {
-      final finMissing = s.submittedAt == null;
-      final accMissing = !(accSubmittedByOrg[s.orgId] ?? false);
-      return finMissing || accMissing;
-    }).length;
+    final onTime = fin.where((s) => s.submittedAt != null && !s.isLate).length +
+        acc.where((s) => s.submittedAt != null && !s.isLate).length;
+    final late = fin.where((s) => s.isLate).length + acc.where((s) => s.isLate).length;
+    final overdue = fin.where((s) => s.submittedAt == null && s.eventDeadline != null && DateTime.now().isAfter(s.eventDeadline!)).length +
+        acc.where((s) => s.submittedAt == null && s.eventDeadline != null && DateTime.now().isAfter(s.eventDeadline!)).length;
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
       child: Row(
         children: [
           _StatCard(
-            label: 'Total Organizations',
-            value: '$total',
+            label: 'Orgs Tracked',
+            value: '$tracked',
             icon: Icons.business_rounded,
             color: UpriseColors.primaryDark,
           ),
           const SizedBox(width: 14),
           _StatCard(
-            label: 'Financial Submitted',
-            value: '$finSubmitted/$total',
-            icon: Icons.attach_money_rounded,
+            label: 'Submitted On Time',
+            value: '$onTime',
+            icon: Icons.check_circle_rounded,
             color: UpriseColors.success,
           ),
           const SizedBox(width: 14),
           _StatCard(
-            label: 'Accomplishment Submitted',
-            value: '$accSubmitted/$total',
-            icon: Icons.assignment_turned_in_rounded,
-            color: UpriseColors.info,
+            label: 'Submitted Late',
+            value: '$late',
+            icon: Icons.history_toggle_off_rounded,
+            color: UpriseColors.warning,
           ),
           const SizedBox(width: 14),
           _StatCard(
-            label: 'Orgs with Pending Items',
-            value: '$pendingOrgCount',
-            icon: Icons.pending_actions_rounded,
-            color: UpriseColors.warning,
+            label: 'Overdue (Not Submitted)',
+            value: '$overdue',
+            icon: Icons.error_outline_rounded,
+            color: UpriseColors.error,
           ),
         ],
       ),
@@ -2535,7 +2624,11 @@ class _ReportsManagementState extends State<ReportsManagement>
         child: Center(child: CircularProgressIndicator()),
       );
 
-    final sorted = List<OrgSubmission>.from(submissions)
+    final type = title.toLowerCase();
+
+    // Only orgs whose event has actually finished have a report due — an
+    // org with no finished event yet has nothing to track here.
+    final sorted = submissions.where((s) => s.hasApprovedEvent).toList()
       ..sort((a, b) {
         final now = DateTime.now();
         final aS = a.submittedAt != null;
@@ -2572,10 +2665,11 @@ class _ReportsManagementState extends State<ReportsManagement>
               children: [
                 Expanded(flex: 3, child: _headerCell('ORGANIZATION')),
                 Expanded(flex: 2, child: _headerCell('EVENT DATE')),
+                Expanded(flex: 2, child: _headerCell('DEADLINE')),
                 Expanded(flex: 2, child: _headerCell('SUBMITTED ON')),
                 Expanded(flex: 2, child: _headerCell('STATUS')),
                 Expanded(
-                  flex: 1,
+                  flex: 2,
                   child: Align(
                     alignment: Alignment.centerRight,
                     child: _headerCell('ACTIONS'),
@@ -2585,16 +2679,31 @@ class _ReportsManagementState extends State<ReportsManagement>
             ),
           ),
           // Rows
+          if (sorted.isEmpty)
+            Padding(
+              padding: const EdgeInsets.all(32),
+              child: Center(
+                child: Text(
+                  'No organizations with a finished event yet.',
+                  style: GoogleFonts.beVietnamPro(
+                    fontSize: 13,
+                    color: const Color(0xFF64748B),
+                  ),
+                ),
+              ),
+            )
+          else
           ...sorted.asMap().entries.map((entry) {
             final i = entry.key;
             final sub = entry.value;
             final isSubmitted = sub.submittedAt != null;
-            final rowDeadline = deadline ?? sub.eventDeadline;
-            final isOverdue =
-                rowDeadline != null &&
-                !isSubmitted &&
-                DateTime.now().isAfter(rowDeadline);
-            final daysLeft = rowDeadline != null && !isSubmitted
+            // Precedence: this org's own override beats the blanket global
+            // deadline, which beats the automatic 7-days-after-event rule.
+            final rowDeadline =
+                sub.deadlineOverride ?? deadline ?? sub.eventDate!.add(const Duration(days: 7));
+            final isOverdue = !isSubmitted && DateTime.now().isAfter(rowDeadline);
+            final isLate = isSubmitted && sub.submittedAt!.isAfter(rowDeadline);
+            final daysLeft = !isSubmitted
                 ? rowDeadline.difference(DateTime.now()).inDays
                 : 0;
             final isLast = i == sorted.length - 1;
@@ -2665,6 +2774,31 @@ class _ReportsManagementState extends State<ReportsManagement>
                     ),
                     Expanded(
                       flex: 2,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Flexible(
+                            child: Text(
+                              DateFormat('MMM dd, yyyy').format(rowDeadline),
+                              style: GoogleFonts.beVietnamPro(
+                                fontSize: 12,
+                                color: const Color(0xFF64748B),
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          if (sub.deadlineOverride != null) ...[
+                            const SizedBox(width: 4),
+                            const Tooltip(
+                              message: 'Custom deadline set by admin',
+                              child: Icon(Icons.push_pin_rounded, size: 12, color: UpriseColors.primaryDark),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                    Expanded(
+                      flex: 2,
                       child: Text(
                         isSubmitted
                             ? DateFormat(
@@ -2682,12 +2816,7 @@ class _ReportsManagementState extends State<ReportsManagement>
                     Expanded(
                       flex: 2,
                       child: isSubmitted
-                          ? _statusBadge('submitted')
-                          : !sub.hasApprovedEvent
-                          ? Tooltip(
-                              message: 'Not a submission status — this org has no approved events yet, so no report is due.',
-                              child: _statusBadge('no events'),
-                            )
+                          ? _statusBadge(isLate ? 'late' : 'on time')
                           : isOverdue
                           ? _statusBadge('overdue')
                           : Row(
@@ -2706,22 +2835,30 @@ class _ReportsManagementState extends State<ReportsManagement>
                             ),
                     ),
                     Expanded(
-                      flex: 1,
-                      child: Align(
-                        alignment: Alignment.centerRight,
-                        child: isSubmitted
-                            ? _ActionIconButton(
-                                icon: Icons.visibility_outlined,
-                                tooltip: 'View Report',
-                                onTap: () => _viewSubmission(sub, title),
-                              )
-                            : sub.hasApprovedEvent
-                            ? _ActionIconButton(
-                                icon: Icons.send_outlined,
-                                tooltip: 'Send Reminder',
-                                onTap: () => _sendReminder(sub, title),
-                              )
-                            : const SizedBox.shrink(),
+                      flex: 2,
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          if (isSubmitted)
+                            _ActionIconButton(
+                              icon: Icons.visibility_outlined,
+                              tooltip: 'View Report',
+                              onTap: () => _viewSubmission(sub, title),
+                            )
+                          else
+                            _ActionIconButton(
+                              icon: Icons.send_outlined,
+                              tooltip: 'Send Reminder',
+                              onTap: () => _sendReminder(sub, title),
+                            ),
+                          const SizedBox(width: 4),
+                          _ActionIconButton(
+                            icon: Icons.edit_calendar_outlined,
+                            tooltip: 'Edit Deadline',
+                            color: UpriseColors.primaryDark,
+                            onTap: () => _showEditDeadlineDialog(sub, type),
+                          ),
+                        ],
                       ),
                     ),
                   ],
@@ -2750,9 +2887,9 @@ class _ReportsManagementState extends State<ReportsManagement>
                 AdminExportButton(
                   onSelected: (choice) async {
                     if (choice == 'csv') {
-                      await _exportSubmissionCSV(title, submissions, deadline);
+                      await _exportSubmissionCSV(title, sorted, deadline);
                     } else if (choice == 'pdf') {
-                      await _exportSubmissionPdf(title, submissions, deadline);
+                      await _exportSubmissionPdf(title, sorted, deadline);
                     }
                   },
                 ),
@@ -4601,51 +4738,57 @@ class _ExportButton extends StatelessWidget {
   }
 }
 
+// Shared event-category styling — used by both the icon badge next to the
+// event title and the category chip in the TYPE column, so they always
+// agree with each other.
+_IconStyle _eventTypeStyle(String type) {
+  const styles = {
+    'Seminar': _IconStyle(
+      Color(0xFFEFF6FF),
+      Color(0xFF2563EB),
+      Icons.mic_rounded,
+    ),
+    'Workshop': _IconStyle(
+      Color(0xFFFFF7ED),
+      Color(0xFFEA580C),
+      Icons.build_rounded,
+    ),
+    'Exhibition': _IconStyle(
+      Color(0xFFF5F3FF),
+      Color(0xFF7C3AED),
+      Icons.museum_rounded,
+    ),
+    'Social': _IconStyle(
+      Color(0xFFFCE7F3),
+      Color(0xFFDB2777),
+      Icons.people_rounded,
+    ),
+    'Cultural': _IconStyle(
+      Color(0xFFF0FDF4),
+      Color(0xFF16A34A),
+      Icons.celebration_rounded,
+    ),
+    'Competition': _IconStyle(
+      Color(0xFFFEFCE8),
+      Color(0xFFCA8A04),
+      Icons.emoji_events_rounded,
+    ),
+  };
+  return styles[type] ??
+      const _IconStyle(
+        Color(0xFFF3F4F6),
+        Color(0xFF6B7280),
+        Icons.event_rounded,
+      );
+}
+
 class _EventIcon extends StatelessWidget {
   final String type;
   const _EventIcon({required this.type});
 
   @override
   Widget build(BuildContext context) {
-    final Map<String, _IconStyle> styles = {
-      'Seminar': _IconStyle(
-        const Color(0xFFEFF6FF),
-        const Color(0xFF2563EB),
-        Icons.mic_rounded,
-      ),
-      'Workshop': _IconStyle(
-        const Color(0xFFFFF7ED),
-        const Color(0xFFEA580C),
-        Icons.build_rounded,
-      ),
-      'Exhibition': _IconStyle(
-        const Color(0xFFF5F3FF),
-        const Color(0xFF7C3AED),
-        Icons.museum_rounded,
-      ),
-      'Social': _IconStyle(
-        const Color(0xFFFCE7F3),
-        const Color(0xFFDB2777),
-        Icons.people_rounded,
-      ),
-      'Cultural': _IconStyle(
-        const Color(0xFFF0FDF4),
-        const Color(0xFF16A34A),
-        Icons.celebration_rounded,
-      ),
-      'Competition': _IconStyle(
-        const Color(0xFFFEFCE8),
-        const Color(0xFFCA8A04),
-        Icons.emoji_events_rounded,
-      ),
-    };
-    final s =
-        styles[type] ??
-        _IconStyle(
-          const Color(0xFFF3F4F6),
-          const Color(0xFF6B7280),
-          Icons.event_rounded,
-        );
+    final s = _eventTypeStyle(type);
     return Container(
       width: 30,
       height: 30,
@@ -4658,35 +4801,39 @@ class _EventIcon extends StatelessWidget {
   }
 }
 
+// Category chip for the TYPE column — shrink-wraps to its text (via the
+// Align wrapper at the call site) instead of stretching the whole column,
+// matching the category-chip convention used on the other admin pages.
+class _EventCategoryChip extends StatelessWidget {
+  final String type;
+  const _EventCategoryChip({required this.type});
+
+  @override
+  Widget build(BuildContext context) {
+    final s = _eventTypeStyle(type);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: s.bg,
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Text(
+        type,
+        style: GoogleFonts.beVietnamPro(
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
+          color: s.fg,
+        ),
+        overflow: TextOverflow.ellipsis,
+      ),
+    );
+  }
+}
+
 class _IconStyle {
   final Color bg, fg;
   final IconData icon;
   const _IconStyle(this.bg, this.fg, this.icon);
-}
-
-class _TypeBadge extends StatelessWidget {
-  final String type;
-  const _TypeBadge({required this.type});
-
-  @override
-  Widget build(BuildContext context) {
-    final isFinancial = type == 'financial';
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(
-        color: isFinancial ? const Color(0xFFECFDF5) : const Color(0xFFEFF6FF),
-        borderRadius: BorderRadius.circular(_DS.radiusPill),
-      ),
-      child: Text(
-        isFinancial ? 'Financial' : 'Accomplishment',
-        style: GoogleFonts.beVietnamPro(
-          fontSize: 11,
-          fontWeight: FontWeight.w600,
-          color: isFinancial ? const Color(0xFF059669) : const Color(0xFF2563EB),
-        ),
-      ),
-    );
-  }
 }
 
 class _OrgAvatar extends StatelessWidget {
@@ -4749,20 +4896,22 @@ class _ActionIconButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final effectiveColor = onTap == null
+        ? const Color(0xFFD1D5DB)
+        : (color ?? const Color(0xFF64748B));
     return Tooltip(
       message: tooltip,
+      waitDuration: const Duration(milliseconds: 400),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(6),
-        child: Padding(
-          padding: const EdgeInsets.all(5),
-          child: Icon(
-            icon,
-            size: 16,
-            color: onTap == null
-                ? const Color(0xFFD1D5DB)
-                : (color ?? const Color(0xFF64748B)),
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+          padding: const EdgeInsets.all(7),
+          decoration: BoxDecoration(
+            color: effectiveColor.withAlpha(26),
+            borderRadius: BorderRadius.circular(8),
           ),
+          child: Icon(icon, size: 14, color: effectiveColor),
         ),
       ),
     );

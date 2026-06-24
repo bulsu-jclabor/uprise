@@ -101,6 +101,7 @@ class ExternalRequest {
   final String?  tempPassword;
   final String?  uid;
   final bool     accountCreated;
+  final bool     isArchived;
 
   const ExternalRequest({
     required this.id,
@@ -114,6 +115,7 @@ class ExternalRequest {
     this.tempPassword,
     this.uid,
     this.accountCreated = false,
+    this.isArchived = false,
   });
 
   factory ExternalRequest.fromFirestore(
@@ -130,6 +132,7 @@ class ExternalRequest {
       tempPassword:   d['tempPassword'] as String?,
       uid:            d['uid'] as String?,
       accountCreated: d['accountCreated'] == true,
+      isArchived:     d['isArchived'] == true,
     );
   }
 }
@@ -274,7 +277,7 @@ class _ExternalAccountState extends State<ExternalAccount> {
       children: [
         _FilterDropdown(
           value: _statusFilter,
-          items: const ['All', 'Pending', 'Approved', 'Rejected'],
+          items: const ['All', 'Pending', 'Approved', 'Rejected', 'Archived'],
           onChanged: (v) => setState(() {
             _statusFilter = v!;
             _currentPage = 1;
@@ -328,12 +331,19 @@ class _ExternalAccountState extends State<ExternalAccount> {
           }).toList();
         }
 
-        if (_statusFilter != 'All') {
-          docs = docs
-              .where((d) =>
-                  (d.data() as Map)['status'] ==
-                  _statusFilter.toLowerCase())
-              .toList();
+        if (_statusFilter == 'Archived') {
+          docs = docs.where((d) => (d.data() as Map)['isArchived'] == true).toList();
+        } else {
+          // Archived requests are hidden from every other view, same as
+          // letter_request.dart, so they don't clutter the active queue.
+          docs = docs.where((d) => (d.data() as Map)['isArchived'] != true).toList();
+          if (_statusFilter != 'All') {
+            docs = docs
+                .where((d) =>
+                    (d.data() as Map)['status'] ==
+                    _statusFilter.toLowerCase())
+                .toList();
+          }
         }
 
         final totalPages =
@@ -554,16 +564,14 @@ class _ExternalAccountState extends State<ExternalAccount> {
                     icon: Icons.check_circle_outline,
                     tooltip: 'Approve & Create Account',
                     color: const Color(0xFF059669),
-                    onTap: () => _setStatus(req.id, 'approved',
-                        userName: req.userName, email: req.email),
+                    onTap: () => _confirmApprove(req),
                   ),
                   const SizedBox(width: 4),
                   _ActionIconButton(
                     icon: Icons.cancel_outlined,
                     tooltip: 'Reject',
                     color: const Color(0xFFDC2626),
-                    onTap: () =>
-                        _setStatus(req.id, 'rejected', userName: req.userName),
+                    onTap: () => _confirmReject(req),
                   ),
                 ],
                 if (req.status == 'approved') ...[
@@ -584,10 +592,10 @@ class _ExternalAccountState extends State<ExternalAccount> {
                 ],
                 const SizedBox(width: 4),
                 _ActionIconButton(
-                  icon: Icons.delete_outline_rounded,
-                  tooltip: 'Delete',
-                  color: const Color(0xFFDC2626),
-                  onTap: () => _confirmDelete(req),
+                  icon: req.isArchived ? Icons.restore_rounded : Icons.archive_outlined,
+                  tooltip: req.isArchived ? 'Restore' : 'Archive',
+                  color: req.isArchived ? const Color(0xFF059669) : const Color(0xFF6B7280),
+                  onTap: () => req.isArchived ? _confirmRestore(req) : _confirmArchive(req),
                 ),
               ],
             ),
@@ -905,7 +913,7 @@ class _ExternalAccountState extends State<ExternalAccount> {
             : 'Approved. Credentials queued — sending failed for $resolvedEmail.'),
         backgroundColor: sent
             ? const Color(0xFF059669)
-            : const Color(0xFFF97316),
+            : const Color(0xFFEA580C),
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(8)),
@@ -923,7 +931,7 @@ class _ExternalAccountState extends State<ExternalAccount> {
 
   // Dedicated EmailJS service for guest credentials (separate from the
   // student_accounts.dart service/template).
-  static const String _guestEmailServiceId = 'service_3qnx8cs';
+  static const String _guestEmailServiceId = 'service_vdfi3uo';
   static const String _guestEmailUserId = 'h6tBNFtWohoZr_B18';
   static const String _guestCredentialsTemplateId = 'template_kqryg75';
 
@@ -1116,7 +1124,7 @@ class _ExternalAccountState extends State<ExternalAccount> {
               ? 'Credentials resent to ${req.email}.'
               : 'Credentials queued but sending failed for ${req.email}.'),
           backgroundColor:
-              sent ? const Color(0xFF059669) : const Color(0xFFF97316),
+              sent ? const Color(0xFF059669) : const Color(0xFFEA580C),
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         ));
@@ -1500,8 +1508,7 @@ class _ExternalAccountState extends State<ExternalAccount> {
                       child: ElevatedButton.icon(
                         onPressed: () async {
                           Navigator.pop(ctx);
-                          await _setStatus(req.id, 'rejected',
-                              userName: req.userName);
+                          await _confirmReject(req);
                         },
                         icon: const Icon(
                             Icons.cancel_rounded, size: 15),
@@ -1528,9 +1535,7 @@ class _ExternalAccountState extends State<ExternalAccount> {
                       child: ElevatedButton.icon(
                         onPressed: () async {
                           Navigator.pop(ctx);
-                          await _setStatus(req.id, 'approved',
-                              userName: req.userName,
-                              email: req.email);
+                          await _confirmApprove(req);
                         },
                         icon: const Icon(
                             Icons.check_circle_rounded,
@@ -1671,140 +1676,130 @@ class _ExternalAccountState extends State<ExternalAccount> {
   }
 
   // ── Delete confirm dialog ──────────────────────────────────────────
-  void _confirmDelete(ExternalRequest req) {
-    showDialog(
+  // ── Simple confirm/action dialog used by approve/reject/archive/restore ──
+  Future<bool> _confirmAction({
+    required String title,
+    required String message,
+    required String confirmLabel,
+    required Color confirmColor,
+  }) async {
+    final confirmed = await showDialog<bool>(
       context: context,
       barrierColor: Colors.black54,
-      builder: (ctx) => Dialog(
-        shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16)),
-        child: Container(
-          width: 420,
-          padding: const EdgeInsets.all(28),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(children: [
-                Container(
-                  width: 42,
-                  height: 42,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFFEF2F2),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: const Icon(
-                      Icons.delete_outline_rounded,
-                      color: Color(0xFFDC2626),
-                      size: 20),
-                ),
-                const SizedBox(width: 14),
-                Text('Delete Request',
-                    style: GoogleFonts.beVietnamPro(
-                      fontSize: 17,
-                      fontWeight: FontWeight.w700,
-                      color: const Color(0xFF1A202C),
-                    )),
-              ]),
-              const SizedBox(height: 16),
-              Text(
-                'Are you sure you want to delete the request from "${req.userName}"? This action cannot be undone.',
-                style: GoogleFonts.beVietnamPro(
-                    fontSize: 14,
-                    color: const Color(0xFF64748B),
-                    height: 1.5),
-              ),
-              const SizedBox(height: 24),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  OutlinedButton(
-                    onPressed: () => Navigator.pop(ctx),
-                    style: OutlinedButton.styleFrom(
-                      side: const BorderSide(
-                          color: Color(0xFFE2E6EA)),
-                      shape: RoundedRectangleBorder(
-                          borderRadius:
-                              BorderRadius.circular(8)),
-                      padding:
-                          const EdgeInsets.symmetric(
-                              horizontal: 18,
-                              vertical: 11),
-                    ),
-                    child: Text('Cancel',
-                        style: GoogleFonts.beVietnamPro(
-                            fontSize: 13,
-                            color:
-                                const Color(0xFF374151))),
-                  ),
-                  const SizedBox(width: 10),
-                  ElevatedButton(
-                    onPressed: () async {
-                      Navigator.pop(ctx);
-                      try {
-                        await FirebaseFirestore.instance
-                            .collection('external_requests')
-                            .doc(req.id)
-                            .delete();
-                        await activity_log
-                            .ActivityLogger.log(
-                          action:
-                              'Deleted external request for ${req.userName}',
-                          module: 'External Account',
-                          severity: 'warning',
-                          details: {'requestId': req.id},
-                        );
-                        if (mounted) {
-                          ScaffoldMessenger.of(context)
-                              .showSnackBar(SnackBar(
-                            content: const Text(
-                                'Request deleted.'),
-                            backgroundColor:
-                                UpriseColors.primaryDark,
-                            behavior:
-                                SnackBarBehavior.floating,
-                            shape: RoundedRectangleBorder(
-                                borderRadius:
-                                    BorderRadius.circular(
-                                        8)),
-                          ));
-                        }
-                      } catch (e) {
-                        if (mounted) {
-                          ScaffoldMessenger.of(context)
-                              .showSnackBar(SnackBar(
-                            content: Text('Error: $e'),
-                            backgroundColor:
-                                UpriseColors.error,
-                          ));
-                        }
-                      }
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor:
-                          const Color(0xFFDC2626),
-                      foregroundColor: Colors.white,
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(
-                          borderRadius:
-                              BorderRadius.circular(8)),
-                      padding:
-                          const EdgeInsets.symmetric(
-                              horizontal: 18,
-                              vertical: 11),
-                    ),
-                    child: Text('Delete',
-                        style: GoogleFonts.beVietnamPro(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600)),
-                  ),
-                ],
-              ),
-            ],
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text(title,
+            style: GoogleFonts.beVietnamPro(fontSize: 16, fontWeight: FontWeight.w700, color: const Color(0xFF1A202C))),
+        content: Text(message,
+            style: GoogleFonts.beVietnamPro(fontSize: 14, color: const Color(0xFF64748B), height: 1.5)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text('Cancel', style: GoogleFonts.beVietnamPro(color: const Color(0xFF374151))),
           ),
-        ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(backgroundColor: confirmColor, foregroundColor: Colors.white),
+            child: Text(confirmLabel, style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.w600)),
+          ),
+        ],
       ),
     );
+    return confirmed == true;
+  }
+
+  Future<void> _confirmApprove(ExternalRequest req) async {
+    final ok = await _confirmAction(
+      title: 'Approve & Create Account',
+      message: 'Approve "${req.userName}"\'s request? This will create a guest account and email login credentials to ${req.email}.',
+      confirmLabel: 'Approve',
+      confirmColor: const Color(0xFF059669),
+    );
+    if (ok) await _setStatus(req.id, 'approved', userName: req.userName, email: req.email);
+  }
+
+  Future<void> _confirmReject(ExternalRequest req) async {
+    final ok = await _confirmAction(
+      title: 'Reject Request',
+      message: 'Reject the request from "${req.userName}"? They will not be granted guest access.',
+      confirmLabel: 'Reject',
+      confirmColor: const Color(0xFFDC2626),
+    );
+    if (ok) await _setStatus(req.id, 'rejected', userName: req.userName);
+  }
+
+  Future<void> _confirmArchive(ExternalRequest req) async {
+    final ok = await _confirmAction(
+      title: 'Archive Request',
+      message: 'Archive the request from "${req.userName}"? You can restore it later from the Archived filter.',
+      confirmLabel: 'Archive',
+      confirmColor: const Color(0xFF6B7280),
+    );
+    if (!ok) return;
+    try {
+      await FirebaseFirestore.instance.collection('external_requests').doc(req.id).update({
+        'isArchived': true,
+        'archivedAt': FieldValue.serverTimestamp(),
+      });
+      await activity_log.ActivityLogger.log(
+        action: 'Archived external request for ${req.userName}',
+        module: 'External Account',
+        severity: 'warning',
+        details: {'requestId': req.id},
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: const Text('Request archived.'),
+          backgroundColor: const Color(0xFF6B7280),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        ));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Error: $e'),
+          backgroundColor: UpriseColors.error,
+        ));
+      }
+    }
+  }
+
+  Future<void> _confirmRestore(ExternalRequest req) async {
+    final ok = await _confirmAction(
+      title: 'Restore Request',
+      message: 'Restore the request from "${req.userName}" back to the active list?',
+      confirmLabel: 'Restore',
+      confirmColor: const Color(0xFF059669),
+    );
+    if (!ok) return;
+    try {
+      await FirebaseFirestore.instance.collection('external_requests').doc(req.id).update({
+        'isArchived': false,
+        'archivedAt': FieldValue.delete(),
+      });
+      await activity_log.ActivityLogger.log(
+        action: 'Restored external request for ${req.userName}',
+        module: 'External Account',
+        severity: 'info',
+        details: {'requestId': req.id},
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: const Text('Request restored.'),
+          backgroundColor: const Color(0xFF059669),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        ));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Error: $e'),
+          backgroundColor: UpriseColors.error,
+        ));
+      }
+    }
   }
 }
 
