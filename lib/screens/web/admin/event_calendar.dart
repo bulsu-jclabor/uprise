@@ -96,8 +96,7 @@ Widget _sectionLabel(String text, {IconData? icon}) {
 // ─────────────────────────────────────────────────────────────────────────────
 class _Event {
   final String id, title, time, category, organization, orgId, createdFromProposalId;
-  final String location, description, guestSpeaker;
-  final int capacity;
+  final String location, description, guestSpeaker, audience, status;
   final List<String> tags;
   final DateTime date;
 
@@ -113,9 +112,20 @@ class _Event {
     this.location = '',
     this.description = '',
     this.guestSpeaker = '',
-    this.capacity = 0,
+    this.audience = '',
+    this.status = 'approved',
     this.tags = const [],
   });
+}
+
+Color _statusColor(String status) {
+  switch (status.toLowerCase()) {
+    case 'approved': return const Color(0xFF059669);
+    case 'pending': return const Color(0xFFFB923C);
+    case 'rejected': return const Color(0xFFDC2626);
+    case 'archived': return const Color(0xFF6B7280);
+    default: return UpriseColors.primaryDark;
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -483,7 +493,9 @@ class _EventCalendarState extends State<EventCalendar> {
     }
   }
 
-  // ── Calendar stream (only approved events) ───────────────────────
+  // ── Calendar stream — approved events plus pending proposals, so a
+  // place/time conflict shows up before the conflicting proposal is even
+  // approved, not after. ───────────────────────────────────────────────
   Widget _buildCalendarStream() {
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance
@@ -502,7 +514,7 @@ class _EventCalendarState extends State<EventCalendar> {
           return Center(child: Text('Error: ${snapshot.error}'));
         }
 
-        final events = snapshot.data!.docs.map((doc) {
+        final approvedEvents = snapshot.data!.docs.map((doc) {
           final d = doc.data() as Map<String, dynamic>;
           return _Event(
             id:           doc.id,
@@ -516,12 +528,40 @@ class _EventCalendarState extends State<EventCalendar> {
             location:     d['location']    ?? '',
             description:  d['description'] ?? '',
             guestSpeaker: d['guestSpeaker'] ?? '',
-            capacity:     (d['capacity'] as num?)?.toInt() ?? 0,
+            audience:     (d['audience'] ?? '').toString(),
+            status:       (d['status'] ?? 'approved').toString(),
             tags:         List<String>.from(d['tags'] ?? []),
           );
         }).toList();
 
-        return _buildCalendarGrid(events);
+        return StreamBuilder<QuerySnapshot>(
+          stream: FirebaseFirestore.instance
+              .collection('event_proposals')
+              .where('status', isEqualTo: 'pending')
+              .snapshots(),
+          builder: (context, pendingSnap) {
+            final pendingEvents = (pendingSnap.data?.docs ?? []).map((doc) {
+              final d = doc.data() as Map<String, dynamic>;
+              return _Event(
+                id:           doc.id,
+                title:        d['title']    ?? 'Untitled',
+                date:         (d['date']    as Timestamp).toDate(),
+                time:         d['startTime'] ?? d['time'] ?? 'TBD',
+                category:     d['category'] ?? 'Other',
+                organization: d['orgName']  ?? 'Unknown',
+                orgId:        (d['orgId'] ?? '').toString(),
+                location:     d['location']    ?? '',
+                description:  d['description'] ?? '',
+                guestSpeaker: d['guestSpeaker'] ?? '',
+                audience:     (d['audience'] ?? '').toString(),
+                status:       'pending',
+                tags:         List<String>.from(d['tags'] ?? []),
+              );
+            }).toList();
+            final events = [...approvedEvents, ...pendingEvents];
+            return _buildCalendarGrid(events);
+          },
+        );
       },
     );
   }
@@ -720,34 +760,46 @@ class _EventCalendarState extends State<EventCalendar> {
             ],
           ),
           const SizedBox(height: 4),
-          // ── Event chips ──────────────────────────────────────────
-          ...display.map((e) => Padding(
+          // ── Event chips — pending proposals get a dashed-look outline
+          // and a clock icon so a place/time conflict is visible even
+          // before the conflicting proposal is approved. ──────────────
+          ...display.map((e) {
+            final isPending = e.status.toLowerCase() == 'pending';
+            final chipColor = isPending ? _statusColor(e.status) : _getCategoryColor(e.category);
+            return Padding(
             padding: const EdgeInsets.only(bottom: 2.0),
             child: Container(
               width: double.infinity,
               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
               decoration: BoxDecoration(
-                color: _getCategoryColor(e.category).withAlpha(20),
+                color: chipColor.withAlpha(20),
                 borderRadius: BorderRadius.circular(4),
+                border: isPending ? Border.all(color: chipColor.withAlpha(140), width: 1) : null,
               ),
               child: Row(
                 children: [
-                  Container(
-                    width: 4,
-                    height: 4,
-                    margin: const EdgeInsets.only(right: 4),
-                    decoration: BoxDecoration(
-                      color: _getCategoryColor(e.category),
-                      shape: BoxShape.circle,
+                  if (isPending)
+                    Padding(
+                      padding: const EdgeInsets.only(right: 3),
+                      child: Icon(Icons.schedule_rounded, size: 9, color: chipColor),
+                    )
+                  else
+                    Container(
+                      width: 4,
+                      height: 4,
+                      margin: const EdgeInsets.only(right: 4),
+                      decoration: BoxDecoration(
+                        color: chipColor,
+                        shape: BoxShape.circle,
+                      ),
                     ),
-                  ),
                   Expanded(
                     child: Text(
                       e.title,
                       style: GoogleFonts.beVietnamPro(
                         fontSize: 10,
                         fontWeight: FontWeight.w600,
-                        color: _getCategoryColor(e.category),
+                        color: chipColor,
                       ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
@@ -756,7 +808,8 @@ class _EventCalendarState extends State<EventCalendar> {
                 ],
               ),
             ),
-          )),
+            );
+          }),
           if (extra > 0)
             Padding(
               padding: const EdgeInsets.only(left: 10),
@@ -900,7 +953,6 @@ class _EventCalendarState extends State<EventCalendar> {
  Future<void> _showEventDetailDialog(_Event event) async {
   // Fetch latest data from proposal (if available)
   var time = event.time;
-  var capacity = event.capacity;
   var guestSpeaker = event.guestSpeaker;
 
   if (event.createdFromProposalId.isNotEmpty) {
@@ -914,7 +966,6 @@ class _EventCalendarState extends State<EventCalendar> {
         final start = (pd['startTime'] ?? '').toString();
         final end = (pd['endTime'] ?? '').toString();
         time = start.isNotEmpty ? (end.isNotEmpty ? '$start - $end' : start) : '';
-        capacity = (pd['capacity'] is num) ? (pd['capacity'] as num).toInt() : 0;
         guestSpeaker = (pd['guestSpeaker'] ?? '').toString();
       }
     } catch (_) {}
@@ -1006,6 +1057,23 @@ class _EventCalendarState extends State<EventCalendar> {
                                   ),
                                 ),
                               ),
+                            if (event.status.toLowerCase() != 'approved')
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                                decoration: BoxDecoration(
+                                  color: _statusColor(event.status),
+                                  borderRadius: BorderRadius.circular(100),
+                                ),
+                                child: Text(
+                                  event.status.toUpperCase(),
+                                  style: GoogleFonts.beVietnamPro(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w700,
+                                    color: Colors.white,
+                                    letterSpacing: 0.8,
+                                  ),
+                                ),
+                              ),
                           ],
                         ),
                       ],
@@ -1027,7 +1095,7 @@ class _EventCalendarState extends State<EventCalendar> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     // ── Event Details ──────────────────────────────────
-                    // Single source of truth for date/time/location/capacity —
+                    // Single source of truth for date/time/location/audience —
                     // category and organization already live in the header
                     // badges above, so they aren't repeated here.
                     _sectionLabel('Event Details', icon: Icons.info_outline_rounded),
@@ -1074,8 +1142,8 @@ class _EventCalendarState extends State<EventCalendar> {
                               const SizedBox(width: 16),
                               Expanded(
                                 child: _detailItem(
-                                  'Capacity',
-                                  capacity > 0 ? '$capacity' : 'Unlimited',
+                                  'Audience',
+                                  event.audience.isNotEmpty ? event.audience : 'Public',
                                   Icons.group_outlined,
                                 ),
                               ),

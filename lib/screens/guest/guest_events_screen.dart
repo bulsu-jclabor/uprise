@@ -25,7 +25,6 @@ class FirestoreEvent {
   final String location;
   final String startTime;
   final String endTime;
-  final int    capacity;
   final DateTime date;
   // enriched after fetch — initialized to empty string to avoid null errors
   String orgLogoUrl = '';
@@ -41,7 +40,6 @@ class FirestoreEvent {
     required this.location,
     required this.startTime,
     required this.endTime,
-    required this.capacity,
     required this.date,
   });
 
@@ -63,7 +61,6 @@ class FirestoreEvent {
       startTime   : d['startTime']   as String?
                   ?? d['time']       as String? ?? '',
       endTime     : d['endTime']     as String? ?? '',
-      capacity    : (d['capacity']   as num?)?.toInt() ?? 0,
       date        : parsedDate,
     );
   }
@@ -75,8 +72,6 @@ class FirestoreEvent {
     if (endTime.isNotEmpty) return '$startTime – $endTime';
     return startTime;
   }
-
-  int get slotsLeft => capacity; // live registration count subtracted below
 
   bool get isSoon =>
       date.difference(DateTime.now()).inDays <= 7 &&
@@ -216,7 +211,6 @@ class _GuestEventsScreenState extends State<GuestEventsScreen> {
           location    : d['location']    as String? ?? 'TBA',
           startTime   : d['time']        as String? ?? '',
           endTime     : '',
-          capacity    : (d['capacity']   as num?)?.toInt() ?? 0,
           date        : parsedDate,
         );
         await _enrichLogo(event);
@@ -622,13 +616,8 @@ class _FeaturedCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 10),
                     Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
                       children: [
-                        if (event.capacity > 0)
-                          Expanded(
-                            child: _CapacityBar(capacity: event.capacity),
-                          ),
-                        if (event.capacity > 0)
-                          const SizedBox(width: 12),
                         Container(
                           padding: const EdgeInsets.symmetric(
                               horizontal: 18, vertical: 8),
@@ -813,39 +802,10 @@ class GuestEventDetailScreen extends StatefulWidget {
 }
 
 class _GuestEventDetailScreenState extends State<GuestEventDetailScreen> {
-  int _registrantCount = 0;
   bool _alreadyRegistered = false;
 
-  @override
-  void initState() {
-    super.initState();
-    _fetchRegistrationCount();
-  }
-
-  Future<void> _fetchRegistrationCount() async {
-    try {
-      final snap = await FirebaseFirestore.instance
-          .collection('registrations')
-          .where('eventId', isEqualTo: widget.event.id)
-          .count()
-          .get();
-      if (mounted) {
-        setState(() => _registrantCount = snap.count ?? 0);
-      }
-    } catch (_) {}
-  }
-
-  int get _slotsLeft {
-    if (widget.event.capacity == 0) return 999;
-    return (widget.event.capacity - _registrantCount)
-        .clamp(0, widget.event.capacity);
-  }
-
   void _onRegistered() {
-    setState(() {
-      _alreadyRegistered = true;
-      _registrantCount++;
-    });
+    setState(() => _alreadyRegistered = true);
   }
 
   @override
@@ -1031,15 +991,13 @@ class _GuestEventDetailScreenState extends State<GuestEventDetailScreen> {
                         label: 'Location',
                         value: event.location,
                       ),
-                      if (event.capacity > 0) ...[
-                        const SizedBox(height: 10),
-                        _InfoTile(
-                          icon: Icons.people_outline,
-                          iconColor: const Color(0xFF6A1B9A),
-                          label: 'Capacity',
-                          value: '$_slotsLeft of ${event.capacity} slots remaining',
-                        ),
-                      ],
+                      const SizedBox(height: 10),
+                      _InfoTile(
+                        icon: Icons.people_outline,
+                        iconColor: const Color(0xFF6A1B9A),
+                        label: 'Audience',
+                        value: event.audience.isNotEmpty ? event.audience : 'Public',
+                      ),
 
                       const SizedBox(height: 16),
                       const Divider(
@@ -1115,18 +1073,12 @@ class _GuestEventDetailScreenState extends State<GuestEventDetailScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Text(
-                            _slotsLeft <= 10 && event.capacity > 0
-                                ? 'Almost Full!'
-                                : event.capacity > 0
-                                    ? '$_slotsLeft slots left'
-                                    : 'Open Registration',
+                          const Text(
+                            'Open Registration',
                             style: TextStyle(
                               fontSize: 13,
                               fontWeight: FontWeight.w700,
-                              color: _slotsLeft <= 10 && event.capacity > 0
-                                  ? _kPrimary
-                                  : Colors.black87,
+                              color: Colors.black87,
                             ),
                           ),
                           Text(event.dateDisplay,
@@ -1139,47 +1091,34 @@ class _GuestEventDetailScreenState extends State<GuestEventDetailScreen> {
                     _alreadyRegistered
                         ? _RegisteredChip()
                         : GestureDetector(
-                            onTap: (_slotsLeft == 0 && event.capacity > 0)
-                                ? null
-                                : () => Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder: (_) =>
-                                            GuestEventRegistrationScreen(
-                                          event: event,
-                                          onRegistered: _onRegistered,
-                                        ),
-                                      ),
-                                    ),
+                            onTap: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) =>
+                                    GuestEventRegistrationScreen(
+                                  event: event,
+                                  onRegistered: _onRegistered,
+                                ),
+                              ),
+                            ),
                             child: Container(
                               padding: const EdgeInsets.symmetric(
                                   horizontal: 24, vertical: 14),
                               decoration: BoxDecoration(
-                                color: (_slotsLeft == 0 && event.capacity > 0)
-                                    ? Colors.grey.shade300
-                                    : _kPrimary,
+                                color: _kPrimary,
                                 borderRadius: BorderRadius.circular(12),
-                                boxShadow: (_slotsLeft == 0 &&
-                                        event.capacity > 0)
-                                    ? []
-                                    : [
-                                        BoxShadow(
-                                          color:
-                                              _kPrimary.withOpacity(0.3),
-                                          blurRadius: 10,
-                                          offset: const Offset(0, 4),
-                                        ),
-                                      ],
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: _kPrimary.withOpacity(0.3),
+                                    blurRadius: 10,
+                                    offset: const Offset(0, 4),
+                                  ),
+                                ],
                               ),
-                              child: Text(
-                                (_slotsLeft == 0 && event.capacity > 0)
-                                    ? 'Full'
-                                    : 'Register Now',
+                              child: const Text(
+                                'Register Now',
                                 style: TextStyle(
-                                  color: (_slotsLeft == 0 &&
-                                          event.capacity > 0)
-                                      ? Colors.black38
-                                      : Colors.white,
+                                  color: Colors.white,
                                   fontSize: 14,
                                   fontWeight: FontWeight.w700,
                                 ),
@@ -1783,39 +1722,6 @@ class _AudienceBadge extends StatelessWidget {
             fontWeight: FontWeight.w700,
             letterSpacing: 0.8),
       ),
-    );
-  }
-}
-
-class _CapacityBar extends StatelessWidget {
-  final int capacity;
-  const _CapacityBar({required this.capacity});
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          '$capacity capacity',
-          style: const TextStyle(
-              fontSize: 10,
-              color: Colors.white70,
-              fontWeight: FontWeight.w600),
-        ),
-        const SizedBox(height: 4),
-        ClipRRect(
-          borderRadius: BorderRadius.circular(4),
-          child: const LinearProgressIndicator(
-            value: 0.5,
-            minHeight: 5,
-            backgroundColor: Colors.white24,
-            valueColor: AlwaysStoppedAnimation<Color>(
-              Color(0xFF69F0AE),
-            ),
-          ),
-        ),
-      ],
     );
   }
 }

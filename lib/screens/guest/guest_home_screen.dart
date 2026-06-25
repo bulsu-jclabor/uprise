@@ -264,10 +264,42 @@ class _GuestHomeContentState extends State<_GuestHomeContent> {
   final Map<String, _FeedItem> _annMap = {};
   final Map<String, _FeedItem> _evtMap = {};
 
+  // Default to the most restrictive tier — same logic as
+  // guest_events_screen.dart / guest_calendar_screen.dart — so an
+  // unregistered/visitor guest, or one not classified BulSUan, never sees
+  // Bulsuan-only or CICT/Members-only events in the feed either.
+  String _guestClassification = 'Outsider';
+
+  bool _audienceAllowed(String audience) {
+    switch (audience) {
+      case 'Bulsuan':
+        return _guestClassification == 'BulSUan';
+      case 'CICT Only':
+      case 'Members Only':
+        return false;
+      default:
+        return true;
+    }
+  }
+
+  Future<void> _loadGuestClassification() async {
+    final svc = GuestAuthService();
+    if (!svc.isAuthenticated || svc.docId == null) return;
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('external_requests')
+          .doc(svc.docId)
+          .get();
+      if (doc.data()?['classification'] == 'BulSUan') {
+        _guestClassification = 'BulSUan';
+      }
+    } catch (_) {}
+  }
+
   @override
   void initState() {
     super.initState();
-    _subscribeFeed();
+    _loadGuestClassification().then((_) => _subscribeFeed());
   }
 
   @override
@@ -317,7 +349,7 @@ class _GuestHomeContentState extends State<_GuestHomeContent> {
       for (final doc in snap.docs) {
         final d       = doc.data() as Map<String, dynamic>;
         final aud     = (d['audience'] as String?) ?? 'Public';
-        if (aud == 'Members Only') { _evtMap.remove(doc.id); continue; }
+        if (!_audienceAllowed(aud)) { _evtMap.remove(doc.id); continue; }
         final dateField = d['date'];
         final evDate  = dateField is Timestamp ? dateField.toDate() : DateTime.now();
         final created = d['createdAt'] as Timestamp?;

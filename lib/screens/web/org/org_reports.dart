@@ -255,19 +255,44 @@ class _OrgReportsScreenState extends State<OrgReportsScreen> {
       setState(() => _remaining = diff.isNegative ? Duration.zero : diff);
   }
 
+  // Per-org, not a single blanket date: defaults to 7 days after this org's
+  // most recently *finished* event, or whatever the admin overrode it to —
+  // and only exists once that event has actually happened, never before.
   Future<void> _loadReportDeadlines() async {
     try {
-      final doc = await FirebaseFirestore.instance
-          .collection('report_deadlines')
-          .doc('deadlines')
+      final now = DateTime.now();
+      final eventsSnap = await FirebaseFirestore.instance
+          .collection('events')
+          .where('orgId', isEqualTo: widget.orgId)
+          .where('status', isEqualTo: 'approved')
           .get();
-      if (doc.exists && doc.data() != null) {
-        final data = doc.data()!;
+      DateTime? lastFinishedEventDate;
+      for (final doc in eventsSnap.docs) {
+        final date = (doc.data()['date'] as Timestamp?)?.toDate();
+        if (date == null || !date.isBefore(now)) continue;
+        if (lastFinishedEventDate == null || date.isAfter(lastFinishedEventDate)) {
+          lastFinishedEventDate = date;
+        }
+      }
+
+      if (lastFinishedEventDate != null) {
+        final overridesSnap = await FirebaseFirestore.instance
+            .collection('report_deadline_overrides')
+            .where('orgId', isEqualTo: widget.orgId)
+            .get();
+        DateTime? financialOverride, accomplishmentOverride;
+        for (final doc in overridesSnap.docs) {
+          final data = doc.data();
+          final deadline = (data['deadline'] as Timestamp?)?.toDate();
+          if (deadline == null) continue;
+          if (data['type'] == 'financial') financialOverride = deadline;
+          if (data['type'] == 'accomplishment') accomplishmentOverride = deadline;
+        }
+        final autoDeadline = lastFinishedEventDate.add(const Duration(days: 7));
         if (mounted) {
           setState(() {
-            _financialDeadline = (data['financial'] as Timestamp?)?.toDate();
-            _accomplishmentDeadline = (data['accomplishment'] as Timestamp?)
-                ?.toDate();
+            _financialDeadline = financialOverride ?? autoDeadline;
+            _accomplishmentDeadline = accomplishmentOverride ?? autoDeadline;
           });
         }
       }
@@ -2464,7 +2489,7 @@ class _DeadlineCard extends StatelessWidget {
     final now = DateTime.now();
     final deadlineText = deadline != null
         ? DateFormat('MMM d, yyyy').format(deadline!)
-        : 'Not yet set';
+        : 'No finished event yet';
     final submittedText = submittedOn != null
         ? DateFormat('MMM d, yyyy').format(submittedOn!)
         : 'Not submitted yet';

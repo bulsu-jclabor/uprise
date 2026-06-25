@@ -268,9 +268,7 @@ class OrgExportPdf {
     final upriseLogo = await _loadImage('assets/images/logo.png');
     final orgLogo = _decodeOrgLogo(orgLogoUrl);
     final now = DateFormat('MMMM d, yyyy \'at\' h:mm a').format(DateTime.now());
-    // The default PDF font has no glyph for the ₱ symbol — it renders as a
-    // missing-character box. 'PHP ' renders correctly in every font.
-    final currency = NumberFormat.currency(locale: 'en_PH', symbol: 'PHP ');
+    final currency = NumberFormat.currency(locale: 'en_PH', symbol: '₱');
     final netFlow = totalInflow - totalOutflow;
 
     const colHeaders = ['Date', 'Event', 'Category', 'Description', 'Amount'];
@@ -354,7 +352,9 @@ class OrgExportPdf {
 
     pdf.addPage(
       pw.MultiPage(
-        pageFormat: PdfPageFormat.a4,
+        // Landscape — 5 columns including Event and Description text in a
+        // portrait page made every row cramp and wrap awkwardly.
+        pageFormat: PdfPageFormat.a4.landscape,
         margin: const pw.EdgeInsets.fromLTRB(32, 28, 32, 28),
         header: (context) => _brandHeader(
           upriseLogo: upriseLogo, cictLogo: cictLogo, bsuLogo: bsuLogo, orgLogo: orgLogo,

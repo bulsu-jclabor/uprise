@@ -547,7 +547,6 @@ class _OrgEventProposalsScreenState extends State<OrgEventProposalsScreen> {
     final date = proposalDate.toDate();
     final startTime = (data['startTime'] ?? '').toString();
     final endTime = (data['endTime'] ?? '').toString();
-    final capacity = (data['capacity'] is num) ? (data['capacity'] as num).toInt() : 0;
     final audience = (data['audience'] ?? 'Public').toString();
 
     final eventData = {
@@ -561,8 +560,6 @@ class _OrgEventProposalsScreenState extends State<OrgEventProposalsScreen> {
       'date': Timestamp.fromDate(date),
       'startTime': startTime,
       'endTime': endTime,
-      'capacity': capacity,
-      'slotsLeft': capacity,
       'status': 'approved',
       'isPublic': true,
       'logoUrl': logoUrl,
@@ -1789,6 +1786,7 @@ class _SubmitProposalModalState extends State<_SubmitProposalModal> {
   final _dateCtrl    = TextEditingController();
   final _startTimeCtrl = TextEditingController();
   final _endTimeCtrl   = TextEditingController();
+  final _otherCategoryCtrl = TextEditingController();
 
   String _category = 'Workshop';
   String _audience = 'Public';
@@ -1839,6 +1837,7 @@ class _SubmitProposalModalState extends State<_SubmitProposalModal> {
       }
       final cat = e['category'] ?? 'Workshop';
       _category = _categories.contains(cat) ? cat : 'Workshop';
+      _otherCategoryCtrl.text = e['otherCategory'] ?? '';
       _audience = e['audience'] ?? 'Public';
       _issuesCertificate = e['issuesCertificate'] == true;
     }
@@ -1852,6 +1851,7 @@ class _SubmitProposalModalState extends State<_SubmitProposalModal> {
     _dateCtrl.dispose();
     _startTimeCtrl.dispose();
     _endTimeCtrl.dispose();
+    _otherCategoryCtrl.dispose();
     super.dispose();
   }
 
@@ -1968,6 +1968,7 @@ class _SubmitProposalModalState extends State<_SubmitProposalModal> {
         'orgName': orgName,
         'title': _titleCtrl.text.trim(),
         'category': _category,
+        'otherCategory': _category == 'Other' ? _otherCategoryCtrl.text.trim() : null,
         'audience': _audience,
         'description': _descCtrl.text.trim(),
         'location': _locCtrl.text.trim(),
@@ -2139,6 +2140,15 @@ class _SubmitProposalModalState extends State<_SubmitProposalModal> {
                       ),
                     ),
                   ]),
+                  if (_category == 'Other') ...[
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: _otherCategoryCtrl,
+                      decoration: _orgEventProposalsInputDecoration('Specify Category *', hint: 'e.g. Webinar', icon: Icons.category_outlined),
+                      style: GoogleFonts.beVietnamPro(fontSize: 13),
+                      validator: (v) => _category == 'Other' && v?.trim().isEmpty == true ? 'Required' : null,
+                    ),
+                  ],
                   const SizedBox(height: 12),
                   DropdownButtonFormField<String>(
                     value: _audience,
@@ -2679,7 +2689,11 @@ class _ViewProposalModal extends StatelessWidget {
                             children: [
                               Expanded(
                                 child: _detailItem(
-                                    'Category', data['category'] ?? '—',
+                                    'Category',
+                                    data['category'] == 'Other' &&
+                                            (data['otherCategory'] ?? '').toString().isNotEmpty
+                                        ? data['otherCategory']
+                                        : (data['category'] ?? '—'),
                                     Icons.category_outlined),
                               ),
                               const SizedBox(width: 12),

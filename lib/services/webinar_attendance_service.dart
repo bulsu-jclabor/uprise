@@ -132,10 +132,12 @@ class WebinarAttendanceService {
     String studentName = 'Unknown';
     String studentEmail = '';
     try {
-      final userDoc = await FirebaseFirestore.instance.collection('users').doc(studentUid).get();
-      final d = userDoc.data();
+      // Name/email live on `students` (doc ID = uid) — `users` only has
+      // uid/email/fullName/role, not the fields this needs.
+      final studentDoc = await FirebaseFirestore.instance.collection('students').doc(studentUid).get();
+      final d = studentDoc.data();
       if (d != null) {
-        studentName = (d['name'] ?? d['email'] ?? 'Unknown').toString();
+        studentName = (d['fullName'] ?? d['email'] ?? 'Unknown').toString();
         studentEmail = (d['email'] ?? '').toString();
       }
     } catch (_) {}
@@ -160,15 +162,15 @@ class WebinarAttendanceService {
       final existing = await attendances.where('studentId', isEqualTo: studentUid).limit(1).get();
       if (existing.docs.isNotEmpty) return 'duplicate';
 
-      final userDoc = await FirebaseFirestore.instance.collection('users').doc(studentUid).get();
-      if (!userDoc.exists) return 'not_registered';
-      final data = userDoc.data() as Map<String, dynamic>;
+      final studentDoc = await FirebaseFirestore.instance.collection('students').doc(studentUid).get();
+      if (!studentDoc.exists) return 'not_registered';
+      final data = studentDoc.data() as Map<String, dynamic>;
 
       await attendances.add({
         'studentId': studentUid,
-        'studentName': data['name'] ?? data['email'] ?? 'Unknown',
+        'studentName': data['fullName'] ?? data['email'] ?? 'Unknown',
         'studentEmail': data['email'] ?? '',
-        'program': data['program'] ?? 'N/A',
+        'program': data['course'] ?? 'N/A',
         'yearLevel': data['yearLevel'] ?? '',
         'timestamp': FieldValue.serverTimestamp(),
         'status': 'present',

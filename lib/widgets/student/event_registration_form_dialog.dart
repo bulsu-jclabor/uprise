@@ -141,10 +141,8 @@ class _DynamicRegistrationDialogState extends State<DynamicRegistrationDialog> {
         }
         final eventSnap = await tx.get(eventRef);
         if (!eventSnap.exists) throw Exception('Event not found.');
-        final slotsLeft = (eventSnap.data()?['slotsLeft'] ?? 0) as int;
-        if (slotsLeft <= 0) throw Exception('No slots available.');
+        // No slot check – org does not enforce capacity limits.
 
-        tx.update(eventRef, {'slotsLeft': slotsLeft - 1});
         tx.set(regRef, {
           'userId': user.uid,
           'eventId': widget.eventId,

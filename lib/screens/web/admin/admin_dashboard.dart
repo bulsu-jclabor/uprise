@@ -82,6 +82,11 @@ class AdminDashboard extends StatefulWidget {
 
 class _AdminDashboardState extends State<AdminDashboard> {
   int _selectedIndex = 0;
+  // Screens are only actually mounted (and start their Firestore queries)
+  // the first time their tab is opened, then kept alive in the IndexedStack
+  // from then on — otherwise every screen would fire its queries at once on
+  // dashboard load instead of spreading that cost out over time.
+  final Set<int> _visitedIndices = {0};
   final AuthService _auth = AuthService();
   int _unreadNotifications = 0;
   List<Map<String, dynamic>> _notifications = [];
@@ -100,7 +105,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
     _updateDateTime();
     _screens = [
       DashboardHome(
-        onNavigateToCalendar: () => setState(() => _selectedIndex = 5),
+        onNavigateToCalendar: () => _selectTab(5),
       ),
       const OrganizationManagement(),
       const StudentAccounts(),
@@ -275,7 +280,14 @@ class _AdminDashboardState extends State<AdminDashboard> {
 
   void _handleNotificationTap(Map<String, dynamic> n) {
     final index = _notificationTypeToTabIndex[n['type']?.toString()];
-    if (index != null) setState(() => _selectedIndex = index);
+    if (index != null) _selectTab(index);
+  }
+
+  void _selectTab(int index) {
+    setState(() {
+      _selectedIndex = index;
+      _visitedIndices.add(index == -1 ? 10 : index);
+    });
   }
 
   void _showAllNotificationsDialog() {
@@ -452,7 +464,10 @@ class _AdminDashboardState extends State<AdminDashboard> {
                   // cause of the lag on every click.
                   child: IndexedStack(
                     index: _selectedIndex == -1 ? 10 : _selectedIndex,
-                    children: _screens,
+                    children: List.generate(
+                      _screens.length,
+                      (i) => _visitedIndices.contains(i) ? _screens[i] : const SizedBox.shrink(),
+                    ),
                   ),
                 ),
               ],
@@ -570,8 +585,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                     : _selectedIndex == index;
 
                 return GestureDetector(
-                  onTap: () =>
-                      setState(() => _selectedIndex = isSettings ? -1 : index),
+                  onTap: () => _selectTab(isSettings ? -1 : index),
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 150),
                     margin: const EdgeInsets.symmetric(vertical: 2),

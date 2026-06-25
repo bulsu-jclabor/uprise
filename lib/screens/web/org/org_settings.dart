@@ -8,9 +8,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
-import 'package:qr_flutter/qr_flutter.dart';
 import '../../../services/activity_logger.dart' as activity_log;
-import '../../../services/totp_service.dart';
 import '../../../theme/app_theme.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -146,7 +144,7 @@ class _OrgSettingsScreenState extends State<OrgSettingsScreen>
               unselectedLabelStyle: GoogleFonts.beVietnamPro(
                   fontSize: 13, fontWeight: FontWeight.w500),
               tabs: const [
-                Tab(height: 38, text: 'Notifications'),
+                Tab(height: 38, text: 'Profile'),
                 Tab(height: 38, text: 'Security'),
               ],
             ),
@@ -159,7 +157,7 @@ class _OrgSettingsScreenState extends State<OrgSettingsScreen>
           child: TabBarView(
             controller: _tabController,
             children: [
-              _NotificationsTab(orgId: widget.orgId),
+              _ProfileTab(orgName: widget.orgName, orgShortName: widget.orgShortName, orgEmail: widget.orgEmail),
               _SecurityTab(orgId: widget.orgId),
             ],
           ),
@@ -172,94 +170,35 @@ class _OrgSettingsScreenState extends State<OrgSettingsScreen>
 // ─────────────────────────────────────────────────────────────────────────────
 // Notifications Tab
 // ─────────────────────────────────────────────────────────────────────────────
-class _NotificationsTab extends StatefulWidget {
-  final String orgId;
-  const _NotificationsTab({required this.orgId});
+class _ProfileTab extends StatelessWidget {
+  final String orgName, orgShortName, orgEmail;
+  const _ProfileTab({required this.orgName, required this.orgShortName, required this.orgEmail});
 
-  @override
-  State<_NotificationsTab> createState() => _NotificationsTabState();
-}
-
-class _NotificationsTabState extends State<_NotificationsTab> {
-  Map<String, bool> _prefs = {};
-  bool _isLoading = true;
-
-  final List<Map<String, String>> _prefKeys = [
-    {'label': 'Email Notifications', 'key': 'email_notifications', 'desc': 'Receive updates via email'},
-    {'label': 'Push Notifications', 'key': 'push_notifications', 'desc': 'Receive push notifications on your device'},
-    {'label': 'Event Reminders', 'key': 'event_reminders', 'desc': 'Get reminded about upcoming events'},
-    {'label': 'Proposal Updates', 'key': 'proposal_updates', 'desc': 'Notify when proposal status changes'},
-    {'label': 'Announcement Alerts', 'key': 'announcement_alerts', 'desc': 'Get alerted for new announcements'},
-    {'label': 'Broadcast Messages', 'key': 'broadcast_messages', 'desc': 'Receive broadcast channel messages'},
-  ];
-
-  @override
-  void initState() {
-    super.initState();
-    _load();
-  }
-
-  Future<void> _load() async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
-    final doc = await FirebaseFirestore.instance
-        .collection('users')
-        .doc(user.uid)
-        .collection('settings')
-        .doc('notifications')
-        .get();
-    final data = doc.exists ? doc.data() as Map<String, dynamic> : {};
-    setState(() {
-      for (final item in _prefKeys) {
-        _prefs[item['key']!] = data[item['key']] ?? true;
-      }
-      _isLoading = false;
-    });
-  }
-
-  Future<void> _save() async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
-    await FirebaseFirestore.instance
-        .collection('users')
-        .doc(user.uid)
-        .collection('settings')
-        .doc('notifications')
-        .set(Map<String, dynamic>.from(_prefs));
-    await activity_log.ActivityLogger.log(
-      action: 'save_notification_settings',
-      module: 'settings',
-      details: {'orgId': widget.orgId},
-    );
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content: Text('Settings saved'),
-            backgroundColor: UpriseColors.success),
-      );
-    }
-  }
-
-  void _restoreDefaults() {
-    setState(() {
-      for (final item in _prefKeys) _prefs[item['key']!] = true;
-    });
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-          content: Text('Defaults restored (not saved yet)'),
-          backgroundColor: UpriseColors.info),
+  Widget _infoRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label,
+              style: GoogleFonts.beVietnamPro(
+                  fontSize: 11, fontWeight: FontWeight.w600, color: const Color(0xFF9AA5B4))),
+          const SizedBox(height: 4),
+          Text(value.isNotEmpty ? value : '—',
+              style: GoogleFonts.beVietnamPro(fontSize: 14, color: const Color(0xFF1A202C))),
+        ],
+      ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_isLoading) return const Center(child: CircularProgressIndicator());
     final width = MediaQuery.of(context).size.width;
     final horizontalPadding = width < 720 ? 16.0 : 28.0;
     return SingleChildScrollView(
       padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
       child: Container(
-        margin: const EdgeInsets.only(bottom: 24),
+        margin: const EdgeInsets.only(bottom: 20),
         padding: const EdgeInsets.all(24),
         decoration: BoxDecoration(
           color: Colors.white,
@@ -270,96 +209,18 @@ class _NotificationsTabState extends State<_NotificationsTab> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Notification Preferences',
+            Text('Organization Information',
                 style: GoogleFonts.beVietnamPro(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w600,
-                    color: const Color(0xFF1A202C))),
+                    fontSize: 18, fontWeight: FontWeight.w600, color: const Color(0xFF1A202C))),
             const SizedBox(height: 4),
-            Text('Choose which events trigger notifications for your account.',
-                style: GoogleFonts.beVietnamPro(
-                    fontSize: 12, color: const Color(0xFF64748B))),
+            Text('To update your logo, cover photo, or description, use the Profile page.',
+                style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF64748B))),
             const SizedBox(height: 20),
-            ..._prefKeys.map((item) => _NotificationTile(
-                  label: item['label']!,
-                  description: item['desc']!,
-                  value: _prefs[item['key']!] ?? true,
-                  onChanged: (v) => setState(() => _prefs[item['key']!] = v),
-                )),
-            const SizedBox(height: 24),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                OutlinedButton(
-                  onPressed: _restoreDefaults,
-                  style: OutlinedButton.styleFrom(
-                    side: const BorderSide(color: UpriseColors.primaryLight),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8)),
-                  ),
-                  child: Text('Restore Defaults', style: GoogleFonts.beVietnamPro(fontSize: 13)),
-                ),
-                const SizedBox(width: 12),
-                ElevatedButton(
-                  onPressed: _save,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: UpriseColors.primaryDark,
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8)),
-                  ),
-                  child: Text('Save Changes',
-                      style: GoogleFonts.beVietnamPro(
-                          fontSize: 13, fontWeight: FontWeight.w600)),
-                ),
-              ],
-            ),
+            _infoRow('Organization Name', orgName),
+            _infoRow('Short Name', orgShortName),
+            _infoRow('Email Address', orgEmail),
           ],
         ),
-      ),
-    );
-  }
-}
-
-class _NotificationTile extends StatelessWidget {
-  final String label, description;
-  final bool value;
-  final ValueChanged<bool> onChanged;
-
-  const _NotificationTile({
-    required this.label,
-    required this.description,
-    required this.value,
-    required this.onChanged,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(label,
-                    style: GoogleFonts.beVietnamPro(
-                        fontWeight: FontWeight.w500,
-                        color: const Color(0xFF1A202C))),
-                const SizedBox(height: 2),
-                Text(description,
-                    style: GoogleFonts.beVietnamPro(
-                        fontSize: 11, color: const Color(0xFF64748B))),
-              ],
-            ),
-          ),
-          Switch(
-            value: value,
-            onChanged: onChanged,
-            activeColor: UpriseColors.primaryDark,
-          ),
-        ],
       ),
     );
   }
@@ -382,17 +243,9 @@ class _SecurityTabState extends State<_SecurityTab> {
   final _newPasswordCtrl = TextEditingController();
   final _confirmPasswordCtrl = TextEditingController();
   bool _isUpdating = false;
-  bool _twoFactorEnabled = false;
-  bool _loading2FA = true;
   bool _obscureCurrent = true;
   bool _obscureNew = true;
   bool _obscureConfirm = true;
-
-  @override
-  void initState() {
-    super.initState();
-    _load2FA();
-  }
 
   @override
   void dispose() {
@@ -400,21 +253,6 @@ class _SecurityTabState extends State<_SecurityTab> {
     _newPasswordCtrl.dispose();
     _confirmPasswordCtrl.dispose();
     super.dispose();
-  }
-
-  Future<void> _load2FA() async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
-    final doc = await FirebaseFirestore.instance
-        .collection('users')
-        .doc(user.uid)
-        .collection('settings')
-        .doc('security')
-        .get();
-    setState(() {
-      _twoFactorEnabled = doc.data()?['twoFactorEnabled'] ?? false;
-      _loading2FA = false;
-    });
   }
 
   Future<void> _updatePassword() async {
@@ -455,248 +293,6 @@ class _SecurityTabState extends State<_SecurityTab> {
       }
     } finally {
       if (mounted) setState(() => _isUpdating = false);
-    }
-  }
-
-  Future<void> _toggle2FA(bool value) async {
-    if (value) {
-      await _startTwoFactorSetup();
-    } else {
-      await _confirmAndDisableTwoFactor();
-    }
-  }
-
-  /// Real TOTP setup: generates a secret, shows the QR code for an
-  /// authenticator app, and requires the user to prove they actually set
-  /// it up by entering a live code before it's persisted as enabled.
-  Future<void> _startTwoFactorSetup() async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
-    final secret = TotpService.generateSecret();
-    final uri = TotpService.buildOtpAuthUri(
-      secret: secret,
-      accountName: user.email ?? widget.orgId,
-    );
-    final codeCtrl = TextEditingController();
-    String? error;
-    bool verifying = false;
-
-    final enabled = await showDialog<bool>(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setDialogState) {
-          Future<void> verify() async {
-            final code = codeCtrl.text.trim();
-            if (code.length != 6) {
-              setDialogState(() => error = 'Enter the 6-digit code from your app');
-              return;
-            }
-            setDialogState(() { verifying = true; error = null; });
-            final ok = TotpService.verifyCode(secret, code);
-            if (!ok) {
-              setDialogState(() { verifying = false; error = 'Incorrect code. Check the time on your device and try again.'; });
-              return;
-            }
-            await FirebaseFirestore.instance
-                .collection('users')
-                .doc(user.uid)
-                .collection('settings')
-                .doc('security')
-                .set({'twoFactorEnabled': true, 'twoFactorSecret': secret}, SetOptions(merge: true));
-            if (ctx.mounted) Navigator.pop(ctx, true);
-          }
-
-          return Dialog(
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-            child: Container(
-              width: 420,
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Set Up Two-Factor Authentication',
-                      style: GoogleFonts.beVietnamPro(fontSize: 16, fontWeight: FontWeight.w700)),
-                  const SizedBox(height: 6),
-                  Text(
-                    'Scan this QR code with Google Authenticator, Authy, or any TOTP app.',
-                    style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF64748B)),
-                  ),
-                  const SizedBox(height: 18),
-                  Center(
-                    child: Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        border: Border.all(color: const Color(0xFFE2E6EA)),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: QrImageView(data: uri, size: 180),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Text("Can't scan? Enter this code manually:",
-                      style: GoogleFonts.beVietnamPro(fontSize: 11, color: const Color(0xFF64748B))),
-                  const SizedBox(height: 4),
-                  SelectableText(
-                    TotpService.formatSecretForDisplay(secret),
-                    style: const TextStyle(
-                        fontSize: 13, fontWeight: FontWeight.w700, letterSpacing: 1.2, fontFamily: 'monospace'),
-                  ),
-                  const SizedBox(height: 18),
-                  TextField(
-                    controller: codeCtrl,
-                    keyboardType: TextInputType.number,
-                    maxLength: 6,
-                    style: GoogleFonts.beVietnamPro(fontSize: 18, letterSpacing: 4),
-                    textAlign: TextAlign.center,
-                    decoration: InputDecoration(
-                      counterText: '',
-                      hintText: '000000',
-                      errorText: error,
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                    ),
-                    onSubmitted: (_) => verify(),
-                  ),
-                  const SizedBox(height: 16),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                      TextButton(
-                        onPressed: verifying ? null : () => Navigator.pop(ctx, false),
-                        child: Text('Cancel', style: GoogleFonts.beVietnamPro()),
-                      ),
-                      const SizedBox(width: 8),
-                      ElevatedButton(
-                        onPressed: verifying ? null : verify,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: UpriseColors.primaryDark,
-                          foregroundColor: Colors.white,
-                        ),
-                        child: verifying
-                            ? const SizedBox(
-                                width: 16, height: 16,
-                                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                            : Text('Verify & Enable', style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.w600)),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          );
-        },
-      ),
-    );
-
-    if (enabled == true && mounted) {
-      setState(() => _twoFactorEnabled = true);
-      await activity_log.ActivityLogger.log(
-        action: 'enable_2fa',
-        module: 'settings',
-        severity: 'security',
-        details: {'orgId': widget.orgId},
-      );
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Two-factor authentication enabled'), backgroundColor: UpriseColors.success),
-        );
-      }
-    }
-  }
-
-  /// Disabling 2FA requires a live code too — otherwise anyone at an
-  /// unlocked, already-authenticated session could just flip it off.
-  Future<void> _confirmAndDisableTwoFactor() async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
-    final doc = await FirebaseFirestore.instance
-        .collection('users')
-        .doc(user.uid)
-        .collection('settings')
-        .doc('security')
-        .get();
-    final secret = doc.data()?['twoFactorSecret'] as String?;
-    if (secret == null || secret.isEmpty) {
-      // No secret on record (shouldn't normally happen) — just clear the flag.
-      await FirebaseFirestore.instance
-          .collection('users').doc(user.uid).collection('settings').doc('security')
-          .set({'twoFactorEnabled': false}, SetOptions(merge: true));
-      if (mounted) setState(() => _twoFactorEnabled = false);
-      return;
-    }
-
-    final codeCtrl = TextEditingController();
-    String? error;
-
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setDialogState) => AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: Text('Disable Two-Factor Authentication',
-              style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.w700)),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Enter your current 6-digit code to confirm.',
-                  style: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF64748B))),
-              const SizedBox(height: 12),
-              TextField(
-                controller: codeCtrl,
-                keyboardType: TextInputType.number,
-                maxLength: 6,
-                autofocus: true,
-                textAlign: TextAlign.center,
-                style: GoogleFonts.beVietnamPro(fontSize: 18, letterSpacing: 4),
-                decoration: InputDecoration(
-                  counterText: '',
-                  hintText: '000000',
-                  errorText: error,
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                ),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text('Cancel', style: GoogleFonts.beVietnamPro())),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: UpriseColors.error, foregroundColor: Colors.white),
-              onPressed: () {
-                if (TotpService.verifyCode(secret, codeCtrl.text.trim())) {
-                  Navigator.pop(ctx, true);
-                } else {
-                  setDialogState(() => error = 'Incorrect code');
-                }
-              },
-              child: Text('Disable', style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.w600)),
-            ),
-          ],
-        ),
-      ),
-    );
-
-    if (confirmed == true) {
-      await FirebaseFirestore.instance
-          .collection('users')
-          .doc(user.uid)
-          .collection('settings')
-          .doc('security')
-          .set({'twoFactorEnabled': false, 'twoFactorSecret': FieldValue.delete()}, SetOptions(merge: true));
-      if (mounted) setState(() => _twoFactorEnabled = false);
-      await activity_log.ActivityLogger.log(
-        action: 'disable_2fa',
-        module: 'settings',
-        severity: 'security',
-        details: {'orgId': widget.orgId},
-      );
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Two-factor authentication disabled'), backgroundColor: UpriseColors.warning),
-        );
-      }
     }
   }
 
@@ -825,84 +421,6 @@ class _SecurityTabState extends State<_SecurityTab> {
                             shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(8)),
                           ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          // 2FA card
-          Container(
-            margin: const EdgeInsets.only(bottom: 20),
-            padding: const EdgeInsets.all(24),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: const Color(0xFFE8ECF0)),
-              boxShadow: _DS.cardShadow,
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Two-Factor Authentication',
-                            style: GoogleFonts.beVietnamPro(
-                                fontSize: 18,
-                                fontWeight: FontWeight.w600,
-                                color: const Color(0xFF1A202C))),
-                        const SizedBox(height: 2),
-                        Text(
-                          _twoFactorEnabled
-                              ? 'Currently enabled — your account has extra protection'
-                              : 'Currently disabled — consider enabling for better security',
-                          style: GoogleFonts.beVietnamPro(
-                              fontSize: 12,
-                              color: _twoFactorEnabled
-                                  ? UpriseColors.success
-                                  : const Color(0xFF64748B)),
-                        ),
-                      ],
-                    ),
-                  ),
-                  if (!_loading2FA)
-                    Switch(
-                      value: _twoFactorEnabled,
-                      onChanged: _toggle2FA,
-                      activeColor: UpriseColors.primaryDark,
-                    )
-                  else
-                    const SizedBox(
-                        width: 36,
-                        height: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2)),
-                ]),
-                const SizedBox(height: 16),
-                Container(
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: UpriseColors.info.withAlpha(20),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(
-                        color: UpriseColors.info.withAlpha(51)),
-                  ),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Icon(Icons.shield_outlined,
-                          color: UpriseColors.info, size: 18),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          'Highly recommended: enabling 2FA ensures that even if someone learns your password, they cannot access your account without your trusted device.',
-                          style: GoogleFonts.beVietnamPro(
-                              fontSize: 12, color: UpriseColors.info),
                         ),
                       ),
                     ],

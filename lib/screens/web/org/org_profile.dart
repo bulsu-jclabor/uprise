@@ -192,6 +192,7 @@ class _OrgProfileScreenState extends State<OrgProfileScreen> {
   String _orgEmail = '';
   String _orgDescription = '';
   String _orgLogoUrl = '';
+  String _coverPhotoUrl = '';
   String _facebook = '';
   String _instagram = '';
   String _twitter = '';
@@ -250,6 +251,7 @@ class _OrgProfileScreenState extends State<OrgProfileScreen> {
           _orgEmail        = data['email']            ?? widget.orgEmail;
           _orgDescription  = data['description']      ?? '';
           _orgLogoUrl      = data['logoUrl']          ?? '';
+          _coverPhotoUrl   = data['coverPhotoUrl']    ?? '';
           _facebook        = data['facebook']         ?? '';
           _instagram       = data['instagram']        ?? '';
           _twitter         = data['twitter']          ?? '';
@@ -378,6 +380,7 @@ class _OrgProfileScreenState extends State<OrgProfileScreen> {
           email: _orgEmail,
           description: _orgDescription,
           logoUrl: _orgLogoUrl,
+          coverPhotoUrl: _coverPhotoUrl,
           advisers: _advisers,
           adviserPhotoUrl: _adviserPhotoUrl,
           facebook: _facebook,
@@ -560,7 +563,7 @@ class _OrgProfileScreenState extends State<OrgProfileScreen> {
   // ── Profile Hero — cover banner + overlapping logo + quick stats ──────────
   Widget _buildProfileHero(bool isMobile) {
     final logoSize = isMobile ? 76.0 : 92.0;
-    final coverHeight = isMobile ? 72.0 : 90.0;
+    final coverHeight = isMobile ? 130.0 : 150.0;
     final sidePad = isMobile ? 16.0 : 26.0;
 
     return Container(
@@ -589,14 +592,29 @@ class _OrgProfileScreenState extends State<OrgProfileScreen> {
                   ),
                 ),
                 child: Stack(
+                  fit: StackFit.expand,
                   children: [
-                    Positioned.fill(
-                      child: Opacity(
-                        opacity: 0.10,
-                        child: Icon(Icons.business_rounded,
-                            size: coverHeight * 1.6, color: Colors.white),
+                    if (_coverPhotoUrl.isNotEmpty)
+                      _buildImageWidget(_coverPhotoUrl, fit: BoxFit.cover)
+                    else
+                      Positioned.fill(
+                        child: Opacity(
+                          opacity: 0.10,
+                          child: Icon(Icons.business_rounded,
+                              size: coverHeight * 1.6, color: Colors.white),
+                        ),
                       ),
-                    ),
+                    // Scrim so the edit button stays legible over a photo.
+                    if (_coverPhotoUrl.isNotEmpty)
+                      Container(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [Colors.black.withOpacity(0.25), Colors.transparent],
+                            begin: Alignment.topRight,
+                            end: Alignment.bottomLeft,
+                          ),
+                        ),
+                      ),
                   ],
                 ),
               ),
@@ -1678,7 +1696,7 @@ class _MembersRow extends StatelessWidget {
 // ─────────────────────────────────────────────────────────────────────────────
 class _EditOrgProfileSheet extends StatefulWidget {
   final String orgId;
-  final String orgName, shortName, email, description, logoUrl;
+  final String orgName, shortName, email, description, logoUrl, coverPhotoUrl;
   final List<AdviserInfo> advisers;
   final String adviserPhotoUrl;
   final String facebook, instagram, twitter, gmail;
@@ -1691,6 +1709,7 @@ class _EditOrgProfileSheet extends StatefulWidget {
     required this.email,
     required this.description,
     required this.logoUrl,
+    required this.coverPhotoUrl,
     required this.advisers,
     required this.adviserPhotoUrl,
     required this.facebook,
@@ -1723,9 +1742,11 @@ class _EditOrgProfileSheetState extends State<_EditOrgProfileSheet> {
   final _gmCtrl     = TextEditingController();
 
   String? _logoUrl;
+  String? _coverPhotoUrl;
   String? _adviserPhotoUrl;
   bool _hasSecondAdviser = false;
   bool _isUploadingLogo   = false;
+  bool _isUploadingCover  = false;
   bool _isUploadingPhoto  = false;
   bool _isSaving          = false;
 
@@ -1751,6 +1772,7 @@ class _EditOrgProfileSheetState extends State<_EditOrgProfileSheet> {
     _twCtrl.text     = widget.twitter;
     _gmCtrl.text     = widget.gmail;
     _logoUrl         = widget.logoUrl.isNotEmpty ? widget.logoUrl : null;
+    _coverPhotoUrl   = widget.coverPhotoUrl.isNotEmpty ? widget.coverPhotoUrl : null;
     _adviserPhotoUrl =
         widget.adviserPhotoUrl.isNotEmpty ? widget.adviserPhotoUrl : null;
   }
@@ -1778,6 +1800,22 @@ class _EditOrgProfileSheetState extends State<_EditOrgProfileSheet> {
           _logoUrl = 'data:$mime;base64,${base64Encode(file.bytes!)}');
     } finally {
       if (mounted) setState(() => _isUploadingLogo = false);
+    }
+  }
+
+  Future<void> _pickCoverPhoto() async {
+    setState(() => _isUploadingCover = true);
+    try {
+      final result = await FilePicker.platform
+          .pickFiles(type: FileType.image, withData: true);
+      if (result == null) return;
+      final file = result.files.first;
+      if (file.bytes == null) return;
+      final mime = _mimeTypeFromBytes(file.bytes!);
+      setState(() =>
+          _coverPhotoUrl = 'data:$mime;base64,${base64Encode(file.bytes!)}');
+    } finally {
+      if (mounted) setState(() => _isUploadingCover = false);
     }
   }
 
@@ -1833,6 +1871,7 @@ class _EditOrgProfileSheetState extends State<_EditOrgProfileSheet> {
       'twitter':   _twCtrl.text.trim(),
       'gmail':     _gmCtrl.text.trim(),
       if (_logoUrl != null) 'logoUrl': _logoUrl,
+      if (_coverPhotoUrl != null) 'coverPhotoUrl': _coverPhotoUrl,
     };
     try {
       await FirebaseFirestore.instance
@@ -2043,6 +2082,52 @@ class _EditOrgProfileSheetState extends State<_EditOrgProfileSheet> {
                     ),
                   ),
                 ]),
+                const SizedBox(height: 20),
+
+                // Cover photo
+                _sectionLabel('Cover Photo',
+                    icon: Icons.panorama_outlined),
+                const SizedBox(height: 12),
+                Container(
+                  width: double.infinity,
+                  height: 110,
+                  decoration: BoxDecoration(
+                    color: _C.surface,
+                    borderRadius: BorderRadius.circular(_DS.radiusMd),
+                    border: Border.all(color: _C.borderSoft),
+                  ),
+                  clipBehavior: Clip.antiAlias,
+                  child: _coverPhotoUrl != null
+                      ? _buildImageWidget(_coverPhotoUrl!,
+                          fit: BoxFit.cover,
+                          errorWidget: const Icon(
+                              Icons.panorama_outlined,
+                              color: _C.textFaint))
+                      : const Icon(Icons.panorama_outlined,
+                          color: _C.textFaint, size: 28),
+                ),
+                const SizedBox(height: 10),
+                OutlinedButton.icon(
+                  onPressed: _isUploadingCover ? null : _pickCoverPhoto,
+                  icon: _isUploadingCover
+                      ? const SizedBox(
+                          width: 14,
+                          height: 14,
+                          child: CircularProgressIndicator(
+                              strokeWidth: 2))
+                      : const Icon(Icons.upload_outlined, size: 16),
+                  label: Text(
+                      _isUploadingCover
+                          ? 'Uploading…'
+                          : 'Upload Cover Photo',
+                      style: GoogleFonts.beVietnamPro(fontSize: 12)),
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: _C.borderSoft),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8)),
+                    foregroundColor: _C.primaryDark,
+                  ),
+                ),
                 const SizedBox(height: 20),
 
                 // Org name (read-only)

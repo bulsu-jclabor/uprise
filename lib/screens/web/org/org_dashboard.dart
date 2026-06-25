@@ -301,6 +301,11 @@ class OrgDashboard extends StatefulWidget {
 
 class _OrgDashboardState extends State<OrgDashboard> {
   int _selectedIndex = 0;
+  // Screens are only actually mounted (and start their Firestore queries)
+  // the first time their tab is opened, then kept alive in the IndexedStack
+  // from then on — otherwise all 13 screens would fire their queries at
+  // once on dashboard load instead of spreading that cost out over time.
+  final Set<int> _visitedIndices = {0};
   String _orgId = '';
   String _orgName = '';
   String _orgShortName = '';
@@ -690,7 +695,14 @@ class _OrgDashboardState extends State<OrgDashboard> {
 
   void _handleNotificationTap(Map<String, dynamic> n) {
     final index = _notificationTypeToTabIndex[n['type']?.toString()];
-    if (index != null) setState(() => _selectedIndex = index);
+    if (index != null) _selectTab(index);
+  }
+
+  void _selectTab(int index) {
+    setState(() {
+      _selectedIndex = index;
+      _visitedIndices.add(index == -1 ? 13 : index);
+    });
   }
 
   Future<void> _logout() async => FirebaseAuth.instance.signOut();
@@ -980,7 +992,10 @@ class _OrgDashboardState extends State<OrgDashboard> {
                           ? const SizedBox()
                           : IndexedStack(
                               index: _selectedIndex == -1 ? 13 : _selectedIndex,
-                              children: _screens,
+                              children: List.generate(
+                                _screens.length,
+                                (i) => _visitedIndices.contains(i) ? _screens[i] : const SizedBox.shrink(),
+                              ),
                             ),
                     ),
                   ],
@@ -1094,8 +1109,7 @@ class _OrgDashboardState extends State<OrgDashboard> {
                     : _selectedIndex == index;
 
                 return GestureDetector(
-                  onTap: () =>
-                      setState(() => _selectedIndex = isSettings ? -1 : index),
+                  onTap: () => _selectTab(isSettings ? -1 : index),
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 150),
                     margin: const EdgeInsets.symmetric(vertical: 2),
@@ -1286,9 +1300,7 @@ class _OrgDashboardState extends State<OrgDashboard> {
                   const Icon(Icons.access_time_rounded, size: 12, color: OrgColors.primaryDark),
                   const SizedBox(width: 6),
                   Text(
-                    _currentDateTime.length > 20
-                        ? _currentDateTime.substring(0, 20)
-                        : _currentDateTime,
+                    _currentDateTime,
                     style: GoogleFonts.beVietnamPro(
                       fontSize: 11,
                       color: OrgColors.primaryDark,

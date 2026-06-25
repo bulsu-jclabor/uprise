@@ -270,11 +270,9 @@ class _OrgEventAnalyticsScreenState extends State<OrgEventAnalyticsScreen>
 
     final events = results[1].docs.map((d) {
       final data = d.data();
-      final capacity = data['capacity'] as num? ?? data['expectedAttendees'] as num? ?? 1;
       return {
         'id': d.id,
         'title': data['title'] as String? ?? 'Untitled',
-        'capacity': capacity.toInt(),
       };
     }).toList();
 
@@ -2221,49 +2219,30 @@ class _CompletionCard extends StatelessWidget {
                   ...data.events.map((e) {
                     final id = e['id'] as String;
                     final title = e['title'] as String;
-                    final capacity = e['capacity'] as int;
                     final received = countByEvent[id] ?? 0;
-                    final pct = capacity > 0
-                        ? (received / capacity).clamp(0.0, 1.0)
-                        : 0.0;
                     return SizedBox(
                       width: 200,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                      child: Row(
                         children: [
-                          Row(
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  title,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: GoogleFonts.beVietnamPro(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w500,
-                                    color: _C.charcoal,
-                                  ),
-                                ),
+                          Expanded(
+                            child: Text(
+                              title,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: GoogleFonts.beVietnamPro(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w500,
+                                color: _C.charcoal,
                               ),
-                              const SizedBox(width: 6),
-                              Text(
-                                '${(pct * 100).toStringAsFixed(0)}%',
-                                style: GoogleFonts.beVietnamPro(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w700,
-                                  color: UpriseColors.primaryDark,
-                                ),
-                              ),
-                            ],
+                            ),
                           ),
-                          const SizedBox(height: 6),
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(99),
-                            child: LinearProgressIndicator(
-                              value: pct,
-                              backgroundColor: const Color(0xFFE5E7EB),
+                          const SizedBox(width: 6),
+                          Text(
+                            '$received response${received == 1 ? '' : 's'}',
+                            style: GoogleFonts.beVietnamPro(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700,
                               color: UpriseColors.primaryDark,
-                              minHeight: 7,
                             ),
                           ),
                         ],

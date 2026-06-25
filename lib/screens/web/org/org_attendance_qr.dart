@@ -177,19 +177,17 @@ void _toast(BuildContext ctx, String msg, {bool error = false}) {
 // ─────────────────────────────────────────────────────────────────────────────
 class EventModel {
   final String id, title, location, startTime, endTime;
-  final int capacity;
   final DateTime date;
   const EventModel({
     required this.id, required this.title, required this.location,
     required this.startTime, required this.endTime,
-    required this.capacity, required this.date,
+    required this.date,
   });
   factory EventModel.fromDoc(DocumentSnapshot d) {
     final m = d.data() as Map<String, dynamic>;
     return EventModel(
       id: d.id, title: m['title'] ?? 'Untitled', location: m['location'] ?? 'TBA',
       startTime: m['startTime'] ?? '—', endTime: m['endTime'] ?? '—',
-      capacity: (m['capacity'] as num?)?.toInt() ?? 0,
       date: (m['date'] as Timestamp).toDate(),
     );
   }
@@ -399,6 +397,34 @@ class _AttendanceTabState extends State<AttendanceTab> with AutomaticKeepAliveCl
   int    _subTab       = 0;
   bool   _sendingEvaluations = false;
 
+  // `registrations` docs only ever carry `userId` (plus whatever the
+  // registration form itself asked for) — name/student number/course/year
+  // live on `students` (doc ID = uid), so every registrant list needs this
+  // looked up alongside the raw registration doc to show more than just a
+  // bare ID.
+  final Map<String, Map<String, dynamic>> _studentCache = {};
+
+  Future<void> _ensureStudentsLoaded(Iterable<String> uids) async {
+    final missing = uids.where((u) => u.isNotEmpty && !_studentCache.containsKey(u)).toSet().toList();
+    if (missing.isEmpty) return;
+    for (var i = 0; i < missing.length; i += 30) {
+      final chunk = missing.sublist(i, (i + 30).clamp(0, missing.length));
+      try {
+        final snap = await FirebaseFirestore.instance
+            .collection('students')
+            .where(FieldPath.documentId, whereIn: chunk)
+            .get();
+        for (final d in snap.docs) {
+          _studentCache[d.id] = d.data();
+        }
+      } catch (_) {}
+      for (final id in chunk) {
+        _studentCache.putIfAbsent(id, () => const {});
+      }
+    }
+    if (mounted) setState(() {});
+  }
+
   @override
   void dispose() { _scanner.dispose(); _search.dispose(); _manualCtrl.dispose(); super.dispose(); }
 
@@ -436,12 +462,14 @@ class _AttendanceTabState extends State<AttendanceTab> with AutomaticKeepAliveCl
       final evDoc = await FirebaseFirestore.instance.collection('events').doc(widget.eventDocId).get();
       if (!_isActive(evDoc)) throw Exception('Attendance is not open for this event');
 
+      // Name/course/yearLevel/studentId live on `students` (doc ID = uid),
+      // not `users` — `users` only has uid/email/fullName/role.
       DocumentSnapshot? userDoc;
-      final direct = await FirebaseFirestore.instance.collection('users').doc(uid).get();
+      final direct = await FirebaseFirestore.instance.collection('students').doc(uid).get();
       if (direct.exists && (direct.data() as Map?)?['orgId'] == widget.orgId) {
         userDoc = direct;
       } else {
-        final q = await FirebaseFirestore.instance.collection('users')
+        final q = await FirebaseFirestore.instance.collection('students')
             .where('studentId', isEqualTo: uid).where('orgId', isEqualTo: widget.orgId).limit(1).get();
         if (q.docs.isNotEmpty) userDoc = q.docs.first;
       }
@@ -451,7 +479,7 @@ class _AttendanceTabState extends State<AttendanceTab> with AutomaticKeepAliveCl
           .doc(widget.eventDocId).collection('attendances')
           .where('studentId', isEqualTo: userDoc.id).get();
       if (existing.docs.isNotEmpty) {
-        throw Exception('${(userDoc.data() as Map)['name'] ?? 'Student'} already marked');
+        throw Exception('${(userDoc.data() as Map)['fullName'] ?? 'Student'} already marked');
       }
 
       String status = 'present';
@@ -465,8 +493,8 @@ class _AttendanceTabState extends State<AttendanceTab> with AutomaticKeepAliveCl
       final data = userDoc.data() as Map<String, dynamic>;
       await FirebaseFirestore.instance.collection('events').doc(widget.eventDocId)
           .collection('attendances').add({
-        'studentId': userDoc.id, 'studentName': data['name'] ?? data['email'] ?? 'Unknown',
-        'studentEmail': data['email'] ?? '', 'program': data['program'] ?? 'N/A',
+        'studentId': userDoc.id, 'studentName': data['fullName'] ?? data['email'] ?? 'Unknown',
+        'studentEmail': data['email'] ?? '', 'program': data['course'] ?? 'N/A',
         'yearLevel': data['yearLevel'] ?? '', 'timestamp': FieldValue.serverTimestamp(),
         'status': status, 'method': isManual ? 'manual' : 'qr',
       });
@@ -480,7 +508,7 @@ class _AttendanceTabState extends State<AttendanceTab> with AutomaticKeepAliveCl
       );
       if (mounted) {
         _toast(context,
-            '${data['name'] ?? 'Student'} marked ${status.toUpperCase()} ${status == 'late' ? '⏰' : '✓'}');
+            '${data['fullName'] ?? 'Student'} marked ${status.toUpperCase()} ${status == 'late' ? '⏰' : '✓'}');
       }
     } catch (e) {
       if (mounted) {
@@ -650,19 +678,37 @@ class _AttendanceTabState extends State<AttendanceTab> with AutomaticKeepAliveCl
     }).toList();
   }
 
+  // `registrations` docs only reliably carry `userId` — this fills in
+  // name/student number/program/year/registeredAt from the `students`
+  // lookup cache (falling back to whatever the registration doc itself has,
+  // for the older form-based flows that do write fullName/email directly).
+  Map<String, dynamic> _enrichedReg(Map<String, dynamic> m) {
+    final uid = (m['userId'] ?? '').toString();
+    final student = _studentCache[uid] ?? const {};
+    return {
+      'uid': uid,
+      'studentName': student['fullName'] ?? m['studentName'] ?? m['fullName'] ?? '',
+      'studentId': student['studentId'] ?? m['studentId'] ?? '',
+      'studentEmail': student['email'] ?? m['studentEmail'] ?? m['email'] ?? '',
+      'program': student['course'] ?? m['program'] ?? 'N/A',
+      'yearLevel': student['yearLevel'] ?? m['yearLevel'] ?? '',
+      'registeredAt': m['registeredAt'] ?? m['createdAt'],
+    };
+  }
+
   List<QueryDocumentSnapshot> _filterRegistrantDocs(List<QueryDocumentSnapshot> regs, List<QueryDocumentSnapshot> attDocs) {
     final attMap = {
       for (final d in attDocs)
         (d.data() as Map)['studentId']?.toString() ?? '': (d.data() as Map)['status']?.toString() ?? 'absent'
     };
     return regs.where((d) {
-      final m = d.data() as Map<String, dynamic>;
+      final reg = _enrichedReg(d.data() as Map<String, dynamic>);
       if (_query.isNotEmpty) {
-        final name = (m['studentName'] ?? '').toString().toLowerCase();
-        final id = (m['studentId'] ?? '').toString().toLowerCase();
+        final name = (reg['studentName'] ?? '').toString().toLowerCase();
+        final id = (reg['studentId'] ?? '').toString().toLowerCase();
         if (!name.contains(_query) && !id.contains(_query)) return false;
       }
-      final status = attMap[(m['studentId'] ?? '').toString()] ?? 'absent';
+      final status = attMap[(reg['uid'] ?? '').toString()] ?? 'absent';
       if (_statusFilter != 'All' && status != _statusFilter) return false;
       return true;
     }).toList();
@@ -701,14 +747,14 @@ class _AttendanceTabState extends State<AttendanceTab> with AutomaticKeepAliveCl
     final rows = [
       ['Student Name', 'Student ID', 'Program', 'Year Level', 'Registered At', 'Status'],
       ...regs.map((d) {
-        final m = d.data() as Map<String, dynamic>;
-        final ts = (m['createdAt'] as Timestamp?)?.toDate();
-        final status = attMap[(m['studentId'] ?? '').toString()] ?? 'absent';
+        final reg = _enrichedReg(d.data() as Map<String, dynamic>);
+        final ts = (reg['registeredAt'] as Timestamp?)?.toDate();
+        final status = attMap[(reg['uid'] ?? '').toString()] ?? 'absent';
         return [
-          m['studentName'] ?? '',
-          m['studentId'] ?? '',
-          m['program'] ?? '',
-          m['yearLevel'] ?? '',
+          reg['studentName'] ?? '',
+          reg['studentId'] ?? '',
+          reg['program'] ?? '',
+          reg['yearLevel'] ?? '',
           ts != null ? DateFormat('yyyy-MM-dd HH:mm').format(ts) : '',
           status,
         ];
@@ -765,14 +811,14 @@ class _AttendanceTabState extends State<AttendanceTab> with AutomaticKeepAliveCl
         (d.data() as Map)['studentId']?.toString() ?? '': (d.data() as Map)['status']?.toString() ?? 'absent'
     };
     final rows = regs.map<List<String>>((d) {
-      final m = d.data() as Map<String, dynamic>;
-      final ts = (m['createdAt'] as Timestamp?)?.toDate();
-      final status = attMap[(m['studentId'] ?? '').toString()] ?? 'absent';
+      final reg = _enrichedReg(d.data() as Map<String, dynamic>);
+      final ts = (reg['registeredAt'] as Timestamp?)?.toDate();
+      final status = attMap[(reg['uid'] ?? '').toString()] ?? 'absent';
       return <String>[
-        m['studentName'] ?? '',
-        m['studentId'] ?? '',
-        m['program'] ?? '',
-        m['yearLevel'] ?? '',
+        reg['studentName'] ?? '',
+        reg['studentId'] ?? '',
+        reg['program'] ?? '',
+        reg['yearLevel'] ?? '',
         ts != null ? DateFormat('yyyy-MM-dd HH:mm').format(ts) : '',
         status,
       ];
@@ -820,7 +866,11 @@ class _AttendanceTabState extends State<AttendanceTab> with AutomaticKeepAliveCl
                 const SizedBox(height: 12),
                 _subTab == 0
                     ? _AttendanceTable(docs: attDocs.cast(), query: _query, statusFilter: _statusFilter)
-                    : _RegistrantsTable(stream: _regStream, attendanceDocs: attDocs.cast(), query: _query, statusFilter: _statusFilter),
+                    : _RegistrantsTable(
+                        stream: _regStream, attendanceDocs: attDocs.cast(),
+                        studentCache: _studentCache, ensureStudentsLoaded: _ensureStudentsLoaded,
+                        query: _query, statusFilter: _statusFilter,
+                      ),
               ]),
             );
           },
@@ -1151,6 +1201,7 @@ class _AttendanceTabState extends State<AttendanceTab> with AutomaticKeepAliveCl
               .where('eventId', isEqualTo: widget.eventDocId).snapshots(),
       builder: (ctx, snap) {
         final regs = snap.data?.docs ?? [];
+        _ensureStudentsLoaded(regs.map((r) => ((r.data() as Map)['userId'] ?? '').toString()));
         return Container(
           padding: const EdgeInsets.all(22),
           decoration: BoxDecoration(
@@ -1170,18 +1221,21 @@ class _AttendanceTabState extends State<AttendanceTab> with AutomaticKeepAliveCl
             else
               ...regs.map((reg) {
                 final d = reg.data() as Map<String, dynamic>;
-                final sid = (d['studentId'] ?? '') as String;
-                final isMarked = marked.contains(sid);
+                final uid = (d['userId'] ?? '').toString();
+                final student = _studentCache[uid] ?? const {};
+                final name = (student['fullName'] ?? d['studentName'] ?? d['fullName'] ?? '').toString();
+                final sid = (student['studentId'] ?? d['studentId'] ?? '').toString();
+                final isMarked = marked.contains(uid);
                 return Container(
                   padding: const EdgeInsets.symmetric(vertical: 10),
                   decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: Color(0xFFF3F4F8)))),
                   child: Row(children: [
-                    _StudentAvatar(name: d['studentName'] ?? '', size: 36),
+                    _StudentAvatar(name: name, size: 36),
                     const SizedBox(width: 12),
                     Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      Text(d['studentName'] ?? '—',
+                      Text(name.isEmpty ? '—' : name,
                           style: GoogleFonts.beVietnamPro(fontSize: 13.5, fontWeight: FontWeight.w600, color: const Color(0xFF1A202C))),
-                      Text(d['studentId'] ?? '',
+                      Text(sid,
                           style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF94A3B8))),
                     ])),
                     isMarked ? _attBadge('present')
@@ -1189,7 +1243,7 @@ class _AttendanceTabState extends State<AttendanceTab> with AutomaticKeepAliveCl
                             label: 'Mark',
                             icon: Icons.check_rounded,
                             color: UpriseColors.primaryDark,
-                            onPressed: () => _markAttendance(sid, isManual: true),
+                            onPressed: () => _markAttendance(uid, isManual: true),
                             compact: true,
                           ),
                   ]),
@@ -1206,6 +1260,7 @@ class _AttendanceTabState extends State<AttendanceTab> with AutomaticKeepAliveCl
       stream: _regStream,
       builder: (ctx, regSnap) {
         final regDocs = regSnap.data?.docs.cast<QueryDocumentSnapshot>() ?? [];
+        _ensureStudentsLoaded(regDocs.map((r) => ((r.data() as Map)['userId'] ?? '').toString()));
         final filteredAttDocs = _filterAttendanceDocs(attDocs);
         final filteredRegDocs = _filterRegistrantDocs(regDocs, attDocs);
         final canExport = _subTab == 0 ? filteredAttDocs.isNotEmpty : filteredRegDocs.isNotEmpty;
@@ -1306,8 +1361,11 @@ class _AttendanceTable extends StatelessWidget {
 class _RegistrantsTable extends StatelessWidget {
   final Stream<QuerySnapshot>? stream;
   final List<QueryDocumentSnapshot> attendanceDocs;
+  final Map<String, Map<String, dynamic>> studentCache;
+  final void Function(Iterable<String> uids) ensureStudentsLoaded;
   final String query, statusFilter;
   const _RegistrantsTable({required this.stream, required this.attendanceDocs,
+      required this.studentCache, required this.ensureStudentsLoaded,
       required this.query, required this.statusFilter});
 
   @override
@@ -1320,19 +1378,30 @@ class _RegistrantsTable extends StatelessWidget {
           return const Center(child: Padding(padding: EdgeInsets.all(40), child: CircularProgressIndicator()));
         }
         final regs = snap.data?.docs ?? [];
+        // `registrations` docs only reliably carry `userId` — name/student
+        // number/program live on `students`, looked up by that uid.
+        ensureStudentsLoaded(regs.map((r) => ((r.data() as Map)['userId'] ?? '').toString()));
         final attMap = {
           for (final d in attendanceDocs)
             (d.data() as Map)['studentId']?.toString() ?? '':
                 (d.data() as Map)['status']?.toString() ?? 'present'
         };
+        Map<String, dynamic> studentOf(Map<String, dynamic> m) =>
+            studentCache[(m['userId'] ?? '').toString()] ?? const {};
+        String nameOf(Map<String, dynamic> m) =>
+            (studentOf(m)['fullName'] ?? m['studentName'] ?? m['fullName'] ?? '').toString();
+        String idOf(Map<String, dynamic> m) =>
+            (studentOf(m)['studentId'] ?? m['studentId'] ?? '').toString();
+
         final filtered = regs.where((d) {
           final m = d.data() as Map<String, dynamic>;
           if (query.isNotEmpty) {
-            final name = (m['studentName'] ?? '').toString().toLowerCase();
-            final id   = (m['studentId']   ?? '').toString().toLowerCase();
+            final name = nameOf(m).toLowerCase();
+            final id   = idOf(m).toLowerCase();
             if (!name.contains(query) && !id.contains(query)) return false;
           }
-          final status = attMap[(m['studentId'] ?? '').toString()] ?? 'absent';
+          final uid = (m['userId'] ?? '').toString();
+          final status = attMap[uid] ?? 'absent';
           if (statusFilter != 'All' && status != statusFilter) return false;
           return true;
         }).toList();
@@ -1340,34 +1409,134 @@ class _RegistrantsTable extends StatelessWidget {
         return _DataTable(
           columns: const [
             _Col('STUDENT', 4), _Col('STUDENT ID', 2), _Col('PROGRAM', 3),
-            _Col('REGISTERED AT', 3), _Col('STATUS', 2),
+            _Col('REGISTERED AT', 3), _Col('STATUS', 2), _Col('', 1),
           ],
           isEmpty: filtered.isEmpty,
           emptyMessage: regs.isEmpty ? 'No registered participants yet.' : 'No records match your filter.',
           footer: '${regs.length} registered participant${regs.length == 1 ? '' : 's'}',
           rows: filtered.map((d) {
             final m = d.data() as Map<String, dynamic>;
-            final sid = (m['studentId'] ?? '').toString();
-            final status = attMap[sid] ?? 'absent';
-            final reg = (m['createdAt'] as Timestamp?)?.toDate();
+            final student = studentOf(m);
+            final uid = (m['userId'] ?? '').toString();
+            final status = attMap[uid] ?? 'absent';
+            final name = nameOf(m);
+            final sid = idOf(m);
+            final email = (student['email'] ?? m['studentEmail'] ?? m['email'] ?? '').toString();
+            final program = (student['course'] ?? m['program'] ?? 'N/A').toString();
+            final reg = ((m['registeredAt'] ?? m['createdAt']) as Timestamp?)?.toDate();
             return _TableRow(
               cells: [
-                _NameCell(m['studentName'] ?? '—', m['studentEmail'] ?? ''),
+                _NameCell(name.isEmpty ? '—' : name, email),
                 _IdText(sid),
-                Text(m['program'] ?? 'N/A',
+                Text(program,
                     style: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF374151)),
                     overflow: TextOverflow.ellipsis),
                 Text(reg != null ? DateFormat('MMM dd, hh:mm a').format(reg) : '—',
                     style: GoogleFonts.beVietnamPro(fontSize: 12.5, color: const Color(0xFF64748B))),
                 _attBadge(status),
+                Tooltip(
+                  message: 'View registration answers',
+                  waitDuration: const Duration(milliseconds: 400),
+                  child: InkWell(
+                    onTap: () => _showRegistrationAnswers(context, name.isEmpty ? 'Student' : name, m),
+                    borderRadius: BorderRadius.circular(8),
+                    child: Container(
+                      padding: const EdgeInsets.all(7),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF2563EB).withAlpha(26),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Icon(Icons.visibility_outlined, size: 14, color: Color(0xFF2563EB)),
+                    ),
+                  ),
+                ),
               ],
-              flex: const [4, 2, 3, 3, 2],
+              flex: const [4, 2, 3, 3, 2, 1],
             );
           }).toList(),
         );
       },
     );
   }
+}
+
+// Registration form answers are stored on the registration doc itself —
+// either as `formResponses` (self-describing: {label, value} per field, the
+// current student registration flow) or the older `formAnswers` (raw field
+// id -> value, no labels). Handles either shape so older registrations
+// still show something instead of nothing.
+void _showRegistrationAnswers(BuildContext context, String studentName, Map<String, dynamic> regData) {
+  final responses = regData['formResponses'];
+  final rawAnswers = regData['formAnswers'];
+  final entries = <MapEntry<String, String>>[];
+
+  String displayOf(dynamic value) {
+    if (value is List) return value.isEmpty ? '—' : value.join(', ');
+    final s = (value ?? '').toString();
+    return s.isEmpty ? '—' : s;
+  }
+
+  if (responses is Map && responses.isNotEmpty) {
+    for (final v in responses.values) {
+      if (v is Map) {
+        final label = (v['label'] ?? '').toString();
+        entries.add(MapEntry(label.isEmpty ? 'Question' : label, displayOf(v['value'])));
+      }
+    }
+  } else if (rawAnswers is Map && rawAnswers.isNotEmpty) {
+    rawAnswers.forEach((k, v) => entries.add(MapEntry(k.toString(), displayOf(v))));
+  }
+
+  showDialog(
+    context: context,
+    builder: (ctx) => Dialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxHeight: 520),
+        child: Container(
+          width: 440,
+          padding: const EdgeInsets.all(22),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(children: [
+                  Expanded(
+                    child: Text('Registration Answers',
+                        style: GoogleFonts.beVietnamPro(fontSize: 16, fontWeight: FontWeight.w700, color: const Color(0xFF1A202C))),
+                  ),
+                  InkWell(
+                    onTap: () => Navigator.pop(ctx),
+                    borderRadius: BorderRadius.circular(8),
+                    child: const Padding(
+                      padding: EdgeInsets.all(4),
+                      child: Icon(Icons.close_rounded, size: 20, color: Color(0xFF94A3B8)),
+                    ),
+                  ),
+                ]),
+                Text(studentName, style: GoogleFonts.beVietnamPro(fontSize: 12.5, color: const Color(0xFF64748B))),
+                const SizedBox(height: 16),
+                if (entries.isEmpty)
+                  Text('No additional info was collected for this registration.',
+                      style: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF94A3B8)))
+                else
+                  ...entries.map((e) => Padding(
+                        padding: const EdgeInsets.only(bottom: 14),
+                        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                          Text(e.key,
+                              style: GoogleFonts.beVietnamPro(fontSize: 11, fontWeight: FontWeight.w600, color: const Color(0xFF9AA5B4))),
+                          const SizedBox(height: 3),
+                          Text(e.value, style: GoogleFonts.beVietnamPro(fontSize: 13.5, color: const Color(0xFF1A202C))),
+                        ]),
+                      )),
+              ],
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
 }
 
 // =============================================================================
@@ -1806,7 +1975,10 @@ class _WebinarCodePanelState extends State<_WebinarCodePanel> {
         intervalMinutes: _intervalMinutes,
         requireCheckOut: _requireCheckOut,
       );
-      _scheduleRotation('checkin', _intervalMinutes);
+      // Don't also call _scheduleRotation here — the session/code stream
+      // listener fires _ensureRotationRunning right after this write lands,
+      // and having both paths race to set _rotationTimer is what was
+      // causing extra, much-too-soon rotations.
       await activity_log.ActivityLogger.log(
         action: 'start_webinar_attendance',
         module: 'attendance',
@@ -1823,7 +1995,8 @@ class _WebinarCodePanelState extends State<_WebinarCodePanel> {
       _rotationTimer?.cancel();
       _rotationTimer = null;
       await WebinarAttendanceService.startCheckOutPhase(widget.eventDocId, intervalMinutes);
-      _scheduleRotation('checkout', intervalMinutes);
+      // Same as _start() above — _ensureRotationRunning schedules the next
+      // rotation reactively once the stream picks up the new checkout code.
     } finally {
       if (mounted) setState(() => _busy = false);
     }

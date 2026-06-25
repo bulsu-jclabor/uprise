@@ -178,6 +178,11 @@ class CertificateRecord {
   final List<Map<String, dynamic>> signatories;
   final String? verificationCode;
   final String? recipientName;
+  // The editable canvas state from the last time this draft was customized —
+  // restored on reopen so "Customize" continues from where the org left
+  // off instead of resetting to the generic default layout every time.
+  final String? customLayoutJson;
+  final int? customBgColor;
 
   const CertificateRecord({
     required this.id,
@@ -194,6 +199,8 @@ class CertificateRecord {
     this.signatories = const [],
     this.verificationCode,
     this.recipientName,
+    this.customLayoutJson,
+    this.customBgColor,
   });
 
   factory CertificateRecord.fromFirestore(DocumentSnapshot doc) {
@@ -215,6 +222,8 @@ class CertificateRecord {
           : const [],
       verificationCode: d['verificationCode'] as String?,
       recipientName: d['recipientName'] as String?,
+      customLayoutJson: d['customLayoutJson'] as String?,
+      customBgColor: (d['customBgColor'] as num?)?.toInt(),
     );
   }
 }
@@ -243,7 +252,10 @@ class _OrgCertificatesScreenState extends State<OrgCertificatesScreen> {
     super.dispose();
   }
 
-  Stream<QuerySnapshot> get _certsStream => FirebaseFirestore.instance
+  // Created once, not a getter — re-evaluating .snapshots() on every
+  // keystroke/setState (search, filter, pagination) was re-subscribing to
+  // Firestore from scratch every time, which is what caused the lag.
+  late final Stream<QuerySnapshot> _certsStream = FirebaseFirestore.instance
       .collection('certificates')
       .where('orgId', isEqualTo: widget.orgId)
       .orderBy('issuedAt', descending: true)
@@ -1073,6 +1085,33 @@ class _CanvasElement {
     strokeColor: strokeColor ?? this.strokeColor,
     strokeWidth: strokeWidth ?? this.strokeWidth,
   );
+
+  // Persisted alongside the certificate draft so reopening Customize
+  // restores exactly what the org left it at, instead of resetting to the
+  // generic default layout every time.
+  Map<String, dynamic> toJson() => {
+    'id': id, 'type': type, 'x': x, 'y': y, 'w': w, 'h': h,
+    'text': text, 'fontSize': fontSize, 'fontWeight': fontWeight.index,
+    'color': color.toARGB32(), 'align': align.index, 'italic': italic,
+    'letterSpacing': letterSpacing, 'fillColor': fillColor.toARGB32(),
+    'strokeColor': strokeColor.toARGB32(), 'strokeWidth': strokeWidth,
+  };
+
+  factory _CanvasElement.fromJson(Map<String, dynamic> j) => _CanvasElement(
+    id: j['id'] as String, type: j['type'] as String,
+    x: (j['x'] as num).toDouble(), y: (j['y'] as num).toDouble(),
+    w: (j['w'] as num).toDouble(), h: (j['h'] as num).toDouble(),
+    text: j['text'] as String? ?? '',
+    fontSize: (j['fontSize'] as num?)?.toDouble() ?? 14,
+    fontWeight: FontWeight.values[(j['fontWeight'] as num?)?.toInt() ?? FontWeight.w400.index],
+    color: Color((j['color'] as num?)?.toInt() ?? 0xFF1A202C),
+    align: TextAlign.values[(j['align'] as num?)?.toInt() ?? TextAlign.center.index],
+    italic: j['italic'] as bool? ?? false,
+    letterSpacing: (j['letterSpacing'] as num?)?.toDouble() ?? 0,
+    fillColor: Color((j['fillColor'] as num?)?.toInt() ?? 0xFFEFF6FF),
+    strokeColor: Color((j['strokeColor'] as num?)?.toInt() ?? 0xFF2563EB),
+    strokeWidth: (j['strokeWidth'] as num?)?.toDouble() ?? 1.5,
+  );
 }
 
 // Default element set, seeded from the same data + theme colors the Live
@@ -1086,27 +1125,29 @@ List<_CanvasElement> _defaultElementsFor({
   required Color accent,
   required Color textCol,
 }) {
-  // Positions approximate CertificatePreview's actual flow (lib/widgets/
-  // certificate_preview.dart) — a small square logo badge sitting just
-  // above the org name, not a large decorative seal, since that's what the
-  // real design has. There's no element type for the small workspace_premium
-  // corner icon or the inline badge+name row (this canvas only supports
-  // text/rect/circle/divider, all absolutely positioned), so this is the
-  // closest practical approximation, not a pixel-exact copy.
+  // Font sizes and vertical rhythm mirror CertificatePreview's actual flow
+  // (lib/widgets/certificate_preview.dart) field-for-field, so what the org
+  // sees in Live Preview is what they get when they open Customize — not a
+  // same-ballpark approximation with different sizes/spacing. The org-letter
+  // badge is recreated as a rect + a centered text element layered on top
+  // (this canvas has no element type that can hold a label inside a shape
+  // on its own); the small workspace_premium corner icon has no equivalent
+  // primitive here and is left out, since it's a minor decorative detail.
   return [
     _CanvasElement(id: 'border', type: 'rect',    x: 8,   y: 8,   w: 584, h: 408, fillColor: Colors.transparent, strokeColor: accent, strokeWidth: 2),
-    _CanvasElement(id: 'badge',  type: 'rect',    x: 287, y: 26,  w: 26,  h: 26,  fillColor: accent, strokeColor: accent, strokeWidth: 0),
-    _CanvasElement(id: 'org',    type: 'text',    x: 0,   y: 58,  w: 600, h: 20,  text: orgName.toUpperCase(), fontSize: 11, fontWeight: FontWeight.w700, color: accent, letterSpacing: 3),
-    _CanvasElement(id: 'certty', type: 'text',    x: 0,   y: 92,  w: 600, h: 34,  text: 'CERTIFICATE', fontSize: 26, fontWeight: FontWeight.w900, color: textCol, letterSpacing: 1),
-    _CanvasElement(id: 'certof', type: 'text',    x: 0,   y: 128, w: 600, h: 20,  text: 'OF PARTICIPATION', fontSize: 13, fontWeight: FontWeight.w700, color: accent, letterSpacing: 3),
-    _CanvasElement(id: 'certfy', type: 'text',    x: 0,   y: 162, w: 600, h: 20,  text: 'This certificate is proudly presented to', fontSize: 11, color: textCol.withAlpha(166)),
-    _CanvasElement(id: 'recip',  type: 'text',    x: 0,   y: 184, w: 600, h: 36,  text: '[Recipient Name]', fontSize: 24, fontWeight: FontWeight.w700, color: textCol, italic: true),
-    _CanvasElement(id: 'div1',   type: 'divider', x: 230, y: 226, w: 140, h: 1,   strokeColor: accent.withAlpha(102), strokeWidth: 1),
-    _CanvasElement(id: 'parti',  type: 'text',    x: 0,   y: 240, w: 600, h: 20,  text: 'for successfully participating in', fontSize: 11, color: textCol.withAlpha(153)),
-    _CanvasElement(id: 'evtit',  type: 'text',    x: 0,   y: 262, w: 600, h: 28,  text: eventTitle, fontSize: 16, fontWeight: FontWeight.w700, color: textCol),
-    _CanvasElement(id: 'evdat',  type: 'text',    x: 0,   y: 292, w: 600, h: 20,  text: 'held on $eventDate', fontSize: 11, color: textCol.withAlpha(153)),
-    _CanvasElement(id: 'div2',   type: 'divider', x: 190, y: 330, w: 220, h: 1,   strokeColor: accent, strokeWidth: 1),
-    _CanvasElement(id: 'signa',  type: 'text',    x: 0,   y: 338, w: 600, h: 18,  text: signatoryLine, fontSize: 10, color: textCol.withAlpha(128)),
+    _CanvasElement(id: 'badge',  type: 'rect',    x: 287, y: 22,  w: 26,  h: 26,  fillColor: accent, strokeColor: accent, strokeWidth: 0),
+    _CanvasElement(id: 'badgeletter', type: 'text', x: 287, y: 22, w: 26, h: 26, text: orgName.isNotEmpty ? orgName[0].toUpperCase() : '?', fontSize: 13, fontWeight: FontWeight.w800, color: Colors.white),
+    _CanvasElement(id: 'org',    type: 'text',    x: 0,   y: 52,  w: 600, h: 18,  text: orgName.toUpperCase(), fontSize: 11, fontWeight: FontWeight.w800, color: accent, letterSpacing: 2),
+    _CanvasElement(id: 'certty', type: 'text',    x: 0,   y: 84,  w: 600, h: 32,  text: 'CERTIFICATE', fontSize: 24, fontWeight: FontWeight.w900, color: textCol, letterSpacing: 1),
+    _CanvasElement(id: 'certof', type: 'text',    x: 0,   y: 116, w: 600, h: 18,  text: 'OF PARTICIPATION', fontSize: 13, fontWeight: FontWeight.w700, color: accent, letterSpacing: 3),
+    _CanvasElement(id: 'certfy', type: 'text',    x: 0,   y: 148, w: 600, h: 16,  text: 'This certificate is proudly presented to', fontSize: 10, color: textCol.withAlpha(166)),
+    _CanvasElement(id: 'recip',  type: 'text',    x: 0,   y: 168, w: 600, h: 28,  text: '[Recipient Name]', fontSize: 19, fontWeight: FontWeight.w700, color: textCol, italic: true),
+    _CanvasElement(id: 'div1',   type: 'divider', x: 230, y: 200, w: 140, h: 1,   strokeColor: accent.withAlpha(102), strokeWidth: 1),
+    _CanvasElement(id: 'parti',  type: 'text',    x: 0,   y: 212, w: 600, h: 16,  text: 'for successfully participating in', fontSize: 10, color: textCol.withAlpha(153)),
+    _CanvasElement(id: 'evtit',  type: 'text',    x: 0,   y: 232, w: 600, h: 18,  text: eventTitle, fontSize: 12, fontWeight: FontWeight.w700, color: textCol),
+    _CanvasElement(id: 'evdat',  type: 'text',    x: 0,   y: 252, w: 600, h: 16,  text: 'held on $eventDate', fontSize: 10, color: textCol.withAlpha(153)),
+    _CanvasElement(id: 'div2',   type: 'divider', x: 190, y: 282, w: 220, h: 1,   strokeColor: accent, strokeWidth: 1),
+    _CanvasElement(id: 'signa',  type: 'text',    x: 0,   y: 290, w: 600, h: 16,  text: signatoryLine, fontSize: 9, color: textCol.withAlpha(128)),
   ];
 }
 
@@ -1120,7 +1161,11 @@ class _CanvaTemplateEditor extends StatefulWidget {
   final Color themeBg;
   final Color themeAccent;
   final Color themeText;
-  final void Function(String? savedUrl) onSave;
+  // Restores exactly where the org left off customizing last time, instead
+  // of resetting to the generic default layout every time Customize opens.
+  final List<_CanvasElement>? initialElements;
+  final Color? initialBgColor;
+  final void Function(String? savedUrl, List<_CanvasElement> elements, Color bgColor) onSave;
   const _CanvaTemplateEditor({
     required this.orgId,
     required this.initialTemplateType,
@@ -1131,6 +1176,8 @@ class _CanvaTemplateEditor extends StatefulWidget {
     required this.themeBg,
     required this.themeAccent,
     required this.themeText,
+    this.initialElements,
+    this.initialBgColor,
     required this.onSave,
   });
 
@@ -1160,7 +1207,7 @@ class _CanvaTemplateEditorState extends State<_CanvaTemplateEditor> {
   @override
   void initState() {
     super.initState();
-    _elements = _defaultElementsFor(
+    _elements = widget.initialElements ?? _defaultElementsFor(
       orgName: widget.orgName,
       eventTitle: widget.eventTitle,
       eventDate: widget.eventDate,
@@ -1168,7 +1215,7 @@ class _CanvaTemplateEditorState extends State<_CanvaTemplateEditor> {
       accent: widget.themeAccent,
       textCol: widget.themeText,
     );
-    _bgColor = widget.themeBg;
+    _bgColor = widget.initialBgColor ?? widget.themeBg;
   }
 
   _CanvasElement? get _selected =>
@@ -1267,7 +1314,7 @@ class _CanvaTemplateEditorState extends State<_CanvaTemplateEditor> {
         module: 'certificates',
         details: {'orgId': widget.orgId, 'templateType': widget.initialTemplateType},
       );
-      if (mounted) widget.onSave(downloadUrl);
+      if (mounted) widget.onSave(downloadUrl, _elements, _bgColor);
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }
@@ -2144,6 +2191,11 @@ class _GenerateCertificateModalState extends State<_GenerateCertificateModal> {
   bool get _hasEligibleRecipients => _eligibleRecipients.isNotEmpty;
 
   String? _selectedTemplateUrl;
+  // The editable canvas state from the last Customize session for this
+  // draft — kept in memory (and persisted on submit) so reopening Customize
+  // continues from here instead of resetting to the generic default.
+  List<_CanvasElement>? _customElements;
+  Color? _customBgColor;
   String  _certType    = 'Formal Academic';
   bool    _isSubmitting = false;
 
@@ -2178,6 +2230,19 @@ class _GenerateCertificateModalState extends State<_GenerateCertificateModal> {
           entry.titleCtrl.text = (s['title'] ?? '').toString();
           entry.signatureImageBase64 = s['signatureImage'] as String?;
           _signatories.add(entry);
+        }
+      }
+      final savedLayout = widget.existingRecord!.customLayoutJson;
+      if (savedLayout != null) {
+        try {
+          final decoded = jsonDecode(savedLayout) as List;
+          _customElements = decoded
+              .map((e) => _CanvasElement.fromJson(Map<String, dynamic>.from(e as Map)))
+              .toList();
+          final bg = widget.existingRecord!.customBgColor;
+          if (bg != null) _customBgColor = Color(bg);
+        } catch (_) {
+          // Corrupt/old-format layout — fall back to the generic default.
         }
       }
     }
@@ -2267,9 +2332,15 @@ class _GenerateCertificateModalState extends State<_GenerateCertificateModal> {
         themeBg: theme.bg,
         themeAccent: theme.accent,
         themeText: theme.text,
-        onSave: (savedUrl) {
+        initialElements: _customElements,
+        initialBgColor: _customBgColor,
+        onSave: (savedUrl, elements, bgColor) {
           Navigator.pop(context);
-          if (savedUrl != null) setState(() => _selectedTemplateUrl = savedUrl);
+          setState(() {
+            if (savedUrl != null) _selectedTemplateUrl = savedUrl;
+            _customElements = elements;
+            _customBgColor = bgColor;
+          });
         },
       ),
     );
@@ -2432,6 +2503,8 @@ class _GenerateCertificateModalState extends State<_GenerateCertificateModal> {
             'verificationCode': _generateVerificationCode(),
             'autoGenerated':    false,
             if (_selectedTemplateUrl != null) 'templateFileUrl': _selectedTemplateUrl,
+            if (_customElements != null) 'customLayoutJson': jsonEncode(_customElements!.map((e) => e.toJson()).toList()),
+            if (_customBgColor != null) 'customBgColor': _customBgColor!.toARGB32(),
           }, SetOptions(merge: true));
         }
         await batch.commit();
@@ -2448,6 +2521,8 @@ class _GenerateCertificateModalState extends State<_GenerateCertificateModal> {
           'recipients':   _eligibleRecipients.length,
           'signatories':  signatoriesPayload,
           if (_selectedTemplateUrl != null) 'templateFileUrl': _selectedTemplateUrl,
+          if (_customElements != null) 'customLayoutJson': jsonEncode(_customElements!.map((e) => e.toJson()).toList()),
+          if (_customBgColor != null) 'customBgColor': _customBgColor!.toARGB32(),
           if (_selectedEventDocId != null) 'eventId': _selectedEventDocId,
         };
         if (widget.existingRecord != null) {
@@ -2560,7 +2635,11 @@ class _GenerateCertificateModalState extends State<_GenerateCertificateModal> {
       insetPadding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
       child: Container(
-        width: 960,
+        // Wide enough (with the flex split below) that the live preview
+        // renders at ~600px — the same logical size Customize's canvas
+        // opens to — instead of shrinking to a noticeably smaller, harder
+        // to judge preview.
+        width: 1080,
         constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.90),
         child: Form(
           key: _formKey,
@@ -2601,7 +2680,7 @@ class _GenerateCertificateModalState extends State<_GenerateCertificateModal> {
                 child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   // Left — form
                   Expanded(
-                    flex: 3,
+                    flex: 2,
                     child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                       _sectionLabel('Event & Template', icon: Icons.event_outlined),
                       Row(children: [
@@ -2844,7 +2923,7 @@ class _GenerateCertificateModalState extends State<_GenerateCertificateModal> {
                   const SizedBox(width: 24),
                   // Right — live preview
                   Expanded(
-                    flex: 2,
+                    flex: 3,
                     child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                       Row(children: [
                         Expanded(child: _sectionLabel('Live Preview', icon: Icons.preview_outlined)),

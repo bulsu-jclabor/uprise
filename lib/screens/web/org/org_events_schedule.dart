@@ -175,11 +175,11 @@ class EventModel {
   final String title;
   final String description;
   final String location;
-  final int capacity;
   final String startTime;
   final String endTime;
   final String category;
   final String guestSpeaker;
+  final String audience;
   final List<String> resources;
   final List<String> labPreparation;
   final List<String> tags;
@@ -194,11 +194,11 @@ class EventModel {
     required this.title,
     required this.description,
     required this.location,
-    required this.capacity,
     required this.startTime,
     required this.endTime,
     required this.category,
     required this.guestSpeaker,
+    this.audience = '',
     required this.resources,
     required this.labPreparation,
     required this.tags,
@@ -220,11 +220,11 @@ class EventModel {
       title: d['title'] ?? '',
       description: d['description'] ?? '',
       location: d['location'] ?? '',
-      capacity: d['capacity'] ?? 0,
       startTime: d['startTime'] ?? '',
       endTime: d['endTime'] ?? '',
       category: d['category'] ?? 'Other',
       guestSpeaker: d['guestSpeaker'] ?? '',
+      audience: (d['audience'] ?? '').toString(),
       resources: toList(d['resources']),
       labPreparation: toList(d['labPreparation']),
       tags: toList(d['tags']),
@@ -266,6 +266,23 @@ class _OrgEventsScheduleScreenState extends State<OrgEventsScheduleScreen> {
       .where('status', isEqualTo: 'approved')
       .orderBy('date')
       .snapshots();
+
+  // Pending proposals are shown on the calendar too (not just approved
+  // events) — the point is to catch a place/time conflict before a
+  // conflicting proposal gets approved, not after.
+  Stream<QuerySnapshot> get _orgPendingStream => FirebaseFirestore.instance
+      .collection('event_proposals')
+      .where('orgId', isEqualTo: widget.orgId)
+      .where('status', isEqualTo: 'pending')
+      .snapshots();
+
+  Stream<QuerySnapshot> get _allPendingStream => FirebaseFirestore.instance
+      .collection('event_proposals')
+      .where('status', isEqualTo: 'pending')
+      .snapshots();
+
+  Stream<QuerySnapshot> get _activePendingStream =>
+      _showOrgEventsOnly ? _orgPendingStream : _allPendingStream;
 
   // Returns the correct stream based on toggle state.
   Stream<QuerySnapshot> get _activeStream =>
@@ -436,7 +453,9 @@ class _OrgEventsScheduleScreenState extends State<OrgEventsScheduleScreen> {
     );
   }
 
-  // ── Calendar stream (only approved events from Firestore) ───────────────
+  // ── Calendar stream — approved events plus pending proposals, so a
+  // place/time conflict shows up before the conflicting proposal is even
+  // approved, not after. ───────────────────────────────────────────────
   Widget _buildCalendarStream() {
     return StreamBuilder<QuerySnapshot>(
       key: ValueKey('cal_${_showOrgEventsOnly}_${widget.orgId}'),
@@ -449,16 +468,25 @@ class _OrgEventsScheduleScreenState extends State<OrgEventsScheduleScreen> {
           return Center(child: Text('Error: ${snapshot.error}'));
         }
 
-        // Convert all docs to EventModel — all are already approved from Firestore
-        var allEvents = (snapshot.data?.docs ?? [])
+        final approvedEvents = (snapshot.data?.docs ?? [])
             .map((doc) => EventModel.fromFirestore(doc))
             .toList();
+        approvedEvents.sort((a, b) => a.date.compareTo(b.date));
+        _archivePastEvents(approvedEvents);
 
-        allEvents.sort((a, b) => a.date.compareTo(b.date));
-        _archivePastEvents(allEvents);
-
-        _cachedEvents = allEvents;
-        return _buildCalendarGrid(allEvents);
+        return StreamBuilder<QuerySnapshot>(
+          key: ValueKey('pending_${_showOrgEventsOnly}_${widget.orgId}'),
+          stream: _activePendingStream,
+          builder: (context, pendingSnap) {
+            final pendingEvents = (pendingSnap.data?.docs ?? [])
+                .map((doc) => EventModel.fromFirestore(doc))
+                .toList();
+            final merged = [...approvedEvents, ...pendingEvents]
+              ..sort((a, b) => a.date.compareTo(b.date));
+            _cachedEvents = merged;
+            return _buildCalendarGrid(merged);
+          },
+        );
       },
     );
   }
@@ -771,7 +799,6 @@ class _OrgEventsScheduleScreenState extends State<OrgEventsScheduleScreen> {
   // Fetch latest data from proposal (if available)
   var startTime = event.startTime;
   var endTime = event.endTime;
-  var capacity = event.capacity;
   var guestSpeaker = event.guestSpeaker;
 
   if (event.createdFromProposalId.isNotEmpty) {
@@ -784,7 +811,6 @@ class _OrgEventsScheduleScreenState extends State<OrgEventsScheduleScreen> {
         final pd = propDoc.data()!;
         startTime = (pd['startTime'] ?? '').toString();
         endTime = (pd['endTime'] ?? '').toString();
-        capacity = (pd['capacity'] is num) ? (pd['capacity'] as num).toInt() : 0;
         guestSpeaker = (pd['guestSpeaker'] ?? '').toString();
       }
     } catch (_) {}
@@ -880,7 +906,7 @@ class _OrgEventsScheduleScreenState extends State<OrgEventsScheduleScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // ── Quick Info (date, time, location, capacity) ──
+                    // ── Quick Info (date, time, location, audience) ──
                     Wrap(
                       spacing: 12,
                       runSpacing: 10,
@@ -901,10 +927,10 @@ class _OrgEventsScheduleScreenState extends State<OrgEventsScheduleScreen> {
                             Icons.location_on_rounded,
                             event.location,
                           ),
-                        if (capacity > 0)
+                        if (event.audience.isNotEmpty)
                           _buildInfoChip(
                             Icons.group_rounded,
-                            '$capacity capacity',
+                            event.audience,
                           ),
                         if (event.orgName.isNotEmpty)
                           _buildInfoChip(
@@ -963,11 +989,11 @@ class _OrgEventsScheduleScreenState extends State<OrgEventsScheduleScreen> {
                           value: event.category,
                           valueColor: _getCategoryColor(event.category),
                         ),
-                        if (capacity > 0)
+                        if (event.audience.isNotEmpty)
                           _buildDetailRow(
                             icon: Icons.group_outlined,
-                            label: 'Capacity',
-                            value: '$capacity attendees',
+                            label: 'Audience',
+                            value: event.audience,
                           ),
                         if (event.location.isNotEmpty)
                           _buildDetailRow(
@@ -1447,7 +1473,6 @@ class _EventModalState extends State<_EventModal> {
   final _titleCtrl = TextEditingController();
   final _descCtrl = TextEditingController();
   final _locationCtrl = TextEditingController();
-  final _capacityCtrl = TextEditingController();
   final _startTimeCtrl = TextEditingController();
   final _endTimeCtrl = TextEditingController();
   final _speakerCtrl = TextEditingController();
@@ -1469,7 +1494,6 @@ class _EventModalState extends State<_EventModal> {
       _titleCtrl.text = e.title;
       _descCtrl.text = e.description;
       _locationCtrl.text = e.location;
-      _capacityCtrl.text = e.capacity.toString();
       _startTimeCtrl.text = e.startTime;
       _endTimeCtrl.text = e.endTime;
       _speakerCtrl.text = e.guestSpeaker;
@@ -1486,7 +1510,7 @@ class _EventModalState extends State<_EventModal> {
   @override
   void dispose() {
     _titleCtrl.dispose(); _descCtrl.dispose(); _locationCtrl.dispose();
-    _capacityCtrl.dispose(); _startTimeCtrl.dispose(); _endTimeCtrl.dispose();
+    _startTimeCtrl.dispose(); _endTimeCtrl.dispose();
     _speakerCtrl.dispose(); _resourcesCtrl.dispose(); _labPrepCtrl.dispose();
     _tagsCtrl.dispose();
     super.dispose();
@@ -1506,7 +1530,6 @@ class _EventModalState extends State<_EventModal> {
       'title': _titleCtrl.text.trim(),
       'description': _descCtrl.text.trim(),
       'location': _locationCtrl.text.trim(),
-      'capacity': int.tryParse(_capacityCtrl.text.trim()) ?? 0,
       'startTime': _startTimeCtrl.text.trim(),
       'endTime': _endTimeCtrl.text.trim(),
       'guestSpeaker': _speakerCtrl.text.trim(),
@@ -1604,8 +1627,6 @@ class _EventModalState extends State<_EventModal> {
                     Expanded(child: _buildField('Start Time', _buildTimeInput(_startTimeCtrl, 'Start time'))),
                     const SizedBox(width: 12),
                     Expanded(child: _buildField('End Time', _buildTimeInput(_endTimeCtrl, 'End time'))),
-                    const SizedBox(width: 12),
-                    Expanded(child: _buildField('Capacity', _buildTextInput(_capacityCtrl, '100', keyboardType: TextInputType.number))),
                   ]),
                   const SizedBox(height: 16),
                   _buildField('Guest Speaker', _buildTextInput(_speakerCtrl, 'Full name and title')),

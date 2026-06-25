@@ -983,6 +983,7 @@ class _StudentEventsScreenState extends State<StudentEventsScreen>
                   return StreamBuilder<QuerySnapshot>(
                     stream: FirebaseFirestore.instance
                         .collection('events')
+                        .where('status', isEqualTo: 'approved')
                         .orderBy('date')
                         .snapshots(),
                     builder: (context, snap) {
@@ -1014,6 +1015,7 @@ class _StudentEventsScreenState extends State<StudentEventsScreen>
               return StreamBuilder<QuerySnapshot>(
                 stream: FirebaseFirestore.instance
                     .collection('events')
+                    .where('status', isEqualTo: 'approved')
                     .orderBy('date')
                     .snapshots(),
                 builder: (context, snap) {
@@ -1077,6 +1079,7 @@ class _StudentEventsScreenState extends State<StudentEventsScreen>
         return StreamBuilder<QuerySnapshot>(
           stream: FirebaseFirestore.instance
               .collection('events')
+              .where('status', isEqualTo: 'approved')
               .orderBy('date')
               .snapshots(),
           builder: (context, snap) {

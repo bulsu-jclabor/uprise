@@ -648,7 +648,9 @@ class _EventProposalsState extends State<EventProposals> {
           borderRadius: BorderRadius.circular(6),
         ),
         child: Text(
-          data['category'] ?? '—',
+          data['category'] == 'Other' && (data['otherCategory'] ?? '').toString().isNotEmpty
+              ? data['otherCategory']
+              : (data['category'] ?? '—'),
           style: GoogleFonts.beVietnamPro(
             fontSize: 12,
             fontWeight: FontWeight.w600,
@@ -1581,7 +1583,13 @@ class _EventProposalsState extends State<EventProposals> {
                       ),
                       child: Column(children: [
                         Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                          Expanded(child: _detailItem('Category', data['category'] ?? '—', Icons.category_outlined)),
+                          Expanded(child: _detailItem(
+                            'Category',
+                            data['category'] == 'Other' && (data['otherCategory'] ?? '').toString().isNotEmpty
+                                ? data['otherCategory']
+                                : (data['category'] ?? '—'),
+                            Icons.category_outlined,
+                          )),
                           Expanded(child: _detailItem('Audience', data['audience'] ?? '—', Icons.people_outline_rounded)),
                         ]),
                         const SizedBox(height: 12),

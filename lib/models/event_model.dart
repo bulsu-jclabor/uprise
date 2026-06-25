@@ -13,8 +13,6 @@ class EventModel {
   final String orgName;
   final String description;
   final String audience;
-  final int capacity;
-  final int slotsLeft;
   final String? proposalId;
   final String? createdFromProposalId;
   final String? orgLogoUrl;
@@ -32,8 +30,6 @@ class EventModel {
     required this.orgName,
     required this.description,
     required this.audience,
-    required this.capacity,
-    required this.slotsLeft,
     this.proposalId,
     this.createdFromProposalId,
     this.orgLogoUrl,
@@ -101,8 +97,6 @@ class EventModel {
       orgName: d['orgName'] ?? '',
       description: d['description'] ?? '',
       audience: d['audience'] ?? 'Public',
-      capacity: (d['capacity'] as int?) ?? 0,
-      slotsLeft: (d['slotsLeft'] as int?) ?? (d['capacity'] as int? ?? 0),
       proposalId: d['createdFromProposalId'] as String?,
       createdFromProposalId: d['createdFromProposalId'] as String?,
       orgLogoUrl: d['logoUrl'] as String?,
@@ -121,8 +115,6 @@ class EventModel {
     'orgName': orgName,
     'description': description,
     'audience': audience,
-    'capacity': capacity,
-    'slotsLeft': slotsLeft,
     'createdFromProposalId': proposalId,
     'logoUrl': orgLogoUrl,
     'bannerUrl': bannerUrl,
