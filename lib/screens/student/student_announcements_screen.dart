@@ -127,13 +127,16 @@ class _StudentAnnouncementsScreenState extends State<StudentAnnouncementsScreen>
   final String? _userId = FirebaseAuth.instance.currentUser?.uid;
 
   // Created once, not a getter — re-evaluating .snapshots() on every
-  // rebuild was re-subscribing to Firestore from scratch each time. Also
-  // now excludes scheduled/draft announcements (isPublished: false) that
-  // were showing up before they were actually due.
+  // rebuild was re-subscribing to Firestore from scratch each time.
+  //
+  // Deliberately NOT combining a `where('isPublished', ...)` filter with
+  // this `orderBy` — that pairing needs a composite Firestore index, and
+  // without it deployed the query fails outright (every load shows
+  // "Failed to load announcements"). Scheduled/draft announcements
+  // (isPublished: false) are filtered out client-side below instead.
   late final Stream<QuerySnapshot> _announcementsStream =
       FirebaseFirestore.instance
           .collection('announcements')
-          .where('isPublished', isEqualTo: true)
           .orderBy('timestamp', descending: true)
           .snapshots();
 
@@ -165,7 +168,10 @@ class _StudentAnnouncementsScreenState extends State<StudentAnnouncementsScreen>
             return const Center(child: Text('Failed to load announcements.'));
           }
 
-          final docs = snapshot.data?.docs ?? [];
+          final docs = (snapshot.data?.docs ?? []).where((d) {
+            final data = d.data() as Map<String, dynamic>;
+            return data['isPublished'] != false;
+          }).toList();
           if (docs.isEmpty) {
             return Center(
               child: Padding(

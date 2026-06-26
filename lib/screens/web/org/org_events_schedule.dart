@@ -1,6 +1,9 @@
 ﻿// ignore_for_file: unused_element_parameter
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_storage/firebase_storage.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:uprise/widgets/admin_export_button.dart';
@@ -185,6 +188,7 @@ class EventModel {
   final List<String> tags;
   final DateTime date;
   final String status;
+  final String bannerUrl;
 
   EventModel({
     required this.id,
@@ -204,6 +208,7 @@ class EventModel {
     required this.tags,
     required this.date,
     required this.status,
+    this.bannerUrl = '',
   });
 
   factory EventModel.fromFirestore(DocumentSnapshot doc) {
@@ -232,6 +237,7 @@ class EventModel {
           ? (d['date'] as Timestamp).toDate()
           : DateTime.tryParse(d['date']?.toString() ?? '') ?? DateTime.now(),
       status: (d['status'] ?? 'pending').toString().toLowerCase(),
+      bannerUrl: (d['bannerUrl'] ?? '').toString(),
     );
   }
 }
@@ -1491,6 +1497,15 @@ class _EventModalState extends State<_EventModal> {
   String _selectedCategory = 'Academic';
   bool _isSubmitting = false;
 
+  // Banner image — `_existingBannerUrl` is what's already saved (shown as
+  // the preview until replaced); `_newImageBytes` holds a freshly-picked
+  // replacement that gets uploaded to Storage on submit. `_bannerRemoved`
+  // lets the org explicitly clear an existing banner.
+  String? _existingBannerUrl;
+  Uint8List? _newImageBytes;
+  String? _newImageExt;
+  bool _bannerRemoved = false;
+
   static const _categories = ['Academic', 'Technical', 'Cultural', 'Sports', 'Workshop', 'Other'];
 
   @override
@@ -1509,9 +1524,31 @@ class _EventModalState extends State<_EventModal> {
       _tagsCtrl.text = e.tags.join(', ');
       _selectedDate = e.date;
       _selectedCategory = _categories.contains(e.category) ? e.category : 'Other';
+      _existingBannerUrl = e.bannerUrl.isNotEmpty ? e.bannerUrl : null;
     } else {
       _selectedDate = DateTime.now();
     }
+  }
+
+  Future<void> _pickBannerImage() async {
+    final result = await FilePicker.platform.pickFiles(withData: true, type: FileType.image);
+    if (result == null || result.files.isEmpty) return;
+    final bytes = result.files.first.bytes;
+    if (bytes == null) return;
+    setState(() {
+      _newImageBytes = bytes;
+      _newImageExt = (result.files.first.extension ?? 'jpg').toLowerCase();
+      _bannerRemoved = false;
+    });
+  }
+
+  void _removeBannerImage() {
+    setState(() {
+      _newImageBytes = null;
+      _newImageExt = null;
+      _existingBannerUrl = null;
+      _bannerRemoved = true;
+    });
   }
 
   @override
@@ -1550,6 +1587,8 @@ class _EventModalState extends State<_EventModal> {
       'status': 'pending', // Always start as pending
     };
 
+    if (_bannerRemoved) data['bannerUrl'] = '';
+
     try {
       if ((data['orgId'] ?? '').toString().isNotEmpty) {
         final orgDoc = await FirebaseFirestore.instance.collection('organizations').doc(data['orgId'].toString()).get();
@@ -1561,20 +1600,45 @@ class _EventModalState extends State<_EventModal> {
     } catch (_) {}
 
     try {
+      String eventId;
       if (widget.existingEvent != null) {
-        await FirebaseFirestore.instance.collection('events').doc(widget.existingEvent!.id).update(data);
+        eventId = widget.existingEvent!.id;
+        await FirebaseFirestore.instance.collection('events').doc(eventId).update(data);
         await activity_log.ActivityLogger.log(
           action: 'edit_event', module: 'events_schedule',
-          details: {'orgId': widget.orgId, 'eventId': widget.existingEvent!.id, 'title': data['title']},
+          details: {'orgId': widget.orgId, 'eventId': eventId, 'title': data['title']},
         );
       } else {
         data['createdAt'] = FieldValue.serverTimestamp();
-        await FirebaseFirestore.instance.collection('events').add(data);
+        final ref = await FirebaseFirestore.instance.collection('events').add(data);
+        eventId = ref.id;
         await activity_log.ActivityLogger.log(
           action: 'create_event', module: 'events_schedule',
           details: {'orgId': widget.orgId, 'title': data['title']},
         );
       }
+
+      // Banner upload happens after the doc exists/is known so the Storage
+      // path can be keyed by eventId, matching org_event_proposals.dart's
+      // convention for the same field.
+      if (_newImageBytes != null) {
+        try {
+          final ext = _newImageExt ?? 'jpg';
+          const contentTypes = {'png': 'image/png', 'gif': 'image/gif', 'webp': 'image/webp'};
+          final contentType = contentTypes[ext] ?? 'image/jpeg';
+          final storageRef = FirebaseStorage.instance.ref().child('event_banners/$eventId.$ext');
+          await storageRef.putData(_newImageBytes!, SettableMetadata(contentType: contentType));
+          final bannerUrl = await storageRef.getDownloadURL();
+          await FirebaseFirestore.instance.collection('events').doc(eventId).update({'bannerUrl': bannerUrl});
+        } catch (e) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Event saved, but the banner image failed to upload: $e')),
+            );
+          }
+        }
+      }
+
       if (mounted) Navigator.pop(context);
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
@@ -1619,6 +1683,8 @@ class _EventModalState extends State<_EventModal> {
                 padding: const EdgeInsets.all(24),
                 child: Column(children: [
                   _buildField('Event Title *', _buildTextInput(_titleCtrl, 'e.g. Hacking Workshop', validator: (v) => v!.isEmpty ? 'Required' : null)),
+                  const SizedBox(height: 16),
+                  _buildField('Banner Image', _buildBannerPicker()),
                   const SizedBox(height: 16),
                   Row(children: [
                     Expanded(child: _buildField('Category *', _buildCategoryDropdown())),
@@ -1696,6 +1762,65 @@ class _EventModalState extends State<_EventModal> {
       child,
     ],
   );
+
+  Widget _buildBannerPicker() {
+    final hasPreview = _newImageBytes != null || (_existingBannerUrl?.isNotEmpty ?? false);
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: 96,
+          height: 64,
+          decoration: BoxDecoration(
+            color: const Color(0xFFF1F4F8),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: const Color(0xFFE2E6EA)),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: _newImageBytes != null
+              ? Image.memory(_newImageBytes!, fit: BoxFit.cover)
+              : (_existingBannerUrl?.isNotEmpty ?? false)
+                  ? Image.network(
+                      _existingBannerUrl!,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => const Icon(Icons.image_not_supported_outlined, color: Color(0xFF9AA5B4)),
+                    )
+                  : const Icon(Icons.image_outlined, color: Color(0xFF9AA5B4)),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(children: [
+                OutlinedButton.icon(
+                  onPressed: _pickBannerImage,
+                  icon: const Icon(Icons.upload_rounded, size: 16),
+                  label: Text(hasPreview ? 'Replace' : 'Upload Image', style: GoogleFonts.beVietnamPro(fontSize: 12.5)),
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: Color(0xFFE2E6EA)),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                ),
+                if (hasPreview) ...[
+                  const SizedBox(width: 8),
+                  TextButton(
+                    onPressed: _removeBannerImage,
+                    style: TextButton.styleFrom(foregroundColor: const Color(0xFFDC2626)),
+                    child: Text('Remove', style: GoogleFonts.beVietnamPro(fontSize: 12.5)),
+                  ),
+                ],
+              ]),
+              const SizedBox(height: 4),
+              Text('Shown as the cover photo on the student/guest events list. Optional.',
+                  style: GoogleFonts.beVietnamPro(fontSize: 11, color: const Color(0xFF9AA5B4))),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
 
   Widget _buildTextInput(TextEditingController ctrl, String hint, {int maxLines = 1, TextInputType keyboardType = TextInputType.text, String? Function(String?)? validator}) {
     return TextFormField(

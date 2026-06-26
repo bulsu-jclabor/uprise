@@ -16,14 +16,18 @@ class AnnouncementsFeed extends StatefulWidget {
 class _AnnouncementsFeedState extends State<AnnouncementsFeed> {
   // Created once, not a getter — re-evaluating .snapshots() on every
   // rebuild (this widget sits on the home screen, which rebuilds often)
-  // was re-subscribing to Firestore from scratch each time. Also now
-  // excludes scheduled/draft announcements (isPublished: false).
+  // was re-subscribing to Firestore from scratch each time.
+  //
+  // Deliberately NOT combining a `where('isPublished', ...)` filter with
+  // this `orderBy` — that pairing needs a composite Firestore index, and
+  // without it deployed the query fails outright. Scheduled/draft
+  // announcements (isPublished: false) are filtered out client-side below
+  // instead; fetches a few extra so there's still room for 4 after that.
   late final Stream<QuerySnapshot> _announcementsStream =
       FirebaseFirestore.instance
           .collection('announcements')
-          .where('isPublished', isEqualTo: true)
           .orderBy('timestamp', descending: true)
-          .limit(4)
+          .limit(10)
           .snapshots();
 
   String _formatTime(dynamic timestamp) {
@@ -51,7 +55,10 @@ class _AnnouncementsFeedState extends State<AnnouncementsFeed> {
           return const SizedBox();
         }
 
-        final docs = snapshot.data?.docs ?? [];
+        final docs = (snapshot.data?.docs ?? []).where((d) {
+          final data = d.data() as Map<String, dynamic>;
+          return data['isPublished'] != false;
+        }).take(4).toList();
         if (docs.isEmpty) {
           return const SizedBox();
         }
