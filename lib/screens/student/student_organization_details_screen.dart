@@ -4,17 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../../widgets/student/app_colors.dart';
 import 'student_broadcast_screen.dart';
 
-// ─────────────────────────────────────────────────────────────
-//  CUSTOM COLORS - UNIFORM (MATCHING ORANGE TABS)
-// ─────────────────────────────────────────────────────────────
-class AppColors {
-  static const Color primaryDark = Colors.orange;
-  static const Color primaryLight = Color(0xFFFFA726);
-  static const Color accent = Color(0xFFFF9800);
-  static const Color background = Color(0xFFF8F9FA);
-}
 
 // ─────────────────────────────────────────────────────────────
 //  ORGANIZATION DETAILS SCREEN
@@ -30,6 +22,7 @@ class StudentOrganizationsDetailsScreen extends StatefulWidget {
 
 class _StudentOrganizationsDetailsScreenState
     extends State<StudentOrganizationsDetailsScreen> {
+  bool _coverImageFailed = false;
 
   ImageProvider? _buildLogoImage(String? logoUrl) {
     if (logoUrl == null || logoUrl.isEmpty) return null;
@@ -64,6 +57,11 @@ class _StudentOrganizationsDetailsScreenState
     return DecorationImage(
       image: NetworkImage(coverUrl),
       fit: BoxFit.cover,
+      onError: (_, __) {
+        if (mounted && !_coverImageFailed) {
+          setState(() => _coverImageFailed = true);
+        }
+      },
     );
   }
 
@@ -116,17 +114,6 @@ class _StudentOrganizationsDetailsScreenState
                   },
                   icon: Icon(Icons.radio, color: AppColors.primaryDark),
                 ),
-                const SizedBox(width: 4),
-                IconButton(
-                  onPressed: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Event Gallery - Coming Soon'),
-                      ),
-                    );
-                  },
-                  icon: Icon(Icons.grid_view_rounded, color: AppColors.primaryDark),
-                ),
                 const SizedBox(width: 8),
               ],
             ),
@@ -141,16 +128,19 @@ class _StudentOrganizationsDetailsScreenState
                         height: 200,
                         width: double.infinity,
                         decoration: BoxDecoration(
-                          color: Colors.orange.withOpacity(0.1),
-                          image: _buildCoverImage(org['coverUrl']),
+                          color: AppColors.primaryDark.withOpacity(0.1),
+                          image: _coverImageFailed
+                              ? null
+                              : _buildCoverImage(org['coverUrl']),
                         ),
                         child: (org['coverUrl'] == null ||
-                                (org['coverUrl'] as String).isEmpty)
+                                (org['coverUrl'] as String).isEmpty ||
+                                _coverImageFailed)
                             ? Center(
                                 child: Icon(
                                   Icons.business,
                                   size: 60,
-                                  color: Colors.orange.withOpacity(0.3),
+                                  color: AppColors.primaryDark.withOpacity(0.3),
                                 ),
                               )
                             : null,
@@ -180,7 +170,7 @@ class _StudentOrganizationsDetailsScreenState
                                     style: TextStyle(
                                       fontSize: 32,
                                       fontWeight: FontWeight.bold,
-                                      color: Colors.orange,
+                                      color: AppColors.primaryDark,
                                     ),
                                   )
                                 : null,
@@ -293,10 +283,10 @@ class _StudentOrganizationsDetailsScreenState
                                             : Container(
                                                 padding: const EdgeInsets.all(10),
                                                 decoration: BoxDecoration(
-                                                  color: Colors.orange.withOpacity(0.1),
+                                                  color: AppColors.primaryDark.withOpacity(0.1),
                                                   borderRadius: BorderRadius.circular(10),
                                                 ),
-                                                child: const Icon(Icons.person_outline, color: Colors.orange),
+                                                child: const Icon(Icons.person_outline, color: AppColors.primaryDark),
                                               ),
                                         const SizedBox(width: 12),
                                         Expanded(
@@ -374,7 +364,7 @@ class _StudentOrganizationsDetailsScreenState
                               return ListTile(
                                 contentPadding: EdgeInsets.zero,
                                 leading: CircleAvatar(
-                                  backgroundColor: Colors.orange.withOpacity(0.1),
+                                  backgroundColor: AppColors.primaryDark.withOpacity(0.1),
                                   backgroundImage: _buildLogoImage(
                                       officer['photoUrl']),
                                   child: (officer['photoUrl'] == null ||
@@ -384,7 +374,7 @@ class _StudentOrganizationsDetailsScreenState
                                       ? Text(
                                           (officer['name'] ?? '')[0].toUpperCase(),
                                           style: TextStyle(
-                                            color: Colors.orange,
+                                            color: AppColors.primaryDark,
                                             fontWeight: FontWeight.bold,
                                           ),
                                         )
@@ -443,7 +433,7 @@ class _StudentOrganizationsDetailsScreenState
                                       height: 60,
                                       alignment: Alignment.center,
                                       decoration: BoxDecoration(
-                                        color: Colors.orange.withOpacity(0.1),
+                                        color: AppColors.primaryDark.withOpacity(0.1),
                                         borderRadius: BorderRadius.circular(10),
                                       ),
                                       child: Column(
@@ -457,7 +447,7 @@ class _StudentOrganizationsDetailsScreenState
                                             style: TextStyle(
                                               fontSize: 16,
                                               fontWeight: FontWeight.bold,
-                                              color: Colors.orange,
+                                              color: AppColors.primaryDark,
                                             ),
                                           ),
                                           Text(
@@ -467,7 +457,7 @@ class _StudentOrganizationsDetailsScreenState
                                                 .last,
                                             style: TextStyle(
                                               fontSize: 10,
-                                              color: Colors.orange.withOpacity(0.7),
+                                              color: AppColors.primaryDark.withOpacity(0.7),
                                             ),
                                           ),
                                         ],
@@ -572,7 +562,7 @@ class _StudentOrganizationsDetailsScreenState
                                       decoration: BoxDecoration(
                                         color: isUrgent
                                             ? Colors.red[100]
-                                            : Colors.orange.withOpacity(0.1),
+                                            : AppColors.primaryDark.withOpacity(0.1),
                                         borderRadius: BorderRadius.circular(8),
                                       ),
                                       child: Icon(
@@ -582,7 +572,7 @@ class _StudentOrganizationsDetailsScreenState
                                         size: 18,
                                         color: isUrgent
                                             ? Colors.red
-                                            : Colors.orange,
+                                            : AppColors.primaryDark,
                                       ),
                                     ),
                                     const SizedBox(width: 12),
@@ -666,12 +656,12 @@ class _SocialChip extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
-          color: Colors.orange.withOpacity(0.08),
+          color: AppColors.primaryDark.withOpacity(0.08),
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: Colors.orange.withOpacity(0.25)),
+          border: Border.all(color: AppColors.primaryDark.withOpacity(0.25)),
         ),
         child: Row(mainAxisSize: MainAxisSize.min, children: [
-          Icon(icon, size: 15, color: Colors.orange),
+          Icon(icon, size: 15, color: AppColors.primaryDark),
           const SizedBox(width: 6),
           Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.black87)),
         ]),

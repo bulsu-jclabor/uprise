@@ -137,7 +137,7 @@ class _LoginScreenState extends State<LoginScreen> {
               Text(
                 'Welcome to UPRISE',
                 textAlign: TextAlign.center,
-                style: GoogleFonts.poppins(
+                style: GoogleFonts.beVietnamPro(
                   fontSize: 28,
                   fontWeight: FontWeight.bold,
                   color: textDark,
@@ -147,7 +147,7 @@ class _LoginScreenState extends State<LoginScreen> {
               Text(
                 'Student Organization Management System',
                 textAlign: TextAlign.center,
-                style: GoogleFonts.poppins(
+                style: GoogleFonts.beVietnamPro(
                   fontSize: 14,
                   color: Colors.grey[600],
                 ),

@@ -6,20 +6,11 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import '../../widgets/student/event_registration_form_dialog.dart';
+import '../../widgets/student/app_colors.dart';
 
-// ─────────────────────────────────────────────────────────────
-// Custom Colors - UNIFORM (Colors.orange)
-// ─────────────────────────────────────────────────────────────
-class AppColors {
-  static const Color primaryDark = Colors.orange;
-  static const Color primaryLight = Color(0xFFFFCC80);
-  static const Color accent = Color(0xFFFF9800);
-  static const Color background = Color(0xFFF5F5F5);
-}
 
 ImageProvider _studentImageProvider(String url) {
   if (url.isEmpty) return const AssetImage('assets/placeholder.png');
@@ -104,8 +95,8 @@ class AnnouncementData {
           .map((att) => {
                 'name': att['name'] as String? ?? '',
                 'type': _guessType(att['name'] as String? ?? ''),
-                'url': att['url'] as String? ?? '',
-                'data': att['data'] as String? ?? '',
+                'base64': att['base64'] as String? ?? '',
+                'size': att['size'] as String? ?? '',
               })
           .toList(),
       linkedEventId: d['linkedEventId'] as String? ?? '',
@@ -274,7 +265,7 @@ class _AnnouncementCard extends StatelessWidget {
                           height: 200,
                           decoration: BoxDecoration(
                             gradient: LinearGradient(
-                              colors: [Colors.orange.shade300, Colors.orange.shade700],
+                              colors: [AppColors.primaryDark.shade300, AppColors.primaryDark.shade700],
                               begin: Alignment.topLeft,
                               end: Alignment.bottomRight,
                             ),
@@ -292,7 +283,7 @@ class _AnnouncementCard extends StatelessWidget {
                         height: 200,
                         decoration: BoxDecoration(
                           gradient: LinearGradient(
-                            colors: [Colors.orange.shade300, Colors.orange.shade700],
+                            colors: [AppColors.primaryDark.shade300, AppColors.primaryDark.shade700],
                             begin: Alignment.topLeft,
                             end: Alignment.bottomRight,
                           ),
@@ -331,7 +322,7 @@ class _AnnouncementCard extends StatelessWidget {
                       vertical: 5,
                     ),
                     decoration: BoxDecoration(
-                      color: Colors.orange,
+                      color: AppColors.primaryDark,
                       borderRadius: BorderRadius.circular(20),
                       boxShadow: [
                         BoxShadow(
@@ -403,9 +394,9 @@ class _AnnouncementCard extends StatelessWidget {
                         height: 36,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          color: Colors.orange.withOpacity(0.1),
+                          color: AppColors.primaryDark.withOpacity(0.1),
                           border: Border.all(
-                            color: Colors.orange.withOpacity(0.2),
+                            color: AppColors.primaryDark.withOpacity(0.2),
                             width: 1,
                           ),
                         ),
@@ -417,13 +408,13 @@ class _AnnouncementCard extends StatelessWidget {
                                   errorBuilder: (_, __, ___) => Icon(
                                     Icons.business_center_outlined,
                                     size: 18,
-                                    color: Colors.orange,
+                                    color: AppColors.primaryDark,
                                   ),
                                 )
                               : Icon(
                                   Icons.business_center_outlined,
                                   size: 18,
-                                  color: Colors.orange,
+                                  color: AppColors.primaryDark,
                                 ),
                         ),
                       ),
@@ -499,8 +490,8 @@ class _AnnouncementCard extends StatelessWidget {
                         label: Text('Register for ${ann.linkedEventTitle}',
                             overflow: TextOverflow.ellipsis),
                         style: OutlinedButton.styleFrom(
-                          foregroundColor: Colors.orange,
-                          side: const BorderSide(color: Colors.orange),
+                          foregroundColor: AppColors.primaryDark,
+                          side: const BorderSide(color: AppColors.primaryDark),
                           padding: const EdgeInsets.symmetric(vertical: 10),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                         ),
@@ -517,7 +508,7 @@ class _AnnouncementCard extends StatelessWidget {
                         'Read more',
                         style: TextStyle(
                           fontSize: 12,
-                          color: Colors.orange,
+                          color: AppColors.primaryDark,
                           fontWeight: FontWeight.w600,
                         ),
                       ),
@@ -525,7 +516,7 @@ class _AnnouncementCard extends StatelessWidget {
                       Icon(
                         Icons.arrow_forward_ios_rounded,
                         size: 10,
-                        color: Colors.orange,
+                        color: AppColors.primaryDark,
                       ),
                     ],
                   ),
@@ -636,7 +627,7 @@ class _AnnouncementDetailScreenState extends State<AnnouncementDetailScreen> {
                               errorBuilder: (_, __, ___) => Container(
                                 decoration: BoxDecoration(
                                   gradient: LinearGradient(
-                                    colors: [Colors.orange.shade300, Colors.orange.shade700],
+                                    colors: [AppColors.primaryDark.shade300, AppColors.primaryDark.shade700],
                                     begin: Alignment.topLeft,
                                     end: Alignment.bottomRight,
                                   ),
@@ -651,7 +642,7 @@ class _AnnouncementDetailScreenState extends State<AnnouncementDetailScreen> {
                           : Container(
                               decoration: BoxDecoration(
                                 gradient: LinearGradient(
-                                  colors: [Colors.orange.shade300, Colors.orange.shade700],
+                                  colors: [AppColors.primaryDark.shade300, AppColors.primaryDark.shade700],
                                   begin: Alignment.topLeft,
                                   end: Alignment.bottomRight,
                                 ),
@@ -685,7 +676,7 @@ class _AnnouncementDetailScreenState extends State<AnnouncementDetailScreen> {
                             vertical: 6,
                           ),
                           decoration: BoxDecoration(
-                            color: Colors.orange,
+                            color: AppColors.primaryDark,
                             borderRadius: BorderRadius.circular(20),
                             boxShadow: [
                               BoxShadow(
@@ -750,13 +741,13 @@ class _AnnouncementDetailScreenState extends State<AnnouncementDetailScreen> {
                                       errorBuilder: (_, __, ___) => Icon(
                                         Icons.business_center_outlined,
                                         size: 22,
-                                        color: Colors.orange,
+                                        color: AppColors.primaryDark,
                                       ),
                                     )
                                   : Icon(
                                       Icons.business_center_outlined,
                                       size: 22,
-                                      color: Colors.orange,
+                                      color: AppColors.primaryDark,
                                     ),
                             ),
                           ),
@@ -827,10 +818,10 @@ class _AnnouncementDetailScreenState extends State<AnnouncementDetailScreen> {
                         Container(
                           padding: const EdgeInsets.all(16),
                           decoration: BoxDecoration(
-                            color: Colors.orange.withOpacity(0.05),
+                            color: AppColors.primaryDark.withOpacity(0.05),
                             borderRadius: BorderRadius.circular(12),
                             border: Border.all(
-                              color: Colors.orange.withOpacity(0.2),
+                              color: AppColors.primaryDark.withOpacity(0.2),
                             ),
                           ),
                           child: Column(
@@ -840,7 +831,7 @@ class _AnnouncementDetailScreenState extends State<AnnouncementDetailScreen> {
                                 children: [
                                   Icon(
                                     Icons.event_available_rounded,
-                                    color: Colors.orange,
+                                    color: AppColors.primaryDark,
                                     size: 20,
                                   ),
                                   const SizedBox(width: 8),
@@ -880,7 +871,7 @@ class _AnnouncementDetailScreenState extends State<AnnouncementDetailScreen> {
                                     ),
                                   ),
                                   style: ElevatedButton.styleFrom(
-                                    backgroundColor: Colors.orange,
+                                    backgroundColor: AppColors.primaryDark,
                                     foregroundColor: Colors.white,
                                     elevation: 0,
                                     padding: const EdgeInsets.symmetric(vertical: 12),
@@ -918,14 +909,14 @@ class _AnnouncementDetailScreenState extends State<AnnouncementDetailScreen> {
                                     vertical: 6,
                                   ),
                                   decoration: BoxDecoration(
-                                    color: Colors.orange.withOpacity(0.1),
+                                    color: AppColors.primaryDark.withOpacity(0.1),
                                     borderRadius: BorderRadius.circular(16),
                                   ),
                                   child: Text(
                                     tag,
                                     style: const TextStyle(
                                       fontSize: 12,
-                                      color: Colors.orange,
+                                      color: AppColors.primaryDark,
                                       fontWeight: FontWeight.w600,
                                     ),
                                   ),
@@ -952,7 +943,7 @@ class _AnnouncementDetailScreenState extends State<AnnouncementDetailScreen> {
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                               decoration: BoxDecoration(
-                                color: Colors.orange.withOpacity(0.1),
+                                color: AppColors.primaryDark.withOpacity(0.1),
                                 borderRadius: BorderRadius.circular(12),
                               ),
                               child: Text(
@@ -960,7 +951,7 @@ class _AnnouncementDetailScreenState extends State<AnnouncementDetailScreen> {
                                 style: const TextStyle(
                                   fontSize: 12,
                                   fontWeight: FontWeight.w600,
-                                  color: Colors.orange,
+                                  color: AppColors.primaryDark,
                                 ),
                               ),
                             ),
@@ -1043,7 +1034,7 @@ class _AnnouncementDetailScreenState extends State<AnnouncementDetailScreen> {
                       ),
                     ),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: _isMarkedAsRead ? Colors.green : Colors.orange,
+                      backgroundColor: _isMarkedAsRead ? Colors.green : AppColors.primaryDark,
                       foregroundColor: Colors.white,
                       elevation: 0,
                       padding: const EdgeInsets.symmetric(vertical: 14),
@@ -1080,31 +1071,21 @@ class _AttachmentTile extends StatefulWidget {
 
 class _AttachmentTileState extends State<_AttachmentTile> {
   bool _isDownloading = false;
-  double _downloadProgress = 0.0;
 
   Future<void> _downloadAttachment() async {
-    setState(() {
-      _isDownloading = true;
-      _downloadProgress = 0.0;
-    });
+    setState(() => _isDownloading = true);
 
     try {
       final fileName = widget.attachment['name'] ?? 'file_${widget.index}';
-      final fileUrl = widget.attachment['url'] ?? '';
+      final base64Data = widget.attachment['base64'] ?? '';
 
-      if (fileUrl.isEmpty) {
-        throw Exception('File URL is empty');
+      if (base64Data.isEmpty) {
+        throw Exception('Attachment data is empty');
       }
 
-      // Download the file
-      final response = await http.get(Uri.parse(fileUrl));
-      
-      if (response.statusCode != 200) {
-        throw Exception('Failed to download: ${response.statusCode}');
-      }
+      // Attachments are embedded as base64 in Firestore, not hosted at a URL.
+      final bytes = base64Decode(base64Data);
 
-      final bytes = response.bodyBytes;
-      
       // Save to temporary directory
       final tempDir = await getTemporaryDirectory();
       final file = File('${tempDir.path}/$fileName');
@@ -1159,10 +1140,7 @@ class _AttachmentTileState extends State<_AttachmentTile> {
       }
     } finally {
       if (mounted) {
-        setState(() {
-          _isDownloading = false;
-          _downloadProgress = 0.0;
-        });
+        setState(() => _isDownloading = false);
       }
     }
   }
@@ -1190,8 +1168,14 @@ class _AttachmentTileState extends State<_AttachmentTile> {
   }
 
   String _getFileSize() {
-    final sizes = ['1.2 MB', '2.5 MB', '856 KB', '4.1 MB', '723 KB'];
-    return sizes[widget.index % sizes.length];
+    final size = widget.attachment['size'];
+    if (size != null && size.isNotEmpty) return size;
+    final base64Data = widget.attachment['base64'] ?? '';
+    if (base64Data.isEmpty) return '';
+    final bytes = (base64Data.length * 3 / 4).round();
+    if (bytes < 1024) return '$bytes B';
+    if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
+    return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
   }
 
   @override
@@ -1239,27 +1223,12 @@ class _AttachmentTileState extends State<_AttachmentTile> {
             ),
           ),
           _isDownloading
-              ? SizedBox(
-                  width: 36,
-                  height: 36,
-                  child: Stack(
-                    alignment: Alignment.center,
-                    children: [
-                      CircularProgressIndicator(
-                        value: _downloadProgress,
-                        strokeWidth: 2.5,
-                        color: Colors.orange,
-                        backgroundColor: Colors.orange.withOpacity(0.1),
-                      ),
-                      Text(
-                        '${(_downloadProgress * 100).toInt()}%',
-                        style: const TextStyle(
-                          fontSize: 8,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.orange,
-                        ),
-                      ),
-                    ],
+              ? const SizedBox(
+                  width: 24,
+                  height: 24,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2.5,
+                    color: AppColors.primaryDark,
                   ),
                 )
               : GestureDetector(
@@ -1267,13 +1236,13 @@ class _AttachmentTileState extends State<_AttachmentTile> {
                   child: Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                      color: Colors.orange.withOpacity(0.1),
+                      color: AppColors.primaryDark.withOpacity(0.1),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: const Icon(
                       Icons.download_rounded,
                       size: 20,
-                      color: Colors.orange,
+                      color: AppColors.primaryDark,
                     ),
                   ),
                 ),

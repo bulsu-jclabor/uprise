@@ -18,8 +18,8 @@ import 'package:http/http.dart' as http;
 import '../../utils/platform_file_utils.dart' as platform_file_utils;
 import 'guest_auth_service.dart';
 
-const _kOrange = Color(0xFFFF6B00);
-const _kOrangeLight = Color(0xFFFFEDD5);
+const _kOrange = Color(0xFFBE4700);
+const _kOrangeLight = Color(0xFFF5E3D9);
 const _kBg = Color(0xFFF5F5F5);
 
 class GuestCertificateRepositoryScreen extends StatefulWidget {
@@ -57,11 +57,12 @@ class _GuestCertificateRepositoryScreenState
       return;
     }
     try {
-      final snap = await FirebaseFirestore.instance.collection('certificates').get();
-      final docs = snap.docs.where((d) {
-        final data = d.data();
-        return data['isGuest'] == true && data['recipientEmail'] == _email;
-      }).map((d) {
+      final snap = await FirebaseFirestore.instance
+          .collection('certificates')
+          .where('isGuest', isEqualTo: true)
+          .where('recipientEmail', isEqualTo: _email)
+          .get();
+      final docs = snap.docs.map((d) {
         final data = d.data();
         return {
           'id': d.id,

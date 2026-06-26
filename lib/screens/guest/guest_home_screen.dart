@@ -28,8 +28,8 @@ import 'guest_profile_screen.dart';
 // ─────────────────────────────────────────────────────────────
 //  THEME CONSTANTS
 // ─────────────────────────────────────────────────────────────
-const _kPrimary   = Color(0xFFFF6B00);
-const _kPrimaryBg = Color(0xFFFFF3EB);
+const _kPrimary   = Color(0xFFBE4700);
+const _kPrimaryBg = Color(0xFFF5E3D9);
 
 // ─────────────────────────────────────────────────────────────
 //  GUEST SHELL

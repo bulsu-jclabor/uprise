@@ -25,8 +25,8 @@ import 'guest_auth_service.dart';
 // ─────────────────────────────────────────────────────────────
 //  THEME
 // ─────────────────────────────────────────────────────────────
-const _kOrange      = Color(0xFFFF6B00);
-const _kOrangeLight = Color(0xFFFFEDD5);
+const _kOrange      = Color(0xFFBE4700);
+const _kOrangeLight = Color(0xFFF5E3D9);
 const _kDark        = Color(0xFF1A1A2E);
 const _kBg          = Color(0xFFF5F5F5);
 const _kSuccess     = Color(0xFF059669);
@@ -275,7 +275,7 @@ class _InfoBanner extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: const Color(0xFFFFF3EB),
+        color: const Color(0xFFF5E3D9),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: _kOrange.withOpacity(0.25)),
       ),
@@ -355,7 +355,7 @@ class _DigitalIdCard extends StatelessWidget {
             height: 8,
             decoration: const BoxDecoration(
               gradient: LinearGradient(
-                  colors: [_kOrange, Color(0xFFFF9A4D)]),
+                  colors: [_kOrange, Color(0xFFD47A00)]),
             ),
           ),
 
@@ -597,7 +597,7 @@ class _DigitalIdCard extends StatelessWidget {
             height: 6,
             decoration: const BoxDecoration(
               gradient: LinearGradient(
-                  colors: [_kOrange, Color(0xFFFF9A4D)]),
+                  colors: [_kOrange, Color(0xFFD47A00)]),
             ),
           ),
         ],

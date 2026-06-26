@@ -16,7 +16,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:uprise/widgets/admin_export_button.dart';
 import 'package:intl/intl.dart';
-import '../../theme/app_theme.dart';
+import '../../../theme/app_theme.dart';
 
 // ============ GLOBAL CONTEXT FOR SNACKBAR ============
 final GlobalKey<ScaffoldMessengerState> globalMessengerKey = GlobalKey<ScaffoldMessengerState>();

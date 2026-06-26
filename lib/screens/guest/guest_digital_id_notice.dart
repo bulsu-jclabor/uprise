@@ -9,8 +9,8 @@ import 'package:google_fonts/google_fonts.dart';
 import 'guest_auth_service.dart';
 import 'guest_digital_id_screen.dart';
 
-const _kOrange = Color(0xFFFF6B00);
-const _kOrangeLight = Color(0xFFFFEDD5);
+const _kOrange = Color(0xFFBE4700);
+const _kOrangeLight = Color(0xFFF5E3D9);
 
 /// Shows the "Your Digital ID is Ready" dialog once per guest account.
 /// Safe to call on every entry into authenticated guest mode — it no-ops

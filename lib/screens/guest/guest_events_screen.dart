@@ -3,12 +3,13 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import 'guest_auth_service.dart';
+import '../../widgets/shared/event_photo_gallery.dart';
 
 // ─────────────────────────────────────────────────────────────
 // Theme
 // ─────────────────────────────────────────────────────────────
-const _kPrimary   = Color(0xFFFF6B00);
-const _kPrimaryBg = Color(0xFFFFF3EB);
+const _kPrimary   = Color(0xFFBE4700);
+const _kPrimaryBg = Color(0xFFF5E3D9);
 const _kBg        = Color(0xFFF5F5F5);
 
 // ─────────────────────────────────────────────────────────────
@@ -358,7 +359,7 @@ class _GuestEventsScreenState extends State<GuestEventsScreen> {
 // ─────────────────────────────────────────────────────────────
 // Search + Filter bar
 // ─────────────────────────────────────────────────────────────
-class _SearchAndFilter extends StatelessWidget {
+class _SearchAndFilter extends StatefulWidget {
   final String search;
   final ValueChanged<String> onSearch;
   final List<String> categories;
@@ -374,9 +375,35 @@ class _SearchAndFilter extends StatelessWidget {
   });
 
   @override
+  State<_SearchAndFilter> createState() => _SearchAndFilterState();
+}
+
+class _SearchAndFilterState extends State<_SearchAndFilter> {
+  late final TextEditingController _ctrl =
+      TextEditingController(text: widget.search);
+
+  @override
+  void didUpdateWidget(_SearchAndFilter oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Only resync when the search text changed from outside this field
+    // (e.g. the clear button) — not on every keystroke, which would fight
+    // the user's cursor position.
+    if (widget.search != _ctrl.text) {
+      _ctrl.value = _ctrl.value.copyWith(
+        text: widget.search,
+        selection: TextSelection.collapsed(offset: widget.search.length),
+      );
+    }
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final ctrl = TextEditingController(text: search)
-      ..selection = TextSelection.collapsed(offset: search.length);
     return Container(
       color: Colors.white,
       padding: const EdgeInsets.fromLTRB(14, 10, 14, 0),
@@ -384,18 +411,18 @@ class _SearchAndFilter extends StatelessWidget {
         children: [
           // Search
           TextField(
-            controller: ctrl,
-            onChanged: onSearch,
+            controller: _ctrl,
+            onChanged: widget.onSearch,
             decoration: InputDecoration(
               hintText: 'Search events, org, location…',
               hintStyle:
                   const TextStyle(fontSize: 13, color: Colors.black38),
               prefixIcon: const Icon(Icons.search, size: 18,
                   color: Colors.black38),
-              suffixIcon: search.isNotEmpty
+              suffixIcon: widget.search.isNotEmpty
                   ? IconButton(
                       icon: const Icon(Icons.clear, size: 16),
-                      onPressed: () => onSearch(''),
+                      onPressed: () => widget.onSearch(''),
                     )
                   : null,
               filled: true,
@@ -414,12 +441,12 @@ class _SearchAndFilter extends StatelessWidget {
             height: 32,
             child: ListView.builder(
               scrollDirection: Axis.horizontal,
-              itemCount: categories.length,
+              itemCount: widget.categories.length,
               itemBuilder: (_, i) {
-                final cat = categories[i];
-                final sel = cat == selected;
+                final cat = widget.categories[i];
+                final sel = cat == widget.selected;
                 return GestureDetector(
-                  onTap: () => onCategory(cat),
+                  onTap: () => widget.onCategory(cat),
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 160),
                     margin: const EdgeInsets.only(right: 8),
@@ -1023,6 +1050,9 @@ class _GuestEventDetailScreenState extends State<GuestEventDetailScreen> {
                             color: Colors.black87,
                             height: 1.65),
                       ),
+
+                      const SizedBox(height: 16),
+                      EventPhotoGallery(eventId: event.id, accentColor: _kPrimary),
 
                       const SizedBox(height: 20),
                       const Divider(
@@ -1653,7 +1683,7 @@ class _CategoryBadge extends StatelessWidget {
 
   Color get _color {
     switch (category.toLowerCase()) {
-      case 'competition': return const Color(0xFFFF6B00);
+      case 'competition': return const Color(0xFFBE4700);
       case 'workshop':    return const Color(0xFF1565C0);
       case 'seminar':     return const Color(0xFF6A1B9A);
       case 'hackathon':   return const Color(0xFFD32F2F);

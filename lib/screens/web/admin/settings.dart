@@ -5,7 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
-import '../../theme/app_theme.dart';
+import '../../../theme/app_theme.dart';
 import 'admin_login.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────

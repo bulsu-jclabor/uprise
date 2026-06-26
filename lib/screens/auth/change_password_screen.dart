@@ -170,7 +170,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
                   Text(
                     'Change Your Password',
                     textAlign: TextAlign.center,
-                    style: GoogleFonts.poppins(
+                    style: GoogleFonts.beVietnamPro(
                       fontSize: 24,
                       fontWeight: FontWeight.w700,
                       color: textDark,
@@ -180,7 +180,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
                   Text(
                     'This account is using a temporary password. Update it now to continue to the organization portal.',
                     textAlign: TextAlign.center,
-                    style: GoogleFonts.poppins(
+                    style: GoogleFonts.beVietnamPro(
                       fontSize: 14,
                       color: Colors.grey[700],
                       height: 1.5,
@@ -235,7 +235,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
                   Text(
                     'After changing your password, you will be signed out and redirected back to the login page. Use your new password to sign in.',
                     textAlign: TextAlign.center,
-                    style: GoogleFonts.poppins(
+                    style: GoogleFonts.beVietnamPro(
                       fontSize: 13,
                       color: Colors.grey[600],
                       height: 1.6,

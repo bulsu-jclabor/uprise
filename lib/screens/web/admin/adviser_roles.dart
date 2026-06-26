@@ -10,7 +10,7 @@ import 'package:uprise/widgets/admin_export_button.dart';
 import '../../../services/activity_logger.dart' as activity_log;
 import 'export_util.dart';
 import 'export_pdf.dart';
-import '../../theme/app_theme.dart';
+import '../../../theme/app_theme.dart';
 
 // Helper for image handling
 ImageProvider _imageProviderFromUrl(String url) {

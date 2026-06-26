@@ -11,6 +11,7 @@ import '../../widgets/common/loading_widget.dart';
 import '../../widgets/student/announcements_feed.dart';
 import '../../widgets/student/profile_summary.dart';
 import '../../widgets/student/countdown_widget.dart';
+import '../../widgets/student/app_colors.dart';
 import 'student_events_screen.dart';
 import 'student_organizations_screen.dart';
 import 'student_certificates_screen.dart';
@@ -18,16 +19,8 @@ import 'student_profile_screen.dart';
 import 'student_announcements_screen.dart';
 import 'student_notifications_screen.dart';
 import 'student_merchandise_screen.dart';
+import 'student_feedback_prompt.dart';
 
-// ─────────────────────────────────────────────────────────────
-// Custom Colors - UNIFORM (using default Colors.orange)
-// ─────────────────────────────────────────────────────────────
-class AppColors {
-  static const Color primaryDark = Colors.orange;
-  static const Color primaryLight = Color(0xFFFFCC80);
-  static const Color accent = Color(0xFFFF9800);
-  static const Color background = Color(0xFFF8F9FA);
-}
 
 // ─────────────────────────────────────────────────────────────
 // Bottom Nav Bar - Integrated
@@ -82,7 +75,7 @@ class BottomNavBar extends StatelessWidget {
                     children: [
                       Icon(
                         isSelected ? item.selectedIcon : item.icon,
-                        color: isSelected ? Colors.orange : Colors.grey,
+                        color: isSelected ? AppColors.primaryDark : Colors.grey,
                         size: 24,
                       ),
                       const SizedBox(height: 4),
@@ -91,7 +84,7 @@ class BottomNavBar extends StatelessWidget {
                         style: TextStyle(
                           fontSize: 10,
                           fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
-                          color: isSelected ? Colors.orange : Colors.grey,
+                          color: isSelected ? AppColors.primaryDark : Colors.grey,
                         ),
                         textAlign: TextAlign.center,
                         overflow: TextOverflow.visible,
@@ -130,6 +123,9 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
   void initState() {
     super.initState();
     _loadUserName();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) maybeShowFeedbackPrompt(context);
+    });
   }
 
   // ── Builds the "Hello, ___" name from the split first/middle name
@@ -358,7 +354,7 @@ class _HomeContentState extends State<_HomeContent> {
                   fit: BoxFit.contain,
                   errorBuilder: (_, __, ___) => const Icon(
                     Icons.school,
-                    color: Colors.orange,
+                    color: AppColors.primaryDark,
                     size: 32,
                   ),
                 ),
@@ -378,7 +374,7 @@ class _HomeContentState extends State<_HomeContent> {
               IconButton(
                 icon: Icon(
                   Icons.shopping_cart_outlined,
-                  color: Colors.orange,
+                  color: AppColors.primaryDark,
                 ),
                 onPressed: () {
                   Navigator.push(
@@ -406,7 +402,7 @@ class _HomeContentState extends State<_HomeContent> {
                       IconButton(
                         icon: Icon(
                           Icons.notifications_outlined,
-                          color: Colors.orange,
+                          color: AppColors.primaryDark,
                         ),
                         onPressed: () {
                           Navigator.push(
@@ -605,7 +601,7 @@ class _HomeContentState extends State<_HomeContent> {
                           width: 30,
                           child: CircularProgressIndicator(
                             strokeWidth: 2,
-                            color: Colors.orange,
+                            color: AppColors.primaryDark,
                           ),
                         ),
                       ),
@@ -646,7 +642,7 @@ class _HomeContentState extends State<_HomeContent> {
                       );
                     },
                     style: TextButton.styleFrom(
-                      foregroundColor: Colors.orange,
+                      foregroundColor: AppColors.primaryDark,
                       padding: EdgeInsets.zero,
                       minimumSize: const Size(0, 0),
                       tapTargetSize: MaterialTapTargetSize.shrinkWrap,
@@ -656,7 +652,7 @@ class _HomeContentState extends State<_HomeContent> {
                       style: TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w500,
-                        color: Colors.orange,
+                        color: AppColors.primaryDark,
                       ),
                     ),
                   ),
@@ -758,8 +754,8 @@ class _HomeContentState extends State<_HomeContent> {
                                     begin: Alignment.topLeft,
                                     end: Alignment.bottomRight,
                                     colors: [
-                                      Colors.orange,
-                                      Color(0xFFFF8C42),
+                                      AppColors.primaryDark,
+                                      AppColors.primaryLight,
                                     ],
                                   ),
                                   borderRadius: BorderRadius.vertical(
@@ -886,7 +882,7 @@ class _HomeContentState extends State<_HomeContent> {
                       );
                     },
                     style: TextButton.styleFrom(
-                      foregroundColor: Colors.orange,
+                      foregroundColor: AppColors.primaryDark,
                       padding: EdgeInsets.zero,
                       minimumSize: const Size(0, 0),
                       tapTargetSize: MaterialTapTargetSize.shrinkWrap,
@@ -896,7 +892,7 @@ class _HomeContentState extends State<_HomeContent> {
                       style: TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w500,
-                        color: Colors.orange,
+                        color: AppColors.primaryDark,
                       ),
                     ),
                   ),
@@ -947,11 +943,11 @@ class _QuickAccessItem extends StatelessWidget {
             width: 64,
             height: 64,
             decoration: BoxDecoration(
-              color: Colors.orange,
+              color: AppColors.primaryDark,
               borderRadius: BorderRadius.circular(16),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.orange.withOpacity(0.25),
+                  color: AppColors.primaryDark.withOpacity(0.25),
                   blurRadius: 6,
                   offset: const Offset(0, 3),
                 ),

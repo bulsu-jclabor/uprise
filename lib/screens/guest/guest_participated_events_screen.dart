@@ -13,7 +13,7 @@ import 'package:intl/intl.dart';
 
 import 'guest_auth_service.dart';
 
-const _kOrange = Color(0xFFFF6B00);
+const _kOrange = Color(0xFFBE4700);
 const _kSuccess = Color(0xFF059669);
 const _kSuccessBg = Color(0xFFECFDF5);
 const _kBg = Color(0xFFF5F5F5);

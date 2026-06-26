@@ -25,8 +25,8 @@ import 'guest_profile_screen.dart'; // exposes RegistrationScreen via re-export
 // ─────────────────────────────────────────────────────────────
 //  THEME
 // ─────────────────────────────────────────────────────────────
-const _kOrange      = Color(0xFFFF6B00);
-const _kOrangeLight = Color(0xFFFFEDD5);
+const _kOrange      = Color(0xFFBE4700);
+const _kOrangeLight = Color(0xFFF5E3D9);
 const _kDark        = Color(0xFF1A1A2E);
 const _kBg          = Color(0xFFF5F5F5);
 

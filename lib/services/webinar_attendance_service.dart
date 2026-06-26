@@ -101,6 +101,17 @@ class WebinarAttendanceService {
   }) async {
     final cleaned = submittedCode.trim().toUpperCase();
     String result;
+
+    // Fetched once and reused for both the attendance record (checkin) and
+    // the codeSubmissions audit log below — avoids reading the same
+    // `students` doc twice per submission. Name/email live on `students`
+    // (doc ID = uid) — `users` only has uid/email/fullName/role.
+    Map<String, dynamic>? studentData;
+    try {
+      final studentDoc = await FirebaseFirestore.instance.collection('students').doc(studentUid).get();
+      studentData = studentDoc.data();
+    } catch (_) {}
+
     try {
       final sessionSnap = await _sessionRef(eventDocId).get();
       final session = sessionSnap.data();
@@ -121,7 +132,7 @@ class WebinarAttendanceService {
           } else if ((codeData['code'] as String).toUpperCase() != cleaned) {
             result = 'invalid_code';
           } else {
-            result = await _recordAttendance(eventDocId, studentUid, type);
+            result = await _recordAttendance(eventDocId, studentUid, type, studentData);
           }
         }
       }
@@ -129,18 +140,8 @@ class WebinarAttendanceService {
       result = 'error';
     }
 
-    String studentName = 'Unknown';
-    String studentEmail = '';
-    try {
-      // Name/email live on `students` (doc ID = uid) — `users` only has
-      // uid/email/fullName/role, not the fields this needs.
-      final studentDoc = await FirebaseFirestore.instance.collection('students').doc(studentUid).get();
-      final d = studentDoc.data();
-      if (d != null) {
-        studentName = (d['fullName'] ?? d['email'] ?? 'Unknown').toString();
-        studentEmail = (d['email'] ?? '').toString();
-      }
-    } catch (_) {}
+    final studentName = (studentData?['fullName'] ?? studentData?['email'] ?? 'Unknown').toString();
+    final studentEmail = (studentData?['email'] ?? '').toString();
 
     await _submissionsRef(eventDocId).add({
       'studentId': studentUid,
@@ -155,23 +156,26 @@ class WebinarAttendanceService {
     return result;
   }
 
-  static Future<String> _recordAttendance(String eventDocId, String studentUid, String type) async {
+  static Future<String> _recordAttendance(
+    String eventDocId,
+    String studentUid,
+    String type,
+    Map<String, dynamic>? studentData,
+  ) async {
     final attendances = FirebaseFirestore.instance.collection('events').doc(eventDocId).collection('attendances');
 
     if (type == 'checkin') {
       final existing = await attendances.where('studentId', isEqualTo: studentUid).limit(1).get();
       if (existing.docs.isNotEmpty) return 'duplicate';
 
-      final studentDoc = await FirebaseFirestore.instance.collection('students').doc(studentUid).get();
-      if (!studentDoc.exists) return 'not_registered';
-      final data = studentDoc.data() as Map<String, dynamic>;
+      if (studentData == null) return 'not_registered';
 
       await attendances.add({
         'studentId': studentUid,
-        'studentName': data['fullName'] ?? data['email'] ?? 'Unknown',
-        'studentEmail': data['email'] ?? '',
-        'program': data['course'] ?? 'N/A',
-        'yearLevel': data['yearLevel'] ?? '',
+        'studentName': studentData['fullName'] ?? studentData['email'] ?? 'Unknown',
+        'studentEmail': studentData['email'] ?? '',
+        'program': studentData['course'] ?? 'N/A',
+        'yearLevel': studentData['yearLevel'] ?? '',
         'timestamp': FieldValue.serverTimestamp(),
         'status': 'present',
         'method': 'webinar_code',

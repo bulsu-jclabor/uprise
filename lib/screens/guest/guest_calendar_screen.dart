@@ -40,8 +40,8 @@ Color _catColor(String cat) => _catColors[cat] ?? const Color(0xFF6B7280);
 // ─────────────────────────────────────────────────────────────
 //  THEME
 // ─────────────────────────────────────────────────────────────
-const _kPrimary   = Color(0xFFFF6B00);
-const _kPrimaryBg = Color(0xFFFFF3EB);
+const _kPrimary   = Color(0xFFBE4700);
+const _kPrimaryBg = Color(0xFFF5E3D9);
 const _kBg        = Color(0xFFF5F5F5);
 
 // ─────────────────────────────────────────────────────────────
@@ -459,7 +459,7 @@ class _CalendarGrid extends StatelessWidget {
               borderRadius:
                   BorderRadius.vertical(top: Radius.circular(16)),
               border: Border(
-                  bottom: BorderSide(color: Color(0xFFFFEDD5))),
+                  bottom: BorderSide(color: Color(0xFFF5E3D9))),
             ),
             child: Row(
               children: weekdays.map((d) => Expanded(

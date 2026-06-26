@@ -5,7 +5,7 @@ import 'package:uprise/widgets/admin_export_button.dart';
 import 'package:intl/intl.dart';
 import 'export_util.dart';
 import 'export_pdf.dart';
-import '../../theme/app_theme.dart';
+import '../../../theme/app_theme.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Design tokens (mirrors student_accounts.dart)

@@ -29,8 +29,8 @@ import 'guest_auth_service.dart';
 // ─────────────────────────────────────────────────────────────
 //  THEME
 // ─────────────────────────────────────────────────────────────
-const _kOrange      = Color(0xFFFF6B00);
-const _kOrangeLight = Color(0xFFFFEDD5);
+const _kOrange      = Color(0xFFBE4700);
+const _kOrangeLight = Color(0xFFF5E3D9);
 const _kBg          = Color(0xFFF5F5F5);
 const _kSuccess     = Color(0xFF059669);
 const _kSuccessBg   = Color(0xFFECFDF5);

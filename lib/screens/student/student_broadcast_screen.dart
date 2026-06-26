@@ -7,16 +7,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../../widgets/student/app_colors.dart';
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Custom Colors - UNIFORM (MATCHING ORANGE TABS)
-// ─────────────────────────────────────────────────────────────────────────────
-class AppColors {
-  static const Color primaryDark = Colors.orange;
-  static const Color primaryLight = Color(0xFFFFA726);
-  static const Color accent = Color(0xFFFF9800);
-  static const Color background = Color(0xFFF8F9FA);
-}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Design Tokens
@@ -272,7 +264,7 @@ class _StudentBroadcastScreenState extends State<StudentBroadcastScreen> {
             return const Center(
                 child: Padding(
                   padding: EdgeInsets.all(40),
-                  child: CircularProgressIndicator(color: Colors.orange),
+                  child: CircularProgressIndicator(color: AppColors.primaryDark),
                 ));
           }
 
@@ -360,14 +352,14 @@ class _StudentBroadcastScreenState extends State<StudentBroadcastScreen> {
             width: 80,
             height: 80,
             decoration: BoxDecoration(
-              color: Colors.orange.withOpacity(0.05),
+              color: AppColors.primaryDark.withOpacity(0.05),
               borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: Colors.orange.withOpacity(0.1)),
+              border: Border.all(color: AppColors.primaryDark.withOpacity(0.1)),
             ),
             child: Icon(
               Icons.campaign_outlined,
               size: 40,
-              color: Colors.orange.withOpacity(0.4),
+              color: AppColors.primaryDark.withOpacity(0.4),
             ),
           ),
           const SizedBox(height: 16),
@@ -400,7 +392,7 @@ class _StudentBroadcastScreenState extends State<StudentBroadcastScreen> {
             ),
             child: Icon(
               Icons.error_outline_rounded,
-              color: Colors.orange,
+              color: AppColors.primaryDark,
               size: 28,
             ),
           ),
@@ -642,7 +634,7 @@ class _BroadcastCard extends StatefulWidget {
   const _BroadcastCard({
     required this.broadcast,
     required this.orgId,
-    this.primaryColor = Colors.orange,
+    this.primaryColor = AppColors.primaryDark,
     this.accentColor = const Color(0xFFFFA726),
   });
 
@@ -682,7 +674,7 @@ class _BroadcastCardState extends State<_BroadcastCard> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Please login to like'),
-          backgroundColor: Colors.orange,
+          backgroundColor: AppColors.primaryDark,
         ),
       );
       return;
@@ -785,7 +777,7 @@ class _BroadcastCardState extends State<_BroadcastCard> {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
                     content: Text('Reply added!'),
-                    backgroundColor: Colors.orange,
+                    backgroundColor: AppColors.primaryDark,
                   ),
                 );
               }
@@ -874,7 +866,7 @@ class _BroadcastCardState extends State<_BroadcastCard> {
                       child: ElevatedButton(
                         onPressed: isSubmitting ? null : submitReply,
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.orange,
+                          backgroundColor: AppColors.primaryDark,
                           foregroundColor: Colors.white,
                           elevation: 0,
                           padding: const EdgeInsets.symmetric(vertical: 14),
@@ -939,13 +931,13 @@ class _BroadcastCardState extends State<_BroadcastCard> {
             children: [
               CircleAvatar(
                 radius: 16,
-                backgroundColor: Colors.orange.withOpacity(0.1),
+                backgroundColor: AppColors.primaryDark.withOpacity(0.1),
                 child: Text(
                   b.authorName.isNotEmpty ? b.authorName[0].toUpperCase() : '?',
                   style: TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.bold,
-                    color: Colors.orange,
+                    color: AppColors.primaryDark,
                   ),
                 ),
               ),
@@ -970,7 +962,7 @@ class _BroadcastCardState extends State<_BroadcastCard> {
                   padding:
                       const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
-                    color: Colors.orange.withOpacity(0.1),
+                    color: AppColors.primaryDark.withOpacity(0.1),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Row(
@@ -979,14 +971,14 @@ class _BroadcastCardState extends State<_BroadcastCard> {
                       Icon(
                         Icons.push_pin_rounded,
                         size: 12,
-                        color: Colors.orange,
+                        color: AppColors.primaryDark,
                       ),
                       const SizedBox(width: 4),
                       Text('Pinned',
                           style: GoogleFonts.beVietnamPro(
                               fontSize: 10,
                               fontWeight: FontWeight.w600,
-                              color: Colors.orange)),
+                              color: AppColors.primaryDark)),
                     ],
                   ),
                 ),
@@ -1067,12 +1059,12 @@ class _BroadcastCardState extends State<_BroadcastCard> {
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                   decoration: BoxDecoration(
                     color: _isLiked
-                        ? Colors.orange.withOpacity(0.1)
+                        ? AppColors.primaryDark.withOpacity(0.1)
                         : const Color(0xFFF5F7FA),
                     borderRadius: BorderRadius.circular(20),
                     border: Border.all(
                       color: _isLiked
-                          ? Colors.orange
+                          ? AppColors.primaryDark
                           : const Color(0xFFE8ECF0),
                       width: _isLiked ? 1.5 : 1,
                     ),
@@ -1083,7 +1075,7 @@ class _BroadcastCardState extends State<_BroadcastCard> {
                       Icon(
                         _isLiked ? Icons.favorite : Icons.favorite_border,
                         size: 18,
-                        color: _isLiked ? Colors.orange : _C.darkGray,
+                        color: _isLiked ? AppColors.primaryDark : _C.darkGray,
                       ),
                       const SizedBox(width: 8),
                       Text(
@@ -1091,7 +1083,7 @@ class _BroadcastCardState extends State<_BroadcastCard> {
                         style: GoogleFonts.beVietnamPro(
                           fontSize: 13,
                           fontWeight: FontWeight.w600,
-                          color: _isLiked ? Colors.orange : _C.darkGray,
+                          color: _isLiked ? AppColors.primaryDark : _C.darkGray,
                         ),
                       ),
                     ],
@@ -1105,12 +1097,12 @@ class _BroadcastCardState extends State<_BroadcastCard> {
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                   decoration: BoxDecoration(
                     color: _repliesExpanded
-                        ? Colors.orange.withOpacity(0.1)
+                        ? AppColors.primaryDark.withOpacity(0.1)
                         : const Color(0xFFF5F7FA),
                     borderRadius: BorderRadius.circular(20),
                     border: Border.all(
                       color: _repliesExpanded
-                          ? Colors.orange
+                          ? AppColors.primaryDark
                           : const Color(0xFFE8ECF0),
                       width: _repliesExpanded ? 1.5 : 1,
                     ),
@@ -1121,7 +1113,7 @@ class _BroadcastCardState extends State<_BroadcastCard> {
                       Icon(
                         Icons.mode_comment_outlined,
                         size: 18,
-                        color: _repliesExpanded ? Colors.orange : _C.darkGray,
+                        color: _repliesExpanded ? AppColors.primaryDark : _C.darkGray,
                       ),
                       const SizedBox(width: 8),
                       Text(
@@ -1129,7 +1121,7 @@ class _BroadcastCardState extends State<_BroadcastCard> {
                         style: GoogleFonts.beVietnamPro(
                           fontSize: 13,
                           fontWeight: FontWeight.w600,
-                          color: _repliesExpanded ? Colors.orange : _C.darkGray,
+                          color: _repliesExpanded ? AppColors.primaryDark : _C.darkGray,
                         ),
                       ),
                     ],
@@ -1182,7 +1174,7 @@ class _BroadcastCardState extends State<_BroadcastCard> {
                               style: GoogleFonts.beVietnamPro(
                                 fontSize: 12,
                                 fontWeight: FontWeight.w700,
-                                color: Colors.orange,
+                                color: AppColors.primaryDark,
                               ),
                             ),
                           ),
@@ -1204,14 +1196,14 @@ class _BroadcastCardState extends State<_BroadcastCard> {
                             CircleAvatar(
                               radius: 14,
                               backgroundColor: isOwnReply
-                                  ? Colors.orange.withOpacity(0.1)
+                                  ? AppColors.primaryDark.withOpacity(0.1)
                                   : const Color(0xFFF5F7FA),
                               child: Text(
                                 replyAuthor.isNotEmpty ? replyAuthor[0].toUpperCase() : '?',
                                 style: TextStyle(
                                   fontSize: 11,
                                   fontWeight: FontWeight.bold,
-                                  color: isOwnReply ? Colors.orange : _C.darkGray,
+                                  color: isOwnReply ? AppColors.primaryDark : _C.darkGray,
                                 ),
                               ),
                             ),
@@ -1221,12 +1213,12 @@ class _BroadcastCardState extends State<_BroadcastCard> {
                                 padding: const EdgeInsets.all(12),
                                 decoration: BoxDecoration(
                                   color: isOwnReply
-                                      ? Colors.orange.withOpacity(0.05)
+                                      ? AppColors.primaryDark.withOpacity(0.05)
                                       : const Color(0xFFF5F7FA),
                                   borderRadius: BorderRadius.circular(12),
                                   border: Border.all(
                                     color: isOwnReply
-                                        ? Colors.orange.withOpacity(0.2)
+                                        ? AppColors.primaryDark.withOpacity(0.2)
                                         : const Color(0xFFE8ECF0),
                                   ),
                                 ),
@@ -1240,7 +1232,7 @@ class _BroadcastCardState extends State<_BroadcastCard> {
                                           style: TextStyle(
                                             fontSize: 12,
                                             fontWeight: FontWeight.w600,
-                                            color: isOwnReply ? Colors.orange : _C.charcoal,
+                                            color: isOwnReply ? AppColors.primaryDark : _C.charcoal,
                                           ),
                                         ),
                                         if (isOwnReply) ...[
@@ -1248,7 +1240,7 @@ class _BroadcastCardState extends State<_BroadcastCard> {
                                           Container(
                                             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
                                             decoration: BoxDecoration(
-                                              color: Colors.orange.withOpacity(0.1),
+                                              color: AppColors.primaryDark.withOpacity(0.1),
                                               borderRadius: BorderRadius.circular(4),
                                             ),
                                             child: Text(
@@ -1256,7 +1248,7 @@ class _BroadcastCardState extends State<_BroadcastCard> {
                                               style: TextStyle(
                                                 fontSize: 8,
                                                 fontWeight: FontWeight.w600,
-                                                color: Colors.orange,
+                                                color: AppColors.primaryDark,
                                               ),
                                             ),
                                           ),

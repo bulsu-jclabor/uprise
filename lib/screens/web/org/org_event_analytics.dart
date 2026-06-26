@@ -22,7 +22,7 @@ import '../../../services/activity_logger.dart' as activity_log;
 import '../../../widgets/admin_export_button.dart';
 import 'export_util.dart';
 import 'export_pdf.dart';
-import '../../theme/app_theme.dart';
+import '../../../theme/app_theme.dart';
 
 // ── Design tokens (mirrors student_accounts / org_event_proposals) ──────────
 class _DS {
@@ -230,7 +230,7 @@ class _OrgEventAnalyticsScreenState extends State<OrgEventAnalyticsScreen>
   @override
   void initState() {
     super.initState();
-    _tabCtrl = TabController(length: 3, vsync: this);
+    _tabCtrl = TabController(length: 4, vsync: this);
     _dataFuture = _loadAll();
     _searchCtrl.addListener(
       () =>
@@ -594,6 +594,7 @@ class _OrgEventAnalyticsScreenState extends State<OrgEventAnalyticsScreen>
                               _buildAnalyticsTab(data),
                               _buildFeedbackTab(data, filtered),
                               _buildEvalFormsTab(data),
+                              _buildRegistrationAnswersTab(data),
                             ][_tabCtrl.index],
                           ),
                         ],
@@ -813,6 +814,7 @@ class _OrgEventAnalyticsScreenState extends State<OrgEventAnalyticsScreen>
         Icons.assignment,
         data.evalForms.isNotEmpty ? data.evalForms.length.toString() : null,
       ),
+      ('Registration Answers', Icons.fact_check_outlined, null),
     ];
 
     return Container(
@@ -1363,6 +1365,153 @@ class _OrgEventAnalyticsScreenState extends State<OrgEventAnalyticsScreen>
           ],
         ],
       ),
+    );
+  }
+
+  // ── Registration Answers tab ────────────────────────────────────────────────
+  // Surfaces what participants actually answered on the registration form —
+  // both an aggregated breakdown per question and the raw per-registrant
+  // answers — instead of that data being reachable only from the
+  // Registered Participants sub-tab in Attendance QR.
+  Widget _buildRegistrationAnswersTab(_AnalyticsData data) {
+    if (_selectedEvent == 'All Events') {
+      return Padding(
+        padding: const EdgeInsets.all(40),
+        child: Center(
+          child: Column(children: [
+            Icon(Icons.fact_check_outlined, size: 56, color: Colors.grey.shade300),
+            const SizedBox(height: 12),
+            Text('Select a specific event above to view its registration answers.',
+                style: GoogleFonts.beVietnamPro(color: Colors.grey.shade500, fontSize: 13)),
+          ]),
+        ),
+      );
+    }
+
+    final eventEntry = data.events.firstWhere(
+      (e) => e['title'] == _selectedEvent,
+      orElse: () => const {},
+    );
+    final eventId = eventEntry['id'] as String?;
+    if (eventId == null) {
+      return Padding(
+        padding: const EdgeInsets.all(40),
+        child: Center(
+          child: Text('Could not find this event.',
+              style: GoogleFonts.beVietnamPro(color: Colors.grey.shade500, fontSize: 13)),
+        ),
+      );
+    }
+
+    return FutureBuilder<QuerySnapshot>(
+      future: FirebaseFirestore.instance
+          .collection('registrations')
+          .where('eventId', isEqualTo: eventId)
+          .get(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) {
+          return const Padding(
+            padding: EdgeInsets.all(40),
+            child: Center(child: CircularProgressIndicator(color: UpriseColors.primaryDark)),
+          );
+        }
+        final regs = snapshot.data!.docs;
+        if (regs.isEmpty) {
+          return Padding(
+            padding: const EdgeInsets.all(40),
+            child: Center(
+              child: Text('No registrations yet for this event.',
+                  style: GoogleFonts.beVietnamPro(color: Colors.grey.shade500, fontSize: 13)),
+            ),
+          );
+        }
+
+        // Group every answer by its question label across all registrants.
+        final Map<String, List<String>> byQuestion = {};
+        final List<(String name, List<MapEntry<String, String>>)> perRegistrant = [];
+
+        for (final doc in regs) {
+          final m = doc.data() as Map<String, dynamic>;
+          final name = (m['studentName'] ?? m['name'] ?? 'Registrant').toString();
+          final entries = <MapEntry<String, String>>[];
+
+          String displayOf(dynamic value) {
+            if (value is List) return value.isEmpty ? '—' : value.join(', ');
+            final s = (value ?? '').toString();
+            return s.isEmpty ? '—' : s;
+          }
+
+          final responses = m['formResponses'];
+          final rawAnswers = m['formAnswers'];
+          if (responses is Map && responses.isNotEmpty) {
+            for (final v in responses.values) {
+              if (v is Map) {
+                final label = (v['label'] ?? '').toString();
+                final value = displayOf(v['value']);
+                entries.add(MapEntry(label.isEmpty ? 'Question' : label, value));
+              }
+            }
+          } else if (rawAnswers is Map && rawAnswers.isNotEmpty) {
+            rawAnswers.forEach((k, v) => entries.add(MapEntry(k.toString(), displayOf(v))));
+          }
+
+          for (final e in entries) {
+            byQuestion.putIfAbsent(e.key, () => []).add(e.value);
+          }
+          if (entries.isNotEmpty) perRegistrant.add((name, entries));
+        }
+
+        if (byQuestion.isEmpty) {
+          return Padding(
+            padding: const EdgeInsets.all(40),
+            child: Center(
+              child: Text('This event\'s registration form collected no extra questions.',
+                  style: GoogleFonts.beVietnamPro(color: Colors.grey.shade500, fontSize: 13)),
+            ),
+          );
+        }
+
+        return Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('${regs.length} registrant${regs.length == 1 ? '' : 's'} answered this form',
+                  style: GoogleFonts.beVietnamPro(fontSize: 12.5, color: const Color(0xFF64748B))),
+              const SizedBox(height: 16),
+              ...byQuestion.entries.map((q) => _RegistrationQuestionCard(label: q.key, answers: q.value)),
+              const SizedBox(height: 8),
+              Text('Individual responses',
+                  style: GoogleFonts.beVietnamPro(fontSize: 14, fontWeight: FontWeight.w700, color: const Color(0xFF1A202C))),
+              const SizedBox(height: 10),
+              ...perRegistrant.map((r) => Container(
+                    margin: const EdgeInsets.only(bottom: 10),
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: _C.border),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(r.$1, style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w700)),
+                        const SizedBox(height: 8),
+                        ...r.$2.map((e) => Padding(
+                              padding: const EdgeInsets.only(bottom: 6),
+                              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                                Text(e.key,
+                                    style: GoogleFonts.beVietnamPro(fontSize: 11, fontWeight: FontWeight.w600, color: const Color(0xFF9AA5B4))),
+                                Text(e.value, style: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF1A202C))),
+                              ]),
+                            )),
+                      ],
+                    ),
+                  )),
+            ],
+          ),
+        );
+      },
     );
   }
 
@@ -2958,4 +3107,80 @@ class _FormField extends StatelessWidget {
       child,
     ],
   );
+}
+
+// ── Registration question card ────────────────────────────────────────────
+// Choice-style questions (few distinct values relative to respondent count)
+// get an aggregated bar breakdown; open-ended questions (mostly unique
+// answers) just list the individual responses instead — there's no field
+// "type" metadata on the registration doc itself to tell the two apart, so
+// this is inferred from the answer shape.
+class _RegistrationQuestionCard extends StatelessWidget {
+  final String label;
+  final List<String> answers;
+  const _RegistrationQuestionCard({required this.label, required this.answers});
+
+  @override
+  Widget build(BuildContext context) {
+    final counts = <String, int>{};
+    for (final a in answers) {
+      counts[a] = (counts[a] ?? 0) + 1;
+    }
+    final isChoiceLike = counts.length <= 8 && counts.length / answers.length <= 0.6;
+    final total = answers.length;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 14),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFEBEEF3)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label,
+              style: GoogleFonts.beVietnamPro(fontSize: 13.5, fontWeight: FontWeight.w700, color: const Color(0xFF1A202C))),
+          const SizedBox(height: 12),
+          if (isChoiceLike)
+            ...counts.entries.map((e) {
+              final pct = total == 0 ? 0.0 : e.value / total;
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(children: [
+                      Expanded(
+                        child: Text(e.key,
+                            style: GoogleFonts.beVietnamPro(fontSize: 12.5, color: const Color(0xFF374151)),
+                            overflow: TextOverflow.ellipsis),
+                      ),
+                      Text('${e.value} (${(pct * 100).round()}%)',
+                          style: GoogleFonts.beVietnamPro(fontSize: 11.5, fontWeight: FontWeight.w600, color: const Color(0xFF64748B))),
+                    ]),
+                    const SizedBox(height: 4),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(4),
+                      child: LinearProgressIndicator(
+                        value: pct,
+                        minHeight: 6,
+                        backgroundColor: const Color(0xFFF1F4F8),
+                        valueColor: const AlwaysStoppedAnimation(UpriseColors.primaryDark),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            })
+          else
+            ...answers.map((a) => Padding(
+                  padding: const EdgeInsets.only(bottom: 6),
+                  child: Text('• $a', style: GoogleFonts.beVietnamPro(fontSize: 12.5, color: const Color(0xFF374151))),
+                )),
+        ],
+      ),
+    );
+  }
 }

@@ -1,39 +1,47 @@
 // lib/utils/theme.dart
+//
+// Mobile app-wide theme — now mirrors the web app's brand palette and font
+// (lib/theme/app_theme.dart's UpriseColors/UpriseTheme, BeVietnamPro)
+// instead of mobile's previous unrelated orange/Poppins scheme, so the
+// student/guest mobile app looks like the same product as the web portal.
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../theme/app_theme.dart';
 
-const Color primaryOrange = Color(0xFFFF6B35);  // Warm orange from logo
-const Color primaryBrown = Color(0xFF8B5A2B);   // Brown from gear
-const Color secondaryOrange = Color(0xFFFF8C42);
-const Color darkBrown = Color(0xFF5C3A21);
-const Color backgroundColor = Color(0xFFFEF7E8);
-const Color textDark = Color(0xFF2C1810);
-const Color textLight = Color(0xFFF5E6D3);
+// Kept as aliases (rather than removed) since a handful of mobile screens
+// import these names directly: profile_summary.dart, login_screen.dart,
+// change_password_screen.dart, bottom_nav_bar.dart.
+const Color primaryOrange = UpriseColors.primaryDark;
+const Color secondaryOrange = UpriseColors.primaryLight;
+const Color backgroundColor = UpriseColors.lightGray;
+const Color textDark = UpriseColors.charcoal;
 
 ThemeData appTheme = ThemeData(
   brightness: Brightness.light,
-  primaryColor: primaryOrange,
-  colorScheme: const ColorScheme.light(
-    primary: primaryOrange,
-    secondary: secondaryOrange,
-    surface: Colors.white,
+  primaryColor: UpriseColors.primaryDark,
+  colorScheme: ColorScheme.light(
+    primary: UpriseColors.primaryDark,
+    secondary: UpriseColors.primaryLight,
+    tertiary: UpriseColors.accent,
+    surface: UpriseColors.white,
+    error: UpriseColors.error,
   ),
-  scaffoldBackgroundColor: backgroundColor,
-  fontFamily: GoogleFonts.poppins().fontFamily,
-  appBarTheme: const AppBarTheme(
+  scaffoldBackgroundColor: UpriseColors.lightGray,
+  fontFamily: GoogleFonts.beVietnamPro().fontFamily,
+  appBarTheme: AppBarTheme(
     backgroundColor: Colors.white,
-    foregroundColor: textDark,
+    foregroundColor: UpriseColors.charcoal,
     elevation: 0,
     centerTitle: true,
-    titleTextStyle: TextStyle(
+    titleTextStyle: GoogleFonts.beVietnamPro(
       fontSize: 20,
       fontWeight: FontWeight.w600,
-      color: textDark,
+      color: UpriseColors.charcoal,
     ),
   ),
-  bottomNavigationBarTheme: const BottomNavigationBarThemeData(
+  bottomNavigationBarTheme: BottomNavigationBarThemeData(
     backgroundColor: Colors.white,
-    selectedItemColor: primaryOrange,
+    selectedItemColor: UpriseColors.primaryDark,
     unselectedItemColor: Colors.grey,
     type: BottomNavigationBarType.fixed,
     elevation: 8,
@@ -51,13 +59,13 @@ ThemeData appTheme = ThemeData(
     ),
     focusedBorder: OutlineInputBorder(
       borderRadius: BorderRadius.circular(12),
-      borderSide: const BorderSide(color: primaryOrange, width: 2),
+      borderSide: const BorderSide(color: UpriseColors.primaryDark, width: 2),
     ),
     contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
   ),
   elevatedButtonTheme: ElevatedButtonThemeData(
     style: ElevatedButton.styleFrom(
-      backgroundColor: primaryOrange,
+      backgroundColor: UpriseColors.primaryDark,
       foregroundColor: Colors.white,
       minimumSize: const Size(double.infinity, 48),
       shape: RoundedRectangleBorder(

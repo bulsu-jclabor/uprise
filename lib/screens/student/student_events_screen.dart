@@ -9,128 +9,11 @@ import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import '../../models/event_model.dart';
+import '../../widgets/student/event_image.dart';
+import '../../widgets/student/app_colors.dart';
+import 'student_feedback_screen.dart';
+import '../../widgets/shared/event_photo_gallery.dart';
 
-// ─── CUSTOM COLORS ─────────────────────────────────────────────
-class AppColors {
-  static const Color primaryDark = Colors.orange;
-  static const Color primaryLight = Color(0xFFFFCC80);
-  static const Color accent = Color(0xFFFF9800);
-  static const Color background = Color(0xFFF5F5F5);
-}
-
-// ─── EVENT IMAGE WIDGET ────────────────────────────────────────
-class EventImage extends StatelessWidget {
-  final String imageUrl;
-  final double? height;
-  final double? width;
-  final BoxFit fit;
-  final bool showLoadingIndicator;
-
-  const EventImage({
-    super.key,
-    required this.imageUrl,
-    this.height,
-    this.width,
-    this.fit = BoxFit.cover,
-    this.showLoadingIndicator = true,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    if (imageUrl.isEmpty) return _buildFallbackImage();
-    if (_isBase64Image(imageUrl)) return _buildBase64Image();
-    if (_isValidImageUrl(imageUrl)) return _buildNetworkImage();
-    return _buildFallbackImage();
-  }
-
-  bool _isBase64Image(String url) =>
-      url.startsWith('data:image') ||
-      (url.isNotEmpty && !url.startsWith('http') && !url.startsWith('assets'));
-
-  bool _isValidImageUrl(String url) =>
-      url.startsWith('http://') ||
-      url.startsWith('https://') ||
-      url.startsWith('assets/');
-
-  Widget _buildBase64Image() {
-    try {
-      String base64String = imageUrl;
-      if (imageUrl.contains(',')) base64String = imageUrl.split(',').last;
-      final bytes = base64Decode(base64String);
-      return Image.memory(
-        bytes,
-        height: height,
-        width: width,
-        fit: fit,
-        errorBuilder: (_, __, ___) => _buildFallbackImage(),
-      );
-    } catch (_) {
-      return _buildFallbackImage();
-    }
-  }
-
-  Widget _buildNetworkImage() {
-    return Image.network(
-      imageUrl,
-      height: height,
-      width: width,
-      fit: fit,
-      loadingBuilder: (context, child, loadingProgress) {
-        if (loadingProgress == null) return child;
-        if (!showLoadingIndicator) return child;
-        return Container(
-          height: height,
-          width: width,
-          color: Colors.grey[200],
-          child: Center(
-            child: SizedBox(
-              width: 30,
-              height: 30,
-              child: CircularProgressIndicator(
-                value: loadingProgress.expectedTotalBytes != null
-                    ? loadingProgress.cumulativeBytesLoaded /
-                        loadingProgress.expectedTotalBytes!
-                    : null,
-                strokeWidth: 2,
-                color: AppColors.primaryDark,
-              ),
-            ),
-          ),
-        );
-      },
-      errorBuilder: (_, __, ___) => _buildFallbackImage(),
-    );
-  }
-
-  Widget _buildFallbackImage() {
-    return Container(
-      height: height,
-      width: width,
-      color: Colors.grey[300],
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            Icons.image_not_supported,
-            size: (height ?? 100) * 0.4,
-            color: Colors.grey[600],
-          ),
-          if ((height ?? 0) > 80)
-            Padding(
-              padding: const EdgeInsets.only(top: 8),
-              child: Text(
-                'Image not available',
-                style: TextStyle(
-                  fontSize: (height ?? 100) * 0.08,
-                  color: Colors.grey[600],
-                ),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-}
 
 // ─── MAIN SCREEN ──────────────────────────────────────────────
 class StudentEventsScreen extends StatefulWidget {
@@ -153,8 +36,19 @@ class _StudentEventsScreenState extends State<StudentEventsScreen>
   bool _certLoading = true;
   bool _orgFiltersLoading = true;
   String? _certError;
-  final Set<String> _feedbackGiven = {};
   String? get _currentUid => FirebaseAuth.instance.currentUser?.uid;
+
+  // Cached once per State lifetime (instead of re-querying on every
+  // rebuild) and live, so newly-created registrations show up automatically.
+  late final Stream<Set<String>> _registeredEventIdsStream = () {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return Stream<Set<String>>.value(<String>{});
+    return FirebaseFirestore.instance
+        .collection('registrations')
+        .where('userId', isEqualTo: user.uid)
+        .snapshots()
+        .map((snap) => snap.docs.map((d) => d['eventId'] as String).toSet());
+  }();
 
   @override
   void initState() {
@@ -183,13 +77,19 @@ class _StudentEventsScreenState extends State<StudentEventsScreen>
   Future<void> _fetchCertificates() async {
     setState(() { _certLoading = true; _certError = null; });
     try {
-      final snapshot = await FirebaseFirestore.instance.collection('certificates').get();
-      var docs = snapshot.docs;
-      if (_currentUid != null) {
-        docs = docs.where((d) {
-          final r = d.data()['recipientUid'];
-          return r == null || r == _currentUid;
-        }).toList();
+      final col = FirebaseFirestore.instance.collection('certificates');
+      // Two server-side queries instead of fetching the whole collection:
+      // this user's own certs, plus legacy certs with no recipientUid set.
+      final results = await Future.wait([
+        if (_currentUid != null) col.where('recipientUid', isEqualTo: _currentUid).get(),
+        col.where('recipientUid', isEqualTo: null).get(),
+      ]);
+      final seenIds = <String>{};
+      final docs = <QueryDocumentSnapshot<Map<String, dynamic>>>[];
+      for (final snap in results) {
+        for (final d in snap.docs) {
+          if (seenIds.add(d.id)) docs.add(d);
+        }
       }
       docs.sort((a, b) {
         final aTs = a.data()['issuedAt'];
@@ -281,8 +181,8 @@ class _StudentEventsScreenState extends State<StudentEventsScreen>
     return Image.network(imageUrl, height: height, width: double.infinity, fit: BoxFit.cover,
         loadingBuilder: (ctx, child, p) {
           if (p == null) return child;
-          return Container(height: height, color: Colors.orange.shade50,
-              child: const Center(child: CircularProgressIndicator(color: Colors.orange)));
+          return Container(height: height, color: AppColors.primaryDark.shade50,
+              child: const Center(child: CircularProgressIndicator(color: AppColors.primaryDark)));
         },
         errorBuilder: (_, __, ___) => const SizedBox.shrink());
   }
@@ -301,7 +201,7 @@ class _StudentEventsScreenState extends State<StudentEventsScreen>
       border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: Colors.orange, width: 2),
+        borderSide: const BorderSide(color: AppColors.primaryDark, width: 2),
       ),
       contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
     );
@@ -324,19 +224,19 @@ class _StudentEventsScreenState extends State<StudentEventsScreen>
             if (pickedFile == null) {
               ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
                 content: Text('Please select a certificate image.'),
-                backgroundColor: Colors.orange));
+                backgroundColor: AppColors.primaryDark));
               return;
             }
             if (eventNameCtrl.text.trim().isEmpty) {
               ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
                 content: Text('Certificate name is required.'),
-                backgroundColor: Colors.orange));
+                backgroundColor: AppColors.primaryDark));
               return;
             }
             if (selectedType.isEmpty) {
               ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
                 content: Text('Please select an organization.'),
-                backgroundColor: Colors.orange));
+                backgroundColor: AppColors.primaryDark));
               return;
             }
             setSheet(() => isUploading = true);
@@ -434,9 +334,9 @@ class _StudentEventsScreenState extends State<StudentEventsScreen>
                     child: Container(
                       height: 160, width: double.infinity,
                       decoration: BoxDecoration(
-                        color: Colors.orange.shade50,
+                        color: AppColors.primaryDark.shade50,
                         borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: Colors.orange.shade200, width: 1.5),
+                        border: Border.all(color: AppColors.primaryDark.shade200, width: 1.5),
                       ),
                       child: pickedFile != null
                           ? ClipRRect(
@@ -455,10 +355,10 @@ class _StudentEventsScreenState extends State<StudentEventsScreen>
                               ]),
                             )
                           : Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-                              Icon(Icons.cloud_upload_rounded, size: 44, color: Colors.orange.shade400),
+                              Icon(Icons.cloud_upload_rounded, size: 44, color: AppColors.primaryDark.shade400),
                               const SizedBox(height: 8),
                               Text('Tap to upload image',
-                                  style: TextStyle(color: Colors.orange.shade400, fontWeight: FontWeight.w500)),
+                                  style: TextStyle(color: AppColors.primaryDark.shade400, fontWeight: FontWeight.w500)),
                               const SizedBox(height: 4),
                               Text('Keep image under 700KB for best results',
                                   style: TextStyle(color: Colors.grey.shade400, fontSize: 11)),
@@ -498,8 +398,8 @@ class _StudentEventsScreenState extends State<StudentEventsScreen>
                     child: ElevatedButton(
                       onPressed: isUploading ? null : doUpload,
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.orange,
-                        disabledBackgroundColor: Colors.orange.shade200,
+                        backgroundColor: AppColors.primaryDark,
+                        disabledBackgroundColor: AppColors.primaryDark.shade200,
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                       ),
                       child: isUploading
@@ -527,124 +427,6 @@ class _StudentEventsScreenState extends State<StudentEventsScreen>
     );
   }
 
-  // ── Feedback dialog ──
-  Future<void> _showFeedbackDialog(Map<String, dynamic> cert) async {
-    int selectedRating = 0;
-    final commentCtrl = TextEditingController();
-    bool submitting = false;
-
-    await showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setSheet) {
-          Future<void> submit() async {
-            if (selectedRating == 0) {
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                content: Text('Please select a star rating.'), backgroundColor: Colors.orange));
-              return;
-            }
-            setSheet(() => submitting = true);
-            try {
-              await FirebaseFirestore.instance.collection('event_feedback').add({
-                'certId': cert['id'],
-                'eventName': cert['title'],
-                'organization': cert['organization'],
-                'rating': selectedRating,
-                'comment': commentCtrl.text.trim(),
-                'userId': _currentUid,
-                'submittedAt': FieldValue.serverTimestamp(),
-              });
-              if (mounted) setState(() => _feedbackGiven.add(cert['id'] as String));
-              if (ctx.mounted) Navigator.pop(ctx);
-              if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                content: Text('Feedback submitted. Thank you!'), backgroundColor: Colors.green));
-            } catch (e) {
-              setSheet(() => submitting = false);
-              if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                content: Text('Failed to submit: $e'), backgroundColor: Colors.red));
-            }
-          }
-
-          return Padding(
-            padding: EdgeInsets.only(
-              bottom: MediaQuery.of(ctx).viewInsets.bottom, left: 20, right: 20, top: 20),
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Center(child: Container(
-                    width: 40, height: 4, margin: const EdgeInsets.only(bottom: 16),
-                    decoration: BoxDecoration(color: Colors.grey.shade300,
-                        borderRadius: BorderRadius.circular(2)),
-                  )),
-                  const Text('Rate This Event',
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black87)),
-                  const SizedBox(height: 4),
-                  Text(cert['title'], style: TextStyle(fontSize: 13, color: Colors.grey.shade600)),
-                  const SizedBox(height: 20),
-                  Center(
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: List.generate(5, (i) {
-                        final star = i + 1;
-                        return GestureDetector(
-                          onTap: () => setSheet(() => selectedRating = star),
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 6),
-                            child: Icon(
-                              star <= selectedRating ? Icons.star_rounded : Icons.star_outline_rounded,
-                              size: 40,
-                              color: star <= selectedRating ? Colors.orange : Colors.grey.shade300,
-                            ),
-                          ),
-                        );
-                      }),
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  TextField(
-                    controller: commentCtrl, maxLines: 3,
-                    decoration: InputDecoration(
-                      hintText: 'Share your experience (optional)...',
-                      hintStyle: TextStyle(color: Colors.grey.shade400),
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: const BorderSide(color: Colors.orange, width: 2),
-                      ),
-                      contentPadding: const EdgeInsets.all(14),
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  SizedBox(
-                    width: double.infinity, height: 52,
-                    child: ElevatedButton(
-                      onPressed: submitting ? null : submit,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.orange,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                      ),
-                      child: submitting
-                          ? const SizedBox(width: 22, height: 22,
-                              child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white))
-                          : const Text('Submit Feedback',
-                              style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w600)),
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-                ],
-              ),
-            ),
-          );
-        },
-      ),
-    );
-  }
 
   // ── Verification QR dialog ──
   void _showVerifyDialog(Map<String, dynamic> cert) {
@@ -745,10 +527,10 @@ class _StudentEventsScreenState extends State<StudentEventsScreen>
                       const SizedBox(height: 4),
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                        decoration: BoxDecoration(color: Colors.orange.shade50,
+                        decoration: BoxDecoration(color: AppColors.primaryDark.shade50,
                             borderRadius: BorderRadius.circular(20)),
                         child: Text(cert['category'],
-                            style: TextStyle(color: Colors.orange.shade700, fontSize: 11, fontWeight: FontWeight.w500)),
+                            style: TextStyle(color: AppColors.primaryDark.shade700, fontSize: 11, fontWeight: FontWeight.w500)),
                       ),
                       const SizedBox(height: 4),
                       Text(cert['date'], style: TextStyle(color: Colors.grey.shade500, fontSize: 12)),
@@ -767,38 +549,16 @@ class _StudentEventsScreenState extends State<StudentEventsScreen>
                 ),
                 GestureDetector(
                   onTap: () => ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                    content: Text('${cert['title']} downloaded'), backgroundColor: Colors.orange)),
+                    content: Text('${cert['title']} downloaded'), backgroundColor: AppColors.primaryDark)),
                   child: Container(
                     width: 40, height: 40,
-                    decoration: BoxDecoration(color: Colors.orange, borderRadius: BorderRadius.circular(10)),
+                    decoration: BoxDecoration(color: AppColors.primaryDark, borderRadius: BorderRadius.circular(10)),
                     child: const Icon(Icons.download_rounded, color: Colors.white, size: 22),
                   ),
                 ),
               ],
             ),
           ),
-          if (cert['status'] != 'draft') ...[
-            const Divider(height: 1, color: Color(0xFFF0F0F0)),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-              child: _feedbackGiven.contains(cert['id'])
-                  ? Row(mainAxisSize: MainAxisSize.min, children: [
-                      Icon(Icons.check_circle, size: 15, color: Colors.green.shade600),
-                      const SizedBox(width: 6),
-                      Text('Feedback submitted',
-                          style: TextStyle(fontSize: 12, color: Colors.green.shade600, fontWeight: FontWeight.w500)),
-                    ])
-                  : GestureDetector(
-                      onTap: () => _showFeedbackDialog(cert),
-                      child: Row(mainAxisSize: MainAxisSize.min, children: [
-                        Icon(Icons.star_outline, size: 16, color: Colors.orange.shade600),
-                        const SizedBox(width: 6),
-                        Text('Rate this event',
-                            style: TextStyle(fontSize: 12, color: Colors.orange.shade600, fontWeight: FontWeight.w600)),
-                      ]),
-                    ),
-            ),
-          ],
           if (vCode.isNotEmpty) ...[
             const Divider(height: 1, color: Color(0xFFF0F0F0)),
             GestureDetector(
@@ -833,7 +593,7 @@ class _StudentEventsScreenState extends State<StudentEventsScreen>
         gradient: LinearGradient(
           colors: isUploaded
               ? [Colors.blue.shade200, Colors.blue.shade500]
-              : [Colors.orange.shade200, Colors.orange.shade500],
+              : [AppColors.primaryDark.shade200, AppColors.primaryDark.shade500],
           begin: Alignment.topLeft, end: Alignment.bottomRight,
         ),
       ),
@@ -859,7 +619,7 @@ class _StudentEventsScreenState extends State<StudentEventsScreen>
 
   Widget _certSectionLabel(String label) => Text(label,
       style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700,
-          color: Colors.orange.shade700, letterSpacing: 0.4));
+          color: AppColors.primaryDark.shade700, letterSpacing: 0.4));
 
   // ══════════════════════════════════════════════
   //  CALENDAR / EVENT HELPERS
@@ -882,16 +642,6 @@ class _StudentEventsScreenState extends State<StudentEventsScreen>
         ),
       ),
     );
-  }
-
-  Future<Set<String>> _getRegisteredEventIds() async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return {};
-    final snap = await FirebaseFirestore.instance
-        .collection('registrations')
-        .where('userId', isEqualTo: user.uid)
-        .get();
-    return snap.docs.map((d) => d['eventId'] as String).toSet();
   }
 
   // ══════════════════════════════════════════════
@@ -976,8 +726,8 @@ class _StudentEventsScreenState extends State<StudentEventsScreen>
                 style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Colors.black87),
               ),
               const Spacer(),
-              FutureBuilder<Set<String>>(
-                future: _getRegisteredEventIds(),
+              StreamBuilder<Set<String>>(
+                stream: _registeredEventIdsStream,
                 builder: (context, regSnap) {
                   final regIds = regSnap.data ?? {};
                   return StreamBuilder<QuerySnapshot>(
@@ -1008,8 +758,8 @@ class _StudentEventsScreenState extends State<StudentEventsScreen>
         ),
         const SizedBox(height: 8),
         Expanded(
-          child: FutureBuilder<Set<String>>(
-            future: _getRegisteredEventIds(),
+          child: StreamBuilder<Set<String>>(
+            stream: _registeredEventIdsStream,
             builder: (context, regSnap) {
               final regIds = regSnap.data ?? {};
               return StreamBuilder<QuerySnapshot>(
@@ -1072,8 +822,8 @@ class _StudentEventsScreenState extends State<StudentEventsScreen>
   }
 
   Widget _buildUpcomingTab() {
-    return FutureBuilder<Set<String>>(
-      future: _getRegisteredEventIds(),
+    return StreamBuilder<Set<String>>(
+      stream: _registeredEventIdsStream,
       builder: (context, regSnap) {
         final regIds = regSnap.data ?? {};
         return StreamBuilder<QuerySnapshot>(
@@ -1140,6 +890,50 @@ class _StudentEventsScreenState extends State<StudentEventsScreen>
 
     return Stack(children: [
       Column(children: [
+        // Entry point to evaluate attended events — required before an org
+        // can generate a certificate for you (see Notifications for the
+        // per-event reminder once you've attended).
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+          child: GestureDetector(
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => Scaffold(
+                  appBar: AppBar(
+                    backgroundColor: Colors.white,
+                    elevation: 0,
+                    foregroundColor: Colors.black87,
+                    title: const Text('Evaluate Events',
+                        style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+                  ),
+                  body: const StudentFeedbackScreen(),
+                ),
+              ),
+            ),
+            child: Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: AppColors.primaryDark.withOpacity(0.08),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: AppColors.primaryDark.withOpacity(0.2)),
+              ),
+              child: Row(children: [
+                Icon(Icons.rate_review_rounded, color: AppColors.primaryDark, size: 20),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text('Evaluate attended events',
+                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Colors.grey.shade800)),
+                    Text('Required before your certificate can be issued',
+                        style: TextStyle(fontSize: 11.5, color: Colors.grey.shade600)),
+                  ]),
+                ),
+                Icon(Icons.chevron_right_rounded, color: AppColors.primaryDark),
+              ]),
+            ),
+          ),
+        ),
         // Filter chips
         SizedBox(
           height: 48,
@@ -1157,9 +951,9 @@ class _StudentEventsScreenState extends State<StudentEventsScreen>
                   margin: const EdgeInsets.only(right: 8, top: 6, bottom: 6),
                   padding: const EdgeInsets.symmetric(horizontal: 18),
                   decoration: BoxDecoration(
-                    color: sel ? Colors.orange : Colors.white,
+                    color: sel ? AppColors.primaryDark : Colors.white,
                     borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: sel ? Colors.orange : Colors.grey.shade300),
+                    border: Border.all(color: sel ? AppColors.primaryDark : Colors.grey.shade300),
                   ),
                   alignment: Alignment.center,
                   child: Text(f,
@@ -1177,7 +971,7 @@ class _StudentEventsScreenState extends State<StudentEventsScreen>
         // Content
         Expanded(
           child: _certLoading
-              ? const Center(child: CircularProgressIndicator(color: Colors.orange))
+              ? const Center(child: CircularProgressIndicator(color: AppColors.primaryDark))
               : _certError != null
                   ? Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
                       const Icon(Icons.error_outline, color: Colors.red, size: 48),
@@ -1190,7 +984,7 @@ class _StudentEventsScreenState extends State<StudentEventsScreen>
                       const SizedBox(height: 12),
                       ElevatedButton(
                         onPressed: _fetchCertificates,
-                        style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
+                        style: ElevatedButton.styleFrom(backgroundColor: AppColors.primaryDark),
                         child: const Text('Retry', style: TextStyle(color: Colors.white)),
                       ),
                     ]))
@@ -1202,7 +996,7 @@ class _StudentEventsScreenState extends State<StudentEventsScreen>
                               style: TextStyle(color: Colors.grey.shade500, fontSize: 16)),
                         ]))
                       : RefreshIndicator(
-                          color: Colors.orange,
+                          color: AppColors.primaryDark,
                           onRefresh: _fetchCertificates,
                           child: ListView.builder(
                             padding: const EdgeInsets.only(left: 16, right: 16, top: 4, bottom: 90),
@@ -1220,7 +1014,7 @@ class _StudentEventsScreenState extends State<StudentEventsScreen>
           heroTag: 'cert_upload_fab',
           shape: const CircleBorder(),
           onPressed: _showUploadDialog,
-          backgroundColor: Colors.orange,
+          backgroundColor: AppColors.primaryDark,
           child: const Icon(Icons.cloud_upload_rounded, color: Colors.white),
         ),
       ),
@@ -2142,7 +1936,9 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                     widget.event.description,
                     style: const TextStyle(fontSize: 14, color: Colors.black87, height: 1.4),
                   ),
-                  const SizedBox(height: 30),
+                  const SizedBox(height: 20),
+                  EventPhotoGallery(eventId: widget.event.id, accentColor: AppColors.primaryDark),
+                  const SizedBox(height: 10),
 
                   // ─── Register / status buttons ────────────────────
                   if (!widget.isPastEvent && !_isRegistered) ...[

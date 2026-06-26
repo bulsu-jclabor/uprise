@@ -6,6 +6,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/certificate_preview.dart';
+import '../../widgets/student/app_colors.dart';
+import 'student_feedback_screen.dart';
 
 // ─────────────────────────────────────────────────────────────
 //  STANDALONE SCREEN (uses CertificatesContent)
@@ -49,7 +51,6 @@ class _CertificatesContentState extends State<CertificatesContent> {
   String? _error;
 
   final String? _currentUid = FirebaseAuth.instance.currentUser?.uid;
-  final Set<String> _feedbackGiven = {};
 
   @override
   void initState() {
@@ -62,15 +63,14 @@ class _CertificatesContentState extends State<CertificatesContent> {
   // ─────────────────────────────────────────────────────────────
   Future<void> _fetchCertificates() async {
     try {
-      final snapshot = await FirebaseFirestore.instance
-          .collection('certificates')
-          .get();
+      final query = _currentUid != null
+          ? FirebaseFirestore.instance
+              .collection('certificates')
+              .where('recipientUid', isEqualTo: _currentUid)
+          : FirebaseFirestore.instance.collection('certificates');
+      final snapshot = await query.get();
 
       var docs = snapshot.docs;
-
-      if (_currentUid != null) {
-        docs = docs.where((doc) => doc.data()['recipientUid'] == _currentUid).toList();
-      }
 
       docs.sort((a, b) {
         final aTs = a.data()['issuedAt'];
@@ -160,153 +160,13 @@ class _CertificatesContentState extends State<CertificatesContent> {
         if (loadingProgress == null) return child;
         return Container(
           height: height,
-          color: Colors.orange.shade50,
+          color: AppColors.primaryDark.shade50,
           child: const Center(
-            child: CircularProgressIndicator(color: Colors.orange),
+            child: CircularProgressIndicator(color: AppColors.primaryDark),
           ),
         );
       },
       errorBuilder: (_, __, ___) => const SizedBox.shrink(),
-    );
-  }
-
-  // ── Feedback Dialog ──────────────────────────────────────────────
-  Future<void> _showFeedbackDialog(Map<String, dynamic> cert) async {
-    int selectedRating = 0;
-    final commentCtrl = TextEditingController();
-    bool submitting = false;
-
-    await showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setSheet) {
-          Future<void> submit() async {
-            if (selectedRating == 0) {
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                content: Text('Please select a star rating.'),
-                backgroundColor: Colors.orange,
-              ));
-              return;
-            }
-            setSheet(() => submitting = true);
-            try {
-              await FirebaseFirestore.instance
-                  .collection('event_feedback')
-                  .add({
-                'certId': cert['id'],
-                'eventName': cert['title'],
-                'organization': cert['organization'],
-                'rating': selectedRating,
-                'comment': commentCtrl.text.trim(),
-                'userId': _currentUid,
-                'submittedAt': FieldValue.serverTimestamp(),
-              });
-              if (mounted) setState(() => _feedbackGiven.add(cert['id']));
-              if (ctx.mounted) Navigator.pop(ctx);
-              if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                  content: Text('Feedback submitted. Thank you!'),
-                  backgroundColor: Colors.green,
-                ));
-              }
-            } catch (e) {
-              setSheet(() => submitting = false);
-              if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                  content: Text('Failed to submit: $e'),
-                  backgroundColor: Colors.red,
-                ));
-              }
-            }
-          }
-
-          return Padding(
-            padding: EdgeInsets.only(
-              bottom: MediaQuery.of(ctx).viewInsets.bottom,
-              left: 20, right: 20, top: 20,
-            ),
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Center(
-                    child: Container(
-                      width: 40, height: 4,
-                      margin: const EdgeInsets.only(bottom: 16),
-                      decoration: BoxDecoration(
-                        color: Colors.grey.shade300,
-                        borderRadius: BorderRadius.circular(2),
-                      ),
-                    ),
-                  ),
-                  const Text('Rate This Event',
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black87)),
-                  const SizedBox(height: 4),
-                  Text(cert['title'], style: TextStyle(fontSize: 13, color: Colors.grey.shade600)),
-                  const SizedBox(height: 20),
-                  Center(
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: List.generate(5, (i) {
-                        final star = i + 1;
-                        return GestureDetector(
-                          onTap: () => setSheet(() => selectedRating = star),
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 6),
-                            child: Icon(
-                              star <= selectedRating ? Icons.star_rounded : Icons.star_outline_rounded,
-                              size: 40,
-                              color: star <= selectedRating ? Colors.orange : Colors.grey.shade300,
-                            ),
-                          ),
-                        );
-                      }),
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  TextField(
-                    controller: commentCtrl,
-                    maxLines: 3,
-                    decoration: InputDecoration(
-                      hintText: 'Share your experience (optional)...',
-                      hintStyle: TextStyle(color: Colors.grey.shade400),
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: const BorderSide(color: Colors.orange, width: 2),
-                      ),
-                      contentPadding: const EdgeInsets.all(14),
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  SizedBox(
-                    width: double.infinity, height: 52,
-                    child: ElevatedButton(
-                      onPressed: submitting ? null : submit,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.orange,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                      ),
-                      child: submitting
-                          ? const SizedBox(width: 22, height: 22,
-                              child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white))
-                          : const Text('Submit Feedback',
-                              style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w600)),
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-                ],
-              ),
-            ),
-          );
-        },
-      ),
     );
   }
 
@@ -441,11 +301,11 @@ class _CertificatesContentState extends State<CertificatesContent> {
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                         decoration: BoxDecoration(
-                          color: Colors.orange.shade50,
+                          color: AppColors.primaryDark.shade50,
                           borderRadius: BorderRadius.circular(20),
                         ),
                         child: Text(cert['category'],
-                            style: TextStyle(color: Colors.orange.shade700, fontSize: 11, fontWeight: FontWeight.w500)),
+                            style: TextStyle(color: AppColors.primaryDark.shade700, fontSize: 11, fontWeight: FontWeight.w500)),
                       ),
                       const SizedBox(height: 4),
                       Text(cert['date'], style: TextStyle(color: Colors.grey.shade500, fontSize: 12)),
@@ -469,47 +329,18 @@ class _CertificatesContentState extends State<CertificatesContent> {
                   onTap: () {
                     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
                       content: Text('${cert['title']} downloaded'),
-                      backgroundColor: Colors.orange,
+                      backgroundColor: AppColors.primaryDark,
                     ));
                   },
                   child: Container(
                     width: 40, height: 40,
-                    decoration: BoxDecoration(color: Colors.orange, borderRadius: BorderRadius.circular(10)),
+                    decoration: BoxDecoration(color: AppColors.primaryDark, borderRadius: BorderRadius.circular(10)),
                     child: const Icon(Icons.download_rounded, color: Colors.white, size: 22),
                   ),
                 ),
               ],
             ),
           ),
-          // ── Feedback Button ──
-          if (cert['status'] != 'draft') ...[
-            const Divider(height: 1, color: Color(0xFFF0F0F0)),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-              child: _feedbackGiven.contains(cert['id'])
-                  ? Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.check_circle, size: 15, color: Colors.green.shade600),
-                        const SizedBox(width: 6),
-                        Text('Feedback submitted',
-                            style: TextStyle(fontSize: 12, color: Colors.green.shade600, fontWeight: FontWeight.w500)),
-                      ],
-                    )
-                  : GestureDetector(
-                      onTap: () => _showFeedbackDialog(cert),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.star_outline, size: 16, color: Colors.orange.shade600),
-                          const SizedBox(width: 6),
-                          Text('Rate this event',
-                              style: TextStyle(fontSize: 12, color: Colors.orange.shade600, fontWeight: FontWeight.w600)),
-                        ],
-                      ),
-                    ),
-            ),
-          ],
           // ── Verification QR ──
           if ((cert['verificationCode'] as String).isNotEmpty) ...[
             const Divider(height: 1, color: Color(0xFFF0F0F0)),
@@ -592,7 +423,7 @@ class _CertificatesContentState extends State<CertificatesContent> {
         gradient: LinearGradient(
           colors: isUploaded
               ? [Colors.blue.shade200, Colors.blue.shade500]
-              : [Colors.orange.shade200, Colors.orange.shade500],
+              : [AppColors.primaryDark.shade200, AppColors.primaryDark.shade500],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
@@ -627,7 +458,7 @@ class _CertificatesContentState extends State<CertificatesContent> {
 
   Widget _sectionLabel(String label) {
     return Text(label,
-        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Colors.orange.shade700, letterSpacing: 0.4));
+        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.primaryDark.shade700, letterSpacing: 0.4));
   }
 
   // ─── BUILD ──────────────────────────────────────────────────────────
@@ -640,6 +471,50 @@ class _CertificatesContentState extends State<CertificatesContent> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // Entry point to evaluate attended events — required before an org
+        // can generate a certificate for you.
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+          child: GestureDetector(
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => Scaffold(
+                  appBar: AppBar(
+                    backgroundColor: Colors.white,
+                    elevation: 0,
+                    foregroundColor: Colors.black87,
+                    title: const Text('Evaluate Events',
+                        style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+                  ),
+                  body: const StudentFeedbackScreen(),
+                ),
+              ),
+            ),
+            child: Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: AppColors.primaryDark.withOpacity(0.08),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: AppColors.primaryDark.withOpacity(0.2)),
+              ),
+              child: Row(children: [
+                Icon(Icons.rate_review_rounded, color: AppColors.primaryDark, size: 20),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text('Evaluate attended events',
+                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Colors.grey.shade800)),
+                    Text('Required before your certificate can be issued',
+                        style: TextStyle(fontSize: 11.5, color: Colors.grey.shade600)),
+                  ]),
+                ),
+                Icon(Icons.chevron_right_rounded, color: AppColors.primaryDark),
+              ]),
+            ),
+          ),
+        ),
+        const SizedBox(height: 4),
         // ── FILTER CHIPS ──
         SizedBox(
           height: 48,
@@ -657,10 +532,10 @@ class _CertificatesContentState extends State<CertificatesContent> {
                   margin: const EdgeInsets.only(right: 8, top: 6, bottom: 6),
                   padding: const EdgeInsets.symmetric(horizontal: 18),
                   decoration: BoxDecoration(
-                    color: isSelected ? Colors.orange : Colors.white,
+                    color: isSelected ? AppColors.primaryDark : Colors.white,
                     borderRadius: BorderRadius.circular(20),
                     border: Border.all(
-                      color: isSelected ? Colors.orange : Colors.grey.shade300,
+                      color: isSelected ? AppColors.primaryDark : Colors.grey.shade300,
                     ),
                   ),
                   alignment: Alignment.center,
@@ -679,7 +554,7 @@ class _CertificatesContentState extends State<CertificatesContent> {
         // ── CONTENT ──
         Expanded(
           child: _isLoading
-              ? const Center(child: CircularProgressIndicator(color: Colors.orange))
+              ? const Center(child: CircularProgressIndicator(color: AppColors.primaryDark))
               : _error != null
                   ? Center(
                       child: Column(
@@ -697,7 +572,7 @@ class _CertificatesContentState extends State<CertificatesContent> {
                               setState(() { _isLoading = true; _error = null; });
                               _fetchCertificates();
                             },
-                            style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
+                            style: ElevatedButton.styleFrom(backgroundColor: AppColors.primaryDark),
                             child: const Text('Retry', style: TextStyle(color: Colors.white)),
                           ),
                         ],
@@ -716,7 +591,7 @@ class _CertificatesContentState extends State<CertificatesContent> {
                           ),
                         )
                       : RefreshIndicator(
-                          color: Colors.orange,
+                          color: AppColors.primaryDark,
                           onRefresh: _fetchCertificates,
                           child: ListView.builder(
                             padding: const EdgeInsets.only(left: 16, right: 16, top: 4, bottom: 16),

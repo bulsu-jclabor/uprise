@@ -1,13 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import '../../widgets/student/app_colors.dart';
+import 'student_feedback_screen.dart';
 
-class AppColors {
-  static const Color primaryDark = Colors.orange;
-  static const Color primaryLight = Color(0xFFFFCC80);
-  static const Color accent = Color(0xFFFF9800);
-  static const Color background = Color(0xFFF5F5F5);
-}
 
 class AppNotification {
   final String id;
@@ -67,17 +63,19 @@ class _StudentNotificationsScreenState extends State<StudentNotificationsScreen>
   ({IconData icon, Color bg, Color fg}) _typeStyle(String type) {
     switch (type) {
       case 'event':
-        return (icon: Icons.calendar_today_rounded, bg: Colors.orange.withOpacity(0.1), fg: Colors.orange);
+        return (icon: Icons.calendar_today_rounded, bg: AppColors.primaryDark.withOpacity(0.1), fg: AppColors.primaryDark);
       case 'org':
-        return (icon: Icons.business_center_rounded, bg: Colors.orange.withOpacity(0.1), fg: Colors.orange);
+        return (icon: Icons.business_center_rounded, bg: AppColors.primaryDark.withOpacity(0.1), fg: AppColors.primaryDark);
       case 'schedule':
-        return (icon: Icons.access_time_rounded, bg: Colors.orange.withOpacity(0.1), fg: Colors.orange);
+        return (icon: Icons.access_time_rounded, bg: AppColors.primaryDark.withOpacity(0.1), fg: AppColors.primaryDark);
       case 'booth':
-        return (icon: Icons.storefront_rounded, bg: Colors.orange.withOpacity(0.1), fg: Colors.orange);
+        return (icon: Icons.storefront_rounded, bg: AppColors.primaryDark.withOpacity(0.1), fg: AppColors.primaryDark);
       case 'order':
-        return (icon: Icons.shopping_bag_rounded, bg: Colors.orange.withOpacity(0.1), fg: Colors.orange);
+        return (icon: Icons.shopping_bag_rounded, bg: AppColors.primaryDark.withOpacity(0.1), fg: AppColors.primaryDark);
+      case 'evaluation':
+        return (icon: Icons.rate_review_rounded, bg: AppColors.primaryDark.withOpacity(0.1), fg: AppColors.primaryDark);
       default:
-        return (icon: Icons.campaign_rounded, bg: Colors.orange.withOpacity(0.1), fg: Colors.orange);
+        return (icon: Icons.campaign_rounded, bg: AppColors.primaryDark.withOpacity(0.1), fg: AppColors.primaryDark);
     }
   }
 
@@ -119,7 +117,7 @@ class _StudentNotificationsScreenState extends State<StudentNotificationsScreen>
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('All notifications marked as read'),
-            backgroundColor: Colors.orange,
+            backgroundColor: AppColors.primaryDark,
           ),
         );
       }
@@ -130,7 +128,23 @@ class _StudentNotificationsScreenState extends State<StudentNotificationsScreen>
 
   void _onNotificationTap(AppNotification notif) {
     _markAsRead(notif.id);
-    // Navigate based on type (optional)
+    if (notif.type == 'evaluation') {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => Scaffold(
+            appBar: AppBar(
+              backgroundColor: Colors.white,
+              elevation: 0,
+              foregroundColor: Colors.black87,
+              title: const Text('Evaluate Events',
+                  style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+            ),
+            body: const StudentFeedbackScreen(),
+          ),
+        ),
+      );
+    }
   }
 
   @override
@@ -160,7 +174,7 @@ class _StudentNotificationsScreenState extends State<StudentNotificationsScreen>
               if (!hasUnread) return const SizedBox.shrink();
               return TextButton(
                 onPressed: _markAllAsRead,
-                style: TextButton.styleFrom(foregroundColor: Colors.orange),
+                style: TextButton.styleFrom(foregroundColor: AppColors.primaryDark),
                 child: const Text('Mark all read'),
               );
             },
@@ -187,7 +201,7 @@ class _StudentNotificationsScreenState extends State<StudentNotificationsScreen>
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Padding(
             padding: EdgeInsets.all(16),
-            child: Center(child: CircularProgressIndicator(color: Colors.orange)),
+            child: Center(child: CircularProgressIndicator(color: AppColors.primaryDark)),
           );
         }
 
@@ -202,7 +216,7 @@ class _StudentNotificationsScreenState extends State<StudentNotificationsScreen>
                 const SizedBox(height: 12),
                 ElevatedButton(
                   onPressed: () => setState(() {}),
-                  style: ElevatedButton.styleFrom(backgroundColor: Colors.orange, foregroundColor: Colors.white),
+                  style: ElevatedButton.styleFrom(backgroundColor: AppColors.primaryDark, foregroundColor: Colors.white),
                   child: const Text('Retry'),
                 ),
               ],
@@ -293,7 +307,7 @@ class _NotifTile extends StatelessWidget {
     return InkWell(
       onTap: onTap,
       child: Container(
-        color: notif.isRead ? Colors.white : Colors.orange.withOpacity(0.05),
+        color: notif.isRead ? Colors.white : AppColors.primaryDark.withOpacity(0.05),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -327,12 +341,12 @@ class _NotifTile extends StatelessWidget {
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                         decoration: BoxDecoration(
-                          color: Colors.orange.withOpacity(0.1),
+                          color: AppColors.primaryDark.withOpacity(0.1),
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: Text(
                           notif.orgName,
-                          style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w500, color: Colors.orange),
+                          style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w500, color: AppColors.primaryDark),
                         ),
                       ),
                     ],
@@ -356,7 +370,7 @@ class _NotifTile extends StatelessWidget {
                         Container(
                           width: 6,
                           height: 6,
-                          decoration: const BoxDecoration(color: Colors.orange, shape: BoxShape.circle),
+                          decoration: const BoxDecoration(color: AppColors.primaryDark, shape: BoxShape.circle),
                         ),
                       ],
                     ],

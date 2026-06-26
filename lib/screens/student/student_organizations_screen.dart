@@ -2,17 +2,9 @@
 import 'package:flutter/material.dart';
 import 'dart:convert';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../../widgets/student/app_colors.dart';
 import 'student_organization_details_screen.dart';
 
-// ─────────────────────────────────────────────────────────────
-//  CUSTOM COLORS - UNIFORM (Colors.orange)
-// ─────────────────────────────────────────────────────────────
-class AppColors {
-  static const Color primaryDark = Colors.orange;
-  static const Color primaryLight = Color(0xFFFFCC80);
-  static const Color accent = Color(0xFFFF9800);
-  static const Color background = Color(0xFFF5F5F5);
-}
 
 // ─────────────────────────────────────────────────────────────
 //  MAIN ORGANIZATIONS SCREEN
@@ -84,7 +76,7 @@ class _StudentOrganizationsScreenState extends State<StudentOrganizationsScreen>
               color: AppColors.background,
               borderRadius: BorderRadius.circular(12),
               border: Border.all(
-                color: _searchQuery.isNotEmpty ? Colors.orange : Colors.transparent,
+                color: _searchQuery.isNotEmpty ? AppColors.primaryDark : Colors.transparent,
                 width: 1.5,
               ),
             ),
@@ -101,11 +93,11 @@ class _StudentOrganizationsScreenState extends State<StudentOrganizationsScreen>
                 prefixIcon: Icon(
                   Icons.search_rounded,
                   size: 20,
-                  color: _searchQuery.isNotEmpty ? Colors.orange : Colors.grey.shade500,
+                  color: _searchQuery.isNotEmpty ? AppColors.primaryDark : Colors.grey.shade500,
                 ),
                 suffixIcon: _searchQuery.isNotEmpty
                     ? IconButton(
-                        icon: Icon(Icons.clear_rounded, size: 18, color: Colors.orange),
+                        icon: Icon(Icons.clear_rounded, size: 18, color: AppColors.primaryDark),
                         onPressed: () {
                           _searchController.clear();
                           setState(() {
@@ -124,7 +116,7 @@ class _StudentOrganizationsScreenState extends State<StudentOrganizationsScreen>
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
                   borderSide: BorderSide(
-                    color: Colors.orange.withOpacity(0.3),
+                    color: AppColors.primaryDark.withOpacity(0.3),
                     width: 1.5,
                   ),
                 ),
@@ -169,13 +161,13 @@ class _StudentOrganizationsScreenState extends State<StudentOrganizationsScreen>
                       Container(
                         padding: const EdgeInsets.all(20),
                         decoration: BoxDecoration(
-                          color: Colors.orange.withOpacity(0.1),
+                          color: AppColors.primaryDark.withOpacity(0.1),
                           shape: BoxShape.circle,
                         ),
                         child: Icon(
                           _searchQuery.isNotEmpty ? Icons.search_off : Icons.business_outlined,
                           size: 48,
-                          color: Colors.orange.withOpacity(0.4),
+                          color: AppColors.primaryDark.withOpacity(0.4),
                         ),
                       ),
                       const SizedBox(height: 12),
@@ -219,14 +211,14 @@ class _StudentOrganizationsScreenState extends State<StudentOrganizationsScreen>
                     margin: const EdgeInsets.only(bottom: 12),
                     decoration: BoxDecoration(
                       gradient: const LinearGradient(
-                        colors: [Colors.orange, Color(0xFFFF8C42)],
+                        colors: [AppColors.primaryDark, AppColors.primaryLight],
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
                       ),
                       borderRadius: BorderRadius.circular(14),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.orange.withOpacity(0.3),
+                          color: AppColors.primaryDark.withOpacity(0.3),
                           blurRadius: 12,
                           offset: const Offset(0, 4),
                         ),

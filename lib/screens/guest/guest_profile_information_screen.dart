@@ -13,8 +13,8 @@ import 'package:image_picker/image_picker.dart';
 
 import 'guest_auth_service.dart';
 
-const _kOrange = Color(0xFFFF6B00);
-const _kOrangeLight = Color(0xFFFFEDD5);
+const _kOrange = Color(0xFFBE4700);
+const _kOrangeLight = Color(0xFFF5E3D9);
 const _kBg = Color(0xFFF5F5F5);
 
 class GuestProfileInformationScreen extends StatefulWidget {
@@ -33,6 +33,7 @@ class _GuestProfileInformationScreenState extends State<GuestProfileInformationS
 
   final _firstNameCtrl = TextEditingController();
   final _lastNameCtrl = TextEditingController();
+  final _emailCtrl = TextEditingController();
   final _phoneCtrl = TextEditingController();
   final _schoolCtrl = TextEditingController();
   final _courseCtrl = TextEditingController();
@@ -49,6 +50,7 @@ class _GuestProfileInformationScreenState extends State<GuestProfileInformationS
   void dispose() {
     _firstNameCtrl.dispose();
     _lastNameCtrl.dispose();
+    _emailCtrl.dispose();
     _phoneCtrl.dispose();
     _schoolCtrl.dispose();
     _courseCtrl.dispose();
@@ -69,6 +71,7 @@ class _GuestProfileInformationScreenState extends State<GuestProfileInformationS
       _schoolCtrl.text = (data['university'] ?? '').toString();
       _courseCtrl.text = (data['course'] ?? '').toString();
       _email = (data['email'] ?? '').toString();
+      _emailCtrl.text = _email;
       _photoUrl = data['photoUrl'] as String?;
       if (mounted) setState(() => _loading = false);
     } catch (e) {
@@ -201,7 +204,7 @@ class _GuestProfileInformationScreenState extends State<GuestProfileInformationS
                     const SizedBox(height: 14),
                     TextField(
                       enabled: false,
-                      controller: TextEditingController(text: _email),
+                      controller: _emailCtrl,
                       decoration: _deco('Email (cannot be changed)'),
                     ),
                     const SizedBox(height: 14),

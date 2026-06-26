@@ -15,12 +15,14 @@ import '../auth/role_router.dart';
 import '../student/student_login.dart';
 import '../student/student_events_screen.dart';
 import '../../models/profile_model.dart';
+import '../../widgets/shared/app_support.dart';
+import '../../widgets/student/app_colors.dart';
 
 // ─────────────────────────────────────────────────────────────
-// Shared constants - UNIFORM ORANGE
+// Shared constants - brand palette (matches web's UpriseColors)
 // ─────────────────────────────────────────────────────────────
-const kOrange = Colors.orange;
-const kOrangeLight = Color(0xFFFFEDD5);
+const kOrange = AppColors.primaryDark;
+const kOrangeLight = Color(0xFFF5E3D9);
 const kBg = Color(0xFFF5F5F5);
 
 // ─────────────────────────────────────────────────────────────
@@ -488,7 +490,7 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
                           padding: const EdgeInsets.all(14),
                           decoration: BoxDecoration(
                             gradient: const LinearGradient(
-                              colors: [Colors.orange, Color(0xFFFFA726)],
+                              colors: [kOrange, AppColors.primaryLight],
                               begin: Alignment.topLeft,
                               end: Alignment.bottomRight,
                             ),
@@ -2099,6 +2101,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _showNewPw = false;
   bool _showConfirmPw = false;
   bool _isLoading = false;
+  String _appVersion = '...';
+
+  @override
+  void initState() {
+    super.initState();
+    getAppVersionLabel().then((v) {
+      if (mounted) setState(() => _appVersion = v);
+    });
+  }
 
   @override
   void dispose() {
@@ -2503,7 +2514,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   icon: Icons.shield_outlined,
                   title: 'Privacy & Security',
                   subtitle: 'Manage your security preferences',
-                  onTap: () {},
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const PrivacySecurityScreen(isGuest: false),
+                      ),
+                    );
+                  },
                 ),
                 const SizedBox(height: 8),
 
@@ -2530,7 +2548,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           Container(
                             padding: const EdgeInsets.all(8),
                             decoration: BoxDecoration(
-                              color: Colors.orange.withOpacity(0.12),
+                              color: kOrange.withOpacity(0.12),
                               borderRadius: BorderRadius.circular(8),
                             ),
                             child: const Icon(
@@ -2625,15 +2643,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   icon: Icons.notifications_outlined,
                   title: 'Notifications',
                   subtitle: 'Manage your notification preferences',
-                  onTap: () {},
-                ),
-                const SizedBox(height: 8),
-
-                _buildSettingsTile(
-                  icon: Icons.palette_outlined,
-                  title: 'Appearance',
-                  subtitle: 'Theme and display settings',
-                  onTap: () {},
+                  onTap: () => openNotificationSettings(context),
                 ),
                 const SizedBox(height: 8),
 
@@ -2643,7 +2653,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   icon: Icons.help_outline,
                   title: 'Help & Support',
                   subtitle: 'Get assistance and FAQs',
-                  onTap: () {},
+                  onTap: () => launchSupportEmail(context, subject: 'UPRISE Support Request'),
                 ),
                 const SizedBox(height: 8),
 
@@ -2651,7 +2661,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   icon: Icons.feedback_outlined,
                   title: 'Send Feedback',
                   subtitle: 'Help us improve the app',
-                  onTap: () {},
+                  onTap: () => launchSupportEmail(context, subject: 'UPRISE Feedback'),
                   iconColor: Colors.purple,
                 ),
                 const SizedBox(height: 8),
@@ -2660,7 +2670,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 _buildSettingsTile(
                   icon: Icons.info_outline,
                   title: 'About',
-                  subtitle: 'Version 2.0.0',
+                  subtitle: 'BulSU CICT event management system',
                   onTap: () {},
                   trailing: Container(
                     padding: const EdgeInsets.symmetric(
@@ -2672,7 +2682,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       borderRadius: BorderRadius.circular(6),
                     ),
                     child: Text(
-                      'v2.0.0',
+                      _appVersion,
                       style: TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.w600,

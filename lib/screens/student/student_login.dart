@@ -12,6 +12,7 @@ import '../../auth_service.dart';
 import '../../services/activity_logger.dart' as activity_log;
 import '../guest/guest_access_gateway_screen.dart';
 import '../student/student_home_screen.dart';
+import '../../widgets/student/app_colors.dart';
 import 'student_change_password_screen.dart';
 
 class StudentLogin extends StatefulWidget {
@@ -195,7 +196,7 @@ class _StudentLoginState extends State<StudentLogin> {
                         Container(
                           width: 38, height: 38,
                           decoration: const BoxDecoration(
-                              color: Color(0xFFFF6B00),
+                              color: AppColors.primaryDark,
                               shape: BoxShape.circle),
                           child: const Icon(Icons.local_fire_department,
                               color: Colors.white, size: 22),
@@ -203,7 +204,7 @@ class _StudentLoginState extends State<StudentLogin> {
                         const SizedBox(width: 10),
                         Text('UPRISE',
                             style: GoogleFonts.beVietnamPro(
-                                color: const Color(0xFFFF6B00),
+                                color: AppColors.primaryDark,
                                 fontWeight: FontWeight.w900,
                                 fontSize: 22,
                                 letterSpacing: 1.8)),
@@ -291,7 +292,7 @@ class _StudentLoginState extends State<StudentLogin> {
                                     _isLoading ? null : _login,
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor:
-                                      const Color(0xFFFF6B00),
+                                      AppColors.primaryDark,
                                   foregroundColor: Colors.white,
                                   elevation: 0,
                                   shape: RoundedRectangleBorder(

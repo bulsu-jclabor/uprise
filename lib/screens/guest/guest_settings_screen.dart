@@ -9,9 +9,10 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import 'guest_access_gateway_screen.dart' show GuestChangePasswordScreen;
+import '../../widgets/shared/app_support.dart';
 
-const _kOrange = Color(0xFFFF6B00);
-const _kOrangeLight = Color(0xFFFFEDD5);
+const _kOrange = Color(0xFFBE4700);
+const _kOrangeLight = Color(0xFFF5E3D9);
 const _kBg = Color(0xFFF5F5F5);
 const _kSuccess = Color(0xFF059669);
 const _kSuccessBg = Color(0xFFECFDF5);
@@ -135,21 +136,28 @@ class GuestSettingsScreen extends StatelessWidget {
                     icon: Icons.notifications_outlined,
                     title: 'Notifications',
                     subtitle: 'Manage event alerts',
-                    onTap: () {},
+                    onTap: () => openNotificationSettings(context),
                   ),
                   Divider(height: 1, color: Colors.grey.shade200),
                   _SettingsTile(
                     icon: Icons.shield_outlined,
                     title: 'Privacy',
                     subtitle: 'Data and privacy settings',
-                    onTap: () {},
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const PrivacySecurityScreen(isGuest: true),
+                        ),
+                      );
+                    },
                   ),
                   Divider(height: 1, color: Colors.grey.shade200),
                   _SettingsTile(
                     icon: Icons.help_outline_rounded,
                     title: 'Help & Support',
                     subtitle: 'FAQs and contact info',
-                    onTap: () {},
+                    onTap: () => launchSupportEmail(context, subject: 'UPRISE Support Request'),
                   ),
                   Divider(height: 1, color: Colors.grey.shade200),
                   _SettingsTile(
@@ -157,6 +165,14 @@ class GuestSettingsScreen extends StatelessWidget {
                     title: 'About UPRISE',
                     subtitle: 'App version and information',
                     onTap: () {},
+                    trailing: FutureBuilder<String>(
+                      future: getAppVersionLabel(),
+                      builder: (context, snap) => Text(
+                        snap.data ?? '...',
+                        style: GoogleFonts.beVietnamPro(
+                            fontSize: 12, fontWeight: FontWeight.w600, color: Colors.grey),
+                      ),
+                    ),
                   ),
                 ],
               ),
@@ -192,11 +208,13 @@ class _SettingsTile extends StatelessWidget {
   final String title;
   final String subtitle;
   final VoidCallback onTap;
+  final Widget? trailing;
   const _SettingsTile({
     required this.icon,
     required this.title,
     required this.subtitle,
     required this.onTap,
+    this.trailing,
   });
 
   @override
@@ -206,7 +224,13 @@ class _SettingsTile extends StatelessWidget {
       leading: Icon(icon, color: _kOrange),
       title: Text(title, style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.w600, fontSize: 14)),
       subtitle: Text(subtitle, style: GoogleFonts.beVietnamPro(fontSize: 12, color: Colors.grey)),
-      trailing: const Icon(Icons.chevron_right, color: Colors.grey),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (trailing != null) ...[trailing!, const SizedBox(width: 6)],
+          const Icon(Icons.chevron_right, color: Colors.grey),
+        ],
+      ),
       onTap: onTap,
     );
   }

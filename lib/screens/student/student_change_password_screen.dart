@@ -19,6 +19,13 @@ class _StudentChangePasswordScreenState
       TextEditingController();
   bool _isLoading = false;
 
+  @override
+  void dispose() {
+    _newPasswordController.dispose();
+    _confirmPasswordController.dispose();
+    super.dispose();
+  }
+
   Future<void> _changePassword() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
@@ -95,10 +102,10 @@ class _StudentChangePasswordScreenState
         );
       }
     } catch (e) {
-      _showError('Error: $e');
+      if (mounted) _showError('Error: $e');
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
-
-    setState(() => _isLoading = false);
   }
 
   void _showError(String message) {

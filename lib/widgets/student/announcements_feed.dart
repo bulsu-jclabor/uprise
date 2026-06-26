@@ -2,6 +2,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import '../../screens/student/student_announcements_screen.dart';
+import 'app_colors.dart';
 
 class AnnouncementsFeed extends StatefulWidget {
   final Function(AnnouncementData)? onTap;
@@ -100,7 +101,7 @@ class _AnnouncementsFeedState extends State<AnnouncementsFeed> {
                         color: const Color.fromRGBO(255, 107, 53, 0.1),
                         borderRadius: BorderRadius.circular(12),
                       ),
-                      child: const Icon(Icons.campaign, color: Color(0xFFFF6B35)),
+                      child: Icon(Icons.campaign, color: AppColors.primaryDark),
                     ),
                     const SizedBox(width: 12),
                     Expanded(

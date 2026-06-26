@@ -2,14 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
+import '../../widgets/student/app_colors.dart';
 
-// ─── App Colors ────────────────────────────────────────────────────────────
-class AppColors {
-  static const Color primaryDark = Colors.orange;
-  static const Color primaryLight = Color(0xFFFFCC80);
-  static const Color accent = Color(0xFFFF9800);
-  static const Color background = Color(0xFFF5F5F5);
-}
 
 class StudentFeedbackScreen extends StatefulWidget {
   const StudentFeedbackScreen({super.key});

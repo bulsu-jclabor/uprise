@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../models/event_model.dart';
+import 'app_colors.dart';
 
 class CountdownWidget extends StatefulWidget {
   final EventModel? event;
@@ -71,14 +72,14 @@ class _CountdownWidgetState extends State<CountdownWidget> {
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
           gradient: const LinearGradient(
-            colors: [Color(0xFFFF6B00), Color(0xFFFF8C42)],
+            colors: [AppColors.primaryDark, AppColors.primaryLight],
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
           ),
           borderRadius: BorderRadius.circular(16),
           boxShadow: [
             BoxShadow(
-              color: Colors.orange.withOpacity(0.3),
+              color: AppColors.primaryDark.withOpacity(0.3),
               blurRadius: 12,
               offset: const Offset(0, 4),
             ),
@@ -127,14 +128,14 @@ class _CountdownWidgetState extends State<CountdownWidget> {
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
-          colors: [Color(0xFFFF6B00), Color(0xFFFF8C42)],
+          colors: [AppColors.primaryDark, AppColors.primaryLight],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.orange.withOpacity(0.3),
+            color: AppColors.primaryDark.withOpacity(0.3),
             blurRadius: 12,
             offset: const Offset(0, 4),
           ),

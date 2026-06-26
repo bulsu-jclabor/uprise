@@ -5,16 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
+import '../../widgets/student/app_colors.dart';
 
-// ─────────────────────────────────────────────────────────────
-// Custom Colors - UNIFORM (Colors.orange)
-// ─────────────────────────────────────────────────────────────
-class AppColors {
-  static const Color primaryDark = Colors.orange;
-  static const Color primaryLight = Color(0xFFFFCC80);
-  static const Color accent = Color(0xFFFF9800);
-  static const Color background = Color(0xFFF5F5F5);
-}
 
 // ─────────────────────────────────────────────────────────────
 // Models
@@ -294,7 +286,7 @@ class _StudentMerchandiseScreenState
             children: [
               IconButton(
                 icon: Icon(Icons.shopping_cart_outlined,
-                    color: Colors.orange),
+                    color: AppColors.primaryDark),
                 onPressed: _cart.isEmpty
                     ? null
                     : () => _openCart(context),
@@ -307,7 +299,7 @@ class _StudentMerchandiseScreenState
                     width: 16,
                     height: 16,
                     decoration: BoxDecoration(
-                        color: Colors.orange, shape: BoxShape.circle),
+                        color: AppColors.primaryDark, shape: BoxShape.circle),
                     child: Center(
                       child: Text(
                         _cartCount().toString(),
@@ -324,7 +316,7 @@ class _StudentMerchandiseScreenState
         ],
       ),
       body: _loadingOrgId
-          ? const Center(child: CircularProgressIndicator(color: Colors.orange))
+          ? const Center(child: CircularProgressIndicator(color: AppColors.primaryDark))
           : Column(
               children: [
                 _TabRow(
@@ -382,7 +374,7 @@ class _StudentMerchandiseScreenState
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
                 content: Text('Order placed successfully!'),
-                backgroundColor: Colors.orange,
+                backgroundColor: AppColors.primaryDark,
               ),
             );
             _tabController.animateTo(1);
@@ -441,7 +433,7 @@ class _TabPill extends StatelessWidget {
         duration: const Duration(milliseconds: 180),
         padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
         decoration: BoxDecoration(
-          color: selected ? Colors.orange : Colors.transparent,
+          color: selected ? AppColors.primaryDark : Colors.transparent,
           borderRadius: BorderRadius.circular(20),
         ),
         child: Text(
@@ -605,12 +597,12 @@ class _ProductsTabState extends State<_ProductsTab> {
                       padding: const EdgeInsets.all(10),
                       decoration: BoxDecoration(
                         color: _hasOrgFilter 
-                            ? Colors.orange.withOpacity(0.1) 
+                            ? AppColors.primaryDark.withOpacity(0.1) 
                             : AppColors.background,
                         borderRadius: BorderRadius.circular(10),
                         border: Border.all(
                           color: _hasOrgFilter 
-                              ? Colors.orange 
+                              ? AppColors.primaryDark 
                               : Colors.transparent,
                           width: 1.5,
                         ),
@@ -618,7 +610,7 @@ class _ProductsTabState extends State<_ProductsTab> {
                       child: Icon(
                         Icons.filter_list_rounded,
                         size: 22,
-                        color: _hasOrgFilter ? Colors.orange : Colors.black38,
+                        color: _hasOrgFilter ? AppColors.primaryDark : Colors.black38,
                       ),
                     ),
                   ),
@@ -629,7 +621,7 @@ class _ProductsTabState extends State<_ProductsTab> {
                       child: Container(
                         padding: const EdgeInsets.all(3),
                         decoration: const BoxDecoration(
-                          color: Colors.orange,
+                          color: AppColors.primaryDark,
                           shape: BoxShape.circle,
                         ),
                         constraints: const BoxConstraints(
@@ -673,10 +665,10 @@ class _ProductsTabState extends State<_ProductsTab> {
                     padding: const EdgeInsets.symmetric(
                         horizontal: 14, vertical: 6),
                     decoration: BoxDecoration(
-                      color: sel ? Colors.orange : Colors.transparent,
+                      color: sel ? AppColors.primaryDark : Colors.transparent,
                       borderRadius: BorderRadius.circular(16),
                       border: Border.all(
-                        color: sel ? Colors.orange : Colors.black12,
+                        color: sel ? AppColors.primaryDark : Colors.black12,
                         width: 1,
                       ),
                     ),
@@ -700,7 +692,7 @@ class _ProductsTabState extends State<_ProductsTab> {
             builder: (ctx, snap) {
               if (snap.connectionState == ConnectionState.waiting) {
                 return const Center(
-                    child: CircularProgressIndicator(color: Colors.orange));
+                    child: CircularProgressIndicator(color: AppColors.primaryDark));
               }
               if (snap.hasError) {
                 return _EmptyHint(
@@ -861,17 +853,17 @@ class _ProductsTabState extends State<_ProductsTab> {
                         Navigator.pop(context);
                       }
                     },
-                    activeColor: Colors.orange,
+                    activeColor: AppColors.primaryDark,
                   ),
                   title: Text(
                     org,
                     style: TextStyle(
                       fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-                      color: isSelected ? Colors.orange : Colors.black87,
+                      color: isSelected ? AppColors.primaryDark : Colors.black87,
                     ),
                   ),
                   trailing: isSelected
-                      ? const Icon(Icons.check_circle, color: Colors.orange, size: 20)
+                      ? const Icon(Icons.check_circle, color: AppColors.primaryDark, size: 20)
                       : null,
                   onTap: () {
                     setState(() => _selectedOrg = org);
@@ -955,7 +947,7 @@ class _ProductCard extends StatelessWidget {
                         padding: const EdgeInsets.symmetric(
                             horizontal: 6, vertical: 2),
                         decoration: BoxDecoration(
-                          color: Colors.orange,
+                          color: AppColors.primaryDark,
                           borderRadius: BorderRadius.circular(10),
                         ),
                         child: Text(
@@ -979,14 +971,14 @@ class _ProductCard extends StatelessWidget {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
                     decoration: BoxDecoration(
-                      color: Colors.orange.withOpacity(0.08),
+                      color: AppColors.primaryDark.withOpacity(0.08),
                       borderRadius: BorderRadius.circular(6),
                     ),
                     child: Text(
                       product.category.toUpperCase(),
                       style: const TextStyle(
                           fontSize: 8.5,
-                          color: Colors.orange,
+                          color: AppColors.primaryDark,
                           fontWeight: FontWeight.w700,
                           letterSpacing: 0.4),
                     ),
@@ -1028,11 +1020,11 @@ class _ProductCard extends StatelessWidget {
                             padding: const EdgeInsets.all(8),
                             decoration: BoxDecoration(
                               gradient: const LinearGradient(
-                                  colors: [Colors.deepOrange, Colors.orange]),
+                                  colors: [Colors.deepOrange, AppColors.primaryDark]),
                               shape: BoxShape.circle,
                               boxShadow: [
                                 BoxShadow(
-                                  color: Colors.orange.withOpacity(0.35),
+                                  color: AppColors.primaryDark.withOpacity(0.35),
                                   blurRadius: 8,
                                   offset: const Offset(0, 3),
                                 ),
@@ -1126,13 +1118,13 @@ class _ProductCard extends StatelessWidget {
   Widget _imgPlaceholder(String name) => Container(
         height: 120,
         width: double.infinity,
-        color: Colors.orange.withOpacity(0.1),
+        color: AppColors.primaryDark.withOpacity(0.1),
         child: Center(
           child: Text(
             name.isNotEmpty ? name[0].toUpperCase() : '?',
             style: const TextStyle(
                 fontSize: 36,
-                color: Colors.orange,
+                color: AppColors.primaryDark,
                 fontWeight: FontWeight.bold),
           ),
         ),
@@ -1214,7 +1206,7 @@ class _ProductCard extends StatelessWidget {
                   style: const TextStyle(
                       fontSize: 22,
                       fontWeight: FontWeight.w800,
-                      color: Colors.orange),
+                      color: AppColors.primaryDark),
                 ),
                 const SizedBox(height: 12),
                 Text(
@@ -1264,7 +1256,7 @@ class _ProductCard extends StatelessWidget {
                               : 'Out of Stock',
                     ),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.orange,
+                      backgroundColor: AppColors.primaryDark,
                       foregroundColor: Colors.white,
                       disabledBackgroundColor: Colors.grey.shade300,
                       padding: const EdgeInsets.symmetric(vertical: 14),
@@ -1325,7 +1317,7 @@ class _ProductCard extends StatelessWidget {
   Widget _detailPlaceholder() => Container(
         height: 200,
         decoration: BoxDecoration(
-          color: Colors.orange.withOpacity(0.1),
+          color: AppColors.primaryDark.withOpacity(0.1),
           borderRadius: BorderRadius.circular(12),
         ),
         child: Column(
@@ -1419,10 +1411,10 @@ class _VariantPickerSheetState extends State<_VariantPickerSheet> {
                   padding: const EdgeInsets.symmetric(
                       horizontal: 14, vertical: 12),
                   decoration: BoxDecoration(
-                    color: selected ? Colors.orange.withOpacity(0.1) : AppColors.background,
+                    color: selected ? AppColors.primaryDark.withOpacity(0.1) : AppColors.background,
                     borderRadius: BorderRadius.circular(10),
                     border: Border.all(
-                      color: selected ? Colors.orange : Colors.transparent,
+                      color: selected ? AppColors.primaryDark : Colors.transparent,
                       width: 1.5,
                     ),
                   ),
@@ -1473,14 +1465,14 @@ class _VariantPickerSheetState extends State<_VariantPickerSheet> {
                         style: TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.w700,
-                          color: inStock ? Colors.orange : Colors.black38,
+                          color: inStock ? AppColors.primaryDark : Colors.black38,
                         ),
                       ),
                       if (selected)
                         const Padding(
                           padding: EdgeInsets.only(left: 8),
                           child: Icon(Icons.check_circle,
-                              color: Colors.orange, size: 18),
+                              color: AppColors.primaryDark, size: 18),
                         ),
                     ],
                   ),
@@ -1496,7 +1488,7 @@ class _VariantPickerSheetState extends State<_VariantPickerSheet> {
                   ? null
                   : () => widget.onSelect(variants[_selectedIndex!]),
               style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.orange,
+                backgroundColor: AppColors.primaryDark,
                 foregroundColor: Colors.white,
                 disabledBackgroundColor: Colors.grey.shade300,
                 padding: const EdgeInsets.symmetric(vertical: 14),
@@ -1678,7 +1670,7 @@ class _MyOrdersTabState extends State<_MyOrdersTab> {
       builder: (ctx, snap) {
         if (snap.connectionState == ConnectionState.waiting) {
           return const Center(
-              child: CircularProgressIndicator(color: Colors.orange));
+              child: CircularProgressIndicator(color: AppColors.primaryDark));
         }
         if (snap.hasError) {
           return _EmptyHint(
@@ -1799,7 +1791,7 @@ class _OrderTile extends StatelessWidget {
                 style: const TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.bold,
-                    color: Colors.orange),
+                    color: AppColors.primaryDark),
               ),
             ],
           ),
@@ -1858,7 +1850,7 @@ class _CartSheet extends StatelessWidget {
             padding: EdgeInsets.symmetric(horizontal: 20),
             child: Row(
               children: [
-                Icon(Icons.shopping_cart_outlined, color: Colors.orange),
+                Icon(Icons.shopping_cart_outlined, color: AppColors.primaryDark),
                 SizedBox(width: 8),
                 Text(
                   'Your Cart',
@@ -1910,7 +1902,7 @@ class _CartSheet extends StatelessWidget {
                   style: const TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w800,
-                      color: Colors.orange),
+                      color: AppColors.primaryDark),
                 ),
               ],
             ),
@@ -1925,7 +1917,7 @@ class _CartSheet extends StatelessWidget {
                     ? null
                     : () => _placeOrder(context),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.orange,
+                  backgroundColor: AppColors.primaryDark,
                   foregroundColor: Colors.white,
                   disabledBackgroundColor: Colors.grey.shade300,
                   padding: const EdgeInsets.symmetric(vertical: 14),
@@ -1948,6 +1940,18 @@ class _CartSheet extends StatelessWidget {
   Future<void> _placeOrder(BuildContext context) async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
+
+    // Orders are a single-org record (one orgId field) — block mixed-org
+    // carts instead of silently attributing everything to the first item's
+    // org (which used to happen and would misfile the order entirely).
+    final cartOrgIds = cart.map((i) => i.product.orgId).toSet();
+    if (cartOrgIds.length > 1) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Your cart has items from more than one organization. Please order from one organization at a time.'),
+        backgroundColor: Colors.redAccent,
+      ));
+      return;
+    }
 
     String customerName = '';
     String studentSection = '';
@@ -2010,7 +2014,11 @@ class _CartSheet extends StatelessWidget {
         final productState = <String, Map<String, dynamic>>{};
 
         for (final id in productIds) {
-          final d = snaps[id]!.data() as Map<String, dynamic>? ?? {};
+          final snap = snaps[id]!;
+          if (!snap.exists) {
+            throw Exception('A product in your cart is no longer available. Please remove it and try again.');
+          }
+          final d = snap.data() as Map<String, dynamic>;
           productState[id] = {
             'stock': (d['stock'] ?? 0) as int,
             'status': (d['status'] ?? 'available') as String,
@@ -2026,6 +2034,9 @@ class _CartSheet extends StatelessWidget {
 
         for (final item in cart) {
           final state = productState[item.product.id]!;
+          if (state['status'] == 'discontinued') {
+            throw Exception('${item.product.name} is no longer available for order.');
+          }
           final variantList =
               state['variants'] as List<Map<String, dynamic>>;
           final hasVariant =
@@ -2037,19 +2048,23 @@ class _CartSheet extends StatelessWidget {
           if (hasVariant) {
             final idx =
                 variantList.indexWhere((v) => v['id'] == item.variantId);
-            if (idx != -1) {
-              logOldStock = (variantList[idx]['stock'] ?? 0) as int;
-              logNewStock = (logOldStock - item.quantity).clamp(0, 999999);
-              variantList[idx]['stock'] = logNewStock;
-              state['variantsModified'] = true;
-            } else {
-              logOldStock = 0;
-              logNewStock = 0;
+            if (idx == -1) {
+              throw Exception('The selected option for ${item.product.name} is no longer available.');
             }
+            logOldStock = (variantList[idx]['stock'] ?? 0) as int;
+            if (item.quantity > logOldStock) {
+              throw Exception('Only $logOldStock left of ${item.product.name}.');
+            }
+            logNewStock = logOldStock - item.quantity;
+            variantList[idx]['stock'] = logNewStock;
+            state['variantsModified'] = true;
             state['stock'] = ((state['stock'] as int) - item.quantity).clamp(0, 999999);
           } else {
             logOldStock = state['stock'] as int;
-            logNewStock = (logOldStock - item.quantity).clamp(0, 999999);
+            if (item.quantity > logOldStock) {
+              throw Exception('Only $logOldStock left of ${item.product.name}.');
+            }
+            logNewStock = logOldStock - item.quantity;
             state['stock'] = logNewStock;
           }
 
@@ -2092,7 +2107,7 @@ class _CartSheet extends StatelessWidget {
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Failed to place order: $e'),
+          content: Text(e.toString().replaceAll('Exception: ', '')),
           backgroundColor: Colors.redAccent,
         ),
       );
@@ -2126,14 +2141,14 @@ class _CartItemRow extends StatelessWidget {
                 : Container(
                     width: 44,
                     height: 44,
-                    color: Colors.orange.withOpacity(0.1),
+                    color: AppColors.primaryDark.withOpacity(0.1),
                     child: Center(
                       child: Text(
                         item.product.name.isNotEmpty
                             ? item.product.name[0]
                             : '?',
                         style: const TextStyle(
-                            color: Colors.orange, fontWeight: FontWeight.bold),
+                            color: AppColors.primaryDark, fontWeight: FontWeight.bold),
                       ),
                     ),
                   ),
@@ -2188,7 +2203,7 @@ class _CartItemRow extends StatelessWidget {
             style: const TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w700,
-                color: Colors.orange),
+                color: AppColors.primaryDark),
           ),
           const SizedBox(width: 4),
           IconButton(
@@ -2219,7 +2234,7 @@ class _CartItemRow extends StatelessWidget {
           errorBuilder: (_, __, ___) => Container(
             width: 44,
             height: 44,
-            color: Colors.orange.withOpacity(0.1),
+            color: AppColors.primaryDark.withOpacity(0.1),
             child: const Icon(Icons.image_not_supported, size: 20, color: Colors.grey),
           ),
         );
@@ -2235,7 +2250,7 @@ class _CartItemRow extends StatelessWidget {
           errorBuilder: (_, __, ___) => Container(
             width: 44,
             height: 44,
-            color: Colors.orange.withOpacity(0.1),
+            color: AppColors.primaryDark.withOpacity(0.1),
             child: const Icon(Icons.image_not_supported, size: 20, color: Colors.grey),
           ),
         );
@@ -2244,7 +2259,7 @@ class _CartItemRow extends StatelessWidget {
       return Container(
         width: 44,
         height: 44,
-        color: Colors.orange.withOpacity(0.1),
+        color: AppColors.primaryDark.withOpacity(0.1),
         child: const Icon(Icons.image_not_supported, size: 20, color: Colors.grey),
       );
     }
@@ -2294,7 +2309,7 @@ class _PickupBadge extends StatelessWidget {
         break;
       default:
         bg = const Color(0xFFFFF3E0);
-        fg = Colors.orange;
+        fg = AppColors.primaryDark;
         label = 'PENDING';
     }
     return Container(

@@ -16,7 +16,7 @@ import 'dart:convert';
 import 'dart:math' as math;
 import 'package:image/image.dart' as img;
 import 'package:qr_flutter/qr_flutter.dart';
-import '../../theme/app_theme.dart';
+import '../../../theme/app_theme.dart';
 import '../../../widgets/certificate_preview.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
