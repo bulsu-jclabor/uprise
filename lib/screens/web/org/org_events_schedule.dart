@@ -253,15 +253,22 @@ class _OrgEventsScheduleScreenState extends State<OrgEventsScheduleScreen> {
   bool _showOrgEventsOnly = true;
 
   // ── Streams with status filter applied at Firestore level ──────────────
+  // Each leaf stream below is created once, not a getter — none of them
+  // depend on anything that changes after creation, only which ONE is
+  // active does (via the toggle). _activeStream/_activePendingStream stay
+  // getters since their job is just to pick between two already-cached
+  // streams, so toggling still works but unrelated rebuilds (e.g.
+  // navigating months) no longer tear down and re-subscribe everything.
+
   // "Org Events" mode — only approved events belonging to this org.
-  Stream<QuerySnapshot> get _orgEventsStream => FirebaseFirestore.instance
+  late final Stream<QuerySnapshot> _orgEventsStream = FirebaseFirestore.instance
       .collection('events')
       .where('orgId', isEqualTo: widget.orgId)
       .where('status', isEqualTo: 'approved')
       .snapshots();
 
   // "All Events" mode — every approved event across all orgs/colleges.
-  Stream<QuerySnapshot> get _allEventsStream => FirebaseFirestore.instance
+  late final Stream<QuerySnapshot> _allEventsStream = FirebaseFirestore.instance
       .collection('events')
       .where('status', isEqualTo: 'approved')
       .orderBy('date')
@@ -270,13 +277,13 @@ class _OrgEventsScheduleScreenState extends State<OrgEventsScheduleScreen> {
   // Pending proposals are shown on the calendar too (not just approved
   // events) — the point is to catch a place/time conflict before a
   // conflicting proposal gets approved, not after.
-  Stream<QuerySnapshot> get _orgPendingStream => FirebaseFirestore.instance
+  late final Stream<QuerySnapshot> _orgPendingStream = FirebaseFirestore.instance
       .collection('event_proposals')
       .where('orgId', isEqualTo: widget.orgId)
       .where('status', isEqualTo: 'pending')
       .snapshots();
 
-  Stream<QuerySnapshot> get _allPendingStream => FirebaseFirestore.instance
+  late final Stream<QuerySnapshot> _allPendingStream = FirebaseFirestore.instance
       .collection('event_proposals')
       .where('status', isEqualTo: 'pending')
       .snapshots();

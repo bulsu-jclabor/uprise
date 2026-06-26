@@ -156,6 +156,18 @@ class _ActivityLogsState extends State<ActivityLogs> {
   int _currentPage = 1;
   static const int _pageSize = 10;
 
+  // Created once, not constructed inline in build() — the table/stats
+  // methods that use these are called on every rebuild (search, filter
+  // changes, pagination), so building a fresh .snapshots() there each time
+  // was re-subscribing to Firestore from scratch on every keystroke.
+  late final Stream<QuerySnapshot> _logsStream =
+      FirebaseFirestore.instance.collection('activity_logs').snapshots();
+  late final Stream<QuerySnapshot> _logsOrderedStream = FirebaseFirestore
+      .instance
+      .collection('activity_logs')
+      .orderBy('timestamp', descending: true)
+      .snapshots();
+
   // ── Dropdown options ──────────────────────────────────────────────
   static const List<String> _modules = [
     'All Modules',
@@ -322,9 +334,7 @@ class _ActivityLogsState extends State<ActivityLogs> {
   // ── Stats row ─────────────────────────────────────────────────────
   Widget _buildStatsRow(bool isMobile, bool isTablet) {
     return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection('activity_logs')
-          .snapshots(),
+      stream: _logsStream,
       builder: (context, snapshot) {
         int total24h = 0, critical = 0, failed = 0, warnings = 0;
 
@@ -485,10 +495,7 @@ class _ActivityLogsState extends State<ActivityLogs> {
   // ── Table ─────────────────────────────────────────────────────────
   Widget _buildTable(bool isMobile, bool isTablet) {
     final tableContent = StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection('activity_logs')
-          .orderBy('timestamp', descending: true)
-          .snapshots(),
+      stream: _logsOrderedStream,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());

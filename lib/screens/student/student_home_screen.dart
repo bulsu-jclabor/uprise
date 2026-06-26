@@ -141,14 +141,14 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
     final user = FirebaseAuth.instance.currentUser;
     if (user != null) {
       try {
-        final snapshot = await FirebaseFirestore.instance
+        // students doc ID is the uid itself — direct lookup, no query/index.
+        final doc = await FirebaseFirestore.instance
             .collection('students')
-            .where('uid', isEqualTo: user.uid)
-            .limit(1)
+            .doc(user.uid)
             .get();
 
-        if (snapshot.docs.isNotEmpty) {
-          final data = snapshot.docs.first.data();
+        if (doc.exists) {
+          final data = doc.data()!;
           final firstName = (data['firstName'] ?? '').toString().trim();
           final middleName = (data['middleName'] ?? '').toString().trim();
 
@@ -273,18 +273,18 @@ class _HomeContentState extends State<_HomeContent> {
       return;
     }
     try {
-      final studentSnap = await FirebaseFirestore.instance
+      // students doc ID is the uid itself — direct lookup, no query/index.
+      final studentDoc = await FirebaseFirestore.instance
           .collection('students')
-          .where('uid', isEqualTo: user.uid)
-          .limit(1)
+          .doc(user.uid)
           .get();
 
-      if (studentSnap.docs.isEmpty) {
+      if (!studentDoc.exists) {
         setState(() => _orgLoading = false);
         return;
       }
 
-      final orgId = studentSnap.docs.first.data()['orgId'] as String?;
+      final orgId = studentDoc.data()?['orgId'] as String?;
       if (orgId == null || orgId.isEmpty) {
         setState(() => _orgLoading = false);
         return;

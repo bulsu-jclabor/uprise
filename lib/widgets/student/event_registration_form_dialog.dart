@@ -117,13 +117,13 @@ class _DynamicRegistrationDialogState extends State<DynamicRegistrationDialog> {
       String fullName = '';
       String email = user.email ?? '';
       try {
+        // students doc ID is the uid itself — direct lookup, no query/index.
         final stu = await FirebaseFirestore.instance
             .collection('students')
-            .where('uid', isEqualTo: user.uid)
-            .limit(1)
+            .doc(user.uid)
             .get();
-        if (stu.docs.isNotEmpty) {
-          final d = stu.docs.first.data();
+        if (stu.exists) {
+          final d = stu.data()!;
           fullName = d['fullName'] ?? '';
           email = d['email'] ?? email;
         }

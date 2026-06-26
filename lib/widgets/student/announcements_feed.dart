@@ -3,14 +3,24 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import '../../screens/student/student_announcements_screen.dart';
 
-class AnnouncementsFeed extends StatelessWidget {
+class AnnouncementsFeed extends StatefulWidget {
   final Function(AnnouncementData)? onTap;
-  
+
   const AnnouncementsFeed({super.key, this.onTap});
 
-  Stream<QuerySnapshot> get _announcementsStream =>
+  @override
+  State<AnnouncementsFeed> createState() => _AnnouncementsFeedState();
+}
+
+class _AnnouncementsFeedState extends State<AnnouncementsFeed> {
+  // Created once, not a getter — re-evaluating .snapshots() on every
+  // rebuild (this widget sits on the home screen, which rebuilds often)
+  // was re-subscribing to Firestore from scratch each time. Also now
+  // excludes scheduled/draft announcements (isPublished: false).
+  late final Stream<QuerySnapshot> _announcementsStream =
       FirebaseFirestore.instance
           .collection('announcements')
+          .where('isPublished', isEqualTo: true)
           .orderBy('timestamp', descending: true)
           .limit(4)
           .snapshots();
@@ -63,8 +73,8 @@ class AnnouncementsFeed extends StatelessWidget {
 
             return GestureDetector(
               onTap: () {
-                if (onTap != null) {
-                  onTap!(announcement);
+                if (widget.onTap != null) {
+                  widget.onTap!(announcement);
                 }
               },
               child: Container(

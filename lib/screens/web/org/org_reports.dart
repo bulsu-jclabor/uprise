@@ -300,7 +300,10 @@ class _OrgReportsScreenState extends State<OrgReportsScreen> {
     if (mounted) setState(() => _deadlinesLoaded = true);
   }
 
-  Stream<QuerySnapshot> get _reportsStream => FirebaseFirestore.instance
+  // Created once, not a getter — filtering happens client-side below, so
+  // re-evaluating .snapshots() on every rebuild (search, filter changes)
+  // was re-subscribing to Firestore from scratch each time.
+  late final Stream<QuerySnapshot> _reportsStream = FirebaseFirestore.instance
       .collection('reports')
       .where('orgId', isEqualTo: widget.orgId)
       .snapshots();

@@ -153,6 +153,18 @@ class _ExternalAccountState extends State<ExternalAccount> {
   int    _currentPage  = 1;
   static const int _pageSize = 10;
 
+  // Created once, not constructed inline in build() — the table/stats
+  // methods that use these are called on every rebuild (search, filter
+  // changes, pagination), so building a fresh .snapshots() there each time
+  // was re-subscribing to Firestore from scratch on every keystroke.
+  late final Stream<QuerySnapshot> _requestsStream =
+      FirebaseFirestore.instance.collection('external_requests').snapshots();
+  late final Stream<QuerySnapshot> _requestsOrderedStream = FirebaseFirestore
+      .instance
+      .collection('external_requests')
+      .orderBy('requestDate', descending: true)
+      .snapshots();
+
   @override
   void dispose() {
     _searchController.dispose();
@@ -184,9 +196,7 @@ class _ExternalAccountState extends State<ExternalAccount> {
   // ── Stats row ──────────────────────────────────────────────────────
   Widget _buildStatsRow(bool isMobile, bool isTablet) {
     return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection('external_requests')
-          .snapshots(),
+      stream: _requestsStream,
       builder: (context, snapshot) {
         int total = 0, pending = 0, approved = 0, rejected = 0;
         if (snapshot.hasData) {
@@ -307,10 +317,7 @@ class _ExternalAccountState extends State<ExternalAccount> {
   // ── Table ──────────────────────────────────────────────────────────
   Widget _buildTable(bool isMobile, bool isTablet) {
     final tableContent = StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection('external_requests')
-          .orderBy('requestDate', descending: true)
-          .snapshots(),
+      stream: _requestsOrderedStream,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());

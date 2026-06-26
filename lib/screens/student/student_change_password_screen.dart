@@ -50,15 +50,15 @@ class _StudentChangePasswordScreenState
         FirebaseFirestore.instance.collection('users').doc(uid).update({
           'mustChangePassword': false,
         }),
-        // Clear temp password and flag in students collection
+        // Clear temp password and flag in students collection — doc ID is
+        // the uid itself, so this is a direct lookup, not a query.
         FirebaseFirestore.instance
             .collection('students')
-            .where('uid', isEqualTo: uid)
-            .limit(1)
+            .doc(uid)
             .get()
-            .then((snap) {
-          if (snap.docs.isNotEmpty) {
-            return snap.docs.first.reference.update({
+            .then((doc) {
+          if (doc.exists) {
+            return doc.reference.update({
               'mustChangePassword': false,
               'tempPassword': FieldValue.delete(),
             });

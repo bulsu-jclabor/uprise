@@ -151,6 +151,18 @@ class _StudentAccountsState extends State<StudentAccounts> {
   int _currentPage = 1;
   final TextEditingController _searchController = TextEditingController();
 
+  // Created once, not constructed inline in build() — the table/stats
+  // methods that use these are called on every rebuild (search, filter
+  // changes, pagination), so building a fresh .snapshots() there each time
+  // was re-subscribing to Firestore from scratch on every keystroke.
+  late final Stream<QuerySnapshot> _studentsStream =
+      FirebaseFirestore.instance.collection('students').snapshots();
+  late final Stream<QuerySnapshot> _studentsOrderedStream = FirebaseFirestore
+      .instance
+      .collection('students')
+      .orderBy('createdAt', descending: true)
+      .snapshots();
+
   @override
   void dispose() {
     _searchController.dispose();
@@ -182,9 +194,7 @@ class _StudentAccountsState extends State<StudentAccounts> {
   // ── Stats row (simplified - only total and archived) ─────────────
   Widget _buildStatsRow(bool isMobile, bool isTablet) {
     return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection('students')
-          .snapshots(),
+      stream: _studentsStream,
       builder: (context, snapshot) {
         int total = 0, archived = 0;
         if (snapshot.hasData) {
@@ -398,10 +408,7 @@ class _StudentAccountsState extends State<StudentAccounts> {
     final horizontalPadding = isMobile ? 16.0 : (isTablet ? 20.0 : 28.0);
 
     return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection('students')
-          .orderBy('createdAt', descending: true)
-          .snapshots(),
+      stream: _studentsOrderedStream,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());

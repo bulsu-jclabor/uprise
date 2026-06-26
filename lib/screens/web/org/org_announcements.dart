@@ -385,7 +385,10 @@ class _OrgAnnouncementsScreenState extends State<OrgAnnouncementsScreen> {
     super.dispose();
   }
 
-  Stream<QuerySnapshot> get _stream => FirebaseFirestore.instance
+  // Created once, not a getter — re-evaluating .snapshots() on every
+  // keystroke in the search box was re-subscribing to Firestore from
+  // scratch on every character typed.
+  late final Stream<QuerySnapshot> _stream = FirebaseFirestore.instance
       .collection('announcements')
       .where('orgId', isEqualTo: widget.orgId)
       .snapshots();

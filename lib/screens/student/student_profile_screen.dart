@@ -66,14 +66,14 @@ class ProfileModel extends ChangeNotifier {
     if (user != null) {
       email = user.email ?? '';
 
-      final snapshot = await FirebaseFirestore.instance
+      // students doc ID is the uid itself — direct lookup, no query/index.
+      final doc = await FirebaseFirestore.instance
           .collection('students')
-          .where('uid', isEqualTo: user.uid)
-          .limit(1)
+          .doc(user.uid)
           .get();
 
-      if (snapshot.docs.isNotEmpty) {
-        final data = snapshot.docs.first.data();
+      if (doc.exists) {
+        final data = doc.data()!;
         firstName = data['firstName'] ?? '';
         middleName = data['middleName'] ?? '';
         lastName = data['lastName'] ?? '';
@@ -129,14 +129,14 @@ class ProfileModel extends ChangeNotifier {
 
     final user = FirebaseAuth.instance.currentUser;
     if (user != null) {
-      final snapshot = await FirebaseFirestore.instance
+      // students doc ID is the uid itself — direct lookup, no query/index.
+      final doc = await FirebaseFirestore.instance
           .collection('students')
-          .where('uid', isEqualTo: user.uid)
-          .limit(1)
+          .doc(user.uid)
           .get();
 
-      if (snapshot.docs.isNotEmpty) {
-        final docRef = snapshot.docs.first.reference;
+      if (doc.exists) {
+        final docRef = doc.reference;
         await docRef.set({
           'firstName': firstName,
           'middleName': middleName,
@@ -161,17 +161,10 @@ class ProfileModel extends ChangeNotifier {
 
     final user = FirebaseAuth.instance.currentUser;
     if (user != null) {
-      final snapshot = await FirebaseFirestore.instance
-          .collection('students')
-          .where('uid', isEqualTo: user.uid)
-          .limit(1)
-          .get();
-
-      if (snapshot.docs.isNotEmpty) {
-        await snapshot.docs.first.reference.set(
-          {'photoUrl': url},
-          SetOptions(merge: true),
-        );
+      // students doc ID is the uid itself — direct lookup, no query/index.
+      final docRef = FirebaseFirestore.instance.collection('students').doc(user.uid);
+      if ((await docRef.get()).exists) {
+        await docRef.set({'photoUrl': url}, SetOptions(merge: true));
       }
     }
 

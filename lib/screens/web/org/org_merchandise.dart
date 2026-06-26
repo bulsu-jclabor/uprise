@@ -157,6 +157,21 @@ class _OrgMerchandiseScreenState extends State<OrgMerchandiseScreen>
   late TabController _tabController;
   int _selectedTab = 0;
 
+  // Created once, not inline in build() — _buildStatsRow rebuilds on every
+  // tab change, so constructing fresh .snapshots() there each time was
+  // re-subscribing to Firestore from scratch every time.
+  late final Stream<QuerySnapshot> _statsProductsStream = FirebaseFirestore
+      .instance
+      .collection('products')
+      .where('orgId', isEqualTo: widget.orgId)
+      .where('isArchived', isEqualTo: false)
+      .snapshots();
+  late final Stream<QuerySnapshot> _statsOrdersStream = FirebaseFirestore
+      .instance
+      .collection('orders')
+      .where('orgId', isEqualTo: widget.orgId)
+      .snapshots();
+
   @override
   void initState() {
     super.initState();
@@ -204,11 +219,7 @@ class _OrgMerchandiseScreenState extends State<OrgMerchandiseScreen>
 
   Widget _buildStatsRow() {
     return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection('products')
-          .where('orgId', isEqualTo: widget.orgId)
-          .where('isArchived', isEqualTo: false)
-          .snapshots(),
+      stream: _statsProductsStream,
       builder: (context, productSnap) {
         final products = productSnap.data?.docs ?? [];
         final totalProducts = products.length;
@@ -225,10 +236,7 @@ class _OrgMerchandiseScreenState extends State<OrgMerchandiseScreen>
         }
 
         return StreamBuilder<QuerySnapshot>(
-          stream: FirebaseFirestore.instance
-              .collection('orders')
-              .where('orgId', isEqualTo: widget.orgId)
-              .snapshots(),
+          stream: _statsOrdersStream,
           builder: (context, orderSnap) {
             final orders = orderSnap.data?.docs ?? [];
             final totalSales = orders.length;
@@ -1307,6 +1315,10 @@ class _ProductCard extends StatelessWidget {
         return Image.memory(
           base64Decode(product.imageBase64!),
           fit: BoxFit.cover,
+          // Decodes at a card-sized resolution instead of whatever the org
+          // originally uploaded — full camera-resolution photos decoded
+          // for every card in a grid is what was making the list laggy.
+          cacheWidth: 400,
           errorBuilder: (_, __, ___) => Container(
             color: const Color(0xFFF8F9FB),
             child: const Icon(
@@ -2032,6 +2044,7 @@ class _ProductModalState extends State<_ProductModal> {
                         fit: BoxFit.cover,
                         width: double.infinity,
                         height: 140,
+                        cacheHeight: 280,
                         errorBuilder: (_, __, ___) => const SizedBox(),
                       )
                     else
@@ -2040,6 +2053,7 @@ class _ProductModalState extends State<_ProductModal> {
                         fit: BoxFit.cover,
                         width: double.infinity,
                         height: 140,
+                        cacheHeight: 280,
                         errorBuilder: (_, __, ___) => const SizedBox(),
                       ),
                     Positioned(
@@ -2989,6 +3003,7 @@ class _ProductDetailsModal extends StatelessWidget {
             width: double.infinity,
             height: 200,
             fit: BoxFit.cover,
+            cacheHeight: 400,
             errorBuilder: (_, __, ___) => Container(
               height: 200,
               decoration: BoxDecoration(
@@ -3159,6 +3174,15 @@ class _OrdersTab extends StatefulWidget {
 
 class _OrdersTabState extends State<_OrdersTab> {
   final TextEditingController _searchController = TextEditingController();
+  // Created once, not inline in build() — _buildTable rebuilds on every
+  // keystroke/filter change/pagination, so constructing fresh
+  // .snapshots() there each time was re-subscribing to Firestore from
+  // scratch on every keystroke.
+  late final Stream<QuerySnapshot> _ordersStream = FirebaseFirestore.instance
+      .collection('orders')
+      .where('orgId', isEqualTo: widget.orgId)
+      .orderBy('createdAt', descending: true)
+      .snapshots();
   String _searchQuery = '';
   String _statusFilter = 'All';
   String _bundleIdFilter = 'All';
@@ -3594,11 +3618,7 @@ class _OrdersTabState extends State<_OrdersTab> {
 
   Widget _buildTable() {
     return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection('orders')
-          .where('orgId', isEqualTo: widget.orgId)
-          .orderBy('createdAt', descending: true)
-          .snapshots(),
+      stream: _ordersStream,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
@@ -4636,6 +4656,8 @@ class _OrderDetailsModal extends StatelessWidget {
           width: 40,
           height: 40,
           fit: BoxFit.cover,
+          cacheWidth: 80,
+          cacheHeight: 80,
           errorBuilder: (_, __, ___) => _itemThumbnailFallback(),
         );
       } catch (_) {

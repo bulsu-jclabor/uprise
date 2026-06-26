@@ -339,7 +339,10 @@ class _OrgProfileScreenState extends State<OrgProfileScreen> {
     return snap.docs.length;
   }
 
-  Stream<QuerySnapshot> get _officersStream => FirebaseFirestore.instance
+  // Created once, not a getter — used in three separate StreamBuilders, so
+  // a getter here was tearing down and re-subscribing all three on every
+  // rebuild.
+  late final Stream<QuerySnapshot> _officersStream = FirebaseFirestore.instance
       .collection('organizations')
       .doc(widget.orgId)
       .collection('officers')

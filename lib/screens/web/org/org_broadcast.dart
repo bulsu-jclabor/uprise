@@ -117,7 +117,10 @@ class _OrgBroadcastScreenState extends State<OrgBroadcastScreen> {
   _ThemePreset _theme = _kThemePresets.first;
   StreamSubscription<DocumentSnapshot>? _orgSettingsSub;
 
-  Stream<DocumentSnapshot> get _orgDocStream =>
+  // Created once, not a getter — widget.orgId never changes for this
+  // screen's lifetime, and this is read both once in initState and again
+  // in a StreamBuilder, so a getter was re-subscribing on every rebuild.
+  late final Stream<DocumentSnapshot> _orgDocStream =
       FirebaseFirestore.instance.collection('organizations').doc(widget.orgId).snapshots();
 
   // Fetched once and reused on every send instead of re-reading the user
@@ -173,7 +176,10 @@ class _OrgBroadcastScreenState extends State<OrgBroadcastScreen> {
     } catch (_) {}
   }
 
-  Stream<QuerySnapshot> get _broadcastsStream => FirebaseFirestore.instance
+  // Created once, not a getter — used in four separate StreamBuilders, so
+  // a getter here was tearing down and re-subscribing all four on every
+  // rebuild (e.g. every keystroke while typing a message or searching).
+  late final Stream<QuerySnapshot> _broadcastsStream = FirebaseFirestore.instance
       .collection('broadcasts')
       .where('orgId', isEqualTo: widget.orgId)
       .orderBy('timestamp', descending: true)

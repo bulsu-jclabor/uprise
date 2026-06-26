@@ -196,30 +196,34 @@ class _OrgEventProposalsScreenState extends State<OrgEventProposalsScreen> {
   final Set<String> _publishingIds = {};
 
   // ── Streams ──────────────────────────────────────────────────────
-  Stream<QuerySnapshot> get _allStream => FirebaseFirestore.instance
+  // Created once, not getters — these only ever depend on widget.orgId
+  // (fixed for this screen's lifetime), so re-evaluating .snapshots() on
+  // every rebuild (typing in search, switching tabs, opening a modal) was
+  // tearing down and re-subscribing all 5 Firestore listeners every time.
+  late final Stream<QuerySnapshot> _allStream = FirebaseFirestore.instance
       .collection('event_proposals')
       .where('orgId', isEqualTo: widget.orgId)
       .snapshots();
 
-  Stream<QuerySnapshot> get _pendingStream => FirebaseFirestore.instance
+  late final Stream<QuerySnapshot> _pendingStream = FirebaseFirestore.instance
       .collection('event_proposals')
       .where('orgId', isEqualTo: widget.orgId)
       .where('status', isEqualTo: 'pending')
       .snapshots();
 
-  Stream<QuerySnapshot> get _approvedStream => FirebaseFirestore.instance
+  late final Stream<QuerySnapshot> _approvedStream = FirebaseFirestore.instance
       .collection('event_proposals')
       .where('orgId', isEqualTo: widget.orgId)
       .where('status', isEqualTo: 'approved')
       .snapshots();
 
-  Stream<QuerySnapshot> get _forReviewStream => FirebaseFirestore.instance
+  late final Stream<QuerySnapshot> _forReviewStream = FirebaseFirestore.instance
       .collection('event_proposals')
       .where('orgId', isEqualTo: widget.orgId)
       .where('status', isEqualTo: 'for_review')
       .snapshots();
 
-  Stream<QuerySnapshot> get _proposalsStream => FirebaseFirestore.instance
+  late final Stream<QuerySnapshot> _proposalsStream = FirebaseFirestore.instance
       .collection('event_proposals')
       .where('orgId', isEqualTo: widget.orgId)
       .orderBy('submittedAt', descending: true)

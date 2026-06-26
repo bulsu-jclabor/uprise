@@ -37,11 +37,6 @@ class _CountdownWidgetState extends State<CountdownWidget> {
     final now = DateTime.now();
     final difference = eventDateTime.difference(now);
 
-    // For debugging - makikita mo sa console
-    print('🎯 EVENT FULL DATE: $eventDateTime');
-    print('🕐 CURRENT TIME: $now');
-    print('⏳ HOURS LEFT: ${difference.inHours}');
-
     if (difference.isNegative) {
       setState(() {
         _duration = Duration.zero;

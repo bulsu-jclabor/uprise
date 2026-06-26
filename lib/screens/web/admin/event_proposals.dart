@@ -49,6 +49,11 @@ Widget _buildImageFromBase64(String base64, {double? width, double? height, BoxF
       width: width,
       height: height,
       fit: fit,
+      // Decodes at ~2x the actual display size instead of full original
+      // resolution — this helper renders logos in every table row, so
+      // that was a real, compounding cost.
+      cacheWidth: width != null ? (width * 2).round() : null,
+      cacheHeight: height != null ? (height * 2).round() : null,
       errorBuilder: (_, __, ___) => const SizedBox.shrink(),
     );
   } catch (e) {
@@ -211,6 +216,18 @@ class _EventProposalsState extends State<EventProposals> {
   static const int _pageSize = 10;
   final TextEditingController _searchController = TextEditingController();
 
+  // Created once, not constructed inline in build() — the table/stats
+  // methods that use these are called on every rebuild (search, filter
+  // changes, pagination), so building a fresh .snapshots() there each time
+  // was re-subscribing to Firestore from scratch on every keystroke.
+  late final Stream<QuerySnapshot> _proposalsStream =
+      FirebaseFirestore.instance.collection('event_proposals').snapshots();
+  late final Stream<QuerySnapshot> _proposalsOrderedStream = FirebaseFirestore
+      .instance
+      .collection('event_proposals')
+      .orderBy('createdAt', descending: true)
+      .snapshots();
+
   @override
   void dispose() {
     _searchController.dispose();
@@ -272,7 +289,7 @@ class _EventProposalsState extends State<EventProposals> {
   // ── Stats row ─────────────────────────────────────────────────────
   Widget _buildStatsRow(bool isMobile, bool isTablet) {
     return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance.collection('event_proposals').snapshots(),
+      stream: _proposalsStream,
       builder: (context, snapshot) {
         int total = 0, pending = 0, approved = 0, rejected = 0, archived = 0, forReview = 0;
         if (snapshot.hasData) {
@@ -436,10 +453,7 @@ class _EventProposalsState extends State<EventProposals> {
     final horizontalPadding = isMobile ? 16.0 : (isTablet ? 20.0 : 28.0);
 
     return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection('event_proposals')
-          .orderBy('createdAt', descending: true)
-          .snapshots(),
+      stream: _proposalsOrderedStream,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());

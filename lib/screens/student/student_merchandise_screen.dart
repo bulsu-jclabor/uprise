@@ -189,15 +189,16 @@ class _StudentMerchandiseScreenState
     }
 
     try {
-      final studentSnap = await FirebaseFirestore.instance
+      // students doc ID is the uid itself — a direct lookup instead of a
+      // where('uid', ...) query, no index needed and one round trip.
+      final studentDoc = await FirebaseFirestore.instance
           .collection('students')
-          .where('uid', isEqualTo: user.uid)
-          .limit(1)
+          .doc(user.uid)
           .get();
 
       String orgId = '';
-      if (studentSnap.docs.isNotEmpty) {
-        orgId = (studentSnap.docs.first.data()['orgId'] as String?) ?? '';
+      if (studentDoc.exists) {
+        orgId = (studentDoc.data()?['orgId'] as String?) ?? '';
       }
 
       if (orgId.isEmpty) {
@@ -546,12 +547,14 @@ class _ProductsTabState extends State<_ProductsTab> {
     }
   }
 
-  Stream<QuerySnapshot> get _stream {
-    return FirebaseFirestore.instance
-        .collection('products')
-        .where('isArchived', isEqualTo: false)
-        .snapshots();
-  }
+  // Created once, not a getter — category/org/search are all filtered
+  // client-side below, so re-evaluating .snapshots() on every keystroke in
+  // the search box was re-subscribing to the entire products collection
+  // from Firestore on every character typed.
+  late final Stream<QuerySnapshot> _stream = FirebaseFirestore.instance
+      .collection('products')
+      .where('isArchived', isEqualTo: false)
+      .snapshots();
 
   bool get _hasOrgFilter => _selectedOrg != 'All';
 
@@ -1097,6 +1100,11 @@ class _ProductCard extends StatelessWidget {
           height: 120,
           width: double.infinity,
           fit: BoxFit.cover,
+          // Decodes at ~2x the display size instead of full original
+          // resolution — org-uploaded photos are often full camera
+          // resolution, and decoding that for every card in a scrolling
+          // grid is what was making the list feel sluggish.
+          cacheHeight: 240,
           errorBuilder: (_, __, ___) => _imgPlaceholder(product.name),
         );
       } else {
@@ -1106,6 +1114,7 @@ class _ProductCard extends StatelessWidget {
           height: 120,
           width: double.infinity,
           fit: BoxFit.cover,
+          cacheHeight: 240,
           errorBuilder: (_, __, ___) => _imgPlaceholder(product.name),
         );
       }
@@ -1290,6 +1299,7 @@ class _ProductCard extends StatelessWidget {
             height: 200,
             width: double.infinity,
             fit: BoxFit.cover,
+            cacheHeight: 400,
             errorBuilder: (_, __, ___) => _detailPlaceholder(),
           ),
         );
@@ -1302,6 +1312,7 @@ class _ProductCard extends StatelessWidget {
             height: 200,
             width: double.infinity,
             fit: BoxFit.cover,
+            cacheHeight: 400,
             errorBuilder: (_, __, ___) => _detailPlaceholder(),
           ),
         );
@@ -1638,20 +1649,27 @@ class _VariantsTable extends StatelessWidget {
 // ─────────────────────────────────────────────────────────────
 // My Orders Tab
 // ─────────────────────────────────────────────────────────────
-class _MyOrdersTab extends StatelessWidget {
+class _MyOrdersTab extends StatefulWidget {
   const _MyOrdersTab();
 
-  Stream<QuerySnapshot> get _stream {
+  @override
+  State<_MyOrdersTab> createState() => _MyOrdersTabState();
+}
+
+class _MyOrdersTabState extends State<_MyOrdersTab> {
+  // Created once, not a getter — same re-subscription concern as the
+  // products tab.
+  late final Stream<QuerySnapshot> _stream = () {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
-      return const Stream.empty();
+      return const Stream<QuerySnapshot>.empty();
     }
     return FirebaseFirestore.instance
         .collection('orders')
         .where('customerEmail', isEqualTo: user.email)
         .orderBy('createdAt', descending: true)
         .snapshots();
-  }
+  }();
 
   @override
   Widget build(BuildContext context) {
@@ -1934,14 +1952,14 @@ class _CartSheet extends StatelessWidget {
     String customerName = '';
     String studentSection = '';
     try {
-      final snap = await FirebaseFirestore.instance
+      // students doc ID is the uid itself — direct lookup, no query/index.
+      final doc = await FirebaseFirestore.instance
           .collection('students')
-          .where('uid', isEqualTo: user.uid)
-          .limit(1)
+          .doc(user.uid)
           .get();
-      if (snap.docs.isNotEmpty) {
-        customerName = snap.docs.first.data()['fullName'] as String? ?? '';
-        studentSection = snap.docs.first.data()['section'] as String? ?? '';
+      if (doc.exists) {
+        customerName = doc.data()?['fullName'] as String? ?? '';
+        studentSection = doc.data()?['section'] as String? ?? '';
       }
     } catch (_) {}
 
@@ -1954,6 +1972,7 @@ class _CartSheet extends StatelessWidget {
     final orderData = {
       'orderId': orderId,
       'orgId': cart.isNotEmpty ? cart.first.product.orgId : '',
+      'userId': user.uid,
       'customerName': customerName,
       'customerEmail': user.email ?? '',
       'customerPhone': '',
@@ -2195,6 +2214,8 @@ class _CartItemRow extends StatelessWidget {
           width: 44,
           height: 44,
           fit: BoxFit.cover,
+          cacheWidth: 88,
+          cacheHeight: 88,
           errorBuilder: (_, __, ___) => Container(
             width: 44,
             height: 44,
@@ -2209,6 +2230,8 @@ class _CartItemRow extends StatelessWidget {
           width: 44,
           height: 44,
           fit: BoxFit.cover,
+          cacheWidth: 88,
+          cacheHeight: 88,
           errorBuilder: (_, __, ___) => Container(
             width: 44,
             height: 44,

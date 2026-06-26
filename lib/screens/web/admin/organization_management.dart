@@ -302,6 +302,18 @@ class _OrganizationManagementState extends State<OrganizationManagement> {
   static const int _pageSize = 10;
   final TextEditingController _searchController = TextEditingController();
 
+  // Created once, not constructed inline in build() — the table/stats
+  // methods that use these are called on every rebuild (search, filter
+  // changes, pagination), so building a fresh .snapshots() there each time
+  // was re-subscribing to Firestore from scratch on every keystroke.
+  late final Stream<QuerySnapshot> _orgsStream =
+      FirebaseFirestore.instance.collection('organizations').snapshots();
+  late final Stream<QuerySnapshot> _orgsOrderedStream = FirebaseFirestore
+      .instance
+      .collection('organizations')
+      .orderBy('createdAt', descending: true)
+      .snapshots();
+
   @override
   void dispose() {
     _searchController.dispose();
@@ -350,7 +362,7 @@ class _OrganizationManagementState extends State<OrganizationManagement> {
 
   Widget _buildStatsRow(bool isMobile, bool isTablet) {
     return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance.collection('organizations').snapshots(),
+      stream: _orgsStream,
       builder: (context, snapshot) {
         int total = 0, active = 0, suspended = 0, archived = 0;
         if (snapshot.hasData) {
@@ -483,7 +495,7 @@ class _OrganizationManagementState extends State<OrganizationManagement> {
 
   Widget _buildTable(bool isMobile, bool isTablet) {
     return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance.collection('organizations').orderBy('createdAt', descending: true).snapshots(),
+      stream: _orgsOrderedStream,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
@@ -1844,8 +1856,14 @@ Widget _infoRow(IconData icon, String text) {
 Widget _buildOrgImageWidget(String url, {double? width, double? height, BoxFit fit = BoxFit.cover}) {
   if (url.startsWith('data:')) {
     try {
+      // Decodes at ~2x the actual display size instead of whatever
+      // resolution the logo was uploaded at — this helper renders logos
+      // in every org row of the table, so a full-resolution decode per
+      // row was a real, compounding cost.
       return Image.memory(base64Decode(url.split(',').last),
           width: width, height: height, fit: fit,
+          cacheWidth: width != null ? (width * 2).round() : null,
+          cacheHeight: height != null ? (height * 2).round() : null,
           errorBuilder: (_, __, ___) => SizedBox(width: width, height: height));
     } catch (_) {
       return SizedBox(width: width, height: height);

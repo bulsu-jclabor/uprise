@@ -230,7 +230,9 @@ class _EventManagementScreenState extends State<EventManagementScreen> {
   EventModel? _event;
   String? _eventDocId;
 
-  Stream<QuerySnapshot> get _eventsStream => FirebaseFirestore.instance
+  // Created once, not a getter — widget.orgId never changes for this
+  // screen's lifetime, so a getter here was re-subscribing on every rebuild.
+  late final Stream<QuerySnapshot> _eventsStream = FirebaseFirestore.instance
       .collection('event_proposals')
       .where('orgId', isEqualTo: widget.orgId)
       .where('status', isEqualTo: 'approved')

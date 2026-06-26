@@ -1497,17 +1497,28 @@ class _OrgFinanceScreenState extends State<OrgFinanceScreen> {
 }
 
 // ============ SUMMARY PANEL ============
-class _SummaryPanel extends StatelessWidget {
+class _SummaryPanel extends StatefulWidget {
   final String orgId;
   const _SummaryPanel({required this.orgId});
 
   @override
+  State<_SummaryPanel> createState() => _SummaryPanelState();
+}
+
+class _SummaryPanelState extends State<_SummaryPanel> {
+  // Created once, not inline in build() — the parent rebuilds on every
+  // search/filter/page change, which was re-subscribing to Firestore from
+  // scratch each time even though Flutter preserves this State object
+  // across those parent rebuilds.
+  late final Stream<QuerySnapshot> _stream = FirebaseFirestore.instance
+      .collection('transactions')
+      .where('orgId', isEqualTo: widget.orgId)
+      .snapshots();
+
+  @override
   Widget build(BuildContext context) {
     return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection('transactions')
-          .where('orgId', isEqualTo: orgId)
-          .snapshots(),
+      stream: _stream,
       builder: (context, snapshot) {
         if (!snapshot.hasData) {
           return const Center(child: CircularProgressIndicator());

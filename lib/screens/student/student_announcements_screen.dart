@@ -135,9 +135,14 @@ class StudentAnnouncementsScreen extends StatefulWidget {
 class _StudentAnnouncementsScreenState extends State<StudentAnnouncementsScreen> {
   final String? _userId = FirebaseAuth.instance.currentUser?.uid;
 
-  Stream<QuerySnapshot> get _announcementsStream =>
+  // Created once, not a getter — re-evaluating .snapshots() on every
+  // rebuild was re-subscribing to Firestore from scratch each time. Also
+  // now excludes scheduled/draft announcements (isPublished: false) that
+  // were showing up before they were actually due.
+  late final Stream<QuerySnapshot> _announcementsStream =
       FirebaseFirestore.instance
           .collection('announcements')
+          .where('isPublished', isEqualTo: true)
           .orderBy('timestamp', descending: true)
           .snapshots();
 

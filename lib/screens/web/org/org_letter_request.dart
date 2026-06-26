@@ -201,7 +201,10 @@ class _OrgLetterRequestScreenState extends State<OrgLetterRequestScreen> {
     }
   }
 
-  Stream<QuerySnapshot> get _requestsStream =>
+  // Created once, not a getter — widget.orgId never changes for this
+  // screen's lifetime, so a getter here was re-subscribing (twice, since
+  // it's used in two places) on every rebuild.
+  late final Stream<QuerySnapshot> _requestsStream =
       FirestoreCollections.letterRequests
           .where('orgId', isEqualTo: widget.orgId)
           .where('isArchived', isEqualTo: false)

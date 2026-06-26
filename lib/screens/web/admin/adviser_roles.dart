@@ -22,8 +22,21 @@ ImageProvider _imageProviderFromUrl(String url) {
 }
 
 Widget _buildImageWidget(String url, {BoxFit fit = BoxFit.cover, double? width, double? height}) {
+  // Decodes at ~2x the actual display size instead of full original
+  // resolution — this helper renders avatars/logos in every table row, so
+  // that was a real, compounding cost. ResizeImage wraps the provider since
+  // the plain Image(image: ...) constructor has no cacheWidth/cacheHeight
+  // shortcut (that's only on the Image.memory/.network/.asset constructors).
+  ImageProvider provider = _imageProviderFromUrl(url);
+  if (width != null || height != null) {
+    provider = ResizeImage(
+      provider,
+      width: width != null ? (width * 2).round() : null,
+      height: height != null ? (height * 2).round() : null,
+    );
+  }
   return Image(
-    image: _imageProviderFromUrl(url),
+    image: provider,
     fit: fit,
     width: width,
     height: height,
@@ -294,6 +307,32 @@ class _AdviserRolesState extends State<AdviserRoles> {
   static const int _pageSize = 10;
   final TextEditingController _searchController = TextEditingController();
 
+  // Created once, not constructed inline in build() — the methods that use
+  // these are called on every rebuild (search, filter changes,
+  // pagination), so building a fresh .snapshots() there each time was
+  // re-subscribing to Firestore from scratch on every keystroke. The table
+  // needs the Active/Archived split to keep working when the filter
+  // toggles, so both are cached and a getter just picks between them.
+  late final Stream<QuerySnapshot> _archivedCountStream = FirebaseFirestore
+      .instance
+      .collection('adviser_roles')
+      .where('archived', isEqualTo: true)
+      .snapshots();
+  late final Stream<QuerySnapshot> _activeAdvisersStream = FirebaseFirestore
+      .instance
+      .collection('adviser_roles')
+      .where('archived', isEqualTo: false)
+      .orderBy('createdAt', descending: true)
+      .snapshots();
+  late final Stream<QuerySnapshot> _archivedAdvisersStream = FirebaseFirestore
+      .instance
+      .collection('adviser_roles')
+      .where('archived', isEqualTo: true)
+      .orderBy('createdAt', descending: true)
+      .snapshots();
+  Stream<QuerySnapshot> get _advisersTableStream =>
+      _statusFilter == 'Archived' ? _archivedAdvisersStream : _activeAdvisersStream;
+
   List<OrgModel> _orgs          = [];
   List<String>   _adviserNames  = [];
   bool           _loadingMeta   = true;
@@ -545,10 +584,7 @@ class _AdviserRolesState extends State<AdviserRoles> {
       _StatCard(label: 'Total Officers',   value: '$_totalOfficers', icon: Icons.groups_rounded,             color: const Color(0xFF059669)),
       _StatCard(label: 'Organizations',    value: '${_orgs.length}', icon: Icons.business_rounded,           color: const Color(0xFF2563EB)),
       _StatCard(label: 'Archived Records', value: '—',              icon: Icons.archive_rounded,            color: const Color(0xFF64748B),
-          stream: FirebaseFirestore.instance
-              .collection('adviser_roles')
-              .where('archived', isEqualTo: true)
-              .snapshots()),
+          stream: _archivedCountStream),
     ];
 
     return Padding(
@@ -757,11 +793,7 @@ class _AdviserRolesState extends State<AdviserRoles> {
 
   Widget _buildTable(bool isMobile, bool isTablet) {
     return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection('adviser_roles')
-          .where('archived', isEqualTo: _statusFilter == 'Archived')
-          .orderBy('createdAt', descending: true)
-          .snapshots(),
+      stream: _advisersTableStream,
       builder: (context, snap) {
         if (snap.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
