@@ -408,8 +408,8 @@ class _AnnouncementCard extends StatelessWidget {
                         ),
                         child: ClipOval(
                           child: ann.logoUrl.isNotEmpty
-                              ? Image.network(
-                                  ann.logoUrl,
+                              ? Image(
+                                  image: _studentImageProvider(ann.logoUrl),
                                   fit: BoxFit.cover,
                                   errorBuilder: (_, __, ___) => Icon(
                                     Icons.business_center_outlined,
@@ -741,8 +741,8 @@ class _AnnouncementDetailScreenState extends State<AnnouncementDetailScreen> {
                             ),
                             child: ClipOval(
                               child: ann.logoUrl.isNotEmpty
-                                  ? Image.network(
-                                      ann.logoUrl,
+                                  ? Image(
+                                      image: _studentImageProvider(ann.logoUrl),
                                       fit: BoxFit.cover,
                                       errorBuilder: (_, __, ___) => Icon(
                                         Icons.business_center_outlined,

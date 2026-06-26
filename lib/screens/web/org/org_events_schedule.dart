@@ -1,8 +1,8 @@
 ﻿// ignore_for_file: unused_element_parameter
+import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_storage/firebase_storage.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
@@ -1584,7 +1584,13 @@ class _EventModalState extends State<_EventModal> {
       'date': Timestamp.fromDate(_selectedDate!),
       'updatedAt': FieldValue.serverTimestamp(),
       'orgId': widget.existingEvent?.orgId ?? widget.orgId,
-      'status': 'pending', // Always start as pending
+      // The org already has publish authority over its own events (this
+      // dialog is org-only, not admin-facing) and every reader of `events`
+      // — this screen's own calendar, student/guest event lists — filters
+      // on status == 'approved' with nothing left to ever promote a
+      // 'pending' doc. Preserve an existing event's status if it's already
+      // something other than approved/pending (e.g. archived).
+      'status': widget.existingEvent?.status == 'archived' ? 'archived' : 'approved',
     };
 
     if (_bannerRemoved) data['bannerUrl'] = '';
@@ -1618,17 +1624,18 @@ class _EventModalState extends State<_EventModal> {
         );
       }
 
-      // Banner upload happens after the doc exists/is known so the Storage
-      // path can be keyed by eventId, matching org_event_proposals.dart's
-      // convention for the same field.
+      // Stored as a base64 data URL directly on the event doc — no Firebase
+      // Storage — mirroring org_event_proposals.dart and the org profile
+      // logo/cover photo pattern, to avoid Storage billing.
       if (_newImageBytes != null) {
         try {
           final ext = _newImageExt ?? 'jpg';
           const contentTypes = {'png': 'image/png', 'gif': 'image/gif', 'webp': 'image/webp'};
           final contentType = contentTypes[ext] ?? 'image/jpeg';
-          final storageRef = FirebaseStorage.instance.ref().child('event_banners/$eventId.$ext');
-          await storageRef.putData(_newImageBytes!, SettableMetadata(contentType: contentType));
-          final bannerUrl = await storageRef.getDownloadURL();
+          final bannerUrl = 'data:$contentType;base64,${base64Encode(_newImageBytes!)}';
+          if (bannerUrl.length > 900 * 1024) {
+            throw Exception('Image is too large (max ~650KB). Please use a smaller image.');
+          }
           await FirebaseFirestore.instance.collection('events').doc(eventId).update({'bannerUrl': bannerUrl});
         } catch (e) {
           if (mounted) {

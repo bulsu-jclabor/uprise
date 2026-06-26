@@ -274,7 +274,9 @@ class EventReport {
 class OrgSubmission {
   final String orgId, orgName;
   final DateTime? submittedAt;
-  final String? fileUrl, submissionId;
+  // The org side stores the uploaded file as base64 directly on the
+  // Firestore doc (fileBase64/fileName) — no Firebase Storage, no URL.
+  final String? fileBase64, fileName, submissionId;
   final String? eventId, eventTitle;
   final DateTime? eventDate;
   // Admin override for this specific org's deadline, if they ever edited it.
@@ -285,7 +287,8 @@ class OrgSubmission {
     required this.orgId,
     required this.orgName,
     this.submittedAt,
-    this.fileUrl,
+    this.fileBase64,
+    this.fileName,
     this.submissionId,
     this.eventId,
     this.eventTitle,
@@ -901,7 +904,8 @@ class _ReportsManagementState extends State<ReportsManagement>
         final data = doc.data();
         subsMap[data['orgId']?.toString() ?? ''] = {
           'submittedAt': (data['submittedAt'] as Timestamp).toDate(),
-          'fileUrl': data['fileUrl'],
+          'fileBase64': data['fileBase64'],
+          'fileName': data['fileName'],
           'submissionId': doc.id,
         };
       }
@@ -913,7 +917,8 @@ class _ReportsManagementState extends State<ReportsManagement>
             orgId: org['id']!,
             orgName: org['name']!,
             submittedAt: subsMap[org['id']]?['submittedAt'] as DateTime?,
-            fileUrl: subsMap[org['id']]?['fileUrl'] as String?,
+            fileBase64: subsMap[org['id']]?['fileBase64'] as String?,
+            fileName: subsMap[org['id']]?['fileName'] as String?,
             submissionId: subsMap[org['id']]?['submissionId'] as String?,
             eventId: info?['eventId'] as String?,
             eventTitle: info?['eventTitle'] as String?,
@@ -954,7 +959,8 @@ class _ReportsManagementState extends State<ReportsManagement>
         final data = doc.data();
         subsMap[data['orgId']?.toString() ?? ''] = {
           'submittedAt': (data['submittedAt'] as Timestamp).toDate(),
-          'fileUrl': data['fileUrl'],
+          'fileBase64': data['fileBase64'],
+          'fileName': data['fileName'],
           'submissionId': doc.id,
         };
       }
@@ -966,7 +972,8 @@ class _ReportsManagementState extends State<ReportsManagement>
             orgId: org['id']!,
             orgName: org['name']!,
             submittedAt: subsMap[org['id']]?['submittedAt'] as DateTime?,
-            fileUrl: subsMap[org['id']]?['fileUrl'] as String?,
+            fileBase64: subsMap[org['id']]?['fileBase64'] as String?,
+            fileName: subsMap[org['id']]?['fileName'] as String?,
             submissionId: subsMap[org['id']]?['submissionId'] as String?,
             eventId: info?['eventId'] as String?,
             eventTitle: info?['eventTitle'] as String?,
@@ -3394,8 +3401,8 @@ class _ReportsManagementState extends State<ReportsManagement>
               const SizedBox(height: 12),
               _credentialRow(
                 label: 'File',
-                value: sub.fileUrl != null && sub.fileUrl!.isNotEmpty
-                    ? sub.fileUrl!
+                value: sub.fileBase64 != null && sub.fileBase64!.isNotEmpty
+                    ? (sub.fileName ?? 'Attached file')
                     : 'No file attached.',
                 icon: Icons.attach_file_rounded,
               ),
@@ -3403,9 +3410,9 @@ class _ReportsManagementState extends State<ReportsManagement>
               Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
-                  if (sub.fileUrl != null && sub.fileUrl!.isNotEmpty) ...[
+                  if (sub.fileBase64 != null && sub.fileBase64!.isNotEmpty) ...[
                     ElevatedButton.icon(
-                      onPressed: () => _openSubmissionFile(sub.fileUrl!),
+                      onPressed: () => _openSubmissionFile(sub.fileBase64!, sub.fileName ?? 'document'),
                       icon: const Icon(Icons.open_in_new_rounded, size: 15),
                       label: Text(
                         'Open File',
@@ -3429,7 +3436,7 @@ class _ReportsManagementState extends State<ReportsManagement>
                     ),
                     const SizedBox(width: 10),
                     ElevatedButton.icon(
-                      onPressed: () => _downloadSubmissionFile(sub.fileUrl!),
+                      onPressed: () => _downloadSubmissionFile(sub.fileBase64!, sub.fileName ?? 'document'),
                       icon: const Icon(Icons.download_rounded, size: 15),
                       label: Text(
                         'Download File',
@@ -3529,9 +3536,18 @@ class _ReportsManagementState extends State<ReportsManagement>
     );
   }
 
-  void _openSubmissionFile(String url) {
+  // The file lives as base64 directly on the Firestore doc (no Storage, no
+  // URL) — build a data: URI on demand from it, mirroring _openAttachment's
+  // pattern on _ViewAdminReportModal for the same fileBase64/fileName shape.
+  void _openSubmissionFile(String fileBase64, String fileName) {
     try {
-      html.window.open(url, '_blank');
+      final ext = fileName.contains('.') ? fileName.split('.').last.toLowerCase() : '';
+      final mime = _ViewAdminReportModal._mimeFromExt(ext);
+      final anchor = html.AnchorElement(href: 'data:$mime;base64,$fileBase64')
+        ..target = '_blank';
+      html.document.body?.append(anchor);
+      anchor.click();
+      anchor.remove();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: const Text('Opening file in a new tab...'),
@@ -3556,11 +3572,13 @@ class _ReportsManagementState extends State<ReportsManagement>
     }
   }
 
-  void _downloadSubmissionFile(String url) {
+  void _downloadSubmissionFile(String fileBase64, String fileName) {
     try {
-      final anchor = html.AnchorElement(href: url)
+      final ext = fileName.contains('.') ? fileName.split('.').last.toLowerCase() : '';
+      final mime = _ViewAdminReportModal._mimeFromExt(ext);
+      final anchor = html.AnchorElement(href: 'data:$mime;base64,$fileBase64')
         ..target = '_blank'
-        ..download = '';
+        ..download = fileName;
       html.document.body?.append(anchor);
       anchor.click();
       anchor.remove();

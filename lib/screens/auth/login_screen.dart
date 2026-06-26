@@ -49,15 +49,25 @@ class _LoginScreenState extends State<LoginScreen> {
 
     try {
       final userCredential = await _authService.signIn(email, password);
-      
+
+      final archived = await _authService.isArchived(userCredential.user!.uid);
+      if (archived) {
+        await _authService.signOut();
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('This account has been archived. Contact your administrator.')),
+        );
+        return;
+      }
+
       // Check if this is first login (needs password change)
       // You can store this in Firestore user document
       final needsPasswordChange = await _authService.needsPasswordChange(
         userCredential.user!.uid,
       );
-      
+
       if (!mounted) return;
-      
+
       if (needsPasswordChange) {
         Navigator.pushReplacement(
           context,

@@ -1295,12 +1295,15 @@ class _StudentAccountsState extends State<StudentAccounts> {
   Future<void> _archiveRestoreStudent(String docId, bool isArchived, String name) async {
     try {
       final newArchivedStatus = !isArchived;
-      
-      await FirebaseFirestore.instance
-          .collection('students')
-          .doc(docId)
-          .update({'archived': newArchivedStatus});
-      
+
+      // students doc ID is the uid, same as the users doc ID — write both
+      // in a batch so the login-time archived checks (which read `users`)
+      // stay in sync with the admin-facing `students` record.
+      final batch = FirebaseFirestore.instance.batch();
+      batch.update(FirebaseFirestore.instance.collection('students').doc(docId), {'archived': newArchivedStatus});
+      batch.update(FirebaseFirestore.instance.collection('users').doc(docId), {'archived': newArchivedStatus});
+      await batch.commit();
+
       final doc = await FirebaseFirestore.instance
           .collection('students')
           .doc(docId)

@@ -187,13 +187,16 @@ class NotificationService {
         .map((snap) => snap.docs.length);
   }
 
-  // Stream all notifications for a user, newest first
+  // Stream notifications for a user. Deliberately NOT combining
+  // `.orderBy('createdAt')` with the `.where('userId', ...)` filter — that
+  // pairing needs a composite Firestore index that isn't deployed for this
+  // collection, and without it the query throws FAILED_PRECONDITION on
+  // every load. Callers must sort client-side by `createdAt` themselves.
   static Stream<QuerySnapshot> notificationsStream(String userId) {
     return _db
         .collection('notifications')
         .where('userId', isEqualTo: userId)
-        .orderBy('createdAt', descending: true)
-        .limit(50)
+        .limit(200)
         .snapshots();
   }
 }

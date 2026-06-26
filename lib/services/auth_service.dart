@@ -21,6 +21,15 @@ class AuthService {
     await _auth.signOut();
   }
 
+  // Admin can archive a student account (student_accounts.dart) — checked
+  // right after sign-in so an archived student is bounced immediately
+  // instead of getting signed into Firebase Auth with nowhere valid to go.
+  Future<bool> isArchived(String userId) async {
+    final doc = await _firestore.collection(FirebaseConstants.usersCollection).doc(userId).get();
+    if (!doc.exists) return false;
+    return doc.data()?['archived'] == true;
+  }
+
   // Check if user needs to change password (first login)
   Future<bool> needsPasswordChange(String userId) async {
     final doc = await _firestore.collection(FirebaseConstants.usersCollection).doc(userId).get();

@@ -5,8 +5,17 @@
 // empty-state) when there are no photos yet, so it stays invisible on
 // events the org hasn't uploaded anything for.
 
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+
+ImageProvider _imageProviderFromUrl(String url) {
+  if (url.startsWith('data:image')) {
+    final base64Part = url.split(',').last;
+    return MemoryImage(base64Decode(base64Part));
+  }
+  return NetworkImage(url);
+}
 
 class EventPhotoGallery extends StatelessWidget {
   final String eventId;
@@ -72,15 +81,11 @@ class EventPhotoGallery extends StatelessWidget {
                   onTap: () => _viewFullscreen(context, urls, i),
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(10),
-                    child: Image.network(
-                      urls[i],
+                    child: Image(
+                      image: _imageProviderFromUrl(urls[i]),
                       width: 90,
                       height: 90,
                       fit: BoxFit.cover,
-                      cacheWidth: 180,
-                      loadingBuilder: (context, child, progress) => progress == null
-                          ? child
-                          : Container(width: 90, height: 90, color: Colors.grey.shade200),
                       errorBuilder: (_, __, ___) => Container(
                         width: 90,
                         height: 90,
@@ -127,7 +132,7 @@ class _FullscreenGalleryState extends State<_FullscreenGallery> {
         onPageChanged: (i) => setState(() => _index = i),
         itemBuilder: (context, i) => Center(
           child: InteractiveViewer(
-            child: Image.network(widget.urls[i], fit: BoxFit.contain),
+            child: Image(image: _imageProviderFromUrl(widget.urls[i]), fit: BoxFit.contain),
           ),
         ),
       ),

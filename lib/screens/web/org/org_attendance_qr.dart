@@ -17,7 +17,6 @@ import 'export_pdf.dart';
 import '../../../services/activity_logger.dart' as activity_log;
 import '../../../services/notification_service.dart';
 import '../../../services/webinar_attendance_service.dart';
-import 'org_event_gallery.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // DESIGN TOKENS
@@ -869,25 +868,11 @@ class _AttendanceTabState extends State<AttendanceTab> with AutomaticKeepAliveCl
                 const SizedBox(height: 12),
                 if (_subTab == 0)
                   _AttendanceTable(docs: attDocs.cast(), query: _query, statusFilter: _statusFilter)
-                else if (_subTab == 1)
+                else
                   _RegistrantsTable(
                     stream: _regStream, attendanceDocs: attDocs.cast(),
                     studentCache: _studentCache, ensureStudentsLoaded: _ensureStudentsLoaded,
                     query: _query, statusFilter: _statusFilter,
-                  )
-                else if (widget.eventDocId != null)
-                  EventGalleryPanel(
-                    orgId: widget.orgId,
-                    eventId: widget.eventDocId!,
-                    eventTitle: widget.event?.title ?? 'this event',
-                  )
-                else
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 40),
-                    child: Center(
-                      child: Text('Select an event above to manage its gallery.',
-                          style: GoogleFonts.beVietnamPro(color: const Color(0xFF94A3B8), fontSize: 13)),
-                    ),
                   ),
               ]),
             );
@@ -1287,37 +1272,33 @@ class _AttendanceTabState extends State<AttendanceTab> with AutomaticKeepAliveCl
           _SubTab('Attendance', _subTab == 0, () => setState(() => _subTab = 0)),
           const SizedBox(width: 8),
           _SubTab('Registered Participants', _subTab == 1, () => setState(() => _subTab = 1)),
-          const SizedBox(width: 8),
-          _SubTab('Gallery', _subTab == 2, () => setState(() => _subTab = 2)),
           const Spacer(),
-          if (_subTab != 2) ...[
-            SizedBox(
-              width: 230, height: 40,
-              child: TextField(
-                controller: _search,
-                style: GoogleFonts.beVietnamPro(fontSize: 13),
-                decoration: _DS.searchDeco('Search name or ID…'),
-                onChanged: (v) => setState(() => _query = v.toLowerCase()),
-              ),
+          SizedBox(
+            width: 230, height: 40,
+            child: TextField(
+              controller: _search,
+              style: GoogleFonts.beVietnamPro(fontSize: 13),
+              decoration: _DS.searchDeco('Search name or ID…'),
+              onChanged: (v) => setState(() => _query = v.toLowerCase()),
             ),
-            const SizedBox(width: 10),
-            _FilterDropdown(value: _statusFilter, items: const ['All', 'present', 'late', 'absent'],
-                hint: 'Status', onChanged: (v) => setState(() => _statusFilter = v ?? 'All')),
-            const SizedBox(width: 10),
-            AdminExportButton(
-              enabled: canExport,
-              label: 'Export',
-              onSelected: (choice) {
-                if (_subTab == 0) {
-                  if (choice == 'csv') _exportAttendanceCsv(filteredAttDocs);
-                  if (choice == 'pdf') _exportAttendancePdf(filteredAttDocs);
-                } else {
-                  if (choice == 'csv') _exportRegistrantCsv(filteredRegDocs, attDocs);
-                  if (choice == 'pdf') _exportRegistrantPdf(filteredRegDocs, attDocs);
-                }
-              },
-            ),
-          ],
+          ),
+          const SizedBox(width: 10),
+          _FilterDropdown(value: _statusFilter, items: const ['All', 'present', 'late', 'absent'],
+              hint: 'Status', onChanged: (v) => setState(() => _statusFilter = v ?? 'All')),
+          const SizedBox(width: 10),
+          AdminExportButton(
+            enabled: canExport,
+            label: 'Export',
+            onSelected: (choice) {
+              if (_subTab == 0) {
+                if (choice == 'csv') _exportAttendanceCsv(filteredAttDocs);
+                if (choice == 'pdf') _exportAttendancePdf(filteredAttDocs);
+              } else {
+                if (choice == 'csv') _exportRegistrantCsv(filteredRegDocs, attDocs);
+                if (choice == 'pdf') _exportRegistrantPdf(filteredRegDocs, attDocs);
+              }
+            },
+          ),
         ]);
       },
     );

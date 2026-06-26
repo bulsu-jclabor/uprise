@@ -1402,7 +1402,7 @@ class BroadcastModel {
       likes: (d['likes'] as int?) ?? 0,
       replyCount: (d['replyCount'] as int?) ?? 0,
       pinned: (d['pinned'] as bool?) ?? false,
-      timestamp: d['timestamp'] as Timestamp,
+      timestamp: (d['timestamp'] as Timestamp?) ?? Timestamp.now(),
       attachments: ((d['attachments'] as List?) ?? [])
           .map((a) => Attachment(name: a['name'], url: a['url']))
           .toList(),

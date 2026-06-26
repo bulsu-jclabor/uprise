@@ -1807,30 +1807,40 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     super.dispose();
   }
 
-  void _save() {
+  Future<void> _save() async {
     final newFirst = _firstNameCtrl.text.trim();
     final newMiddle = _middleNameCtrl.text.trim();
     final newLast = _lastNameCtrl.text.trim();
 
-    widget.profile.update(
-      firstName: newFirst,
-      middleName: newMiddle,
-      lastName: newLast,
-      email: _emailCtrl.text.trim(),
-      mobile: _mobileCtrl.text.trim(),
-      address: _addressCtrl.text.trim(),
-      course: _courseCtrl.text.trim(),
-      major: _selectedMajor ?? '',
-      yearLevel: _yearLevelCtrl.text.trim(),
-      department: _departmentCtrl.text.trim(),
-    );
+    try {
+      await widget.profile.update(
+        firstName: newFirst,
+        middleName: newMiddle,
+        lastName: newLast,
+        email: _emailCtrl.text.trim(),
+        mobile: _mobileCtrl.text.trim(),
+        address: _addressCtrl.text.trim(),
+        course: _courseCtrl.text.trim(),
+        major: _selectedMajor ?? '',
+        yearLevel: _yearLevelCtrl.text.trim(),
+        department: _departmentCtrl.text.trim(),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not save profile: $e'), backgroundColor: Colors.red),
+      );
+      return;
+    }
+    if (!mounted) return;
 
     final user = FirebaseAuth.instance.currentUser;
     if (user != null) {
       final displayName =
           [newFirst, newMiddle, newLast].where((p) => p.isNotEmpty).join(' ');
-      user.updateDisplayName(displayName);
+      await user.updateDisplayName(displayName);
     }
+    if (!mounted) return;
 
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(

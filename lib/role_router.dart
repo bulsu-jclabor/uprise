@@ -92,10 +92,19 @@ class _RoleRouterState extends State<RoleRouter> {
           final data = userDocSnapshot.data!.docs.first.data()
               as Map<String, dynamic>;
           final mustChange = data['mustChangePassword'] ?? false;
+          final archived = data['archived'] == true;
           debugPrint(
-              '📋 Student doc: $data, mustChangePassword: $mustChange');
+              '📋 Student doc: $data, mustChangePassword: $mustChange, archived: $archived');
 
-          if (mustChange == true) {
+          // Checked here (not just at the login screen) so a session that
+          // was already signed in when an admin archived the account also
+          // gets bounced, instead of only blocking fresh sign-ins.
+          if (archived) {
+            return const WrongPlatformScreen(
+              message: 'This account has been archived. Contact your administrator.',
+              icon: Icons.lock_outline,
+            );
+          } else if (mustChange == true) {
             return const StudentChangePasswordScreen();
           } else {
             return const StudentHomeScreen();

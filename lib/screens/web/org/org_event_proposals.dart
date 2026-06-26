@@ -5,7 +5,6 @@ import '../../../utils/platform_file_utils.dart' as platform_file_utils;
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_storage/firebase_storage.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:file_picker/file_picker.dart';
@@ -595,22 +594,34 @@ class _OrgEventProposalsScreenState extends State<OrgEventProposalsScreen> {
       });
     }
 
-    // ─── UPLOAD IMAGE IN BACKGROUND ──────────────────────────────
+    // ─── UPLOAD IMAGE ─────────────────────────────────────────────
+    // Awaited (not fire-and-forget) so a Storage failure is caught by the
+    // outer try/catch below and actually shown to the org — previously
+    // this ran unawaited in the background, so a failed upload looked
+    // identical to success and the banner silently never appeared.
     final imgB64 = data['imageBase64'] as String?;
+    String? imageUploadError;
     if (imgB64 != null && imgB64.isNotEmpty) {
-      // Run upload in the background (don't await unless you want to update after)
-      unawaited(_uploadEventImage(imgB64, data['imageName'], eventId));
+      try {
+        await _uploadEventImage(imgB64, data['imageName'], eventId);
+      } catch (e) {
+        imageUploadError = e.toString();
+      }
     }
 
-    // Show success immediately
+    // Show success (or a partial-success warning if the image failed)
     if (mounted) {
+      final baseMsg = existingEventId.isNotEmpty
+          ? 'Event updated on the student events page!'
+          : 'Event published to the student events page!';
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(existingEventId.isNotEmpty
-              ? '✅ Event updated on the student events page!'
-              : '✅ Event published to the student events page!'),
-          backgroundColor: const Color(0xFF059669),
+          content: Text(imageUploadError == null
+              ? '✅ $baseMsg'
+              : '⚠️ $baseMsg But the banner image failed to upload: $imageUploadError'),
+          backgroundColor: imageUploadError == null ? const Color(0xFF059669) : const Color(0xFFB45309),
           behavior: SnackBarBehavior.floating,
+          duration: imageUploadError == null ? const Duration(seconds: 4) : const Duration(seconds: 7),
         ),
       );
     }
@@ -639,29 +650,33 @@ class _OrgEventProposalsScreenState extends State<OrgEventProposalsScreen> {
   }
 }
 
-// Separate function for image upload
+// Separate function for image upload — lets failures propagate to the
+// caller (org_event_proposals.dart's _publishProposal) instead of being
+// silently swallowed, since a swallowed failure looks identical to a
+// successful publish from the org's point of view.
+//
+// Stored as a base64 data URL directly on the event doc (no Firebase
+// Storage — avoids Storage billing, mirrors the org profile logo/cover
+// photo pattern). The proposal already carries the image as base64, so
+// this is just a re-encode into a data: URI, no actual network upload.
 Future<void> _uploadEventImage(String base64Image, String? imageName, String eventId) async {
-  try {
-    final bytes = base64Decode(base64Image);
-    final ext = (imageName?.contains('.') ?? false)
-        ? imageName!.split('.').last.toLowerCase()
-        : 'jpg';
-    const contentTypes = {'png': 'image/png', 'gif': 'image/gif', 'webp': 'image/webp'};
-    final contentType = contentTypes[ext] ?? 'image/jpeg';
-    final ref = FirebaseStorage.instance
-        .ref()
-        .child('event_banners/$eventId.$ext');
-    await ref.putData(bytes, SettableMetadata(contentType: contentType));
-    final bannerUrl = await ref.getDownloadURL();
+  final ext = (imageName?.contains('.') ?? false)
+      ? imageName!.split('.').last.toLowerCase()
+      : 'jpg';
+  const contentTypes = {'png': 'image/png', 'gif': 'image/gif', 'webp': 'image/webp'};
+  final contentType = contentTypes[ext] ?? 'image/jpeg';
+  final bannerUrl = 'data:$contentType;base64,$base64Image';
 
-    // Update the event document with the banner URL
-    await FirebaseFirestore.instance
-        .collection('events')
-        .doc(eventId)
-        .update({'bannerUrl': bannerUrl});
-  } catch (e) {
-    debugPrint('⚠️ Background image upload failed: $e');
+  // Firestore caps a document at 1MB; the banner shares the doc with the
+  // rest of the event fields, so keep a safety margin.
+  if (bannerUrl.length > 900 * 1024) {
+    throw Exception('Image is too large (max ~650KB). Please use a smaller image.');
   }
+
+  await FirebaseFirestore.instance
+      .collection('events')
+      .doc(eventId)
+      .update({'bannerUrl': bannerUrl});
 }
 
   // ── Export ────────────────────────────────────────────────────────

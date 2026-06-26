@@ -1656,10 +1656,14 @@ class _MyOrdersTabState extends State<_MyOrdersTab> {
     if (user == null) {
       return const Stream<QuerySnapshot>.empty();
     }
+    // Deliberately NOT combining `.orderBy('createdAt')` with the
+    // `.where('customerEmail', ...)` filter — that pairing needs a
+    // composite Firestore index that isn't deployed for this collection,
+    // and without it the query throws FAILED_PRECONDITION on every load.
+    // Sorted client-side in build() below instead.
     return FirebaseFirestore.instance
         .collection('orders')
         .where('customerEmail', isEqualTo: user.email)
-        .orderBy('createdAt', descending: true)
         .snapshots();
   }();
 
@@ -1679,7 +1683,13 @@ class _MyOrdersTabState extends State<_MyOrdersTab> {
             subtitle: snap.error.toString(),
           );
         }
-        final docs = snap.data?.docs ?? [];
+        final docs = (snap.data?.docs ?? []).toList()
+          ..sort((a, b) {
+            final ta = (a.data() as Map)['createdAt'] as Timestamp?;
+            final tb = (b.data() as Map)['createdAt'] as Timestamp?;
+            if (ta == null || tb == null) return 0;
+            return tb.compareTo(ta);
+          });
         if (docs.isEmpty) {
           return const _EmptyHint(
             icon: Icons.receipt_long_outlined,

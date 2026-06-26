@@ -191,11 +191,19 @@ class _StudentNotificationsScreenState extends State<StudentNotificationsScreen>
     }
 
     return StreamBuilder<QuerySnapshot>(
+      // Deliberately NOT combining `.orderBy('createdAt')` with the
+      // `.where('userId', ...)` filter above — that pairing needs a
+      // composite Firestore index that isn't deployed for this collection,
+      // and without it the query throws FAILED_PRECONDITION on every load
+      // (the same failure class that broke announcements). Sorted
+      // client-side below instead.
+      // Fetches a wider window than the 50 we actually display, since
+      // without a server-side orderBy the limit can't guarantee the most
+      // recent docs — sorted and trimmed to 50 client-side below.
       stream: FirebaseFirestore.instance
           .collection('notifications')
           .where('userId', isEqualTo: _uid)
-          .orderBy('createdAt', descending: true)
-          .limit(50)
+          .limit(200)
           .snapshots(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
@@ -230,15 +238,17 @@ class _StudentNotificationsScreenState extends State<StudentNotificationsScreen>
 
         final all = snapshot.data!.docs
             .map((d) => AppNotification.fromFirestore(d))
-            .toList();
+            .toList()
+          ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+        final visible = all.take(50).toList();
 
         final now = DateTime.now();
         final todayStart = DateTime(now.year, now.month, now.day);
         final yesterdayStart = todayStart.subtract(const Duration(days: 1));
 
-        final today = all.where((n) => n.createdAt.isAfter(todayStart)).toList();
-        final yesterday = all.where((n) => n.createdAt.isAfter(yesterdayStart) && !n.createdAt.isAfter(todayStart)).toList();
-        final earlier = all.where((n) => !n.createdAt.isAfter(yesterdayStart)).toList();
+        final today = visible.where((n) => n.createdAt.isAfter(todayStart)).toList();
+        final yesterday = visible.where((n) => n.createdAt.isAfter(yesterdayStart) && !n.createdAt.isAfter(todayStart)).toList();
+        final earlier = visible.where((n) => !n.createdAt.isAfter(yesterdayStart)).toList();
 
         return ListView(
           children: [

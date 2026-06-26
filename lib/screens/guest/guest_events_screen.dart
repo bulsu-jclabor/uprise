@@ -1,9 +1,17 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import 'guest_auth_service.dart';
 import '../../widgets/shared/event_photo_gallery.dart';
+
+ImageProvider _guestImageProvider(String url) {
+  if (url.startsWith('data:image')) {
+    return MemoryImage(base64Decode(url.split(',').last));
+  }
+  return NetworkImage(url);
+}
 
 // ─────────────────────────────────────────────────────────────
 // Theme
@@ -953,7 +961,7 @@ class _GuestEventDetailScreenState extends State<GuestEventDetailScreen> {
                             radius: 22,
                             backgroundColor: Colors.grey[200],
                             backgroundImage: event.orgLogoUrl.isNotEmpty
-                                ? NetworkImage(event.orgLogoUrl)
+                                ? _guestImageProvider(event.orgLogoUrl)
                                 : null,
                             child: event.orgLogoUrl.isEmpty
                                 ? Text(
