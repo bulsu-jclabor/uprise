@@ -459,65 +459,72 @@ class _AttendanceTabState extends State<AttendanceTab> with AutomaticKeepAliveCl
   }
 
   Future<void> _markAttendance(String uid, {bool isManual = false}) async {
-    if (widget.eventDocId == null || widget.event == null) return;
+  if (widget.eventDocId == null || widget.event == null) return;
+  try {
+    final evDoc = await FirebaseFirestore.instance.collection('events').doc(widget.eventDocId).get();
+    if (!_isActive(evDoc)) throw Exception('Attendance is not open for this event');
+
+    // Hanapin ang student - HINDI na kailangan ng orgId check!
+    DocumentSnapshot? userDoc;
+    
+    // 1. Subukan muna ang direct lookup gamit ang UID (para sa QR scan)
+    final direct = await FirebaseFirestore.instance.collection('students').doc(uid).get();
+    if (direct.exists) {
+      userDoc = direct;
+    } else {
+      // 2. Kung hindi, subukan ang studentId (para sa manual entry)
+      final q = await FirebaseFirestore.instance.collection('students')
+          .where('studentId', isEqualTo: uid)
+          .limit(1)
+          .get();
+      if (q.docs.isNotEmpty) userDoc = q.docs.first;
+    }
+    
+    if (userDoc == null) throw Exception('Student not found');
+
+    final existing = await FirebaseFirestore.instance.collection('events')
+        .doc(widget.eventDocId).collection('attendances')
+        .where('studentId', isEqualTo: userDoc.id).get();
+    if (existing.docs.isNotEmpty) {
+      throw Exception('${(userDoc.data() as Map)['fullName'] ?? 'Student'} already marked');
+    }
+
+    String status = 'present';
     try {
-      final evDoc = await FirebaseFirestore.instance.collection('events').doc(widget.eventDocId).get();
-      if (!_isActive(evDoc)) throw Exception('Attendance is not open for this event');
+      final s = DateFormat.jm().parse(widget.event!.startTime);
+      final startDt = DateTime(widget.event!.date.year, widget.event!.date.month,
+          widget.event!.date.day, s.hour, s.minute);
+      if (DateTime.now().isAfter(startDt.add(const Duration(minutes: 15)))) status = 'late';
+    } catch (_) {}
 
-      // Name/course/yearLevel/studentId live on `students` (doc ID = uid),
-      // not `users` — `users` only has uid/email/fullName/role.
-      DocumentSnapshot? userDoc;
-      final direct = await FirebaseFirestore.instance.collection('students').doc(uid).get();
-      if (direct.exists && (direct.data() as Map?)?['orgId'] == widget.orgId) {
-        userDoc = direct;
-      } else {
-        final q = await FirebaseFirestore.instance.collection('students')
-            .where('studentId', isEqualTo: uid).where('orgId', isEqualTo: widget.orgId).limit(1).get();
-        if (q.docs.isNotEmpty) userDoc = q.docs.first;
-      }
-      if (userDoc == null) throw Exception('Student not found or not in your organization');
+    final data = userDoc.data() as Map<String, dynamic>;
+    await FirebaseFirestore.instance.collection('events').doc(widget.eventDocId)
+        .collection('attendances').add({
+      'studentId': userDoc.id, 
+      'studentName': data['fullName'] ?? data['email'] ?? 'Unknown',
+      'studentEmail': data['email'] ?? '', 
+      'program': data['course'] ?? 'N/A',
+      'yearLevel': data['yearLevel'] ?? '', 
+      'timestamp': FieldValue.serverTimestamp(),
+      'status': status, 
+      'method': isManual ? 'manual' : 'qr',
+    });
 
-      final existing = await FirebaseFirestore.instance.collection('events')
-          .doc(widget.eventDocId).collection('attendances')
-          .where('studentId', isEqualTo: userDoc.id).get();
-      if (existing.docs.isNotEmpty) {
-        throw Exception('${(userDoc.data() as Map)['fullName'] ?? 'Student'} already marked');
-      }
-
-      String status = 'present';
-      try {
-        final s = DateFormat.jm().parse(widget.event!.startTime);
-        final startDt = DateTime(widget.event!.date.year, widget.event!.date.month,
-            widget.event!.date.day, s.hour, s.minute);
-        if (DateTime.now().isAfter(startDt.add(const Duration(minutes: 15)))) status = 'late';
-      } catch (_) {}
-
-      final data = userDoc.data() as Map<String, dynamic>;
-      await FirebaseFirestore.instance.collection('events').doc(widget.eventDocId)
-          .collection('attendances').add({
-        'studentId': userDoc.id, 'studentName': data['fullName'] ?? data['email'] ?? 'Unknown',
-        'studentEmail': data['email'] ?? '', 'program': data['course'] ?? 'N/A',
-        'yearLevel': data['yearLevel'] ?? '', 'timestamp': FieldValue.serverTimestamp(),
-        'status': status, 'method': isManual ? 'manual' : 'qr',
-      });
-
-      // Certificates are no longer auto-generated here — they're created on the
-      // Certificates page after the event, once each attendee submits their evaluation.
-      await activity_log.ActivityLogger.log(
-        action: 'mark_attendance', module: 'attendance',
-        details: { 'orgId': widget.orgId, 'eventId': widget.eventDocId,
-            'studentId': userDoc.id, 'status': status, 'method': isManual ? 'manual' : 'qr' },
-      );
-      if (mounted) {
-        _toast(context,
-            '${data['fullName'] ?? 'Student'} marked ${status.toUpperCase()} ${status == 'late' ? '⏰' : '✓'}');
-      }
-    } catch (e) {
-      if (mounted) {
-        _toast(context, e.toString().replaceFirst('Exception: ', ''), error: true);
-      }
+    await activity_log.ActivityLogger.log(
+      action: 'mark_attendance', module: 'attendance',
+      details: { 'orgId': widget.orgId, 'eventId': widget.eventDocId,
+          'studentId': userDoc.id, 'status': status, 'method': isManual ? 'manual' : 'qr' },
+    );
+    if (mounted) {
+      _toast(context,
+          '${data['fullName'] ?? 'Student'} marked ${status.toUpperCase()} ${status == 'late' ? '⏰' : '✓'}');
+    }
+  } catch (e) {
+    if (mounted) {
+      _toast(context, e.toString().replaceFirst('Exception: ', ''), error: true);
     }
   }
+}
 
   Future<void> _onScan(BarcodeCapture cap) async {
     if (!_scanning) return;

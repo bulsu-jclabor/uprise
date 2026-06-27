@@ -1302,6 +1302,7 @@ class _IdCard1 extends StatelessWidget {
 }
 
 // ── BACK of ID ──
+// ── BACK of ID ──
 class _IdCard2 extends StatelessWidget {
   final ProfileModel profile;
   const _IdCard2({required this.profile});
@@ -1373,15 +1374,7 @@ class _IdCard2 extends StatelessWidget {
                     border: Border.all(color: Colors.grey.shade200),
                   ),
                   child: QrImageView(
-                    data: 'BULACAN STATE UNIVERSITY\n'
-                        'STUDENT IDENTIFICATION\n'
-                        '\n'
-                        'Full Name: ${profile.fullName.isNotEmpty ? profile.fullName : 'N/A'}\n'
-                        'Student No: ${profile.studentId.isNotEmpty ? profile.studentId : 'N/A'}\n'
-                        'Program: ${profile.course.isNotEmpty ? profile.course : 'N/A'}\n'
-                        'Major: ${profile.major.isNotEmpty ? profile.major : 'N/A'}\n'
-                        'Year Level: ${profile.yearLevel.isNotEmpty ? profile.yearLevel : 'N/A'}\n'
-                        'College/Department: ${profile.department.isNotEmpty ? profile.department : 'N/A'}',
+                    data: FirebaseAuth.instance.currentUser?.uid ?? '',
                     version: QrVersions.auto,
                     backgroundColor: Colors.white,
                   ),

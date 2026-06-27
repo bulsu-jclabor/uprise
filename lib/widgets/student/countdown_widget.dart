@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import '../../models/event_model.dart';
+import 'package:uprise/models/event_model.dart';
 import 'app_colors.dart';
 
 class CountdownWidget extends StatefulWidget {
