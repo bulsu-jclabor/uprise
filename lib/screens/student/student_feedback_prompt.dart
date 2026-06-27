@@ -1,15 +1,5 @@
 // lib/screens/student/student_feedback_prompt.dart
-//
-// Auto-surfaces the feedback opportunity right after a student attends an
-// event, instead of relying entirely on the org remembering to tap "Send
-// Evaluation" in org_attendance_qr.dart. Mirrors
-// guest_digital_id_notice.dart's "show once" pattern, but keyed per event
-// (a student attends many events over time) rather than per account.
-//
-// Safe to call on every app open — it no-ops if there's nothing new to
-// prompt for. Declining ("Maybe Later") only suppresses the auto-popup for
-// that event; the event stays reachable via the "Evaluate attended events"
-// banner on the Certificates tab and via StudentFeedbackScreen directly.
+// JUST COPY THIS WHOLE FILE - Replace your existing one
 
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -18,64 +8,90 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../widgets/student/app_colors.dart';
 import 'student_feedback_screen.dart';
 
-const _kPromptedPrefix = 'feedback_prompted_';
-
+// 👇 THIS FUNCTION CHECKS IF STUDENT NEEDS TO GIVE FEEDBACK
+// AND SHOWS THE POP-UP IF THEY DO
 Future<void> maybeShowFeedbackPrompt(BuildContext context) async {
   final user = FirebaseAuth.instance.currentUser;
   if (user == null) return;
 
   try {
-    final attSnap = await FirebaseFirestore.instance
+    // 1. Get all events the student attended
+    final attendanceDocs = await FirebaseFirestore.instance
         .collectionGroup('attendances')
         .where('studentId', isEqualTo: user.uid)
         .get();
 
-    final feedbackSnap = await FirebaseFirestore.instance
+    // 2. Get all feedback the student already gave
+    final feedbackDocs = await FirebaseFirestore.instance
         .collection('event_feedback')
         .where('userId', isEqualTo: user.uid)
         .get();
-    final ratedEventIds = feedbackSnap.docs
-        .map((d) => d.data()['eventId']?.toString())
+
+    // 3. Make a list of event IDs that already have feedback
+    final ratedEventIds = feedbackDocs.docs
+        .map((doc) => doc.data()['eventId']?.toString())
         .whereType<String>()
         .toSet();
 
+    // 4. Remember which pop-ups we already showed
     final prefs = await SharedPreferences.getInstance();
 
-    for (final doc in attSnap.docs) {
-      final status = (doc.data()['status'] ?? '').toString();
+    // 5. Check each event the student attended
+    for (final doc in attendanceDocs.docs) {
+      final status = doc.data()['status']?.toString() ?? '';
+      
+      // Only care about 'present' or 'late'
       if (status != 'present' && status != 'late') continue;
+
+      // Get the event ID
       final eventRef = doc.reference.parent.parent;
       if (eventRef == null) continue;
       final eventId = eventRef.id;
 
+      // Skip if student already rated this
       if (ratedEventIds.contains(eventId)) continue;
-      final alreadyPrompted = prefs.getBool('$_kPromptedPrefix$eventId') ?? false;
+
+      // Skip if we already showed pop-up for this event
+      final alreadyPrompted = prefs.getBool('feedback_prompt_$eventId') ?? false;
       if (alreadyPrompted) continue;
 
+      // Get event details
       final eventDoc = await eventRef.get();
       if (!eventDoc.exists) continue;
-      final ed = eventDoc.data() as Map<String, dynamic>;
+      final eventData = eventDoc.data() as Map<String, dynamic>;
 
-      await prefs.setBool('$_kPromptedPrefix$eventId', true);
+      // Remember we showed this pop-up
+      await prefs.setBool('feedback_prompt_$eventId', true);
+
+      // 👇 THIS SHOWS THE POP-UP
       if (!context.mounted) return;
-
       await showDialog(
         context: context,
         barrierDismissible: false,
         builder: (ctx) => _FeedbackPromptDialog(
-          eventTitle: (ed['title'] as String?) ?? 'this event',
+          eventTitle: eventData['title'] ?? 'this event',
+          eventId: eventId,
         ),
       );
-      return; // one prompt per app open is enough.
+      
+      // Only show ONE pop-up at a time
+      return;
     }
-  } catch (_) {
-    // Best-effort — never block app startup over this.
+  } catch (e) {
+    // If something fails, just ignore it
+    print('Error: $e');
   }
 }
 
+// 👇 THIS IS THE ACTUAL POP-UP WIDGET
 class _FeedbackPromptDialog extends StatelessWidget {
   final String eventTitle;
-  const _FeedbackPromptDialog({required this.eventTitle});
+  final String eventId;
+
+  const _FeedbackPromptDialog({
+    required this.eventTitle,
+    required this.eventId,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -86,6 +102,7 @@ class _FeedbackPromptDialog extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            // Icon
             Container(
               width: 64,
               height: 64,
@@ -93,21 +110,39 @@ class _FeedbackPromptDialog extends StatelessWidget {
                 color: AppColors.primaryDark.withOpacity(0.12),
                 shape: BoxShape.circle,
               ),
-              child: Icon(Icons.rate_review_rounded, size: 32, color: AppColors.primaryDark),
+              child: Icon(
+                Icons.rate_review_rounded,
+                size: 32,
+                color: AppColors.primaryDark,
+              ),
             ),
             const SizedBox(height: 18),
+            
+            // Title
             const Text(
               'How was the event?',
               textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: Colors.black87),
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w800,
+                color: Colors.black87,
+              ),
             ),
             const SizedBox(height: 10),
+            
+            // Description
             Text(
-              'You attended "$eventTitle" — share a quick evaluation so the organizer can issue your certificate.',
+              'You attended "$eventTitle". Share your feedback so the organizer can issue your certificate.',
               textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 13, color: Colors.grey, height: 1.5),
+              style: const TextStyle(
+                fontSize: 13,
+                color: Colors.grey,
+                height: 1.5,
+              ),
             ),
             const SizedBox(height: 22),
+            
+            // "Evaluate Now" button
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
@@ -116,16 +151,7 @@ class _FeedbackPromptDialog extends StatelessWidget {
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (_) => Scaffold(
-                        appBar: AppBar(
-                          backgroundColor: Colors.white,
-                          elevation: 0,
-                          foregroundColor: Colors.black87,
-                          title: const Text('Evaluate Events',
-                              style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
-                        ),
-                        body: const StudentFeedbackScreen(),
-                      ),
+                      builder: (_) => const StudentFeedbackScreen(),
                     ),
                   );
                 },
@@ -134,16 +160,25 @@ class _FeedbackPromptDialog extends StatelessWidget {
                   foregroundColor: Colors.white,
                   elevation: 0,
                   padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
                 ),
-                child: const Text('Evaluate Now',
-                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
+                child: const Text(
+                  'Evaluate Now',
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+                ),
               ),
             ),
             const SizedBox(height: 8),
+            
+            // "Maybe Later" button
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text('Maybe Later', style: TextStyle(fontSize: 13, color: Colors.grey)),
+              child: const Text(
+                'Maybe Later',
+                style: TextStyle(fontSize: 13, color: Colors.grey),
+              ),
             ),
           ],
         ),
