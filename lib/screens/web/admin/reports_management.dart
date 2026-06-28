@@ -1904,7 +1904,7 @@ class _ReportsManagementState extends State<ReportsManagement>
               ]
             : [
                 Expanded(flex: 4, child: _headerCell('EVENT NAME')),
-                Expanded(flex: 3, child: _headerCell('ORGANIZATION')),
+                Expanded(flex: 2, child: _headerCell('ORGANIZATION')),
                 Expanded(flex: 2, child: _headerCell('TYPE')),
                 Expanded(flex: 2, child: _headerCell('DATE')),
                 Expanded(
@@ -2508,13 +2508,20 @@ class _ReportsManagementState extends State<ReportsManagement>
             ),
             child: Row(
               children: [
-                Expanded(flex: 3, child: _headerCell('ORGANIZATION')),
+                Expanded(flex: 2, child: _headerCell('ORGANIZATION')),
+                Expanded(
+  flex: 3,
+  child: Padding(
+    padding: const EdgeInsets.only(left: 8),
+    child: _headerCell('EVENT'),
+  ),
+),
                 Expanded(flex: 2, child: _headerCell('EVENT DATE')),
                 Expanded(flex: 2, child: _headerCell('DEADLINE')),
                 Expanded(flex: 2, child: _headerCell('SUBMITTED ON')),
                 Expanded(flex: 2, child: _headerCell('STATUS')),
                 Expanded(
-                  flex: 2,
+                  flex: 1,
                   child: Align(
                     alignment: Alignment.centerRight,
                     child: _headerCell('ACTIONS'),
@@ -2567,175 +2574,152 @@ class _ReportsManagementState extends State<ReportsManagement>
                         ),
                 ),
                 child: Row(
+  children: [
+    // ---- NEW: Organization column ----
+    Expanded(
+      flex: 2,
+      child: Row(
+        children: [
+          _OrgAvatar(name: sub.orgName),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              sub.orgName,
+              style: GoogleFonts.beVietnamPro(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: const Color(0xFF1A202C),
+              ),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
+      ),
+    ),
+    // ---- NEW: Event column ----
+    Expanded(
+  flex: 3,
+  child: Padding(
+    padding: const EdgeInsets.only(left: 8),
+    child: Text(
+      sub.eventTitle ?? '—',
+      style: GoogleFonts.beVietnamPro(
+        fontSize: 13,
+        fontWeight: FontWeight.w600,
+        color: UpriseColors.primaryDark,
+      ),
+      overflow: TextOverflow.ellipsis,
+    ),
+  ),
+),
+    // ---- Keep the remaining columns, but adjust their flex to match the new header ----
+    // Event Date
+    Expanded(
+      flex: 2,
+      child: Text(
+        sub.eventDate != null
+            ? DateFormat('MMM dd, yyyy').format(sub.eventDate!)
+            : '—',
+        style: GoogleFonts.beVietnamPro(
+          fontSize: 12,
+          color: const Color(0xFF64748B),
+        ),
+      ),
+    ),
+    // Deadline
+    Expanded(
+      flex: 2,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Flexible(
+            child: Text(
+              DateFormat('MMM dd, yyyy').format(rowDeadline),
+              style: GoogleFonts.beVietnamPro(
+                fontSize: 12,
+                color: const Color(0xFF64748B),
+              ),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          if (sub.deadlineOverride != null) ...[
+            const SizedBox(width: 4),
+            const Tooltip(
+              message: 'Custom deadline set by admin',
+              child: Icon(Icons.push_pin_rounded, size: 12, color: UpriseColors.primaryDark),
+            ),
+          ],
+        ],
+      ),
+    ),
+    // Submitted On
+    Expanded(
+      flex: 2,
+      child: Text(
+        isSubmitted
+            ? DateFormat('MMM dd, yyyy').format(sub.submittedAt!)
+            : '—',
+        style: GoogleFonts.beVietnamPro(
+          fontSize: 12,
+          color: isSubmitted ? const Color(0xFF374151) : const Color(0xFF9AA5B4),
+        ),
+      ),
+    ),
+    // Status
+    Expanded(
+      flex: 2,
+      child: isSubmitted
+          ? Align(alignment: Alignment.centerLeft, child: _statusBadge(isLate ? 'late' : 'on time'))
+          : isOverdue
+              ? Align(alignment: Alignment.centerLeft, child: _statusBadge('overdue'))
+              : Row(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    Expanded(
-                      flex: 3,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              _OrgAvatar(name: sub.orgName),
-                              const SizedBox(width: 10),
-                              Expanded(
-                                child: Text(
-                                  sub.orgName,
-                                  style: GoogleFonts.beVietnamPro(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w600,
-                                    color: const Color(0xFF1A202C),
-                                  ),
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                            ],
-                          ),
-                          if (sub.hasApprovedEvent) ...[
-                            const SizedBox(height: 6),
-                            // Each row is now one specific event (an org
-                            // with several finished events gets several
-                            // rows) — this is what tells them apart, so it
-                            // needs to read clearly, not as a faint aside.
-                            Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Padding(
-                                  padding: const EdgeInsets.only(top: 2),
-                                  child: Icon(Icons.event_rounded, size: 12, color: UpriseColors.primaryDark.withAlpha(180)),
-                                ),
-                                const SizedBox(width: 4),
-                                Expanded(
-                                  // Wraps instead of truncating — this is
-                                  // the only thing telling apart several
-                                  // rows for the same org, so a long event
-                                  // title getting cut off with "…" defeats
-                                  // the point.
-                                  child: Text(
-                                    sub.eventTitle ?? '',
-                                    style: GoogleFonts.beVietnamPro(
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w600,
-                                      color: UpriseColors.primaryDark,
-                                      height: 1.3,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ],
-                      ),
-                    ),
-                    Expanded(
-                      flex: 2,
-                      child: Text(
-                        sub.eventDate != null
-                            ? DateFormat('MMM dd, yyyy').format(sub.eventDate!)
-                            : '—',
-                        style: GoogleFonts.beVietnamPro(
-                          fontSize: 12,
-                          color: const Color(0xFF64748B),
-                        ),
-                      ),
-                    ),
-                    Expanded(
-                      flex: 2,
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Flexible(
-                            child: Text(
-                              DateFormat('MMM dd, yyyy').format(rowDeadline),
-                              style: GoogleFonts.beVietnamPro(
-                                fontSize: 12,
-                                color: const Color(0xFF64748B),
-                              ),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                          if (sub.deadlineOverride != null) ...[
-                            const SizedBox(width: 4),
-                            const Tooltip(
-                              message: 'Custom deadline set by admin',
-                              child: Icon(Icons.push_pin_rounded, size: 12, color: UpriseColors.primaryDark),
-                            ),
-                          ],
-                        ],
-                      ),
-                    ),
-                    Expanded(
-                      flex: 2,
-                      child: Text(
-                        isSubmitted
-                            ? DateFormat(
-                                'MMM dd, yyyy',
-                              ).format(sub.submittedAt!)
-                            : '—',
-                        style: GoogleFonts.beVietnamPro(
-                          fontSize: 12,
-                          color: isSubmitted
-                              ? const Color(0xFF374151)
-                              : const Color(0xFF9AA5B4),
-                        ),
-                      ),
-                    ),
-                    Expanded(
-                      flex: 2,
-                      // Align(centerLeft) so the badge hugs its text — a
-                      // bare Container as Expanded's direct child gets
-                      // stretched to fill the whole column width instead
-                      // of sizing to its label.
-                      child: isSubmitted
-                          ? Align(alignment: Alignment.centerLeft, child: _statusBadge(isLate ? 'late' : 'on time'))
-                          : isOverdue
-                          ? Align(alignment: Alignment.centerLeft, child: _statusBadge('overdue'))
-                          : Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                _statusBadge('pending'),
-                                const SizedBox(width: 6),
-                                Text(
-                                  daysLeft > 0 ? '$daysLeft d left' : 'today',
-                                  style: GoogleFonts.beVietnamPro(
-                                    fontSize: 10,
-                                    color: UpriseColors.warning,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ],
-                            ),
-                    ),
-                    Expanded(
-                      flex: 2,
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.end,
-                        children: [
-                          if (isSubmitted)
-                            _ActionIconButton(
-                              icon: Icons.visibility_outlined,
-                              tooltip: 'View Report',
-                              color: const Color(0xFF3B82F6),
-                              onTap: () => _viewSubmission(sub, title),
-                            )
-                          else
-                            _ActionIconButton(
-                              icon: Icons.send_outlined,
-                              tooltip: 'Send Reminder',
-                              color: const Color(0xFF7C3AED),
-                              onTap: () => _sendReminder(sub, title),
-                            ),
-                          const SizedBox(width: 4),
-                          _ActionIconButton(
-                            icon: Icons.edit_calendar_outlined,
-                            tooltip: 'Edit Deadline',
-                            color: UpriseColors.primaryDark,
-                            onTap: () => _showEditDeadlineDialog(sub, type),
-                          ),
-                        ],
+                    _statusBadge('pending'),
+                    const SizedBox(width: 6),
+                    Text(
+                      daysLeft > 0 ? '$daysLeft d left' : 'today',
+                      style: GoogleFonts.beVietnamPro(
+                        fontSize: 10,
+                        color: UpriseColors.warning,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                   ],
                 ),
+    ),
+    // Actions
+    Expanded(
+      flex: 1,
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.end,
+        children: [
+          if (isSubmitted)
+            _ActionIconButton(
+              icon: Icons.visibility_outlined,
+              tooltip: 'View Report',
+              color: const Color(0xFF3B82F6),
+              onTap: () => _viewSubmission(sub, title),
+            )
+          else
+            _ActionIconButton(
+              icon: Icons.send_outlined,
+              tooltip: 'Send Reminder',
+              color: const Color(0xFF7C3AED),
+              onTap: () => _sendReminder(sub, title),
+            ),
+          const SizedBox(width: 4),
+          _ActionIconButton(
+            icon: Icons.edit_calendar_outlined,
+            tooltip: 'Edit Deadline',
+            color: UpriseColors.primaryDark,
+            onTap: () => _showEditDeadlineDialog(sub, type),
+          ),
+        ],
+      ),
+    ),
+  ],
+),
               ),
             );
           }),
