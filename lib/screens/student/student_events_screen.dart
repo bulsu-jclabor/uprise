@@ -1,6 +1,7 @@
 // lib/screens/student/student_events_screen.dart
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -8,6 +9,11 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:qr_flutter/qr_flutter.dart';
+import 'package:http/http.dart' as http;
+import 'package:path_provider/path_provider.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:open_file/open_file.dart';
 import 'package:uprise/models/event_model.dart';
 import '../../widgets/student/event_image.dart';
 import '../../widgets/student/app_colors.dart';
@@ -31,15 +37,13 @@ class _StudentEventsScreenState extends State<StudentEventsScreen>
 
   // ── Certificate tab state ──
   String _certFilter = 'All';
-  List<String> _certFilters = ['All', 'Others'];
+  List<String> _certFilters = ['All'];
   List<Map<String, dynamic>> _allCertificates = [];
   bool _certLoading = true;
   bool _orgFiltersLoading = true;
   String? _certError;
   String? get _currentUid => FirebaseAuth.instance.currentUser?.uid;
 
-  // Cached once per State lifetime (instead of re-querying on every
-  // rebuild) and live, so newly-created registrations show up automatically.
   late final Stream<Set<String>> _registeredEventIdsStream = () {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return Stream<Set<String>>.value(<String>{});
@@ -78,8 +82,6 @@ class _StudentEventsScreenState extends State<StudentEventsScreen>
     setState(() { _certLoading = true; _certError = null; });
     try {
       final col = FirebaseFirestore.instance.collection('certificates');
-      // Two server-side queries instead of fetching the whole collection:
-      // this user's own certs, plus legacy certs with no recipientUid set.
       final results = await Future.wait([
         if (_currentUid != null) col.where('recipientUid', isEqualTo: _currentUid).get(),
         col.where('recipientUid', isEqualTo: null).get(),
@@ -122,12 +124,12 @@ class _StudentEventsScreenState extends State<StudentEventsScreen>
           .toList();
       names.sort();
       setState(() {
-        _certFilters = ['All', ...names, 'Others'];
+        _certFilters = ['All', ...names];
         _orgFiltersLoading = false;
       });
     } catch (_) {
       setState(() {
-        _certFilters = ['All', 'Others'];
+        _certFilters = ['All'];
         _orgFiltersLoading = false;
       });
     }
@@ -166,6 +168,91 @@ class _StudentEventsScreenState extends State<StudentEventsScreen>
   bool _isBase64Image(String url) =>
       url.startsWith('data:image') || (!url.startsWith('http') && url.isNotEmpty);
 
+  // ── Decode certificate image bytes (handles base64 + network URLs) ──
+  Future<Uint8List?> _getCertImageBytes(String imageUrl) async {
+    if (imageUrl.isEmpty) return null;
+    try {
+      if (_isBase64Image(imageUrl)) {
+        final b64 = imageUrl.contains(',') ? imageUrl.split(',').last : imageUrl;
+        return base64Decode(b64);
+      }
+      final resp = await http.get(Uri.parse(imageUrl));
+      if (resp.statusCode == 200) return resp.bodyBytes;
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  // ── Build & save certificate as a PDF, then open it ──
+  Future<void> _downloadCertificateAsPdf(Map<String, dynamic> cert) async {
+    final imageUrl = cert['imageUrl'] as String? ?? '';
+    final title = (cert['title'] ?? 'Certificate').toString();
+
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+      content: Text('Preparing PDF...'),
+      backgroundColor: AppColors.primaryDark,
+      duration: Duration(seconds: 2),
+    ));
+
+    try {
+      final imageBytes = await _getCertImageBytes(imageUrl);
+      if (imageBytes == null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('No certificate image available to download.'),
+            backgroundColor: Colors.red,
+          ));
+        }
+        return;
+      }
+
+      final pdfImage = pw.MemoryImage(imageBytes);
+      final doc = pw.Document();
+      doc.addPage(
+        pw.Page(
+          pageFormat: PdfPageFormat.a4,
+          margin: const pw.EdgeInsets.all(0),
+          build: (context) {
+            return pw.Center(
+              child: pw.Image(pdfImage, fit: pw.BoxFit.contain),
+            );
+          },
+        ),
+      );
+
+      final dir = await getApplicationDocumentsDirectory();
+      final safeName = title
+          .trim()
+          .replaceAll(RegExp(r'[^\w\s-]'), '')
+          .replaceAll(RegExp(r'\s+'), '_');
+      final fileName = '${safeName.isEmpty ? "certificate" : safeName}_${cert['id']}.pdf';
+      final filePath = '${dir.path}/$fileName';
+      final file = File(filePath);
+      await file.writeAsBytes(await doc.save());
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('$title saved as PDF'),
+        backgroundColor: Colors.green,
+        duration: const Duration(seconds: 4),
+        action: SnackBarAction(
+          label: 'OPEN',
+          textColor: Colors.white,
+          onPressed: () => OpenFile.open(filePath),
+        ),
+      ));
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Failed to save PDF: $e'),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 5),
+        ));
+      }
+    }
+  }
+
   Widget _buildCertImage(String imageUrl, {double height = 180}) {
     if (imageUrl.isEmpty) return const SizedBox.shrink();
     if (_isBase64Image(imageUrl)) {
@@ -187,12 +274,10 @@ class _StudentEventsScreenState extends State<StudentEventsScreen>
         errorBuilder: (_, __, ___) => const SizedBox.shrink());
   }
 
-  // ── Upload dialog ──
+  // ── Upload dialog (centered) ──
   Future<void> _showUploadDialog() async {
     final eventNameCtrl = TextEditingController();
 
-    final orgOptions = _certFilters.where((f) => f != 'All').toList();
-    String selectedType = orgOptions.isNotEmpty ? orgOptions.first : '';
     File? pickedFile;
     bool isUploading = false;
 
@@ -206,12 +291,9 @@ class _StudentEventsScreenState extends State<StudentEventsScreen>
       contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
     );
 
-    await showModalBottomSheet(
+    await showDialog(
       context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      barrierDismissible: true,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setSheet) {
           Future<void> pickImage(ImageSource src) async {
@@ -233,12 +315,6 @@ class _StudentEventsScreenState extends State<StudentEventsScreen>
                 backgroundColor: AppColors.primaryDark));
               return;
             }
-            if (selectedType.isEmpty) {
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                content: Text('Please select an organization.'),
-                backgroundColor: AppColors.primaryDark));
-              return;
-            }
             setSheet(() => isUploading = true);
             try {
               final bytes = await pickedFile!.readAsBytes();
@@ -252,8 +328,6 @@ class _StudentEventsScreenState extends State<StudentEventsScreen>
               }
               final docRef = await FirebaseFirestore.instance.collection('certificates').add({
                 'eventName': eventNameCtrl.text.trim(),
-                'type': selectedType,
-                'organization': selectedType,
                 'imageUrl': b64Img,
                 'issuedAt': FieldValue.serverTimestamp(),
                 'recipientUid': _currentUid,
@@ -267,8 +341,8 @@ class _StudentEventsScreenState extends State<StudentEventsScreen>
                 'id': docRef.id,
                 'title': eventNameCtrl.text.trim(),
                 'date': '${months[now.month-1]} ${now.day.toString().padLeft(2,'0')}, ${now.year}',
-                'category': selectedType,
-                'organization': selectedType,
+                'category': 'General',
+                'organization': '',
                 'signatories': '',
                 'status': 'issued',
                 'recipients': 1,
@@ -293,132 +367,141 @@ class _StudentEventsScreenState extends State<StudentEventsScreen>
             }
           }
 
-          return Padding(
-            padding: EdgeInsets.only(
-              bottom: MediaQuery.of(ctx).viewInsets.bottom,
-              left: 20, right: 20, top: 20),
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Center(child: Container(
-                    width: 40, height: 4,
-                    margin: const EdgeInsets.only(bottom: 16),
-                    decoration: BoxDecoration(color: Colors.grey.shade300,
-                        borderRadius: BorderRadius.circular(2)),
-                  )),
-                  const Text('Upload Certificate',
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black87)),
-                  const SizedBox(height: 4),
-                  Text('Add the image, name, and type of your certificate.',
-                      style: TextStyle(fontSize: 12, color: Colors.grey.shade500)),
-                  const SizedBox(height: 20),
-
-                  GestureDetector(
-                    onTap: () => showModalBottomSheet(
-                      context: ctx,
-                      builder: (c) => SafeArea(child: Wrap(children: [
-                        ListTile(
-                          leading: const Icon(Icons.photo_library_rounded),
-                          title: const Text('Choose from Gallery'),
-                          onTap: () { Navigator.pop(c); pickImage(ImageSource.gallery); },
-                        ),
-                        ListTile(
-                          leading: const Icon(Icons.camera_alt_rounded),
-                          title: const Text('Take a Photo'),
-                          onTap: () { Navigator.pop(c); pickImage(ImageSource.camera); },
-                        ),
-                      ])),
-                    ),
-                    child: Container(
-                      height: 160, width: double.infinity,
-                      decoration: BoxDecoration(
-                        color: AppColors.primaryDark.shade50,
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: AppColors.primaryDark.shade200, width: 1.5),
-                      ),
-                      child: pickedFile != null
-                          ? ClipRRect(
-                              borderRadius: BorderRadius.circular(13),
-                              child: Stack(fit: StackFit.expand, children: [
-                                Image.file(pickedFile!, fit: BoxFit.cover),
-                                Positioned(bottom: 8, right: 8,
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                    decoration: BoxDecoration(color: Colors.black54,
-                                        borderRadius: BorderRadius.circular(8)),
-                                    child: const Text('Tap to change',
-                                        style: TextStyle(color: Colors.white, fontSize: 11)),
-                                  ),
-                                ),
-                              ]),
-                            )
-                          : Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-                              Icon(Icons.cloud_upload_rounded, size: 44, color: AppColors.primaryDark.shade400),
-                              const SizedBox(height: 8),
-                              Text('Tap to upload image',
-                                  style: TextStyle(color: AppColors.primaryDark.shade400, fontWeight: FontWeight.w500)),
+          return Dialog(
+            backgroundColor: Colors.white,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+            insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                maxHeight: MediaQuery.of(ctx).size.height * 0.85,
+                maxWidth: 480,
+              ),
+              child: SingleChildScrollView(
+                padding: EdgeInsets.only(
+                  bottom: MediaQuery.of(ctx).viewInsets.bottom + 24,
+                  left: 24, right: 24, top: 24,
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // ── Header row with close button ──
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text('Upload Certificate',
+                                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black87)),
                               const SizedBox(height: 4),
-                              Text('Keep image under 700KB for best results',
-                                  style: TextStyle(color: Colors.grey.shade400, fontSize: 11)),
-                            ]),
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-
-                  _certSectionLabel('Certificate Details'),
-                  const SizedBox(height: 12),
-                  TextField(controller: eventNameCtrl, decoration: fd('Certificate Name *', hint: 'e.g. Codecraft')),
-                  const SizedBox(height: 12),
-                  orgOptions.isNotEmpty
-                      ? DropdownButtonFormField<String>(
-                          value: selectedType, decoration: fd('Organization *'),
-                          items: orgOptions.map((o) => DropdownMenuItem(value: o, child: Text(o))).toList(),
-                          onChanged: (v) { if (v != null) setSheet(() => selectedType = v); },
-                        )
-                      : Container(
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: Colors.grey.shade100,
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: Colors.grey.shade300),
+                              Text('Add the image and name of your certificate.',
+                                  style: TextStyle(fontSize: 12, color: Colors.grey.shade500)),
+                            ],
                           ),
-                          child: Row(children: [
-                            Icon(Icons.info_outline, size: 18, color: Colors.grey.shade500),
-                            const SizedBox(width: 8),
-                            Expanded(child: Text('No organizations available yet.',
-                                style: TextStyle(fontSize: 12, color: Colors.grey.shade600))),
-                          ]),
                         ),
-                  const SizedBox(height: 28),
-
-                  SizedBox(
-                    width: double.infinity, height: 52,
-                    child: ElevatedButton(
-                      onPressed: isUploading ? null : doUpload,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.primaryDark,
-                        disabledBackgroundColor: AppColors.primaryDark.shade200,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                      ),
-                      child: isUploading
-                          ? const Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                              SizedBox(width: 20, height: 20,
-                                  child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5)),
-                              SizedBox(width: 12),
-                              Text('Uploading...', style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w600)),
-                            ])
-                          : const Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                              Icon(Icons.cloud_upload_rounded, color: Colors.white, size: 20),
-                              SizedBox(width: 8),
-                              Text('Upload Certificate',
-                                  style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w600)),
-                            ]),
+                        GestureDetector(
+                          onTap: () => Navigator.pop(ctx),
+                          child: Container(
+                            width: 32, height: 32,
+                            decoration: BoxDecoration(
+                              color: Colors.grey.shade100,
+                              shape: BoxShape.circle,
+                            ),
+                            child: Icon(Icons.close_rounded, size: 18, color: Colors.grey.shade600),
+                          ),
+                        ),
+                      ],
                     ),
-                  ),
-                  const SizedBox(height: 28),
-                ],
+                    const SizedBox(height: 20),
+
+                    // ── Image picker ──
+                    GestureDetector(
+                      onTap: () => showModalBottomSheet(
+                        context: ctx,
+                        builder: (c) => SafeArea(child: Wrap(children: [
+                          ListTile(
+                            leading: const Icon(Icons.photo_library_rounded),
+                            title: const Text('Choose from Gallery'),
+                            onTap: () { Navigator.pop(c); pickImage(ImageSource.gallery); },
+                          ),
+                          ListTile(
+                            leading: const Icon(Icons.camera_alt_rounded),
+                            title: const Text('Take a Photo'),
+                            onTap: () { Navigator.pop(c); pickImage(ImageSource.camera); },
+                          ),
+                        ])),
+                      ),
+                      child: Container(
+                        height: 160, width: double.infinity,
+                        decoration: BoxDecoration(
+                          color: AppColors.primaryDark.shade50,
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: AppColors.primaryDark.shade200, width: 1.5),
+                        ),
+                        child: pickedFile != null
+                            ? ClipRRect(
+                                borderRadius: BorderRadius.circular(13),
+                                child: Stack(fit: StackFit.expand, children: [
+                                  Image.file(pickedFile!, fit: BoxFit.cover),
+                                  Positioned(bottom: 8, right: 8,
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                      decoration: BoxDecoration(color: Colors.black54,
+                                          borderRadius: BorderRadius.circular(8)),
+                                      child: const Text('Tap to change',
+                                          style: TextStyle(color: Colors.white, fontSize: 11)),
+                                    ),
+                                  ),
+                                ]),
+                              )
+                            : Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+                                Icon(Icons.cloud_upload_rounded, size: 44, color: AppColors.primaryDark.shade400),
+                                const SizedBox(height: 8),
+                                Text('Tap to upload image',
+                                    style: TextStyle(color: AppColors.primaryDark.shade400, fontWeight: FontWeight.w500)),
+                                const SizedBox(height: 4),
+                                Text('Keep image under 700KB for best results',
+                                    style: TextStyle(color: Colors.grey.shade400, fontSize: 11)),
+                              ]),
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+
+                    // ── Certificate details ──
+                    _certSectionLabel('Certificate Details'),
+                    const SizedBox(height: 12),
+                    TextField(controller: eventNameCtrl, decoration: fd('Certificate Name *', hint: 'e.g. Codecraft')),
+                    const SizedBox(height: 24),
+
+                    // ── Upload button ──
+                    SizedBox(
+                      width: double.infinity, height: 52,
+                      child: ElevatedButton(
+                        onPressed: isUploading ? null : doUpload,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.primaryDark,
+                          disabledBackgroundColor: AppColors.primaryDark.shade200,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                        ),
+                        child: isUploading
+                            ? const Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                                SizedBox(width: 20, height: 20,
+                                    child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5)),
+                                SizedBox(width: 12),
+                                Text('Uploading...', style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w600)),
+                              ])
+                            : const Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                                Icon(Icons.cloud_upload_rounded, color: Colors.white, size: 20),
+                                SizedBox(width: 8),
+                                Text('Upload Certificate',
+                                    style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w600)),
+                              ]),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           );
@@ -525,14 +608,16 @@ class _StudentEventsScreenState extends State<StudentEventsScreen>
                       Text(cert['title'],
                           style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Colors.black87)),
                       const SizedBox(height: 4),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                        decoration: BoxDecoration(color: AppColors.primaryDark.shade50,
-                            borderRadius: BorderRadius.circular(20)),
-                        child: Text(cert['category'],
-                            style: TextStyle(color: AppColors.primaryDark.shade700, fontSize: 11, fontWeight: FontWeight.w500)),
-                      ),
-                      const SizedBox(height: 4),
+                      if (cert['category'] != 'Others') ...[
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                          decoration: BoxDecoration(color: AppColors.primaryDark.shade50,
+                              borderRadius: BorderRadius.circular(20)),
+                          child: Text(cert['category'],
+                              style: TextStyle(color: AppColors.primaryDark.shade700, fontSize: 11, fontWeight: FontWeight.w500)),
+                        ),
+                        const SizedBox(height: 4),
+                      ],
                       Text(cert['date'], style: TextStyle(color: Colors.grey.shade500, fontSize: 12)),
                       if (isUploaded) ...[
                         const SizedBox(height: 6),
@@ -548,8 +633,7 @@ class _StudentEventsScreenState extends State<StudentEventsScreen>
                   ),
                 ),
                 GestureDetector(
-                  onTap: () => ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                    content: Text('${cert['title']} downloaded'), backgroundColor: AppColors.primaryDark)),
+                  onTap: () => _downloadCertificateAsPdf(cert),
                   child: Container(
                     width: 40, height: 40,
                     decoration: BoxDecoration(color: AppColors.primaryDark, borderRadius: BorderRadius.circular(10)),
@@ -608,7 +692,7 @@ class _StudentEventsScreenState extends State<StudentEventsScreen>
                   style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
             ),
           ),
-        if ((cert['organization'] as String).isNotEmpty)
+        if ((cert['organization'] as String).isNotEmpty && cert['organization'] != 'Others')
           Positioned(bottom: 10, left: 14,
             child: Text(cert['organization'],
                 style: const TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.w500)),
@@ -665,7 +749,7 @@ class _StudentEventsScreenState extends State<StudentEventsScreen>
           labelColor: AppColors.primaryDark,
           unselectedLabelColor: Colors.black45,
           indicatorWeight: 3,
-          dividerColor: Colors.transparent, // 👈 This removes the black line under tabs
+          dividerColor: Colors.transparent,
           tabs: const [
             Tab(text: 'Calendar'),
             Tab(text: 'Upcoming'),
@@ -890,9 +974,6 @@ class _StudentEventsScreenState extends State<StudentEventsScreen>
 
     return Stack(children: [
       Column(children: [
-        // Entry point to evaluate attended events — required before an org
-        // can generate a certificate for you (see Notifications for the
-        // per-event reminder once you've attended).
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
           child: GestureDetector(
@@ -1007,7 +1088,7 @@ class _StudentEventsScreenState extends State<StudentEventsScreen>
         ),
       ]),
 
-      // Upload FAB — icon only, circular
+      // Upload FAB
       Positioned(
         right: 16, bottom: 16,
         child: FloatingActionButton(
@@ -1536,7 +1617,6 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
       ));
       return;
     }
-    // No slot check – org does not enforce capacity limits.
     final formError = _validateDynamicFields();
     if (formError != null) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -1565,7 +1645,6 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
         final evRef = FirebaseFirestore.instance.collection('events').doc(widget.event.id);
         final evDoc = await tx.get(evRef);
         if (!evDoc.exists) throw Exception('Event not found');
-        // No slot decrement – org does not enforce limits.
         tx.set(regRef, {
           'userId': user.uid,
           'eventId': widget.event.id,
