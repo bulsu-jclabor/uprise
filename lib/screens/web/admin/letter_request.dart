@@ -152,7 +152,7 @@ class _AdminLetterRequestScreenState extends State<AdminLetterRequestScreen> {
       children: [
         Row(
           children: [
-            Icon(icon, size: 13, color: const Color(0xFF9AA5B4)),
+            Icon(icon, size: 13, color: AdminColors.primaryDark.withAlpha(150)),
             const SizedBox(width: 6),
             Text(
               label,
@@ -1923,6 +1923,10 @@ class _AdminLetterRequestScreenState extends State<AdminLetterRequestScreen> {
               constraints: BoxConstraints(
                 maxHeight: MediaQuery.of(context).size.height * 0.88,
               ),
+              decoration: const BoxDecoration(
+                color: Color(0xFFFFFAF5),
+                borderRadius: BorderRadius.all(Radius.circular(18)),
+              ),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -1930,7 +1934,11 @@ class _AdminLetterRequestScreenState extends State<AdminLetterRequestScreen> {
                   Container(
                     padding: const EdgeInsets.fromLTRB(24, 20, 20, 20),
                     decoration: BoxDecoration(
-                      color: AdminColors.primaryDark,
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [AdminColors.primaryDark, AdminColors.primaryDark.withAlpha(225)],
+                      ),
                       borderRadius: const BorderRadius.vertical(
                         top: Radius.circular(18),
                       ),
@@ -1941,8 +1949,8 @@ class _AdminLetterRequestScreenState extends State<AdminLetterRequestScreen> {
                           width: 44,
                           height: 44,
                           decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.15),
                             borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: Colors.white.withAlpha(70)),
                           ),
                           child: const Icon(
                             Icons.mail_outline_rounded,
@@ -1996,7 +2004,7 @@ class _AdminLetterRequestScreenState extends State<AdminLetterRequestScreen> {
                   ),
 
                   // ─── BODY ────────────────────────────────────────────
-                  Expanded(
+                  Flexible(
                     child: SingleChildScrollView(
                       padding: const EdgeInsets.all(24),
                       child: Column(
@@ -2006,7 +2014,7 @@ class _AdminLetterRequestScreenState extends State<AdminLetterRequestScreen> {
                           Container(
                             padding: const EdgeInsets.all(14),
                             decoration: BoxDecoration(
-                              color: const Color(0xFFF8F9FB),
+                              color: Colors.white,
                               borderRadius: BorderRadius.circular(10),
                               border: Border.all(
                                 color: const Color(0xFFE2E6EA),
@@ -2077,7 +2085,7 @@ class _AdminLetterRequestScreenState extends State<AdminLetterRequestScreen> {
                           Container(
                             padding: const EdgeInsets.all(16),
                             decoration: BoxDecoration(
-                              color: const Color(0xFFF8F9FB),
+                              color: Colors.white,
                               borderRadius: BorderRadius.circular(10),
                               border: Border.all(
                                 color: const Color(0xFFE2E6EA),
@@ -2141,7 +2149,7 @@ class _AdminLetterRequestScreenState extends State<AdminLetterRequestScreen> {
                             Container(
                               padding: const EdgeInsets.all(14),
                               decoration: BoxDecoration(
-                                color: const Color(0xFFF8F9FB),
+                                color: Colors.white,
                                 borderRadius: BorderRadius.circular(10),
                                 border: Border.all(
                                   color: const Color(0xFFE2E6EA),
@@ -2196,14 +2204,10 @@ class _AdminLetterRequestScreenState extends State<AdminLetterRequestScreen> {
                             Container(
                               padding: const EdgeInsets.all(14),
                               decoration: BoxDecoration(
-                                color: AdminColors.primaryDark.withOpacity(
-                                  0.04,
-                                ),
+                                color: Colors.white,
                                 borderRadius: BorderRadius.circular(10),
                                 border: Border.all(
-                                  color: AdminColors.primaryDark.withOpacity(
-                                    0.15,
-                                  ),
+                                  color: const Color(0xFFE2E6EA),
                                 ),
                               ),
                               child: Row(
@@ -2397,11 +2401,7 @@ class _AdminLetterRequestScreenState extends State<AdminLetterRequestScreen> {
                       padding: const EdgeInsets.fromLTRB(24, 16, 24, 20),
                       decoration: const BoxDecoration(
                         border: Border(
-                          top: BorderSide(color: Color(0xFFE8ECF0)),
-                        ),
-                        color: Color(0xFFF8F9FB),
-                        borderRadius: BorderRadius.vertical(
-                          bottom: Radius.circular(18),
+                          top: BorderSide(color: Color(0xFFEDF0F3)),
                         ),
                       ),
                       child: Row(
@@ -2503,22 +2503,17 @@ class _AdminLetterRequestScreenState extends State<AdminLetterRequestScreen> {
                       padding: const EdgeInsets.fromLTRB(24, 16, 24, 20),
                       decoration: const BoxDecoration(
                         border: Border(
-                          top: BorderSide(color: Color(0xFFE8ECF0)),
-                        ),
-                        color: Color(0xFFF8F9FB),
-                        borderRadius: BorderRadius.vertical(
-                          bottom: Radius.circular(18),
+                          top: BorderSide(color: Color(0xFFEDF0F3)),
                         ),
                       ),
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.end,
                         children: [
-                          ElevatedButton(
+                          OutlinedButton(
                             onPressed: () => Navigator.pop(ctx),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: AdminColors.primaryDark,
-                              foregroundColor: Colors.white,
-                              elevation: 0,
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: const Color(0xFF374151),
+                              side: const BorderSide(color: Color(0xFFE2E6EA)),
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(8),
                               ),

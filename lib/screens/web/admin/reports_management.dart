@@ -334,6 +334,7 @@ class _ReportsManagementState extends State<ReportsManagement>
 
   final TextEditingController _eventSearchController = TextEditingController();
   final TextEditingController _reportSearchController = TextEditingController();
+  final TextEditingController _submissionSearchController = TextEditingController();
 
   String _filterOrg = 'All Organizations';
   String _filterType = 'All Types';
@@ -341,6 +342,7 @@ class _ReportsManagementState extends State<ReportsManagement>
   String _filterAcademicYear = 'All Years';
   String _filterSemester = 'All Semesters';
   String _filterStatus = 'All';
+  String _submissionStatusFilter = 'All';
   final String _reportView = 'By Event';
 
   static const List<String> _academicYears = [
@@ -392,6 +394,7 @@ class _ReportsManagementState extends State<ReportsManagement>
     _tabController.dispose();
     _eventSearchController.dispose();
     _reportSearchController.dispose();
+    _submissionSearchController.dispose();
     super.dispose();
   }
 
@@ -494,24 +497,22 @@ class _ReportsManagementState extends State<ReportsManagement>
       final orgMap = {
         for (var o in _organizations) o['id'] as String: o['name'] as String,
       };
-      final List<EventReport> loaded = [];
-      for (final doc in eventsSnap.docs) {
-        final data = doc.data() as Map<String, dynamic>;
-        final orgId = data['orgId']?.toString() ?? '';
-        final orgName =
-            orgMap[orgId] ?? data['orgName']?.toString() ?? 'Unknown';
-        final regSnap = await FirebaseFirestore.instance
-            .collection('registrations')
-            .where('eventId', isEqualTo: doc.id)
-            .get();
-        final registrants = regSnap.docs.length;
-        final attendees = regSnap.docs
-            .where((r) => (r.data())['attended'] == true)
-            .length;
-        loaded.add(
-          EventReport.fromFirestore(doc, orgName, registrants, attendees),
-        );
-      }
+      // Registrant/attendee counts are no longer fetched here — this used
+      // to run one extra Firestore round-trip PER event, sequentially,
+      // every time any filter changed (the cause of the page-wide lag).
+      // Those counts are now fetched on-demand for just the one event
+      // being viewed, in _buildDetailView's attendance section instead.
+      final List<EventReport> loaded = [
+        for (final doc in eventsSnap.docs)
+          EventReport.fromFirestore(
+            doc,
+            orgMap[(doc.data() as Map<String, dynamic>)['orgId']?.toString() ?? ''] ??
+                (doc.data() as Map<String, dynamic>)['orgName']?.toString() ??
+                'Unknown',
+            0,
+            0,
+          ),
+      ];
       if (!mounted) return;
       setState(() => _events = loaded);
     } catch (e) {
@@ -519,6 +520,25 @@ class _ReportsManagementState extends State<ReportsManagement>
     } finally {
       if (mounted) setState(() => _loadingEvents = false);
     }
+  }
+
+  // Registrants come from the `registrations` collection; attendees come
+  // from the actual attendance subcollection events/{id}/attendances
+  // (only ever written with status 'present' or 'late' — see
+  // org_attendance_qr.dart — so a doc existing there means the student
+  // showed up). `registrations.attended` is NOT used: nothing in the app
+  // ever writes that field, so it would always read as 0.
+  Future<(int, int)> _loadEventAttendanceStats(String eventId) async {
+    final regSnap = await FirebaseFirestore.instance
+        .collection('registrations')
+        .where('eventId', isEqualTo: eventId)
+        .get();
+    final attSnap = await FirebaseFirestore.instance
+        .collection('events')
+        .doc(eventId)
+        .collection('attendances')
+        .get();
+    return (regSnap.docs.length, attSnap.docs.length);
   }
 
   // ── Load Financial Reports ──────────────────────────────────
@@ -675,6 +695,71 @@ class _ReportsManagementState extends State<ReportsManagement>
     }
   }
 
+  // ── Archive Event (Event Summary tab) ───────────────────────────────
+  // Events use a `status` field (approved/pending/rejected/archived) —
+  // same convention org_events_schedule.dart writes — not the boolean
+  // `archived` field reports/proposals use, so this is its own function
+  // rather than reusing _archiveReport.
+  Future<void> _archiveEvent(EventReport event) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      barrierColor: Colors.black54,
+      builder: (_) => _ConfirmDialog(
+        title: 'Archive Event',
+        message: 'Archive "${event.title}" from ${event.orgName}? It will no longer show up as an active event.',
+        confirmLabel: 'Archive',
+        destructive: false,
+      ),
+    );
+    if (confirm != true) return;
+
+    try {
+      await FirebaseFirestore.instance
+          .collection('events')
+          .doc(event.id)
+          .update({'status': 'archived'});
+
+      await activity_log.ActivityLogger.log(
+        action: 'archive_event',
+        module: 'Reports',
+        details: {
+          'eventId': event.id,
+          'orgId': event.orgId,
+          'title': event.title,
+        },
+      );
+
+      setState(() {
+        _events.removeWhere((e) => e.id == event.id);
+        if (_detailEvent?.id == event.id) _detailEvent = null;
+      });
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Event archived successfully'),
+          backgroundColor: UpriseColors.success,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(_DS.radiusSm),
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error archiving event: $e'),
+          backgroundColor: UpriseColors.error,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(_DS.radiusSm),
+          ),
+        ),
+      );
+    }
+  }
+
   // ── View Report Modal ─────────────────────────────────────────────
   void _viewReport(AdminReport report) {
     showDialog(
@@ -684,18 +769,19 @@ class _ReportsManagementState extends State<ReportsManagement>
     );
   }
 
-  // Reports are only due once an event has actually happened, so the
-  // tracker is keyed off each org's most recently FINISHED approved event
-  // (not an upcoming one — there's nothing to report on yet for those).
-  Future<Map<String, Map<String, dynamic>>>
-  _loadLastFinishedEventsByOrg() async {
+  // Reports are only due once an event has actually happened. Returns
+  // EVERY finished approved event per org (not just the most recent one)
+  // — an org that held 3 events has 3 separate report obligations, each
+  // tracked as its own row, not collapsed into one.
+  Future<Map<String, List<Map<String, dynamic>>>>
+  _loadFinishedEventsByOrg() async {
     final now = DateTime.now();
     final eventsSnap = await FirebaseFirestore.instance
         .collection('events')
         .where('status', isEqualTo: 'approved')
         .get();
 
-    final Map<String, Map<String, dynamic>> eventInfo = {};
+    final Map<String, List<Map<String, dynamic>>> eventsByOrg = {};
     for (final doc in eventsSnap.docs) {
       final data = doc.data() as Map<String, dynamic>;
       final orgId = data['orgId']?.toString();
@@ -703,18 +789,16 @@ class _ReportsManagementState extends State<ReportsManagement>
       if (orgId == null || orgId.isEmpty || date == null || !date.isBefore(now)) {
         continue;
       }
-
-      final existing = eventInfo[orgId];
-      if (existing == null ||
-          date.isAfter(existing['eventDate'] as DateTime)) {
-        eventInfo[orgId] = {
-          'eventId': doc.id,
-          'eventTitle': data['title']?.toString() ?? 'Untitled Event',
-          'eventDate': date,
-        };
-      }
+      eventsByOrg.putIfAbsent(orgId, () => []).add({
+        'eventId': doc.id,
+        'eventTitle': data['title']?.toString() ?? 'Untitled Event',
+        'eventDate': date,
+      });
     }
-    return eventInfo;
+    for (final list in eventsByOrg.values) {
+      list.sort((a, b) => (b['eventDate'] as DateTime).compareTo(a['eventDate'] as DateTime));
+    }
+    return eventsByOrg;
   }
 
 
@@ -725,7 +809,10 @@ class _ReportsManagementState extends State<ReportsManagement>
     ]);
   }
 
-  // Per-org/type deadline overrides an admin has set, keyed '{orgId}_{type}'.
+  // Per-(org, event, type) deadline overrides an admin has set. Mapped by
+  // the doc's own orgId+eventId fields (not by parsing the doc ID), so
+  // this stays backward-compatible with override docs saved under the
+  // old org+type-only ID scheme — they already had `eventId` populated.
   Future<Map<String, DateTime>> _loadDeadlineOverrides(String type) async {
     final snap = await FirebaseFirestore.instance
         .collection('report_deadline_overrides')
@@ -735,8 +822,11 @@ class _ReportsManagementState extends State<ReportsManagement>
     for (final doc in snap.docs) {
       final data = doc.data();
       final orgId = data['orgId']?.toString();
+      final eventId = data['eventId']?.toString();
       final deadline = (data['deadline'] as Timestamp?)?.toDate();
-      if (orgId != null && deadline != null) map[orgId] = deadline;
+      if (orgId != null && eventId != null && eventId.isNotEmpty && deadline != null) {
+        map['${orgId}_$eventId'] = deadline;
+      }
     }
     return map;
   }
@@ -746,7 +836,9 @@ class _ReportsManagementState extends State<ReportsManagement>
     String type,
     DateTime? deadline,
   ) async {
-    final docId = '${sub.orgId}_$type';
+    // Keyed per event (not just per org+type) so different events for the
+    // same org don't stomp on each other's custom deadline.
+    final docId = '${sub.orgId}_${sub.eventId}_$type';
     final ref = FirebaseFirestore.instance
         .collection('report_deadline_overrides')
         .doc(docId);
@@ -798,7 +890,7 @@ class _ReportsManagementState extends State<ReportsManagement>
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  sub.orgName,
+                  sub.eventTitle != null ? '${sub.orgName} — ${sub.eventTitle}' : sub.orgName,
                   style: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF64748B)),
                 ),
                 const SizedBox(height: 16),
@@ -879,56 +971,74 @@ class _ReportsManagementState extends State<ReportsManagement>
   }
 
   // Keep these for submission tracker tab
+  // Builds one OrgSubmission per (org, finished event) pair — the real
+  // source of truth for an actual submission is the `reports` collection
+  // (one doc per org+event+type, written by org_reports.dart's _submit()),
+  // NOT the old financial_submissions/accomplishment_submissions
+  // collections, which only ever held a single doc per ORG (keyed by
+  // orgId alone) that got silently overwritten by every new upload
+  // regardless of which event it was actually for.
+  Future<List<OrgSubmission>> _loadSubmissionRows(String type) async {
+    final orgsSnap = await FirebaseFirestore.instance.collection('organizations').get();
+    final allOrgs = orgsSnap.docs
+        .map((doc) => {'id': doc.id, 'name': doc.data()['name']?.toString() ?? 'Unknown'})
+        .toList();
+    final eventsByOrg = await _loadFinishedEventsByOrg();
+    final overrides = await _loadDeadlineOverrides(type);
+
+    final reportsSnap = await FirebaseFirestore.instance
+        .collection('reports')
+        .where('type', isEqualTo: type)
+        .get();
+    final subsMap = <String, Map<String, dynamic>>{};
+    for (final doc in reportsSnap.docs) {
+      final data = doc.data();
+      final orgId = data['orgId']?.toString() ?? '';
+      final eventId = data['eventId']?.toString() ?? '';
+      if (orgId.isEmpty || eventId.isEmpty) continue;
+      subsMap['${orgId}_$eventId'] = {
+        'submittedAt': (data['submittedAt'] as Timestamp?)?.toDate(),
+        'fileBase64': data['fileBase64'],
+        'fileName': data['fileName'],
+        'submissionId': doc.id,
+      };
+    }
+
+    final rows = <OrgSubmission>[];
+    for (final org in allOrgs) {
+      final orgId = org['id']!;
+      final events = eventsByOrg[orgId];
+      if (events == null) continue;
+      for (final ev in events) {
+        final eventId = ev['eventId'] as String;
+        final key = '${orgId}_$eventId';
+        final sub = subsMap[key];
+        rows.add(OrgSubmission(
+          orgId: orgId,
+          orgName: org['name']!,
+          submittedAt: sub?['submittedAt'] as DateTime?,
+          fileBase64: sub?['fileBase64'] as String?,
+          fileName: sub?['fileName'] as String?,
+          submissionId: sub?['submissionId'] as String?,
+          eventId: eventId,
+          eventTitle: ev['eventTitle'] as String,
+          eventDate: ev['eventDate'] as DateTime,
+          deadlineOverride: overrides[key],
+        ));
+      }
+    }
+    return rows;
+  }
+
   Future<void> _loadFinancialSubmissions() async {
     if (!mounted) return;
     setState(() => _loadingFinancialSubs = true);
     try {
-      final orgsSnap = await FirebaseFirestore.instance
-          .collection('organizations')
-          .get();
-      final allOrgs = orgsSnap.docs
-          .map(
-            (doc) => {
-              'id': doc.id,
-              'name': doc.data()['name']?.toString() ?? 'Unknown',
-            },
-          )
-          .toList();
-      final eventInfo = await _loadLastFinishedEventsByOrg();
-      final overrides = await _loadDeadlineOverrides('financial');
-      final subsSnap = await FirebaseFirestore.instance
-          .collection('financial_submissions')
-          .get();
-      final subsMap = <String, Map<String, dynamic>>{};
-      for (final doc in subsSnap.docs) {
-        final data = doc.data();
-        subsMap[data['orgId']?.toString() ?? ''] = {
-          'submittedAt': (data['submittedAt'] as Timestamp).toDate(),
-          'fileBase64': data['fileBase64'],
-          'fileName': data['fileName'],
-          'submissionId': doc.id,
-        };
-      }
+      final rows = await _loadSubmissionRows('financial');
       if (!mounted) return;
-      setState(() {
-        _financialSubs = allOrgs.map((org) {
-          final info = eventInfo[org['id']];
-          return OrgSubmission(
-            orgId: org['id']!,
-            orgName: org['name']!,
-            submittedAt: subsMap[org['id']]?['submittedAt'] as DateTime?,
-            fileBase64: subsMap[org['id']]?['fileBase64'] as String?,
-            fileName: subsMap[org['id']]?['fileName'] as String?,
-            submissionId: subsMap[org['id']]?['submissionId'] as String?,
-            eventId: info?['eventId'] as String?,
-            eventTitle: info?['eventTitle'] as String?,
-            eventDate: info?['eventDate'] as DateTime?,
-            deadlineOverride: overrides[org['id']],
-          );
-        }).toList();
-      });
+      setState(() => _financialSubs = rows);
     } catch (e) {
-      debugPrint('Error: $e');
+      debugPrint('Error loading financial submissions: $e');
     } finally {
       if (mounted) setState(() => _loadingFinancialSubs = false);
     }
@@ -938,52 +1048,11 @@ class _ReportsManagementState extends State<ReportsManagement>
     if (!mounted) return;
     setState(() => _loadingAccomplishmentSubs = true);
     try {
-      final orgsSnap = await FirebaseFirestore.instance
-          .collection('organizations')
-          .get();
-      final allOrgs = orgsSnap.docs
-          .map(
-            (doc) => {
-              'id': doc.id,
-              'name': doc.data()['name']?.toString() ?? 'Unknown',
-            },
-          )
-          .toList();
-      final eventInfo = await _loadLastFinishedEventsByOrg();
-      final overrides = await _loadDeadlineOverrides('accomplishment');
-      final subsSnap = await FirebaseFirestore.instance
-          .collection('accomplishment_submissions')
-          .get();
-      final subsMap = <String, Map<String, dynamic>>{};
-      for (final doc in subsSnap.docs) {
-        final data = doc.data();
-        subsMap[data['orgId']?.toString() ?? ''] = {
-          'submittedAt': (data['submittedAt'] as Timestamp).toDate(),
-          'fileBase64': data['fileBase64'],
-          'fileName': data['fileName'],
-          'submissionId': doc.id,
-        };
-      }
+      final rows = await _loadSubmissionRows('accomplishment');
       if (!mounted) return;
-      setState(() {
-        _accomplishmentSubs = allOrgs.map((org) {
-          final info = eventInfo[org['id']];
-          return OrgSubmission(
-            orgId: org['id']!,
-            orgName: org['name']!,
-            submittedAt: subsMap[org['id']]?['submittedAt'] as DateTime?,
-            fileBase64: subsMap[org['id']]?['fileBase64'] as String?,
-            fileName: subsMap[org['id']]?['fileName'] as String?,
-            submissionId: subsMap[org['id']]?['submissionId'] as String?,
-            eventId: info?['eventId'] as String?,
-            eventTitle: info?['eventTitle'] as String?,
-            eventDate: info?['eventDate'] as DateTime?,
-            deadlineOverride: overrides[org['id']],
-          );
-        }).toList();
-      });
+      setState(() => _accomplishmentSubs = rows);
     } catch (e) {
-      debugPrint('Error: $e');
+      debugPrint('Error loading accomplishment submissions: $e');
     } finally {
       if (mounted) setState(() => _loadingAccomplishmentSubs = false);
     }
@@ -1122,72 +1191,6 @@ class _ReportsManagementState extends State<ReportsManagement>
     await _logGeneratedReport(fileName, 'CSV', 'Accomplishment');
   }
 
-  Future<void> _exportSubmissionCSV(
-    String reportType,
-    List<OrgSubmission> submissions,
-  ) async {
-    final rows = <List<String>>[
-      ['Organization', 'Deadline', 'Submitted On', 'Status'],
-    ];
-    for (final sub in submissions) {
-      final isSubmitted = sub.submittedAt != null;
-      final deadline = sub.eventDeadline;
-      final isOverdue =
-          deadline != null && !isSubmitted && DateTime.now().isAfter(deadline);
-      rows.add([
-        sub.orgName,
-        deadline != null ? DateFormat('yyyy-MM-dd').format(deadline) : '',
-        isSubmitted ? DateFormat('yyyy-MM-dd').format(sub.submittedAt!) : '',
-        isSubmitted ? (sub.isLate ? 'Late' : 'On Time') : (isOverdue ? 'Overdue' : 'Pending'),
-      ]);
-    }
-    final csv = rows.map((r) => r.join(',')).join('\n');
-    await AdminExportUtil.saveText(
-      csv,
-      '${reportType.toLowerCase()}_submissions.csv',
-      mimeType: 'text/csv',
-    );
-    await _logGeneratedReport(
-      '${reportType.toLowerCase()}_submissions.csv',
-      'CSV',
-      'Submission',
-    );
-  }
-
-  Future<void> _exportSubmissionPdf(
-    String reportType,
-    List<OrgSubmission> submissions,
-  ) async {
-    final rows = <List<String>>[
-      ['Organization', 'Deadline', 'Submitted On', 'Status'],
-    ];
-    for (final sub in submissions) {
-      final isSubmitted = sub.submittedAt != null;
-      final deadline = sub.eventDeadline;
-      final isOverdue =
-          deadline != null && !isSubmitted && DateTime.now().isAfter(deadline);
-      rows.add([
-        sub.orgName,
-        deadline != null ? DateFormat('yyyy-MM-dd').format(deadline) : '',
-        isSubmitted ? DateFormat('yyyy-MM-dd').format(sub.submittedAt!) : '',
-        isSubmitted ? (sub.isLate ? 'Late' : 'On Time') : (isOverdue ? 'Overdue' : 'Pending'),
-      ]);
-    }
-
-    final pdfBytes = await AdminExportPdf.generateTablePdf(
-      title: '$reportType Submission Report',
-      headers: const ['Organization', 'Deadline', 'Submitted On', 'Status'],
-      rows: rows,
-    );
-    final fileName =
-        '${reportType.toLowerCase().replaceAll(' ', '_')}_submissions.pdf';
-    await AdminExportUtil.saveBytes(
-      pdfBytes,
-      fileName,
-      mimeType: 'application/pdf',
-    );
-    await _logGeneratedReport(fileName, 'PDF', 'Submission');
-  }
 
   // ── Build ─────────────────────────────────────────────────────────
 
@@ -1200,13 +1203,6 @@ class _ReportsManagementState extends State<ReportsManagement>
           : _buildMainView(),
     );
   }
-
-  static const List<String> _tabSubtitles = [
-    'Build a custom analytics report filtered by organization, event type, and semester.',
-    'Accomplishment reports submitted by organizations, for your review.',
-    'Financial reports submitted by organizations, for your review.',
-    'Track which organizations have met their financial and accomplishment report deadlines.',
-  ];
 
   // Page-level overview, visible regardless of which tab is active — same
   // pattern as the stats row on event_proposals.dart / external_account.dart.
@@ -1653,7 +1649,7 @@ class _ReportsManagementState extends State<ReportsManagement>
                             _ActionIconButton(
                               icon: Icons.archive_outlined,
                               tooltip: 'Archive Report',
-                              color: UpriseColors.warning,
+                              color: const Color(0xFF6B7280),
                               onTap: () => _archiveReport(report),
                             ),
                           ],
@@ -1820,109 +1816,12 @@ class _ReportsManagementState extends State<ReportsManagement>
     });
   }
 
+  // Toolbar + table only — matches the layout every other tab on this page
+  // uses (_buildReportTab, _buildSubmissionTrackerTab). The per-event Type
+  // and attendance Ratio are already visible per-row in the table itself,
+  // so a separate aggregate chart above it was just duplicate noise.
   Widget _buildEventSummaryResults() {
-    final events = _filteredEvents;
-    final typeCount = <String, int>{};
-    final orgCount = <String, int>{};
-
-    for (final e in events) {
-      typeCount[e.type] = (typeCount[e.type] ?? 0) + 1;
-      orgCount[e.orgName] = (orgCount[e.orgName] ?? 0) + 1;
-    }
-
-    final sortedTypes = typeCount.entries.toList()
-      ..sort((a, b) => b.value.compareTo(a.value));
-    final sortedOrgs = orgCount.entries.toList()
-      ..sort((a, b) => b.value.compareTo(a.value));
-    final maxTypeCount = sortedTypes.isEmpty ? 1 : sortedTypes.first.value;
-    final maxOrgCount = sortedOrgs.isEmpty ? 1 : sortedOrgs.first.value;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(28, 0, 28, 12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Expanded(
-                  child: Container(
-                    padding: const EdgeInsets.all(18),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: const Color(0xFFE8ECF0)),
-                      boxShadow: _DS.cardShadow,
-                    ),
-                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      _sectionLabel('Events by Type', icon: Icons.category_rounded),
-                      if (sortedTypes.isEmpty)
-                        Text('No events to display.', style: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF64748B)))
-                      else
-                        ...sortedTypes.map((entry) {
-                          final r = maxTypeCount > 0 ? entry.value / maxTypeCount : 0.0;
-                          return Padding(
-                            padding: const EdgeInsets.only(bottom: 10),
-                            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                              Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                                Text(entry.key, style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF374151))),
-                                Text('${entry.value}', style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.w700, color: UpriseColors.primaryDark)),
-                              ]),
-                              const SizedBox(height: 4),
-                              ClipRRect(
-                                borderRadius: BorderRadius.circular(3),
-                                child: LinearProgressIndicator(value: r.toDouble(), backgroundColor: const Color(0xFFE8ECF0), color: UpriseColors.primaryDark, minHeight: 6),
-                              ),
-                            ]),
-                          );
-                        }),
-                    ]),
-                  ),
-                ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Container(
-                    padding: const EdgeInsets.all(18),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: const Color(0xFFE8ECF0)),
-                      boxShadow: _DS.cardShadow,
-                    ),
-                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      _sectionLabel('Events by Organization', icon: Icons.business_rounded),
-                      if (sortedOrgs.isEmpty)
-                        Text('No events to display.', style: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF64748B)))
-                      else
-                        ...sortedOrgs.take(6).map((entry) {
-                          final r = maxOrgCount > 0 ? entry.value / maxOrgCount : 0.0;
-                          return Padding(
-                            padding: const EdgeInsets.only(bottom: 10),
-                            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                              Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                                Expanded(child: Text(entry.key, style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF374151)), overflow: TextOverflow.ellipsis)),
-                                const SizedBox(width: 8),
-                                Text('${entry.value}', style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.w700, color: UpriseColors.info)),
-                              ]),
-                              const SizedBox(height: 4),
-                              ClipRRect(
-                                borderRadius: BorderRadius.circular(3),
-                                child: LinearProgressIndicator(value: r.toDouble(), backgroundColor: const Color(0xFFE8ECF0), color: UpriseColors.info, minHeight: 6),
-                              ),
-                            ]),
-                          );
-                        }),
-                    ]),
-                  ),
-                ),
-              ]),
-            ],
-          ),
-        ),
-        _buildEventsTable(events, showFinancial: false, showCountdown: false),
-      ],
-    );
+    return _buildEventsTable(_filteredEvents, showFinancial: false, showCountdown: false);
   }
 
   // ── Events Table ──────────────────────────────────────────────────
@@ -1942,8 +1841,11 @@ class _ReportsManagementState extends State<ReportsManagement>
     final end = (start + _pageSize).clamp(0, events.length);
     final pageItems = events.isEmpty ? <EventReport>[] : events.sublist(start, end);
 
+    // No horizontal margin here — the parent SingleChildScrollView
+    // (_buildEventSummaryTab) already applies 28px side padding, so this
+    // table lines up flush with the toolbar above it instead of being
+    // indented an extra 28px on top of that.
     return Container(
-      margin: const EdgeInsets.fromLTRB(28, 0, 28, 0),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(14),
@@ -2001,13 +1903,10 @@ class _ReportsManagementState extends State<ReportsManagement>
                 ),
               ]
             : [
-                Expanded(flex: 3, child: _headerCell('EVENT NAME')),
-                Expanded(flex: 2, child: _headerCell('ORGANIZATION')),
+                Expanded(flex: 4, child: _headerCell('EVENT NAME')),
+                Expanded(flex: 3, child: _headerCell('ORGANIZATION')),
                 Expanded(flex: 2, child: _headerCell('TYPE')),
                 Expanded(flex: 2, child: _headerCell('DATE')),
-                Expanded(flex: 1, child: _headerCell('REG.')),
-                Expanded(flex: 1, child: _headerCell('ATT.')),
-                Expanded(flex: 2, child: _headerCell('RATIO')),
                 Expanded(
                   flex: 1,
                   child: Align(
@@ -2170,7 +2069,7 @@ class _ReportsManagementState extends State<ReportsManagement>
                 ]
               : [
                   Expanded(
-                    flex: 3,
+                    flex: 4,
                     child: Row(
                       children: [
                         _EventIcon(type: event.type),
@@ -2190,7 +2089,7 @@ class _ReportsManagementState extends State<ReportsManagement>
                     ),
                   ),
                   Expanded(
-                    flex: 2,
+                    flex: 3,
                     child: Text(
                       event.orgName,
                       style: GoogleFonts.beVietnamPro(
@@ -2219,63 +2118,23 @@ class _ReportsManagementState extends State<ReportsManagement>
                   ),
                   Expanded(
                     flex: 1,
-                    child: Text(
-                      '${event.registrants}',
-                      style: GoogleFonts.beVietnamPro(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: const Color(0xFF1A202C),
-                      ),
-                    ),
-                  ),
-                  Expanded(
-                    flex: 1,
-                    child: Text(
-                      '${event.attendees}',
-                      style: GoogleFonts.beVietnamPro(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: const Color(0xFF1A202C),
-                      ),
-                    ),
-                  ),
-                  Expanded(
-                    flex: 2,
                     child: Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
                       children: [
-                        Expanded(
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(3),
-                            child: LinearProgressIndicator(
-                              value: event.attendanceRatio / 100,
-                              backgroundColor: const Color(0xFFE8ECF0),
-                              color: UpriseColors.primaryDark,
-                              minHeight: 6,
-                            ),
-                          ),
+                        _ActionIconButton(
+                          icon: Icons.visibility_outlined,
+                          tooltip: 'View Report',
+                          color: const Color(0xFF3B82F6),
+                          onTap: () => setState(() => _detailEvent = event),
                         ),
-                        const SizedBox(width: 6),
-                        Text(
-                          '${event.attendanceRatio}%',
-                          style: GoogleFonts.beVietnamPro(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w700,
-                            color: UpriseColors.primaryDark,
-                          ),
+                        const SizedBox(width: 4),
+                        _ActionIconButton(
+                          icon: Icons.archive_outlined,
+                          tooltip: 'Archive Event',
+                          color: const Color(0xFF6B7280),
+                          onTap: () => _archiveEvent(event),
                         ),
                       ],
-                    ),
-                  ),
-                  Expanded(
-                    flex: 1,
-                    child: Align(
-                      alignment: Alignment.centerRight,
-                      child: _ActionIconButton(
-                        icon: Icons.visibility_outlined,
-                        tooltip: 'View Report',
-                        color: const Color(0xFF3B82F6),
-                        onTap: () => setState(() => _detailEvent = event),
-                      ),
                     ),
                   ),
                 ],
@@ -2401,6 +2260,8 @@ class _ReportsManagementState extends State<ReportsManagement>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          _buildSubmissionTrackerToolbar(),
+          const SizedBox(height: 20),
           _sectionLabel(
             'Financial Report Submissions',
             icon: Icons.payments_rounded,
@@ -2426,6 +2287,175 @@ class _ReportsManagementState extends State<ReportsManagement>
     );
   }
 
+  // Single search + filter + export toolbar shared by BOTH tables below —
+  // replaces what used to be two separate, control-less tables each with
+  // their own footer export button. Same bare search-field-plus-dropdowns
+  // layout as the other admin toolbars in this file.
+  Widget _buildSubmissionTrackerToolbar() {
+    final orgNames = [
+      'All Organizations',
+      ..._organizations.map((o) => o['name'] as String),
+    ];
+
+    final searchField = SizedBox(
+      height: 40,
+      child: TextField(
+        controller: _submissionSearchController,
+        style: GoogleFonts.beVietnamPro(fontSize: 13),
+        decoration: InputDecoration(
+          hintText: 'Search by organization or event…',
+          hintStyle: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF9AA5B4)),
+          prefixIcon: const Icon(Icons.search_rounded, size: 18, color: Color(0xFF9AA5B4)),
+          filled: true,
+          fillColor: Colors.white,
+          contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE2E6EA))),
+          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE2E6EA))),
+          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: UpriseColors.primaryDark, width: 1.5)),
+        ),
+        onChanged: (_) => setState(() {}),
+      ),
+    );
+
+    final filters = Wrap(
+      spacing: 10,
+      runSpacing: 10,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        _FilterDropdown(
+          value: _filterOrg,
+          items: orgNames,
+          hint: 'Organization',
+          icon: Icons.business_rounded,
+          onChanged: (v) => setState(() => _filterOrg = v!),
+        ),
+        _FilterDropdown(
+          value: _submissionStatusFilter,
+          items: const ['All', 'Pending', 'Submitted', 'Late', 'Overdue'],
+          hint: 'Status',
+          icon: Icons.flag_outlined,
+          onChanged: (v) => setState(() => _submissionStatusFilter = v!),
+        ),
+        _ExportButton(
+          onExportCsv: _exportSubmissionTrackerCsv,
+          onExportPdf: _exportSubmissionTrackerPdf,
+        ),
+      ],
+    );
+
+    return LayoutBuilder(builder: (context, constraints) {
+      if (constraints.maxWidth < 760) {
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [searchField, const SizedBox(height: 10), filters],
+        );
+      }
+      return Row(
+        children: [
+          Expanded(child: searchField),
+          const SizedBox(width: 10),
+          filters,
+        ],
+      );
+    });
+  }
+
+  // Shared by both tables and the combined export, so what you export
+  // always matches what you're currently looking at.
+  List<OrgSubmission> _filterSubmissionRows(List<OrgSubmission> subs) {
+    final term = _submissionSearchController.text.trim().toLowerCase();
+    var filtered = subs.where((s) => s.hasApprovedEvent).toList();
+    if (term.isNotEmpty) {
+      filtered = filtered
+          .where((s) =>
+              s.orgName.toLowerCase().contains(term) ||
+              (s.eventTitle ?? '').toLowerCase().contains(term))
+          .toList();
+    }
+    if (_filterOrg != 'All Organizations') {
+      filtered = filtered.where((s) => s.orgName == _filterOrg).toList();
+    }
+    if (_submissionStatusFilter != 'All') {
+      filtered = filtered.where((s) {
+        final isSubmitted = s.submittedAt != null;
+        final deadline = s.eventDeadline;
+        final isOverdue = !isSubmitted && deadline != null && DateTime.now().isAfter(deadline);
+        final isLate = isSubmitted && deadline != null && s.submittedAt!.isAfter(deadline);
+        switch (_submissionStatusFilter) {
+          case 'Submitted': return isSubmitted && !isLate;
+          case 'Late': return isLate;
+          case 'Overdue': return isOverdue;
+          case 'Pending': return !isSubmitted && !isOverdue;
+        }
+        return true;
+      }).toList();
+    }
+    return filtered;
+  }
+
+  Future<void> _exportSubmissionTrackerCsv() async {
+    final finRows = _filterSubmissionRows(_financialSubs);
+    final accRows = _filterSubmissionRows(_accomplishmentSubs);
+    if (finRows.isEmpty && accRows.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No data to export.')));
+      return;
+    }
+    final rows = <List<String>>[
+      ['Type', 'Organization', 'Event', 'Event Date', 'Deadline', 'Submitted On', 'Status'],
+    ];
+    for (final entry in [('Financial', finRows), ('Accomplishment', accRows)]) {
+      for (final s in entry.$2) {
+        rows.add(_submissionExportRow(entry.$1, s));
+      }
+    }
+    String esc(String v) => '"${v.replaceAll('"', '""')}"';
+    final csv = rows.map((r) => r.map(esc).join(',')).join('\n');
+    final ts = DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
+    final fileName = 'submission_tracker_$ts.csv';
+    await AdminExportUtil.saveText(csv, fileName, mimeType: 'text/csv');
+    await _logGeneratedReport(fileName, 'CSV', 'Submission Tracker');
+  }
+
+  Future<void> _exportSubmissionTrackerPdf() async {
+    final finRows = _filterSubmissionRows(_financialSubs);
+    final accRows = _filterSubmissionRows(_accomplishmentSubs);
+    if (finRows.isEmpty && accRows.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No data to export.')));
+      return;
+    }
+    final rows = <List<String>>[];
+    for (final entry in [('Financial', finRows), ('Accomplishment', accRows)]) {
+      for (final s in entry.$2) {
+        rows.add(_submissionExportRow(entry.$1, s));
+      }
+    }
+    final pdfBytes = await AdminExportPdf.generateTablePdf(
+      title: 'Submission Tracker Report',
+      headers: const ['Type', 'Organization', 'Event', 'Event Date', 'Deadline', 'Submitted On', 'Status'],
+      rows: rows,
+    );
+    final ts = DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
+    final fileName = 'submission_tracker_$ts.pdf';
+    await AdminExportUtil.saveBytes(pdfBytes, fileName, mimeType: 'application/pdf');
+    await _logGeneratedReport(fileName, 'PDF', 'Submission Tracker');
+  }
+
+  List<String> _submissionExportRow(String type, OrgSubmission s) {
+    final isSubmitted = s.submittedAt != null;
+    final deadline = s.eventDeadline;
+    final isOverdue = !isSubmitted && deadline != null && DateTime.now().isAfter(deadline);
+    final status = isSubmitted ? (s.isLate ? 'Late' : 'On Time') : (isOverdue ? 'Overdue' : 'Pending');
+    return [
+      type,
+      s.orgName,
+      s.eventTitle ?? '',
+      s.eventDate != null ? DateFormat('yyyy-MM-dd').format(s.eventDate!) : '',
+      deadline != null ? DateFormat('yyyy-MM-dd').format(deadline) : '',
+      isSubmitted ? DateFormat('yyyy-MM-dd').format(s.submittedAt!) : '',
+      status,
+    ];
+  }
+
   // ── Submission Table ──────────────────────────────────────────────
   Widget _buildSubmissionTable(
     String title,
@@ -2440,11 +2470,10 @@ class _ReportsManagementState extends State<ReportsManagement>
 
     final type = title.toLowerCase();
 
-    // Only orgs whose event has actually finished have a report due — an
-    // org with no finished event yet has nothing to track here. Deadline
-    // is always per-org: their own override if set, else 7 days after
-    // their event — there's no separate blanket deadline anymore.
-    final sorted = submissions.where((s) => s.hasApprovedEvent).toList()
+    // Search/org/status filters come from the shared toolbar above both
+    // tables. Deadline is per (org, event): their own override if set,
+    // else 7 days after that specific event.
+    final sorted = _filterSubmissionRows(submissions)
       ..sort((a, b) {
         final now = DateTime.now();
         final aS = a.submittedAt != null;
@@ -2500,7 +2529,7 @@ class _ReportsManagementState extends State<ReportsManagement>
               padding: const EdgeInsets.all(32),
               child: Center(
                 child: Text(
-                  'No organizations with a finished event yet.',
+                  'No matching submissions.',
                   style: GoogleFonts.beVietnamPro(
                     fontSize: 13,
                     color: const Color(0xFF64748B),
@@ -2563,13 +2592,35 @@ class _ReportsManagementState extends State<ReportsManagement>
                           ),
                           if (sub.hasApprovedEvent) ...[
                             const SizedBox(height: 6),
-                            Text(
-                              sub.eventTitle ?? '',
-                              style: GoogleFonts.beVietnamPro(
-                                fontSize: 11,
-                                color: const Color(0xFF64748B),
-                              ),
-                              overflow: TextOverflow.ellipsis,
+                            // Each row is now one specific event (an org
+                            // with several finished events gets several
+                            // rows) — this is what tells them apart, so it
+                            // needs to read clearly, not as a faint aside.
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 2),
+                                  child: Icon(Icons.event_rounded, size: 12, color: UpriseColors.primaryDark.withAlpha(180)),
+                                ),
+                                const SizedBox(width: 4),
+                                Expanded(
+                                  // Wraps instead of truncating — this is
+                                  // the only thing telling apart several
+                                  // rows for the same org, so a long event
+                                  // title getting cut off with "…" defeats
+                                  // the point.
+                                  child: Text(
+                                    sub.eventTitle ?? '',
+                                    style: GoogleFonts.beVietnamPro(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                      color: UpriseColors.primaryDark,
+                                      height: 1.3,
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
                           ],
                         ],
@@ -2630,11 +2681,16 @@ class _ReportsManagementState extends State<ReportsManagement>
                     ),
                     Expanded(
                       flex: 2,
+                      // Align(centerLeft) so the badge hugs its text — a
+                      // bare Container as Expanded's direct child gets
+                      // stretched to fill the whole column width instead
+                      // of sizing to its label.
                       child: isSubmitted
-                          ? _statusBadge(isLate ? 'late' : 'on time')
+                          ? Align(alignment: Alignment.centerLeft, child: _statusBadge(isLate ? 'late' : 'on time'))
                           : isOverdue
-                          ? _statusBadge('overdue')
+                          ? Align(alignment: Alignment.centerLeft, child: _statusBadge('overdue'))
                           : Row(
+                              mainAxisSize: MainAxisSize.min,
                               children: [
                                 _statusBadge('pending'),
                                 const SizedBox(width: 6),
@@ -2665,6 +2721,7 @@ class _ReportsManagementState extends State<ReportsManagement>
                             _ActionIconButton(
                               icon: Icons.send_outlined,
                               tooltip: 'Send Reminder',
+                              color: const Color(0xFF7C3AED),
                               onTap: () => _sendReminder(sub, title),
                             ),
                           const SizedBox(width: 4),
@@ -2682,7 +2739,8 @@ class _ReportsManagementState extends State<ReportsManagement>
               ),
             );
           }),
-          // Footer
+          // Footer — count only now; export moved to the shared toolbar
+          // above both tables instead of a separate button per table.
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
             decoration: const BoxDecoration(
@@ -2690,26 +2748,12 @@ class _ReportsManagementState extends State<ReportsManagement>
               color: Color(0xFFF8F9FB),
               borderRadius: BorderRadius.vertical(bottom: Radius.circular(14)),
             ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  'Showing ${sorted.length} organizations',
-                  style: GoogleFonts.beVietnamPro(
-                    fontSize: 12,
-                    color: const Color(0xFF64748B),
-                  ),
-                ),
-                AdminExportButton(
-                  onSelected: (choice) async {
-                    if (choice == 'csv') {
-                      await _exportSubmissionCSV(title, sorted);
-                    } else if (choice == 'pdf') {
-                      await _exportSubmissionPdf(title, sorted);
-                    }
-                  },
-                ),
-              ],
+            child: Text(
+              'Showing ${sorted.length} submission${sorted.length == 1 ? '' : 's'}',
+              style: GoogleFonts.beVietnamPro(
+                fontSize: 12,
+                color: const Color(0xFF64748B),
+              ),
             ),
           ),
         ],
@@ -2805,7 +2849,7 @@ class _ReportsManagementState extends State<ReportsManagement>
                     Row(
                       children: [
                         OutlinedButton.icon(
-                          onPressed: () {},
+                          onPressed: () => _archiveEvent(event),
                           icon: const Icon(Icons.archive_outlined, size: 15),
                           label: Text(
                             'Archive',
@@ -2910,6 +2954,52 @@ class _ReportsManagementState extends State<ReportsManagement>
                         ),
                       ],
                     ),
+                  ),
+                  const SizedBox(height: 16),
+                  // Registration & attendance — fetched on-demand for just
+                  // this one event (cheap: two queries) rather than eagerly
+                  // for every event in the list, which used to be the cause
+                  // of the page-wide lag. Attendees comes from the real
+                  // attendance subcollection (events/{id}/attendances),
+                  // not the `registrations.attended` field, which nothing
+                  // in the app ever actually writes to.
+                  FutureBuilder<(int, int)>(
+                    future: _loadEventAttendanceStats(event.id),
+                    builder: (context, snapshot) {
+                      final registrants = snapshot.data?.$1 ?? 0;
+                      final attendees = snapshot.data?.$2 ?? 0;
+                      final ratio = registrants > 0
+                          ? ((attendees / registrants) * 100).round()
+                          : 0;
+                      final loading = snapshot.connectionState == ConnectionState.waiting;
+                      return Row(
+                        children: [
+                          _detailStatCard(
+                            'Registrants',
+                            loading ? '—' : '$registrants',
+                            UpriseColors.info,
+                            UpriseColors.infoBg,
+                            Icons.people_outline_rounded,
+                          ),
+                          const SizedBox(width: 14),
+                          _detailStatCard(
+                            'Attendees',
+                            loading ? '—' : '$attendees',
+                            UpriseColors.primaryDark,
+                            UpriseColors.primaryLight,
+                            Icons.check_circle_outline_rounded,
+                          ),
+                          const SizedBox(width: 14),
+                          _detailStatCard(
+                            'Attendance Rate',
+                            loading ? '—' : '$ratio%',
+                            ratio >= 50 ? UpriseColors.success : UpriseColors.warning,
+                            ratio >= 50 ? UpriseColors.successBg : UpriseColors.warningBg,
+                            Icons.donut_large_rounded,
+                          ),
+                        ],
+                      );
+                    },
                   ),
                   const SizedBox(height: 16),
                   // Financial stats
@@ -3342,55 +3432,88 @@ class _ReportsManagementState extends State<ReportsManagement>
       context: context,
       barrierColor: Colors.black54,
       builder: (ctx) => Dialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
         child: Container(
-          width: 420,
-          padding: const EdgeInsets.all(28),
+          width: 460,
+          constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.85),
+          decoration: const BoxDecoration(
+            color: Color(0xFFFFFAF5),
+            borderRadius: BorderRadius.all(Radius.circular(18)),
+          ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
-                children: [
-                  Container(
-                    width: 42,
-                    height: 42,
-                    decoration: BoxDecoration(
-                      color: UpriseColors.successBg,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: const Icon(
-                      Icons.assignment_turned_in_rounded,
-                      color: UpriseColors.success,
-                      size: 20,
-                    ),
+              Container(
+                padding: const EdgeInsets.fromLTRB(24, 20, 20, 20),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [UpriseColors.primaryDark, UpriseColors.primaryDark.withAlpha(225)],
                   ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          '$reportType Report',
-                          style: GoogleFonts.beVietnamPro(
-                            fontSize: 17,
-                            fontWeight: FontWeight.w700,
-                            color: const Color(0xFF1A202C),
-                          ),
-                        ),
-                        Text(
-                          sub.orgName,
-                          style: GoogleFonts.beVietnamPro(
-                            fontSize: 13,
-                            color: const Color(0xFF64748B),
-                          ),
-                        ),
-                      ],
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(18)),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 42,
+                      height: 42,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: Colors.white.withAlpha(70)),
+                      ),
+                      child: const Icon(
+                        Icons.assignment_turned_in_rounded,
+                        color: Colors.white,
+                        size: 20,
+                      ),
                     ),
-                  ),
-                ],
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '$reportType Report',
+                            style: GoogleFonts.beVietnamPro(
+                              fontSize: 17,
+                              fontWeight: FontWeight.w700,
+                              color: Colors.white,
+                            ),
+                          ),
+                          Text(
+                            sub.orgName,
+                            style: GoogleFonts.beVietnamPro(
+                              fontSize: 12,
+                              color: Colors.white.withAlpha(179),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close_rounded, color: Colors.white, size: 20),
+                      onPressed: () => Navigator.pop(ctx),
+                    ),
+                  ],
+                ),
               ),
-              const SizedBox(height: 20),
+              Flexible(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+              if (sub.eventTitle != null) ...[
+                _credentialRow(
+                  label: 'For Event',
+                  value: sub.eventDate != null
+                      ? '${sub.eventTitle} (${DateFormat('MMM dd, yyyy').format(sub.eventDate!)})'
+                      : sub.eventTitle!,
+                  icon: Icons.event_rounded,
+                ),
+                const SizedBox(height: 12),
+              ],
               _credentialRow(
                 label: 'Submitted On',
                 value: DateFormat(
@@ -3406,8 +3529,16 @@ class _ReportsManagementState extends State<ReportsManagement>
                     : 'No file attached.',
                 icon: Icons.attach_file_rounded,
               ),
-              const SizedBox(height: 24),
-              Row(
+                  ],
+                  ),
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.fromLTRB(24, 16, 24, 18),
+                decoration: const BoxDecoration(
+                  border: Border(top: BorderSide(color: Color(0xFFEDF0F3))),
+                ),
+                child: Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
                   if (sub.fileBase64 != null && sub.fileBase64!.isNotEmpty) ...[
@@ -3460,12 +3591,11 @@ class _ReportsManagementState extends State<ReportsManagement>
                     ),
                   ],
                   const SizedBox(width: 10),
-                  ElevatedButton(
+                  OutlinedButton(
                     onPressed: () => Navigator.pop(ctx),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: UpriseColors.primaryDark,
-                      foregroundColor: Colors.white,
-                      elevation: 0,
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: const Color(0xFF374151),
+                      side: const BorderSide(color: Color(0xFFE2E6EA)),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(8),
                       ),
@@ -3484,6 +3614,7 @@ class _ReportsManagementState extends State<ReportsManagement>
                   ),
                 ],
               ),
+              ),
             ],
           ),
         ),
@@ -3501,7 +3632,7 @@ class _ReportsManagementState extends State<ReportsManagement>
       children: [
         Row(
           children: [
-            Icon(icon, size: 14, color: const Color(0xFF64748B)),
+            Icon(icon, size: 14, color: UpriseColors.primaryDark.withAlpha(150)),
             const SizedBox(width: 6),
             Text(
               label,
@@ -3519,7 +3650,7 @@ class _ReportsManagementState extends State<ReportsManagement>
           width: double.infinity,
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
           decoration: BoxDecoration(
-            color: const Color(0xFFF8F9FB),
+            color: Colors.white,
             borderRadius: BorderRadius.circular(8),
             border: Border.all(color: const Color(0xFFE2E6EA)),
           ),
@@ -3678,8 +3809,13 @@ class _ViewAdminReportModal extends StatelessWidget {
 
     return Dialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-      child: SizedBox(
+      child: Container(
         width: 500,
+        constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.85),
+        decoration: const BoxDecoration(
+          color: Color(0xFFFFFAF5),
+          borderRadius: BorderRadius.all(Radius.circular(18)),
+        ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -3687,7 +3823,11 @@ class _ViewAdminReportModal extends StatelessWidget {
             Container(
               padding: const EdgeInsets.fromLTRB(24, 20, 20, 20),
               decoration: BoxDecoration(
-                color: UpriseColors.primaryDark,
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [UpriseColors.primaryDark, UpriseColors.primaryDark.withAlpha(225)],
+                ),
                 borderRadius: const BorderRadius.vertical(
                   top: Radius.circular(18),
                 ),
@@ -3698,8 +3838,8 @@ class _ViewAdminReportModal extends StatelessWidget {
                     width: 38,
                     height: 38,
                     decoration: BoxDecoration(
-                      color: Colors.white.withAlpha(38),
                       borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: Colors.white.withAlpha(70)),
                     ),
                     child: const Icon(
                       Icons.article_outlined,
@@ -3742,9 +3882,10 @@ class _ViewAdminReportModal extends StatelessWidget {
               ),
             ),
             // Body
-            Padding(
-              padding: const EdgeInsets.all(24),
-              child: Column(
+            Flexible(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(24),
+                child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   // Event Title
@@ -3814,7 +3955,7 @@ class _ViewAdminReportModal extends StatelessWidget {
                     Container(
                       padding: const EdgeInsets.all(14),
                       decoration: BoxDecoration(
-                        color: const Color(0xFFF8F9FB),
+                        color: Colors.white,
                         borderRadius: BorderRadius.circular(10),
                         border: Border.all(color: const Color(0xFFE2E6EA)),
                       ),
@@ -3870,19 +4011,22 @@ class _ViewAdminReportModal extends StatelessWidget {
                   ],
                 ],
               ),
+              ),
             ),
             // Footer
             Container(
-              padding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
+              padding: const EdgeInsets.fromLTRB(24, 16, 24, 18),
+              decoration: const BoxDecoration(
+                border: Border(top: BorderSide(color: Color(0xFFEDF0F3))),
+              ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
-                  ElevatedButton(
+                  OutlinedButton(
                     onPressed: () => Navigator.pop(context),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: UpriseColors.primaryDark,
-                      foregroundColor: Colors.white,
-                      elevation: 0,
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: const Color(0xFF374151),
+                      side: const BorderSide(color: Color(0xFFE2E6EA)),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(8),
                       ),
@@ -3919,7 +4063,7 @@ class _ViewAdminReportModal extends StatelessWidget {
       children: [
         Row(
           children: [
-            Icon(icon, size: 13, color: const Color(0xFF9AA5B4)),
+            Icon(icon, size: 13, color: UpriseColors.primaryDark.withAlpha(150)),
             const SizedBox(width: 5),
             Text(
               label,

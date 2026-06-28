@@ -910,7 +910,6 @@ class _OrgReportsScreenState extends State<OrgReportsScreen> {
           .collection('reports')
           .doc(report.id)
           .delete();
-      await _refreshSubmissionStateAfterDelete(report.type);
       await activity_log.ActivityLogger.log(
         action: 'delete_report',
         module: 'reports',
@@ -926,42 +925,6 @@ class _OrgReportsScreenState extends State<OrgReportsScreen> {
     }
   }
 
-  Future<void> _refreshSubmissionStateAfterDelete(String type) async {
-    final col = FirebaseFirestore.instance.collection(
-      type == 'financial'
-          ? 'financial_submissions'
-          : 'accomplishment_submissions',
-    );
-    final snap = await FirebaseFirestore.instance
-        .collection('reports')
-        .where('orgId', isEqualTo: widget.orgId)
-        .where('type', isEqualTo: type)
-        .get();
-    final doc = col.doc(widget.orgId);
-    if (snap.docs.isEmpty) {
-      try {
-        await doc.delete();
-      } catch (_) {}
-      return;
-    }
-    final latest = snap.docs.reduce((a, b) {
-      final aT =
-          (a.data()['submittedAt'] as Timestamp?)?.toDate() ??
-          DateTime.fromMillisecondsSinceEpoch(0);
-      final bT =
-          (b.data()['submittedAt'] as Timestamp?)?.toDate() ??
-          DateTime.fromMillisecondsSinceEpoch(0);
-      return aT.isAfter(bT) ? a : b;
-    });
-    await doc.set({
-      'orgId': widget.orgId,
-      'fileBase64': latest.data()['fileBase64'],
-      'fileName': latest.data()['fileName'],
-      'fileSize': latest.data()['fileSize'],
-      'submittedAt':
-          latest.data()['submittedAt'] ?? FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
-  }
 
   void _snack(String msg, {bool error = false}) {
     if (!mounted) return;
@@ -1455,23 +1418,6 @@ class _ReportModalState extends State<_ReportModal> {
     }
   }
 
-  String _submissionCollection(String type) => type == 'financial'
-      ? 'financial_submissions'
-      : 'accomplishment_submissions';
-
-  Future<void> _syncSubmissionRecord(String type, String? base64, String? name, String? size) async {
-    await FirebaseFirestore.instance
-        .collection(_submissionCollection(type))
-        .doc(widget.orgId)
-        .set({
-          'orgId': widget.orgId,
-          'fileBase64': base64,
-          'fileName': name,
-          'fileSize': size,
-          'submittedAt': FieldValue.serverTimestamp(),
-        }, SetOptions(merge: true));
-  }
-
   // ── PICK FILE (base64 encoding, identical to event proposals) ──────────
   Future<void> _pickFile() async {
     final result = await FilePicker.platform.pickFiles(
@@ -1581,23 +1527,7 @@ class _ReportModalState extends State<_ReportModal> {
     try {
       final col = FirebaseFirestore.instance.collection('reports');
       if (isEdit) {
-        final oldType = widget.existingReport!.type;
         await col.doc(widget.existingReport!.id).update(data);
-        await _syncSubmissionRecord(_type, _fileBase64, _fileName, _fileSize);
-        if (oldType != _type) {
-          final snap = await col
-              .where('orgId', isEqualTo: widget.orgId)
-              .where('type', isEqualTo: oldType)
-              .get();
-          final oldCol = FirebaseFirestore.instance.collection(
-            _submissionCollection(oldType),
-          );
-          if (snap.docs.isEmpty) {
-            try {
-              await oldCol.doc(widget.orgId).delete();
-            } catch (_) {}
-          }
-        }
         await activity_log.ActivityLogger.log(
           action: 'edit_report',
           module: 'reports',
@@ -1614,7 +1544,6 @@ class _ReportModalState extends State<_ReportModal> {
         data['submittedAt'] = FieldValue.serverTimestamp();
         data['submittedBy'] = FirebaseAuth.instance.currentUser?.uid ?? '';
         await col.add(data);
-        await _syncSubmissionRecord(_type, _fileBase64, _fileName, _fileSize);
         await activity_log.ActivityLogger.log(
           action: 'create_report',
           module: 'reports',

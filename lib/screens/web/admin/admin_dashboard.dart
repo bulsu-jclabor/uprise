@@ -290,23 +290,45 @@ class _AdminDashboardState extends State<AdminDashboard> {
     });
   }
 
+  // Anchored top-right under the header — same width and corner as the
+  // bell's PopupMenuButton dropdown (offset: Offset(-318, 54), maxWidth:
+  // 360) — instead of the plain showDialog() that used to center a
+  // differently-sized panel in the middle of the screen, which made
+  // "View All" feel like a completely different control jumping
+  // somewhere else rather than the same notification list staying put.
   void _showAllNotificationsDialog() {
-    showDialog(
+    showGeneralDialog(
       context: context,
+      barrierDismissible: true,
       barrierColor: Colors.black54,
-      builder: (ctx) => Dialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 420, maxHeight: 600),
-          child: _AdminNotificationPanel(
-            notifications: List.from(_notifications),
-            onMarkRead: _markNotificationAsRead,
-            onMarkAllRead: _markAllNotificationsAsRead,
-            onNotificationTap: _handleNotificationTap,
-            listMaxHeight: 480,
+      barrierLabel: 'Notifications',
+      transitionDuration: const Duration(milliseconds: 150),
+      pageBuilder: (ctx, anim, secAnim) {
+        return Align(
+          alignment: Alignment.topRight,
+          child: Padding(
+            padding: const EdgeInsets.only(top: 76, right: 28),
+            child: Material(
+              color: Colors.white,
+              elevation: 12,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+                side: const BorderSide(color: Color(0xFFE8ECF0), width: 0.5),
+              ),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 360, minWidth: 360, maxHeight: 600),
+                child: _AdminNotificationPanel(
+                  notifications: List.from(_notifications),
+                  onMarkRead: _markNotificationAsRead,
+                  onMarkAllRead: _markAllNotificationsAsRead,
+                  onNotificationTap: _handleNotificationTap,
+                  listMaxHeight: 480,
+                ),
+              ),
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 
@@ -499,23 +521,17 @@ class _AdminDashboardState extends State<AdminDashboard> {
             padding: const EdgeInsets.fromLTRB(20, 28, 20, 20),
             child: Row(
               children: [
-                Container(
+                SizedBox(
                   width: 44,
                   height: 44,
-                  decoration: BoxDecoration(
-                    color: Colors.white.withAlpha(46),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(10),
-                    child: Image.asset(
-                      'assets/images/logo.png',
-                      fit: BoxFit.contain,
-                      errorBuilder: (_, __, ___) => const Icon(
-                        Icons.school,
-                        color: Colors.white,
-                        size: 26,
-                      ),
+                  child: Image.asset(
+                    'assets/images/logo.png',
+                    fit: BoxFit.contain,
+                    filterQuality: FilterQuality.high,
+                    errorBuilder: (_, __, ___) => const Icon(
+                      Icons.school,
+                      color: Colors.white,
+                      size: 26,
                     ),
                   ),
                 ),

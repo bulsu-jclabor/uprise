@@ -1583,20 +1583,33 @@ class _ViewOrganizationDialog extends StatelessWidget {
       child: Container(
         width: 640,
         constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.88),
+        // A soft warm cream instead of stark white — ties the body back
+        // to the amber header instead of a flat, generic admin-form look.
+        decoration: const BoxDecoration(
+          color: Color(0xFFFFFAF5),
+          borderRadius: BorderRadius.all(Radius.circular(18)),
+        ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Container(
               padding: const EdgeInsets.fromLTRB(24, 20, 20, 20),
               decoration: BoxDecoration(
-                color: UpriseColors.primaryDark,
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [UpriseColors.primaryDark, UpriseColors.primaryDark.withAlpha(225)],
+                ),
                 borderRadius: const BorderRadius.vertical(top: Radius.circular(18)),
               ),
               child: Row(children: [
                 Container(
                   width: 38,
                   height: 38,
-                  decoration: BoxDecoration(color: Colors.white.withOpacity(0.15), borderRadius: BorderRadius.circular(10)),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: Colors.white.withAlpha(70)),
+                  ),
                   child: const Icon(Icons.open_in_new_rounded, color: Colors.white, size: 20),
                 ),
                 const SizedBox(width: 14),
@@ -1614,7 +1627,7 @@ class _ViewOrganizationDialog extends StatelessWidget {
                 ),
               ]),
             ),
-            Expanded(
+            Flexible(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.all(28),
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -1703,7 +1716,7 @@ class _ViewOrganizationDialog extends StatelessWidget {
                           margin: const EdgeInsets.only(bottom: 12),
                           padding: const EdgeInsets.all(14),
                           decoration: BoxDecoration(
-                            color: const Color(0xFFF8F9FB),
+                            color: Colors.white,
                             borderRadius: BorderRadius.circular(14),
                             border: Border.all(color: const Color(0xFFE2E6EA)),
                           ),
@@ -1748,9 +1761,7 @@ class _ViewOrganizationDialog extends StatelessWidget {
             Container(
               padding: const EdgeInsets.fromLTRB(28, 16, 28, 20),
               decoration: const BoxDecoration(
-                border: Border(top: BorderSide(color: Color(0xFFE8ECF0))),
-                color: Color(0xFFF8F9FB),
-                borderRadius: BorderRadius.vertical(bottom: Radius.circular(18)),
+                border: Border(top: BorderSide(color: Color(0xFFEDF0F3))),
               ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.end,
@@ -1834,7 +1845,7 @@ Widget _infoRow(IconData icon, String text) {
     padding: const EdgeInsets.only(bottom: 6),
     child: Row(
       children: [
-        Icon(icon, size: 16, color: UpriseColors.darkGray),
+        Icon(icon, size: 16, color: UpriseColors.primaryDark.withAlpha(150)),
         const SizedBox(width: 10),
         Expanded(
           child: Text(

@@ -541,9 +541,13 @@ class _OrgDashboardState extends State<OrgDashboard> {
     }
   }
 
-  // Report deadlines are per-org: this org's own override (set by admin
-  // via the "Edit Deadline" icon in reports_management.dart) beats the
-  // automatic 7-days-after-event default. There's no blanket deadline.
+  // Report deadlines are per (org, event): each finished event has its
+  // own financial/accomplishment report obligation and its own deadline
+  // (an admin override via "Edit Deadline" in reports_management.dart, or
+  // the automatic 7-days-after-event default). An org that held several
+  // events has several independent obligations — checked individually
+  // here, instead of collapsing them into one org-wide check that only
+  // looked at the single most-recent event.
   Future<void> _checkReportDeadlineReminders() async {
     final eventsSnap = await FirebaseFirestore.instance
         .collection('events')
@@ -551,54 +555,65 @@ class _OrgDashboardState extends State<OrgDashboard> {
         .where('status', isEqualTo: 'approved')
         .get();
     final now = DateTime.now();
-    DateTime? lastFinishedEventDate;
+    final finishedEvents = <Map<String, dynamic>>[];
     for (final doc in eventsSnap.docs) {
       final date = (doc.data()['date'] as Timestamp?)?.toDate();
       if (date == null || !date.isBefore(now)) continue;
-      if (lastFinishedEventDate == null || date.isAfter(lastFinishedEventDate)) {
-        lastFinishedEventDate = date;
-      }
+      finishedEvents.add({
+        'id': doc.id,
+        'title': doc.data()['title']?.toString() ?? 'Untitled Event',
+        'date': date,
+      });
     }
-    if (lastFinishedEventDate == null) return;
+    if (finishedEvents.isEmpty) return;
 
     final orgDoc = await FirebaseFirestore.instance.collection('organizations').doc(_orgId).get();
     final orgData = orgDoc.data() ?? {};
 
-    Future<void> checkOne(String key, String label, String submissionsCollection) async {
-      final overrideDoc = await FirebaseFirestore.instance
-          .collection('report_deadline_overrides')
-          .doc('${_orgId}_$key')
-          .get();
-      final deadline = (overrideDoc.data()?['deadline'] as Timestamp?)?.toDate() ??
-          lastFinishedEventDate!.add(const Duration(days: 7));
-
-      final daysUntil = deadline.difference(now);
-      if (daysUntil > _deadlineNearWindow || daysUntil.isNegative) return;
-
+    // One cooldown per org+type throttles how often we re-notify; it
+    // doesn't change which event the notification is about — the first
+    // finished event still missing a report (in date order) is reported.
+    Future<void> checkOne(String key, String label) async {
       final lastSentField = 'last${key[0].toUpperCase()}${key.substring(1)}DeadlineReminderAt';
       if (!_cooldownElapsed(orgData[lastSentField] as Timestamp?)) return;
 
-      final subSnap = await FirebaseFirestore.instance
-          .collection(submissionsCollection)
-          .where('orgId', isEqualTo: _orgId)
-          .limit(1)
-          .get();
-      if (subSnap.docs.isNotEmpty) return;
+      for (final ev in finishedEvents) {
+        final eventId = ev['id'] as String;
+        final overrideDoc = await FirebaseFirestore.instance
+            .collection('report_deadline_overrides')
+            .doc('${_orgId}_${eventId}_$key')
+            .get();
+        final deadline = (overrideDoc.data()?['deadline'] as Timestamp?)?.toDate() ??
+            (ev['date'] as DateTime).add(const Duration(days: 7));
 
-      final daysLabel = daysUntil.inDays <= 0 ? 'today' : 'in ${daysUntil.inDays} day${daysUntil.inDays == 1 ? '' : 's'}';
-      await NotificationService.sendToOrgMembers(
-        orgId: _orgId,
-        title: '$label report deadline approaching',
-        body: 'The $label report deadline is $daysLabel. Submit it from Reports if you haven\'t already.',
-        type: 'deadline_reminder',
-      );
-      await FirebaseFirestore.instance.collection('organizations').doc(_orgId).update({
-        lastSentField: FieldValue.serverTimestamp(),
-      });
+        final daysUntil = deadline.difference(now);
+        if (daysUntil > _deadlineNearWindow || daysUntil.isNegative) continue;
+
+        final reportSnap = await FirebaseFirestore.instance
+            .collection('reports')
+            .where('orgId', isEqualTo: _orgId)
+            .where('eventId', isEqualTo: eventId)
+            .where('type', isEqualTo: key)
+            .limit(1)
+            .get();
+        if (reportSnap.docs.isNotEmpty) continue;
+
+        final daysLabel = daysUntil.inDays <= 0 ? 'today' : 'in ${daysUntil.inDays} day${daysUntil.inDays == 1 ? '' : 's'}';
+        await NotificationService.sendToOrgMembers(
+          orgId: _orgId,
+          title: '$label report deadline approaching',
+          body: 'The $label report deadline for "${ev['title']}" is $daysLabel. Submit it from Reports if you haven\'t already.',
+          type: 'deadline_reminder',
+        );
+        await FirebaseFirestore.instance.collection('organizations').doc(_orgId).update({
+          lastSentField: FieldValue.serverTimestamp(),
+        });
+        return;
+      }
     }
 
-    await checkOne('financial', 'Financial', 'financial_submissions');
-    await checkOne('accomplishment', 'Accomplishment', 'accomplishment_submissions');
+    await checkOne('financial', 'Financial');
+    await checkOne('accomplishment', 'Accomplishment');
   }
 
   Future<void> _fetchUnreadNotifications() async {
@@ -3068,62 +3083,87 @@ class _OrgNotificationPanelState extends State<_OrgNotificationPanel> {
     await widget.onMarkAllRead();
   }
 
-  // The dropdown only shows ~400px worth of items — this opens the same
-  // (already fully-loaded) list in a taller dialog so "view all" actually
-  // shows more, instead of just closing the popover.
+  // Anchored top-right under the header — same width (360) and corner as
+  // the bell's PopupMenuButton dropdown (offset: Offset(-318, 54)) —
+  // instead of the plain showDialog() that used to center a wider (420)
+  // panel in the middle of the screen, which made "View All" feel like a
+  // different control jumping elsewhere rather than the same list
+  // staying in place.
   void _openAllNotifications() {
     Navigator.of(context).pop();
-    showDialog(
+    showGeneralDialog(
       context: context,
-      builder: (ctx) => Dialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        child: SizedBox(
-          width: 420,
-          height: MediaQuery.of(ctx).size.height * 0.75,
-          child: Column(
-            children: [
-              Container(
-                padding: const EdgeInsets.fromLTRB(18, 16, 12, 14),
-                decoration: const BoxDecoration(
-                  border: Border(bottom: BorderSide(color: OrgColors.border)),
+      barrierDismissible: true,
+      barrierColor: Colors.black54,
+      barrierLabel: 'Notifications',
+      transitionDuration: const Duration(milliseconds: 150),
+      pageBuilder: (ctx, anim, secAnim) {
+        return Align(
+          alignment: Alignment.topRight,
+          child: Padding(
+            padding: const EdgeInsets.only(top: 76, right: 28),
+            child: Material(
+              color: Colors.white,
+              elevation: 12,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+                side: const BorderSide(color: OrgColors.border, width: 0.5),
+              ),
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxWidth: 360,
+                  minWidth: 360,
+                  maxHeight: MediaQuery.of(ctx).size.height * 0.75,
                 ),
-                child: Row(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(
-                      'All Notifications',
-                      style: GoogleFonts.beVietnamPro(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
-                        color: OrgColors.charcoal,
+                    Container(
+                      padding: const EdgeInsets.fromLTRB(18, 16, 12, 14),
+                      decoration: const BoxDecoration(
+                        border: Border(bottom: BorderSide(color: OrgColors.border)),
+                      ),
+                      child: Row(
+                        children: [
+                          Text(
+                            'All Notifications',
+                            style: GoogleFonts.beVietnamPro(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w700,
+                              color: OrgColors.charcoal,
+                            ),
+                          ),
+                          const Spacer(),
+                          IconButton(
+                            icon: const Icon(Icons.close_rounded, size: 20),
+                            onPressed: () => Navigator.of(ctx).pop(),
+                          ),
+                        ],
                       ),
                     ),
-                    const Spacer(),
-                    IconButton(
-                      icon: const Icon(Icons.close_rounded, size: 20),
-                      onPressed: () => Navigator.of(ctx).pop(),
+                    Flexible(
+                      child: _notifs.isEmpty
+                          ? Padding(
+                              padding: const EdgeInsets.all(32),
+                              child: Text(
+                                'No notifications yet',
+                                style: GoogleFonts.beVietnamPro(fontSize: 13, color: OrgColors.textFaint),
+                              ),
+                            )
+                          : SingleChildScrollView(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: _buildGroupedItems(),
+                              ),
+                            ),
                     ),
                   ],
                 ),
               ),
-              Expanded(
-                child: _notifs.isEmpty
-                    ? Center(
-                        child: Text(
-                          'No notifications yet',
-                          style: GoogleFonts.beVietnamPro(fontSize: 13, color: OrgColors.textFaint),
-                        ),
-                      )
-                    : SingleChildScrollView(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: _buildGroupedItems(),
-                        ),
-                      ),
-              ),
-            ],
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 

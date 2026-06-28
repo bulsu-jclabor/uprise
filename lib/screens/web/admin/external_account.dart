@@ -584,16 +584,9 @@ class _ExternalAccountState extends State<ExternalAccount> {
                 if (req.status == 'approved') ...[
                   const SizedBox(width: 4),
                   _ActionIconButton(
-                    icon: Icons.key_rounded,
-                    tooltip: 'View Credentials',
-                    color: UpriseColors.primaryDark,
-                    onTap: () => _showCredentialsDialog(req),
-                  ),
-                  const SizedBox(width: 4),
-                  _ActionIconButton(
                     icon: Icons.email_outlined,
                     tooltip: 'Resend Credentials',
-                    color: const Color(0xFFEA580C),
+                    color: const Color(0xFF7C3AED),
                     onTap: () => _confirmResendCredentials(req),
                   ),
                 ],
@@ -1202,166 +1195,6 @@ class _ExternalAccountState extends State<ExternalAccount> {
   }
 
   // ── View stored credentials dialog ──────────────────────────────────
-  void _showCredentialsDialog(ExternalRequest req) {
-    showDialog(
-      context: context,
-      barrierColor: Colors.black54,
-      builder: (ctx) => Dialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-        child: SizedBox(
-          width: 420,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                padding: const EdgeInsets.fromLTRB(24, 20, 20, 20),
-                decoration: BoxDecoration(
-                  color: UpriseColors.primaryDark,
-                  borderRadius:
-                      const BorderRadius.vertical(top: Radius.circular(18)),
-                ),
-                child: Row(children: [
-                  Container(
-                    width: 38,
-                    height: 38,
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.15),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: const Icon(Icons.key_rounded,
-                        color: Colors.white, size: 18),
-                  ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Text('Guest Credentials',
-                        style: GoogleFonts.beVietnamPro(
-                            fontSize: 17,
-                            fontWeight: FontWeight.w700,
-                            color: Colors.white)),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.close_rounded,
-                        color: Colors.white, size: 20),
-                    onPressed: () => Navigator.pop(ctx),
-                  ),
-                ]),
-              ),
-              Padding(
-                padding: const EdgeInsets.all(24),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _credentialRow(
-                      label: 'Email',
-                      value: req.email.isEmpty ? '—' : req.email,
-                      icon: Icons.alternate_email_rounded,
-                    ),
-                    const SizedBox(height: 14),
-                    _credentialRow(
-                      label: 'Temporary Password',
-                      value: req.tempPassword ??
-                          'Not stored — use Resend to generate a new one.',
-                      icon: Icons.lock_outline_rounded,
-                      isPassword: true,
-                    ),
-                    const SizedBox(height: 20),
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFFFFBEB),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: const Color(0xFFFED7AA)),
-                      ),
-                      child: Row(children: [
-                        const Icon(Icons.info_outline_rounded,
-                            size: 15, color: Color(0xFFFB923C)),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            'Guests are prompted to change their password on first login.',
-                            style: GoogleFonts.beVietnamPro(
-                                fontSize: 12, color: const Color(0xFF92400E)),
-                          ),
-                        ),
-                      ]),
-                    ),
-                  ],
-                ),
-              ),
-              Container(
-                padding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    ElevatedButton(
-                      onPressed: () => Navigator.pop(ctx),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: UpriseColors.primaryDark,
-                        foregroundColor: Colors.white,
-                        elevation: 0,
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8)),
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 20, vertical: 11),
-                      ),
-                      child: Text('Done',
-                          style: GoogleFonts.beVietnamPro(
-                              fontSize: 13, fontWeight: FontWeight.w600)),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _credentialRow({
-    required String label,
-    required String value,
-    required IconData icon,
-    bool isPassword = false,
-  }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(children: [
-          Icon(icon, size: 14, color: const Color(0xFF64748B)),
-          const SizedBox(width: 6),
-          Text(label,
-              style: GoogleFonts.beVietnamPro(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                  color: const Color(0xFF64748B),
-                  letterSpacing: 0.5)),
-        ]),
-        const SizedBox(height: 6),
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-          decoration: BoxDecoration(
-            color: const Color(0xFFF8F9FB),
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: const Color(0xFFE2E6EA)),
-          ),
-          child: SelectableText(
-            value,
-            style: GoogleFonts.beVietnamPro(
-              fontSize: isPassword ? 15 : 14,
-              fontWeight: isPassword ? FontWeight.w700 : FontWeight.w500,
-              color: isPassword
-                  ? UpriseColors.primaryDark
-                  : const Color(0xFF1A202C),
-              letterSpacing: isPassword ? 1.5 : 0,
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
   // ── View Dialog ────────────────────────────────────────────────────
   void _showDetails(ExternalRequest req) {
     showDialog(
@@ -1372,6 +1205,11 @@ class _ExternalAccountState extends State<ExternalAccount> {
             borderRadius: BorderRadius.circular(18)),
         child: Container(
           width: 500,
+          constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.85),
+          decoration: const BoxDecoration(
+            color: Color(0xFFFFFAF5),
+            borderRadius: BorderRadius.all(Radius.circular(18)),
+          ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -1380,7 +1218,11 @@ class _ExternalAccountState extends State<ExternalAccount> {
                 padding:
                     const EdgeInsets.fromLTRB(24, 20, 20, 20),
                 decoration: BoxDecoration(
-                  color: UpriseColors.primaryDark,
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [UpriseColors.primaryDark, UpriseColors.primaryDark.withAlpha(225)],
+                  ),
                   borderRadius: const BorderRadius.vertical(
                       top: Radius.circular(18)),
                 ),
@@ -1389,8 +1231,8 @@ class _ExternalAccountState extends State<ExternalAccount> {
                     width: 38,
                     height: 38,
                     decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.15),
                       borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: Colors.white.withAlpha(70)),
                     ),
                     child: const Icon(Icons.person_rounded,
                         color: Colors.white, size: 18),
@@ -1430,9 +1272,10 @@ class _ExternalAccountState extends State<ExternalAccount> {
                 ]),
               ),
               // Body
-              Padding(
-                padding: const EdgeInsets.all(24),
-                child: Column(
+              Flexible(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
                   crossAxisAlignment:
                       CrossAxisAlignment.start,
                   children: [
@@ -1442,7 +1285,7 @@ class _ExternalAccountState extends State<ExternalAccount> {
                       const SizedBox(width: 12),
                       Icon(Icons.calendar_today_outlined,
                           size: 13,
-                          color: const Color(0xFF9AA5B4)),
+                          color: UpriseColors.primaryDark.withAlpha(150)),
                       const SizedBox(width: 4),
                       Text(
                         DateFormat('MMM dd, yyyy – hh:mm a')
@@ -1487,7 +1330,7 @@ class _ExternalAccountState extends State<ExternalAccount> {
                         width: double.infinity,
                         padding: const EdgeInsets.all(14),
                         decoration: BoxDecoration(
-                          color: const Color(0xFFF8F9FB),
+                          color: Colors.white,
                           borderRadius:
                               BorderRadius.circular(8),
                           border: Border.all(
@@ -1503,12 +1346,16 @@ class _ExternalAccountState extends State<ExternalAccount> {
                       ),
                     ],
                   ],
+                  ),
                 ),
               ),
               // Footer actions
               Container(
                 padding:
-                    const EdgeInsets.fromLTRB(24, 0, 24, 20),
+                    const EdgeInsets.fromLTRB(24, 16, 24, 20),
+                decoration: const BoxDecoration(
+                  border: Border(top: BorderSide(color: Color(0xFFEDF0F3))),
+                ),
                 child: Row(children: [
                   if (req.status == 'pending') ...[
                     Expanded(
@@ -1565,62 +1412,15 @@ class _ExternalAccountState extends State<ExternalAccount> {
                         ),
                       ),
                     ),
-                  ] else if (req.status == 'approved') ...[
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: () {
-                          Navigator.pop(ctx);
-                          _showCredentialsDialog(req);
-                        },
-                        icon: const Icon(Icons.key_rounded, size: 15),
-                        label: Text('View Credentials',
-                            style: GoogleFonts.beVietnamPro(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600)),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: UpriseColors.primaryDark,
-                          side: BorderSide(
-                              color: UpriseColors.primaryDark
-                                  .withOpacity(0.4)),
-                          shape: RoundedRectangleBorder(
-                              borderRadius:
-                                  BorderRadius.circular(8)),
-                          padding: const EdgeInsets.symmetric(
-                              vertical: 11),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: ElevatedButton(
-                        onPressed: () => Navigator.pop(ctx),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor:
-                              UpriseColors.primaryDark,
-                          foregroundColor: Colors.white,
-                          elevation: 0,
-                          shape: RoundedRectangleBorder(
-                              borderRadius:
-                                  BorderRadius.circular(8)),
-                          padding:
-                              const EdgeInsets.symmetric(
-                                  vertical: 11),
-                        ),
-                        child: Text('Close',
-                            style: GoogleFonts.beVietnamPro(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600)),
-                      ),
-                    ),
                   ] else ...[
                     Expanded(
-                      child: ElevatedButton(
+                      child: OutlinedButton(
                         onPressed: () => Navigator.pop(ctx),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor:
-                              UpriseColors.primaryDark,
-                          foregroundColor: Colors.white,
-                          elevation: 0,
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor:
+                              const Color(0xFF374151),
+                          side: const BorderSide(
+                              color: Color(0xFFE2E6EA)),
                           shape: RoundedRectangleBorder(
                               borderRadius:
                                   BorderRadius.circular(8)),
@@ -1649,7 +1449,7 @@ class _ExternalAccountState extends State<ExternalAccount> {
       width: double.infinity,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFFF8F9FB),
+        color: Colors.white,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: const Color(0xFFE2E6EA)),
       ),

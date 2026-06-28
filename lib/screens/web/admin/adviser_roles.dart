@@ -340,6 +340,7 @@ class _AdviserRolesState extends State<AdviserRoles> {
   int            _totalOfficers = 0;
   late StreamSubscription _metaListener;
   late StreamSubscription _officersListener;
+  late StreamSubscription _orgsListener;
 
   int _getPositionPriority(String position) {
   final lower = position.toLowerCase().trim();
@@ -361,6 +362,7 @@ class _AdviserRolesState extends State<AdviserRoles> {
     _loadMeta();
     _setupMetaListener();
     _setupOfficersListener();
+    _setupOrgsListener();
   }
 
   @override
@@ -368,6 +370,7 @@ class _AdviserRolesState extends State<AdviserRoles> {
     _searchController.dispose();
     _metaListener.cancel();
     _officersListener.cancel();
+    _orgsListener.cancel();
     super.dispose();
   }
 
@@ -381,6 +384,19 @@ class _AdviserRolesState extends State<AdviserRoles> {
   void _setupOfficersListener() {
     _officersListener = FirebaseFirestore.instance
         .collectionGroup('officers')
+        .snapshots()
+        .listen((snapshot) {
+          _loadOfficersForAllOrgs();
+        });
+  }
+
+  // Picks up adviser/logo edits made directly on the organization (e.g. via
+  // Organization Management) so the Adviser Role record reflects them
+  // automatically instead of staying stuck with whatever was entered when
+  // the role was first created.
+  void _setupOrgsListener() {
+    _orgsListener = FirebaseFirestore.instance
+        .collection('organizations')
         .snapshots()
         .listen((snapshot) {
           _loadOfficersForAllOrgs();
@@ -466,20 +482,32 @@ class _AdviserRolesState extends State<AdviserRoles> {
       
       final orgData = orgDoc.data();
       final adviserPhotoUrl = orgData?['adviserPhotoUrl'] ?? '';
-      
+      final adviserName = (orgData?['adviserName'] ?? '').toString();
+      final adviserEmail = (orgData?['adviserEmail'] ?? '').toString();
+      final adviserPhone = (orgData?['adviserPhone'] ?? '').toString();
+      final adviserTitle = (orgData?['adviserTitle'] ?? '').toString();
+
       final roleSnap = await FirebaseFirestore.instance
           .collection('adviser_roles')
           .where('orgId', isEqualTo: orgId)
           .where('archived', isEqualTo: false)
           .get();
-      
+
       for (final doc in roleSnap.docs) {
         final updates = <String, dynamic>{};
-        
+
         if (adviserPhotoUrl.isNotEmpty) {
           updates['adviserPhotoUrl'] = adviserPhotoUrl;
         }
-        
+        // Keep the adviser role record's adviser fields mirrored to whatever
+        // is currently set on the org itself (Organization Management is
+        // the source of truth), so editing the adviser there reflects here
+        // automatically without re-entering it in Adviser Roles.
+        if (adviserName.isNotEmpty) updates['adviserName'] = adviserName;
+        if (adviserEmail.isNotEmpty) updates['adviserEmail'] = adviserEmail;
+        if (adviserPhone.isNotEmpty) updates['adviserPhone'] = adviserPhone;
+        if (adviserTitle.isNotEmpty) updates['adviserRank'] = adviserTitle;
+
         if (officers.containsKey('president')) {
           updates['president'] = officers['president']!.name;
           updates['presidentEmail'] = officers['president']!.email;
@@ -984,7 +1012,7 @@ class _AdviserRolesState extends State<AdviserRoles> {
             ],
             const SizedBox(width: 6),
             _ActionIcon(
-              icon: archived ? Icons.unarchive_outlined : Icons.archive_outlined,
+              icon: archived ? Icons.restore_rounded : Icons.archive_outlined,
               tooltip: archived ? 'Restore' : 'Archive',
               color: archived ? const Color(0xFF059669) : const Color(0xFF6B7280),
               onTap: archived
@@ -1076,6 +1104,8 @@ class _AdviserRolesState extends State<AdviserRoles> {
   final archived = data['archived'] == true;
   final orgName = data['orgName'] ?? '—';
   final orgTag = data['orgTag'] ?? '';
+  final org = _orgs.firstWhere((o) => o.id == (data['orgId'] ?? ''),
+      orElse: () => const OrgModel(id: '', name: '', abbrev: '', tag: '', logoUrl: ''));
 
   showDialog(
     context: context,
@@ -1085,6 +1115,10 @@ class _AdviserRolesState extends State<AdviserRoles> {
       child: Container(
         width: 540,
         constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.88),
+        decoration: const BoxDecoration(
+          color: Color(0xFFFFFAF5),
+          borderRadius: BorderRadius.all(Radius.circular(18)),
+        ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -1092,7 +1126,11 @@ class _AdviserRolesState extends State<AdviserRoles> {
             Container(
               padding: const EdgeInsets.fromLTRB(24, 20, 20, 20),
               decoration: BoxDecoration(
-                color: UpriseColors.primaryDark,
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [UpriseColors.primaryDark, UpriseColors.primaryDark.withAlpha(225)],
+                ),
                 borderRadius: const BorderRadius.vertical(top: Radius.circular(18)),
               ),
               child: Row(children: [
@@ -1100,10 +1138,10 @@ class _AdviserRolesState extends State<AdviserRoles> {
                   width: 44,
                   height: 44,
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.15),
                     borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: Colors.white.withAlpha(70)),
                   ),
-                  child: _OrgAvatar(data['orgAbbrev'] ?? '??'),
+                  child: _OrgAvatar(data['orgAbbrev'] ?? '??', logoUrl: org.logoUrl),
                 ),
                 const SizedBox(width: 14),
                 Expanded(
@@ -1149,7 +1187,7 @@ class _AdviserRolesState extends State<AdviserRoles> {
             const SizedBox(height: 16),
 
             // ---- Officers (scrollable) ----
-            Expanded(
+            Flexible(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
                 child: _buildOfficersCard(_allOfficersCache[data['orgId']] ?? []),
@@ -1160,9 +1198,7 @@ class _AdviserRolesState extends State<AdviserRoles> {
             Container(
               padding: const EdgeInsets.fromLTRB(24, 16, 24, 20),
               decoration: const BoxDecoration(
-                border: Border(top: BorderSide(color: Color(0xFFE8ECF0))),
-                color: Color(0xFFF8F9FB),
-                borderRadius: BorderRadius.vertical(bottom: Radius.circular(18)),
+                border: Border(top: BorderSide(color: Color(0xFFEDF0F3))),
               ),
               child: Row(
                 children: [
@@ -1186,15 +1222,26 @@ class _AdviserRolesState extends State<AdviserRoles> {
                         Navigator.pop(ctx);
                         _confirmRestoreRecord(docId, orgName);
                       },
-                      icon: const Icon(Icons.unarchive_outlined, size: 15, color: Color(0xFF059669)),
+                      icon: const Icon(Icons.restore_rounded, size: 15, color: Color(0xFF059669)),
                       label: Text('Restore', style: GoogleFonts.beVietnamPro(fontSize: 13, color: Color(0xFF059669))),
                       style: OutlinedButton.styleFrom(
-                        side: const BorderSide(color: Color(0xFF6EE7B7)),
+                        side: const BorderSide(color: Color(0xFF059669)),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
                       ),
                     ),
                   const Spacer(),
+                  OutlinedButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: const Color(0xFF374151),
+                      side: const BorderSide(color: Color(0xFFE2E6EA)),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 11),
+                    ),
+                    child: Text('Close', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600)),
+                  ),
+                  if (!archived) const SizedBox(width: 10),
                   if (!archived)
                     ElevatedButton.icon(
                       onPressed: () {
@@ -1256,9 +1303,9 @@ class _AdviserRolesState extends State<AdviserRoles> {
     width: double.infinity,
     padding: const EdgeInsets.all(16),
     decoration: BoxDecoration(
-      color: const Color(0xFFF8F9FB),
+      color: Colors.white,
       borderRadius: BorderRadius.circular(12),
-      border: Border.all(color: const Color(0xFFE8ECF0)),
+      border: Border.all(color: const Color(0xFFE2E6EA)),
     ),
     child: Row(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1306,9 +1353,9 @@ Widget _buildOfficersCard(List<OfficerInfo> officers) {
       width: double.infinity,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFFF8F9FB),
+        color: Colors.white,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFE8ECF0)),
+        border: Border.all(color: const Color(0xFFE2E6EA)),
       ),
       child: Center(
         child: Text('No officers listed',
@@ -1330,9 +1377,9 @@ Widget _buildOfficersCard(List<OfficerInfo> officers) {
     width: double.infinity,
     padding: const EdgeInsets.all(16),
     decoration: BoxDecoration(
-      color: const Color(0xFFF8F9FB),
+      color: Colors.white,
       borderRadius: BorderRadius.circular(12),
-      border: Border.all(color: const Color(0xFFE8ECF0)),
+      border: Border.all(color: const Color(0xFFE2E6EA)),
     ),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1378,7 +1425,7 @@ Widget _infoRow(IconData icon, String text) {
     padding: const EdgeInsets.only(bottom: 4),
     child: Row(
       children: [
-        Icon(icon, size: 14, color: const Color(0xFF9AA5B4)),
+        Icon(icon, size: 14, color: UpriseColors.primaryDark.withAlpha(150)),
         const SizedBox(width: 8),
         Expanded(
           child: Text(text,

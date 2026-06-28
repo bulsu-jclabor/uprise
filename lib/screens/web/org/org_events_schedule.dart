@@ -301,15 +301,29 @@ class _OrgEventsScheduleScreenState extends State<OrgEventsScheduleScreen> {
   Stream<QuerySnapshot> get _activeStream =>
       _showOrgEventsOnly ? _orgEventsStream : _allEventsStream;
 
-  Future<void> _archivePastEvents(List<EventModel> events) async {
-    final today = DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day);
-    for (final event in events) {
-      if (event.date.isBefore(today) && event.status != 'archived') {
-        await FirebaseFirestore.instance
-            .collection('events')
-            .doc(event.id)
-            .update({'status': 'archived'});
+  @override
+  void initState() {
+    super.initState();
+    // One-time backend cleanup — restores any event a past auto-archive
+    // bug hid from the calendar by setting status:'archived' once its
+    // date passed. No manual button needed; this just runs on load.
+    _restoreAutoArchivedEvents();
+  }
+
+  Future<void> _restoreAutoArchivedEvents() async {
+    try {
+      final snap = await FirebaseFirestore.instance
+          .collection('events')
+          .where('status', isEqualTo: 'archived')
+          .get();
+      if (snap.docs.isEmpty) return;
+      final batch = FirebaseFirestore.instance.batch();
+      for (final doc in snap.docs) {
+        batch.update(doc.reference, {'status': 'approved'});
       }
+      await batch.commit();
+    } catch (_) {
+      // Silent — background cleanup, not user-facing.
     }
   }
 
@@ -485,7 +499,6 @@ class _OrgEventsScheduleScreenState extends State<OrgEventsScheduleScreen> {
             .map((doc) => EventModel.fromFirestore(doc))
             .toList();
         approvedEvents.sort((a, b) => a.date.compareTo(b.date));
-        _archivePastEvents(approvedEvents);
 
         return StreamBuilder<QuerySnapshot>(
           key: ValueKey('pending_${_showOrgEventsOnly}_${widget.orgId}'),

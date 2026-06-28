@@ -640,15 +640,6 @@ class _StudentAccountsState extends State<StudentAccounts> {
                 children: [
                   if (!isArchived) ...[
                     _ActionIconButton(
-                      icon: Icons.key_rounded,
-                      tooltip: 'View Credentials',
-                      color: const Color(0xFF3B82F6),
-                      onTap: () => _showPasswordDialog(
-                          data['studentId'] ?? '',
-                          data['tempPassword']),
-                    ),
-                    const SizedBox(width: 4),
-                    _ActionIconButton(
                       icon: Icons.email_outlined,
                       tooltip: 'Resend Credentials',
                       color: const Color(0xFF7C3AED),
@@ -778,157 +769,6 @@ class _StudentAccountsState extends State<StudentAccounts> {
 
   // ── Actions ───────────────────────────────────────────────────────
 
-  void _showPasswordDialog(String studentId, String? password) {
-    showDialog(
-      context: context,
-      barrierColor: Colors.black54,
-      builder: (ctx) => Dialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-        child: SizedBox(
-          width: 420,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                padding: const EdgeInsets.fromLTRB(24, 20, 20, 20),
-                decoration: BoxDecoration(
-                  color: UpriseColors.primaryDark,
-                  borderRadius: const BorderRadius.vertical(top: Radius.circular(18)),
-                ),
-                child: Row(children: [
-                  Container(
-                    width: 38,
-                    height: 38,
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.15),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: const Icon(Icons.key_rounded, color: Colors.white, size: 18),
-                  ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Text(
-                      'Student Credentials',
-                      style: GoogleFonts.beVietnamPro(
-                        fontSize: 17,
-                        fontWeight: FontWeight.w700,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.close_rounded, color: Colors.white, size: 20),
-                    onPressed: () => Navigator.pop(ctx),
-                  ),
-                ]),
-              ),
-              Padding(
-                padding: const EdgeInsets.all(24),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _credentialRow(
-                      label: 'Student ID',
-                      value: studentId.isEmpty ? '—' : studentId,
-                      icon: Icons.badge_outlined,
-                    ),
-                    const SizedBox(height: 14),
-                    _credentialRow(
-                      label: 'Temporary Password',
-                      value: password ?? 'Not stored — use Resend to generate a new one.',
-                      icon: Icons.lock_outline_rounded,
-                      isPassword: true,
-                    ),
-                    const SizedBox(height: 20),
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFFFFBEB),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: const Color(0xFFFED7AA)),
-                      ),
-                      child: Row(children: [
-                        const Icon(Icons.info_outline_rounded, size: 15, color: Color(0xFFFB923C)),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            'Students are prompted to change their password on first login.',
-                            style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF92400E)),
-                          ),
-                        ),
-                      ]),
-                    ),
-                  ],
-                ),
-              ),
-              Container(
-                padding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    ElevatedButton(
-                      onPressed: () => Navigator.pop(ctx),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: UpriseColors.primaryDark,
-                        foregroundColor: Colors.white,
-                        elevation: 0,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 11),
-                      ),
-                      child: Text('Done', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600)),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _credentialRow({
-    required String label,
-    required String value,
-    required IconData icon,
-    bool isPassword = false,
-  }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(children: [
-          Icon(icon, size: 14, color: const Color(0xFF64748B)),
-          const SizedBox(width: 6),
-          Text(label,
-              style: GoogleFonts.beVietnamPro(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                  color: const Color(0xFF64748B),
-                  letterSpacing: 0.5)),
-        ]),
-        const SizedBox(height: 6),
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-          decoration: BoxDecoration(
-            color: const Color(0xFFF8F9FB),
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: const Color(0xFFE2E6EA)),
-          ),
-          child: SelectableText(
-            value,
-            style: GoogleFonts.beVietnamPro(
-              fontSize: isPassword ? 15 : 14,
-              fontWeight: isPassword ? FontWeight.w700 : FontWeight.w500,
-              color: isPassword ? UpriseColors.primaryDark : const Color(0xFF1A202C),
-              letterSpacing: isPassword ? 1.5 : 0,
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
   void _showStudentDetailDialog(String docId, Map<String, dynamic> data) {
     final isArchived = data['archived'] == true;
     showDialog(
@@ -936,15 +776,24 @@ class _StudentAccountsState extends State<StudentAccounts> {
       barrierColor: Colors.black54,
       builder: (ctx) => Dialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-        child: SizedBox(
+        child: Container(
           width: 500,
+          constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.85),
+          decoration: const BoxDecoration(
+            color: Color(0xFFFFFAF5),
+            borderRadius: BorderRadius.all(Radius.circular(18)),
+          ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               Container(
                 padding: const EdgeInsets.fromLTRB(24, 20, 20, 20),
                 decoration: BoxDecoration(
-                  color: UpriseColors.primaryDark,
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [UpriseColors.primaryDark, UpriseColors.primaryDark.withAlpha(225)],
+                  ),
                   borderRadius: const BorderRadius.vertical(top: Radius.circular(18)),
                 ),
                 child: Row(children: [
@@ -952,8 +801,8 @@ class _StudentAccountsState extends State<StudentAccounts> {
                     width: 38,
                     height: 38,
                     decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.15),
                       borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: Colors.white.withAlpha(70)),
                     ),
                     child: const Icon(Icons.person_rounded, color: Colors.white, size: 18),
                   ),
@@ -986,63 +835,104 @@ class _StudentAccountsState extends State<StudentAccounts> {
                   ),
                 ]),
               ),
-              Padding(
-                padding: const EdgeInsets.all(24),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      Expanded(
-                        child: _detailItem('Student ID', data['studentId'] ?? '—', Icons.badge_outlined),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: _detailItem(
-                            'Status',
-                            isArchived ? 'ARCHIVED' : 'ACTIVE',
-                            Icons.circle_outlined,
-                            valueColor: isArchived 
-                                ? const Color(0xFF6B7280)
-                                : const Color(0xFF059669)),
-                      ),
-                    ]),
-                    const SizedBox(height: 14),
-                    Row(children: [
-                      Expanded(
-                        child: _detailItem('Course', data['course'] ?? '—', Icons.school_outlined),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: _detailItem('Year Level', data['yearLevel'] ?? '—', Icons.calendar_today_outlined),
-                      ),
-                    ]),
-                    const SizedBox(height: 14),
-                    _detailItem('Section', data['section'] ?? '—', Icons.groups_outlined), // NEW
-                    const SizedBox(height: 14),
-                    _detailItem('Email', data['email'] ?? '—', Icons.email_outlined),
-                  ],
+              Flexible(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        Expanded(
+                          child: _detailItem('Student ID', data['studentId'] ?? '—', Icons.badge_outlined),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: _detailItem(
+                              'Status',
+                              isArchived ? 'ARCHIVED' : 'ACTIVE',
+                              Icons.circle_outlined,
+                              valueColor: isArchived
+                                  ? const Color(0xFF6B7280)
+                                  : const Color(0xFF059669)),
+                        ),
+                      ]),
+                      const SizedBox(height: 16),
+                      Row(children: [
+                        Expanded(
+                          child: _detailItem('Course', data['course'] ?? '—', Icons.school_outlined),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: _detailItem('Year Level', data['yearLevel'] ?? '—', Icons.calendar_today_outlined),
+                        ),
+                      ]),
+                      const SizedBox(height: 16),
+                      _detailItem('Section', data['section'] ?? '—', Icons.groups_outlined),
+                      const SizedBox(height: 16),
+                      _detailItem('Email', data['email'] ?? '—', Icons.email_outlined),
+                    ],
+                  ),
                 ),
               ),
               Container(
-                padding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
+                padding: const EdgeInsets.fromLTRB(24, 16, 24, 18),
+                decoration: const BoxDecoration(
+                  border: Border(top: BorderSide(color: Color(0xFFEDF0F3))),
+                ),
                 child: Row(children: [
                   if (!isArchived) ...[
                     Expanded(
                       child: OutlinedButton.icon(
                         onPressed: () {
                           Navigator.pop(ctx);
-                          _showPasswordDialog(data['studentId'] ?? '', data['tempPassword']);
+                          _confirmResendCredentials(
+                            docId,
+                            data['email'] ?? '',
+                            data['studentId'] ?? '',
+                            data['tempPassword'],
+                          );
                         },
-                        icon: const Icon(Icons.key_rounded, size: 15),
-                        label: Text('Credentials', style: GoogleFonts.beVietnamPro(fontSize: 13)),
+                        icon: const Icon(Icons.email_outlined, size: 15),
+                        label: Text('Resend', style: GoogleFonts.beVietnamPro(fontSize: 13)),
                         style: OutlinedButton.styleFrom(
-                          side: const BorderSide(color: Color(0xFFE2E6EA)),
+                          foregroundColor: const Color(0xFF7C3AED),
+                          side: const BorderSide(color: Color(0xFF7C3AED)),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                           padding: const EdgeInsets.symmetric(vertical: 11),
                         ),
                       ),
                     ),
+                    const SizedBox(width: 10),
                   ],
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () {
+                        Navigator.pop(ctx);
+                        _confirmArchiveStudent(docId, data['fullName'] ?? 'this student', isArchived);
+                      },
+                      icon: Icon(isArchived ? Icons.restore_rounded : Icons.archive_outlined, size: 15),
+                      label: Text(isArchived ? 'Restore' : 'Archive', style: GoogleFonts.beVietnamPro(fontSize: 13)),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: isArchived ? const Color(0xFF059669) : const Color(0xFF6B7280),
+                        side: BorderSide(color: isArchived ? const Color(0xFF059669) : const Color(0xFF6B7280)),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        padding: const EdgeInsets.symmetric(vertical: 11),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.pop(ctx),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: const Color(0xFF374151),
+                        side: const BorderSide(color: Color(0xFFE2E6EA)),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        padding: const EdgeInsets.symmetric(vertical: 11),
+                      ),
+                      child: Text('Close', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600)),
+                    ),
+                  ),
                 ]),
               ),
             ],
@@ -1057,7 +947,7 @@ class _StudentAccountsState extends State<StudentAccounts> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(children: [
-          Icon(icon, size: 13, color: const Color(0xFF9AA5B4)),
+          Icon(icon, size: 12, color: UpriseColors.primaryDark.withAlpha(150)),
           const SizedBox(width: 5),
           Text(label,
               style: GoogleFonts.beVietnamPro(

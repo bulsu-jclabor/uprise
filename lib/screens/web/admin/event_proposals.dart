@@ -1515,55 +1515,68 @@ class _EventProposalsState extends State<EventProposals> {
       child: Container(
         width: 600,
         constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.88),
+        // A soft warm cream instead of stark white — ties the body back to
+        // the amber header instead of jumping straight to a flat, generic
+        // white admin-form look.
+        decoration: const BoxDecoration(
+          color: Color(0xFFFFFAF5),
+          borderRadius: BorderRadius.all(Radius.circular(18)),
+        ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             // ── HEADER ──────────────────────────────────────────────
             Container(
-              padding: const EdgeInsets.fromLTRB(24, 20, 20, 20),
+              padding: const EdgeInsets.fromLTRB(24, 22, 16, 20),
               decoration: BoxDecoration(
-                color: UpriseColors.primaryDark,
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [UpriseColors.primaryDark, UpriseColors.primaryDark.withAlpha(225)],
+                ),
                 borderRadius: const BorderRadius.vertical(top: Radius.circular(18)),
               ),
-              child: Row(children: [
-                Container(
-                  width: 44,
-                  height: 44,
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.15),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: const Icon(Icons.event_note_rounded, color: Colors.white, size: 20),
-                ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text(
-                      data['title'] ?? 'Event Proposal',
-                      style: GoogleFonts.beVietnamPro(
-                          fontSize: 17, fontWeight: FontWeight.w700, color: Colors.white),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    Row(children: [
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Row(children: [
+                        _statusBadge(status),
+                        if ((data['orgName'] ?? '').toString().isNotEmpty) ...[
+                          const SizedBox(width: 8),
+                          Flexible(
+                            child: Text(
+                              data['orgName'],
+                              style: GoogleFonts.beVietnamPro(
+                                  fontSize: 12, fontWeight: FontWeight.w600, color: Colors.white.withAlpha(200)),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ]),
+                      const SizedBox(height: 10),
                       Text(
-                        data['orgName'] ?? '',
+                        data['title'] ?? 'Event Proposal',
                         style: GoogleFonts.beVietnamPro(
-                            fontSize: 12, color: Colors.white.withOpacity(0.7)),
+                            fontSize: 19, fontWeight: FontWeight.w700, color: Colors.white, height: 1.25),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
                       ),
-                      const SizedBox(width: 12),
-                      _statusBadge(status),
                     ]),
-                  ]),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.close_rounded, color: Colors.white, size: 20),
-                  onPressed: () => Navigator.pop(ctx),
-                ),
-              ]),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close_rounded, color: Colors.white, size: 20),
+                    onPressed: () => Navigator.pop(ctx),
+                  ),
+                ],
+              ),
             ),
 
             // ── BODY ────────────────────────────────────────────────
-            Expanded(
+            // Flexible (not Expanded) so the dialog shrinks to fit short
+            // content instead of stretching to near-fullscreen height.
+            Flexible(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.all(24),
                 child: Column(
@@ -1571,88 +1584,61 @@ class _EventProposalsState extends State<EventProposals> {
                   children: [
                     // ── Event Image (if present) ──
                     if (hasImage) ...[
-                      Container(
-                        width: double.infinity,
-                        height: 200,
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: const Color(0xFFE2E6EA)),
-                        ),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(12),
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(12),
+                        child: Container(
+                          width: double.infinity,
+                          height: 200,
+                          color: const Color(0xFFF8F9FB),
                           child: _buildImageFromBase64(data['imageBase64']!, fit: BoxFit.contain),
                         ),
                       ),
-                      const SizedBox(height: 20),
+                      const SizedBox(height: 24),
                     ],
 
                     // ── Event Details Section ──
-                    _sectionLabel('Event Details', icon: Icons.info_outline_rounded),
-                    Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFF8F9FB),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: const Color(0xFFE2E6EA)),
+                    // Plain inline grid, no boxed card — avoids the
+                    // dashboard-template look of a grey box around everything.
+                    Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Expanded(child: _detailItem(
+                        'Category',
+                        data['category'] == 'Other' && (data['otherCategory'] ?? '').toString().isNotEmpty
+                            ? data['otherCategory']
+                            : (data['category'] ?? '—'),
+                        Icons.category_outlined,
+                      )),
+                      Expanded(child: _detailItem('Audience', data['audience'] ?? '—', Icons.people_outline_rounded)),
+                    ]),
+                    const SizedBox(height: 16),
+                    Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Expanded(child: _detailItem('Date', _formatDate(data['date']), Icons.calendar_today_outlined)),
+                      Expanded(child: _detailItem('Time', timeStr, Icons.access_time_rounded)),
+                    ]),
+                    const SizedBox(height: 16),
+                    Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Expanded(child: _detailItem('Location', data['location'] ?? '—', Icons.location_on_outlined)),
+                      Expanded(
+                        child: _detailItem(
+                          'Issues Certificate',
+                          issuesCertificate ? 'Yes' : 'No',
+                          Icons.verified_outlined,
+                          valueColor: issuesCertificate ? const Color(0xFF059669) : const Color(0xFF6B7280),
+                        ),
                       ),
-                      child: Column(children: [
-                        Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                          Expanded(child: _detailItem(
-                            'Category',
-                            data['category'] == 'Other' && (data['otherCategory'] ?? '').toString().isNotEmpty
-                                ? data['otherCategory']
-                                : (data['category'] ?? '—'),
-                            Icons.category_outlined,
-                          )),
-                          Expanded(child: _detailItem('Audience', data['audience'] ?? '—', Icons.people_outline_rounded)),
-                        ]),
-                        const SizedBox(height: 12),
-                        Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                          Expanded(child: _detailItem('Date', _formatDate(data['date']), Icons.calendar_today_outlined)),
-                          Expanded(child: _detailItem('Time', timeStr, Icons.access_time_rounded)),
-                        ]),
-                        const SizedBox(height: 12),
-                        Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                          Expanded(child: _detailItem('Location', data['location'] ?? '—', Icons.location_on_outlined)),
-                          Expanded(
-                            child: _detailItem(
-                              'Issues Certificate',
-                              issuesCertificate ? 'Yes' : 'No',
-                              Icons.verified_outlined,
-                              valueColor: issuesCertificate ? const Color(0xFF059669) : const Color(0xFF6B7280),
-                            ),
-                          ),
-                        ]),
-                      ]),
-                    ),
-                    const SizedBox(height: 20),
+                    ]),
+                    const SizedBox(height: 24),
 
                     // ── Description ──
                     _sectionLabel('Description', icon: Icons.description_outlined),
-                    Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFF8F9FB),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: const Color(0xFFE2E6EA)),
-                      ),
-                      child: Text(
-                        data['description'] ?? 'No description provided.',
-                        style: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF374151), height: 1.6),
-                      ),
+                    Text(
+                      data['description'] ?? 'No description provided.',
+                      style: GoogleFonts.beVietnamPro(fontSize: 13.5, color: const Color(0xFF374151), height: 1.65),
                     ),
-                    const SizedBox(height: 20),
+                    const SizedBox(height: 24),
 
                     // ── Submission Info ──
                     _sectionLabel('Submission Info', icon: Icons.person_outline_rounded),
-                    Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFF8F9FB),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: const Color(0xFFE2E6EA)),
-                      ),
-                      child: Column(children: [
+                    Column(children: [
                         Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
                           Expanded(child: _detailItem('Submitted By', data['submittedByEmail'] ?? '—', Icons.email_outlined)),
                           Expanded(child: _detailItem('Submitted At', _formatTimestamp(data['createdAt']), Icons.access_time_rounded)),
@@ -1687,8 +1673,7 @@ class _EventProposalsState extends State<EventProposals> {
                           ]),
                         ],
                       ]),
-                    ),
-                    const SizedBox(height: 20),
+                    const SizedBox(height: 24),
 
                     // ── Admin Feedback (if present) ──
                     if (data['adminFeedback'] != null && data['adminFeedback'].toString().isNotEmpty) ...[
@@ -1743,7 +1728,7 @@ class _EventProposalsState extends State<EventProposals> {
                       Container(
                         padding: const EdgeInsets.all(14),
                         decoration: BoxDecoration(
-                          color: const Color(0xFFF8F9FB),
+                          color: Colors.white,
                           borderRadius: BorderRadius.circular(12),
                           border: Border.all(color: const Color(0xFFE2E6EA)),
                         ),
@@ -1797,11 +1782,9 @@ class _EventProposalsState extends State<EventProposals> {
 
             // ── FOOTER ─────────────────────────────────────────────
             Container(
-              padding: const EdgeInsets.fromLTRB(24, 16, 24, 20),
+              padding: const EdgeInsets.fromLTRB(24, 16, 24, 18),
               decoration: const BoxDecoration(
-                border: Border(top: BorderSide(color: Color(0xFFE8ECF0))),
-                color: Color(0xFFF8F9FB),
-                borderRadius: BorderRadius.vertical(bottom: Radius.circular(18)),
+                border: Border(top: BorderSide(color: Color(0xFFEDF0F3))),
               ),
               child: Column(children: [
                 if (status == 'pending') ...[
@@ -1900,12 +1883,11 @@ class _EventProposalsState extends State<EventProposals> {
                       ),
                     ),
                   const Spacer(),
-                  ElevatedButton(
+                  OutlinedButton(
                     onPressed: () => Navigator.pop(ctx),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: UpriseColors.primaryDark,
-                      foregroundColor: Colors.white,
-                      elevation: 0,
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: const Color(0xFF374151),
+                      side: const BorderSide(color: Color(0xFFE2E6EA)),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 11),
                     ),
@@ -1927,7 +1909,7 @@ class _EventProposalsState extends State<EventProposals> {
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
       Row(children: [
-        Icon(icon, size: 12, color: const Color(0xFF9AA5B4)),
+        Icon(icon, size: 12, color: UpriseColors.primaryDark.withAlpha(150)),
         const SizedBox(width: 4),
         Text(label,
             style: GoogleFonts.beVietnamPro(

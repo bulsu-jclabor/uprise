@@ -91,6 +91,37 @@ Widget _sectionLabel(String text, {IconData? icon}) {
   );
 }
 
+// Glass-style outlined chip for dialog headers — used instead of solid
+// filled pills, which read as a generic dashboard-template look.
+Widget _outlinedChip(String label, {bool dim = false, Color? accent}) {
+  if (accent != null) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(color: accent, borderRadius: BorderRadius.circular(100)),
+      child: Text(
+        label,
+        style: GoogleFonts.beVietnamPro(
+          fontSize: 10, fontWeight: FontWeight.w700, color: Colors.white, letterSpacing: 0.6,
+        ),
+      ),
+    );
+  }
+  return Container(
+    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+    decoration: BoxDecoration(
+      borderRadius: BorderRadius.circular(100),
+      border: Border.all(color: Colors.white.withAlpha(dim ? 90 : 150)),
+    ),
+    child: Text(
+      label,
+      style: GoogleFonts.beVietnamPro(
+        fontSize: 10, fontWeight: FontWeight.w600,
+        color: Colors.white.withAlpha(dim ? 200 : 255), letterSpacing: 0.6,
+      ),
+    ),
+  );
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Event model
 // ─────────────────────────────────────────────────────────────────────────────
@@ -140,6 +171,50 @@ class EventCalendar extends StatefulWidget {
 
 class _EventCalendarState extends State<EventCalendar> {
   DateTime _currentMonth = DateTime.now();
+
+  @override
+  void initState() {
+    super.initState();
+    // One-time backend cleanup on load — no manual buttons needed.
+    // Restores any event a past auto-archive bug hid from the calendar,
+    // and silently merges any duplicate events left over from double-publishes.
+    _restoreAutoArchivedEvents();
+    _autoFixDuplicatesOnLoad();
+  }
+
+  Future<void> _restoreAutoArchivedEvents() async {
+    try {
+      final snap = await FirebaseFirestore.instance
+          .collection('events')
+          .where('status', isEqualTo: 'archived')
+          .get();
+      if (snap.docs.isEmpty) return;
+      final batch = FirebaseFirestore.instance.batch();
+      for (final doc in snap.docs) {
+        batch.update(doc.reference, {'status': 'approved'});
+      }
+      await batch.commit();
+    } catch (_) {
+      // Silent — background cleanup, not user-facing.
+    }
+  }
+
+  Future<void> _autoFixDuplicatesOnLoad() async {
+    try {
+      final snap = await FirebaseFirestore.instance.collection('events').get();
+      final groups = <String, List<QueryDocumentSnapshot<Map<String, dynamic>>>>{};
+      for (final doc in snap.docs) {
+        final proposalId = (doc.data()['createdFromProposalId'] ?? '').toString();
+        if (proposalId.isEmpty) continue;
+        groups.putIfAbsent(proposalId, () => []).add(doc);
+      }
+      final duplicateGroups = groups.entries.where((e) => e.value.length > 1).toList();
+      if (duplicateGroups.isEmpty) return;
+      await _mergeDuplicates(duplicateGroups);
+    } catch (_) {
+      // Silent — background cleanup, not user-facing.
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -264,30 +339,6 @@ class _EventCalendarState extends State<EventCalendar> {
             ),
           );
 
-          final fixDuplicatesButton = InkWell(
-            onTap: _confirmMergeDuplicates,
-            borderRadius: BorderRadius.circular(10),
-            child: Container(
-              height: 40,
-              padding: const EdgeInsets.symmetric(horizontal: 14),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: const Color(0xFFE2E6EA)),
-                boxShadow: _DS.cardShadow,
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.cleaning_services_outlined, size: 15, color: UpriseColors.primaryDark),
-                  const SizedBox(width: 7),
-                  Text('Fix Duplicates',
-                      style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600, color: const Color(0xFF374151))),
-                ],
-              ),
-            ),
-          );
-
           if (canUseRow) {
             return Row(
               crossAxisAlignment: CrossAxisAlignment.center,
@@ -296,8 +347,6 @@ class _EventCalendarState extends State<EventCalendar> {
                 const SizedBox(width: 10),
                 dateControl,
                 const Spacer(),
-                fixDuplicatesButton,
-                const SizedBox(width: 10),
                 _ExportEventsButton(),
               ],
             );
@@ -307,7 +356,7 @@ class _EventCalendarState extends State<EventCalendar> {
             spacing: 10,
             runSpacing: 10,
             crossAxisAlignment: WrapCrossAlignment.center,
-            children: [todayButton, dateControl, fixDuplicatesButton, _ExportEventsButton()],
+            children: [todayButton, dateControl, _ExportEventsButton()],
           );
         },
       ),
@@ -321,120 +370,8 @@ class _EventCalendarState extends State<EventCalendar> {
   // events that share the same non-empty createdFromProposalId — a proposal
   // can only ever map to one real event — and removes the extras, keeping
   // whichever doc the proposal's own publishedEventId already points to
-  // (or the oldest one if that field is stale/missing).
-  Future<void> _confirmMergeDuplicates() async {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => const Center(child: CircularProgressIndicator()),
-    );
-
-    Map<String, List<QueryDocumentSnapshot<Map<String, dynamic>>>> groups = {};
-    try {
-      final snap = await FirebaseFirestore.instance.collection('events').get();
-      for (final doc in snap.docs) {
-        final proposalId = (doc.data()['createdFromProposalId'] ?? '').toString();
-        if (proposalId.isEmpty) continue;
-        groups.putIfAbsent(proposalId, () => []).add(doc);
-      }
-    } finally {
-      if (mounted) Navigator.of(context, rootNavigator: true).pop();
-    }
-
-    final duplicateGroups = groups.entries.where((e) => e.value.length > 1).toList();
-    if (duplicateGroups.isEmpty) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('No duplicate events found.'),
-          behavior: SnackBarBehavior.floating,
-        ));
-      }
-      return;
-    }
-
-    final extraCount = duplicateGroups.fold<int>(0, (total, e) => total + e.value.length - 1);
-    if (!mounted) return;
-    final confirmed = await showDialog<bool>(
-      context: context,
-      barrierColor: Colors.black54,
-      builder: (ctx) => Dialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        child: Container(
-          width: 460,
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(children: [
-                Container(
-                  width: 40, height: 40,
-                  decoration: BoxDecoration(color: const Color(0xFFFEF2F2), borderRadius: BorderRadius.circular(10)),
-                  child: const Icon(Icons.cleaning_services_outlined, color: Color(0xFFDC2626), size: 20),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text('Found ${duplicateGroups.length} duplicate event${duplicateGroups.length == 1 ? '' : 's'}',
-                      style: GoogleFonts.beVietnamPro(fontSize: 16, fontWeight: FontWeight.w700, color: const Color(0xFF1A202C))),
-                ),
-              ]),
-              const SizedBox(height: 16),
-              ConstrainedBox(
-                constraints: const BoxConstraints(maxHeight: 220),
-                child: SingleChildScrollView(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: duplicateGroups.map((e) {
-                      final title = (e.value.first.data()['title'] ?? 'Untitled').toString();
-                      return Padding(
-                        padding: const EdgeInsets.only(bottom: 8),
-                        child: Text('• $title — ${e.value.length} copies, will keep 1',
-                            style: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF374151))),
-                      );
-                    }).toList(),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
-              Text('This will permanently delete $extraCount extra event document${extraCount == 1 ? '' : 's'}. This cannot be undone.',
-                  style: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFFDC2626), height: 1.5)),
-              const SizedBox(height: 20),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  OutlinedButton(
-                    onPressed: () => Navigator.pop(ctx, false),
-                    style: OutlinedButton.styleFrom(
-                      side: const BorderSide(color: Color(0xFFE2E6EA)),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                    ),
-                    child: Text('Cancel', style: GoogleFonts.beVietnamPro(fontSize: 13)),
-                  ),
-                  const SizedBox(width: 10),
-                  ElevatedButton(
-                    onPressed: () => Navigator.pop(ctx, true),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFFDC2626),
-                      foregroundColor: Colors.white,
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                    ),
-                    child: Text('Delete Duplicates', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600)),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-
-    if (confirmed != true) return;
-    await _mergeDuplicates(duplicateGroups);
-  }
-
+  // (or the oldest one if that field is stale/missing). Runs silently from
+  // initState now — no manual button/confirmation, this is backend upkeep.
   Future<void> _mergeDuplicates(
     List<MapEntry<String, List<QueryDocumentSnapshot<Map<String, dynamic>>>>> duplicateGroups,
   ) async {
@@ -862,51 +799,52 @@ class _EventCalendarState extends State<EventCalendar> {
         child: Container(
           width: 460,
           constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.85),
+          // A soft warm cream instead of stark white — ties the body back
+          // to the amber header instead of a flat, generic admin-form look.
+          decoration: const BoxDecoration(
+            color: Color(0xFFFFFAF5),
+            borderRadius: BorderRadius.all(Radius.circular(18)),
+          ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              ClipRRect(
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(18)),
-                child: Container(
-                  padding: const EdgeInsets.fromLTRB(22, 20, 16, 20),
-                  decoration: const BoxDecoration(color: UpriseColors.primaryDark),
-                  child: Stack(children: [
-                    Positioned(
-                      right: -20, top: -20,
-                      child: Container(
-                        width: 90, height: 90,
-                        decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.white.withAlpha(20)),
-                      ),
-                    ),
-                    Row(children: [
-                      Container(
-                        width: 42,
-                        height: 42,
-                        decoration: BoxDecoration(
-                          color: Colors.white.withAlpha(38),
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: const Icon(Icons.event_rounded, color: Colors.white, size: 20),
-                      ),
-                      const SizedBox(width: 14),
-                      Expanded(
-                        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                          Text(dateLabel,
-                              style: GoogleFonts.beVietnamPro(
-                                  fontSize: 14, fontWeight: FontWeight.w700, color: Colors.white)),
-                          const SizedBox(height: 2),
-                          Text('${events.length} event${events.length == 1 ? '' : 's'}',
-                              style: GoogleFonts.beVietnamPro(
-                                  fontSize: 12, color: Colors.white.withAlpha(204))),
-                        ]),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.close_rounded, color: Colors.white, size: 20),
-                        onPressed: () => Navigator.pop(ctx),
-                      ),
-                    ]),
-                  ]),
+              Container(
+                padding: const EdgeInsets.fromLTRB(22, 20, 16, 20),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [UpriseColors.primaryDark, UpriseColors.primaryDark.withAlpha(225)],
+                  ),
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(18)),
                 ),
+                child: Row(children: [
+                  Container(
+                    width: 42,
+                    height: 42,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: Colors.white.withAlpha(70)),
+                    ),
+                    child: const Icon(Icons.event_rounded, color: Colors.white, size: 20),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Text(dateLabel,
+                          style: GoogleFonts.beVietnamPro(
+                              fontSize: 14, fontWeight: FontWeight.w700, color: Colors.white)),
+                      const SizedBox(height: 2),
+                      Text('${events.length} event${events.length == 1 ? '' : 's'}',
+                          style: GoogleFonts.beVietnamPro(
+                              fontSize: 12, color: Colors.white.withAlpha(204))),
+                    ]),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close_rounded, color: Colors.white, size: 20),
+                    onPressed: () => Navigator.pop(ctx),
+                  ),
+                ]),
               ),
               Flexible(
                 child: ListView.separated(
@@ -927,9 +865,7 @@ class _EventCalendarState extends State<EventCalendar> {
               Container(
                 padding: const EdgeInsets.fromLTRB(20, 12, 20, 18),
                 decoration: const BoxDecoration(
-                  border: Border(top: BorderSide(color: Color(0xFFE8ECF0))),
-                  color: Color(0xFFF8F9FB),
-                  borderRadius: BorderRadius.vertical(bottom: Radius.circular(18)),
+                  border: Border(top: BorderSide(color: Color(0xFFEDF0F3))),
                 ),
                 child: Row(mainAxisAlignment: MainAxisAlignment.end, children: [
                   OutlinedButton(
@@ -985,96 +921,56 @@ class _EventCalendarState extends State<EventCalendar> {
         constraints: BoxConstraints(
           maxHeight: MediaQuery.of(context).size.height * 0.88,
         ),
+        // A soft warm cream instead of stark white — ties the body back
+        // to the amber header instead of a flat, generic admin-form look.
+        decoration: const BoxDecoration(
+          color: Color(0xFFFFFAF5),
+          borderRadius: BorderRadius.all(Radius.circular(18)),
+        ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             // ─── HEADER ──────────────────────────────────────────────
             Container(
-              padding: const EdgeInsets.fromLTRB(24, 20, 20, 20),
+              padding: const EdgeInsets.fromLTRB(24, 22, 16, 20),
               decoration: BoxDecoration(
-                color: UpriseColors.primaryDark,
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [UpriseColors.primaryDark, UpriseColors.primaryDark.withAlpha(225)],
+                ),
                 borderRadius: const BorderRadius.vertical(top: Radius.circular(18)),
               ),
               child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Container(
-                    width: 44,
-                    height: 44,
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.15),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: const Icon(Icons.event_rounded, color: Colors.white, size: 20),
-                  ),
-                  const SizedBox(width: 14),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 6,
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          children: [
+                            _outlinedChip(event.category.toUpperCase()),
+                            if (event.organization.isNotEmpty && event.organization != 'Unknown')
+                              _outlinedChip(event.organization, dim: true),
+                            if (event.status.toLowerCase() != 'approved')
+                              _outlinedChip(event.status.toUpperCase(), accent: _statusColor(event.status)),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
                         Text(
                           event.title,
                           style: GoogleFonts.beVietnamPro(
-                            fontSize: 17,
+                            fontSize: 19,
                             fontWeight: FontWeight.w700,
                             color: Colors.white,
+                            height: 1.25,
                           ),
+                          maxLines: 2,
                           overflow: TextOverflow.ellipsis,
-                        ),
-                        const SizedBox(height: 4),
-                        Wrap(
-                          spacing: 8,
-                          runSpacing: 4,
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-                              decoration: BoxDecoration(
-                                color: CategoryColors.getBg(event.category),
-                                borderRadius: BorderRadius.circular(100),
-                              ),
-                              child: Text(
-                                event.category.toUpperCase(),
-                                style: GoogleFonts.beVietnamPro(
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.w700,
-                                  color: CategoryColors.getFg(event.category),
-                                  letterSpacing: 0.8,
-                                ),
-                              ),
-                            ),
-                            if (event.organization.isNotEmpty && event.organization != 'Unknown')
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-                                decoration: BoxDecoration(
-                                  color: Colors.white.withOpacity(0.15),
-                                  borderRadius: BorderRadius.circular(100),
-                                ),
-                                child: Text(
-                                  event.organization,
-                                  style: GoogleFonts.beVietnamPro(
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.w600,
-                                    color: Colors.white.withOpacity(0.85),
-                                  ),
-                                ),
-                              ),
-                            if (event.status.toLowerCase() != 'approved')
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-                                decoration: BoxDecoration(
-                                  color: _statusColor(event.status),
-                                  borderRadius: BorderRadius.circular(100),
-                                ),
-                                child: Text(
-                                  event.status.toUpperCase(),
-                                  style: GoogleFonts.beVietnamPro(
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.w700,
-                                    color: Colors.white,
-                                    letterSpacing: 0.8,
-                                  ),
-                                ),
-                              ),
-                          ],
                         ),
                       ],
                     ),
@@ -1088,7 +984,10 @@ class _EventCalendarState extends State<EventCalendar> {
             ),
 
             // ─── BODY ────────────────────────────────────────────────
-            Expanded(
+            // Flexible (not Expanded) so the dialog shrinks to fit short
+            // content instead of always stretching to near-fullscreen
+            // height and leaving a big empty gap above the footer.
+            Flexible(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.all(24),
                 child: Column(
@@ -1097,127 +996,99 @@ class _EventCalendarState extends State<EventCalendar> {
                     // ── Event Details ──────────────────────────────────
                     // Single source of truth for date/time/location/audience —
                     // category and organization already live in the header
-                    // badges above, so they aren't repeated here.
-                    _sectionLabel('Event Details', icon: Icons.info_outline_rounded),
-                    Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFF8F9FB),
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: const Color(0xFFE2E6EA)),
-                      ),
-                      child: Column(
-                        children: [
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Expanded(
-                                child: _detailItem(
-                                  'Date',
-                                  DateFormat('MMM d, yyyy').format(event.date),
-                                  Icons.calendar_today_rounded,
-                                ),
-                              ),
-                              const SizedBox(width: 16),
-                              Expanded(
-                                child: _detailItem(
-                                  'Time',
-                                  time.isNotEmpty && time != 'TBD' ? time : 'TBD',
-                                  Icons.access_time_rounded,
-                                ),
-                              ),
-                            ],
+                    // badges above, so they aren't repeated here. Rendered as
+                    // a plain inline grid (no boxed card) to avoid the
+                    // dashboard-template look of a grey box around everything.
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: _detailItem(
+                            'Date',
+                            DateFormat('MMM d, yyyy').format(event.date),
+                            Icons.calendar_today_rounded,
                           ),
-                          const SizedBox(height: 12),
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Expanded(
-                                child: _detailItem(
-                                  'Location',
-                                  event.location.isNotEmpty ? event.location : 'TBD',
-                                  Icons.location_on_outlined,
-                                ),
-                              ),
-                              const SizedBox(width: 16),
-                              Expanded(
-                                child: _detailItem(
-                                  'Audience',
-                                  event.audience.isNotEmpty ? event.audience : 'Public',
-                                  Icons.group_outlined,
-                                ),
-                              ),
-                            ],
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: _detailItem(
+                            'Time',
+                            time.isNotEmpty && time != 'TBD' ? time : 'TBD',
+                            Icons.access_time_rounded,
                           ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
-                    const SizedBox(height: 20),
+                    const SizedBox(height: 16),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: _detailItem(
+                            'Location',
+                            event.location.isNotEmpty ? event.location : 'TBD',
+                            Icons.location_on_outlined,
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: _detailItem(
+                            'Audience',
+                            event.audience.isNotEmpty ? event.audience : 'Public',
+                            Icons.group_outlined,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 24),
 
                     // ── Description ──────────────────────────────────
                     if (event.description.isNotEmpty) ...[
                       _sectionLabel('Description', icon: Icons.description_outlined),
-                      Container(
-                        padding: const EdgeInsets.all(14),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFF8F9FB),
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(color: const Color(0xFFE2E6EA)),
-                        ),
-                        child: Text(
-                          event.description,
-                          style: GoogleFonts.beVietnamPro(
-                            fontSize: 13,
-                            color: const Color(0xFF374151),
-                            height: 1.6,
-                          ),
+                      Text(
+                        event.description,
+                        style: GoogleFonts.beVietnamPro(
+                          fontSize: 13.5,
+                          color: const Color(0xFF374151),
+                          height: 1.65,
                         ),
                       ),
-                      const SizedBox(height: 20),
+                      const SizedBox(height: 24),
                     ],
 
                     // ── Guest Speaker ────────────────────────────────
                     if (guestSpeaker.isNotEmpty) ...[
                       _sectionLabel('Guest Speaker', icon: Icons.person_outline_rounded),
-                      Container(
-                        padding: const EdgeInsets.all(14),
-                        decoration: BoxDecoration(
-                          color: catColor.withOpacity(0.06),
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(
-                            color: catColor.withOpacity(0.15),
+                      Row(
+                        children: [
+                          Container(
+                            width: 38,
+                            height: 38,
+                            decoration: BoxDecoration(
+                              color: catColor.withAlpha(20),
+                              shape: BoxShape.circle,
+                              border: Border.all(color: catColor.withAlpha(45)),
+                            ),
+                            child: Icon(
+                              Icons.person_rounded,
+                              color: catColor,
+                              size: 18,
+                            ),
                           ),
-                        ),
-                        child: Row(
-                          children: [
-                            Container(
-                              width: 40,
-                              height: 40,
-                              decoration: BoxDecoration(
-                                color: catColor.withOpacity(0.12),
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: Icon(
-                                Icons.person_rounded,
-                                color: catColor,
-                                size: 20,
+                          const SizedBox(width: 14),
+                          Expanded(
+                            child: Text(
+                              guestSpeaker,
+                              style: GoogleFonts.beVietnamPro(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                                color: const Color(0xFF1A202C),
                               ),
                             ),
-                            const SizedBox(width: 14),
-                            Expanded(
-                              child: Text(
-                                guestSpeaker,
-                                style: GoogleFonts.beVietnamPro(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w600,
-                                  color: const Color(0xFF1A202C),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
+                          ),
+                        ],
                       ),
-                      const SizedBox(height: 20),
+                      const SizedBox(height: 24),
                     ],
 
                     // ── Tags ─────────────────────────────────────────
@@ -1230,11 +1101,8 @@ class _EventCalendarState extends State<EventCalendar> {
                           return Container(
                             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                             decoration: BoxDecoration(
-                              color: catColor.withOpacity(0.10),
                               borderRadius: BorderRadius.circular(20),
-                              border: Border.all(
-                                color: catColor.withOpacity(0.20),
-                              ),
+                              border: Border.all(color: catColor.withAlpha(60)),
                             ),
                             child: Text(
                               tag,
@@ -1255,21 +1123,18 @@ class _EventCalendarState extends State<EventCalendar> {
 
             // ─── FOOTER ──────────────────────────────────────────────
             Container(
-              padding: const EdgeInsets.fromLTRB(24, 16, 24, 20),
+              padding: const EdgeInsets.fromLTRB(24, 14, 24, 18),
               decoration: const BoxDecoration(
-                border: Border(top: BorderSide(color: Color(0xFFE8ECF0))),
-                color: Color(0xFFF8F9FB),
-                borderRadius: BorderRadius.vertical(bottom: Radius.circular(18)),
+                border: Border(top: BorderSide(color: Color(0xFFEDF0F3))),
               ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
-                  ElevatedButton(
+                  OutlinedButton(
                     onPressed: () => Navigator.pop(ctx),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: UpriseColors.primaryDark,
-                      foregroundColor: Colors.white,
-                      elevation: 0,
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: const Color(0xFF374151),
+                      side: const BorderSide(color: Color(0xFFE2E6EA)),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(8),
                       ),
@@ -1345,7 +1210,7 @@ Widget _buildDetailRow({
     children: [
       Row(
         children: [
-          Icon(icon, size: 13, color: const Color(0xFF9AA5B4)),
+          Icon(icon, size: 13, color: UpriseColors.primaryDark.withAlpha(150)),
           const SizedBox(width: 6),
           Text(
             label,

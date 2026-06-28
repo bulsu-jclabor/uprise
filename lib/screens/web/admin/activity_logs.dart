@@ -934,8 +934,13 @@ Expanded(
       barrierColor: Colors.black54,
       builder: (ctx) => Dialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-        child: SizedBox(
+        child: Container(
           width: 500,
+          constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.85),
+          decoration: const BoxDecoration(
+            color: Color(0xFFFFFAF5),
+            borderRadius: BorderRadius.all(Radius.circular(18)),
+          ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -943,7 +948,11 @@ Expanded(
               Container(
                 padding: const EdgeInsets.fromLTRB(24, 20, 20, 20),
                 decoration: BoxDecoration(
-                  color: UpriseColors.primaryDark,
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [UpriseColors.primaryDark, UpriseColors.primaryDark.withAlpha(225)],
+                  ),
                   borderRadius: const BorderRadius.vertical(
                     top: Radius.circular(18),
                   ),
@@ -954,8 +963,8 @@ Expanded(
                       width: 38,
                       height: 38,
                       decoration: BoxDecoration(
-                        color: Colors.white.withAlpha(38),
                         borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: Colors.white.withAlpha(70)),
                       ),
                       child: const Icon(
                         Icons.receipt_long_rounded,
@@ -998,9 +1007,10 @@ Expanded(
                 ),
               ),
               // Body
-              Padding(
-                padding: const EdgeInsets.all(24),
-                child: Column(
+              Flexible(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Row(
@@ -1063,19 +1073,22 @@ Expanded(
                       ),
                     ],
                   ],
+                  ),
                 ),
               ),
               // Footer
               Container(
-                padding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
+                padding: const EdgeInsets.fromLTRB(24, 16, 24, 18),
+                decoration: const BoxDecoration(
+                  border: Border(top: BorderSide(color: Color(0xFFEDF0F3))),
+                ),
                 child: Align(
                   alignment: Alignment.centerRight,
-                  child: ElevatedButton(
+                  child: OutlinedButton(
                     onPressed: () => Navigator.pop(ctx),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: UpriseColors.primaryDark,
-                      foregroundColor: Colors.white,
-                      elevation: 0,
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: const Color(0xFF374151),
+                      side: const BorderSide(color: Color(0xFFE2E6EA)),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(8),
                       ),
@@ -1112,7 +1125,7 @@ Expanded(
       children: [
         Row(
           children: [
-            Icon(icon, size: 13, color: const Color(0xFF9AA5B4)),
+            Icon(icon, size: 13, color: UpriseColors.primaryDark.withAlpha(150)),
             const SizedBox(width: 5),
             Text(
               label,
