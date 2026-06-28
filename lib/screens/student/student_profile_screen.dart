@@ -68,7 +68,6 @@ class ProfileModel extends ChangeNotifier {
     if (user != null) {
       email = user.email ?? '';
 
-      // students doc ID is the uid itself — direct lookup, no query/index.
       final doc = await FirebaseFirestore.instance
           .collection('students')
           .doc(user.uid)
@@ -131,7 +130,6 @@ class ProfileModel extends ChangeNotifier {
 
     final user = FirebaseAuth.instance.currentUser;
     if (user != null) {
-      // students doc ID is the uid itself — direct lookup, no query/index.
       final doc = await FirebaseFirestore.instance
           .collection('students')
           .doc(user.uid)
@@ -163,7 +161,6 @@ class ProfileModel extends ChangeNotifier {
 
     final user = FirebaseAuth.instance.currentUser;
     if (user != null) {
-      // students doc ID is the uid itself — direct lookup, no query/index.
       final docRef = FirebaseFirestore.instance.collection('students').doc(user.uid);
       if ((await docRef.get()).exists) {
         await docRef.set({'photoUrl': url}, SetOptions(merge: true));
@@ -929,7 +926,6 @@ class _IdDownloadPreviewSheetState extends State<_IdDownloadPreviewSheet> {
     final boundary =
         key.currentContext?.findRenderObject() as RenderRepaintBoundary?;
     if (boundary == null) return null;
-    // pixelRatio 3 keeps the exported PDF sharp on high-density phone screens.
     final ui.Image image = await boundary.toImage(pixelRatio: 3.0);
     final ByteData? byteData =
         await image.toByteData(format: ui.ImageByteFormat.png);
@@ -953,7 +949,6 @@ class _IdDownloadPreviewSheetState extends State<_IdDownloadPreviewSheet> {
 
       final doc = pw.Document();
 
-      // Both sides of the ID on a single page, stacked vertically.
       doc.addPage(
         pw.Page(
           pageFormat: PdfPageFormat.a4,
@@ -1004,8 +999,6 @@ class _IdDownloadPreviewSheetState extends State<_IdDownloadPreviewSheet> {
       setState(() => _isGenerating = false);
       Navigator.pop(context);
 
-      // Opens the native iOS/Android share & save sheet so the user can
-      // save the PDF to Files, Drive, or share it directly.
       await Printing.sharePdf(bytes: pdfBytes, filename: fileName);
     } catch (e) {
       if (!mounted) return;
@@ -1084,14 +1077,13 @@ class _IdDownloadPreviewSheetState extends State<_IdDownloadPreviewSheet> {
 }
 
 // ─────────────────────────────────────────────────────────────
-// _HeaderBadge — now accepts custom size & imageSize so the
-// smaller UPRISE logo can be scaled up to match the BSU logo
+// _HeaderBadge
 // ─────────────────────────────────────────────────────────────
 class _HeaderBadge extends StatelessWidget {
   final String assetPath;
   final IconData icon;
-  final double size;       // container (circle) diameter
-  final double imageSize;  // inner image size — increase for small assets
+  final double size;
+  final double imageSize;
 
   const _HeaderBadge({
     required this.assetPath,
@@ -1147,12 +1139,10 @@ class _IdCard1 extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // ── Header with both logos ──
           Padding(
             padding: const EdgeInsets.fromLTRB(18, 16, 18, 14),
             child: Row(
               children: [
-                // BSU logo — normal size
                 _HeaderBadge(
                   assetPath: 'assets/images/bsu_logo.png',
                   icon: Icons.school,
@@ -1183,14 +1173,11 @@ class _IdCard1 extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 10),
-                // UPRISE logo — imageSize bumped up so it looks the
-                // same visual weight as the BSU logo despite being a
-                // smaller source asset
                 _HeaderBadge(
                   assetPath: 'assets/images/logo.png',
                   icon: Icons.local_fire_department,
                   size: 36,
-                  imageSize: 52,  // ← increase/decrease to taste
+                  imageSize: 52,
                 ),
               ],
             ),
@@ -1201,7 +1188,6 @@ class _IdCard1 extends StatelessWidget {
             child: Divider(height: 1, color: Colors.grey.shade200),
           ),
 
-          // ── Photo + name/ID fields ──
           Padding(
             padding: const EdgeInsets.fromLTRB(18, 18, 18, 20),
             child: Row(
@@ -1302,7 +1288,6 @@ class _IdCard1 extends StatelessWidget {
 }
 
 // ── BACK of ID ──
-// ── BACK of ID ──
 class _IdCard2 extends StatelessWidget {
   final ProfileModel profile;
   const _IdCard2({required this.profile});
@@ -1388,7 +1373,6 @@ class _IdCard2 extends StatelessWidget {
             child: Divider(height: 1, color: Colors.grey.shade200),
           ),
 
-          // ── Validity note + logos at the bottom ──
           Padding(
             padding: const EdgeInsets.fromLTRB(18, 12, 18, 14),
             child: Row(
@@ -1414,7 +1398,6 @@ class _IdCard2 extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 10),
-                // BSU logo — base size
                 Image.asset(
                   'assets/images/bsu_logo.png',
                   width: 22,
@@ -1424,11 +1407,9 @@ class _IdCard2 extends StatelessWidget {
                       Icon(Icons.school, size: 18, color: Colors.grey[400]),
                 ),
                 const SizedBox(width: 4),
-                // UPRISE logo — slightly larger to compensate for
-                // the smaller source asset
                 Image.asset(
                   'assets/images/logo.png',
-                  width: 32,   // ← bigger than BSU's 22 to look equal
+                  width: 32,
                   height: 32,
                   fit: BoxFit.contain,
                   errorBuilder: (_, __, ___) => Icon(
@@ -2081,7 +2062,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 }
 
 // ─────────────────────────────────────────────────────────────
-// Settings Screen - Redesigned
+// Settings Screen
 // ─────────────────────────────────────────────────────────────
 class SettingsScreen extends StatefulWidget {
   final ProfileModel profile;
@@ -2122,6 +2103,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
     super.dispose();
   }
 
+  // ─────────────────────────────────────────────────────────────
+  // FIXED: Change Password
+  // Handles all Firebase error codes including the newer
+  // 'invalid-credential' code that replaced 'wrong-password'
+  // in recent Firebase SDK versions.
+  // Also clears the tempPassword field in Firestore after success.
+  // ─────────────────────────────────────────────────────────────
   Future<void> _changePassword() async {
     final current = _currentPwCtrl.text.trim();
     final newPw = _newPwCtrl.text.trim();
@@ -2161,21 +2149,28 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     try {
       final user = FirebaseAuth.instance.currentUser;
-      if (user == null) {
+      if (user == null || user.email == null) {
         throw Exception('User not logged in');
       }
 
-      // Re-authenticate user
+      // Step 1: Re-authenticate — required by Firebase before
+      // any sensitive operation like changing password.
       final credential = EmailAuthProvider.credential(
         email: user.email!,
         password: current,
       );
       await user.reauthenticateWithCredential(credential);
 
-      // Update password
+      // Step 2: Update the Firebase Auth password.
       await user.updatePassword(newPw);
 
-      // Clear fields
+      // Step 3: Clear the tempPassword field in Firestore
+      // so the student is no longer flagged as using a temp password.
+      await FirebaseFirestore.instance
+          .collection('students')
+          .doc(user.uid)
+          .set({'tempPassword': null}, SetOptions(merge: true));
+
       _currentPwCtrl.clear();
       _newPwCtrl.clear();
       _confirmPwCtrl.clear();
@@ -2189,33 +2184,42 @@ class _SettingsScreenState extends State<SettingsScreen> {
         );
       }
     } on FirebaseAuthException catch (e) {
-      String message = 'Failed to update password';
-      if (e.code == 'wrong-password') {
-        message = 'Current password is incorrect';
-      } else if (e.code == 'requires-recent-login') {
-        message = 'Please log out and log in again to change password';
+      String message;
+      switch (e.code) {
+        // Older Firebase SDK uses 'wrong-password';
+        // newer SDK (v5+) uses 'invalid-credential' for the same error.
+        case 'wrong-password':
+        case 'invalid-credential':
+          message = 'Current password is incorrect. Please try again.';
+          break;
+        case 'requires-recent-login':
+          message = 'Session expired. Please log out, log back in, then try again.';
+          break;
+        case 'weak-password':
+          message = 'New password is too weak. Use at least 6 characters.';
+          break;
+        case 'user-disabled':
+          message = 'This account has been disabled.';
+          break;
+        case 'too-many-requests':
+          message = 'Too many failed attempts. Please wait a moment and try again.';
+          break;
+        default:
+          message = 'Failed to update password. (${e.code})';
       }
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(message),
-            backgroundColor: Colors.red,
-          ),
+          SnackBar(content: Text(message), backgroundColor: Colors.red),
         );
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error: $e'),
-            backgroundColor: Colors.red,
-          ),
+          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
         );
       }
     } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -2275,10 +2279,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ),
         subtitle: Text(
           subtitle,
-          style: TextStyle(
-            fontSize: 12,
-            color: Colors.grey[500],
-          ),
+          style: TextStyle(fontSize: 12, color: Colors.grey[500]),
         ),
         trailing: trailing ??
             const Icon(Icons.chevron_right, color: Colors.grey, size: 20),
@@ -2326,7 +2327,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
               suffixIcon: IconButton(
                 icon: Icon(
-                  showPassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                  showPassword
+                      ? Icons.visibility_off_outlined
+                      : Icons.visibility_outlined,
                   size: 20,
                   color: Colors.grey[400],
                 ),
@@ -2363,10 +2366,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ),
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(1),
-          child: Container(
-            height: 1,
-            color: Colors.grey.shade100,
-          ),
+          child: Container(height: 1, color: Colors.grey.shade100),
         ),
       ),
       body: AnimatedBuilder(
@@ -2395,7 +2395,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     padding: const EdgeInsets.all(16),
                     child: Row(
                       children: [
-                        // Profile Image
                         Container(
                           width: 64,
                           height: 64,
@@ -2463,7 +2462,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             ],
                           ),
                         ),
-                        // Edit Button
                         Container(
                           decoration: BoxDecoration(
                             color: kOrange.withOpacity(0.1),
@@ -2504,9 +2502,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (_) => EditProfileScreen(
-                          profile: widget.profile,
-                        ),
+                        builder: (_) =>
+                            EditProfileScreen(profile: widget.profile),
                       ),
                     );
                   },
@@ -2521,14 +2518,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (_) => const PrivacySecurityScreen(isGuest: false),
+                        builder: (_) =>
+                            const PrivacySecurityScreen(isGuest: false),
                       ),
                     );
                   },
                 ),
                 const SizedBox(height: 8),
 
-                // ── Password Change Section ──
+                // ── Change Password Card ──
                 Container(
                   margin: const EdgeInsets.all(16),
                   padding: const EdgeInsets.all(16),
@@ -2576,9 +2574,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         label: 'Current Password',
                         controller: _currentPwCtrl,
                         showPassword: _showCurrentPw,
-                        onToggle: () {
-                          setState(() => _showCurrentPw = !_showCurrentPw);
-                        },
+                        onToggle: () =>
+                            setState(() => _showCurrentPw = !_showCurrentPw),
                         hintText: 'Enter current password',
                       ),
                       const SizedBox(height: 12),
@@ -2586,9 +2583,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         label: 'New Password',
                         controller: _newPwCtrl,
                         showPassword: _showNewPw,
-                        onToggle: () {
-                          setState(() => _showNewPw = !_showNewPw);
-                        },
+                        onToggle: () =>
+                            setState(() => _showNewPw = !_showNewPw),
                         hintText: 'Enter new password (min 6 chars)',
                       ),
                       const SizedBox(height: 12),
@@ -2596,9 +2592,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         label: 'Confirm New Password',
                         controller: _confirmPwCtrl,
                         showPassword: _showConfirmPw,
-                        onToggle: () {
-                          setState(() => _showConfirmPw = !_showConfirmPw);
-                        },
+                        onToggle: () =>
+                            setState(() => _showConfirmPw = !_showConfirmPw),
                         hintText: 'Confirm your new password',
                       ),
                       const SizedBox(height: 16),
@@ -2610,9 +2605,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             backgroundColor: kOrange,
                             foregroundColor: Colors.white,
                             elevation: 0,
-                            padding: const EdgeInsets.symmetric(
-                              vertical: 14,
-                            ),
+                            padding: const EdgeInsets.symmetric(vertical: 14),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(10),
                             ),
@@ -2640,7 +2633,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
                 ),
 
-                // ── App Preferences ──
+                // ── Preferences ──
                 _buildSectionHeader('PREFERENCES'),
                 _buildSettingsTile(
                   icon: Icons.notifications_outlined,
@@ -2656,7 +2649,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   icon: Icons.help_outline,
                   title: 'Help & Support',
                   subtitle: 'Get assistance and FAQs',
-                  onTap: () => launchSupportEmail(context, subject: 'UPRISE Support Request'),
+                  onTap: () => launchSupportEmail(context,
+                      subject: 'UPRISE Support Request'),
                 ),
                 const SizedBox(height: 8),
 
@@ -2664,12 +2658,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   icon: Icons.feedback_outlined,
                   title: 'Send Feedback',
                   subtitle: 'Help us improve the app',
-                  onTap: () => launchSupportEmail(context, subject: 'UPRISE Feedback'),
+                  onTap: () =>
+                      launchSupportEmail(context, subject: 'UPRISE Feedback'),
                   iconColor: Colors.purple,
                 ),
                 const SizedBox(height: 8),
 
-                // ── About ──
                 _buildSettingsTile(
                   icon: Icons.info_outline,
                   title: 'About',
@@ -2677,16 +2671,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   onTap: () {},
                   trailing: Container(
                     padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 4,
-                    ),
+                        horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(
                       color: kOrange.withOpacity(0.12),
                       borderRadius: BorderRadius.circular(6),
                     ),
                     child: Text(
                       _appVersion,
-                      style: TextStyle(
+                      style: const TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.w600,
                         color: kOrange,
@@ -2696,9 +2688,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
                 const SizedBox(height: 8),
 
-                // ── Logout Button ──
+                // ── Logout ──
                 Container(
                   margin: const EdgeInsets.symmetric(horizontal: 16),
+                  width: double.infinity,
                   child: ElevatedButton.icon(
                     onPressed: () async {
                       final confirm = await showDialog<bool>(
@@ -2715,16 +2708,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           actions: [
                             TextButton(
                               onPressed: () => Navigator.pop(context, false),
-                              child: Text(
-                                'Cancel',
-                                style: TextStyle(color: Colors.grey[600]),
-                              ),
+                              child: Text('Cancel',
+                                  style:
+                                      TextStyle(color: Colors.grey[600])),
                             ),
                             TextButton(
                               onPressed: () => Navigator.pop(context, true),
                               style: TextButton.styleFrom(
-                                foregroundColor: Colors.red,
-                              ),
+                                  foregroundColor: Colors.red),
                               child: const Text('Logout'),
                             ),
                           ],
@@ -2737,8 +2728,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       if (context.mounted) {
                         Navigator.of(context).pushAndRemoveUntil(
                           MaterialPageRoute(
-                            builder: (_) => const StudentLogin(),
-                          ),
+                              builder: (_) => const StudentLogin()),
                           (route) => false,
                         );
                       }
@@ -2747,20 +2737,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       backgroundColor: Colors.red.shade50,
                       foregroundColor: Colors.red,
                       elevation: 0,
-                      padding: const EdgeInsets.symmetric(
-                        vertical: 16,
-                      ),
+                      padding: const EdgeInsets.symmetric(vertical: 16),
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
+                          borderRadius: BorderRadius.circular(12)),
                     ),
                     icon: const Icon(Icons.logout, size: 20),
                     label: const Text(
                       'Log Out',
                       style: TextStyle(
-                        fontWeight: FontWeight.w600,
-                        fontSize: 15,
-                      ),
+                          fontWeight: FontWeight.w600, fontSize: 15),
                     ),
                   ),
                 ),

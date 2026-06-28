@@ -1205,68 +1205,131 @@ class _CalendarGrid extends StatelessWidget {
     final firstWeekday = firstDayOfMonth.weekday % 7;
     final daysInMonth = DateTime(selectedDate.year, selectedDate.month + 1, 0).day;
 
-    List<Widget> dayWidgets = [];
-    const weekdays = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
-    for (var day in weekdays) {
-      dayWidgets.add(Center(
-        child: Text(
-          day,
-          style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.grey.shade600),
-        ),
-      ));
-    }
+    // Stream to get events for the current month
+    final eventsStream = FirebaseFirestore.instance
+        .collection('events')
+        .where('status', isEqualTo: 'approved')
+        .snapshots();
 
-    for (int i = 0; i < firstWeekday; i++) {
-      dayWidgets.add(const SizedBox.shrink());
-    }
+    return StreamBuilder<QuerySnapshot>(
+      stream: eventsStream,
+      builder: (context, snap) {
+        Set<String> eventDates = {};
+        if (snap.hasData) {
+          final events = snap.data!.docs
+              .map((d) => EventModel.fromFirestore(d))
+              .where((e) =>
+                  e.date.year == selectedDate.year &&
+                  e.date.month == selectedDate.month)
+              .toList();
+          
+          // Store dates that have events in format "YYYY-MM-DD"
+          eventDates = events
+              .map((e) => 
+                  '${e.date.year}-${e.date.month.toString().padLeft(2, '0')}-${e.date.day.toString().padLeft(2, '0')}')
+              .toSet();
+        }
 
-    for (int day = 1; day <= daysInMonth; day++) {
-      final currentDate = DateTime(selectedDate.year, selectedDate.month, day);
-      final isSelected = currentDate.year == selectedDate.year &&
-          currentDate.month == selectedDate.month &&
-          currentDate.day == selectedDate.day;
-      final isToday = currentDate.year == DateTime.now().year &&
-          currentDate.month == DateTime.now().month &&
-          currentDate.day == DateTime.now().day;
-
-      dayWidgets.add(
-        GestureDetector(
-          onTap: () => onDateSelected(currentDate),
-          child: Container(
-            margin: const EdgeInsets.all(4),
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: isSelected
-                  ? AppColors.primaryDark
-                  : isToday
-                      ? Colors.grey.shade200
-                      : Colors.transparent,
+        List<Widget> dayWidgets = [];
+        const weekdays = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+        for (var day in weekdays) {
+          dayWidgets.add(Center(
+            child: Text(
+              day,
+              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.grey.shade600),
             ),
-            child: Center(
-              child: Text(
-                day.toString(),
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                  color: isSelected
-                      ? Colors.white
-                      : isToday
-                          ? AppColors.primaryDark
-                          : Colors.black87,
+          ));
+        }
+
+        for (int i = 0; i < firstWeekday; i++) {
+          dayWidgets.add(const SizedBox.shrink());
+        }
+
+        for (int day = 1; day <= daysInMonth; day++) {
+          final currentDate = DateTime(selectedDate.year, selectedDate.month, day);
+          final isSelected = currentDate.year == selectedDate.year &&
+              currentDate.month == selectedDate.month &&
+              currentDate.day == selectedDate.day;
+          final isToday = currentDate.year == DateTime.now().year &&
+              currentDate.month == DateTime.now().month &&
+              currentDate.day == DateTime.now().day;
+          
+          // Check if this date has an event
+          final dateKey = '${currentDate.year}-${currentDate.month.toString().padLeft(2, '0')}-${currentDate.day.toString().padLeft(2, '0')}';
+          final hasEvent = eventDates.contains(dateKey);
+
+          // Determine indicator color
+          Color indicatorColor;
+          if (hasEvent && isToday) {
+            indicatorColor = Colors.green; // Green for today's events
+          } else if (hasEvent) {
+            indicatorColor = AppColors.primaryDark; // Primary color for other dates with events
+          } else {
+            indicatorColor = Colors.transparent; // No indicator
+          }
+
+          dayWidgets.add(
+            GestureDetector(
+              onTap: () => onDateSelected(currentDate),
+              child: Container(
+                margin: const EdgeInsets.all(2),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Container(
+                      width: 32,
+                      height: 32,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: isSelected
+                            ? AppColors.primaryDark
+                            : isToday
+                                ? Colors.grey.shade200
+                                : Colors.transparent,
+                      ),
+                      child: Center(
+                        child: Text(
+                          day.toString(),
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500,
+                            color: isSelected
+                                ? Colors.white
+                                : isToday
+                                    ? AppColors.primaryDark
+                                    : Colors.black87,
+                          ),
+                        ),
+                      ),
+                    ),
+                    // Event indicator dot
+                    if (hasEvent)
+                      Container(
+                        width: 5,
+                        height: 5,
+                        margin: const EdgeInsets.only(top: 1),
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: indicatorColor,
+                        ),
+                      )
+                    else
+                      const SizedBox(height: 6), // Keep spacing consistent
+                  ],
                 ),
               ),
             ),
-          ),
-        ),
-      );
-    }
+          );
+        }
 
-    return GridView.count(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      crossAxisCount: 7,
-      childAspectRatio: 1.2,
-      children: dayWidgets,
+        return GridView.count(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          crossAxisCount: 7,
+          childAspectRatio: 1.1,
+          children: dayWidgets,
+        );
+      },
     );
   }
 }
