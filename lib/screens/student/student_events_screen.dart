@@ -966,6 +966,89 @@ class _StudentEventsScreenState extends State<StudentEventsScreen>
     );
   }
 
+  // ── Filter by Organization bottom sheet ──
+  void _showOrgFilterSheet() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setSheetState) {
+            return SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Center(
+                      child: Container(
+                        width: 40, height: 4,
+                        margin: const EdgeInsets.only(bottom: 18),
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade300,
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                    ),
+                    const Text('Filter by Organization',
+                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: Colors.black87)),
+                    const SizedBox(height: 12),
+                    Divider(height: 1, color: Colors.grey.shade300),
+                    const SizedBox(height: 8),
+                    ...List.generate(_certFilters.length, (i) {
+                      final f = _certFilters[i];
+                      final sel = _certFilter == f;
+                      return InkWell(
+                        onTap: () {
+                          setSheetState(() {});
+                          setState(() => _certFilter = f);
+                          Navigator.pop(ctx);
+                        },
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          child: Row(
+                            children: [
+                              Icon(
+                                sel ? Icons.radio_button_checked_rounded : Icons.radio_button_off_rounded,
+                                color: sel ? AppColors.primaryDark : Colors.grey.shade400,
+                                size: 22,
+                              ),
+                              const SizedBox(width: 14),
+                              Expanded(
+                                child: Text(f,
+                                    style: TextStyle(
+                                        fontSize: 15,
+                                        fontWeight: sel ? FontWeight.w700 : FontWeight.w500,
+                                        color: sel ? AppColors.primaryDark : Colors.black87)),
+                              ),
+                              if (sel)
+                                Container(
+                                  width: 22, height: 22,
+                                  decoration: const BoxDecoration(
+                                    color: AppColors.primaryDark,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: const Icon(Icons.check_rounded, size: 14, color: Colors.white),
+                                ),
+                            ],
+                          ),
+                        ),
+                      );
+                    }),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
   // ── TAB 2: Certificate ──
   Widget _buildCertificateTab() {
     final filtered = _certFilter == 'All'
@@ -1015,36 +1098,42 @@ class _StudentEventsScreenState extends State<StudentEventsScreen>
             ),
           ),
         ),
-        // Filter chips
-        SizedBox(
-          height: 48,
-          child: ListView.builder(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            itemCount: _certFilters.length,
-            itemBuilder: (_, i) {
-              final f = _certFilters[i];
-              final sel = _certFilter == f;
-              return GestureDetector(
-                onTap: () => setState(() => _certFilter = f),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 200),
-                  margin: const EdgeInsets.only(right: 8, top: 6, bottom: 6),
-                  padding: const EdgeInsets.symmetric(horizontal: 18),
-                  decoration: BoxDecoration(
-                    color: sel ? AppColors.primaryDark : Colors.white,
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: sel ? AppColors.primaryDark : Colors.grey.shade300),
-                  ),
-                  alignment: Alignment.center,
-                  child: Text(f,
-                      style: TextStyle(
-                          color: sel ? Colors.white : Colors.grey.shade600,
-                          fontWeight: sel ? FontWeight.w600 : FontWeight.w400,
-                          fontSize: 13)),
+        // Filter header row
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  _certFilter == 'All' ? 'All Certificates' : _certFilter,
+                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: Colors.black87),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
-              );
-            },
+              ),
+              GestureDetector(
+                onTap: _showOrgFilterSheet,
+                child: Container(
+                  padding: const EdgeInsets.all(9),
+                  decoration: BoxDecoration(
+                    color: _certFilter != 'All'
+                        ? AppColors.primaryDark
+                        : Colors.grey.shade100,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: _certFilter != 'All'
+                          ? AppColors.primaryDark
+                          : Colors.grey.shade300,
+                    ),
+                  ),
+                  child: Icon(
+                    Icons.filter_list_rounded,
+                    size: 20,
+                    color: _certFilter != 'All' ? Colors.white : Colors.grey.shade700,
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
         const SizedBox(height: 8),
