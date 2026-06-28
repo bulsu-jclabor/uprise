@@ -128,6 +128,7 @@ Widget _outlinedChip(String label, {bool dim = false, Color? accent}) {
 class _Event {
   final String id, title, time, category, organization, orgId, createdFromProposalId;
   final String location, description, guestSpeaker, audience, status;
+  final String schoolYear, semester;
   final List<String> tags;
   final DateTime date;
 
@@ -145,6 +146,8 @@ class _Event {
     this.guestSpeaker = '',
     this.audience = '',
     this.status = 'approved',
+    this.schoolYear = '',
+    this.semester = '',
     this.tags = const [],
   });
 }
@@ -467,6 +470,8 @@ class _EventCalendarState extends State<EventCalendar> {
             guestSpeaker: d['guestSpeaker'] ?? '',
             audience:     (d['audience'] ?? '').toString(),
             status:       (d['status'] ?? 'approved').toString(),
+            schoolYear:   (d['schoolYear'] ?? '').toString(),
+            semester:     (d['semester'] ?? '').toString(),
             tags:         List<String>.from(d['tags'] ?? []),
           );
         }).toList();
@@ -492,6 +497,8 @@ class _EventCalendarState extends State<EventCalendar> {
                 guestSpeaker: d['guestSpeaker'] ?? '',
                 audience:     (d['audience'] ?? '').toString(),
                 status:       'pending',
+                schoolYear:   (d['schoolYear'] ?? '').toString(),
+                semester:     (d['semester'] ?? '').toString(),
                 tags:         List<String>.from(d['tags'] ?? []),
               );
             }).toList();
@@ -1040,6 +1047,29 @@ class _EventCalendarState extends State<EventCalendar> {
                         ),
                       ],
                     ),
+                    if (event.schoolYear.isNotEmpty || event.semester.isNotEmpty) ...[
+                      const SizedBox(height: 16),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: _detailItem(
+                              'School Year',
+                              event.schoolYear.isNotEmpty ? event.schoolYear : '—',
+                              Icons.school_outlined,
+                            ),
+                          ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: _detailItem(
+                              'Semester',
+                              event.semester.isNotEmpty ? event.semester : '—',
+                              Icons.date_range_outlined,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
                     const SizedBox(height: 24),
 
                     // ── Description ──────────────────────────────────

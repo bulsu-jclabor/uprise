@@ -10,6 +10,7 @@ import '../../../widgets/admin_export_button.dart';
 import 'export_util.dart';
 import 'export_pdf.dart';
 import '../../../theme/app_theme.dart';
+import '../../../utils/school_year.dart';
 
 // ============ COLOR SCHEME ============
 class OrgColors {
@@ -120,16 +121,18 @@ class _OrgFinanceScreenState extends State<OrgFinanceScreen> {
   }
 
   // 'event' mode filters by a specific event and excludes archived
-  // transactions, same as the rest of the page. 'dateRange' mode filters by
-  // date only and deliberately includes archived transactions that fall
-  // within the range — these are mutually exclusive report modes, not
-  // combinable filters.
+  // transactions, same as the rest of the page. 'dateRange' and 'semester'
+  // modes filter by date only and deliberately include archived
+  // transactions that fall within the range — these are mutually exclusive
+  // report modes, not combinable filters.
   List<TransactionModel> _applyReportFilters(
     List<TransactionModel> list, {
     required String mode,
     String eventFilter = 'All Events',
     DateTime? startDate,
     DateTime? endDate,
+    String? schoolYear,
+    String? semester,
   }) {
     if (mode == 'dateRange') {
       final inclusiveEnd = endDate == null
@@ -140,6 +143,15 @@ class _OrgFinanceScreenState extends State<OrgFinanceScreen> {
         final startMatch = startDate == null || !txnDate.isBefore(startDate);
         final endMatch = inclusiveEnd == null || !txnDate.isAfter(inclusiveEnd);
         return startMatch && endMatch;
+      }).toList();
+    }
+    if (mode == 'semester') {
+      final (rangeStart, rangeEnd) = SchoolYearUtil.dateRangeFor(
+          schoolYear ?? SchoolYearUtil.currentSchoolYear(),
+          semester == SchoolYearUtil.wholeYear ? null : semester);
+      return list.where((t) {
+        final txnDate = t.date.toDate();
+        return !txnDate.isBefore(rangeStart) && !txnDate.isAfter(rangeEnd);
       }).toList();
     }
     return list.where((t) {
@@ -463,10 +475,12 @@ class _OrgFinanceScreenState extends State<OrgFinanceScreen> {
     DateTime? startDate;
     DateTime? endDate;
     String selectedFormat = 'pdf';
-    // Either filter by a specific event, or by a date range — not both at
-    // once. Date-range mode also pulls in archived transactions that fall
-    // within the range, since "export everything from this period" should
-    // include records the org has since archived.
+    String selectedSchoolYear = SchoolYearUtil.currentSchoolYear();
+    String selectedSemester = SchoolYearUtil.wholeYear;
+    // Filter by a specific event, a date range, or a school year/semester —
+    // not combinable. Date-range and semester modes also pull in archived
+    // transactions that fall within the range, since "export everything
+    // from this period" should include records the org has since archived.
     String reportMode = 'event';
 
     await showDialog<void>(
@@ -501,8 +515,10 @@ class _OrgFinanceScreenState extends State<OrgFinanceScreen> {
               mode: reportMode,
               eventFilter: selectedEvent,
               startDate: startDate,
-              endDate: endDate);
-          final archivedIncluded = reportMode == 'dateRange'
+              endDate: endDate,
+              schoolYear: selectedSchoolYear,
+              semester: selectedSemester);
+          final archivedIncluded = (reportMode == 'dateRange' || reportMode == 'semester')
               ? filtered.where((t) => t.isArchived).length
               : 0;
 
@@ -579,9 +595,41 @@ class _OrgFinanceScreenState extends State<OrgFinanceScreen> {
                           selectedEvent = 'All Events';
                         }),
                       ),
+                      const SizedBox(width: 10),
+                      _FormatChip(
+                        label: 'School Year',
+                        icon: Icons.school_outlined,
+                        selected: reportMode == 'semester',
+                        onTap: () => setDialogState(() {
+                          reportMode = 'semester';
+                          selectedEvent = 'All Events';
+                        }),
+                      ),
                     ]),
                     const SizedBox(height: 16),
-                    if (reportMode == 'event') ...[
+                    if (reportMode == 'semester') ...[
+                      _FieldLabel('SCHOOL YEAR'),
+                      const SizedBox(height: 6),
+                      _StyledDropdown<String>(
+                        value: selectedSchoolYear,
+                        items: SchoolYearUtil.schoolYears()
+                            .map((y) => DropdownMenuItem(value: y, child: Text(y)))
+                            .toList(),
+                        onChanged: (v) => setDialogState(
+                            () => selectedSchoolYear = v ?? SchoolYearUtil.currentSchoolYear()),
+                      ),
+                      const SizedBox(height: 12),
+                      _FieldLabel('SEMESTER'),
+                      const SizedBox(height: 6),
+                      _StyledDropdown<String>(
+                        value: selectedSemester,
+                        items: [SchoolYearUtil.wholeYear, ...SchoolYearUtil.semesters]
+                            .map((s) => DropdownMenuItem(value: s, child: Text(s)))
+                            .toList(),
+                        onChanged: (v) => setDialogState(
+                            () => selectedSemester = v ?? SchoolYearUtil.wholeYear),
+                      ),
+                    ] else if (reportMode == 'event') ...[
                       _FieldLabel('FILTER BY EVENT'),
                       const SizedBox(height: 6),
                       _StyledDropdown<String>(
@@ -729,7 +777,9 @@ class _OrgFinanceScreenState extends State<OrgFinanceScreen> {
                                     mode: reportMode,
                                     eventFilter: selectedEvent,
                                     startDate: startDate,
-                                    endDate: endDate);
+                                    endDate: endDate,
+                                    schoolYear: selectedSchoolYear,
+                                    semester: selectedSemester);
                               },
                         style: ElevatedButton.styleFrom(
                           backgroundColor: UpriseColors.primaryDark,
@@ -759,9 +809,16 @@ class _OrgFinanceScreenState extends State<OrgFinanceScreen> {
       {required String mode,
       String eventFilter = 'All Events',
       DateTime? startDate,
-      DateTime? endDate}) async {
+      DateTime? endDate,
+      String? schoolYear,
+      String? semester}) async {
     final filtered = _applyReportFilters(transactions,
-        mode: mode, eventFilter: eventFilter, startDate: startDate, endDate: endDate);
+        mode: mode,
+        eventFilter: eventFilter,
+        startDate: startDate,
+        endDate: endDate,
+        schoolYear: schoolYear,
+        semester: semester);
     if (filtered.isEmpty) {
       _showSnack('No transactions match the selected filters', OrgColors.warning);
       return;
@@ -771,7 +828,7 @@ class _OrgFinanceScreenState extends State<OrgFinanceScreen> {
       // show feedback right away so it doesn't look like the page froze.
       _showSnack('Generating PDF…', UpriseColors.primaryDark);
     }
-    final includeStatusColumn = mode == 'dateRange';
+    final includeStatusColumn = mode == 'dateRange' || mode == 'semester';
     final headers = [
       'Date', 'Event', 'Category', 'Description', 'Type', 'Amount',
       if (includeStatusColumn) 'Status',
@@ -802,7 +859,12 @@ class _OrgFinanceScreenState extends State<OrgFinanceScreen> {
           filters.add('From: ${DateFormat('MMM d, yyyy').format(startDate)}');
         if (mode == 'dateRange' && endDate != null)
           filters.add('To: ${DateFormat('MMM d, yyyy').format(endDate)}');
-        if (mode == 'dateRange') {
+        if (mode == 'semester' && schoolYear != null) {
+          filters.add(semester == null || semester == SchoolYearUtil.wholeYear
+              ? 'School Year: $schoolYear (Whole Year)'
+              : 'School Year: $schoolYear, $semester');
+        }
+        if (mode == 'dateRange' || mode == 'semester') {
           final archivedCount = filtered.where((t) => t.isArchived).length;
           if (archivedCount > 0) filters.add('Includes $archivedCount archived');
         }

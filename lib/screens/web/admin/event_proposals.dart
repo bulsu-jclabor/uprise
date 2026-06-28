@@ -1616,6 +1616,11 @@ class _EventProposalsState extends State<EventProposals> {
                     ]),
                     const SizedBox(height: 16),
                     Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Expanded(child: _detailItem('School Year', data['schoolYear'] ?? '—', Icons.school_outlined)),
+                      Expanded(child: _detailItem('Semester', data['semester'] ?? '—', Icons.date_range_outlined)),
+                    ]),
+                    const SizedBox(height: 16),
+                    Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
                       Expanded(child: _detailItem('Location', data['location'] ?? '—', Icons.location_on_outlined)),
                       Expanded(
                         child: _detailItem(

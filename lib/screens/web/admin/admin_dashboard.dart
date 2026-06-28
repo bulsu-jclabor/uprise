@@ -88,6 +88,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
   // dashboard load instead of spreading that cost out over time.
   final Set<int> _visitedIndices = {0};
   final AuthService _auth = AuthService();
+  final GlobalKey _bellKey = GlobalKey();
   int _unreadNotifications = 0;
   List<Map<String, dynamic>> _notifications = [];
   String _adminName = 'Admin User';
@@ -290,13 +291,70 @@ class _AdminDashboardState extends State<AdminDashboard> {
     });
   }
 
-  // Anchored top-right under the header — same width and corner as the
-  // bell's PopupMenuButton dropdown (offset: Offset(-318, 54), maxWidth:
-  // 360) — instead of the plain showDialog() that used to center a
-  // differently-sized panel in the middle of the screen, which made
-  // "View All" feel like a completely different control jumping
-  // somewhere else rather than the same notification list staying put.
+  // Reads the bell's real on-screen position (via _bellKey) so any overlay
+  // anchored from this can sit consistently right under it, regardless of
+  // window width — Flutter's built-in menu-positioning (PopupMenuButton's
+  // offset + internal clamping) repositions itself differently depending
+  // on how much room is left in the viewport, which is what made the
+  // dropdown/"View All" land in inconsistent spots before.
+  ({double top, double right, double maxHeight}) _bellAnchor({required double preferredHeight}) {
+    final bellBox = _bellKey.currentContext?.findRenderObject() as RenderBox?;
+    final screenSize = MediaQuery.of(context).size;
+    double top = 76;
+    double right = 28;
+    if (bellBox != null) {
+      final bellTopLeft = bellBox.localToGlobal(Offset.zero);
+      final bellSize = bellBox.size;
+      top = bellTopLeft.dy + bellSize.height + 12;
+      right = (screenSize.width - (bellTopLeft.dx + bellSize.width) - 6)
+          .clamp(8.0, screenSize.width - 360);
+    }
+    final maxHeight = (screenSize.height - top - 24).clamp(200.0, preferredHeight);
+    return (top: top, right: right, maxHeight: maxHeight);
+  }
+
+  void _showNotificationDropdown() {
+    final anchor = _bellAnchor(preferredHeight: 480);
+    showGeneralDialog(
+      context: context,
+      barrierDismissible: true,
+      barrierColor: Colors.transparent,
+      barrierLabel: 'Notifications',
+      transitionDuration: const Duration(milliseconds: 150),
+      pageBuilder: (ctx, anim, secAnim) {
+        return Align(
+          alignment: Alignment.topRight,
+          child: Padding(
+            padding: EdgeInsets.only(top: anchor.top, right: anchor.right),
+            child: Material(
+              color: Colors.white,
+              elevation: 12,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+                side: const BorderSide(color: Color(0xFFE8ECF0), width: 0.5),
+              ),
+              child: ConstrainedBox(
+                constraints: BoxConstraints(maxWidth: 360, minWidth: 360, maxHeight: anchor.maxHeight),
+                child: _AdminNotificationPanel(
+                  notifications: List.from(_notifications),
+                  onMarkRead: _markNotificationAsRead,
+                  onMarkAllRead: _markAllNotificationsAsRead,
+                  onNotificationTap: _handleNotificationTap,
+                  onViewAll: () {
+                    Navigator.of(ctx).pop();
+                    _showAllNotificationsDialog();
+                  },
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   void _showAllNotificationsDialog() {
+    final anchor = _bellAnchor(preferredHeight: 600);
     showGeneralDialog(
       context: context,
       barrierDismissible: true,
@@ -307,7 +365,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
         return Align(
           alignment: Alignment.topRight,
           child: Padding(
-            padding: const EdgeInsets.only(top: 76, right: 28),
+            padding: EdgeInsets.only(top: anchor.top, right: anchor.right),
             child: Material(
               color: Colors.white,
               elevation: 12,
@@ -316,7 +374,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                 side: const BorderSide(color: Color(0xFFE8ECF0), width: 0.5),
               ),
               child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 360, minWidth: 360, maxHeight: 600),
+                constraints: BoxConstraints(maxWidth: 360, minWidth: 360, maxHeight: anchor.maxHeight),
                 child: _AdminNotificationPanel(
                   notifications: List.from(_notifications),
                   onMarkRead: _markNotificationAsRead,
@@ -798,34 +856,21 @@ class _AdminDashboardState extends State<AdminDashboard> {
           const SizedBox(width: 12),
 
           // Notification bell
-          PopupMenuButton<String>(
-            offset: const Offset(-318, 54),
-            onOpened: _fetchUnreadNotifications,
-            constraints: const BoxConstraints(maxWidth: 360, minWidth: 360),
-            color: Colors.white,
-            elevation: 12,
-            surfaceTintColor: Colors.transparent,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-              side: const BorderSide(color: Color(0xFFE8ECF0), width: 0.5),
-            ),
-            padding: EdgeInsets.zero,
-            tooltip: '',
-            itemBuilder: (ctx) => [
-              PopupMenuItem<String>(
-                enabled: false,
-                padding: EdgeInsets.zero,
-                height: 0,
-                child: _AdminNotificationPanel(
-                  notifications: List.from(_notifications),
-                  onMarkRead: _markNotificationAsRead,
-                  onMarkAllRead: _markAllNotificationsAsRead,
-                  onNotificationTap: _handleNotificationTap,
-                  onViewAll: _showAllNotificationsDialog,
-                ),
-              ),
-            ],
-            child: StreamBuilder<int>(
+          // A plain InkWell driving our own custom-positioned overlay
+          // (same as "View All") instead of PopupMenuButton — Flutter's
+          // built-in menu positioning clamps/repositions itself to fit the
+          // viewport, which made the dropdown land in inconsistent spots
+          // depending on window size instead of staying tucked under the
+          // bell every time.
+          InkWell(
+            borderRadius: BorderRadius.circular(10),
+            onTap: () {
+              _fetchUnreadNotifications();
+              _showNotificationDropdown();
+            },
+            child: KeyedSubtree(
+              key: _bellKey,
+              child: StreamBuilder<int>(
               // Live count so a new notification updates the badge
               // immediately, without needing to reopen the dropdown.
               stream: FirebaseAuth.instance.currentUser != null
@@ -887,6 +932,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
               ],
             );
               },
+            ),
             ),
           ),
           const SizedBox(width: 10),
@@ -2746,12 +2792,14 @@ class _AdminNotificationPanelState extends State<_AdminNotificationPanel> {
               ),
             )
           else
-            ConstrainedBox(
-              constraints: BoxConstraints(maxHeight: widget.listMaxHeight),
-              child: SingleChildScrollView(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: _buildGroupedItems(),
+            Flexible(
+              child: ConstrainedBox(
+                constraints: BoxConstraints(maxHeight: widget.listMaxHeight),
+                child: SingleChildScrollView(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: _buildGroupedItems(),
+                  ),
                 ),
               ),
             ),

@@ -4,8 +4,11 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:intl/intl.dart';
 import '../../widgets/student/app_colors.dart';
+import '../../services/gcash_payment_service.dart';
+import 'gcash_checkout_screen.dart';
 
 
 // ─────────────────────────────────────────────────────────────
@@ -154,6 +157,7 @@ class _StudentMerchandiseScreenState
   bool _loadingOrgId = true;
 
   final List<_CartItem> _cart = [];
+  String _paymentMethod = 'Cash on Pickup';
 
   @override
   void initState() {
@@ -351,6 +355,11 @@ class _StudentMerchandiseScreenState
         builder: (ctx, setModalState) => _CartSheet(
           cart: _cart,
           orgId: _studentOrgId ?? '',
+          paymentMethod: _paymentMethod,
+          onPaymentMethodChanged: (method) {
+            _paymentMethod = method;
+            setModalState(() {});
+          },
           onIncrease: (cartKey) {
             _increaseItem(cartKey);
             setModalState(() {});
@@ -366,12 +375,15 @@ class _StudentMerchandiseScreenState
             setModalState(() {});
             setState(() {});
           },
-          onOrderPlaced: () {
-            setState(() => _cart.clear());
+          onOrderPlaced: (message) {
+            setState(() {
+              _cart.clear();
+              _paymentMethod = 'Cash on Pickup';
+            });
             Navigator.pop(context);
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Order placed successfully!'),
+              SnackBar(
+                content: Text(message),
                 backgroundColor: AppColors.primaryDark,
               ),
             );
@@ -2069,14 +2081,18 @@ class _OrderTile extends StatelessWidget {
 class _CartSheet extends StatelessWidget {
   final List<_CartItem> cart;
   final String orgId;
+  final String paymentMethod;
+  final void Function(String) onPaymentMethodChanged;
   final void Function(String) onIncrease;
   final void Function(String) onDecrease;
   final void Function(String) onRemove;
-  final VoidCallback onOrderPlaced;
+  final void Function(String message) onOrderPlaced;
 
   const _CartSheet({
     required this.cart,
     required this.orgId,
+    required this.paymentMethod,
+    required this.onPaymentMethodChanged,
     required this.onIncrease,
     required this.onDecrease,
     required this.onRemove,
@@ -2152,6 +2168,41 @@ class _CartSheet extends StatelessWidget {
 
           const Divider(height: 1),
           Padding(
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Payment Method',
+                  style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: Colors.black54),
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _PaymentMethodOption(
+                        icon: Icons.payments_outlined,
+                        label: 'Cash on Pickup',
+                        selected: paymentMethod == 'Cash on Pickup',
+                        onTap: () => onPaymentMethodChanged('Cash on Pickup'),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: _PaymentMethodOption(
+                        icon: Icons.account_balance_wallet_outlined,
+                        label: 'GCash',
+                        selected: paymentMethod == 'GCash',
+                        onTap: () => onPaymentMethodChanged('GCash'),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const Divider(height: 1),
+          Padding(
             padding: const EdgeInsets.fromLTRB(20, 14, 20, 0),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -2177,7 +2228,7 @@ class _CartSheet extends StatelessWidget {
               child: ElevatedButton(
                 onPressed: cart.isEmpty
                     ? null
-                    : () => _placeOrder(context),
+                    : () => _onPlaceOrderPressed(context),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.primaryDark,
                   foregroundColor: Colors.white,
@@ -2186,9 +2237,9 @@ class _CartSheet extends StatelessWidget {
                   shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12)),
                 ),
-                child: const Text(
-                  'Place Order',
-                  style: TextStyle(
+                child: Text(
+                  paymentMethod == 'GCash' ? 'Pay with GCash' : 'Place Order',
+                  style: const TextStyle(
                       fontWeight: FontWeight.w700, fontSize: 15),
                 ),
               ),
@@ -2199,18 +2250,31 @@ class _CartSheet extends StatelessWidget {
     );
   }
 
-  Future<void> _placeOrder(BuildContext context) async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
+  void _onPlaceOrderPressed(BuildContext context) {
+    if (paymentMethod == 'GCash') {
+      _placeGcashOrder(context);
+    } else {
+      _placeCashOrder(context);
+    }
+  }
 
+  bool _validateSingleOrg(BuildContext context) {
     final cartOrgIds = cart.map((i) => i.product.orgId).toSet();
     if (cartOrgIds.length > 1) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
         content: Text('Your cart has items from more than one organization. Please order from one organization at a time.'),
         backgroundColor: Colors.redAccent,
       ));
-      return;
+      return false;
     }
+    return true;
+  }
+
+  Future<void> _placeCashOrder(BuildContext context) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    if (!_validateSingleOrg(context)) return;
 
     String customerName = '';
     String studentSection = '';
@@ -2361,7 +2425,7 @@ class _CartSheet extends StatelessWidget {
         txn.set(orderRef, orderData);
       });
 
-      onOrderPlaced();
+      onOrderPlaced('Order placed successfully!');
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -2370,6 +2434,174 @@ class _CartSheet extends StatelessWidget {
         ),
       );
     }
+  }
+
+  Future<void> _placeGcashOrder(BuildContext context) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    if (!_validateSingleOrg(context)) return;
+
+    String customerName = '';
+    String studentSection = '';
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('students')
+          .doc(user.uid)
+          .get();
+      if (doc.exists) {
+        customerName = doc.data()?['fullName'] as String? ?? '';
+        studentSection = doc.data()?['section'] as String? ?? '';
+      }
+    } catch (_) {}
+
+    final items = cart
+        .map((i) => {
+              'productId': i.product.id,
+              'name': i.product.name,
+              'variantId': i.variantId ?? '',
+              'variantSize': i.variantSize ?? '',
+              'variantColor': i.variantColor ?? '',
+              'quantity': i.quantity,
+              'price': i.variantPrice ?? i.product.price,
+              'totalPrice': i.subtotal,
+              'imageBase64': i.product.imageBase64,
+            })
+        .toList();
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(
+        child: CircularProgressIndicator(color: AppColors.primaryDark),
+      ),
+    );
+
+    GcashPaymentResult intent;
+    try {
+      intent = await GcashPaymentService.createPaymentIntent(
+        orgId: cart.isNotEmpty ? cart.first.product.orgId : '',
+        items: items,
+        total: _total,
+        customerName: customerName,
+        customerEmail: user.email ?? '',
+        section: studentSection,
+      );
+    } on FirebaseFunctionsException catch (e) {
+      if (context.mounted) {
+        Navigator.of(context, rootNavigator: true).pop(); // close loading
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(e.message ?? 'Could not start GCash payment. Please try again.'),
+          backgroundColor: Colors.redAccent,
+        ));
+      }
+      return;
+    } catch (_) {
+      if (context.mounted) {
+        Navigator.of(context, rootNavigator: true).pop();
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Could not start GCash payment. Please try again.'),
+          backgroundColor: Colors.redAccent,
+        ));
+      }
+      return;
+    }
+
+    if (!context.mounted) return;
+    Navigator.of(context, rootNavigator: true).pop(); // close loading
+
+    final reachedRedirect = await Navigator.of(context, rootNavigator: true).push<bool>(
+      MaterialPageRoute(builder: (_) => GcashCheckoutScreen(checkoutUrl: intent.checkoutUrl)),
+    );
+
+    if (reachedRedirect != true) {
+      // User backed out of the GCash flow before finishing.
+      return;
+    }
+
+    if (!context.mounted) return;
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const AlertDialog(
+        content: Row(
+          children: [
+            CircularProgressIndicator(color: AppColors.primaryDark),
+            SizedBox(width: 16),
+            Expanded(child: Text('Confirming your GCash payment…')),
+          ],
+        ),
+      ),
+    );
+
+    final status = await GcashPaymentService.awaitConfirmation(intent.intentDocId);
+
+    if (!context.mounted) return;
+    Navigator.of(context, rootNavigator: true).pop(); // close confirming dialog
+
+    if (status == 'completed') {
+      onOrderPlaced('GCash payment received! Your order has been placed.');
+    } else if (status == 'failed') {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('GCash payment failed or was cancelled. Please try again.'),
+        backgroundColor: Colors.redAccent,
+      ));
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Still confirming your payment. Check "My Orders" again shortly.'),
+        backgroundColor: Colors.orange,
+      ));
+    }
+  }
+}
+
+class _PaymentMethodOption extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _PaymentMethodOption({
+    required this.icon,
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+        decoration: BoxDecoration(
+          color: selected ? AppColors.primaryDark.withAlpha(20) : AppColors.background,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: selected ? AppColors.primaryDark : Colors.transparent,
+            width: 1.5,
+          ),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, size: 16, color: selected ? AppColors.primaryDark : Colors.black54),
+            const SizedBox(width: 6),
+            Flexible(
+              child: Text(
+                label,
+                style: TextStyle(
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w600,
+                  color: selected ? AppColors.primaryDark : Colors.black54,
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 

@@ -19,6 +19,7 @@ import 'export_pdf.dart';
 import 'dart:io';
 import 'package:path_provider/path_provider.dart';
 import '../../../utils/platform_file_utils.dart' as platform_file_utils;
+import '../../../utils/school_year.dart';
 import '../../../theme/app_theme.dart';
 import '../../../widgets/admin_export_button.dart';
 
@@ -1351,6 +1352,10 @@ class _ReportModalState extends State<_ReportModal> {
   List<Map<String, dynamic>> _events = [];
   bool _eventsLoaded = false;
   String? _selectedEventId;
+  // 'event' | 'semester' | 'year' — which scope this report covers.
+  String _scope = 'event';
+  String _schoolYear = SchoolYearUtil.currentSchoolYear();
+  String _semester = SchoolYearUtil.semesters.first;
 
   @override
   void initState() {
@@ -1362,6 +1367,9 @@ class _ReportModalState extends State<_ReportModal> {
       _fileBase64 = r.fileBase64;
       _fileName = r.fileName;
       _fileSize = r.fileSize;
+      _scope = r.scope;
+      if ((r.schoolYear ?? '').isNotEmpty) _schoolYear = r.schoolYear!;
+      if ((r.semester ?? '').isNotEmpty) _semester = r.semester!;
     }
     _loadEvents();
   }
@@ -1467,7 +1475,7 @@ class _ReportModalState extends State<_ReportModal> {
     setState(() => _errorMsg = null);
     if (!_formKey.currentState!.validate()) return;
 
-    if (_selectedEventId == null) {
+    if (_scope == 'event' && _selectedEventId == null) {
       setState(() => _errorMsg = 'Please select an event');
       return;
     }
@@ -1479,12 +1487,21 @@ class _ReportModalState extends State<_ReportModal> {
 
     final isEdit = widget.existingReport != null;
 
-    final dupSnap = await FirebaseFirestore.instance
+    Query<Map<String, dynamic>> dupQuery = FirebaseFirestore.instance
         .collection('reports')
         .where('orgId', isEqualTo: widget.orgId)
-        .where('eventId', isEqualTo: _selectedEventId)
-        .where('type', isEqualTo: _type)
-        .get();
+        .where('type', isEqualTo: _type);
+    if (_scope == 'event') {
+      dupQuery = dupQuery.where('eventId', isEqualTo: _selectedEventId);
+    } else {
+      dupQuery = dupQuery
+          .where('scope', isEqualTo: _scope)
+          .where('schoolYear', isEqualTo: _schoolYear);
+      if (_scope == 'semester') {
+        dupQuery = dupQuery.where('semester', isEqualTo: _semester);
+      }
+    }
+    final dupSnap = await dupQuery.get();
     final hasDuplicate = dupSnap.docs.any((d) => d.id != widget.existingReport?.id);
     if (hasDuplicate) {
       setState(() => _errorMsg =
@@ -1505,22 +1522,30 @@ class _ReportModalState extends State<_ReportModal> {
     );
     if (ok != true) return;
 
-    final selectedEvent = _events.firstWhere(
-      (e) => e['id'] == _selectedEventId,
-    );
-    final eventTitle = selectedEvent['title'] as String;
+    final String title;
+    if (_scope == 'event') {
+      final selectedEvent = _events.firstWhere((e) => e['id'] == _selectedEventId);
+      title = selectedEvent['title'] as String;
+    } else if (_scope == 'semester') {
+      title = '$_schoolYear — $_semester';
+    } else {
+      title = '$_schoolYear (Whole Year)';
+    }
 
     setState(() => _isSubmitting = true);
 
     final Map<String, dynamic> data = {
       'orgId': widget.orgId,
-      'title': eventTitle,
+      'title': title,
       'type': _type,
       'description': _descCtrl.text.trim(),
       'fileBase64': _fileBase64,
       'fileName': _fileName,
       'fileSize': _fileSize,
-      'eventId': _selectedEventId,
+      'scope': _scope,
+      'eventId': _scope == 'event' ? _selectedEventId : null,
+      'schoolYear': _scope == 'event' ? null : _schoolYear,
+      'semester': _scope == 'semester' ? _semester : null,
       'updatedAt': FieldValue.serverTimestamp(),
     };
 
@@ -1549,7 +1574,7 @@ class _ReportModalState extends State<_ReportModal> {
           module: 'reports',
           details: {'orgId': widget.orgId, 'title': data['title']},
         );
-        _notifyAdminsOfReportSubmission(eventTitle);
+        _notifyAdminsOfReportSubmission(title);
       }
       if (mounted) Navigator.pop(context);
     } catch (e) {
@@ -1682,6 +1707,45 @@ class _ReportModalState extends State<_ReportModal> {
                           Padding(
                             padding: const EdgeInsets.only(bottom: 8),
                             child: Text(
+                              'Covers *',
+                              style: GoogleFonts.beVietnamPro(
+                                fontSize: 13,
+                                color: const Color(0xFF64748B),
+                              ),
+                            ),
+                          ),
+                          Row(children: [
+                            _TypeCard(
+                              label: 'Specific Event',
+                              icon: Icons.event_outlined,
+                              selected: _scope == 'event',
+                              onTap: () => setState(() => _scope = 'event'),
+                            ),
+                            const SizedBox(width: 10),
+                            _TypeCard(
+                              label: 'Semester',
+                              icon: Icons.date_range_outlined,
+                              selected: _scope == 'semester',
+                              onTap: () => setState(() => _scope = 'semester'),
+                            ),
+                            const SizedBox(width: 10),
+                            _TypeCard(
+                              label: 'Whole School Year',
+                              icon: Icons.school_outlined,
+                              selected: _scope == 'year',
+                              onTap: () => setState(() => _scope = 'year'),
+                            ),
+                          ]),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      if (_scope == 'event') ...[
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 8),
+                            child: Text(
                               'Select Event *',
                               style: GoogleFonts.beVietnamPro(
                                 fontSize: 13,
@@ -1704,6 +1768,57 @@ class _ReportModalState extends State<_ReportModal> {
                           ],
                         ],
                       ),
+                      ] else ...[
+                        Row(children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Padding(
+                                  padding: const EdgeInsets.only(bottom: 8),
+                                  child: Text('School Year *',
+                                      style: GoogleFonts.beVietnamPro(
+                                          fontSize: 13, color: const Color(0xFF64748B))),
+                                ),
+                                DropdownButtonFormField<String>(
+                                  value: _schoolYear,
+                                  decoration: _DS.inputDecoration('School Year'),
+                                  style: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF1A202C)),
+                                  items: SchoolYearUtil.schoolYears()
+                                      .map((y) => DropdownMenuItem(value: y, child: Text(y)))
+                                      .toList(),
+                                  onChanged: (v) => setState(() => _schoolYear = v!),
+                                ),
+                              ],
+                            ),
+                          ),
+                          if (_scope == 'semester') ...[
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Padding(
+                                    padding: const EdgeInsets.only(bottom: 8),
+                                    child: Text('Semester *',
+                                        style: GoogleFonts.beVietnamPro(
+                                            fontSize: 13, color: const Color(0xFF64748B))),
+                                  ),
+                                  DropdownButtonFormField<String>(
+                                    value: _semester,
+                                    decoration: _DS.inputDecoration('Semester'),
+                                    style: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF1A202C)),
+                                    items: SchoolYearUtil.semesters
+                                        .map((s) => DropdownMenuItem(value: s, child: Text(s)))
+                                        .toList(),
+                                    onChanged: (v) => setState(() => _semester = v!),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ]),
+                      ],
                       const SizedBox(height: 12),
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -3091,6 +3206,11 @@ class ReportModel {
   final Timestamp submittedAt;
   final String submittedBy;
   final String? eventId;
+  // 'event' (default, tied to eventId) | 'semester' | 'year' — a report can
+  // instead cover a whole semester or school year with no single event.
+  final String scope;
+  final String? schoolYear;
+  final String? semester;
 
   const ReportModel({
     required this.id,
@@ -3105,6 +3225,9 @@ class ReportModel {
     required this.submittedAt,
     required this.submittedBy,
     this.eventId,
+    this.scope = 'event',
+    this.schoolYear,
+    this.semester,
   });
 
   factory ReportModel.fromFirestore(DocumentSnapshot doc) {
@@ -3124,6 +3247,9 @@ class ReportModel {
       submittedAt: d['submittedAt'] as Timestamp? ?? Timestamp.now(),
       submittedBy: d['submittedBy'] as String? ?? '',
       eventId: d['eventId'] as String?,
+      scope: d['scope'] as String? ?? 'event',
+      schoolYear: d['schoolYear'] as String?,
+      semester: d['semester'] as String?,
     );
   }
 }

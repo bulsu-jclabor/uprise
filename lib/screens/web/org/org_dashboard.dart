@@ -306,6 +306,7 @@ class _OrgDashboardState extends State<OrgDashboard> {
   // from then on — otherwise all 13 screens would fire their queries at
   // once on dashboard load instead of spreading that cost out over time.
   final Set<int> _visitedIndices = {0};
+  final GlobalKey _bellKey = GlobalKey();
   String _orgId = '';
   String _orgName = '';
   String _orgShortName = '';
@@ -649,6 +650,54 @@ class _OrgDashboardState extends State<OrgDashboard> {
         });
       }
     } catch (_) {}
+  }
+
+  void _showNotificationDropdown() {
+    final bellBox = _bellKey.currentContext?.findRenderObject() as RenderBox?;
+    final screenSize = MediaQuery.of(context).size;
+    double top = 76;
+    double right = 28;
+    if (bellBox != null) {
+      final bellTopLeft = bellBox.localToGlobal(Offset.zero);
+      final bellSize = bellBox.size;
+      top = bellTopLeft.dy + bellSize.height + 12;
+      right = (screenSize.width - (bellTopLeft.dx + bellSize.width) - 6)
+          .clamp(8.0, screenSize.width - 360);
+    }
+    final maxHeight = (screenSize.height - top - 24).clamp(200.0, 480.0);
+    showGeneralDialog(
+      context: context,
+      barrierDismissible: true,
+      barrierColor: Colors.transparent,
+      barrierLabel: 'Notifications',
+      transitionDuration: const Duration(milliseconds: 150),
+      pageBuilder: (ctx, anim, secAnim) {
+        return Align(
+          alignment: Alignment.topRight,
+          child: Padding(
+            padding: EdgeInsets.only(top: top, right: right),
+            child: Material(
+              color: Colors.white,
+              elevation: 12,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+                side: const BorderSide(color: OrgColors.border, width: 0.5),
+              ),
+              child: ConstrainedBox(
+                constraints: BoxConstraints(maxWidth: 360, minWidth: 360, maxHeight: maxHeight),
+                child: _OrgNotificationPanel(
+                  notifications: List.from(_notifications),
+                  onMarkRead: _markNotificationAsRead,
+                  onMarkAllRead: _markAllNotificationsAsRead,
+                  onNotificationTap: _handleNotificationTap,
+                  bellKey: _bellKey,
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
   }
 
   Future<void> _markNotificationAsRead(String id) async {
@@ -1337,33 +1386,21 @@ class _OrgDashboardState extends State<OrgDashboard> {
             const SizedBox(width: 12),
           ],
           if (screenWidth >= 480) const SizedBox(width: 12),
-          PopupMenuButton<String>(
-            offset: const Offset(-318, 54),
-            onOpened: _fetchUnreadNotifications,
-            constraints: const BoxConstraints(maxWidth: 360, minWidth: 360),
-            color: Colors.white,
-            elevation: 12,
-            surfaceTintColor: Colors.transparent,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-              side: const BorderSide(color: OrgColors.border, width: 0.5),
-            ),
-            padding: EdgeInsets.zero,
-            tooltip: '',
-            itemBuilder: (ctx) => [
-              PopupMenuItem<String>(
-                enabled: false,
-                padding: EdgeInsets.zero,
-                height: 0,
-                child: _OrgNotificationPanel(
-                  notifications: List.from(_notifications),
-                  onMarkRead: _markNotificationAsRead,
-                  onMarkAllRead: _markAllNotificationsAsRead,
-                  onNotificationTap: _handleNotificationTap,
-                ),
-              ),
-            ],
-            child: Stack(
+          // A plain InkWell driving our own custom-positioned overlay
+          // (same technique as "View All") instead of PopupMenuButton —
+          // Flutter's built-in menu positioning clamps/repositions itself
+          // to fit the viewport, which made the dropdown land in
+          // inconsistent spots depending on window size instead of
+          // staying tucked under the bell every time.
+          InkWell(
+            borderRadius: BorderRadius.circular(10),
+            onTap: () {
+              _fetchUnreadNotifications();
+              _showNotificationDropdown();
+            },
+            child: KeyedSubtree(
+              key: _bellKey,
+              child: Stack(
               clipBehavior: Clip.none,
               children: [
                 Container(
@@ -1411,6 +1448,7 @@ class _OrgDashboardState extends State<OrgDashboard> {
                     ),
                   ),
               ],
+            ),
             ),
           ),
           const SizedBox(width: 10),
@@ -3043,12 +3081,14 @@ class _OrgNotificationPanel extends StatefulWidget {
   final Future<void> Function(String id) onMarkRead;
   final Future<void> Function() onMarkAllRead;
   final void Function(Map<String, dynamic> n) onNotificationTap;
+  final GlobalKey bellKey;
 
   const _OrgNotificationPanel({
     required this.notifications,
     required this.onMarkRead,
     required this.onMarkAllRead,
     required this.onNotificationTap,
+    required this.bellKey,
   });
 
   @override
@@ -3083,13 +3123,22 @@ class _OrgNotificationPanelState extends State<_OrgNotificationPanel> {
     await widget.onMarkAllRead();
   }
 
-  // Anchored top-right under the header — same width (360) and corner as
-  // the bell's PopupMenuButton dropdown (offset: Offset(-318, 54)) —
-  // instead of the plain showDialog() that used to center a wider (420)
-  // panel in the middle of the screen, which made "View All" feel like a
-  // different control jumping elsewhere rather than the same list
-  // staying in place.
+  // Anchored directly under the actual bell icon (read from its real
+  // on-screen position via _bellKey) rather than a guessed fixed inset —
+  // the bell has a divider and the org logo/name sitting after it in the
+  // top bar, so a hardcoded top-right padding landed the panel well to
+  // the side of the bell instead of right under it.
   void _openAllNotifications() {
+    final bellBox = widget.bellKey.currentContext?.findRenderObject() as RenderBox?;
+    final screenWidth = MediaQuery.of(context).size.width;
+    double top = 76;
+    double right = 28;
+    if (bellBox != null) {
+      final bellTopLeft = bellBox.localToGlobal(Offset.zero);
+      final bellSize = bellBox.size;
+      top = bellTopLeft.dy + bellSize.height + 12;
+      right = (screenWidth - (bellTopLeft.dx + bellSize.width) - 6).clamp(8.0, screenWidth - 360);
+    }
     Navigator.of(context).pop();
     showGeneralDialog(
       context: context,
@@ -3101,7 +3150,7 @@ class _OrgNotificationPanelState extends State<_OrgNotificationPanel> {
         return Align(
           alignment: Alignment.topRight,
           child: Padding(
-            padding: const EdgeInsets.only(top: 76, right: 28),
+            padding: EdgeInsets.only(top: top, right: right),
             child: Material(
               color: Colors.white,
               elevation: 12,
@@ -3420,12 +3469,14 @@ class _OrgNotificationPanelState extends State<_OrgNotificationPanel> {
               ),
             )
           else
-            ConstrainedBox(
-              constraints: const BoxConstraints(maxHeight: 400),
-              child: SingleChildScrollView(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: _buildGroupedItems(),
+            Flexible(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxHeight: 400),
+                child: SingleChildScrollView(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: _buildGroupedItems(),
+                  ),
                 ),
               ),
             ),

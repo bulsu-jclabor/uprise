@@ -282,6 +282,10 @@ class OrgSubmission {
   // Admin override for this specific org's deadline, if they ever edited it.
   // Falls back to the automatic 7-day rule when null.
   final DateTime? deadlineOverride;
+  // 'event' (default) | 'semester' | 'year' — a submission can instead
+  // cover a whole semester/school year with no single event behind it.
+  final String scope;
+  final String? schoolYear, semester;
 
   OrgSubmission({
     required this.orgId,
@@ -294,9 +298,22 @@ class OrgSubmission {
     this.eventTitle,
     this.eventDate,
     this.deadlineOverride,
+    this.scope = 'event',
+    this.schoolYear,
+    this.semester,
   });
 
-  bool get hasApprovedEvent => eventDate != null && eventTitle != null;
+  bool get isPeriodScope => scope == 'semester' || scope == 'year';
+
+  // What to show as the "event" column for this row — an actual event
+  // title for event-scoped submissions, or a school year/semester label
+  // for period-scoped ones.
+  String get displayTitle {
+    if (!isPeriodScope) return eventTitle ?? '—';
+    return scope == 'semester' ? '${schoolYear ?? '—'} — ${semester ?? '—'}' : '${schoolYear ?? '—'} (Whole Year)';
+  }
+
+  bool get hasApprovedEvent => isPeriodScope || (eventDate != null && eventTitle != null);
 
   // Submission deadline rule: automatically 1 week AFTER the event date,
   // unless an admin has set a per-org override for this report type.
@@ -991,8 +1008,14 @@ class _ReportsManagementState extends State<ReportsManagement>
         .where('type', isEqualTo: type)
         .get();
     final subsMap = <String, Map<String, dynamic>>{};
+    final periodDocs = <QueryDocumentSnapshot<Map<String, dynamic>>>[];
     for (final doc in reportsSnap.docs) {
       final data = doc.data();
+      final scope = (data['scope'] ?? 'event').toString();
+      if (scope != 'event') {
+        periodDocs.add(doc);
+        continue;
+      }
       final orgId = data['orgId']?.toString() ?? '';
       final eventId = data['eventId']?.toString() ?? '';
       if (orgId.isEmpty || eventId.isEmpty) continue;
@@ -1026,6 +1049,27 @@ class _ReportsManagementState extends State<ReportsManagement>
           deadlineOverride: overrides[key],
         ));
       }
+    }
+
+    // Semester/whole-year submissions only ever appear here if an org
+    // actually uploaded one — unlike events, there's no fixed date to
+    // proactively chase a "pending" placeholder for every period.
+    final orgNames = {for (final org in allOrgs) org['id']!: org['name']!};
+    for (final doc in periodDocs) {
+      final data = doc.data();
+      final orgId = data['orgId']?.toString() ?? '';
+      if (orgId.isEmpty) continue;
+      rows.add(OrgSubmission(
+        orgId: orgId,
+        orgName: orgNames[orgId] ?? 'Unknown',
+        submittedAt: (data['submittedAt'] as Timestamp?)?.toDate(),
+        fileBase64: data['fileBase64'],
+        fileName: data['fileName'],
+        submissionId: doc.id,
+        scope: (data['scope'] ?? 'event').toString(),
+        schoolYear: data['schoolYear']?.toString(),
+        semester: data['semester']?.toString(),
+      ));
     }
     return rows;
   }
@@ -2369,7 +2413,7 @@ class _ReportsManagementState extends State<ReportsManagement>
       filtered = filtered
           .where((s) =>
               s.orgName.toLowerCase().contains(term) ||
-              (s.eventTitle ?? '').toLowerCase().contains(term))
+              s.displayTitle.toLowerCase().contains(term))
           .toList();
     }
     if (_filterOrg != 'All Organizations') {
@@ -2401,7 +2445,7 @@ class _ReportsManagementState extends State<ReportsManagement>
       return;
     }
     final rows = <List<String>>[
-      ['Type', 'Organization', 'Event', 'Event Date', 'Deadline', 'Submitted On', 'Status'],
+      ['Type', 'Organization', 'Event / Period', 'Event Date', 'Deadline', 'Submitted On', 'Status'],
     ];
     for (final entry in [('Financial', finRows), ('Accomplishment', accRows)]) {
       for (final s in entry.$2) {
@@ -2431,7 +2475,7 @@ class _ReportsManagementState extends State<ReportsManagement>
     }
     final pdfBytes = await AdminExportPdf.generateTablePdf(
       title: 'Submission Tracker Report',
-      headers: const ['Type', 'Organization', 'Event', 'Event Date', 'Deadline', 'Submitted On', 'Status'],
+      headers: const ['Type', 'Organization', 'Event / Period', 'Event Date', 'Deadline', 'Submitted On', 'Status'],
       rows: rows,
     );
     final ts = DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
@@ -2448,7 +2492,7 @@ class _ReportsManagementState extends State<ReportsManagement>
     return [
       type,
       s.orgName,
-      s.eventTitle ?? '',
+      s.displayTitle,
       s.eventDate != null ? DateFormat('yyyy-MM-dd').format(s.eventDate!) : '',
       deadline != null ? DateFormat('yyyy-MM-dd').format(deadline) : '',
       isSubmitted ? DateFormat('yyyy-MM-dd').format(s.submittedAt!) : '',
@@ -2513,7 +2557,7 @@ class _ReportsManagementState extends State<ReportsManagement>
   flex: 3,
   child: Padding(
     padding: const EdgeInsets.only(left: 8),
-    child: _headerCell('EVENT'),
+    child: _headerCell('EVENT / PERIOD'),
   ),
 ),
                 Expanded(flex: 2, child: _headerCell('EVENT DATE')),
@@ -2550,11 +2594,13 @@ class _ReportsManagementState extends State<ReportsManagement>
             final sub = entry.value;
             final isSubmitted = sub.submittedAt != null;
             // Precedence: this org's own override beats the automatic
-            // 7-days-after-event rule.
-            final rowDeadline = sub.eventDeadline!;
-            final isOverdue = !isSubmitted && DateTime.now().isAfter(rowDeadline);
-            final isLate = isSubmitted && sub.submittedAt!.isAfter(rowDeadline);
-            final daysLeft = !isSubmitted
+            // 7-days-after-event rule. Period-scoped (semester/whole-year)
+            // submissions have no deadline concept at all — they only ever
+            // appear in this list once actually uploaded.
+            final rowDeadline = sub.eventDeadline;
+            final isOverdue = !isSubmitted && rowDeadline != null && DateTime.now().isAfter(rowDeadline);
+            final isLate = isSubmitted && rowDeadline != null && sub.submittedAt!.isAfter(rowDeadline);
+            final daysLeft = (!isSubmitted && rowDeadline != null)
                 ? rowDeadline.difference(DateTime.now()).inDays
                 : 0;
             final isLast = i == sorted.length - 1;
@@ -2602,7 +2648,7 @@ class _ReportsManagementState extends State<ReportsManagement>
   child: Padding(
     padding: const EdgeInsets.only(left: 8),
     child: Text(
-      sub.eventTitle ?? '—',
+      sub.displayTitle,
       style: GoogleFonts.beVietnamPro(
         fontSize: 13,
         fontWeight: FontWeight.w600,
@@ -2634,7 +2680,7 @@ class _ReportsManagementState extends State<ReportsManagement>
         children: [
           Flexible(
             child: Text(
-              DateFormat('MMM dd, yyyy').format(rowDeadline),
+              rowDeadline != null ? DateFormat('MMM dd, yyyy').format(rowDeadline) : '—',
               style: GoogleFonts.beVietnamPro(
                 fontSize: 12,
                 color: const Color(0xFF64748B),
@@ -2708,13 +2754,15 @@ class _ReportsManagementState extends State<ReportsManagement>
               color: const Color(0xFF7C3AED),
               onTap: () => _sendReminder(sub, title),
             ),
-          const SizedBox(width: 4),
-          _ActionIconButton(
-            icon: Icons.edit_calendar_outlined,
-            tooltip: 'Edit Deadline',
-            color: UpriseColors.primaryDark,
-            onTap: () => _showEditDeadlineDialog(sub, type),
-          ),
+          if (!sub.isPeriodScope) ...[
+            const SizedBox(width: 4),
+            _ActionIconButton(
+              icon: Icons.edit_calendar_outlined,
+              tooltip: 'Edit Deadline',
+              color: UpriseColors.primaryDark,
+              onTap: () => _showEditDeadlineDialog(sub, type),
+            ),
+          ],
         ],
       ),
     ),
@@ -3488,16 +3536,16 @@ class _ReportsManagementState extends State<ReportsManagement>
                   child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-              if (sub.eventTitle != null) ...[
-                _credentialRow(
-                  label: 'For Event',
-                  value: sub.eventDate != null
-                      ? '${sub.eventTitle} (${DateFormat('MMM dd, yyyy').format(sub.eventDate!)})'
-                      : sub.eventTitle!,
-                  icon: Icons.event_rounded,
-                ),
-                const SizedBox(height: 12),
-              ],
+              _credentialRow(
+                label: sub.isPeriodScope ? 'For Period' : 'For Event',
+                value: sub.isPeriodScope
+                    ? sub.displayTitle
+                    : (sub.eventDate != null
+                        ? '${sub.eventTitle} (${DateFormat('MMM dd, yyyy').format(sub.eventDate!)})'
+                        : (sub.eventTitle ?? '—')),
+                icon: sub.isPeriodScope ? Icons.school_outlined : Icons.event_rounded,
+              ),
+              const SizedBox(height: 12),
               _credentialRow(
                 label: 'Submitted On',
                 value: DateFormat(

@@ -14,6 +14,7 @@ import '../../../widgets/admin_export_button.dart';
 import 'export_util.dart';
 import 'export_pdf.dart';
 import '../../../theme/app_theme.dart';
+import '../../../utils/school_year.dart';
 import 'org_form_builder.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -560,6 +561,8 @@ class _OrgEventProposalsScreenState extends State<OrgEventProposalsScreen> {
       'location': location,
       'category': data['category'] ?? 'Other',
       'audience': audience,
+      'schoolYear': data['schoolYear'] ?? SchoolYearUtil.currentSchoolYear(),
+      'semester': data['semester'] ?? SchoolYearUtil.currentSemester(),
       'date': Timestamp.fromDate(date),
       'startTime': startTime,
       'endTime': endTime,
@@ -1809,6 +1812,8 @@ class _SubmitProposalModalState extends State<_SubmitProposalModal> {
 
   String _category = 'Workshop';
   String _audience = 'Public';
+  String _schoolYear = SchoolYearUtil.currentSchoolYear();
+  String _semester = SchoolYearUtil.currentSemester();
   bool _isSubmitting = false;
   String? _errorMsg;
   bool _issuesCertificate = false;
@@ -1859,6 +1864,12 @@ class _SubmitProposalModalState extends State<_SubmitProposalModal> {
       _otherCategoryCtrl.text = e['otherCategory'] ?? '';
       _audience = e['audience'] ?? 'Public';
       _issuesCertificate = e['issuesCertificate'] == true;
+      _schoolYear = (e['schoolYear'] ?? '').toString().isNotEmpty
+          ? e['schoolYear']
+          : SchoolYearUtil.currentSchoolYear();
+      _semester = (e['semester'] ?? '').toString().isNotEmpty
+          ? e['semester']
+          : SchoolYearUtil.currentSemester();
     }
   }
 
@@ -1989,6 +2000,8 @@ class _SubmitProposalModalState extends State<_SubmitProposalModal> {
         'category': _category,
         'otherCategory': _category == 'Other' ? _otherCategoryCtrl.text.trim() : null,
         'audience': _audience,
+        'schoolYear': _schoolYear,
+        'semester': _semester,
         'description': _descCtrl.text.trim(),
         'location': _locCtrl.text.trim(),
         'startTime': _startTimeCtrl.text.trim(),
@@ -2231,6 +2244,32 @@ class _SubmitProposalModalState extends State<_SubmitProposalModal> {
                         decoration: _orgEventProposalsInputDecoration('End Time *', hint: '-- : --', icon: Icons.access_time_rounded),
                         style: GoogleFonts.beVietnamPro(fontSize: 13),
                         validator: (v) => v?.trim().isEmpty == true ? 'Required' : null,
+                      ),
+                    ),
+                  ]),
+                  const SizedBox(height: 12),
+                  Row(children: [
+                    Expanded(
+                      child: DropdownButtonFormField<String>(
+                        value: _schoolYear,
+                        decoration: _orgEventProposalsInputDecoration('School Year *'),
+                        style: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF1A202C)),
+                        items: SchoolYearUtil.schoolYears()
+                            .map((y) => DropdownMenuItem(value: y, child: Text(y)))
+                            .toList(),
+                        onChanged: (v) => setState(() => _schoolYear = v!),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: DropdownButtonFormField<String>(
+                        value: _semester,
+                        decoration: _orgEventProposalsInputDecoration('Semester *'),
+                        style: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF1A202C)),
+                        items: SchoolYearUtil.semesters
+                            .map((s) => DropdownMenuItem(value: s, child: Text(s)))
+                            .toList(),
+                        onChanged: (v) => setState(() => _semester = v!),
                       ),
                     ),
                   ]),
@@ -2737,6 +2776,23 @@ class _ViewProposalModal extends StatelessWidget {
                                 child: _detailItem(
                                     'Time', timeStr,
                                     Icons.access_time_rounded),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(
+                                child: _detailItem(
+                                    'School Year', data['schoolYear'] ?? '—',
+                                    Icons.school_outlined),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: _detailItem(
+                                    'Semester', data['semester'] ?? '—',
+                                    Icons.date_range_outlined),
                               ),
                             ],
                           ),

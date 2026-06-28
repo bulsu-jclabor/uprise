@@ -11,6 +11,7 @@ import '../../../services/activity_logger.dart' as activity_log;
 import '../../../services/firestore_collections.dart';
 import '../../../services/notification_service.dart';
 import '../../../utils/platform_file_utils.dart' as platform_file_utils;
+import '../../../utils/school_year.dart';
 import '../../../widgets/admin_export_button.dart';
 import '../../../theme/app_theme.dart';
 import 'export_util.dart';
@@ -1272,6 +1273,22 @@ class _RequestDetailsDialog extends StatelessWidget {
                     ),
                   ]),
                   const SizedBox(height: 14),
+                  Row(children: [
+                    Expanded(
+                      child: _detailItem(
+                          'School Year',
+                          request.schoolYear.isNotEmpty ? request.schoolYear : '—',
+                          Icons.school_outlined),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: _detailItem(
+                          'Semester',
+                          request.semester.isNotEmpty ? request.semester : '—',
+                          Icons.date_range_outlined),
+                    ),
+                  ]),
+                  const SizedBox(height: 14),
                   _detailItem('Subject', request.subject,
                       Icons.subject_rounded),
                   if (request.message != null && request.message!.isNotEmpty) ...[
@@ -1548,6 +1565,8 @@ class _LetterRequestModalState
   bool _isUploading = false;
   double _uploadProgress = 0.0;
   String? _errorMsg;
+  String _schoolYear = SchoolYearUtil.currentSchoolYear();
+  String _semester = SchoolYearUtil.currentSemester();
 
   @override
   void initState() {
@@ -1559,6 +1578,8 @@ class _LetterRequestModalState
       _attachmentBase64 = r.attachmentBase64;
       _attachmentName  = r.attachmentName;
       _attachmentSize  = r.attachmentSize;
+      if (r.schoolYear.isNotEmpty) _schoolYear = r.schoolYear;
+      if (r.semester.isNotEmpty) _semester = r.semester;
     }
   }
 
@@ -1658,6 +1679,8 @@ class _LetterRequestModalState
         'name':             widget.orgName,
         'email':            widget.orgEmail,
         'letterType':       'General',
+        'schoolYear':       _schoolYear,
+        'semester':         _semester,
         'subject':          _subjectCtrl.text.trim(),
         'message':          _messageCtrl.text.trim().isEmpty ? null : _messageCtrl.text.trim(),
         'attachmentBase64': _attachmentBase64,
@@ -1807,7 +1830,33 @@ class _LetterRequestModalState
                                 : null,
                       ),
                       const SizedBox(height: 14),
-                      
+                      Row(children: [
+                        Expanded(
+                          child: DropdownButtonFormField<String>(
+                            value: _schoolYear,
+                            decoration: _DS.inputDecoration('School Year *'),
+                            style: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF1A202C)),
+                            items: SchoolYearUtil.schoolYears()
+                                .map((y) => DropdownMenuItem(value: y, child: Text(y)))
+                                .toList(),
+                            onChanged: (v) => setState(() => _schoolYear = v!),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: DropdownButtonFormField<String>(
+                            value: _semester,
+                            decoration: _DS.inputDecoration('Semester *'),
+                            style: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF1A202C)),
+                            items: SchoolYearUtil.semesters
+                                .map((s) => DropdownMenuItem(value: s, child: Text(s)))
+                                .toList(),
+                            onChanged: (v) => setState(() => _semester = v!),
+                          ),
+                        ),
+                      ]),
+                      const SizedBox(height: 14),
+
                       TextFormField(
                         controller: _messageCtrl,
                         maxLines: 3,
@@ -2421,6 +2470,8 @@ class LetterRequestModel {
   final String orgEmail;
   final String orgLogoUrl;
   final String letterType;
+  final String schoolYear;
+  final String semester;
   final String subject;
   final String? message;
   final String? attachmentBase64;
@@ -2444,6 +2495,8 @@ class LetterRequestModel {
     required this.orgEmail,
     this.orgLogoUrl = '',
     required this.letterType,
+    this.schoolYear = '',
+    this.semester = '',
     required this.subject,
     this.message,
     this.attachmentBase64,
@@ -2470,6 +2523,8 @@ class LetterRequestModel {
       orgEmail:         d['orgEmail'] ?? '',
       orgLogoUrl:       d['orgLogoUrl'] ?? '',
       letterType:       d['letterType'] ?? 'General',
+      schoolYear:       (d['schoolYear'] ?? '').toString(),
+      semester:         (d['semester'] ?? '').toString(),
       subject:          d['subject'] ?? '',
       message:          d['message'],
       attachmentBase64: d['attachmentBase64'],

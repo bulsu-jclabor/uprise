@@ -4567,6 +4567,14 @@ class _OrderDetailsModal extends StatelessWidget {
                           ),
                           const SizedBox(height: 4),
                           _summaryLine('Payment Method', order.paymentMethod),
+                          if (order.paymentMethod == 'GCash') ...[
+                            const SizedBox(height: 4),
+                            _summaryLine(
+                              'Payment Status',
+                              'Paid',
+                              valueColor: UpriseColors.success,
+                            ),
+                          ],
                           Padding(
                             padding: const EdgeInsets.symmetric(vertical: 8),
                             child: Divider(

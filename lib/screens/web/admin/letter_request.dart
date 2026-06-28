@@ -2134,6 +2134,31 @@ class _AdminLetterRequestScreenState extends State<AdminLetterRequestScreen> {
                                     ),
                                   ],
                                 ),
+                                const SizedBox(height: 12),
+                                Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Expanded(
+                                      child: _detailItem(
+                                        'School Year',
+                                        (data['schoolYear'] ?? '').toString().isNotEmpty
+                                            ? data['schoolYear'].toString()
+                                            : '—',
+                                        Icons.school_outlined,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 16),
+                                    Expanded(
+                                      child: _detailItem(
+                                        'Semester',
+                                        (data['semester'] ?? '').toString().isNotEmpty
+                                            ? data['semester'].toString()
+                                            : '—',
+                                        Icons.date_range_outlined,
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ],
                             ),
                           ),
