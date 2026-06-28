@@ -126,14 +126,6 @@ class StudentAnnouncementsScreen extends StatefulWidget {
 class _StudentAnnouncementsScreenState extends State<StudentAnnouncementsScreen> {
   final String? _userId = FirebaseAuth.instance.currentUser?.uid;
 
-  // Created once, not a getter — re-evaluating .snapshots() on every
-  // rebuild was re-subscribing to Firestore from scratch each time.
-  //
-  // Deliberately NOT combining a `where('isPublished', ...)` filter with
-  // this `orderBy` — that pairing needs a composite Firestore index, and
-  // without it deployed the query fails outright (every load shows
-  // "Failed to load announcements"). Scheduled/draft announcements
-  // (isPublished: false) are filtered out client-side below instead.
   late final Stream<QuerySnapshot> _announcementsStream =
       FirebaseFirestore.instance
           .collection('announcements')
@@ -143,35 +135,71 @@ class _StudentAnnouncementsScreenState extends State<StudentAnnouncementsScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: AppColors.background,
       appBar: AppBar(
         title: const Text(
           'Announcements',
           style: TextStyle(
-            fontWeight: FontWeight.w600,
-            fontSize: 18,
-            color: Colors.black,
+            fontWeight: FontWeight.w700,
+            fontSize: 20,
+            color: Colors.black87,
           ),
         ),
         backgroundColor: Colors.white,
         foregroundColor: Colors.black,
         elevation: 0,
         centerTitle: true,
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(1),
+          child: Container(
+            height: 1,
+            color: Colors.grey.shade200,
+          ),
+        ),
       ),
-      backgroundColor: AppColors.background,
       body: StreamBuilder<QuerySnapshot>(
         stream: _announcementsStream,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
+            return const Center(
+              child: CircularProgressIndicator(
+                color: AppColors.primaryDark,
+              ),
+            );
           }
           if (snapshot.hasError) {
-            return const Center(child: Text('Failed to load announcements.'));
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.error_outline,
+                    size: 56,
+                    color: Colors.grey.shade400,
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    'Failed to load announcements',
+                    style: TextStyle(
+                      fontSize: 16,
+                      color: Colors.grey.shade600,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  TextButton(
+                    onPressed: () => setState(() {}),
+                    child: const Text('Retry'),
+                  ),
+                ],
+              ),
+            );
           }
 
           final docs = (snapshot.data?.docs ?? []).where((d) {
             final data = d.data() as Map<String, dynamic>;
             return data['isPublished'] != false;
           }).toList();
+
           if (docs.isEmpty) {
             return Center(
               child: Padding(
@@ -179,22 +207,36 @@ class _StudentAnnouncementsScreenState extends State<StudentAnnouncementsScreen>
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(Icons.campaign_outlined,
-                        size: 56, color: Color(0xFF616161)),
+                    Container(
+                      padding: const EdgeInsets.all(24),
+                      decoration: BoxDecoration(
+                        color: AppColors.primaryDark.withOpacity(0.08),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        Icons.campaign_outlined,
+                        size: 48,
+                        color: AppColors.primaryDark,
+                      ),
+                    ),
                     const SizedBox(height: 16),
                     const Text(
-                      'No announcements yet.',
+                      'No announcements yet',
                       style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                        color: Color(0xFF424242),
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.black87,
                       ),
                     ),
                     const SizedBox(height: 8),
                     const Text(
-                      'New posts from your organizations will appear here automatically.',
+                      'New posts from your organizations\nwill appear here automatically.',
                       textAlign: TextAlign.center,
-                      style: TextStyle(fontSize: 13, color: Colors.black54),
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Colors.grey,
+                        height: 1.5,
+                      ),
                     ),
                   ],
                 ),
@@ -221,7 +263,7 @@ class _StudentAnnouncementsScreenState extends State<StudentAnnouncementsScreen>
 }
 
 // ─────────────────────────────────────────────────────────────
-//  ANNOUNCEMENT CARD (No ">" icon)
+//  ANNOUNCEMENT CARD - UPRISE THEME COLORS
 // ─────────────────────────────────────────────────────────────
 class _AnnouncementCard extends StatelessWidget {
   final AnnouncementData ann;
@@ -239,17 +281,19 @@ class _AnnouncementCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final ann = this.ann;
+
     return GestureDetector(
       onTap: () => _navigateToDetail(context),
       child: Container(
-        margin: const EdgeInsets.only(bottom: 16),
+        margin: const EdgeInsets.only(bottom: 14),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(16),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.06),
-              blurRadius: 12,
+              color: AppColors.primaryDark.withOpacity(0.08),
+              blurRadius: 16,
               offset: const Offset(0, 4),
             ),
           ],
@@ -264,14 +308,17 @@ class _AnnouncementCard extends StatelessWidget {
                 ann.imageUrl.isNotEmpty
                     ? Image(
                         image: _studentImageProvider(ann.imageUrl),
-                        height: 200,
+                        height: 190,
                         width: double.infinity,
                         fit: BoxFit.cover,
                         errorBuilder: (_, __, ___) => Container(
-                          height: 200,
+                          height: 190,
                           decoration: BoxDecoration(
                             gradient: LinearGradient(
-                              colors: [AppColors.primaryDark.shade300, AppColors.primaryDark.shade700],
+                              colors: [
+                                AppColors.primaryDark,
+                                AppColors.primaryDark.withOpacity(0.7),
+                              ],
                               begin: Alignment.topLeft,
                               end: Alignment.bottomRight,
                             ),
@@ -279,17 +326,20 @@ class _AnnouncementCard extends StatelessWidget {
                           child: Center(
                             child: Icon(
                               Icons.image_outlined,
-                              size: 50,
+                              size: 48,
                               color: Colors.white.withOpacity(0.5),
                             ),
                           ),
                         ),
                       )
                     : Container(
-                        height: 200,
+                        height: 190,
                         decoration: BoxDecoration(
                           gradient: LinearGradient(
-                            colors: [AppColors.primaryDark.shade300, AppColors.primaryDark.shade700],
+                            colors: [
+                              AppColors.primaryDark,
+                              AppColors.primaryDark.withOpacity(0.7),
+                            ],
                             begin: Alignment.topLeft,
                             end: Alignment.bottomRight,
                           ),
@@ -297,7 +347,7 @@ class _AnnouncementCard extends StatelessWidget {
                         child: Center(
                           child: Icon(
                             Icons.image_outlined,
-                            size: 50,
+                            size: 48,
                             color: Colors.white.withOpacity(0.5),
                           ),
                         ),
@@ -305,20 +355,20 @@ class _AnnouncementCard extends StatelessWidget {
                 
                 // ── Gradient Overlay ──
                 Container(
-                  height: 200,
+                  height: 190,
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
                       begin: Alignment.topCenter,
                       end: Alignment.bottomCenter,
                       colors: [
                         Colors.transparent,
-                        Colors.black.withOpacity(0.3),
+                        Colors.black.withOpacity(0.35),
                       ],
                     ),
                   ),
                 ),
                 
-                // ── Tag Badge on Image ──
+                // ── Tag Badge ──
                 Positioned(
                   top: 12,
                   left: 12,
@@ -328,24 +378,38 @@ class _AnnouncementCard extends StatelessWidget {
                       vertical: 5,
                     ),
                     decoration: BoxDecoration(
-                      color: AppColors.primaryDark,
+                      color: Colors.white.withOpacity(0.95),
                       borderRadius: BorderRadius.circular(20),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.2),
+                          color: Colors.black.withOpacity(0.08),
                           blurRadius: 8,
                           offset: const Offset(0, 2),
                         ),
                       ],
                     ),
-                    child: Text(
-                      ann.tag,
-                      style: const TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w700,
-                        color: Colors.white,
-                        letterSpacing: 0.5,
-                      ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          width: 6,
+                          height: 6,
+                          decoration: BoxDecoration(
+                            color: AppColors.primaryDark,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          ann.tag,
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.primaryDark,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ),
@@ -360,19 +424,40 @@ class _AnnouncementCard extends StatelessWidget {
                       vertical: 4,
                     ),
                     decoration: BoxDecoration(
-                      color: Colors.black.withOpacity(0.6),
+                      color: Colors.black.withOpacity(0.55),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Row(
                       children: [
                         const Icon(
-                          Icons.access_time_rounded,
-                          size: 12,
+                          Icons.calendar_today_rounded,
+                          size: 11,
                           color: Colors.white,
                         ),
                         const SizedBox(width: 4),
                         Text(
                           ann.date,
+                          style: const TextStyle(
+                            fontSize: 10,
+                            color: Colors.white,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Container(
+                          width: 1,
+                          height: 10,
+                          color: Colors.white.withOpacity(0.3),
+                        ),
+                        const SizedBox(width: 6),
+                        const Icon(
+                          Icons.access_time_rounded,
+                          size: 11,
+                          color: Colors.white,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          ann.time,
                           style: const TextStyle(
                             fontSize: 10,
                             color: Colors.white,
@@ -396,15 +481,11 @@ class _AnnouncementCard extends StatelessWidget {
                   Row(
                     children: [
                       Container(
-                        width: 36,
-                        height: 36,
+                        width: 32,
+                        height: 32,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
                           color: AppColors.primaryDark.withOpacity(0.1),
-                          border: Border.all(
-                            color: AppColors.primaryDark.withOpacity(0.2),
-                            width: 1,
-                          ),
                         ),
                         child: ClipOval(
                           child: ann.logoUrl.isNotEmpty
@@ -413,38 +494,33 @@ class _AnnouncementCard extends StatelessWidget {
                                   fit: BoxFit.cover,
                                   errorBuilder: (_, __, ___) => Icon(
                                     Icons.business_center_outlined,
-                                    size: 18,
+                                    size: 16,
                                     color: AppColors.primaryDark,
                                   ),
                                 )
                               : Icon(
                                   Icons.business_center_outlined,
-                                  size: 18,
+                                  size: 16,
                                   color: AppColors.primaryDark,
                                 ),
                         ),
                       ),
                       const SizedBox(width: 10),
                       Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              ann.org,
-                              style: const TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w700,
-                                color: Colors.black87,
-                              ),
-                            ),
-                            Text(
-                              ann.orgSub,
-                              style: const TextStyle(
-                                fontSize: 10,
-                                color: Colors.grey,
-                              ),
-                            ),
-                          ],
+                        child: Text(
+                          ann.org,
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.black87,
+                          ),
+                        ),
+                      ),
+                      Text(
+                        ann.time,
+                        style: const TextStyle(
+                          fontSize: 10,
+                          color: Colors.grey,
                         ),
                       ),
                     ],
@@ -457,7 +533,7 @@ class _AnnouncementCard extends StatelessWidget {
                     ann.title,
                     style: const TextStyle(
                       fontSize: 16,
-                      fontWeight: FontWeight.w800,
+                      fontWeight: FontWeight.w700,
                       color: Colors.black87,
                       height: 1.3,
                     ),
@@ -472,9 +548,9 @@ class _AnnouncementCard extends StatelessWidget {
                     ann.body,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 13,
-                      color: Colors.grey,
+                      color: Colors.grey.shade600,
                       height: 1.5,
                     ),
                   ),
@@ -492,14 +568,30 @@ class _AnnouncementCard extends StatelessWidget {
                           eventId: ann.linkedEventId,
                           eventTitle: ann.linkedEventTitle,
                         ),
-                        icon: const Icon(Icons.event_available_rounded, size: 16),
-                        label: Text('Register for ${ann.linkedEventTitle}',
-                            overflow: TextOverflow.ellipsis),
+                        icon: Icon(
+                          Icons.event_available_rounded,
+                          size: 16,
+                          color: AppColors.primaryDark,
+                        ),
+                        label: Text(
+                          'Register for ${ann.linkedEventTitle}',
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
                         style: OutlinedButton.styleFrom(
                           foregroundColor: AppColors.primaryDark,
-                          side: const BorderSide(color: AppColors.primaryDark),
-                          padding: const EdgeInsets.symmetric(vertical: 10),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          side: BorderSide(
+                            color: AppColors.primaryDark.withOpacity(0.3),
+                          ),
+                          padding: const EdgeInsets.symmetric(
+                            vertical: 10,
+                            horizontal: 12,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
                         ),
                       ),
                     ),
@@ -537,9 +629,9 @@ class _AnnouncementCard extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────
-//  DETAIL SCREEN (With "Mark as Read" button at bottom)
+//  DETAIL SCREEN - UPRISE THEME COLORS (NO "Mark as Read")
 // ─────────────────────────────────────────────────────────────
-class AnnouncementDetailScreen extends StatefulWidget {
+class AnnouncementDetailScreen extends StatelessWidget {
   final AnnouncementData announcement;
 
   const AnnouncementDetailScreen({
@@ -548,508 +640,463 @@ class AnnouncementDetailScreen extends StatefulWidget {
   });
 
   @override
-  State<AnnouncementDetailScreen> createState() => _AnnouncementDetailScreenState();
-}
-
-class _AnnouncementDetailScreenState extends State<AnnouncementDetailScreen> {
-  bool _isMarkedAsRead = false;
-
-  Future<void> _markAsRead() async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
-
-    try {
-      await FirebaseFirestore.instance
-          .collection('notifications')
-          .where('data.announcementId', isEqualTo: widget.announcement.id)
-          .where('userId', isEqualTo: user.uid)
-          .get()
-          .then((snapshot) {
-        for (var doc in snapshot.docs) {
-          doc.reference.update({'isRead': true});
-        }
-      });
-
-      setState(() {
-        _isMarkedAsRead = true;
-      });
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Marked as read!'),
-          backgroundColor: Colors.green,
-          duration: Duration(seconds: 2),
-        ),
-      );
-    } catch (e) {
-      print('Error marking as read: $e');
-    }
-  }
-
-  @override
   Widget build(BuildContext context) {
-    final ann = widget.announcement;
+    final ann = announcement;
 
     return Scaffold(
-      backgroundColor: AppColors.background,
-      body: Stack(
-        children: [
-          // ── Main Content ──
-          CustomScrollView(
-            slivers: [
-              // ── App Bar with Hero Image ──
-              SliverAppBar(
-                expandedHeight: 280,
-                pinned: true,
-                backgroundColor: Colors.white,
-                foregroundColor: Colors.black,
-                elevation: 0,
-                leading: IconButton(
-                  icon: Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.9),
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.1),
-                          blurRadius: 8,
-                          offset: const Offset(0, 2),
-                        ),
-                      ],
+      backgroundColor: Colors.white,
+      body: CustomScrollView(
+        slivers: [
+          // ── App Bar with Hero Image ──
+          SliverAppBar(
+            expandedHeight: 300,
+            pinned: true,
+            backgroundColor: Colors.white,
+            foregroundColor: Colors.black,
+            elevation: 0,
+            leading: IconButton(
+              icon: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.9),
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.1),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
                     ),
-                    child: const Icon(Icons.arrow_back, size: 20, color: Colors.black),
-                  ),
-                  onPressed: () => Navigator.pop(context),
+                  ],
                 ),
-                flexibleSpace: FlexibleSpaceBar(
-                  background: Stack(
-                    fit: StackFit.expand,
-                    children: [
-                      ann.imageUrl.isNotEmpty
-                          ? Image(
-                              image: _studentImageProvider(ann.imageUrl),
-                              fit: BoxFit.cover,
-                              errorBuilder: (_, __, ___) => Container(
-                                decoration: BoxDecoration(
-                                  gradient: LinearGradient(
-                                    colors: [AppColors.primaryDark.shade300, AppColors.primaryDark.shade700],
-                                    begin: Alignment.topLeft,
-                                    end: Alignment.bottomRight,
-                                  ),
-                                ),
-                                child: const Icon(
-                                  Icons.image_outlined,
-                                  size: 80,
-                                  color: Colors.white,
-                                ),
-                              ),
-                            )
-                          : Container(
-                              decoration: BoxDecoration(
-                                gradient: LinearGradient(
-                                  colors: [AppColors.primaryDark.shade300, AppColors.primaryDark.shade700],
-                                  begin: Alignment.topLeft,
-                                  end: Alignment.bottomRight,
-                                ),
-                              ),
-                              child: const Icon(
-                                Icons.image_outlined,
-                                size: 80,
-                                color: Colors.white,
+                child: const Icon(Icons.arrow_back, size: 20, color: Colors.black),
+              ),
+              onPressed: () => Navigator.pop(context),
+            ),
+            flexibleSpace: FlexibleSpaceBar(
+              background: Stack(
+                fit: StackFit.expand,
+                children: [
+                  ann.imageUrl.isNotEmpty
+                      ? Image(
+                          image: _studentImageProvider(ann.imageUrl),
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => Container(
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                colors: [
+                                  AppColors.primaryDark,
+                                  AppColors.primaryDark.withOpacity(0.7),
+                                ],
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
                               ),
                             ),
-                      
-                      Container(
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            begin: Alignment.topCenter,
-                            end: Alignment.bottomCenter,
-                            colors: [
-                              Colors.transparent,
-                              Colors.black.withOpacity(0.4),
-                            ],
+                            child: const Icon(
+                              Icons.image_outlined,
+                              size: 80,
+                              color: Colors.white,
+                            ),
+                          ),
+                        )
+                      : Container(
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [
+                                AppColors.primaryDark,
+                                AppColors.primaryDark.withOpacity(0.7),
+                              ],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            ),
+                          ),
+                          child: const Icon(
+                            Icons.image_outlined,
+                            size: 80,
+                            color: Colors.white,
                           ),
                         ),
+                  
+                  Container(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          Colors.transparent,
+                          Colors.black.withOpacity(0.4),
+                        ],
                       ),
-                      
-                      Positioned(
-                        bottom: 20,
-                        left: 20,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 14,
-                            vertical: 6,
+                    ),
+                  ),
+                  
+                  // ── Tag Badge ──
+                  Positioned(
+                    bottom: 20,
+                    left: 20,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.95),
+                        borderRadius: BorderRadius.circular(20),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.2),
+                            blurRadius: 10,
+                            offset: const Offset(0, 2),
                           ),
-                          decoration: BoxDecoration(
-                            color: AppColors.primaryDark,
-                            borderRadius: BorderRadius.circular(20),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withOpacity(0.2),
-                                blurRadius: 10,
-                                offset: const Offset(0, 2),
-                              ),
-                            ],
+                        ],
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            width: 6,
+                            height: 6,
+                            decoration: BoxDecoration(
+                              color: AppColors.primaryDark,
+                              shape: BoxShape.circle,
+                            ),
                           ),
-                          child: Text(
+                          const SizedBox(width: 6),
+                          Text(
                             ann.tag,
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 12,
                               fontWeight: FontWeight.w700,
-                              color: Colors.white,
+                              color: AppColors.primaryDark,
                               letterSpacing: 0.5,
                             ),
                           ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  
+                  // ── Date on Image ──
+                  Positioned(
+                    bottom: 20,
+                    right: 20,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withOpacity(0.5),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(
+                            Icons.calendar_today_rounded,
+                            size: 12,
+                            color: Colors.white,
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            ann.date,
+                            style: const TextStyle(
+                              fontSize: 11,
+                              color: Colors.white,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          const Icon(
+                            Icons.access_time_rounded,
+                            size: 12,
+                            color: Colors.white,
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            ann.time,
+                            style: const TextStyle(
+                              fontSize: 11,
+                              color: Colors.white,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          // ── Body ──
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // ── Organization Row ──
+                  Row(
+                    children: [
+                      Container(
+                        width: 48,
+                        height: 48,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: AppColors.primaryDark.withOpacity(0.1),
+                        ),
+                        child: ClipOval(
+                          child: ann.logoUrl.isNotEmpty
+                              ? Image(
+                                  image: _studentImageProvider(ann.logoUrl),
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (_, __, ___) => Icon(
+                                    Icons.business_center_outlined,
+                                    size: 24,
+                                    color: AppColors.primaryDark,
+                                  ),
+                                )
+                              : Icon(
+                                  Icons.business_center_outlined,
+                                  size: 24,
+                                  color: AppColors.primaryDark,
+                                ),
+                        ),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              ann.org,
+                              style: const TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w700,
+                                color: Colors.black87,
+                              ),
+                            ),
+                            Text(
+                              ann.orgSub,
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: Colors.grey,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ],
                   ),
-                ),
-              ),
 
-              // ── Body ──
-              SliverToBoxAdapter(
-                child: Container(
-                  color: Colors.white,
-                  padding: const EdgeInsets.all(20),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // ── Title ──
-                      Text(
-                        ann.title,
-                        style: const TextStyle(
-                          fontSize: 22,
-                          fontWeight: FontWeight.w800,
-                          color: Colors.black87,
-                          height: 1.2,
+                  const SizedBox(height: 20),
+                  const Divider(color: Color(0xFFF0F0F0), thickness: 1),
+                  const SizedBox(height: 20),
+
+                  // ── Title ──
+                  Text(
+                    ann.title,
+                    style: const TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.w800,
+                      color: Colors.black87,
+                      height: 1.3,
+                    ),
+                  ),
+
+                  const SizedBox(height: 16),
+
+                  // ── Body ──
+                  Text(
+                    ann.body,
+                    style: TextStyle(
+                      fontSize: 15,
+                      color: Colors.grey.shade800,
+                      height: 1.8,
+                    ),
+                  ),
+
+                  const SizedBox(height: 24),
+
+                  // ── Register for Event ──
+                  if (ann.linkedProposalId.isNotEmpty) ...[
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: AppColors.primaryDark.withOpacity(0.05),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: AppColors.primaryDark.withOpacity(0.15),
                         ),
                       ),
-
-                      const SizedBox(height: 16),
-
-                      // ── Organization Info ──
-                      Row(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Container(
-                            width: 44,
-                            height: 44,
-                            decoration: const BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: Color(0xFFF5F5F5),
-                            ),
-                            child: ClipOval(
-                              child: ann.logoUrl.isNotEmpty
-                                  ? Image(
-                                      image: _studentImageProvider(ann.logoUrl),
-                                      fit: BoxFit.cover,
-                                      errorBuilder: (_, __, ___) => Icon(
-                                        Icons.business_center_outlined,
-                                        size: 22,
-                                        color: AppColors.primaryDark,
-                                      ),
-                                    )
-                                  : Icon(
-                                      Icons.business_center_outlined,
-                                      size: 22,
-                                      color: AppColors.primaryDark,
-                                    ),
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  ann.org,
-                                  style: const TextStyle(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w700,
-                                    color: Colors.black87,
-                                  ),
-                                ),
-                                Text(
-                                  ann.orgSub,
-                                  style: const TextStyle(
-                                    fontSize: 12,
-                                    color: Colors.grey,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.end,
+                          Row(
                             children: [
-                              Text(
-                                ann.date,
-                                style: const TextStyle(
-                                  fontSize: 12,
-                                  color: Colors.black87,
-                                  fontWeight: FontWeight.w500,
-                                ),
+                              Icon(
+                                Icons.event_available_rounded,
+                                color: AppColors.primaryDark,
+                                size: 20,
                               ),
-                              Text(
-                                ann.time,
-                                style: const TextStyle(
-                                  fontSize: 11,
-                                  color: Colors.grey,
+                              const SizedBox(width: 8),
+                              const Text(
+                                'Event Registration',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w700,
+                                  color: Colors.black87,
                                 ),
                               ),
                             ],
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            'Register for ${ann.linkedEventTitle}',
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: Colors.grey.shade600,
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          SizedBox(
+                            width: double.infinity,
+                            child: ElevatedButton.icon(
+                              onPressed: () => DynamicRegistrationDialog.show(
+                                context,
+                                proposalId: ann.linkedProposalId,
+                                eventId: ann.linkedEventId,
+                                eventTitle: ann.linkedEventTitle,
+                              ),
+                              icon: const Icon(Icons.event_available_rounded, size: 18),
+                              label: const Text(
+                                'Register Now',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: AppColors.primaryDark,
+                                foregroundColor: Colors.white,
+                                elevation: 0,
+                                padding: const EdgeInsets.symmetric(vertical: 12),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                              ),
+                            ),
                           ),
                         ],
                       ),
+                    ),
+                    const SizedBox(height: 24),
+                  ],
 
-                      const SizedBox(height: 20),
-                      const Divider(color: Color(0xFFEEEEEE), thickness: 1),
-                      const SizedBox(height: 20),
-
-                      // ── Body ──
-                      Text(
-                        ann.body,
-                        style: const TextStyle(
-                          fontSize: 15,
-                          color: Colors.black87,
-                          height: 1.8,
-                        ),
+                  // ── Hashtags ──
+                  if (ann.hashtags.isNotEmpty) ...[
+                    const Text(
+                      'Tags',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.black87,
                       ),
-
-                      const SizedBox(height: 24),
-
-                      // ── Register for Event ──
-                      if (ann.linkedProposalId.isNotEmpty) ...[
-                        Container(
-                          padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            color: AppColors.primaryDark.withOpacity(0.05),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                              color: AppColors.primaryDark.withOpacity(0.2),
+                    ),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 6,
+                      children: ann.hashtags
+                          .map(
+                            (tag) => Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 6,
+                              ),
+                              decoration: BoxDecoration(
+                                color: AppColors.primaryDark.withOpacity(0.08),
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                              child: Text(
+                                tag,
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: AppColors.primaryDark,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
                             ),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  Icon(
-                                    Icons.event_available_rounded,
-                                    color: AppColors.primaryDark,
-                                    size: 20,
-                                  ),
-                                  const SizedBox(width: 8),
-                                  const Text(
-                                    'Event Registration',
-                                    style: TextStyle(
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w700,
-                                      color: Colors.black87,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 8),
-                              Text(
-                                'Register for ${ann.linkedEventTitle}',
-                                style: const TextStyle(
-                                  fontSize: 13,
-                                  color: Colors.grey,
-                                ),
-                              ),
-                              const SizedBox(height: 12),
-                              SizedBox(
-                                width: double.infinity,
-                                child: ElevatedButton.icon(
-                                  onPressed: () => DynamicRegistrationDialog.show(
-                                    context,
-                                    proposalId: ann.linkedProposalId,
-                                    eventId: ann.linkedEventId,
-                                    eventTitle: ann.linkedEventTitle,
-                                  ),
-                                  icon: const Icon(Icons.event_available_rounded, size: 18),
-                                  label: const Text(
-                                    'Register Now',
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: AppColors.primaryDark,
-                                    foregroundColor: Colors.white,
-                                    elevation: 0,
-                                    padding: const EdgeInsets.symmetric(vertical: 12),
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(10),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 24),
-                      ],
+                          )
+                          .toList(),
+                    ),
+                    const SizedBox(height: 20),
+                  ],
 
-                      // ── Hashtags ──
-                      if (ann.hashtags.isNotEmpty) ...[
+                  // ── Attachments ──
+                  if (ann.attachments.isNotEmpty) ...[
+                    Row(
+                      children: [
                         const Text(
-                          'Tags',
+                          'Attachments',
                           style: TextStyle(
                             fontSize: 13,
                             fontWeight: FontWeight.w700,
                             color: Colors.black87,
                           ),
                         ),
-                        const SizedBox(height: 8),
-                        Wrap(
-                          spacing: 8,
-                          runSpacing: 6,
-                          children: ann.hashtags
-                              .map(
-                                (tag) => Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 12,
-                                    vertical: 6,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: AppColors.primaryDark.withOpacity(0.1),
-                                    borderRadius: BorderRadius.circular(16),
-                                  ),
-                                  child: Text(
-                                    tag,
-                                    style: const TextStyle(
-                                      fontSize: 12,
-                                      color: AppColors.primaryDark,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                ),
-                              )
-                              .toList(),
-                        ),
-                        const SizedBox(height: 20),
-                      ],
-
-                      // ── Attachments with Count ──
-                      if (ann.attachments.isNotEmpty) ...[
-                        Row(
-                          children: [
-                            const Text(
-                              'Attachments',
-                              style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w700,
-                                color: Colors.black87,
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                              decoration: BoxDecoration(
-                                color: AppColors.primaryDark.withOpacity(0.1),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Text(
-                                '${ann.attachments.length}',
-                                style: const TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
-                                  color: AppColors.primaryDark,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 8),
+                        const SizedBox(width: 8),
                         Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.all(14),
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                           decoration: BoxDecoration(
-                            color: const Color(0xFFF8FAFD),
+                            color: AppColors.primaryDark.withOpacity(0.1),
                             borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                              color: const Color(0xFFDEE7F1),
+                          ),
+                          child: Text(
+                            '${ann.attachments.length}',
+                            style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.primaryDark,
                             ),
                           ),
-                          child: Column(
-                            children: ann.attachments.asMap().entries.map(
-                              (entry) {
-                                final index = entry.key;
-                                final att = entry.value;
-                                return Column(
-                                  children: [
-                                    _AttachmentTile(
-                                      attachment: att,
-                                      index: index,
-                                    ),
-                                    if (index < ann.attachments.length - 1)
-                                      const Divider(height: 1, color: Color(0xFFEEEEEE)),
-                                  ],
-                                );
-                              },
-                            ).toList(),
-                          ),
                         ),
-                        const SizedBox(height: 20),
                       ],
-
-                      // ── Extra space for bottom button ──
-                      const SizedBox(height: 100),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
-
-          // ── Bottom Button (Mark as Read) ──
-          Positioned(
-            bottom: 0,
-            left: 0,
-            right: 0,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.08),
-                    blurRadius: 12,
-                    offset: const Offset(0, -3),
-                  ),
-                ],
-              ),
-              child: SafeArea(
-                top: false,
-                child: SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton.icon(
-                    onPressed: _isMarkedAsRead ? null : _markAsRead,
-                    icon: Icon(
-                      _isMarkedAsRead ? Icons.check_circle_rounded : Icons.mark_email_read_rounded,
-                      color: Colors.white,
                     ),
-                    label: Text(
-                      _isMarkedAsRead ? 'Marked as Read ✓' : 'Mark as Read',
-                      style: const TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: _isMarkedAsRead ? Colors.green : AppColors.primaryDark,
-                      foregroundColor: Colors.white,
-                      elevation: 0,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(
+                    const SizedBox(height: 8),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF8FAFD),
                         borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: const Color(0xFFEEEEEE),
+                        ),
+                      ),
+                      child: Column(
+                        children: ann.attachments.asMap().entries.map(
+                          (entry) {
+                            final index = entry.key;
+                            final att = entry.value;
+                            return Column(
+                              children: [
+                                _AttachmentTile(
+                                  attachment: att,
+                                  index: index,
+                                ),
+                                if (index < ann.attachments.length - 1)
+                                  const Divider(height: 1, color: Color(0xFFEEEEEE)),
+                              ],
+                            );
+                          },
+                        ).toList(),
                       ),
                     ),
-                  ),
-                ),
+                    const SizedBox(height: 20),
+                  ],
+
+                  const SizedBox(height: 40),
+                ],
               ),
             ),
           ),
@@ -1089,15 +1136,12 @@ class _AttachmentTileState extends State<_AttachmentTile> {
         throw Exception('Attachment data is empty');
       }
 
-      // Attachments are embedded as base64 in Firestore, not hosted at a URL.
       final bytes = base64Decode(base64Data);
 
-      // Save to temporary directory
       final tempDir = await getTemporaryDirectory();
       final file = File('${tempDir.path}/$fileName');
       await file.writeAsBytes(bytes);
 
-      // Share the file
       await Share.shareXFiles(
         [XFile(file.path)],
         text: 'Downloaded: $fileName',

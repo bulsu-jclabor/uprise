@@ -181,8 +181,6 @@ class _StudentMerchandiseScreenState
     }
 
     try {
-      // students doc ID is the uid itself — a direct lookup instead of a
-      // where('uid', ...) query, no index needed and one round trip.
       final studentDoc = await FirebaseFirestore.instance
           .collection('students')
           .doc(user.uid)
@@ -490,7 +488,6 @@ class _ProductsTabState extends State<_ProductsTab> {
 
   Future<void> _loadFilters() async {
     try {
-      // Load organizations
       final orgSnapshot = await FirebaseFirestore.instance
           .collection('organizations')
           .where('status', isEqualTo: 'active')
@@ -503,13 +500,11 @@ class _ProductsTabState extends State<_ProductsTab> {
         }
       }
       
-      // Load products to get categories and orgs with products
       final productsSnap = await FirebaseFirestore.instance
           .collection('products')
           .where('isArchived', isEqualTo: false)
           .get();
       
-      // Get categories
       final categories = productsSnap.docs
           .map((d) => d.data()['category'] as String? ?? '')
           .where((cat) => cat.isNotEmpty)
@@ -517,7 +512,6 @@ class _ProductsTabState extends State<_ProductsTab> {
           .toList()
           ..sort();
       
-      // Get orgs with products
       final productOrgIds = productsSnap.docs
           .map((d) => d.data()['orgId'] as String? ?? '')
           .where((id) => id.isNotEmpty)
@@ -539,10 +533,6 @@ class _ProductsTabState extends State<_ProductsTab> {
     }
   }
 
-  // Created once, not a getter — category/org/search are all filtered
-  // client-side below, so re-evaluating .snapshots() on every keystroke in
-  // the search box was re-subscribing to the entire products collection
-  // from Firestore on every character typed.
   late final Stream<QuerySnapshot> _stream = FirebaseFirestore.instance
       .collection('products')
       .where('isArchived', isEqualTo: false)
@@ -588,7 +578,6 @@ class _ProductsTabState extends State<_ProductsTab> {
                 ),
               ),
               const SizedBox(width: 8),
-              // ── Filter Icon with Badge ──
               Stack(
                 children: [
                   GestureDetector(
@@ -706,14 +695,12 @@ class _ProductsTabState extends State<_ProductsTab> {
                   .map((d) => _Product.fromFirestore(d))
                   .toList();
 
-              // ── FILTER BY CATEGORY ──
               if (_selectedCategory != 'All') {
                 products = products
                     .where((p) => p.category == _selectedCategory)
                     .toList();
               }
 
-              // ── FILTER BY ORG ──
               if (_selectedOrg != 'All') {
                 final orgId = _orgIdMap[_selectedOrg];
                 if (orgId != null) {
@@ -721,7 +708,6 @@ class _ProductsTabState extends State<_ProductsTab> {
                 }
               }
 
-              // ── FILTER BY SEARCH ──
               if (_search.isNotEmpty) {
                 final q = _search.toLowerCase();
                 products = products
@@ -768,7 +754,6 @@ class _ProductsTabState extends State<_ProductsTab> {
     );
   }
 
-  // ── Org Filter Dialog ──
   void _showOrgFilterDialog() {
     showModalBottomSheet(
       context: context,
@@ -1092,10 +1077,6 @@ class _ProductCard extends StatelessWidget {
           height: 120,
           width: double.infinity,
           fit: BoxFit.cover,
-          // Decodes at ~2x the display size instead of full original
-          // resolution — org-uploaded photos are often full camera
-          // resolution, and decoding that for every card in a scrolling
-          // grid is what was making the list feel sluggish.
           cacheHeight: 240,
           errorBuilder: (_, __, ___) => _imgPlaceholder(product.name),
         );
@@ -1639,7 +1620,7 @@ class _VariantsTable extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────
-// My Orders Tab
+// My Orders Tab - SHOPEE STYLE (UPDATED)
 // ─────────────────────────────────────────────────────────────
 class _MyOrdersTab extends StatefulWidget {
   const _MyOrdersTab();
@@ -1649,18 +1630,14 @@ class _MyOrdersTab extends StatefulWidget {
 }
 
 class _MyOrdersTabState extends State<_MyOrdersTab> {
-  // Created once, not a getter — same re-subscription concern as the
-  // products tab.
+  String _selectedFilter = 'All';
+  final List<String> _filters = ['All', 'Pending', 'Claimed'];  // ⭐ TINANGGAL ANG "Ready for Pickup"
+
   late final Stream<QuerySnapshot> _stream = () {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
       return const Stream<QuerySnapshot>.empty();
     }
-    // Deliberately NOT combining `.orderBy('createdAt')` with the
-    // `.where('customerEmail', ...)` filter — that pairing needs a
-    // composite Firestore index that isn't deployed for this collection,
-    // and without it the query throws FAILED_PRECONDITION on every load.
-    // Sorted client-side in build() below instead.
     return FirebaseFirestore.instance
         .collection('orders')
         .where('customerEmail', isEqualTo: user.email)
@@ -1669,44 +1646,117 @@ class _MyOrdersTabState extends State<_MyOrdersTab> {
 
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder<QuerySnapshot>(
-      stream: _stream,
-      builder: (ctx, snap) {
-        if (snap.connectionState == ConnectionState.waiting) {
-          return const Center(
-              child: CircularProgressIndicator(color: AppColors.primaryDark));
-        }
-        if (snap.hasError) {
-          return _EmptyHint(
-            icon: Icons.error_outline,
-            title: 'Failed to load orders',
-            subtitle: snap.error.toString(),
-          );
-        }
-        final docs = (snap.data?.docs ?? []).toList()
-          ..sort((a, b) {
-            final ta = (a.data() as Map)['createdAt'] as Timestamp?;
-            final tb = (b.data() as Map)['createdAt'] as Timestamp?;
-            if (ta == null || tb == null) return 0;
-            return tb.compareTo(ta);
-          });
-        if (docs.isEmpty) {
-          return const _EmptyHint(
-            icon: Icons.receipt_long_outlined,
-            title: 'No orders yet',
-            subtitle: 'Your order history will appear here.',
-          );
-        }
-        return ListView.builder(
-          padding: const EdgeInsets.all(16),
-          itemCount: docs.length,
-          itemBuilder: (_, i) => _OrderTile(doc: docs[i]),
-        );
-      },
+    return Column(
+      children: [
+        // ── Filter Tabs ──
+        Container(
+          color: Colors.white,
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: SizedBox(
+            height: 40,
+            child: ListView.builder(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              itemCount: _filters.length,
+              itemBuilder: (_, i) {
+                final filter = _filters[i];
+                final selected = filter == _selectedFilter;
+                return GestureDetector(
+                  onTap: () => setState(() => _selectedFilter = filter),
+                  child: Container(
+                    margin: const EdgeInsets.only(right: 8),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      color: selected ? AppColors.primaryDark : Colors.transparent,
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                        color: selected ? AppColors.primaryDark : Colors.grey.shade300,
+                        width: 1,
+                      ),
+                    ),
+                    child: Center(  // ⭐ IDINAGDAG ITO PARA I-CENTER ANG TEXT
+                    child: Text(
+                      filter,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: selected ? Colors.white : Colors.black54,
+                      ),
+                    ),
+                  ),
+                ),
+                );
+              },
+            ),
+          ),
+        ),
+    
+        Expanded(
+          child: StreamBuilder<QuerySnapshot>(
+            stream: _stream,
+            builder: (ctx, snap) {
+              if (snap.connectionState == ConnectionState.waiting) {
+                return const Center(
+                  child: CircularProgressIndicator(color: AppColors.primaryDark),
+                );
+              }
+              if (snap.hasError) {
+                return _EmptyHint(
+                  icon: Icons.error_outline,
+                  title: 'Failed to load orders',
+                  subtitle: snap.error.toString(),
+                );
+              }
+
+              var docs = (snap.data?.docs ?? []).toList()
+                ..sort((a, b) {
+                  final ta = (a.data() as Map)['createdAt'] as Timestamp?;
+                  final tb = (b.data() as Map)['createdAt'] as Timestamp?;
+                  if (ta == null || tb == null) return 0;
+                  return tb.compareTo(ta);
+                });
+
+              // ── Filter by status ──
+              if (_selectedFilter != 'All') {
+                docs = docs.where((doc) {
+                  final d = doc.data() as Map<String, dynamic>;
+                  final status = (d['pickupStatus'] as String?) ?? 'Pending';
+                  return status == _selectedFilter;
+                }).toList();
+              }
+
+              if (docs.isEmpty) {
+                return _EmptyHint(
+                  icon: Icons.receipt_long_outlined,
+                  title: _selectedFilter == 'All' 
+                      ? 'No orders yet' 
+                      : 'No $_selectedFilter orders',
+                  subtitle: _selectedFilter == 'All'
+                      ? 'Your order history will appear here.'
+                      : 'You don\'t have any $_selectedFilter orders.',
+                );
+              }
+
+              return ListView.builder(
+                padding: const EdgeInsets.all(12),
+                itemCount: docs.length,
+                itemBuilder: (_, i) => _OrderTile(doc: docs[i]),
+              );
+            },
+          ),
+        ),
+      ],
     );
   }
 }
 
+// ─────────────────────────────────────────────────────────────
+// Order Tile - SHOPEE STYLE
+// ─────────────────────────────────────────────────────────────
 class _OrderTile extends StatelessWidget {
   final DocumentSnapshot doc;
   const _OrderTile({required this.doc});
@@ -1719,22 +1769,27 @@ class _OrderTile extends StatelessWidget {
     final total = (d['total'] ?? 0).toDouble();
     final ts = d['createdAt'] as Timestamp?;
     final dateStr = ts != null
-        ? DateFormat('MMM dd, yyyy').format(ts.toDate())
+        ? DateFormat('MMM dd, yyyy • h:mm a').format(ts.toDate())
         : '—';
     final items = (d['items'] as List?) ?? [];
-    final fmt = NumberFormat('#,##0.00');
     final pickupStatus = (d['pickupStatus'] as String?) ?? 'Pending';
+    final fmt = NumberFormat('#,##0.00');
+
+    final statusColor = pickupStatus == 'Ready for Pickup' 
+        ? const Color(0xFF2563EB) 
+        : pickupStatus == 'Claimed' 
+            ? const Color(0xFF059669) 
+            : AppColors.primaryDark;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 8,
+            color: Colors.black.withOpacity(0.06),
+            blurRadius: 10,
             offset: const Offset(0, 3),
           ),
         ],
@@ -1742,70 +1797,267 @@ class _OrderTile extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Text(
-                orderId,
-                style: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.black87),
-              ),
-              const Spacer(),
-              _PickupBadge(status: pickupStatus),
-            ],
-          ),
-          const SizedBox(height: 6),
-          Text(
-            dateStr,
-            style: const TextStyle(fontSize: 11, color: Colors.black38),
-          ),
-          const SizedBox(height: 8),
-          ...items.take(3).map((item) {
-            final m = item as Map<String, dynamic>;
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 2),
-              child: Row(
-                children: [
-                  Text(
-                    '${m['quantity'] ?? 1}× ${m['name'] ?? ''}',
-                    style: const TextStyle(
-                        fontSize: 12, color: Colors.black54),
+          // ── Header: Order ID + Status ──
+          Padding(
+            padding: const EdgeInsets.all(14),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        orderId,
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.black87,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        dateStr,
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: Colors.grey,
+                        ),
+                      ),
+                    ],
                   ),
-                  const Spacer(),
-                  Text(
-                    '₱${fmt.format((m['totalPrice'] ?? 0).toDouble())}',
-                    style: const TextStyle(
-                        fontSize: 12, color: Colors.black54),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
                   ),
-                ],
-              ),
-            );
-          }),
-          if (items.length > 3)
-            Text(
-              '+${items.length - 3} more item(s)',
-              style: const TextStyle(fontSize: 11, color: Colors.black38),
+                  decoration: BoxDecoration(
+                    color: statusColor.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: 6,
+                        height: 6,
+                        decoration: BoxDecoration(
+                          color: statusColor,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        pickupStatus.toUpperCase(),
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700,
+                          color: statusColor,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
-          const Divider(height: 16),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text(
-                'Total',
-                style: TextStyle(
-                    fontSize: 13, fontWeight: FontWeight.w600),
-              ),
-              Text(
-                '₱${fmt.format(total)}',
+          ),
+
+          const Divider(height: 1, thickness: 1),
+
+          // ── Items ──
+          Padding(
+            padding: const EdgeInsets.all(14),
+            child: Column(
+              children: items.take(2).map((item) {
+                final m = item as Map<String, dynamic>;
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Row(
+                    children: [
+                      _buildItemImage(m),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              m['name'] ?? 'Item',
+                              style: const TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w500,
+                                color: Colors.black87,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            if (m['variantSize'] != null && m['variantSize'].toString().isNotEmpty)
+                              Text(
+                                'Size: ${m['variantSize']}',
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  color: Colors.grey,
+                                ),
+                              ),
+                            Text(
+                              '₱${fmt.format((m['price'] ?? 0).toDouble())}',
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: Colors.grey,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Text(
+                        '×${m['quantity'] ?? 1}',
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.black54,
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
+
+          if (items.length > 2)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 14),
+              child: Text(
+                '+${items.length - 2} more item(s)',
                 style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.primaryDark),
+                  fontSize: 11,
+                  color: Colors.grey,
+                ),
               ),
-            ],
+            ),
+
+          const Divider(height: 16, thickness: 1),
+
+          // ── Footer: Total ──
+          Padding(
+            padding: const EdgeInsets.all(14),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: [
+                    const Icon(
+                      Icons.shopping_bag_outlined,
+                      size: 16,
+                      color: Colors.grey,
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      '${items.length} item(s)',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey,
+                      ),
+                    ),
+                  ],
+                ),
+                Row(
+                  children: [
+                    const Text(
+                      'Total: ',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: Colors.grey,
+                      ),
+                    ),
+                    Text(
+                      '₱${fmt.format(total)}',
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.primaryDark,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildItemImage(Map<String, dynamic> item) {
+    final imageBase64 = item['imageBase64'] as String? ?? '';
+    
+    if (imageBase64.isEmpty) {
+      return Container(
+        width: 50,
+        height: 50,
+        decoration: BoxDecoration(
+          color: AppColors.primaryDark.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Center(
+          child: Icon(
+            Icons.image_not_supported,
+            size: 20,
+            color: Colors.grey.shade400,
+          ),
+        ),
+      );
+    }
+
+    try {
+      if (imageBase64.startsWith('data:image')) {
+        final base64String = imageBase64.split(',').last;
+        final bytes = base64Decode(base64String);
+        return ClipRRect(
+          borderRadius: BorderRadius.circular(8),
+          child: Image.memory(
+            bytes,
+            width: 50,
+            height: 50,
+            fit: BoxFit.cover,
+            cacheWidth: 100,
+            cacheHeight: 100,
+            errorBuilder: (_, __, ___) => _fallbackImage(),
+          ),
+        );
+      } else {
+        final bytes = base64Decode(imageBase64);
+        return ClipRRect(
+          borderRadius: BorderRadius.circular(8),
+          child: Image.memory(
+            bytes,
+            width: 50,
+            height: 50,
+            fit: BoxFit.cover,
+            cacheWidth: 100,
+            cacheHeight: 100,
+            errorBuilder: (_, __, ___) => _fallbackImage(),
+          ),
+        );
+      }
+    } catch (e) {
+      return _fallbackImage();
+    }
+  }
+
+  Widget _fallbackImage() {
+    return Container(
+      width: 50,
+      height: 50,
+      decoration: BoxDecoration(
+        color: AppColors.primaryDark.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Center(
+        child: Icon(
+          Icons.image_not_supported,
+          size: 20,
+          color: Colors.grey.shade400,
+        ),
       ),
     );
   }
@@ -1861,7 +2113,7 @@ class _CartSheet extends StatelessWidget {
             child: Row(
               children: [
                 Icon(Icons.shopping_cart_outlined, color: AppColors.primaryDark),
-                SizedBox(width: 8),
+                const SizedBox(width: 8),
                 Text(
                   'Your Cart',
                   style: TextStyle(
@@ -1951,9 +2203,6 @@ class _CartSheet extends StatelessWidget {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
 
-    // Orders are a single-org record (one orgId field) — block mixed-org
-    // carts instead of silently attributing everything to the first item's
-    // org (which used to happen and would misfile the order entirely).
     final cartOrgIds = cart.map((i) => i.product.orgId).toSet();
     if (cartOrgIds.length > 1) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
@@ -1966,7 +2215,6 @@ class _CartSheet extends StatelessWidget {
     String customerName = '';
     String studentSection = '';
     try {
-      // students doc ID is the uid itself — direct lookup, no query/index.
       final doc = await FirebaseFirestore.instance
           .collection('students')
           .doc(user.uid)
@@ -2307,11 +2555,6 @@ class _PickupBadge extends StatelessWidget {
     final Color bg, fg;
     final String label;
     switch (status) {
-      case 'Ready for Pickup':
-        bg = const Color(0xFFEFF6FF);
-        fg = const Color(0xFF2563EB);
-        label = 'READY';
-        break;
       case 'Claimed':
         bg = const Color(0xFFECFDF5);
         fg = const Color(0xFF059669);
