@@ -14,6 +14,93 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
+// Where the recipient's name goes on an imported/custom template image —
+// the org info, event info, and signatories are already baked into that
+// image, so this is the only thing that varies per recipient. Position is
+// stored as 0..1 fractions of the image (not pixels), so it stays correct
+// no matter what size the image is actually rendered at.
+class CertNamePlacement {
+  final double xPct, yPct;
+  final double fontSize; // relative to a 600-wide reference canvas
+  final bool light; // true = white text, for dark/photo backgrounds
+
+  const CertNamePlacement({
+    this.xPct = 0.5,
+    this.yPct = 0.55,
+    this.fontSize = 19,
+    this.light = false,
+  });
+
+  factory CertNamePlacement.fromMap(Map<String, dynamic>? m) {
+    if (m == null) return const CertNamePlacement();
+    return CertNamePlacement(
+      xPct: (m['xPct'] as num?)?.toDouble() ?? 0.5,
+      yPct: (m['yPct'] as num?)?.toDouble() ?? 0.55,
+      fontSize: (m['fontSize'] as num?)?.toDouble() ?? 19,
+      light: m['light'] as bool? ?? false,
+    );
+  }
+
+  Map<String, dynamic> toMap() => {
+        'xPct': xPct,
+        'yPct': yPct,
+        'fontSize': fontSize,
+        'light': light,
+      };
+
+  CertNamePlacement copyWith({double? xPct, double? yPct, double? fontSize, bool? light}) =>
+      CertNamePlacement(
+        xPct: xPct ?? this.xPct,
+        yPct: yPct ?? this.yPct,
+        fontSize: fontSize ?? this.fontSize,
+        light: light ?? this.light,
+      );
+}
+
+// Overlays the recipient's name on top of an imported/custom certificate
+// background image at the stored placement — used wherever such a
+// certificate is displayed, so every recipient sees their own name on the
+// same shared design instead of a flat, identical-for-everyone image.
+class CertificateImageWithName extends StatelessWidget {
+  final Widget background;
+  final String recipientName;
+  final CertNamePlacement placement;
+  const CertificateImageWithName({
+    super.key,
+    required this.background,
+    required this.recipientName,
+    this.placement = const CertNamePlacement(),
+  });
+
+  static const double referenceWidth = 600;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(builder: (context, constraints) {
+      final scale = constraints.maxWidth.isFinite ? constraints.maxWidth / referenceWidth : 1.0;
+      return Stack(fit: StackFit.passthrough, children: [
+        background,
+        if (recipientName.isNotEmpty)
+          Positioned.fill(
+            child: Align(
+              alignment: Alignment(placement.xPct * 2 - 1, placement.yPct * 2 - 1),
+              child: Text(
+                recipientName,
+                textAlign: TextAlign.center,
+                style: GoogleFonts.beVietnamPro(
+                  fontSize: placement.fontSize * scale,
+                  fontWeight: FontWeight.w700,
+                  fontStyle: FontStyle.italic,
+                  color: placement.light ? Colors.white : const Color(0xFF1A202C),
+                ),
+              ),
+            ),
+          ),
+      ]);
+    });
+  }
+}
+
 class CertSignatory {
   final String name;
   final String title;

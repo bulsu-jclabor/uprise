@@ -2052,10 +2052,10 @@ class _WebinarCodePanelState extends State<_WebinarCodePanel> {
           final intervalMinutes = (session['intervalMinutes'] as num?)?.toInt() ?? 5;
           final requireCheckOut = session['requireCheckOut'] == true;
 
-          return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+          return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
             stream: WebinarAttendanceService.codeStream(widget.eventDocId, phase),
             builder: (context, codeSnap) {
-              final currentCode = codeSnap.data?.docs.isNotEmpty == true ? codeSnap.data!.docs.first.data() : null;
+              final currentCode = codeSnap.data?.data();
               WidgetsBinding.instance.addPostFrameCallback((_) {
                 if (mounted) _ensureRotationRunning(session, currentCode);
               });

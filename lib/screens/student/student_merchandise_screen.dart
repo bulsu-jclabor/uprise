@@ -2,13 +2,12 @@
 
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:cloud_functions/cloud_functions.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import '../../widgets/student/app_colors.dart';
-import '../../services/gcash_payment_service.dart';
-import 'gcash_checkout_screen.dart';
 
 
 // ─────────────────────────────────────────────────────────────
@@ -158,6 +157,13 @@ class _StudentMerchandiseScreenState
 
   final List<_CartItem> _cart = [];
   String _paymentMethod = 'Cash on Pickup';
+  final TextEditingController _gcashRefCtrl = TextEditingController();
+  String _gcashProofBase64 = '';
+  String _gcashProofFormat = '';
+  String? _gcashInfoOrgId;
+  String _orgGcashNumber = '';
+  String _orgGcashName = '';
+  bool _loadingGcashInfo = false;
 
   @override
   void initState() {
@@ -174,7 +180,30 @@ class _StudentMerchandiseScreenState
   @override
   void dispose() {
     _tabController.dispose();
+    _gcashRefCtrl.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadGcashInfo(String orgId) async {
+    if (orgId.isEmpty || _gcashInfoOrgId == orgId) return;
+    setState(() => _loadingGcashInfo = true);
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('organizations')
+          .doc(orgId)
+          .get();
+      final d = doc.data() ?? {};
+      if (mounted) {
+        setState(() {
+          _gcashInfoOrgId = orgId;
+          _orgGcashNumber = (d['gcashNumber'] as String?) ?? '';
+          _orgGcashName = (d['gcashName'] as String?) ?? '';
+          _loadingGcashInfo = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _loadingGcashInfo = false);
+    }
   }
 
   Future<void> _resolveOrgId() async {
@@ -346,7 +375,11 @@ class _StudentMerchandiseScreenState
     );
   }
 
-  void _openCart(BuildContext context) {
+  Future<void> _openCart(BuildContext context) async {
+    if (_cart.isNotEmpty) {
+      await _loadGcashInfo(_cart.first.product.orgId);
+    }
+    if (!context.mounted) return;
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -358,6 +391,17 @@ class _StudentMerchandiseScreenState
           paymentMethod: _paymentMethod,
           onPaymentMethodChanged: (method) {
             _paymentMethod = method;
+            setModalState(() {});
+          },
+          gcashNumber: _orgGcashNumber,
+          gcashName: _orgGcashName,
+          loadingGcashInfo: _loadingGcashInfo,
+          gcashRefController: _gcashRefCtrl,
+          gcashProofBase64: _gcashProofBase64,
+          gcashProofFormat: _gcashProofFormat,
+          onGcashProofPicked: (base64, format) {
+            _gcashProofBase64 = base64;
+            _gcashProofFormat = format;
             setModalState(() {});
           },
           onIncrease: (cartKey) {
@@ -379,6 +423,9 @@ class _StudentMerchandiseScreenState
             setState(() {
               _cart.clear();
               _paymentMethod = 'Cash on Pickup';
+              _gcashRefCtrl.clear();
+              _gcashProofBase64 = '';
+              _gcashProofFormat = '';
             });
             Navigator.pop(context);
             ScaffoldMessenger.of(context).showSnackBar(
@@ -2083,6 +2130,13 @@ class _CartSheet extends StatelessWidget {
   final String orgId;
   final String paymentMethod;
   final void Function(String) onPaymentMethodChanged;
+  final String gcashNumber;
+  final String gcashName;
+  final bool loadingGcashInfo;
+  final TextEditingController gcashRefController;
+  final String gcashProofBase64;
+  final String gcashProofFormat;
+  final void Function(String base64, String format) onGcashProofPicked;
   final void Function(String) onIncrease;
   final void Function(String) onDecrease;
   final void Function(String) onRemove;
@@ -2093,6 +2147,13 @@ class _CartSheet extends StatelessWidget {
     required this.orgId,
     required this.paymentMethod,
     required this.onPaymentMethodChanged,
+    required this.gcashNumber,
+    required this.gcashName,
+    required this.loadingGcashInfo,
+    required this.gcashRefController,
+    required this.gcashProofBase64,
+    required this.gcashProofFormat,
+    required this.onGcashProofPicked,
     required this.onIncrease,
     required this.onDecrease,
     required this.onRemove,
@@ -2198,6 +2259,18 @@ class _CartSheet extends StatelessWidget {
                     ),
                   ],
                 ),
+                if (paymentMethod == 'GCash') ...[
+                  const SizedBox(height: 12),
+                  _GcashProofPanel(
+                    total: _total,
+                    gcashNumber: gcashNumber,
+                    gcashName: gcashName,
+                    loading: loadingGcashInfo,
+                    refController: gcashRefController,
+                    proofBase64: gcashProofBase64,
+                    onProofPicked: onGcashProofPicked,
+                  ),
+                ],
               ],
             ),
           ),
@@ -2270,40 +2343,35 @@ class _CartSheet extends StatelessWidget {
     return true;
   }
 
-  Future<void> _placeCashOrder(BuildContext context) async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
-
-    if (!_validateSingleOrg(context)) return;
-
+  Future<({String customerName, String studentSection})> _loadCustomerInfo(String uid) async {
     String customerName = '';
     String studentSection = '';
     try {
-      final doc = await FirebaseFirestore.instance
-          .collection('students')
-          .doc(user.uid)
-          .get();
+      final doc = await FirebaseFirestore.instance.collection('students').doc(uid).get();
       if (doc.exists) {
         customerName = doc.data()?['fullName'] as String? ?? '';
         studentSection = doc.data()?['section'] as String? ?? '';
       }
     } catch (_) {}
+    return (customerName: customerName, studentSection: studentSection);
+  }
 
-    final orderId =
-        'ORD-${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}';
-
-    final db = FirebaseFirestore.instance;
-    final orderRef = db.collection('orders').doc();
-
-    final orderData = {
+  Map<String, dynamic> _buildBaseOrderData({
+    required String orderId,
+    required String userId,
+    required String customerName,
+    required String customerEmail,
+    required String section,
+  }) {
+    return {
       'orderId': orderId,
       'orgId': cart.isNotEmpty ? cart.first.product.orgId : '',
-      'userId': user.uid,
+      'userId': userId,
       'customerName': customerName,
-      'customerEmail': user.email ?? '',
+      'customerEmail': customerEmail,
       'customerPhone': '',
       'customerAddress': '',
-      'section': studentSection,
+      'section': section,
       'pickupStatus': 'Pending',
       'items': cart
           .map((i) => {
@@ -2319,11 +2387,99 @@ class _CartSheet extends StatelessWidget {
               })
           .toList(),
       'total': _total,
-      'paymentMethod': 'Cash on Pickup',
-      'status': 'pending',
       'createdAt': FieldValue.serverTimestamp(),
     };
+  }
 
+  Future<void> _placeCashOrder(BuildContext context) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    if (!_validateSingleOrg(context)) return;
+
+    final info = await _loadCustomerInfo(user.uid);
+    final orderId =
+        'ORD-${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}';
+
+    final orderData = _buildBaseOrderData(
+      orderId: orderId,
+      userId: user.uid,
+      customerName: info.customerName,
+      customerEmail: user.email ?? '',
+      section: info.studentSection,
+    )
+      ..['paymentMethod'] = 'Cash on Pickup'
+      ..['status'] = 'pending';
+
+    if (!context.mounted) return;
+    await _runOrderTransaction(
+      context: context,
+      orderId: orderId,
+      orderData: orderData,
+      successMessage: 'Order placed successfully!',
+    );
+  }
+
+  Future<void> _placeGcashOrder(BuildContext context) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    if (!_validateSingleOrg(context)) return;
+
+    final reference = gcashRefController.text.trim();
+    if (reference.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Please enter your GCash reference number.'),
+        backgroundColor: Colors.redAccent,
+      ));
+      return;
+    }
+    if (gcashNumber.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('This organization hasn\'t set up GCash payments yet. Please choose Cash on Pickup.'),
+        backgroundColor: Colors.redAccent,
+      ));
+      return;
+    }
+
+    final info = await _loadCustomerInfo(user.uid);
+    final orderId =
+        'ORD-${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}';
+
+    final orderData = _buildBaseOrderData(
+      orderId: orderId,
+      userId: user.uid,
+      customerName: info.customerName,
+      customerEmail: user.email ?? '',
+      section: info.studentSection,
+    )
+      ..['paymentMethod'] = 'GCash'
+      ..['status'] = 'pending'
+      ..['paymentVerified'] = false
+      ..['gcashReferenceNumber'] = reference;
+    if (gcashProofBase64.isNotEmpty) {
+      orderData['gcashProofBase64'] = gcashProofBase64;
+      orderData['gcashProofFormat'] = gcashProofFormat.isNotEmpty ? gcashProofFormat : 'jpg';
+    }
+
+    if (!context.mounted) return;
+    await _runOrderTransaction(
+      context: context,
+      orderId: orderId,
+      orderData: orderData,
+      successMessage:
+          'Order placed! We\'ll verify your GCash payment (Ref: $reference) shortly.',
+    );
+  }
+
+  Future<void> _runOrderTransaction({
+    required BuildContext context,
+    required String orderId,
+    required Map<String, dynamic> orderData,
+    required String successMessage,
+  }) async {
+    final db = FirebaseFirestore.instance;
+    final orderRef = db.collection('orders').doc();
     final productIds = cart.map((i) => i.product.id).toSet().toList();
 
     try {
@@ -2425,7 +2581,7 @@ class _CartSheet extends StatelessWidget {
         txn.set(orderRef, orderData);
       });
 
-      onOrderPlaced('Order placed successfully!');
+      onOrderPlaced(successMessage);
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -2435,123 +2591,187 @@ class _CartSheet extends StatelessWidget {
       );
     }
   }
+}
 
-  Future<void> _placeGcashOrder(BuildContext context) async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
+// ─────────────────────────────────────────────────────────────
+// Manual GCash payment panel — the org publishes a GCash number/name in
+// their settings; there's no payment gateway behind this (PayMongo needs
+// business docs/Blaze billing the org doesn't have), so the student pays
+// the org directly in the GCash app and submits proof here for the org
+// to manually verify before fulfilling the order.
+// ─────────────────────────────────────────────────────────────
+class _GcashProofPanel extends StatefulWidget {
+  final double total;
+  final String gcashNumber;
+  final String gcashName;
+  final bool loading;
+  final TextEditingController refController;
+  final String proofBase64;
+  final void Function(String base64, String format) onProofPicked;
 
-    if (!_validateSingleOrg(context)) return;
+  const _GcashProofPanel({
+    required this.total,
+    required this.gcashNumber,
+    required this.gcashName,
+    required this.loading,
+    required this.refController,
+    required this.proofBase64,
+    required this.onProofPicked,
+  });
 
-    String customerName = '';
-    String studentSection = '';
+  @override
+  State<_GcashProofPanel> createState() => _GcashProofPanelState();
+}
+
+class _GcashProofPanelState extends State<_GcashProofPanel> {
+  bool _picking = false;
+
+  Future<void> _pickProof() async {
+    setState(() => _picking = true);
     try {
-      final doc = await FirebaseFirestore.instance
-          .collection('students')
-          .doc(user.uid)
-          .get();
-      if (doc.exists) {
-        customerName = doc.data()?['fullName'] as String? ?? '';
-        studentSection = doc.data()?['section'] as String? ?? '';
+      final picked = await ImagePicker()
+          .pickImage(source: ImageSource.gallery, imageQuality: 60, maxWidth: 1000);
+      if (picked != null) {
+        final bytes = await picked.readAsBytes();
+        final ext = picked.path.split('.').last.toLowerCase();
+        widget.onProofPicked(base64Encode(bytes), ext.isNotEmpty ? ext : 'jpg');
       }
-    } catch (_) {}
-
-    final items = cart
-        .map((i) => {
-              'productId': i.product.id,
-              'name': i.product.name,
-              'variantId': i.variantId ?? '',
-              'variantSize': i.variantSize ?? '',
-              'variantColor': i.variantColor ?? '',
-              'quantity': i.quantity,
-              'price': i.variantPrice ?? i.product.price,
-              'totalPrice': i.subtotal,
-              'imageBase64': i.product.imageBase64,
-            })
-        .toList();
-
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => const Center(
-        child: CircularProgressIndicator(color: AppColors.primaryDark),
-      ),
-    );
-
-    GcashPaymentResult intent;
-    try {
-      intent = await GcashPaymentService.createPaymentIntent(
-        orgId: cart.isNotEmpty ? cart.first.product.orgId : '',
-        items: items,
-        total: _total,
-        customerName: customerName,
-        customerEmail: user.email ?? '',
-        section: studentSection,
-      );
-    } on FirebaseFunctionsException catch (e) {
-      if (context.mounted) {
-        Navigator.of(context, rootNavigator: true).pop(); // close loading
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(e.message ?? 'Could not start GCash payment. Please try again.'),
-          backgroundColor: Colors.redAccent,
-        ));
-      }
-      return;
     } catch (_) {
-      if (context.mounted) {
-        Navigator.of(context, rootNavigator: true).pop();
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('Could not start GCash payment. Please try again.'),
+          content: Text('Could not attach screenshot. You can still place the order without it.'),
           backgroundColor: Colors.redAccent,
         ));
       }
-      return;
+    } finally {
+      if (mounted) setState(() => _picking = false);
+    }
+  }
+
+  void _copyNumber() {
+    Clipboard.setData(ClipboardData(text: widget.gcashNumber));
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+      content: Text('GCash number copied'),
+      duration: Duration(seconds: 1),
+    ));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final fmt = NumberFormat('#,##0.00');
+
+    if (widget.loading) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 12),
+        child: Center(child: CircularProgressIndicator(color: AppColors.primaryDark)),
+      );
     }
 
-    if (!context.mounted) return;
-    Navigator.of(context, rootNavigator: true).pop(); // close loading
-
-    final reachedRedirect = await Navigator.of(context, rootNavigator: true).push<bool>(
-      MaterialPageRoute(builder: (_) => GcashCheckoutScreen(checkoutUrl: intent.checkoutUrl)),
-    );
-
-    if (reachedRedirect != true) {
-      // User backed out of the GCash flow before finishing.
-      return;
-    }
-
-    if (!context.mounted) return;
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => const AlertDialog(
-        content: Row(
-          children: [
-            CircularProgressIndicator(color: AppColors.primaryDark),
-            SizedBox(width: 16),
-            Expanded(child: Text('Confirming your GCash payment…')),
-          ],
+    if (widget.gcashNumber.isEmpty) {
+      return Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: Colors.red.withAlpha(15),
+          borderRadius: BorderRadius.circular(10),
         ),
-      ),
-    );
-
-    final status = await GcashPaymentService.awaitConfirmation(intent.intentDocId);
-
-    if (!context.mounted) return;
-    Navigator.of(context, rootNavigator: true).pop(); // close confirming dialog
-
-    if (status == 'completed') {
-      onOrderPlaced('GCash payment received! Your order has been placed.');
-    } else if (status == 'failed') {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('GCash payment failed or was cancelled. Please try again.'),
-        backgroundColor: Colors.redAccent,
-      ));
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('Still confirming your payment. Check "My Orders" again shortly.'),
-        backgroundColor: Colors.orange,
-      ));
+        child: const Text(
+          'This organization hasn\'t set up GCash payments yet. Please choose Cash on Pickup instead.',
+          style: TextStyle(fontSize: 12, color: Colors.redAccent),
+        ),
+      );
     }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: AppColors.primaryDark.withAlpha(15),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Send ₱${fmt.format(widget.total)} via GCash to:',
+                style: const TextStyle(fontSize: 12, color: Colors.black54),
+              ),
+              const SizedBox(height: 4),
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      '${widget.gcashName.isNotEmpty ? widget.gcashName : '—'} • ${widget.gcashNumber}',
+                      style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700),
+                    ),
+                  ),
+                  InkWell(
+                    onTap: _copyNumber,
+                    borderRadius: BorderRadius.circular(6),
+                    child: const Padding(
+                      padding: EdgeInsets.all(4),
+                      child: Icon(Icons.copy_rounded, size: 16, color: AppColors.primaryDark),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 10),
+        TextField(
+          controller: widget.refController,
+          decoration: InputDecoration(
+            labelText: 'GCash Reference Number',
+            hintText: 'e.g. 1234567890123',
+            labelStyle: const TextStyle(fontSize: 12.5),
+            isDense: true,
+            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+            filled: true,
+            fillColor: AppColors.background,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: BorderSide.none,
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
+        InkWell(
+          onTap: _picking ? null : _pickProof,
+          borderRadius: BorderRadius.circular(10),
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: AppColors.background,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: const Color(0xFFE2E6EA)),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  widget.proofBase64.isNotEmpty ? Icons.check_circle : Icons.attach_file_rounded,
+                  size: 16,
+                  color: widget.proofBase64.isNotEmpty ? Colors.green.shade600 : Colors.black45,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    _picking
+                        ? 'Attaching…'
+                        : widget.proofBase64.isNotEmpty
+                            ? 'Screenshot attached'
+                            : 'Attach screenshot (optional)',
+                    style: const TextStyle(fontSize: 12.5, color: Colors.black54),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
   }
 }
 

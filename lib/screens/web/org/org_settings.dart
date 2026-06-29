@@ -157,7 +157,7 @@ class _OrgSettingsScreenState extends State<OrgSettingsScreen>
           child: TabBarView(
             controller: _tabController,
             children: [
-              _ProfileTab(orgName: widget.orgName, orgShortName: widget.orgShortName, orgEmail: widget.orgEmail),
+              _ProfileTab(orgId: widget.orgId, orgName: widget.orgName, orgShortName: widget.orgShortName, orgEmail: widget.orgEmail),
               _SecurityTab(orgId: widget.orgId),
             ],
           ),
@@ -171,8 +171,9 @@ class _OrgSettingsScreenState extends State<OrgSettingsScreen>
 // Notifications Tab
 // ─────────────────────────────────────────────────────────────────────────────
 class _ProfileTab extends StatelessWidget {
+  final String orgId;
   final String orgName, orgShortName, orgEmail;
-  const _ProfileTab({required this.orgName, required this.orgShortName, required this.orgEmail});
+  const _ProfileTab({required this.orgId, required this.orgName, required this.orgShortName, required this.orgEmail});
 
   Widget _infoRow(String label, String value) {
     return Padding(
@@ -197,30 +198,181 @@ class _ProfileTab extends StatelessWidget {
     final horizontalPadding = width < 720 ? 16.0 : 28.0;
     return SingleChildScrollView(
       padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 20),
-        padding: const EdgeInsets.all(24),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: const Color(0xFFE8ECF0)),
-          boxShadow: _DS.cardShadow,
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Organization Information',
-                style: GoogleFonts.beVietnamPro(
-                    fontSize: 18, fontWeight: FontWeight.w600, color: const Color(0xFF1A202C))),
-            const SizedBox(height: 4),
-            Text('To update your logo, cover photo, or description, use the Profile page.',
-                style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF64748B))),
-            const SizedBox(height: 20),
-            _infoRow('Organization Name', orgName),
-            _infoRow('Short Name', orgShortName),
-            _infoRow('Email Address', orgEmail),
+      child: Column(
+        children: [
+          Container(
+            margin: const EdgeInsets.only(bottom: 20),
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: const Color(0xFFE8ECF0)),
+              boxShadow: _DS.cardShadow,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Organization Information',
+                    style: GoogleFonts.beVietnamPro(
+                        fontSize: 18, fontWeight: FontWeight.w600, color: const Color(0xFF1A202C))),
+                const SizedBox(height: 4),
+                Text('To update your logo, cover photo, or description, use the Profile page.',
+                    style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF64748B))),
+                const SizedBox(height: 20),
+                _infoRow('Organization Name', orgName),
+                _infoRow('Short Name', orgShortName),
+                _infoRow('Email Address', orgEmail),
+              ],
+            ),
+          ),
+          _GcashSettingsCard(orgId: orgId),
+        ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GCash Settings — the GCash number/name students are told to pay to during
+// merchandise checkout. There's no payment gateway behind this (PayMongo
+// requires business docs/Blaze billing the org doesn't have); the org just
+// publishes where to send money and manually verifies each order's
+// reference number in org_merchandise.dart before fulfilling it.
+// ─────────────────────────────────────────────────────────────────────────────
+class _GcashSettingsCard extends StatefulWidget {
+  final String orgId;
+  const _GcashSettingsCard({required this.orgId});
+
+  @override
+  State<_GcashSettingsCard> createState() => _GcashSettingsCardState();
+}
+
+class _GcashSettingsCardState extends State<_GcashSettingsCard> {
+  final _numberCtrl = TextEditingController();
+  final _nameCtrl = TextEditingController();
+  bool _loading = true;
+  bool _saving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  @override
+  void dispose() {
+    _numberCtrl.dispose();
+    _nameCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _load() async {
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('organizations')
+          .doc(widget.orgId)
+          .get();
+      final d = doc.data() ?? {};
+      _numberCtrl.text = (d['gcashNumber'] as String?) ?? '';
+      _nameCtrl.text = (d['gcashName'] as String?) ?? '';
+    } catch (_) {}
+    if (mounted) setState(() => _loading = false);
+  }
+
+  Future<void> _save() async {
+    setState(() => _saving = true);
+    try {
+      await FirebaseFirestore.instance
+          .collection('organizations')
+          .doc(widget.orgId)
+          .update({
+        'gcashNumber': _numberCtrl.text.trim(),
+        'gcashName': _nameCtrl.text.trim(),
+      });
+      await activity_log.ActivityLogger.log(
+        action: 'update_gcash_settings',
+        module: 'settings',
+        details: {'orgId': widget.orgId},
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+              content: Text('GCash details saved'),
+              backgroundColor: UpriseColors.success),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e'), backgroundColor: UpriseColors.error),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 20),
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFE8ECF0)),
+        boxShadow: _DS.cardShadow,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('GCash Payment Details',
+              style: GoogleFonts.beVietnamPro(
+                  fontSize: 18, fontWeight: FontWeight.w600, color: const Color(0xFF1A202C))),
+          const SizedBox(height: 4),
+          Text(
+            'Shown to students at merchandise checkout so they know where to send GCash payments. You confirm each payment manually in Merchandise > Orders.',
+            style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF64748B)),
+          ),
+          const SizedBox(height: 20),
+          if (_loading)
+            const Center(
+                child: Padding(
+              padding: EdgeInsets.symmetric(vertical: 12),
+              child: CircularProgressIndicator(),
+            ))
+          else ...[
+            TextFormField(
+              controller: _numberCtrl,
+              decoration: _DS.inputDecoration('GCash Number', hint: 'e.g. 0917xxxxxxx', icon: Icons.phone_iphone_rounded),
+            ),
+            const SizedBox(height: 14),
+            TextFormField(
+              controller: _nameCtrl,
+              decoration: _DS.inputDecoration('GCash Account Name', hint: 'e.g. Juan Dela Cruz', icon: Icons.person_outline_rounded),
+            ),
+            const SizedBox(height: 18),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: ElevatedButton(
+                onPressed: _saving ? null : _save,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: UpriseColors.primaryDark,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 13),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+                child: _saving
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                      )
+                    : Text('Save', style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.w600)),
+              ),
+            ),
           ],
-        ),
+        ],
       ),
     );
   }

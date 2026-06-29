@@ -25,6 +25,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 
 import 'guest_auth_service.dart';
+import '../../services/certificate_auto_issue_service.dart';
 
 // ─────────────────────────────────────────────────────────────
 //  THEME
@@ -592,6 +593,15 @@ class _FeedbackFormSheetState extends State<_FeedbackFormSheet> {
         'comment'     : _commentCtrl.text.trim(),
         'submittedAt' : FieldValue.serverTimestamp(),
       });
+
+      // If the org already distributed certificates for this event before
+      // this feedback came in, issue this guest's certificate right now
+      // instead of leaving them waiting for the org to re-run it.
+      await CertificateAutoIssueService.tryIssueForFeedback(
+        eventDocId: widget.event.eventId,
+        recipientKey: widget.email,
+        isGuest: true,
+      );
 
       widget.onSubmit();
       if (mounted) setState(() { _isLoading = false; _submitted = true; });

@@ -4033,13 +4033,29 @@ class _OrdersTabState extends State<_OrdersTab> {
           ),
           Expanded(
             flex: 1,
-            child: Text(
-              '₱${NumberFormat('#,###.00').format(order.total)}',
-              style: GoogleFonts.beVietnamPro(
-                fontSize: 13,
-                fontWeight: FontWeight.w700,
-                color: UpriseColors.primaryDark,
-              ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '₱${NumberFormat('#,###.00').format(order.total)}',
+                  style: GoogleFonts.beVietnamPro(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: UpriseColors.primaryDark,
+                  ),
+                ),
+                if (order.paymentMethod == 'GCash')
+                  Text(
+                    order.paymentVerified ? 'GCash · Verified' : 'GCash · Unverified',
+                    style: GoogleFonts.beVietnamPro(
+                      fontSize: 9.5,
+                      fontWeight: FontWeight.w600,
+                      color: order.paymentVerified
+                          ? UpriseColors.success
+                          : const Color(0xFFD97706),
+                    ),
+                  ),
+              ],
             ),
           ),
           Expanded(flex: 2, child: _pickupStatusBadge(order.pickupStatus)),
@@ -4409,9 +4425,60 @@ class _PageNumButton extends StatelessWidget {
 // ============================================================
 // ORDER DETAILS MODAL
 // ============================================================
-class _OrderDetailsModal extends StatelessWidget {
+class _OrderDetailsModal extends StatefulWidget {
   final OrderModel order;
   const _OrderDetailsModal({required this.order});
+
+  @override
+  State<_OrderDetailsModal> createState() => _OrderDetailsModalState();
+}
+
+class _OrderDetailsModalState extends State<_OrderDetailsModal> {
+  bool _verifying = false;
+  late bool _paymentVerified = widget.order.paymentVerified;
+
+  OrderModel get order => widget.order;
+
+  Future<void> _markPaymentVerified() async {
+    setState(() => _verifying = true);
+    try {
+      await FirebaseFirestore.instance
+          .collection('orders')
+          .doc(order.id)
+          .update({'paymentVerified': true});
+      await activity_log.ActivityLogger.log(
+        action: 'verify_gcash_payment',
+        module: 'merchandise',
+        details: {'orgId': order.orgId, 'orderId': order.orderId},
+      );
+      if (mounted) setState(() => _paymentVerified = true);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e'), backgroundColor: UpriseColors.error),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _verifying = false);
+    }
+  }
+
+  void _viewProof() {
+    final raw = order.gcashProofBase64;
+    if (raw.isEmpty) return;
+    showDialog(
+      context: context,
+      builder: (_) => Dialog(
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(12),
+          child: Image.memory(
+            base64Decode(raw.contains(',') ? raw.split(',').last : raw),
+            fit: BoxFit.contain,
+          ),
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -4570,10 +4637,36 @@ class _OrderDetailsModal extends StatelessWidget {
                           if (order.paymentMethod == 'GCash') ...[
                             const SizedBox(height: 4),
                             _summaryLine(
-                              'Payment Status',
-                              'Paid',
-                              valueColor: UpriseColors.success,
+                              'GCash Reference No.',
+                              order.gcashReferenceNumber.isNotEmpty ? order.gcashReferenceNumber : '—',
                             ),
+                            const SizedBox(height: 4),
+                            _summaryLine(
+                              'Payment Status',
+                              _paymentVerified ? 'Verified' : 'Awaiting Verification',
+                              valueColor: _paymentVerified ? UpriseColors.success : const Color(0xFFD97706),
+                            ),
+                            if (order.gcashProofBase64.isNotEmpty) ...[
+                              const SizedBox(height: 8),
+                              InkWell(
+                                onTap: _viewProof,
+                                child: Row(
+                                  children: [
+                                    const Icon(Icons.image_outlined, size: 15, color: UpriseColors.primaryDark),
+                                    const SizedBox(width: 6),
+                                    Text(
+                                      'View payment screenshot',
+                                      style: GoogleFonts.beVietnamPro(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w600,
+                                        color: UpriseColors.primaryDark,
+                                        decoration: TextDecoration.underline,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
                           ],
                           Padding(
                             padding: const EdgeInsets.symmetric(vertical: 8),
@@ -4627,6 +4720,29 @@ class _OrderDetailsModal extends StatelessWidget {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
+                  if (order.paymentMethod == 'GCash' && !_paymentVerified) ...[
+                    ElevatedButton.icon(
+                      onPressed: _verifying ? null : _markPaymentVerified,
+                      icon: _verifying
+                          ? const SizedBox(
+                              width: 14,
+                              height: 14,
+                              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                            )
+                          : const Icon(Icons.check_circle_outline, size: 16),
+                      label: Text(
+                        'Mark Payment Verified',
+                        style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: UpriseColors.success,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                  ],
                   OutlinedButton(
                     onPressed: () => Navigator.pop(context),
                     style: OutlinedButton.styleFrom(
@@ -5467,6 +5583,10 @@ class OrderModel {
   final String bundleId;
   final String section;
   final String pickupStatus;
+  final String gcashReferenceNumber;
+  final String gcashProofBase64;
+  final String gcashProofFormat;
+  final bool paymentVerified;
 
   OrderModel({
     required this.id,
@@ -5484,6 +5604,10 @@ class OrderModel {
     required this.bundleId,
     this.section = '',
     this.pickupStatus = 'Pending',
+    this.gcashReferenceNumber = '',
+    this.gcashProofBase64 = '',
+    this.gcashProofFormat = '',
+    this.paymentVerified = false,
   });
 
   factory OrderModel.fromFirestore(DocumentSnapshot doc) {
@@ -5507,6 +5631,10 @@ class OrderModel {
       bundleId: d['bundleId'] ?? '',
       section: d['section'] ?? '',
       pickupStatus: d['pickupStatus'] ?? 'Pending',
+      gcashReferenceNumber: d['gcashReferenceNumber'] ?? '',
+      gcashProofBase64: d['gcashProofBase64'] ?? '',
+      gcashProofFormat: d['gcashProofFormat'] ?? '',
+      paymentVerified: d['paymentVerified'] as bool? ?? false,
     );
   }
 }

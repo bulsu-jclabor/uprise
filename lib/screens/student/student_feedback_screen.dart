@@ -6,6 +6,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
 import '../../widgets/student/app_colors.dart';
+import '../../services/certificate_auto_issue_service.dart';
 
 class StudentFeedbackScreen extends StatefulWidget {
   const StudentFeedbackScreen({super.key});
@@ -129,6 +130,15 @@ class _StudentFeedbackScreenState extends State<StudentFeedbackScreen> {
         'userId': user.uid,
         'submittedAt': FieldValue.serverTimestamp(),
       });
+
+      // If the org already distributed certificates for this event before
+      // this feedback came in, issue this student's certificate right now
+      // instead of leaving them waiting for the org to re-run it.
+      await CertificateAutoIssueService.tryIssueForFeedback(
+        eventDocId: event['eventId'] as String,
+        recipientKey: user.uid,
+        isGuest: false,
+      );
 
       // Refresh the list
       await _loadEvents();

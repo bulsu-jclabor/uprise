@@ -5,14 +5,29 @@
 // names (`studentId`, `studentName`, `status`, `timestamp`, ...) that
 // org_attendance_qr.dart's QR/manual flow already writes to, so a webinar
 // check-in shows up in the exact same attendance table/exports — just with
-// `method: 'webinar_code'` instead of `'qr'`/`'manual'`. Two new
-// subcollections support the rotating-code mechanism itself:
+// `method: 'webinar_code'` instead of `'qr'`/`'manual'`. Subcollections used:
 //
-//   events/{eventDocId}/webinarSession/current   — session state (single doc)
-//   events/{eventDocId}/attendanceCodes          — one doc per rotation
-//   events/{eventDocId}/codeSubmissions          — audit log of every
-//                                                   submission attempt,
-//                                                   successful or not
+//   events/{eventDocId}/webinarSession/current     — session state (single doc)
+//   events/{eventDocId}/webinarCode/{checkin|checkout} — the *current* code
+//                                                         for that phase (one
+//                                                         doc per phase, kept
+//                                                         up to date by
+//                                                         rotateCode — not a
+//                                                         growing history)
+//   events/{eventDocId}/codeSubmissions            — audit log of every
+//                                                     submission attempt,
+//                                                     successful or not
+//
+// The rotation timer itself runs client-side, on whichever organizer screen
+// has this tab open (see org_attendance_qr.dart _WebinarCodePanelState) —
+// there's no server-side scheduler. If two organizer tabs/windows are open
+// on the same event, both independently notice the same code expiring and
+// both call rotateCode() at nearly the same moment. rotateCode() guards
+// against that with a transaction on the single per-phase doc: Firestore
+// serializes concurrent transactions on the same document, so the second
+// caller's retry sees the first caller's already-written code and skips —
+// without this, both writes would land and the displayed code would flip
+// twice within the same second.
 import 'dart:math';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
@@ -29,8 +44,8 @@ class WebinarAttendanceService {
   static DocumentReference<Map<String, dynamic>> _sessionRef(String eventDocId) =>
       FirebaseFirestore.instance.collection('events').doc(eventDocId).collection('webinarSession').doc('current');
 
-  static CollectionReference<Map<String, dynamic>> _codesRef(String eventDocId) =>
-      FirebaseFirestore.instance.collection('events').doc(eventDocId).collection('attendanceCodes');
+  static DocumentReference<Map<String, dynamic>> _codeDocRef(String eventDocId, String type) =>
+      FirebaseFirestore.instance.collection('events').doc(eventDocId).collection('webinarCode').doc(type);
 
   static CollectionReference<Map<String, dynamic>> _submissionsRef(String eventDocId) =>
       FirebaseFirestore.instance.collection('events').doc(eventDocId).collection('codeSubmissions');
@@ -38,11 +53,8 @@ class WebinarAttendanceService {
   static Stream<DocumentSnapshot<Map<String, dynamic>>> sessionStream(String eventDocId) =>
       _sessionRef(eventDocId).snapshots();
 
-  static Stream<QuerySnapshot<Map<String, dynamic>>> codeStream(String eventDocId, String type) => _codesRef(eventDocId)
-      .where('type', isEqualTo: type)
-      .orderBy('createdAt', descending: true)
-      .limit(1)
-      .snapshots();
+  static Stream<DocumentSnapshot<Map<String, dynamic>>> codeStream(String eventDocId, String type) =>
+      _codeDocRef(eventDocId, type).snapshots();
 
   static Stream<QuerySnapshot<Map<String, dynamic>>> submissionsStream(String eventDocId) =>
       _submissionsRef(eventDocId).orderBy('timestamp', descending: true).limit(50).snapshots();
@@ -68,13 +80,23 @@ class WebinarAttendanceService {
   }
 
   static Future<void> rotateCode(String eventDocId, String type, int intervalMinutes) async {
-    final now = DateTime.now();
-    await _codesRef(eventDocId).add({
-      'code': generateCode(),
-      'type': type,
-      'startsAt': Timestamp.fromDate(now),
-      'expiresAt': Timestamp.fromDate(now.add(Duration(minutes: intervalMinutes))),
-      'createdAt': FieldValue.serverTimestamp(),
+    final docRef = _codeDocRef(eventDocId, type);
+    await FirebaseFirestore.instance.runTransaction((txn) async {
+      final snap = await txn.get(docRef);
+      final now = DateTime.now();
+      if (snap.exists) {
+        final existingExpiresAt = (snap.data()?['expiresAt'] as Timestamp?)?.toDate();
+        // Another caller (e.g. a second organizer tab on the same event)
+        // already rotated this phase for the current window — skip so the
+        // code doesn't flip twice in quick succession.
+        if (existingExpiresAt != null && now.isBefore(existingExpiresAt)) return;
+      }
+      txn.set(docRef, {
+        'code': generateCode(),
+        'type': type,
+        'startsAt': Timestamp.fromDate(now),
+        'expiresAt': Timestamp.fromDate(now.add(Duration(minutes: intervalMinutes))),
+      });
     });
   }
 
@@ -118,12 +140,11 @@ class WebinarAttendanceService {
       if (session == null || session['isActive'] != true || session['phase'] != type) {
         result = 'session_inactive';
       } else {
-        final codesSnap =
-            await _codesRef(eventDocId).where('type', isEqualTo: type).orderBy('createdAt', descending: true).limit(1).get();
-        if (codesSnap.docs.isEmpty) {
+        final codeSnap = await _codeDocRef(eventDocId, type).get();
+        if (!codeSnap.exists) {
           result = 'no_active_code';
         } else {
-          final codeData = codesSnap.docs.first.data();
+          final codeData = codeSnap.data()!;
           final now = DateTime.now();
           final startsAt = (codeData['startsAt'] as Timestamp).toDate();
           final expiresAt = (codeData['expiresAt'] as Timestamp).toDate();
@@ -150,7 +171,9 @@ class WebinarAttendanceService {
       'submittedCode': cleaned,
       'type': type,
       'result': result,
-      'timestamp': FieldValue.serverTimestamp(),
+      // Same reasoning as rotateCode() above — submissionsStream() orders by
+      // this field, so a concrete client timestamp avoids the same flicker.
+      'timestamp': Timestamp.fromDate(DateTime.now()),
     });
 
     return result;
