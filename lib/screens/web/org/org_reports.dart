@@ -194,9 +194,10 @@ class _OrgReportsScreenState extends State<OrgReportsScreen> {
   String _eventLabel = '';
   bool _eventLoaded = false;
 
-  // Deadlines
-  DateTime? _financialDeadline;
-  DateTime? _accomplishmentDeadline;
+  // Deadlines — one entry per (finished event × report type) for this org.
+  // Whether each is actually still pending is resolved live in
+  // _buildDeadlineRow against the reports stream, not stored here.
+  List<_PendingEventDeadline> _finishedEventDeadlines = [];
   bool _deadlinesLoaded = false;
 
   @override
@@ -256,9 +257,11 @@ class _OrgReportsScreenState extends State<OrgReportsScreen> {
       setState(() => _remaining = diff.isNegative ? Duration.zero : diff);
   }
 
-  // Per-org, not a single blanket date: defaults to 7 days after this org's
-  // most recently *finished* event, or whatever the admin overrode it to —
-  // and only exists once that event has actually happened, never before.
+  // Every finished approved event owes its own financial + accomplishment
+  // report — not just the org's single most-recently-finished event. Each
+  // entry's deadline defaults to 7 days after that event's date, unless an
+  // admin overrode it for that specific (event, type) pair. Matches
+  // reports_management.dart's per-event model on the admin side exactly.
   Future<void> _loadReportDeadlines() async {
     try {
       final now = DateTime.now();
@@ -267,36 +270,53 @@ class _OrgReportsScreenState extends State<OrgReportsScreen> {
           .where('orgId', isEqualTo: widget.orgId)
           .where('status', isEqualTo: 'approved')
           .get();
-      DateTime? lastFinishedEventDate;
+
+      final finishedEvents = <Map<String, dynamic>>[];
       for (final doc in eventsSnap.docs) {
-        final date = (doc.data()['date'] as Timestamp?)?.toDate();
+        final data = doc.data();
+        final date = (data['date'] as Timestamp?)?.toDate();
         if (date == null || !date.isBefore(now)) continue;
-        if (lastFinishedEventDate == null || date.isAfter(lastFinishedEventDate)) {
-          lastFinishedEventDate = date;
-        }
+        finishedEvents.add({
+          'eventId': doc.id,
+          'eventTitle': data['title']?.toString() ?? 'Untitled Event',
+          'eventDate': date,
+        });
       }
 
-      if (lastFinishedEventDate != null) {
+      final overrides = <String, DateTime>{};
+      if (finishedEvents.isNotEmpty) {
         final overridesSnap = await FirebaseFirestore.instance
             .collection('report_deadline_overrides')
             .where('orgId', isEqualTo: widget.orgId)
             .get();
-        DateTime? financialOverride, accomplishmentOverride;
         for (final doc in overridesSnap.docs) {
           final data = doc.data();
+          final eventId = data['eventId']?.toString();
+          final type = data['type']?.toString();
           final deadline = (data['deadline'] as Timestamp?)?.toDate();
-          if (deadline == null) continue;
-          if (data['type'] == 'financial') financialOverride = deadline;
-          if (data['type'] == 'accomplishment') accomplishmentOverride = deadline;
-        }
-        final autoDeadline = lastFinishedEventDate.add(const Duration(days: 7));
-        if (mounted) {
-          setState(() {
-            _financialDeadline = financialOverride ?? autoDeadline;
-            _accomplishmentDeadline = accomplishmentOverride ?? autoDeadline;
-          });
+          if (eventId != null && eventId.isNotEmpty && type != null && deadline != null) {
+            overrides['${eventId}_$type'] = deadline;
+          }
         }
       }
+
+      final deadlines = <_PendingEventDeadline>[];
+      for (final ev in finishedEvents) {
+        final eventId = ev['eventId'] as String;
+        final eventDate = ev['eventDate'] as DateTime;
+        for (final type in const ['financial', 'accomplishment']) {
+          final deadline = overrides['${eventId}_$type'] ?? eventDate.add(const Duration(days: 7));
+          deadlines.add(_PendingEventDeadline(
+            eventId: eventId,
+            eventTitle: ev['eventTitle'] as String,
+            eventDate: eventDate,
+            type: type,
+            deadline: deadline,
+          ));
+        }
+      }
+
+      if (mounted) setState(() => _finishedEventDeadlines = deadlines);
     } catch (_) {}
     if (mounted) setState(() => _deadlinesLoaded = true);
   }
@@ -402,38 +422,64 @@ class _OrgReportsScreenState extends State<OrgReportsScreen> {
 }
 
   // ── Deadline row ───────────────────────────────────────────────────────────
+  // Pending/overdue per-event deadlines — resolved live against the
+  // reports stream so a fresh submission drops off this list immediately,
+  // without needing to re-fetch events/overrides.
   Widget _buildDeadlineRow(List<ReportModel> all) {
-    DateTime? latestFinancial = all
-        .where((r) => r.type == 'financial')
-        .map((r) => r.submittedAt.toDate())
-        .fold<DateTime?>(
-          null,
-          (l, d) => l == null ? d : (d.isAfter(l) ? d : l),
-        );
-    DateTime? latestAccompl = all
-        .where((r) => r.type == 'accomplishment')
-        .map((r) => r.submittedAt.toDate())
-        .fold<DateTime?>(
-          null,
-          (l, d) => l == null ? d : (d.isAfter(l) ? d : l),
-        );
+    final submittedKeys = all
+        .where((r) => r.status != 'archived' && (r.eventId ?? '').isNotEmpty)
+        .map((r) => '${r.eventId}_${r.type}')
+        .toSet();
+
+    final pending = _finishedEventDeadlines
+        .where((d) => !submittedKeys.contains('${d.eventId}_${d.type}'))
+        .toList()
+      ..sort((a, b) => a.deadline.compareTo(b.deadline));
+
+    if (pending.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(28, 16, 28, 0),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          decoration: BoxDecoration(
+            color: const Color(0xFFECFDF5),
+            borderRadius: BorderRadius.circular(_DS.radiusPill),
+            border: Border.all(color: const Color(0xFFA7F3D0)),
+          ),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            const Icon(Icons.check_circle_outline_rounded, color: Color(0xFF059669), size: 16),
+            const SizedBox(width: 8),
+            Text(
+              'All reports for your finished events are submitted.',
+              style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF065F46), fontWeight: FontWeight.w600),
+            ),
+          ]),
+        ),
+      );
+    }
+
+    // One chip per event (not per report type) — an event needing both a
+    // financial and accomplishment report shows as a single compact chip
+    // listing both, instead of two separate bulky cards.
+    final groups = <String, List<_PendingEventDeadline>>{};
+    for (final d in pending) {
+      groups.putIfAbsent(d.eventId, () => []).add(d);
+    }
+    final orderedEventIds = groups.keys.toList()
+      ..sort((a, b) {
+        final da = groups[a]!.map((d) => d.deadline).reduce((x, y) => x.isBefore(y) ? x : y);
+        final db = groups[b]!.map((d) => d.deadline).reduce((x, y) => x.isBefore(y) ? x : y);
+        return da.compareTo(db);
+      });
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(28, 16, 28, 0),
-      child: Row(
-        children: [
-          _DeadlineCard(
-            label: 'Financial Report Deadline',
-            deadline: _financialDeadline,
-            submittedOn: latestFinancial,
-          ),
-          const SizedBox(width: 14),
-          _DeadlineCard(
-            label: 'Accomplishment Report Deadline',
-            deadline: _accomplishmentDeadline,
-            submittedOn: latestAccompl,
-          ),
-        ],
+      child: Wrap(
+        spacing: 10,
+        runSpacing: 10,
+        children: orderedEventIds
+            .map((eventId) => _PendingDeadlineChip(items: groups[eventId]!))
+            .toList(),
       ),
     );
   }
@@ -2523,107 +2569,83 @@ class _Colon extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Deadline card (unchanged)
+// One financial/accomplishment report obligation for one finished event.
 // ─────────────────────────────────────────────────────────────────────────────
-class _DeadlineCard extends StatelessWidget {
-  final String label;
-  final DateTime? deadline;
-  final DateTime? submittedOn;
-  const _DeadlineCard({required this.label, this.deadline, this.submittedOn});
+class _PendingEventDeadline {
+  final String eventId;
+  final String eventTitle;
+  final DateTime eventDate;
+  final String type; // 'financial' | 'accomplishment'
+  final DateTime deadline;
+  const _PendingEventDeadline({
+    required this.eventId,
+    required this.eventTitle,
+    required this.eventDate,
+    required this.type,
+    required this.deadline,
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Pending deadline chip — one per event (not per report type), so an event
+// needing both a financial and accomplishment report is a single compact
+// pill instead of two separate cards. Always names the event.
+// ─────────────────────────────────────────────────────────────────────────────
+class _PendingDeadlineChip extends StatelessWidget {
+  final List<_PendingEventDeadline> items; // same eventId, 1-2 entries (financial/accomplishment)
+  const _PendingDeadlineChip({required this.items});
 
   @override
   Widget build(BuildContext context) {
     final now = DateTime.now();
-    final deadlineText = deadline != null
-        ? DateFormat('MMM d, yyyy').format(deadline!)
-        : 'No finished event yet';
-    final submittedText = submittedOn != null
-        ? DateFormat('MMM d, yyyy').format(submittedOn!)
-        : 'Not submitted yet';
-    final status = submittedOn != null
-        ? (deadline != null && submittedOn!.isAfter(deadline!)
-              ? 'Submitted late'
-              : 'Submitted on time')
-        : (deadline != null && now.isAfter(deadline!)
-              ? 'Overdue'
-              : 'Pending submission');
-    final statusColor = submittedOn != null
-        ? (deadline != null && submittedOn!.isAfter(deadline!)
-              ? const Color(0xFFDC2626)
-              : const Color(0xFF059669))
-        : (deadline != null && now.isAfter(deadline!)
-              ? const Color(0xFFDC2626)
-              : const Color(0xFFFB923C));
+    final anyOverdue = items.any((d) => now.isAfter(d.deadline));
+    final color = anyOverdue ? const Color(0xFFDC2626) : const Color(0xFFFB923C);
+    final earliest = items.map((d) => d.deadline).reduce((a, b) => a.isBefore(b) ? a : b);
+    final typesLabel = items
+        .map((d) => d.type == 'financial' ? 'Financial' : 'Accomplishment')
+        .join(' & ');
 
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.all(18),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: const Color(0xFFE8ECF0)),
-          boxShadow: _DS.cardShadow,
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 42,
-              height: 42,
-              decoration: BoxDecoration(
-                color: statusColor.withAlpha(26),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Icon(Icons.event_outlined, color: statusColor, size: 20),
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: color.withAlpha(13),
+        borderRadius: BorderRadius.circular(_DS.radiusPill),
+        border: Border.all(color: color.withAlpha(70)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            anyOverdue ? Icons.error_outline_rounded : Icons.schedule_rounded,
+            size: 14,
+            color: color,
+          ),
+          const SizedBox(width: 6),
+          Text(
+            items.first.eventTitle,
+            style: GoogleFonts.beVietnamPro(
+              fontSize: 12.5,
+              fontWeight: FontWeight.w700,
+              color: const Color(0xFF1A202C),
             ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    label,
-                    style: GoogleFonts.beVietnamPro(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                      color: const Color(0xFF1A202C),
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Deadline: $deadlineText',
-                    style: GoogleFonts.beVietnamPro(
-                      fontSize: 12,
-                      color: const Color(0xFF64748B),
-                    ),
-                  ),
-                  Text(
-                    'Last upload: $submittedText',
-                    style: GoogleFonts.beVietnamPro(
-                      fontSize: 12,
-                      color: const Color(0xFF64748B),
-                    ),
-                  ),
-                ],
-              ),
+          ),
+          const SizedBox(width: 6),
+          Text('·', style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF9AA5B4))),
+          const SizedBox(width: 6),
+          Text(
+            typesLabel,
+            style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF64748B)),
+          ),
+          const SizedBox(width: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+            decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(_DS.radiusPill)),
+            child: Text(
+              anyOverdue ? 'Overdue' : 'Due ${DateFormat('MMM d').format(earliest)}',
+              style: GoogleFonts.beVietnamPro(fontSize: 10.5, fontWeight: FontWeight.w700, color: Colors.white),
             ),
-            const SizedBox(width: 12),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-              decoration: BoxDecoration(
-                color: statusColor.withAlpha(26),
-                borderRadius: BorderRadius.circular(_DS.radiusPill),
-              ),
-              child: Text(
-                status,
-                style: GoogleFonts.beVietnamPro(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                  color: statusColor,
-                ),
-              ),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

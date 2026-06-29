@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import 'guest_auth_service.dart';
-import '../../widgets/shared/event_photo_gallery.dart';
 
 ImageProvider _guestImageProvider(String url) {
   if (url.startsWith('data:image')) {
@@ -1058,9 +1057,6 @@ class _GuestEventDetailScreenState extends State<GuestEventDetailScreen> {
                             color: Colors.black87,
                             height: 1.65),
                       ),
-
-                      const SizedBox(height: 16),
-                      EventPhotoGallery(eventId: event.id, accentColor: _kPrimary),
 
                       const SizedBox(height: 20),
                       const Divider(

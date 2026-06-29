@@ -8,7 +8,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:file_picker/file_picker.dart';
 import '../../../services/activity_logger.dart' as activity_log;
-import 'org_event_gallery.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Image helpers (preserved exactly)
@@ -526,8 +525,6 @@ class _OrgProfileScreenState extends State<OrgProfileScreen> {
               const SizedBox(height: 20),
               _buildHierarchyCard(),
               const SizedBox(height: 20),
-              _buildEventGalleryCard(),
-              const SizedBox(height: 20),
               _buildSocialCard(),
               const SizedBox(height: 16),
               _buildQuickStatsCard(),
@@ -545,8 +542,6 @@ class _OrgProfileScreenState extends State<OrgProfileScreen> {
                       _buildOfficersCard(),
                       const SizedBox(height: 20),
                       _buildHierarchyCard(),
-                      const SizedBox(height: 20),
-                      _buildEventGalleryCard(),
                     ],
                   ),
                 ),
@@ -1075,21 +1070,6 @@ class _OrgProfileScreenState extends State<OrgProfileScreen> {
                 fontSize: 12, color: _C.darkGray)),
         const SizedBox(height: 20),
         _HierarchyTree(orgId: widget.orgId, orgName: _orgName),
-      ]),
-    );
-  }
-
-  // ── Event Gallery Card ────────────────────────────────────────────────────
-  Widget _buildEventGalleryCard() {
-    return _card(
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        _sectionLabel('Event Gallery', icon: Icons.photo_library_outlined),
-        const SizedBox(height: 4),
-        Text('Upload and manage photos for your events',
-            style: GoogleFonts.beVietnamPro(
-                fontSize: 12, color: _C.darkGray)),
-        const SizedBox(height: 16),
-        EventGallerySection(orgId: widget.orgId),
       ]),
     );
   }

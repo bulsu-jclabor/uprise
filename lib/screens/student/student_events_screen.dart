@@ -18,7 +18,6 @@ import 'package:uprise/models/event_model.dart';
 import '../../widgets/student/event_image.dart';
 import '../../widgets/student/app_colors.dart';
 import 'student_feedback_screen.dart';
-import '../../widgets/shared/event_photo_gallery.dart';
 
 
 // ─── MAIN SCREEN ──────────────────────────────────────────────
@@ -2171,8 +2170,6 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                     widget.event.description,
                     style: const TextStyle(fontSize: 14, color: Colors.black87, height: 1.4),
                   ),
-                  const SizedBox(height: 20),
-                  EventPhotoGallery(eventId: widget.event.id, accentColor: AppColors.primaryDark),
                   const SizedBox(height: 10),
 
                   // ─── Register / status buttons ────────────────────
