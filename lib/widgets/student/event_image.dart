@@ -1,15 +1,9 @@
 // lib/widgets/student/event_image.dart
-//
-// Shared event banner image widget (base64 + network), used by
-// student_events_screen.dart and student_event_details_screen.dart.
-// Network failures are disambiguated against actual device connectivity
-// so "no internet" and "broken/missing image" show distinct, accurate
-// states instead of one generic placeholder, with a working retry.
-
 import 'dart:convert';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
-import 'package:connectivity_plus/connectivity_plus.dart';
-import 'app_colors.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:http/http.dart' as http;
 
 class EventImage extends StatefulWidget {
   final String imageUrl;
@@ -32,141 +26,123 @@ class EventImage extends StatefulWidget {
 }
 
 class _EventImageState extends State<EventImage> {
-  int _retryToken = 0;
-  bool _offline = false;
+  Future<ImageProvider?>? _futureProvider;
 
-  int? get _cacheWidth => widget.width != null ? (widget.width! * 2).round() : null;
-  int? get _cacheHeight => widget.height != null ? (widget.height! * 2).round() : null;
+  @override
+  void initState() {
+    super.initState();
+    _resolveProvider();
+  }
 
-  bool _isBase64Image(String url) =>
-      url.startsWith('data:image') ||
-      (url.isNotEmpty && !url.startsWith('http') && !url.startsWith('assets'));
-
-  bool _isValidImageUrl(String url) =>
-      url.startsWith('http://') || url.startsWith('https://') || url.startsWith('assets/');
-
-  Future<void> _checkOffline() async {
-    final result = await Connectivity().checkConnectivity();
-    final offline = result.isEmpty || result.every((r) => r == ConnectivityResult.none);
-    if (mounted && offline != _offline) {
-      setState(() => _offline = offline);
+  @override
+  void didUpdateWidget(covariant EventImage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.imageUrl != widget.imageUrl) {
+      _resolveProvider();
     }
   }
 
-  Future<void> _retry() async {
-    NetworkImage(widget.imageUrl).evict();
-    await _checkOffline();
-    if (mounted) setState(() => _retryToken++);
+  void _resolveProvider() {
+    final url = widget.imageUrl;
+    if (url.isEmpty) {
+      _futureProvider = null;
+      return;
+    }
+
+    // 1. Base64 image (data:image...)
+    if (url.startsWith('data:image')) {
+      try {
+        final b64 = url.contains(',') ? url.split(',').last : url;
+        final bytes = base64Decode(b64);
+        _futureProvider = Future.value(MemoryImage(bytes));
+        return;
+      } catch (_) {}
+    }
+
+    // 2. Raw base64 (no http prefix, not data:image)
+    if (!url.startsWith('http')) {
+      try {
+        final bytes = base64Decode(url);
+        _futureProvider = Future.value(MemoryImage(bytes));
+        return;
+      } catch (_) {}
+    }
+
+    // 3. Network URL – need to handle Firebase Storage auth
+    _futureProvider = _fetchNetworkImage(url);
+  }
+
+  Future<ImageProvider> _fetchNetworkImage(String url) async {
+    final isFirebaseStorage = url.contains('firebasestorage.googleapis.com');
+
+    if (isFirebaseStorage) {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user != null) {
+        final token = await user.getIdToken();
+        try {
+          final resp = await http.get(
+            Uri.parse(url),
+            headers: {'Authorization': 'Bearer $token'},
+          );
+          if (resp.statusCode == 200) {
+            return MemoryImage(resp.bodyBytes);
+          }
+        } catch (_) {}
+      }
+    }
+
+    // fallback: try as normal network image
+    return NetworkImage(url);
   }
 
   @override
   Widget build(BuildContext context) {
-    if (widget.imageUrl.isEmpty) return _buildFallback();
-    if (_isBase64Image(widget.imageUrl)) return _buildBase64Image();
-    if (_isValidImageUrl(widget.imageUrl)) return _buildNetworkImage();
-    return _buildFallback();
-  }
-
-  Widget _buildBase64Image() {
-    try {
-      String base64String = widget.imageUrl;
-      if (base64String.contains(',')) base64String = base64String.split(',').last;
-      final bytes = base64Decode(base64String);
-      return Image.memory(
-        bytes,
-        height: widget.height,
-        width: widget.width,
-        fit: widget.fit,
-        cacheWidth: _cacheWidth,
-        cacheHeight: _cacheHeight,
-        errorBuilder: (_, __, ___) => _buildFallback(),
-      );
-    } catch (_) {
-      return _buildFallback();
+    if (widget.imageUrl.isEmpty || _futureProvider == null) {
+      return _placeholder();
     }
-  }
 
-  Widget _buildNetworkImage() {
-    return Image.network(
-      widget.imageUrl,
-      key: ValueKey('${widget.imageUrl}_$_retryToken'),
-      height: widget.height,
-      width: widget.width,
-      fit: widget.fit,
-      cacheWidth: _cacheWidth,
-      cacheHeight: _cacheHeight,
-      loadingBuilder: (context, child, loadingProgress) {
-        if (loadingProgress == null) return child;
-        if (!widget.showLoadingIndicator) return child;
-        return Container(
-          height: widget.height,
-          width: widget.width,
-          color: Colors.grey[200],
-          child: Center(
-            child: SizedBox(
-              width: 30,
-              height: 30,
-              child: CircularProgressIndicator(
-                value: loadingProgress.expectedTotalBytes != null
-                    ? loadingProgress.cumulativeBytesLoaded /
-                        loadingProgress.expectedTotalBytes!
-                    : null,
-                strokeWidth: 2,
-                color: AppColors.primaryDark,
-              ),
-            ),
-          ),
-        );
-      },
-      errorBuilder: (_, __, ___) {
-        _checkOffline();
-        return _buildFallback(isNetworkError: true);
+    return FutureBuilder<ImageProvider?>(
+      future: _futureProvider,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return widget.showLoadingIndicator
+              ? Container(
+                  height: widget.height,
+                  width: widget.width,
+                  color: Colors.grey.shade100,
+                  child: const Center(
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                )
+              : _placeholder();
+        }
+
+        if (snapshot.hasData && snapshot.data != null) {
+          return Image(
+            image: snapshot.data!,
+            height: widget.height,
+            width: widget.width,
+            fit: widget.fit,
+            errorBuilder: (_, __, ___) => _placeholder(),
+          );
+        }
+
+        return _placeholder();
       },
     );
   }
 
-  Widget _buildFallback({bool isNetworkError = false}) {
-    final h = widget.height ?? 100;
-    final showOffline = isNetworkError && _offline;
+  Widget _placeholder() {
     return Container(
       height: widget.height,
       width: widget.width,
-      color: Colors.grey[300],
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            showOffline ? Icons.wifi_off_rounded : Icons.image_not_supported,
-            size: h * 0.35,
-            color: Colors.grey[600],
-          ),
-          if (h > 80) ...[
-            Padding(
-              padding: const EdgeInsets.only(top: 6, left: 8, right: 8),
-              child: Text(
-                showOffline ? 'No internet connection' : 'Image not available',
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: h * 0.075, color: Colors.grey[600]),
-              ),
-            ),
-            if (isNetworkError)
-              Padding(
-                padding: const EdgeInsets.only(top: 4),
-                child: InkWell(
-                  onTap: _retry,
-                  child: Text(
-                    'Retry',
-                    style: TextStyle(
-                      fontSize: h * 0.08,
-                      color: AppColors.primaryDark,
-                      fontWeight: FontWeight.w700,
-                      decoration: TextDecoration.underline,
-                    ),
-                  ),
-                ),
-              ),
-          ],
-        ],
+      color: Colors.grey.shade200,
+      child: Center(
+        child: Icon(
+          Icons.image_not_supported,
+          color: Colors.grey.shade400,
+          size: 32,
+        ),
       ),
     );
   }
