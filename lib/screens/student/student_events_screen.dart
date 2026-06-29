@@ -510,7 +510,6 @@ class _StudentEventsScreenState extends State<StudentEventsScreen>
     );
   }
 
-
   // ── Verification QR dialog ──
   void _showVerifyDialog(Map<String, dynamic> cert) {
     final code = cert['verificationCode'] as String;
@@ -1361,7 +1360,7 @@ class _CompactEventCard extends StatelessWidget {
           children: [
             Container(
               width: 70,
-              padding: const EdgeInsets.symmetric(vertical: 12),
+              height: 70,
               decoration: BoxDecoration(
                 color: AppColors.primaryDark.withOpacity(0.1),
                 borderRadius: const BorderRadius.only(
@@ -1369,17 +1368,18 @@ class _CompactEventCard extends StatelessWidget {
                   bottomLeft: Radius.circular(12),
                 ),
               ),
-              child: Column(
-                children: [
-                  Text(
-                    DateFormat('MMM').format(event.date),
-                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.primaryDark),
-                  ),
-                  Text(
-                    DateFormat('dd').format(event.date),
-                    style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: AppColors.primaryDark),
-                  ),
-                ],
+              child: ClipRRect(
+                borderRadius: const BorderRadius.only(
+                  topLeft: Radius.circular(12),
+                  bottomLeft: Radius.circular(12),
+                ),
+                child: EventImage(
+                  imageUrl: event.imageUrl,
+                  height: 70,
+                  width: 70,
+                  fit: BoxFit.cover,
+                  showLoadingIndicator: false,
+                ),
               ),
             ),
             Expanded(
@@ -1477,11 +1477,13 @@ class _UpcomingEventCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // ⭐ EventImage widget - gamit ang event.imageUrl
             EventImage(
-              imageUrl: event.bannerUrl ?? '',
+              imageUrl: event.imageUrl,
               height: 160,
               width: double.infinity,
               fit: BoxFit.cover,
+              showLoadingIndicator: true,
             ),
             Padding(
               padding: const EdgeInsets.all(12),
@@ -2120,11 +2122,13 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // ⭐ EventImage widget for detail screen
             EventImage(
-              imageUrl: widget.event.bannerUrl ?? '',
+              imageUrl: widget.event.imageUrl,
               height: 220,
               width: double.infinity,
               fit: BoxFit.cover,
+              showLoadingIndicator: true,
             ),
             Padding(
               padding: const EdgeInsets.all(16),

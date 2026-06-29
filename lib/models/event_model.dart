@@ -95,6 +95,19 @@ class EventModel {
     }
   }
 
+  /// ⭐ Getter para sa image URL na may fallback placeholder
+  String get imageUrl {
+    if (bannerUrl != null && bannerUrl!.isNotEmpty) {
+      return bannerUrl!;
+    }
+    // Return default placeholder image (orange background with "No Image" text)
+    // This will show a placeholder in the EventImage widget
+    return '';
+  }
+
+  /// ⭐ Check kung may image
+  bool get hasImage => bannerUrl != null && bannerUrl!.isNotEmpty;
+
   factory EventModel.fromFirestore(DocumentSnapshot doc) {
     final d = doc.data() as Map<String, dynamic>? ?? {};
 
