@@ -20,7 +20,6 @@ import '../../widgets/student/app_colors.dart';
 import 'student_feedback_screen.dart';
 import '../../widgets/shared/event_photo_gallery.dart';
 
-
 // ─── MAIN SCREEN ──────────────────────────────────────────────
 class StudentEventsScreen extends StatefulWidget {
   final int initialTabIndex;
@@ -33,17 +32,8 @@ class StudentEventsScreen extends StatefulWidget {
 class _StudentEventsScreenState extends State<StudentEventsScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
-  DateTime _selectedDate = DateTime.now();
 
-  // ── Certificate tab state ──
-  String _certFilter = 'All';
-  List<String> _certFilters = ['All'];
-  List<Map<String, dynamic>> _allCertificates = [];
-  bool _certLoading = true;
-  bool _orgFiltersLoading = true;
-  String? _certError;
-  String? get _currentUid => FirebaseAuth.instance.currentUser?.uid;
-
+  // Stream of registered event IDs (shared across tabs)
   late final Stream<Set<String>> _registeredEventIdsStream = () {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return Stream<Set<String>>.value(<String>{});
@@ -62,11 +52,6 @@ class _StudentEventsScreenState extends State<StudentEventsScreen>
       vsync: this,
       initialIndex: widget.initialTabIndex.clamp(0, 2),
     );
-    _tabController.addListener(() {
-      if (_tabController.index == 2 && _certLoading) _fetchCertificates();
-    });
-    _fetchCertificates();
-    _fetchOrganizationFilters();
   }
 
   @override
@@ -75,11 +60,350 @@ class _StudentEventsScreenState extends State<StudentEventsScreen>
     super.dispose();
   }
 
-  // ══════════════════════════════════════════════
-  //  CERTIFICATE HELPERS
-  // ══════════════════════════════════════════════
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        elevation: 0,
+        title: const Text(
+          'Events',
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: Colors.black87),
+        ),
+        centerTitle: true,
+        bottom: TabBar(
+          controller: _tabController,
+          indicatorColor: AppColors.primaryDark,
+          labelColor: AppColors.primaryDark,
+          unselectedLabelColor: Colors.black45,
+          indicatorWeight: 3,
+          dividerColor: Colors.transparent,
+          tabs: const [
+            Tab(text: 'Calendar'),
+            Tab(text: 'Upcoming'),
+            Tab(text: 'Certificates'),
+          ],
+        ),
+      ),
+      body: TabBarView(
+        controller: _tabController,
+        children: [
+          CalendarTab(registeredEventIdsStream: _registeredEventIdsStream),
+          UpcomingTab(registeredEventIdsStream: _registeredEventIdsStream),
+          CertificatesTab(registeredEventIdsStream: _registeredEventIdsStream),
+        ],
+      ),
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  TAB 1: CALENDAR
+// ═══════════════════════════════════════════════════════════════
+class CalendarTab extends StatefulWidget {
+  final Stream<Set<String>> registeredEventIdsStream;
+  const CalendarTab({required this.registeredEventIdsStream, super.key});
+
+  @override
+  State<CalendarTab> createState() => _CalendarTabState();
+}
+
+class _CalendarTabState extends State<CalendarTab> with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
+
+  DateTime _selectedDate = DateTime.now();
+
+  void _previousMonth() => setState(() {
+        _selectedDate = DateTime(_selectedDate.year, _selectedDate.month - 1);
+      });
+  void _nextMonth() => setState(() {
+        _selectedDate = DateTime(_selectedDate.year, _selectedDate.month + 1);
+      });
+
+  void _openDetail(EventModel event) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => EventDetailScreen(
+          event: event,
+          onRegistered: () => setState(() {}),
+          isPastEvent: event.isPast,
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context); // required for AutomaticKeepAlive
+    return Column(
+      children: [
+        Container(
+          color: Colors.white,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              IconButton(
+                icon: const Icon(Icons.chevron_left, color: AppColors.primaryDark),
+                onPressed: _previousMonth,
+              ),
+              Text(
+                DateFormat('MMMM yyyy').format(_selectedDate),
+                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+              ),
+              IconButton(
+                icon: const Icon(Icons.chevron_right, color: AppColors.primaryDark),
+                onPressed: _nextMonth,
+              ),
+            ],
+          ),
+        ),
+        Container(
+          color: Colors.white,
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          child: _CalendarGrid(
+            selectedDate: _selectedDate,
+            onDateSelected: (date) => setState(() => _selectedDate = date),
+          ),
+        ),
+        const SizedBox(height: 12),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Row(
+            children: [
+              Text(
+                'Events for ${DateFormat('MMM dd, yyyy').format(_selectedDate)}',
+                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Colors.black87),
+              ),
+              const Spacer(),
+              StreamBuilder<Set<String>>(
+                stream: widget.registeredEventIdsStream,
+                builder: (context, regSnap) {
+                  final regIds = regSnap.data ?? {};
+                  return StreamBuilder<QuerySnapshot>(
+                    stream: FirebaseFirestore.instance
+                        .collection('events')
+                        .where('status', isEqualTo: 'approved')
+                        .orderBy('date')
+                        .snapshots(),
+                    builder: (context, snap) {
+                      if (!snap.hasData) return const SizedBox.shrink();
+                      final count = snap.data!.docs
+                          .map((d) => EventModel.fromFirestore(d))
+                          .where((e) =>
+                              e.date.year == _selectedDate.year &&
+                              e.date.month == _selectedDate.month &&
+                              e.date.day == _selectedDate.day)
+                          .length;
+                      return Text(
+                        '$count events',
+                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: Colors.grey.shade600),
+                      );
+                    },
+                  );
+                },
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 8),
+        Expanded(
+          child: StreamBuilder<Set<String>>(
+            stream: widget.registeredEventIdsStream,
+            builder: (context, regSnap) {
+              final regIds = regSnap.data ?? {};
+              return StreamBuilder<QuerySnapshot>(
+                stream: FirebaseFirestore.instance
+                    .collection('events')
+                    .where('status', isEqualTo: 'approved')
+                    .orderBy('date')
+                    .snapshots(),
+                builder: (context, snap) {
+                  if (!snap.hasData) {
+                    return const Center(
+                      child: CircularProgressIndicator(color: AppColors.primaryDark),
+                    );
+                  }
+                  final todayEvents = snap.data!.docs
+                      .map((d) => EventModel.fromFirestore(d))
+                      .where((e) =>
+                          e.date.year == _selectedDate.year &&
+                          e.date.month == _selectedDate.month &&
+                          e.date.day == _selectedDate.day)
+                      .toList();
+
+                  if (todayEvents.isEmpty) {
+                    return const Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.event_busy, size: 64, color: Colors.grey),
+                          SizedBox(height: 12),
+                          Text(
+                            'No events for this day',
+                            style: TextStyle(fontSize: 15, color: Colors.grey, fontWeight: FontWeight.w500),
+                          ),
+                        ],
+                      ),
+                    );
+                  }
+
+                  return ListView.builder(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    itemCount: todayEvents.length,
+                    itemBuilder: (context, index) {
+                      final event = todayEvents[index];
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: _CompactEventCard(
+                          event: event,
+                          onTap: () => _openDetail(event),
+                        ),
+                      );
+                    },
+                  );
+                },
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  TAB 2: UPCOMING
+// ═══════════════════════════════════════════════════════════════
+class UpcomingTab extends StatefulWidget {
+  final Stream<Set<String>> registeredEventIdsStream;
+  const UpcomingTab({required this.registeredEventIdsStream, super.key});
+
+  @override
+  State<UpcomingTab> createState() => _UpcomingTabState();
+}
+
+class _UpcomingTabState extends State<UpcomingTab> with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
+
+  void _openDetail(EventModel event) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => EventDetailScreen(
+          event: event,
+          onRegistered: () => setState(() {}),
+          isPastEvent: event.isPast,
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+    return StreamBuilder<Set<String>>(
+      stream: widget.registeredEventIdsStream,
+      builder: (context, regSnap) {
+        final regIds = regSnap.data ?? {};
+        return StreamBuilder<QuerySnapshot>(
+          stream: FirebaseFirestore.instance
+              .collection('events')
+              .where('status', isEqualTo: 'approved')
+              .orderBy('date')
+              .snapshots(),
+          builder: (context, snap) {
+            if (!snap.hasData) {
+              return const Center(
+                child: CircularProgressIndicator(color: AppColors.primaryDark),
+              );
+            }
+
+            final allEvents = snap.data!.docs
+                .map((d) => EventModel.fromFirestore(d))
+                .where((e) => !e.isPast)
+                .toList();
+
+            if (allEvents.isEmpty) {
+              return const Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.event_available, size: 64, color: Colors.grey),
+                    SizedBox(height: 12),
+                    Text(
+                      'No upcoming events',
+                      style: TextStyle(fontSize: 15, color: Colors.grey, fontWeight: FontWeight.w500),
+                    ),
+                  ],
+                ),
+              );
+            }
+
+            return ListView.builder(
+              padding: const EdgeInsets.all(16),
+              itemCount: allEvents.length,
+              itemBuilder: (context, index) {
+                final event = allEvents[index];
+                final isRegistered = regIds.contains(event.id);
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 16),
+                  child: _UpcomingEventCard(
+                    event: event,
+                    isRegistered: isRegistered,
+                    onTap: () => _openDetail(event),
+                  ),
+                );
+              },
+            );
+          },
+        );
+      },
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  TAB 3: CERTIFICATES
+// ═══════════════════════════════════════════════════════════════
+class CertificatesTab extends StatefulWidget {
+  final Stream<Set<String>> registeredEventIdsStream;
+  const CertificatesTab({required this.registeredEventIdsStream, super.key});
+
+  @override
+  State<CertificatesTab> createState() => _CertificatesTabState();
+}
+
+class _CertificatesTabState extends State<CertificatesTab> with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
+
+  // Certificate state
+  String _certFilter = 'All';
+  List<String> _certFilters = ['All'];
+  List<Map<String, dynamic>> _allCertificates = [];
+  bool _certLoading = true;
+  bool _orgFiltersLoading = true;
+  String? _certError;
+  String? get _currentUid => FirebaseAuth.instance.currentUser?.uid;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchCertificates();
+    _fetchOrganizationFilters();
+  }
+
+  // ── Certificate helpers ──
   Future<void> _fetchCertificates() async {
-    setState(() { _certLoading = true; _certError = null; });
+    setState(() {
+      _certLoading = true;
+      _certError = null;
+    });
     try {
       final col = FirebaseFirestore.instance.collection('certificates');
       final results = await Future.wait([
@@ -106,7 +430,10 @@ class _StudentEventsScreenState extends State<StudentEventsScreen>
         _certLoading = false;
       });
     } catch (e) {
-      setState(() { _certError = e.toString(); _certLoading = false; });
+      setState(() {
+        _certError = e.toString();
+        _certLoading = false;
+      });
     }
   }
 
@@ -168,7 +495,6 @@ class _StudentEventsScreenState extends State<StudentEventsScreen>
   bool _isBase64Image(String url) =>
       url.startsWith('data:image') || (!url.startsWith('http') && url.isNotEmpty);
 
-  // ── Decode certificate image bytes (handles base64 + network URLs) ──
   Future<Uint8List?> _getCertImageBytes(String imageUrl) async {
     if (imageUrl.isEmpty) return null;
     try {
@@ -184,7 +510,6 @@ class _StudentEventsScreenState extends State<StudentEventsScreen>
     }
   }
 
-  // ── Build & save certificate as a PDF, then open it ──
   Future<void> _downloadCertificateAsPdf(Map<String, dynamic> cert) async {
     final imageUrl = cert['imageUrl'] as String? ?? '';
     final title = (cert['title'] ?? 'Certificate').toString();
@@ -274,10 +599,8 @@ class _StudentEventsScreenState extends State<StudentEventsScreen>
         errorBuilder: (_, __, ___) => const SizedBox.shrink());
   }
 
-  // ── Upload dialog (centered) ──
   Future<void> _showUploadDialog() async {
     final eventNameCtrl = TextEditingController();
-
     File? pickedFile;
     bool isUploading = false;
 
@@ -385,7 +708,6 @@ class _StudentEventsScreenState extends State<StudentEventsScreen>
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // ── Header row with close button ──
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -415,8 +737,6 @@ class _StudentEventsScreenState extends State<StudentEventsScreen>
                       ],
                     ),
                     const SizedBox(height: 20),
-
-                    // ── Image picker ──
                     GestureDetector(
                       onTap: () => showModalBottomSheet(
                         context: ctx,
@@ -468,14 +788,10 @@ class _StudentEventsScreenState extends State<StudentEventsScreen>
                       ),
                     ),
                     const SizedBox(height: 20),
-
-                    // ── Certificate details ──
                     _certSectionLabel('Certificate Details'),
                     const SizedBox(height: 12),
                     TextField(controller: eventNameCtrl, decoration: fd('Certificate Name *', hint: 'e.g. Codecraft')),
                     const SizedBox(height: 24),
-
-                    // ── Upload button ──
                     SizedBox(
                       width: double.infinity, height: 52,
                       child: ElevatedButton(
@@ -510,7 +826,6 @@ class _StudentEventsScreenState extends State<StudentEventsScreen>
     );
   }
 
-  // ── Verification QR dialog ──
   void _showVerifyDialog(Map<String, dynamic> cert) {
     final code = cert['verificationCode'] as String;
     showModalBottomSheet(
@@ -572,7 +887,6 @@ class _StudentEventsScreenState extends State<StudentEventsScreen>
     );
   }
 
-  // ── Certificate card ──
   Widget _buildCertificateCard(Map<String, dynamic> cert) {
     final isDraft = cert['status'] == 'draft';
     final isUploaded = cert['isUploaded'] == true;
@@ -704,268 +1018,6 @@ class _StudentEventsScreenState extends State<StudentEventsScreen>
       style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700,
           color: AppColors.primaryDark.shade700, letterSpacing: 0.4));
 
-  // ══════════════════════════════════════════════
-  //  CALENDAR / EVENT HELPERS
-  // ══════════════════════════════════════════════
-  void _previousMonth() => setState(() {
-        _selectedDate = DateTime(_selectedDate.year, _selectedDate.month - 1);
-      });
-  void _nextMonth() => setState(() {
-        _selectedDate = DateTime(_selectedDate.year, _selectedDate.month + 1);
-      });
-
-  void _openDetail(EventModel event) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => EventDetailScreen(
-          event: event,
-          onRegistered: () => setState(() {}),
-          isPastEvent: event.isPast,
-        ),
-      ),
-    );
-  }
-
-  // ══════════════════════════════════════════════
-  //  BUILD
-  // ══════════════════════════════════════════════
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        title: const Text(
-          'Events',
-          style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: Colors.black87),
-        ),
-        centerTitle: true,
-        bottom: TabBar(
-          controller: _tabController,
-          indicatorColor: AppColors.primaryDark,
-          labelColor: AppColors.primaryDark,
-          unselectedLabelColor: Colors.black45,
-          indicatorWeight: 3,
-          dividerColor: Colors.transparent,
-          tabs: const [
-            Tab(text: 'Calendar'),
-            Tab(text: 'Upcoming'),
-            Tab(text: 'Certificates'),
-          ],
-        ),
-      ),
-      body: TabBarView(
-        controller: _tabController,
-        children: [
-          _buildCalendarTab(),
-          _buildUpcomingTab(),
-          _buildCertificateTab(),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildCalendarTab() {
-    return Column(
-      children: [
-        Container(
-          color: Colors.white,
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              IconButton(
-                icon: const Icon(Icons.chevron_left, color: AppColors.primaryDark),
-                onPressed: _previousMonth,
-              ),
-              Text(
-                DateFormat('MMMM yyyy').format(_selectedDate),
-                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-              ),
-              IconButton(
-                icon: const Icon(Icons.chevron_right, color: AppColors.primaryDark),
-                onPressed: _nextMonth,
-              ),
-            ],
-          ),
-        ),
-        Container(
-          color: Colors.white,
-          padding: const EdgeInsets.symmetric(horizontal: 8),
-          child: _CalendarGrid(
-            selectedDate: _selectedDate,
-            onDateSelected: (date) => setState(() => _selectedDate = date),
-          ),
-        ),
-        const SizedBox(height: 12),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Row(
-            children: [
-              Text(
-                'Events for ${DateFormat('MMM dd, yyyy').format(_selectedDate)}',
-                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Colors.black87),
-              ),
-              const Spacer(),
-              StreamBuilder<Set<String>>(
-                stream: _registeredEventIdsStream,
-                builder: (context, regSnap) {
-                  final regIds = regSnap.data ?? {};
-                  return StreamBuilder<QuerySnapshot>(
-                    stream: FirebaseFirestore.instance
-                        .collection('events')
-                        .where('status', isEqualTo: 'approved')
-                        .orderBy('date')
-                        .snapshots(),
-                    builder: (context, snap) {
-                      if (!snap.hasData) return const SizedBox.shrink();
-                      final count = snap.data!.docs
-                          .map((d) => EventModel.fromFirestore(d))
-                          .where((e) =>
-                              e.date.year == _selectedDate.year &&
-                              e.date.month == _selectedDate.month &&
-                              e.date.day == _selectedDate.day)
-                          .length;
-                      return Text(
-                        '$count events',
-                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: Colors.grey.shade600),
-                      );
-                    },
-                  );
-                },
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 8),
-        Expanded(
-          child: StreamBuilder<Set<String>>(
-            stream: _registeredEventIdsStream,
-            builder: (context, regSnap) {
-              final regIds = regSnap.data ?? {};
-              return StreamBuilder<QuerySnapshot>(
-                stream: FirebaseFirestore.instance
-                    .collection('events')
-                    .where('status', isEqualTo: 'approved')
-                    .orderBy('date')
-                    .snapshots(),
-                builder: (context, snap) {
-                  if (!snap.hasData) {
-                    return const Center(
-                      child: CircularProgressIndicator(color: AppColors.primaryDark),
-                    );
-                  }
-                  final todayEvents = snap.data!.docs
-                      .map((d) => EventModel.fromFirestore(d))
-                      .where((e) =>
-                          e.date.year == _selectedDate.year &&
-                          e.date.month == _selectedDate.month &&
-                          e.date.day == _selectedDate.day)
-                      .toList();
-
-                  if (todayEvents.isEmpty) {
-                    return const Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.event_busy, size: 64, color: Colors.grey),
-                          SizedBox(height: 12),
-                          Text(
-                            'No events for this day',
-                            style: TextStyle(fontSize: 15, color: Colors.grey, fontWeight: FontWeight.w500),
-                          ),
-                        ],
-                      ),
-                    );
-                  }
-
-                  return ListView.builder(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                    itemCount: todayEvents.length,
-                    itemBuilder: (context, index) {
-                      final event = todayEvents[index];
-                      return Padding(
-                        padding: const EdgeInsets.only(bottom: 12),
-                        child: _CompactEventCard(
-                          event: event,
-                          onTap: () => _openDetail(event),
-                        ),
-                      );
-                    },
-                  );
-                },
-              );
-            },
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildUpcomingTab() {
-    return StreamBuilder<Set<String>>(
-      stream: _registeredEventIdsStream,
-      builder: (context, regSnap) {
-        final regIds = regSnap.data ?? {};
-        return StreamBuilder<QuerySnapshot>(
-          stream: FirebaseFirestore.instance
-              .collection('events')
-              .where('status', isEqualTo: 'approved')
-              .orderBy('date')
-              .snapshots(),
-          builder: (context, snap) {
-            if (!snap.hasData) {
-              return const Center(
-                child: CircularProgressIndicator(color: AppColors.primaryDark),
-              );
-            }
-
-            final allEvents = snap.data!.docs
-                .map((d) => EventModel.fromFirestore(d))
-                .where((e) => !e.isPast)
-                .toList();
-
-            if (allEvents.isEmpty) {
-              return const Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.event_available, size: 64, color: Colors.grey),
-                    SizedBox(height: 12),
-                    Text(
-                      'No upcoming events',
-                      style: TextStyle(fontSize: 15, color: Colors.grey, fontWeight: FontWeight.w500),
-                    ),
-                  ],
-                ),
-              );
-            }
-
-            return ListView.builder(
-              padding: const EdgeInsets.all(16),
-              itemCount: allEvents.length,
-              itemBuilder: (context, index) {
-                final event = allEvents[index];
-                final isRegistered = regIds.contains(event.id);
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 16),
-                  child: _UpcomingEventCard(
-                    event: event,
-                    isRegistered: isRegistered,
-                    onTap: () => _openDetail(event),
-                  ),
-                );
-              },
-            );
-          },
-        );
-      },
-    );
-  }
-
-  // ── Filter by Organization bottom sheet ──
   void _showOrgFilterSheet() {
     showModalBottomSheet(
       context: context,
@@ -1048,8 +1100,27 @@ class _StudentEventsScreenState extends State<StudentEventsScreen>
     );
   }
 
-  // ── TAB 2: Certificate ──
-  Widget _buildCertificateTab() {
+  void _goToFeedback() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => Scaffold(
+          appBar: AppBar(
+            backgroundColor: Colors.white,
+            elevation: 0,
+            foregroundColor: Colors.black87,
+            title: const Text('Evaluate Events',
+                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+          ),
+          body: const StudentFeedbackScreen(),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
     final filtered = _certFilter == 'All'
         ? _allCertificates
         : _allCertificates.where((c) => c['organization'] == _certFilter).toList();
@@ -1059,21 +1130,7 @@ class _StudentEventsScreenState extends State<StudentEventsScreen>
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
           child: GestureDetector(
-            onTap: () => Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => Scaffold(
-                  appBar: AppBar(
-                    backgroundColor: Colors.white,
-                    elevation: 0,
-                    foregroundColor: Colors.black87,
-                    title: const Text('Evaluate Events',
-                        style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
-                  ),
-                  body: const StudentFeedbackScreen(),
-                ),
-              ),
-            ),
+            onTap: _goToFeedback,
             child: Container(
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
@@ -1204,7 +1261,6 @@ class _CalendarGrid extends StatelessWidget {
     final firstWeekday = firstDayOfMonth.weekday % 7;
     final daysInMonth = DateTime(selectedDate.year, selectedDate.month + 1, 0).day;
 
-    // Stream to get events for the current month
     final eventsStream = FirebaseFirestore.instance
         .collection('events')
         .where('status', isEqualTo: 'approved')
@@ -1221,10 +1277,9 @@ class _CalendarGrid extends StatelessWidget {
                   e.date.year == selectedDate.year &&
                   e.date.month == selectedDate.month)
               .toList();
-          
-          // Store dates that have events in format "YYYY-MM-DD"
+
           eventDates = events
-              .map((e) => 
+              .map((e) =>
                   '${e.date.year}-${e.date.month.toString().padLeft(2, '0')}-${e.date.day.toString().padLeft(2, '0')}')
               .toSet();
         }
@@ -1252,19 +1307,17 @@ class _CalendarGrid extends StatelessWidget {
           final isToday = currentDate.year == DateTime.now().year &&
               currentDate.month == DateTime.now().month &&
               currentDate.day == DateTime.now().day;
-          
-          // Check if this date has an event
+
           final dateKey = '${currentDate.year}-${currentDate.month.toString().padLeft(2, '0')}-${currentDate.day.toString().padLeft(2, '0')}';
           final hasEvent = eventDates.contains(dateKey);
 
-          // Determine indicator color
           Color indicatorColor;
           if (hasEvent && isToday) {
-            indicatorColor = Colors.green; // Green for today's events
+            indicatorColor = Colors.green;
           } else if (hasEvent) {
-            indicatorColor = AppColors.primaryDark; // Primary color for other dates with events
+            indicatorColor = AppColors.primaryDark;
           } else {
-            indicatorColor = Colors.transparent; // No indicator
+            indicatorColor = Colors.transparent;
           }
 
           dayWidgets.add(
@@ -1301,7 +1354,6 @@ class _CalendarGrid extends StatelessWidget {
                         ),
                       ),
                     ),
-                    // Event indicator dot
                     if (hasEvent)
                       Container(
                         width: 5,
@@ -1313,7 +1365,7 @@ class _CalendarGrid extends StatelessWidget {
                         ),
                       )
                     else
-                      const SizedBox(height: 6), // Keep spacing consistent
+                      const SizedBox(height: 6),
                   ],
                 ),
               ),
@@ -1445,7 +1497,7 @@ class _CompactEventCard extends StatelessWidget {
   }
 }
 
-// ─── UPCOMING EVENT CARD (with registration status) ────────────
+// ─── UPCOMING EVENT CARD ──────────────────────────────────────
 class _UpcomingEventCard extends StatelessWidget {
   final EventModel event;
   final bool isRegistered;
@@ -1477,7 +1529,6 @@ class _UpcomingEventCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // ⭐ EventImage widget - gamit ang event.imageUrl
             EventImage(
               imageUrl: event.imageUrl,
               height: 160,
@@ -1630,7 +1681,7 @@ class _CategoryBadge extends StatelessWidget {
   }
 }
 
-// ─── EVENT DETAIL SCREEN (with registration popup) ────────────
+// ─── EVENT DETAIL SCREEN ────────────────────────────────────────
 class EventDetailScreen extends StatefulWidget {
   final EventModel event;
   final VoidCallback onRegistered;
@@ -2122,7 +2173,6 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // ⭐ EventImage widget for detail screen
             EventImage(
               imageUrl: widget.event.imageUrl,
               height: 220,
@@ -2175,7 +2225,6 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                   EventPhotoGallery(eventId: widget.event.id, accentColor: AppColors.primaryDark),
                   const SizedBox(height: 10),
 
-                  // ─── Register / status buttons ────────────────────
                   if (!widget.isPastEvent && !_isRegistered) ...[
                     if (_loadingForm)
                       const Center(
