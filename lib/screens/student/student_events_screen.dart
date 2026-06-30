@@ -1706,11 +1706,73 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
   final Map<String, String?> _singleChoice = {};
   final Map<String, Set<String>> _multiChoice = {};
 
+  // ── Feedback / rating state ──
+  int _rating = 0;
+  final TextEditingController _feedbackCtrl = TextEditingController();
+  bool _feedbackSubmitted = false;
+  bool _checkingFeedback = true;
+  bool _submittingFeedback = false;
+
+  /// True only once the event's end time has actually passed.
+  /// Falls back to widget.isPastEvent if no usable end time is found,
+  /// so this never makes feedback show up EARLIER than before —
+  /// only fixes cases where it was showing up too early (e.g. right
+  /// after midnight on the event date, before the event even started).
+  bool get _isEventReallyOver {
+    try {
+      final event = widget.event;
+      // Try to read an endTime-like field via dynamic access.
+      // EventModel stores date as a DateTime at midnight, and a
+      // separate "endTime" string like "10:00 AM".
+      final dynamic raw = event;
+      String? endTimeStr;
+      try {
+        endTimeStr = raw.endTime as String?;
+      } catch (_) {
+        endTimeStr = null;
+      }
+
+      if (endTimeStr == null || endTimeStr.trim().isEmpty) {
+        return widget.isPastEvent;
+      }
+
+      final parsedEnd = _combineDateAndTimeString(event.date, endTimeStr);
+      if (parsedEnd == null) return widget.isPastEvent;
+
+      return DateTime.now().isAfter(parsedEnd);
+    } catch (_) {
+      return widget.isPastEvent;
+    }
+  }
+
+  /// Combines a date (year/month/day) with a time string like
+  /// "10:00 AM" or "14:30" into a single DateTime. Returns null if
+  /// the time string can't be parsed.
+  DateTime? _combineDateAndTimeString(DateTime date, String timeStr) {
+    final cleaned = timeStr.trim().toUpperCase();
+    final match = RegExp(r'^(\d{1,2}):(\d{2})\s*(AM|PM)?$').firstMatch(cleaned);
+    if (match == null) return null;
+
+    int hour = int.parse(match.group(1)!);
+    final minute = int.parse(match.group(2)!);
+    final meridiem = match.group(3);
+
+    if (meridiem == 'PM' && hour != 12) hour += 12;
+    if (meridiem == 'AM' && hour == 12) hour = 0;
+
+    return DateTime(date.year, date.month, date.day, hour, minute);
+  }
+
   @override
   void initState() {
     super.initState();
     _loadRegistrationForm();
     _checkRegistrationStatus();
+    if (_isEventReallyOver) {
+      _checkFeedbackStatus();
+    } else {
+      _checkingFeedback = false;
+    }
   }
 
   @override
@@ -1718,6 +1780,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     for (final c in _fieldControllers.values) {
       c.dispose();
     }
+    _feedbackCtrl.dispose();
     super.dispose();
   }
 
@@ -1732,6 +1795,213 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     if (mounted) {
       setState(() => _isRegistered = snap.docs.isNotEmpty);
     }
+  }
+
+  // ── Feedback helpers ──
+  Future<void> _checkFeedbackStatus() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      if (mounted) setState(() => _checkingFeedback = false);
+      return;
+    }
+    try {
+      final docId = '${user.uid}_${widget.event.id}';
+      final doc = await FirebaseFirestore.instance
+          .collection('feedback')
+          .doc(docId)
+          .get();
+      if (mounted) {
+        setState(() {
+          if (doc.exists) {
+            final d = doc.data()!;
+            _feedbackSubmitted = true;
+            _rating = (d['rating'] ?? 0) as int;
+            _feedbackCtrl.text = (d['comment'] ?? '').toString();
+          }
+          _checkingFeedback = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _checkingFeedback = false);
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Could not load feedback status: $e'),
+          backgroundColor: Colors.orange,
+          duration: const Duration(seconds: 4),
+        ));
+      }
+    }
+  }
+
+  Future<void> _submitFeedback() async {
+    if (_rating == 0) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Please select a star rating'),
+        backgroundColor: Colors.red,
+      ));
+      return;
+    }
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Please login to submit feedback'),
+        backgroundColor: Colors.red,
+      ));
+      return;
+    }
+    setState(() => _submittingFeedback = true);
+    try {
+      final docId = '${user.uid}_${widget.event.id}';
+      await FirebaseFirestore.instance.collection('feedback').doc(docId).set({
+        'userId': user.uid,
+        'eventId': widget.event.id,
+        'eventTitle': widget.event.title,
+        'rating': _rating,
+        'comment': _feedbackCtrl.text.trim(),
+        'submittedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+      if (mounted) {
+        setState(() {
+          _feedbackSubmitted = true;
+          _submittingFeedback = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Thanks for your feedback!'),
+          backgroundColor: Colors.green,
+        ));
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _submittingFeedback = false);
+        final msg = e.toString().toLowerCase().contains('permission')
+            ? 'Failed to submit: missing Firestore permission for "feedback" collection. Check your security rules.'
+            : 'Failed to submit feedback: $e';
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(msg),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 6),
+        ));
+      }
+    }
+  }
+
+  Widget _buildStarSelector() {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: List.generate(5, (i) {
+        final starIndex = i + 1;
+        final filled = starIndex <= _rating;
+        return GestureDetector(
+          onTap: _feedbackSubmitted
+              ? null
+              : () => setState(() => _rating = starIndex),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            child: Icon(
+              filled ? Icons.star_rounded : Icons.star_border_rounded,
+              size: 36,
+              color: filled ? const Color(0xFFFBBF24) : Colors.grey.shade400,
+            ),
+          ),
+        );
+      }),
+    );
+  }
+
+  Widget _buildFeedbackSection() {
+    if (_checkingFeedback) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.symmetric(vertical: 12),
+          child: CircularProgressIndicator(strokeWidth: 2),
+        ),
+      );
+    }
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: _feedbackSubmitted ? Colors.green.shade50 : Colors.grey.shade50,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: _feedbackSubmitted ? Colors.green.shade200 : Colors.grey.shade200,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                _feedbackSubmitted ? Icons.check_circle_rounded : Icons.rate_review_rounded,
+                color: _feedbackSubmitted ? Colors.green : AppColors.primaryDark,
+                size: 20,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                _feedbackSubmitted ? 'Feedback Submitted' : 'Rate this event',
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                  color: _feedbackSubmitted ? Colors.green.shade700 : Colors.black87,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          _buildStarSelector(),
+          const SizedBox(height: 14),
+          TextField(
+            controller: _feedbackCtrl,
+            readOnly: _feedbackSubmitted,
+            maxLines: 3,
+            decoration: InputDecoration(
+              hintText: 'Share your thoughts about this event (optional)',
+              hintStyle: const TextStyle(fontSize: 13),
+              filled: true,
+              fillColor: Colors.white,
+              contentPadding: const EdgeInsets.all(12),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: BorderSide(color: Colors.grey.shade300),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: BorderSide(color: Colors.grey.shade300),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: const BorderSide(color: AppColors.primaryDark, width: 1.5),
+              ),
+            ),
+          ),
+          if (!_feedbackSubmitted) ...[
+            const SizedBox(height: 14),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: _submittingFeedback ? null : _submitFeedback,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primaryDark,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+                child: _submittingFeedback
+                    ? const SizedBox(
+                        width: 20, height: 20,
+                        child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5),
+                      )
+                    : const Text(
+                        'Submit Feedback',
+                        style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w700),
+                      ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
   }
 
   Future<void> _loadRegistrationForm() async {
@@ -2222,7 +2492,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                   ),
                   const SizedBox(height: 10),
 
-                  if (!widget.isPastEvent && !_isRegistered) ...[
+                  if (!_isEventReallyOver && !_isRegistered) ...[
                     if (_loadingForm)
                       const Center(
                         child: Padding(
@@ -2250,7 +2520,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                       ),
                   ],
 
-                  if (_isRegistered && !widget.isPastEvent)
+                  if (_isRegistered && !_isEventReallyOver)
                     Container(
                       width: double.infinity,
                       padding: const EdgeInsets.symmetric(vertical: 14),
@@ -2271,25 +2541,8 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                       ),
                     ),
 
-                  if (widget.isPastEvent)
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      decoration: BoxDecoration(
-                        color: Colors.grey.shade100,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: const Center(
-                        child: Text(
-                          'Past Event',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w700,
-                            color: Colors.grey,
-                          ),
-                        ),
-                      ),
-                    ),
+                  // Past event: show star-rating feedback form instead of a static label
+                  if (_isEventReallyOver) _buildFeedbackSection(),
 
                   const SizedBox(height: 30),
                 ],

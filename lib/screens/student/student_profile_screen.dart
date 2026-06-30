@@ -2103,13 +2103,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     super.dispose();
   }
 
-  // ─────────────────────────────────────────────────────────────
-  // FIXED: Change Password
-  // Handles all Firebase error codes including the newer
-  // 'invalid-credential' code that replaced 'wrong-password'
-  // in recent Firebase SDK versions.
-  // Also clears the tempPassword field in Firestore after success.
-  // ─────────────────────────────────────────────────────────────
   Future<void> _changePassword() async {
     final current = _currentPwCtrl.text.trim();
     final newPw = _newPwCtrl.text.trim();
@@ -2153,19 +2146,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
         throw Exception('User not logged in');
       }
 
-      // Step 1: Re-authenticate — required by Firebase before
-      // any sensitive operation like changing password.
       final credential = EmailAuthProvider.credential(
         email: user.email!,
         password: current,
       );
       await user.reauthenticateWithCredential(credential);
 
-      // Step 2: Update the Firebase Auth password.
       await user.updatePassword(newPw);
 
-      // Step 3: Clear the tempPassword field in Firestore
-      // so the student is no longer flagged as using a temp password.
       await FirebaseFirestore.instance
           .collection('students')
           .doc(user.uid)
@@ -2186,8 +2174,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     } on FirebaseAuthException catch (e) {
       String message;
       switch (e.code) {
-        // Older Firebase SDK uses 'wrong-password';
-        // newer SDK (v5+) uses 'invalid-credential' for the same error.
         case 'wrong-password':
         case 'invalid-credential':
           message = 'Current password is incorrect. Please try again.';
@@ -2733,10 +2719,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         );
                       }
                     },
+                    // ── UPDATED: matches the solid red style from the profile tab ──
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.red.shade50,
-                      foregroundColor: Colors.red,
-                      elevation: 0,
+                      backgroundColor: Colors.red,
+                      foregroundColor: Colors.white,
+                      elevation: 2,
                       padding: const EdgeInsets.symmetric(vertical: 16),
                       shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12)),
