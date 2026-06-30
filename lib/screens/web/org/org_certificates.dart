@@ -6,7 +6,8 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import '../../../services/activity_logger.dart' as activity_log;
 import '../../../services/notification_service.dart';
-import 'package:firebase_storage/firebase_storage.dart';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
 import 'package:file_picker/file_picker.dart';
 import 'dart:typed_data';
 import 'dart:math' as math;
@@ -1818,42 +1819,57 @@ class _ImportTemplateModalState extends State<_ImportTemplateModal> {
     setState(() => _file = picked);
   }
 
-  Future<void> _upload() async {
-    if (_file == null || _name?.trim().isEmpty == true) return;
-    setState(() => _isUploading = true);
-    try {
-      final path = 'certificate_templates/${widget.orgId}/${DateTime.now().millisecondsSinceEpoch}_${_file!.name}';
-      final ref = FirebaseStorage.instance.ref().child(path);
-      final data = _file!.bytes as Uint8List?;
-      if (data == null) throw Exception('Failed to read file bytes — try picking the file again.');
-      final ext = (_file!.extension ?? '').toLowerCase();
-      await ref.putData(data, SettableMetadata(contentType: ext == 'pdf' ? 'application/pdf' : 'image/$ext'));
-      final url = await ref.getDownloadURL();
-      await FirebaseFirestore.instance.collection('certificate_templates').add({
-        'orgId': widget.orgId,
+Future<void> _upload() async {
+  if (_file == null || _name?.trim().isEmpty == true) return;
+  setState(() => _isUploading = true);
+
+  try {
+    final data = _file!.bytes;
+    if (data == null) throw Exception('File data is null');
+
+    const cloudName = 'igawal9n';     // <- palitan
+    const uploadPreset = 'uprise_certs'; // <- palitan
+
+    final uri = Uri.parse('https://api.cloudinary.com/v1_1/$cloudName/auto/upload');
+    final request = http.MultipartRequest('POST', uri)
+      ..fields['upload_preset'] = uploadPreset
+      ..files.add(http.MultipartFile.fromBytes('file', data, filename: _file!.name));
+
+    final streamedResponse = await request.send();
+    final response = await http.Response.fromStream(streamedResponse);
+
+    if (response.statusCode != 200) {
+      throw Exception('Upload failed: ${response.body}');
+    }
+
+    final json = jsonDecode(response.body);
+    final url = json['secure_url'] as String;
+
+    await FirebaseFirestore.instance.collection('certificate_templates').add({
+      'orgId': widget.orgId,
+      'name': _name!.trim(),
+      'url': url,
+      'namePlacement': _placement.toMap(),
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+
+    if (mounted) {
+      Navigator.pop(context, {
         'name': _name!.trim(),
-        'storagePath': path,
         'url': url,
         'namePlacement': _placement.toMap(),
-        'createdAt': FieldValue.serverTimestamp(),
       });
-      if (mounted) {
-        Navigator.pop(context, {'name': _name!.trim(), 'url': url, 'namePlacement': _placement.toMap()});
-      }
-    } on FirebaseException catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('Upload failed (${e.code}): ${e.message ?? 'Storage rejected the upload — check Storage rules/CORS for this project.'}'),
-          backgroundColor: UpriseColors.error,
-        ));
-      }
-    } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Upload failed: $e'), backgroundColor: UpriseColors.error));
-    } finally {
-      if (mounted) setState(() => _isUploading = false);
     }
+  } catch (e) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: $e'), backgroundColor: UpriseColors.error),
+      );
+    }
+  } finally {
+    if (mounted) setState(() => _isUploading = false);
   }
-
+}
   // Lets the org drag the recipient's name onto the right spot on their
   // uploaded design — everything else (org/event info, signatories) is
   // already part of the image, so this is the only configurable part.
