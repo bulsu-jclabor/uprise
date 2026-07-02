@@ -1,17 +1,6 @@
 ﻿// lib/screens/web/org/org_event_analytics.dart
-//
-// Redesigned to match the student-accounts / org-event-proposals design system.
-// Added:  • Tab 2 — Participant Feedback (filterable, live)
-//         • Tab 3 — Evaluation Forms (builder + cert-gate logic)
-// Sync:   All KPI / satisfaction / distribution / completion cards now derive
-//         from a single _AnalyticsData snapshot fetched once per session and
-//         re-fetched on refresh, so every card is always consistent.
-// Logic:  Participants must submit an evaluation before a certificate can be
-//         distributed (the `evaluated` field on the `event_proposals` doc is
-//         set to true when ≥ 1 evaluation response is recorded for that event).
 
-// ignore_for_file: unused_local_variable, use_build_context_synchronously, deprecated_member_use
-
+import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
@@ -24,10 +13,9 @@ import 'export_util.dart';
 import 'export_pdf.dart';
 import '../../../theme/app_theme.dart';
 
-// ── Design tokens (mirrors student_accounts / org_event_proposals) ──────────
+// ── Design tokens ────────────────────────────────────────────────────────────
 class _DS {
   static const double radiusLg = 14;
-
   static final cardShadow = [
     BoxShadow(
       color: Colors.black.withOpacity(0.06),
@@ -37,7 +25,7 @@ class _DS {
   ];
 }
 
-// ── Color aliases (re-uses UpriseColors where possible) ─────────────────────
+// ── Color aliases ────────────────────────────────────────────────────────────
 class _C {
   static const Color amber = Color(0xFFFB923C);
   static const Color green = Color(0xFF059669);
@@ -101,12 +89,72 @@ class _AnalyticsData {
     return c;
   }
 
-  String eventTitle(String id) =>
-      events.firstWhere(
-            (e) => e['id'] == id,
-            orElse: () => {'title': id},
-          )['title']
-          as String;
+  String eventTitle(String id) {
+    // First try: match by document ID
+    try {
+      final exactMatch = events.firstWhere(
+        (e) => e['id'] == id,
+        orElse: () => const {},
+      );
+      if (exactMatch.isNotEmpty) {
+        final title = exactMatch['title'] as String?;
+        if (title != null && title.isNotEmpty) return title;
+      }
+    } catch (_) {}
+
+    // Second try: match by eventId field in the event data
+    try {
+      final matchByEventId = events.firstWhere(
+        (e) => e['eventId'] == id,
+        orElse: () => const {},
+      );
+      if (matchByEventId.isNotEmpty) {
+        final title = matchByEventId['title'] as String?;
+        if (title != null && title.isNotEmpty) return title;
+      }
+    } catch (_) {}
+
+    // Third try: check if the ID itself is stored as a title
+    try {
+      final matchByTitle = events.firstWhere(
+        (e) => e['title'] == id,
+        orElse: () => const {},
+      );
+      if (matchByTitle.isNotEmpty) {
+        return id;
+      }
+    } catch (_) {}
+
+    // Fourth try: partial match
+    for (final event in events) {
+      final title = event['title'] as String? ?? '';
+      if (title.isNotEmpty && (title.contains(id) || id.contains(title))) {
+        return title;
+      }
+    }
+
+    // Last resort: show a shortened version of the ID
+    if (id.length > 12) {
+      return '${id.substring(0, 8)}...';
+    }
+    return id;
+  }
+
+  String? eventIdByTitle(String title) {
+    try {
+      final match = events.firstWhere(
+        (e) => e['title'] == title,
+        orElse: () => const {},
+      );
+      return match['id'] as String?;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  List<String> get eventTitles {
+    return events.map((e) => e['title'] as String).toList();
+  }
 }
 
 // ── Eval-form model ──────────────────────────────────────────────────────────
@@ -116,8 +164,8 @@ class _EvalForm {
   String linkedEventId;
   String linkedEventTitle;
   String deadline;
-  String certGate; // 'required' | 'optional'
-  String status; // 'draft' | 'published'
+  String certGate;
+  String status;
   int responses;
   List<_EvalQuestion> questions;
 
@@ -163,7 +211,7 @@ class _EvalForm {
 
 class _EvalQuestion {
   String id;
-  String type; // 'rating' | 'multiple' | 'text' | 'scale'
+  String type;
   String text;
   List<String> options;
 
@@ -203,19 +251,14 @@ class OrgEventAnalyticsScreen extends StatefulWidget {
 
 class _OrgEventAnalyticsScreenState extends State<OrgEventAnalyticsScreen>
     with SingleTickerProviderStateMixin {
-  // ── Data ──
   late Future<_AnalyticsData> _dataFuture;
-
-  // ── Tabs ──
   late TabController _tabCtrl;
 
-  // ── Feedback filters ──
   final TextEditingController _searchCtrl = TextEditingController();
   String _searchQuery = '';
   String _selectedEvent = 'All Events';
   int? _selectedRating;
 
-  // ── Eval-form builder state ──
   bool _showFormBuilder = false;
   bool _isSubmittingForm = false;
   _EvalForm? _editingForm;
@@ -227,6 +270,8 @@ class _OrgEventAnalyticsScreenState extends State<OrgEventAnalyticsScreen>
   String _formCertGate = 'required';
   List<_EvalQuestion> _formQuestions = [];
 
+  StreamSubscription<QuerySnapshot>? _feedbackSubscription;
+
   @override
   void initState() {
     super.initState();
@@ -236,6 +281,7 @@ class _OrgEventAnalyticsScreenState extends State<OrgEventAnalyticsScreen>
       () =>
           setState(() => _searchQuery = _searchCtrl.text.toLowerCase().trim()),
     );
+    _listenForUpdates();
     activity_log.ActivityLogger.log(
       action: 'view_analytics',
       module: 'event_analytics',
@@ -249,17 +295,18 @@ class _OrgEventAnalyticsScreenState extends State<OrgEventAnalyticsScreen>
     _searchCtrl.dispose();
     _formTitleCtrl.dispose();
     _formDeadlineCtrl.dispose();
+    _feedbackSubscription?.cancel();
     super.dispose();
   }
 
   // ── Load ──────────────────────────────────────────────────────────────────
   Future<_AnalyticsData> _loadAll() async {
     final db = FirebaseFirestore.instance;
+    
+    final feedbackSnapshot = await db.collection('feedback').get();
+    
     final results = await Future.wait([
-      db
-          .collection('event_feedback')
-          .where('orgId', isEqualTo: widget.orgId)
-          .get(),
+      Future.value(feedbackSnapshot),
       db.collection('events').where('orgId', isEqualTo: widget.orgId).get(),
       db.collection('eval_forms').where('orgId', isEqualTo: widget.orgId).get(),
     ]);
@@ -273,6 +320,7 @@ class _OrgEventAnalyticsScreenState extends State<OrgEventAnalyticsScreen>
       return {
         'id': d.id,
         'title': data['title'] as String? ?? 'Untitled',
+        'eventId': data['eventId'] as String?,
       };
     }).toList();
 
@@ -280,11 +328,37 @@ class _OrgEventAnalyticsScreenState extends State<OrgEventAnalyticsScreen>
         .map((d) => {...d.data(), 'id': d.id})
         .toList();
 
-    return _AnalyticsData(
+    print('=== LOADED DATA ===');
+    print('Feedback count: ${feedbacks.length}');
+    if (feedbacks.isNotEmpty) {
+      print('Sample feedback: ${feedbacks.first}');
+    }
+    print('Events count: ${events.length}');
+
+    final data = _AnalyticsData(
       feedbacks: feedbacks,
       events: events,
       evalForms: evalForms,
     );
+    
+    _debugData(data);
+    return data;
+  }
+
+  void _listenForUpdates() {
+    _feedbackSubscription?.cancel();
+    _feedbackSubscription = FirebaseFirestore.instance
+        .collection('feedback')
+        .snapshots()
+        .listen((snapshot) {
+      if (mounted) {
+        setState(() {
+          _dataFuture = _loadAll();
+        });
+      }
+    }, onError: (error) {
+      print('Feedback listener error: $error');
+    });
   }
 
   void _refresh() {
@@ -297,7 +371,24 @@ class _OrgEventAnalyticsScreenState extends State<OrgEventAnalyticsScreen>
     });
   }
 
-  // ── Filter helpers ────────────────────────────────────────────────────────
+  void _debugData(_AnalyticsData data) {
+    print('=== Analytics Data ===');
+    print('Total Feedback: ${data.totalFeedbacks}');
+    print('Events: ${data.events.length}');
+    print('Avg Rating: ${data.avgRating}');
+    print('Star Counts: ${data.starCounts}');
+    
+    for (final f in data.feedbacks) {
+      final eventId = f['eventId'] as String? ?? '';
+      final title = data.eventTitle(eventId);
+      print('Feedback: eventId=$eventId -> "$title", rating=${f['rating']}, comment=${f['comment']}');
+    }
+    
+    for (final e in data.events) {
+      print('Event: ${e['title']}, ID: ${e['id']}');
+    }
+  }
+
   List<Map<String, dynamic>> _applyFilters(
     List<Map<String, dynamic>> feedbacks,
     _AnalyticsData data,
@@ -326,7 +417,6 @@ class _OrgEventAnalyticsScreenState extends State<OrgEventAnalyticsScreen>
       _selectedEvent != 'All Events' ||
       _selectedRating != null;
 
-  // ── Export ────────────────────────────────────────────────────────────────
   Future<void> _exportAnalytics(String choice, _AnalyticsData data) async {
     final filtered = _applyFilters([...data.feedbacks], data)
       ..sort((a, b) {
@@ -395,7 +485,6 @@ class _OrgEventAnalyticsScreenState extends State<OrgEventAnalyticsScreen>
     );
   }
 
-  // ── Eval-form CRUD ────────────────────────────────────────────────────────
   void _openNewForm(_AnalyticsData data) {
     setState(() {
       _editingForm = null;
@@ -471,8 +560,6 @@ class _OrgEventAnalyticsScreenState extends State<OrgEventAnalyticsScreen>
         await col.add(payload);
       }
 
-      // If cert-gate is required and the form is published,
-      // update the linked event_proposal to mark evaluationFormLinked=true.
       if (publish && _formCertGate == 'required' && _formEventId.isNotEmpty) {
         await FirebaseFirestore.instance
             .collection('event_proposals')
@@ -512,9 +599,6 @@ class _OrgEventAnalyticsScreenState extends State<OrgEventAnalyticsScreen>
     }
   }
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // Build
-  // ─────────────────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<_AnalyticsData>(
@@ -547,7 +631,7 @@ class _OrgEventAnalyticsScreenState extends State<OrgEventAnalyticsScreen>
         final filtered = _applyFilters([...data.feedbacks], data);
         final eventOptions = [
           'All Events',
-          ...data.events.map((e) => e['title'] as String),
+          ...data.eventTitles,
         ];
 
         return Scaffold(
@@ -566,15 +650,10 @@ class _OrgEventAnalyticsScreenState extends State<OrgEventAnalyticsScreen>
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // ── Stats row ──
                     _buildStatsRow(data, isMobile),
                     SizedBox(height: isMobile ? 14 : 20),
-
-                    // ── Header + toolbar ──
                     _buildToolbar(data, eventOptions, isMobile, isTablet),
                     const SizedBox(height: 16),
-
-                    // ── Main card with tabs ──
                     Container(
                       decoration: BoxDecoration(
                         color: Colors.white,
@@ -585,10 +664,7 @@ class _OrgEventAnalyticsScreenState extends State<OrgEventAnalyticsScreen>
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          // Tabs
                           _buildTabBar(data),
-
-                          // Tab bodies
                           SizedBox(
                             child: [
                               _buildAnalyticsTab(data),
@@ -610,12 +686,10 @@ class _OrgEventAnalyticsScreenState extends State<OrgEventAnalyticsScreen>
     );
   }
 
-  // ── Stats row ─────────────────────────────────────────────────────────────
   Widget _buildStatsRow(_AnalyticsData data, bool isMobile) {
     final published = data.evalForms
         .where((f) => f['status'] == 'published')
         .length;
-    final avgByEvent = data.avgByEvent;
     final totalEvents = data.events.length;
 
     final cards = [
@@ -627,7 +701,7 @@ class _OrgEventAnalyticsScreenState extends State<OrgEventAnalyticsScreen>
       ),
       _StatCardData(
         'Average rating',
-        data.avgRating.toStringAsFixed(1),
+        data.totalFeedbacks > 0 ? data.avgRating.toStringAsFixed(1) : '—',
         Icons.star_outline,
         _C.amber,
       ),
@@ -670,7 +744,6 @@ class _OrgEventAnalyticsScreenState extends State<OrgEventAnalyticsScreen>
     );
   }
 
-  // ── Toolbar ───────────────────────────────────────────────────────────────
   Widget _buildToolbar(
     _AnalyticsData data,
     List<String> eventOptions,
@@ -800,7 +873,6 @@ class _OrgEventAnalyticsScreenState extends State<OrgEventAnalyticsScreen>
     );
   }
 
-  // ── Tab bar ───────────────────────────────────────────────────────────────
   Widget _buildTabBar(_AnalyticsData data) {
     final tabs = [
       ('Analytics', Icons.bar_chart_rounded, null),
@@ -919,13 +991,9 @@ class _OrgEventAnalyticsScreenState extends State<OrgEventAnalyticsScreen>
     );
   }
 
-  // ════════════════════════════════════════════════════════════════════════
-  // TAB 1: Analytics
-  // ════════════════════════════════════════════════════════════════════════
   Widget _buildAnalyticsTab(_AnalyticsData data) {
     final avgByEvent = data.avgByEvent;
 
-    // KPI — highest / lowest
     String highestEvent = '—';
     double highestScore = 0.0;
     String lowestEvent = '—';
@@ -951,7 +1019,6 @@ class _OrgEventAnalyticsScreenState extends State<OrgEventAnalyticsScreen>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // KPI row
           Row(
             children: [
               Expanded(
@@ -970,8 +1037,12 @@ class _OrgEventAnalyticsScreenState extends State<OrgEventAnalyticsScreen>
                 child: _KpiCard(
                   icon: Icons.star_outline,
                   label: 'Average rating',
-                  value: data.avgRating.toStringAsFixed(1),
-                  sub: 'Based on ${data.totalFeedbacks} responses',
+                  value: data.totalFeedbacks > 0 
+                      ? data.avgRating.toStringAsFixed(1) 
+                      : '—',
+                  sub: data.totalFeedbacks > 0
+                      ? 'Based on ${data.totalFeedbacks} responses'
+                      : 'No ratings yet',
                   color: _C.amber,
                 ),
               ),
@@ -981,7 +1052,9 @@ class _OrgEventAnalyticsScreenState extends State<OrgEventAnalyticsScreen>
                   icon: Icons.emoji_events_outlined,
                   label: 'Highest rated',
                   value: highestEvent,
-                  sub: 'Score: ${highestScore.toStringAsFixed(1)} / 5.0',
+                  sub: avgByEvent.isNotEmpty 
+                      ? 'Score: ${highestScore.toStringAsFixed(1)} / 5.0'
+                      : 'No data yet',
                   color: _C.green,
                 ),
               ),
@@ -991,15 +1064,15 @@ class _OrgEventAnalyticsScreenState extends State<OrgEventAnalyticsScreen>
                   icon: Icons.trending_down_rounded,
                   label: 'Needs improvement',
                   value: lowestEvent,
-                  sub: 'Score: ${lowestScore.toStringAsFixed(1)} / 5.0',
+                  sub: avgByEvent.isNotEmpty 
+                      ? 'Score: ${lowestScore.toStringAsFixed(1)} / 5.0'
+                      : 'No data yet',
                   color: _C.red,
                 ),
               ),
             ],
           ),
           const SizedBox(height: 20),
-
-          // Satisfaction + Distribution
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -1009,17 +1082,12 @@ class _OrgEventAnalyticsScreenState extends State<OrgEventAnalyticsScreen>
             ],
           ),
           const SizedBox(height: 20),
-
-          // Completion
           _CompletionCard(data: data),
         ],
       ),
     );
   }
 
-  // ════════════════════════════════════════════════════════════════════════
-  // TAB 2: Feedback
-  // ════════════════════════════════════════════════════════════════════════
   Widget _buildFeedbackTab(
     _AnalyticsData data,
     List<Map<String, dynamic>> filtered,
@@ -1035,7 +1103,6 @@ class _OrgEventAnalyticsScreenState extends State<OrgEventAnalyticsScreen>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Active filter chips
         if (_hasActiveFilters)
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
@@ -1056,8 +1123,6 @@ class _OrgEventAnalyticsScreenState extends State<OrgEventAnalyticsScreen>
               }),
             ),
           ),
-
-        // Table header
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
           decoration: const BoxDecoration(
@@ -1076,8 +1141,6 @@ class _OrgEventAnalyticsScreenState extends State<OrgEventAnalyticsScreen>
             ],
           ),
         ),
-
-        // Rows
         if (items.isEmpty)
           Padding(
             padding: const EdgeInsets.all(40),
@@ -1170,8 +1233,6 @@ class _OrgEventAnalyticsScreenState extends State<OrgEventAnalyticsScreen>
               ),
             );
           }),
-
-        // Footer
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 11),
           decoration: const BoxDecoration(
@@ -1206,9 +1267,6 @@ class _OrgEventAnalyticsScreenState extends State<OrgEventAnalyticsScreen>
     );
   }
 
-  // ════════════════════════════════════════════════════════════════════════
-  // TAB 3: Evaluation Forms
-  // ════════════════════════════════════════════════════════════════════════
   Widget _buildEvalFormsTab(_AnalyticsData data) {
     final forms = data.evalForms
         .map((d) => _EvalForm.fromFirestore(d['id'] as String, d))
@@ -1219,7 +1277,6 @@ class _OrgEventAnalyticsScreenState extends State<OrgEventAnalyticsScreen>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Info banner
           Container(
             padding: const EdgeInsets.all(12),
             margin: const EdgeInsets.only(bottom: 16),
@@ -1264,8 +1321,6 @@ class _OrgEventAnalyticsScreenState extends State<OrgEventAnalyticsScreen>
               ],
             ),
           ),
-
-          // Row: section label + New Form button
           Row(
             children: [
               Text(
@@ -1305,8 +1360,6 @@ class _OrgEventAnalyticsScreenState extends State<OrgEventAnalyticsScreen>
             ],
           ),
           const SizedBox(height: 16),
-
-          // Forms list
           if (forms.isEmpty && !_showFormBuilder)
             Center(
               child: Padding(
@@ -1357,8 +1410,6 @@ class _OrgEventAnalyticsScreenState extends State<OrgEventAnalyticsScreen>
                 },
               ),
             ),
-
-          // Form builder
           if (_showFormBuilder) ...[
             const SizedBox(height: 24),
             _buildFormBuilder(data),
@@ -1368,11 +1419,6 @@ class _OrgEventAnalyticsScreenState extends State<OrgEventAnalyticsScreen>
     );
   }
 
-  // ── Registration Answers tab ────────────────────────────────────────────────
-  // Surfaces what participants actually answered on the registration form —
-  // both an aggregated breakdown per question and the raw per-registrant
-  // answers — instead of that data being reachable only from the
-  // Registered Participants sub-tab in Attendance QR.
   Widget _buildRegistrationAnswersTab(_AnalyticsData data) {
     if (_selectedEvent == 'All Events') {
       return Padding(
@@ -1388,11 +1434,7 @@ class _OrgEventAnalyticsScreenState extends State<OrgEventAnalyticsScreen>
       );
     }
 
-    final eventEntry = data.events.firstWhere(
-      (e) => e['title'] == _selectedEvent,
-      orElse: () => const {},
-    );
-    final eventId = eventEntry['id'] as String?;
+    final eventId = data.eventIdByTitle(_selectedEvent);
     if (eventId == null) {
       return Padding(
         padding: const EdgeInsets.all(40),
@@ -1426,7 +1468,6 @@ class _OrgEventAnalyticsScreenState extends State<OrgEventAnalyticsScreen>
           );
         }
 
-        // Group every answer by its question label across all registrants.
         final Map<String, List<String>> byQuestion = {};
         final List<(String name, List<MapEntry<String, String>>)> perRegistrant = [];
 
@@ -1515,7 +1556,6 @@ class _OrgEventAnalyticsScreenState extends State<OrgEventAnalyticsScreen>
     );
   }
 
-  // ── Form builder ──────────────────────────────────────────────────────────
   Widget _buildFormBuilder(_AnalyticsData data) {
     return Form(
       key: _formKey,
@@ -1539,8 +1579,6 @@ class _OrgEventAnalyticsScreenState extends State<OrgEventAnalyticsScreen>
             ],
           ),
           const SizedBox(height: 16),
-
-          // Config grid
           Row(
             children: [
               Expanded(
@@ -1645,8 +1683,6 @@ class _OrgEventAnalyticsScreenState extends State<OrgEventAnalyticsScreen>
             ],
           ),
           const SizedBox(height: 20),
-
-          // Question builder
           Container(
             decoration: BoxDecoration(
               color: Colors.white,
@@ -1656,7 +1692,6 @@ class _OrgEventAnalyticsScreenState extends State<OrgEventAnalyticsScreen>
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Header
                 Padding(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 16,
@@ -1703,7 +1738,6 @@ class _OrgEventAnalyticsScreenState extends State<OrgEventAnalyticsScreen>
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Questions
                       ..._formQuestions.asMap().entries.map(
                         (e) => _QuestionCard(
                           index: e.key,
@@ -1715,8 +1749,6 @@ class _OrgEventAnalyticsScreenState extends State<OrgEventAnalyticsScreen>
                               setState(() => _formQuestions.removeAt(e.key)),
                         ),
                       ),
-
-                      // Add buttons
                       const SizedBox(height: 8),
                       Wrap(
                         spacing: 8,
@@ -1792,7 +1824,6 @@ class _OrgEventAnalyticsScreenState extends State<OrgEventAnalyticsScreen>
               ],
             ),
           ),
-
           const SizedBox(height: 16),
           Row(
             mainAxisAlignment: MainAxisAlignment.end,
@@ -1888,7 +1919,6 @@ class _OrgEventAnalyticsScreenState extends State<OrgEventAnalyticsScreen>
     );
   }
 
-  // ── Helpers ───────────────────────────────────────────────────────────────
   Widget _hCell(String t) => Text(
     t,
     style: GoogleFonts.beVietnamPro(
@@ -2051,7 +2081,6 @@ class _KpiCard extends StatelessWidget {
   );
 }
 
-// Satisfaction scores card
 class _SatisfactionCard extends StatelessWidget {
   final _AnalyticsData data;
   const _SatisfactionCard({required this.data});
@@ -2152,7 +2181,6 @@ class _SatisfactionCard extends StatelessWidget {
   }
 }
 
-// Rating distribution (donut)
 class _DistributionCard extends StatelessWidget {
   final _AnalyticsData data;
   const _DistributionCard({required this.data});
@@ -2187,64 +2215,84 @@ class _DistributionCard extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 16),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              SizedBox(
-                width: 140,
-                height: 140,
-                child: CustomPaint(
-                  painter: _DonutPainter(
-                    segs: segs,
-                    total: total,
-                    label: data.avgRating.toStringAsFixed(1),
+          if (total == 0)
+            Container(
+              height: 140,
+              alignment: Alignment.center,
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.insert_chart_outlined, size: 32, color: Colors.grey.shade300),
+                  const SizedBox(height: 4),
+                  Text(
+                    'No feedback yet',
+                    style: GoogleFonts.beVietnamPro(
+                      fontSize: 12,
+                      color: Colors.grey.shade400,
+                    ),
+                  ),
+                ],
+              ),
+            )
+          else
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                SizedBox(
+                  width: 140,
+                  height: 140,
+                  child: CustomPaint(
+                    painter: _DonutPainter(
+                      segs: segs,
+                      total: total,
+                      label: data.avgRating.toStringAsFixed(1),
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  children: segs.map((s) {
-                    final pct = total > 0
-                        ? (s.count / total * 100).toStringAsFixed(0)
-                        : '0';
-                    return Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 4),
-                      child: Row(
-                        children: [
-                          Container(
-                            width: 10,
-                            height: 10,
-                            decoration: BoxDecoration(
-                              color: s.color,
-                              shape: BoxShape.circle,
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    children: segs.map((s) {
+                      final pct = total > 0
+                          ? (s.count / total * 100).toStringAsFixed(0)
+                          : '0';
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 4),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 10,
+                              height: 10,
+                              decoration: BoxDecoration(
+                                color: s.color,
+                                shape: BoxShape.circle,
+                              ),
                             ),
-                          ),
-                          const SizedBox(width: 8),
-                          Text(
-                            '${s.stars} star${s.stars > 1 ? 's' : ''}',
-                            style: GoogleFonts.beVietnamPro(
-                              fontSize: 12,
-                              color: _C.muted,
+                            const SizedBox(width: 8),
+                            Text(
+                              '${s.stars} star${s.stars > 1 ? 's' : ''}',
+                              style: GoogleFonts.beVietnamPro(
+                                fontSize: 12,
+                                color: _C.muted,
+                              ),
                             ),
-                          ),
-                          const Spacer(),
-                          Text(
-                            '$pct%',
-                            style: GoogleFonts.beVietnamPro(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                              color: _C.charcoal,
+                            const Spacer(),
+                            Text(
+                              '$pct%',
+                              style: GoogleFonts.beVietnamPro(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: _C.charcoal,
+                              ),
                             ),
-                          ),
-                        ],
-                      ),
-                    );
-                  }).toList(),
+                          ],
+                        ),
+                      );
+                    }).toList(),
+                  ),
                 ),
-              ),
-            ],
-          ),
+              ],
+            ),
         ],
       ),
     );
@@ -2324,7 +2372,6 @@ class _DonutPainter extends CustomPainter {
       old.total != total || old.label != label;
 }
 
-// Completion card
 class _CompletionCard extends StatelessWidget {
   final _AnalyticsData data;
   const _CompletionCard({required this.data});
@@ -2370,7 +2417,7 @@ class _CompletionCard extends StatelessWidget {
                     final title = e['title'] as String;
                     final received = countByEvent[id] ?? 0;
                     return SizedBox(
-                      width: 200,
+                      width: 220,
                       child: Row(
                         children: [
                           Expanded(
@@ -2408,7 +2455,6 @@ class _CompletionCard extends StatelessWidget {
   }
 }
 
-// Active filter chips
 class _ActiveFilterChips extends StatelessWidget {
   final String searchQuery, selectedEvent;
   final int? selectedRating;
@@ -2494,7 +2540,6 @@ class _Chip extends StatelessWidget {
   );
 }
 
-// Badge
 class _Badge extends StatelessWidget {
   final String label;
   final Color bg, fg;
@@ -2519,7 +2564,6 @@ class _Badge extends StatelessWidget {
   );
 }
 
-// Filter dropdown
 class _FilterDropdown extends StatelessWidget {
   final String value;
   final List<String> items;
@@ -2562,7 +2606,6 @@ class _FilterDropdown extends StatelessWidget {
   );
 }
 
-// Footer export button
 class _FooterBtn extends StatelessWidget {
   final IconData icon;
   final String label;
@@ -2595,7 +2638,6 @@ class _FooterBtn extends StatelessWidget {
   );
 }
 
-// Eval form row card
 class _EvalFormCard extends StatelessWidget {
   final _EvalForm form;
   final VoidCallback onEdit, onDelete;
@@ -2733,7 +2775,6 @@ class _EvalFormCard extends StatelessWidget {
   }
 }
 
-// Question card in form builder
 class _QuestionCard extends StatefulWidget {
   final int index;
   final _EvalQuestion question;
@@ -3052,7 +3093,6 @@ class _QuestionPreview extends StatelessWidget {
   }
 }
 
-// Add question button
 class _AddQBtn extends StatelessWidget {
   final IconData icon;
   final String label;
@@ -3085,7 +3125,6 @@ class _AddQBtn extends StatelessWidget {
   );
 }
 
-// Form field wrapper
 class _FormField extends StatelessWidget {
   final String label;
   final Widget child;
@@ -3109,12 +3148,6 @@ class _FormField extends StatelessWidget {
   );
 }
 
-// ── Registration question card ────────────────────────────────────────────
-// Choice-style questions (few distinct values relative to respondent count)
-// get an aggregated bar breakdown; open-ended questions (mostly unique
-// answers) just list the individual responses instead — there's no field
-// "type" metadata on the registration doc itself to tell the two apart, so
-// this is inferred from the answer shape.
 class _RegistrationQuestionCard extends StatelessWidget {
   final String label;
   final List<String> answers;
