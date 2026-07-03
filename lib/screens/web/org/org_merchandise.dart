@@ -350,6 +350,29 @@ class _OrgMerchandiseScreenState extends State<OrgMerchandiseScreen>
             ),
           ),
           const SizedBox(width: 10),
+
+          OutlinedButton.icon(
+  onPressed: () => _openGcashSettings(context),
+  icon: const Icon(Icons.account_balance_wallet_outlined, size: 16),
+  label: Text(
+    'GCash Settings',
+    style: GoogleFonts.beVietnamPro(
+      fontSize: 13,
+      fontWeight: FontWeight.w600,
+    ),
+  ),
+  style: OutlinedButton.styleFrom(
+    foregroundColor: UpriseColors.primaryDark,
+    side: BorderSide(color: UpriseColors.primaryDark),
+    shape: RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(10),
+    ),
+    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+  ),
+),
+const SizedBox(width: 10),
+
+
           ElevatedButton.icon(
             onPressed: () => _openAddProductModal(context),
             icon: const Icon(Icons.add, size: 18, color: Colors.white),
@@ -523,6 +546,14 @@ class _OrgMerchandiseScreenState extends State<OrgMerchandiseScreen>
       builder: (_) => _SalesReportModal(orgId: widget.orgId),
     );
   }
+
+  void _openGcashSettings(BuildContext context) {
+  showDialog(
+    context: context,
+    barrierDismissible: false,
+    builder: (_) => _GcashSettingsDialog(orgId: widget.orgId),
+  );
+}
 
   void _showSnack(String msg, Color color) {
     ScaffoldMessenger.of(context).showSnackBar(
@@ -5635,6 +5666,237 @@ class OrderModel {
       gcashProofBase64: d['gcashProofBase64'] ?? '',
       gcashProofFormat: d['gcashProofFormat'] ?? '',
       paymentVerified: d['paymentVerified'] as bool? ?? false,
+    );
+  }
+}
+  // ─────────────────────────────────────────────────────────────
+// GCash Settings Dialog
+// ─────────────────────────────────────────────────────────────
+class _GcashSettingsDialog extends StatefulWidget {
+  final String orgId;
+  const _GcashSettingsDialog({required this.orgId});
+
+  @override
+  State<_GcashSettingsDialog> createState() => _GcashSettingsDialogState();
+}
+
+class _GcashSettingsDialogState extends State<_GcashSettingsDialog> {
+  final _numberCtrl = TextEditingController();
+  final _nameCtrl = TextEditingController();
+  bool _loading = true;
+  bool _saving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadGcashInfo();
+  }
+
+  @override
+  void dispose() {
+    _numberCtrl.dispose();
+    _nameCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadGcashInfo() async {
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('organizations')
+          .doc(widget.orgId)
+          .get();
+      if (doc.exists) {
+        final data = doc.data() ?? {};
+        setState(() {
+          _numberCtrl.text = data['gcashNumber'] as String? ?? '';
+          _nameCtrl.text = data['gcashName'] as String? ?? '';
+          _loading = false;
+        });
+      } else {
+        setState(() => _loading = false);
+      }
+    } catch (_) {
+      setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _saveGcashInfo() async {
+    if (_numberCtrl.text.trim().isEmpty) {
+      _showSnack('Please enter a GCash number.');
+      return;
+    }
+    if (_nameCtrl.text.trim().isEmpty) {
+      _showSnack('Please enter the GCash account name.');
+      return;
+    }
+
+    setState(() => _saving = true);
+    try {
+      await FirebaseFirestore.instance
+          .collection('organizations')
+          .doc(widget.orgId)
+          .update({
+        'gcashNumber': _numberCtrl.text.trim(),
+        'gcashName': _nameCtrl.text.trim(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+      if (mounted) {
+        _showSnack('GCash settings saved successfully!', isSuccess: true);
+        Navigator.pop(context);
+      }
+    } catch (e) {
+      if (mounted) _showSnack('Error: $e');
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  void _showSnack(String msg, {bool isSuccess = false}) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(msg, style: GoogleFonts.beVietnamPro()),
+        backgroundColor: isSuccess ? UpriseColors.success : UpriseColors.error,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+      child: Container(
+        width: 480,
+        padding: const EdgeInsets.all(28),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: UpriseColors.primaryDark.withAlpha(18),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(
+                    Icons.account_balance_wallet_outlined,
+                    color: UpriseColors.primaryDark,
+                    size: 22,
+                  ),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Text(
+                    'GCash Payment Settings',
+                    style: GoogleFonts.beVietnamPro(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                      color: const Color(0xFF1A202C),
+                    ),
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.close_rounded, size: 20),
+                  onPressed: _saving ? null : () => Navigator.pop(context),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Enter the GCash account details that students will pay to.',
+              style: GoogleFonts.beVietnamPro(
+                fontSize: 13,
+                color: const Color(0xFF64748B),
+              ),
+            ),
+            const SizedBox(height: 24),
+            if (_loading)
+              const Center(child: CircularProgressIndicator())
+            else ...[
+              TextFormField(
+                controller: _numberCtrl,
+                decoration: _DS.inputDecoration(
+                  'GCash Number',
+                  hint: 'e.g., 09171234567',
+                  icon: Icons.phone_android_outlined,
+                ),
+                style: GoogleFonts.beVietnamPro(fontSize: 13),
+                keyboardType: TextInputType.phone,
+              ),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: _nameCtrl,
+                decoration: _DS.inputDecoration(
+                  'GCash Account Name',
+                  hint: 'e.g., Juan Dela Cruz',
+                  icon: Icons.person_outline_rounded,
+                ),
+                style: GoogleFonts.beVietnamPro(fontSize: 13),
+              ),
+              const SizedBox(height: 28),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  OutlinedButton(
+                    onPressed: _saving ? null : () => Navigator.pop(context),
+                    style: OutlinedButton.styleFrom(
+                      side: const BorderSide(color: Color(0xFFE2E6EA)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 18,
+                        vertical: 11,
+                      ),
+                    ),
+                    child: Text(
+                      'Cancel',
+                      style: GoogleFonts.beVietnamPro(fontSize: 13),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  ElevatedButton.icon(
+                    onPressed: _saving ? null : _saveGcashInfo,
+                    icon: _saving
+                        ? const SizedBox(
+                            width: 14,
+                            height: 14,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : const Icon(Icons.save_rounded, size: 16),
+                    label: Text(
+                      _saving ? 'Saving...' : 'Save Settings',
+                      style: GoogleFonts.beVietnamPro(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: UpriseColors.primaryDark,
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 20,
+                        vertical: 11,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ],
+        ),
+      ),
     );
   }
 }

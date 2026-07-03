@@ -14,27 +14,80 @@ import 'export_pdf.dart';
 import '../../../theme/app_theme.dart';
 
 // ── Design tokens ────────────────────────────────────────────────────────────
+// ── Design tokens ────────────────────────────────────────────────────────────
 class _DS {
-  static const double radiusLg = 14;
+  static const double radiusSm = 8;
+  static const double radiusMd = 12;
+  static const double radiusLg = 16;
+  static const double radiusXl = 20;
+  
   static final cardShadow = [
     BoxShadow(
-      color: Colors.black.withOpacity(0.06),
-      blurRadius: 12,
+      color: Colors.black.withOpacity(0.05),
+      blurRadius: 16,
       offset: const Offset(0, 4),
     ),
   ];
+  
+  static final cardShadowHover = [
+    BoxShadow(
+      color: Colors.black.withOpacity(0.08),
+      blurRadius: 24,
+      offset: const Offset(0, 8),
+    ),
+  ];
+  
+  // Gradient for primary brand
+  static const LinearGradient primaryGradient = LinearGradient(
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+    colors: [
+      Color(0xFF3B82F6),
+      Color(0xFF2563EB),
+    ],
+  );
+  
+  static const LinearGradient accentGradient = LinearGradient(
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+    colors: [
+      Color(0xFFF59E0B),
+      Color(0xFFD97706),
+    ],
+  );
+  
+  static const LinearGradient successGradient = LinearGradient(
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+    colors: [
+      Color(0xFF10B981),
+      Color(0xFF059669),
+    ],
+  );
+  
+  static const LinearGradient dangerGradient = LinearGradient(
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+    colors: [
+      Color(0xFFEF4444),
+      Color(0xFFDC2626),
+    ],
+  );
 }
 
 // ── Color aliases ────────────────────────────────────────────────────────────
+// ── Color aliases ────────────────────────────────────────────────────────────
 class _C {
-  static const Color amber = Color(0xFFFB923C);
-  static const Color green = Color(0xFF059669);
-  static const Color red = Color(0xFFDC2626);
-  static const Color blue = Color(0xFF2563EB);
-  static const Color surface = Color(0xFFF8F9FB);
-  static const Color border = Color(0xFFE8ECF0);
+  static const Color amber = Color(0xFFF59E0B);
+  static const Color green = Color(0xFF10B981);
+  static const Color red = Color(0xFFEF4444);
+  static const Color blue = Color(0xFF3B82F6);
+  static const Color surface = Color(0xFFF8FAFC);
+  static const Color border = Color(0xFFE2E8F0);
   static const Color muted = Color(0xFF64748B);
-  static const Color charcoal = Color(0xFF1A202C);
+  static const Color charcoal = Color(0xFF0F172A);
+  static const Color white = Color(0xFFFFFFFF);
+  static const Color cardBg = Color(0xFFFFFFFF);
 }
 
 // ── Data model ───────────────────────────────────────────────────────────────
@@ -42,8 +95,11 @@ class _AnalyticsData {
   final List<Map<String, dynamic>> feedbacks;
   final List<Map<String, dynamic>> events;
   final List<Map<String, dynamic>> evalForms;
+  
+  // Cache para sa event titles para mas mabilis
+  final Map<String, String> _eventTitleCache = {};
 
-  const _AnalyticsData({
+   _AnalyticsData({
     required this.feedbacks,
     required this.events,
     required this.evalForms,
@@ -89,71 +145,89 @@ class _AnalyticsData {
     return c;
   }
 
-  String eventTitle(String id) {
-    // First try: match by document ID
-    try {
-      final exactMatch = events.firstWhere(
-        (e) => e['id'] == id,
-        orElse: () => const {},
-      );
-      if (exactMatch.isNotEmpty) {
-        final title = exactMatch['title'] as String?;
-        if (title != null && title.isNotEmpty) return title;
-      }
-    } catch (_) {}
+  /// ⭐ BAGO: Mas matalinong pag-match ng event title
+  String eventTitle(String eventId) {
+    // Check cache muna
+    if (_eventTitleCache.containsKey(eventId)) {
+      return _eventTitleCache[eventId]!;
+    }
 
-    // Second try: match by eventId field in the event data
-    try {
-      final matchByEventId = events.firstWhere(
-        (e) => e['eventId'] == id,
-        orElse: () => const {},
-      );
-      if (matchByEventId.isNotEmpty) {
-        final title = matchByEventId['title'] as String?;
-        if (title != null && title.isNotEmpty) return title;
-      }
-    } catch (_) {}
+    String result = eventId;
 
-    // Third try: check if the ID itself is stored as a title
-    try {
-      final matchByTitle = events.firstWhere(
-        (e) => e['title'] == id,
-        orElse: () => const {},
-      );
-      if (matchByTitle.isNotEmpty) {
-        return id;
+    // 1. Hanapin sa events gamit ang document ID
+    for (final event in events) {
+      final id = event['id'] as String? ?? '';
+      if (id == eventId) {
+        final title = event['title'] as String? ?? '';
+        if (title.isNotEmpty) {
+          result = title;
+          _eventTitleCache[eventId] = result;
+          return result;
+        }
       }
-    } catch (_) {}
+    }
 
-    // Fourth try: partial match
+    // 2. Hanapin gamit ang eventId field (kung meron)
+    for (final event in events) {
+      final evEventId = event['eventId'] as String? ?? '';
+      if (evEventId == eventId) {
+        final title = event['title'] as String? ?? '';
+        if (title.isNotEmpty) {
+          result = title;
+          _eventTitleCache[eventId] = result;
+          return result;
+        }
+      }
+    }
+
+    // 3. Hanapin gamit ang title kung ang eventId ay title talaga
     for (final event in events) {
       final title = event['title'] as String? ?? '';
-      if (title.isNotEmpty && (title.contains(id) || id.contains(title))) {
-        return title;
+      if (title == eventId) {
+        result = title;
+        _eventTitleCache[eventId] = result;
+        return result;
       }
     }
 
-    // Last resort: show a shortened version of the ID
-    if (id.length > 12) {
-      return '${id.substring(0, 8)}...';
+    // 4. Partial match (last resort)
+    for (final event in events) {
+      final title = event['title'] as String? ?? '';
+      if (title.isNotEmpty && eventId.isNotEmpty) {
+        if (title.contains(eventId) || eventId.contains(title)) {
+          result = title;
+          _eventTitleCache[eventId] = result;
+          return result;
+        }
+      }
     }
-    return id;
+
+    // 5. Kung wala talaga, i-display ang ID na pinaikli
+    _eventTitleCache[eventId] = result;
+    return result;
   }
 
+  /// Get event ID from title
   String? eventIdByTitle(String title) {
-    try {
-      final match = events.firstWhere(
-        (e) => e['title'] == title,
-        orElse: () => const {},
-      );
-      return match['id'] as String?;
-    } catch (_) {
-      return null;
+    for (final event in events) {
+      final t = event['title'] as String? ?? '';
+      if (t == title) {
+        return event['id'] as String?;
+      }
     }
+    return null;
   }
 
+  /// Get all event titles (unique)
   List<String> get eventTitles {
-    return events.map((e) => e['title'] as String).toList();
+    final titles = <String>{};
+    for (final event in events) {
+      final title = event['title'] as String? ?? '';
+      if (title.isNotEmpty) {
+        titles.add(title);
+      }
+    }
+    return titles.toList()..sort();
   }
 }
 
@@ -299,41 +373,66 @@ class _OrgEventAnalyticsScreenState extends State<OrgEventAnalyticsScreen>
     super.dispose();
   }
 
-  // ── Load ──────────────────────────────────────────────────────────────────
   Future<_AnalyticsData> _loadAll() async {
-    final db = FirebaseFirestore.instance;
-    
+  final db = FirebaseFirestore.instance;
+  
+  try {
+    // Kunin ang lahat ng feedback (walang filter para makita lahat)
     final feedbackSnapshot = await db.collection('feedback').get();
     
-    final results = await Future.wait([
-      Future.value(feedbackSnapshot),
-      db.collection('events').where('orgId', isEqualTo: widget.orgId).get(),
-      db.collection('eval_forms').where('orgId', isEqualTo: widget.orgId).get(),
-    ]);
+    // Kunin ang events ng organization
+    final eventsSnapshot = await db
+        .collection('events')
+        .where('orgId', isEqualTo: widget.orgId)
+        .get();
+    
+    // Kunin ang eval forms
+    final evalFormsSnapshot = await db
+        .collection('eval_forms')
+        .where('orgId', isEqualTo: widget.orgId)
+        .get();
 
-    final feedbacks = results[0].docs
-        .map((d) => {...d.data(), 'id': d.id})
+    final feedbacks = feedbackSnapshot.docs
+        .map((d) => {
+          ...d.data(),
+          'id': d.id,
+          // Siguraduhing may eventId
+          'eventId': d.data()['eventId'] as String? ?? '',
+        })
         .toList();
 
-    final events = results[1].docs.map((d) {
+    final events = eventsSnapshot.docs.map((d) {
       final data = d.data();
       return {
         'id': d.id,
-        'title': data['title'] as String? ?? 'Untitled',
-        'eventId': data['eventId'] as String?,
+        'title': data['title'] as String? ?? 'Untitled Event',
+        'eventId': data['eventId'] as String? ?? d.id, // Fallback sa document ID
       };
     }).toList();
 
-    final evalForms = results[2].docs
-        .map((d) => {...d.data(), 'id': d.id})
+    final evalForms = evalFormsSnapshot.docs
+        .map((d) => {
+          ...d.data(),
+          'id': d.id,
+        })
         .toList();
 
+    // Debug logs
     print('=== LOADED DATA ===');
     print('Feedback count: ${feedbacks.length}');
-    if (feedbacks.isNotEmpty) {
-      print('Sample feedback: ${feedbacks.first}');
-    }
     print('Events count: ${events.length}');
+    print('Eval forms count: ${evalForms.length}');
+    
+    // Print event titles para sa debugging
+    for (final event in events) {
+      print('Event: ${event['title']} (ID: ${event['id']})');
+    }
+    
+    // Print feedback event IDs
+    for (final fb in feedbacks) {
+      final eventId = fb['eventId'] ?? 'NO EVENT ID';
+      print('Feedback eventId: $eventId');
+    }
 
     final data = _AnalyticsData(
       feedbacks: feedbacks,
@@ -341,9 +440,12 @@ class _OrgEventAnalyticsScreenState extends State<OrgEventAnalyticsScreen>
       evalForms: evalForms,
     );
     
-    _debugData(data);
     return data;
+  } catch (e) {
+    print('Error loading analytics: $e');
+    rethrow;
   }
+}
 
   void _listenForUpdates() {
     _feedbackSubscription?.cancel();
@@ -992,280 +1094,277 @@ class _OrgEventAnalyticsScreenState extends State<OrgEventAnalyticsScreen>
   }
 
   Widget _buildAnalyticsTab(_AnalyticsData data) {
-    final avgByEvent = data.avgByEvent;
+  final avgByEvent = data.avgByEvent;
 
-    String highestEvent = '—';
-    double highestScore = 0.0;
-    String lowestEvent = '—';
-    double lowestScore = 5.1;
-    for (final e in avgByEvent.entries) {
-      final t = data.eventTitle(e.key);
-      if (e.value > highestScore) {
-        highestScore = e.value;
-        highestEvent = t;
-      }
-      if (e.value < lowestScore) {
-        lowestScore = e.value;
-        lowestEvent = t;
-      }
-    }
-    if (avgByEvent.isEmpty) {
-      highestScore = 0;
-      lowestScore = 0;
-    }
+  String highestEvent = '—';
+  double highestScore = 0.0;
+  String lowestEvent = '—';
+  double lowestScore = 5.1;
 
-    return Padding(
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: _KpiCard(
-                  icon: Icons.bar_chart_rounded,
-                  label: 'Total evaluations',
-                  value: data.totalFeedbacks.toString(),
-                  sub: data.totalFeedbacks > 0
-                      ? 'All responses collected'
-                      : 'No data yet',
-                  color: _C.blue,
-                ),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: _KpiCard(
-                  icon: Icons.star_outline,
-                  label: 'Average rating',
-                  value: data.totalFeedbacks > 0 
-                      ? data.avgRating.toStringAsFixed(1) 
-                      : '—',
-                  sub: data.totalFeedbacks > 0
-                      ? 'Based on ${data.totalFeedbacks} responses'
-                      : 'No ratings yet',
-                  color: _C.amber,
-                ),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: _KpiCard(
-                  icon: Icons.emoji_events_outlined,
-                  label: 'Highest rated',
-                  value: highestEvent,
-                  sub: avgByEvent.isNotEmpty 
-                      ? 'Score: ${highestScore.toStringAsFixed(1)} / 5.0'
-                      : 'No data yet',
-                  color: _C.green,
-                ),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: _KpiCard(
-                  icon: Icons.trending_down_rounded,
-                  label: 'Needs improvement',
-                  value: lowestEvent,
-                  sub: avgByEvent.isNotEmpty 
-                      ? 'Score: ${lowestScore.toStringAsFixed(1)} / 5.0'
-                      : 'No data yet',
-                  color: _C.red,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 20),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(child: _SatisfactionCard(data: data)),
-              const SizedBox(width: 20),
-              Expanded(child: _DistributionCard(data: data)),
-            ],
-          ),
-          const SizedBox(height: 20),
-          _CompletionCard(data: data),
-        ],
-      ),
-    );
+  for (final entry in avgByEvent.entries) {
+    final title = data.eventTitle(entry.key);
+    final score = entry.value;
+    if (score > highestScore) {
+      highestScore = score;
+      highestEvent = title;
+    }
+    if (score < lowestScore) {
+      lowestScore = score;
+      lowestEvent = title;
+    }
+  }
+  if (avgByEvent.isEmpty) {
+    highestScore = 0;
+    lowestScore = 0;
+    highestEvent = '—';
+    lowestEvent = '—';
   }
 
-  Widget _buildFeedbackTab(
-    _AnalyticsData data,
-    List<Map<String, dynamic>> filtered,
-  ) {
-    final sorted = [...filtered]
-      ..sort((a, b) {
-        final ta = (a['submittedAt'] as Timestamp?)?.millisecondsSinceEpoch ?? 0;
-        final tb = (b['submittedAt'] as Timestamp?)?.millisecondsSinceEpoch ?? 0;
-        return tb.compareTo(ta);
-      });
-    final items = sorted.take(50).toList();
-
-    return Column(
+  return Padding(
+    padding: const EdgeInsets.all(20),
+    child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (_hasActiveFilters)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
-            child: _ActiveFilterChips(
-              searchQuery: _searchQuery,
-              selectedEvent: _selectedEvent,
-              selectedRating: _selectedRating,
-              filteredCount: filtered.length,
-              totalCount: data.totalFeedbacks,
-              onRemoveSearch: () => _searchCtrl.clear(),
-              onRemoveEvent: () =>
-                  setState(() => _selectedEvent = 'All Events'),
-              onRemoveRating: () => setState(() => _selectedRating = null),
-              onClearAll: () => setState(() {
-                _searchCtrl.clear();
-                _selectedEvent = 'All Events';
-                _selectedRating = null;
-              }),
+        Row(
+          children: [
+            Expanded(
+              child: _KpiCard(
+                icon: Icons.bar_chart_rounded,
+                label: 'Total evaluations',
+                value: data.totalFeedbacks.toString(),
+                sub: data.totalFeedbacks > 0
+                    ? 'All responses collected'
+                    : 'No data yet',
+                color: _C.blue,
+              ),
             ),
-          ),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-          decoration: const BoxDecoration(
-            color: _C.surface,
-            border: Border(
-              top: BorderSide(color: _C.border),
-              bottom: BorderSide(color: _C.border),
+            const SizedBox(width: 14),
+            Expanded(
+              child: _KpiCard(
+                icon: Icons.star_outline,
+                label: 'Average rating',
+                value: data.totalFeedbacks > 0
+                    ? data.avgRating.toStringAsFixed(1)
+                    : '—',
+                sub: data.totalFeedbacks > 0
+                    ? 'Based on ${data.totalFeedbacks} responses'
+                    : 'No ratings yet',
+                color: _C.amber,
+              ),
             ),
-          ),
-          child: Row(
-            children: [
-              Expanded(flex: 3, child: _hCell('EVENT')),
-              Expanded(flex: 5, child: _hCell('COMMENT')),
-              Expanded(flex: 2, child: _hCell('RATING')),
-              Expanded(flex: 2, child: _hCell('DATE')),
-            ],
-          ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: _KpiCard(
+                icon: Icons.emoji_events_outlined,
+                label: 'Highest rated',
+                value: highestEvent,
+                sub: avgByEvent.isNotEmpty
+                    ? 'Score: ${highestScore.toStringAsFixed(1)} / 5.0'
+                    : 'No data yet',
+                color: _C.green,
+              ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: _KpiCard(
+                icon: Icons.trending_down_rounded,
+                label: 'Needs improvement',
+                value: lowestEvent,
+                sub: avgByEvent.isNotEmpty
+                    ? 'Score: ${lowestScore.toStringAsFixed(1)} / 5.0'
+                    : 'No data yet',
+                color: _C.red,
+              ),
+            ),
+          ],
         ),
-        if (items.isEmpty)
-          Padding(
-            padding: const EdgeInsets.all(40),
-            child: Center(
-              child: Column(
-                children: [
-                  const Icon(
-                    Icons.search_off,
-                    size: 40,
-                    color: Color(0xFFD1D5DB),
-                  ),
-                  const SizedBox(height: 10),
-                  Text(
-                    'No feedback matches your filters',
-                    style: GoogleFonts.beVietnamPro(color: _C.muted),
-                  ),
-                ],
-              ),
-            ),
-          )
-        else
-          ...items.asMap().entries.map((e) {
-            final f = e.value;
-            final rating = f['rating'] as int? ?? 0;
-            final comment = f['comment'] as String? ?? '';
-            final eventId = f['eventId'] as String? ?? '';
-            final eventTitle = data.eventTitle(eventId);
-            final createdAt =
-                (f['submittedAt'] as Timestamp?)?.toDate() ?? DateTime.now();
-            final isLast = e.key == items.length - 1;
-
-            return Container(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-              decoration: BoxDecoration(
-                border: isLast
-                    ? null
-                    : const Border(
-                        bottom: BorderSide(color: Color(0xFFF1F5F9)),
-                      ),
-              ),
-              child: Row(
-                children: [
-                  Expanded(
-                    flex: 3,
-                    child: Text(
-                      eventTitle,
-                      style: GoogleFonts.beVietnamPro(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w500,
-                        color: _C.charcoal,
-                      ),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  Expanded(
-                    flex: 5,
-                    child: Text(
-                      comment.isEmpty ? '—' : comment,
-                      style: GoogleFonts.beVietnamPro(
-                        fontSize: 12,
-                        color: _C.muted,
-                      ),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  Expanded(
-                    flex: 2,
-                    child: Row(
-                      children: List.generate(
-                        5,
-                        (i) => Icon(
-                          i < rating ? Icons.star : Icons.star_border,
-                          size: 14,
-                          color: const Color(0xFFF97316),
-                        ),
-                      ),
-                    ),
-                  ),
-                  Expanded(
-                    flex: 2,
-                    child: Text(
-                      DateFormat('MMM dd, yyyy').format(createdAt),
-                      style: GoogleFonts.beVietnamPro(
-                        fontSize: 12,
-                        color: _C.muted,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            );
-          }),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 11),
-          decoration: const BoxDecoration(
-            border: Border(top: BorderSide(color: _C.border)),
-            color: _C.surface,
-            borderRadius: BorderRadius.vertical(
-              bottom: Radius.circular(_DS.radiusLg),
-            ),
-          ),
-          child: Row(
-            children: [
-              Text(
-                '${items.length} result${items.length == 1 ? '' : 's'}',
-                style: GoogleFonts.beVietnamPro(fontSize: 12, color: _C.muted),
-              ),
-              const Spacer(),
-              _FooterBtn(
-                icon: Icons.download_outlined,
-                label: 'CSV',
-                onTap: () => _exportAnalytics('csv', data),
-              ),
-              const SizedBox(width: 8),
-              _FooterBtn(
-                icon: Icons.picture_as_pdf_outlined,
-                label: 'PDF',
-                onTap: () => _exportAnalytics('pdf', data),
-              ),
-            ],
-          ),
+        const SizedBox(height: 20),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(child: _SatisfactionCard(data: data)),
+            const SizedBox(width: 20),
+            Expanded(child: _DistributionCard(data: data)),
+          ],
         ),
+        const SizedBox(height: 20),
+        _CompletionCard(data: data),
       ],
-    );
-  }
+    ),
+  );
+}
+
+  Widget _buildFeedbackTab(
+  _AnalyticsData data,
+  List<Map<String, dynamic>> filtered,
+) {
+  final sorted = [...filtered]
+    ..sort((a, b) {
+      final ta = (a['submittedAt'] as Timestamp?)?.millisecondsSinceEpoch ?? 0;
+      final tb = (b['submittedAt'] as Timestamp?)?.millisecondsSinceEpoch ?? 0;
+      return tb.compareTo(ta);
+    });
+  final items = sorted.take(50).toList();
+
+  return Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      if (_hasActiveFilters)
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+          child: _ActiveFilterChips(
+            searchQuery: _searchQuery,
+            selectedEvent: _selectedEvent,
+            selectedRating: _selectedRating,
+            filteredCount: filtered.length,
+            totalCount: data.totalFeedbacks,
+            onRemoveSearch: () => _searchCtrl.clear(),
+            onRemoveEvent: () => setState(() => _selectedEvent = 'All Events'),
+            onRemoveRating: () => setState(() => _selectedRating = null),
+            onClearAll: () => setState(() {
+              _searchCtrl.clear();
+              _selectedEvent = 'All Events';
+              _selectedRating = null;
+            }),
+          ),
+        ),
+      Container(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+        decoration: const BoxDecoration(
+          color: _C.surface,
+          border: Border(
+            top: BorderSide(color: _C.border),
+            bottom: BorderSide(color: _C.border),
+          ),
+        ),
+        child: Row(
+          children: [
+            Expanded(flex: 3, child: _hCell('EVENT')),
+            Expanded(flex: 5, child: _hCell('COMMENT')),
+            Expanded(flex: 2, child: _hCell('RATING')),
+            Expanded(flex: 2, child: _hCell('DATE')),
+          ],
+        ),
+      ),
+      if (items.isEmpty)
+        Padding(
+          padding: const EdgeInsets.all(40),
+          child: Center(
+            child: Column(
+              children: [
+                const Icon(Icons.search_off, size: 40, color: Color(0xFFD1D5DB)),
+                const SizedBox(height: 10),
+                Text(
+                  'No feedback matches your filters',
+                  style: GoogleFonts.beVietnamPro(color: _C.muted),
+                ),
+              ],
+            ),
+          ),
+        )
+      else
+        ...items.asMap().entries.map((entry) {
+          final f = entry.value;
+          final rating = f['rating'] as int? ?? 0;
+          final comment = f['comment'] as String? ?? '';
+          final eventId = f['eventId'] as String? ?? '';
+          final eventTitle = data.eventTitle(eventId); // ✅ fixed
+          final createdAt =
+              (f['submittedAt'] as Timestamp?)?.toDate() ?? DateTime.now();
+          final isLast = entry.key == items.length - 1;
+
+          return Container(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+            decoration: BoxDecoration(
+              border: isLast
+                  ? null
+                  : const Border(bottom: BorderSide(color: Color(0xFFF1F5F9))),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  flex: 3,
+                  child: Text(
+                    eventTitle,
+                    style: GoogleFonts.beVietnamPro(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                      color: _C.charcoal,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                Expanded(
+                  flex: 5,
+                  child: Text(
+                    comment.isEmpty ? '—' : comment,
+                    style: GoogleFonts.beVietnamPro(
+                      fontSize: 12,
+                      color: _C.muted,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                Expanded(
+                  flex: 2,
+                  child: Row(
+                    children: List.generate(
+                      5,
+                      (i) => Icon(
+                        i < rating ? Icons.star : Icons.star_border,
+                        size: 14,
+                        color: const Color(0xFFF97316),
+                      ),
+                    ),
+                  ),
+                ),
+                Expanded(
+                  flex: 2,
+                  child: Text(
+                    DateFormat('MMM dd, yyyy').format(createdAt),
+                    style: GoogleFonts.beVietnamPro(
+                      fontSize: 12,
+                      color: _C.muted,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          );
+        }),
+      Container(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 11),
+        decoration: const BoxDecoration(
+          border: Border(top: BorderSide(color: _C.border)),
+          color: _C.surface,
+          borderRadius: BorderRadius.vertical(
+            bottom: Radius.circular(_DS.radiusLg),
+          ),
+        ),
+        child: Row(
+          children: [
+            Text(
+              '${items.length} result${items.length == 1 ? '' : 's'}',
+              style: GoogleFonts.beVietnamPro(fontSize: 12, color: _C.muted),
+            ),
+            const Spacer(),
+            _FooterBtn(
+              icon: Icons.download_outlined,
+              label: 'CSV',
+              onTap: () => _exportAnalytics('csv', data),
+            ),
+            const SizedBox(width: 8),
+            _FooterBtn(
+              icon: Icons.picture_as_pdf_outlined,
+              label: 'PDF',
+              onTap: () => _exportAnalytics('pdf', data),
+            ),
+          ],
+        ),
+      ),
+    ],
+  );
+}
 
   Widget _buildEvalFormsTab(_AnalyticsData data) {
     final forms = data.evalForms
@@ -1919,15 +2018,16 @@ class _OrgEventAnalyticsScreenState extends State<OrgEventAnalyticsScreen>
     );
   }
 
+
   Widget _hCell(String t) => Text(
-    t,
-    style: GoogleFonts.beVietnamPro(
-      fontSize: 11,
-      fontWeight: FontWeight.w700,
-      color: _C.muted,
-      letterSpacing: 0.7,
-    ),
-  );
+  t.toUpperCase(), // 
+  style: GoogleFonts.inter(
+    fontSize: 10,
+    fontWeight: FontWeight.w700,
+    color: _C.muted,
+    letterSpacing: 0.8,
+  ),
+);
 
   InputDecoration _fieldDec(String hint, {IconData? icon}) => InputDecoration(
     hintText: hint,
@@ -1971,21 +2071,28 @@ class _StatCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.all(18),
+    padding: const EdgeInsets.all(20),
     decoration: BoxDecoration(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(12),
-      border: Border.all(color: _C.border),
+      color: _C.white,
+      borderRadius: BorderRadius.circular(_DS.radiusMd),
+      border: Border.all(color: _C.border.withOpacity(0.5)),
       boxShadow: _DS.cardShadow,
     ),
     child: Row(
       children: [
         Container(
-          width: 44,
-          height: 44,
+          width: 48,
+          height: 48,
           decoration: BoxDecoration(
-            color: c.color.withOpacity(0.10),
-            borderRadius: BorderRadius.circular(12),
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                c.color.withOpacity(0.15),
+                c.color.withOpacity(0.05),
+              ],
+            ),
+            borderRadius: BorderRadius.circular(_DS.radiusMd),
           ),
           child: Icon(c.icon, color: c.color, size: 22),
         ),
@@ -1996,19 +2103,21 @@ class _StatCard extends StatelessWidget {
             children: [
               Text(
                 c.label,
-                style: GoogleFonts.beVietnamPro(
-                  fontSize: 11,
+                style: GoogleFonts.inter(
+                  fontSize: 12,
                   color: _C.muted,
                   fontWeight: FontWeight.w500,
+                  letterSpacing: 0.3,
                 ),
               ),
-              const SizedBox(height: 2),
+              const SizedBox(height: 4),
               Text(
                 c.value,
-                style: GoogleFonts.beVietnamPro(
-                  fontSize: 26,
+                style: GoogleFonts.inter(
+                  fontSize: 28,
                   fontWeight: FontWeight.w700,
                   color: _C.charcoal,
+                  letterSpacing: -0.5,
                 ),
               ),
             ],
@@ -2033,18 +2142,26 @@ class _KpiCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.all(14),
+    padding: const EdgeInsets.all(16),
     decoration: BoxDecoration(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(12),
-      border: Border.all(color: _C.border),
+      color: _C.white,
+      borderRadius: BorderRadius.circular(_DS.radiusMd),
+      border: Border.all(color: _C.border.withOpacity(0.5)),
+      boxShadow: _DS.cardShadow,
     ),
     child: Row(
       children: [
         Container(
-          padding: const EdgeInsets.all(9),
+          padding: const EdgeInsets.all(10),
           decoration: BoxDecoration(
-            color: color.withOpacity(0.10),
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                color.withOpacity(0.15),
+                color.withOpacity(0.05),
+              ],
+            ),
             borderRadius: BorderRadius.circular(10),
           ),
           child: Icon(icon, color: color, size: 20),
@@ -2056,22 +2173,32 @@ class _KpiCard extends StatelessWidget {
             children: [
               Text(
                 label,
-                style: GoogleFonts.beVietnamPro(fontSize: 11, color: _C.muted),
+                style: GoogleFonts.inter(
+                  fontSize: 11,
+                  color: _C.muted,
+                  fontWeight: FontWeight.w500,
+                  letterSpacing: 0.3,
+                ),
               ),
-              const SizedBox(height: 3),
+              const SizedBox(height: 2),
               Text(
                 value,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: GoogleFonts.beVietnamPro(
+                style: GoogleFonts.inter(
                   fontSize: 16,
                   fontWeight: FontWeight.w700,
                   color: _C.charcoal,
+                  letterSpacing: -0.3,
                 ),
               ),
               Text(
                 sub,
-                style: GoogleFonts.beVietnamPro(fontSize: 10, color: _C.muted),
+                style: GoogleFonts.inter(
+                  fontSize: 10,
+                  color: _C.muted,
+                  fontWeight: FontWeight.w400,
+                ),
               ),
             ],
           ),
@@ -2089,24 +2216,43 @@ class _SatisfactionCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final sorted = data.avgByEvent.entries.toList()
       ..sort((a, b) => b.value.compareTo(a.value));
+
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: _C.border),
+        color: _C.white,
+        borderRadius: BorderRadius.circular(_DS.radiusMd),
+        border: Border.all(color: _C.border.withOpacity(0.5)),
+        boxShadow: _DS.cardShadow,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Padding(
             padding: const EdgeInsets.all(16),
-            child: Text(
-              'Event satisfaction scores',
-              style: GoogleFonts.beVietnamPro(
-                fontSize: 14,
-                fontWeight: FontWeight.w700,
-                color: _C.charcoal,
-              ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFEFF6FF),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(
+                    Icons.emoji_events_outlined,
+                    size: 16,
+                    color: _C.blue,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Text(
+                  'Event satisfaction scores',
+                  style: GoogleFonts.inter(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: _C.charcoal,
+                  ),
+                ),
+              ],
             ),
           ),
           const Divider(height: 1, color: _C.border),
@@ -2114,16 +2260,28 @@ class _SatisfactionCard extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.all(32),
               child: Center(
-                child: Text(
-                  'No feedback data yet',
-                  style: GoogleFonts.beVietnamPro(color: _C.muted),
+                child: Column(
+                  children: [
+                    Icon(Icons.inbox_outlined, size: 40, color: _C.border),
+                    const SizedBox(height: 8),
+                    Text(
+                      'No feedback data yet',
+                      style: GoogleFonts.inter(
+                        fontSize: 13,
+                        color: _C.muted,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             )
           else
-            ...sorted.asMap().entries.map((e) {
-              final score = e.value.value;
-              final title = data.eventTitle(e.value.key);
+            ...sorted.asMap().entries.map((entry) {
+              final eventKey = entry.value.key;
+              final score = entry.value.value;
+              final title = data.eventTitle(eventKey);
+              final isLast = entry.key == sorted.length - 1;
+
               return Column(
                 children: [
                   Padding(
@@ -2139,38 +2297,60 @@ class _SatisfactionCard extends StatelessWidget {
                             Expanded(
                               child: Text(
                                 title,
-                                style: GoogleFonts.beVietnamPro(
+                                style: GoogleFonts.inter(
                                   fontSize: 13,
                                   fontWeight: FontWeight.w500,
                                   color: _C.charcoal,
                                 ),
+                                overflow: TextOverflow.ellipsis,
                               ),
                             ),
-                            Text(
-                              score.toStringAsFixed(1),
-                              style: GoogleFonts.beVietnamPro(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w700,
-                                color: _C.amber,
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 3,
+                              ),
+                              decoration: BoxDecoration(
+                                color: score >= 4.0
+                                    ? const Color(0xFFECFDF5)
+                                    : score >= 3.0
+                                        ? const Color(0xFFFFFBEB)
+                                        : const Color(0xFFFEF2F2),
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: Text(
+                                score.toStringAsFixed(1),
+                                style: GoogleFonts.inter(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w700,
+                                  color: score >= 4.0
+                                      ? _C.green
+                                      : score >= 3.0
+                                          ? _C.amber
+                                          : _C.red,
+                                ),
                               ),
                             ),
                           ],
                         ),
-                        const SizedBox(height: 7),
+                        const SizedBox(height: 8),
                         ClipRRect(
                           borderRadius: BorderRadius.circular(99),
                           child: LinearProgressIndicator(
                             value: score / 5.0,
-                            backgroundColor: const Color(0xFFE5E7EB),
-                            color: UpriseColors.primaryDark,
-                            minHeight: 7,
+                            backgroundColor: const Color(0xFFF1F5F9),
+                            color: score >= 4.0
+                                ? _C.green
+                                : score >= 3.0
+                                    ? _C.amber
+                                    : _C.red,
+                            minHeight: 6,
                           ),
                         ),
                       ],
                     ),
                   ),
-                  if (e.key != sorted.length - 1)
-                    const Divider(height: 1, color: _C.border),
+                  if (!isLast) const Divider(height: 1, color: _C.border),
                 ],
               );
             }),
@@ -2189,30 +2369,50 @@ class _DistributionCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final counts = data.starCounts;
     final total = data.totalFeedbacks;
-    final segs = [
-      _Seg(5, counts[5]!, const Color(0xFFEA580C)),
-      _Seg(4, counts[4]!, const Color(0xFFFB923C)),
-      _Seg(3, counts[3]!, const Color(0xFFF97316)),
-      _Seg(2, counts[2]!, const Color(0xFFFCD34D)),
-      _Seg(1, counts[1]!, const Color(0xFFE5E7EB)),
-    ];
+  
+final segs = [
+  _Seg(5, counts[5]!, const Color(0xFF10B981)),  // Green
+  _Seg(4, counts[4]!, const Color(0xFF34D399)),  // Light Green
+  _Seg(3, counts[3]!, const Color(0xFFFBBF24)),  // Yellow
+  _Seg(2, counts[2]!, const Color(0xFFFB923C)),  // Orange
+  _Seg(1, counts[1]!, const Color(0xFFF87171)),  // Red
+];
+    
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: _C.border),
+        color: _C.white,
+        borderRadius: BorderRadius.circular(_DS.radiusMd),
+        border: Border.all(color: _C.border.withOpacity(0.5)),
+        boxShadow: _DS.cardShadow,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'Rating distribution',
-            style: GoogleFonts.beVietnamPro(
-              fontSize: 14,
-              fontWeight: FontWeight.w700,
-              color: UpriseColors.primaryDark,
-            ),
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFFBEB),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(
+                  Icons.insert_chart_outlined,
+                  size: 16,
+                  color: _C.amber,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Text(
+                'Rating distribution',
+                style: GoogleFonts.inter(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: _C.charcoal,
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 16),
           if (total == 0)
@@ -2222,13 +2422,13 @@ class _DistributionCard extends StatelessWidget {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.insert_chart_outlined, size: 32, color: Colors.grey.shade300),
-                  const SizedBox(height: 4),
+                  Icon(Icons.insert_chart_outlined, size: 40, color: _C.border),
+                  const SizedBox(height: 8),
                   Text(
                     'No feedback yet',
-                    style: GoogleFonts.beVietnamPro(
-                      fontSize: 12,
-                      color: Colors.grey.shade400,
+                    style: GoogleFonts.inter(
+                      fontSize: 13,
+                      color: _C.muted,
                     ),
                   ),
                 ],
@@ -2257,12 +2457,12 @@ class _DistributionCard extends StatelessWidget {
                           ? (s.count / total * 100).toStringAsFixed(0)
                           : '0';
                       return Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 4),
+                        padding: const EdgeInsets.symmetric(vertical: 3),
                         child: Row(
                           children: [
                             Container(
-                              width: 10,
-                              height: 10,
+                              width: 12,
+                              height: 12,
                               decoration: BoxDecoration(
                                 color: s.color,
                                 shape: BoxShape.circle,
@@ -2271,18 +2471,28 @@ class _DistributionCard extends StatelessWidget {
                             const SizedBox(width: 8),
                             Text(
                               '${s.stars} star${s.stars > 1 ? 's' : ''}',
-                              style: GoogleFonts.beVietnamPro(
+                              style: GoogleFonts.inter(
                                 fontSize: 12,
                                 color: _C.muted,
                               ),
                             ),
                             const Spacer(),
-                            Text(
-                              '$pct%',
-                              style: GoogleFonts.beVietnamPro(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                                color: _C.charcoal,
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 2,
+                              ),
+                              decoration: BoxDecoration(
+                                color: s.color.withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: Text(
+                                '$pct%',
+                                style: GoogleFonts.inter(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: s.color,
+                                ),
                               ),
                             ),
                           ],
@@ -2347,12 +2557,16 @@ class _DonutPainter extends CustomPainter {
       }
     }
 
-    final bigStyle = GoogleFonts.beVietnamPro(
-      fontSize: 20,
+    final bigStyle = GoogleFonts.inter(
+      fontSize: 22,
       fontWeight: FontWeight.w700,
       color: _C.charcoal,
     );
-    final smStyle = GoogleFonts.beVietnamPro(fontSize: 10, color: _C.muted);
+    final smStyle = GoogleFonts.inter(
+      fontSize: 11,
+      color: _C.muted,
+      fontWeight: FontWeight.w500,
+    );
 
     final tp1 = TextPainter(
       text: TextSpan(text: label, style: bigStyle),
@@ -2379,24 +2593,43 @@ class _CompletionCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final countByEvent = data.feedbackCountByEvent;
+
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: _C.border),
+        color: _C.white,
+        borderRadius: BorderRadius.circular(_DS.radiusMd),
+        border: Border.all(color: _C.border.withOpacity(0.5)),
+        boxShadow: _DS.cardShadow,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Padding(
             padding: const EdgeInsets.all(16),
-            child: Text(
-              'Evaluation completion by event',
-              style: GoogleFonts.beVietnamPro(
-                fontSize: 14,
-                fontWeight: FontWeight.w700,
-                color: _C.charcoal,
-              ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFECFDF5),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(
+                    Icons.checklist_outlined,
+                    size: 16,
+                    color: _C.green,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Text(
+                  'Evaluation completion by event',
+                  style: GoogleFonts.inter(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: _C.charcoal,
+                  ),
+                ),
+              ],
             ),
           ),
           const Divider(height: 1, color: _C.border),
@@ -2409,36 +2642,74 @@ class _CompletionCard extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.all(16),
               child: Wrap(
-                spacing: 24,
-                runSpacing: 16,
+                spacing: 20,
+                runSpacing: 12,
                 children: [
-                  ...data.events.map((e) {
-                    final id = e['id'] as String;
-                    final title = e['title'] as String;
+                  ...data.events.map((event) {
+                    final id = event['id'] as String;
+                    final title = event['title'] as String;
                     final received = countByEvent[id] ?? 0;
-                    return SizedBox(
-                      width: 220,
+                    final hasFeedback = received > 0;
+
+                    return Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 10,
+                      ),
+                      decoration: BoxDecoration(
+                        color: hasFeedback
+                            ? const Color(0xFFF0FDF4)
+                            : const Color(0xFFF8FAFC),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: hasFeedback
+                              ? const Color(0xFF86EFAC)
+                              : _C.border,
+                        ),
+                      ),
                       child: Row(
+                        mainAxisSize: MainAxisSize.min,
                         children: [
-                          Expanded(
-                            child: Text(
-                              title,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: GoogleFonts.beVietnamPro(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w500,
-                                color: _C.charcoal,
-                              ),
+                          Container(
+                            width: 6,
+                            height: 6,
+                            decoration: BoxDecoration(
+                              color: hasFeedback ? _C.green : _C.border,
+                              shape: BoxShape.circle,
                             ),
                           ),
-                          const SizedBox(width: 6),
+                          const SizedBox(width: 8),
                           Text(
-                            '$received response${received == 1 ? '' : 's'}',
-                            style: GoogleFonts.beVietnamPro(
+                            title,
+                            style: GoogleFonts.inter(
                               fontSize: 13,
-                              fontWeight: FontWeight.w700,
-                              color: UpriseColors.primaryDark,
+                              fontWeight: FontWeight.w500,
+                              color: _C.charcoal,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color: hasFeedback
+                                  ? const Color(0xFF86EFAC)
+                                  : const Color(0xFFE2E8F0),
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: Text(
+                              '$received response${received == 1 ? '' : 's'}',
+                              style: GoogleFonts.inter(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: hasFeedback
+                                    ? const Color(0xFF166534)
+                                    : _C.muted,
+                              ),
                             ),
                           ),
                         ],
