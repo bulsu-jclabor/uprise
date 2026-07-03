@@ -14,6 +14,7 @@ import 'package:printing/printing.dart';
 import '../auth/role_router.dart';
 import '../student/student_login.dart';
 import '../student/student_events_screen.dart';
+import '../student/student_webinar_code_screen.dart';  // ⭐ ADD THIS
 import '../../models/profile_model.dart';
 import '../../widgets/shared/app_support.dart';
 import '../../widgets/student/app_colors.dart';
@@ -301,6 +302,16 @@ class StudentProfileScreen extends StatefulWidget {
 class _StudentProfileScreenState extends State<StudentProfileScreen> {
   final ProfileModel _profile = ProfileModel();
 
+  // ⭐ ADD: Navigate to Webinar Code Screen
+  void _openWebinarCode() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => const StudentWebinarCodeScreen(),
+      ),
+    );
+  }
+
   Future<List<QueryDocumentSnapshot>> _fetchEventsByIds(List<String> eventIds) async {
     if (eventIds.isEmpty) return [];
 
@@ -338,6 +349,16 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
                     fontWeight: FontWeight.w600,
                     fontSize: 18)),
             actions: [
+              // ⭐ QR CODE ICON ⭐
+              IconButton(
+                icon: Icon(
+                  Icons.qr_code_scanner_rounded,
+                  color: AppColors.primaryDark,
+                  size: 26,
+                ),
+                onPressed: _openWebinarCode,
+                tooltip: 'Enter Webinar Code',
+              ),
               IconButton(
                 icon: const Icon(Icons.settings, color: kOrange),
                 onPressed: () => Navigator.push(
@@ -2719,7 +2740,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         );
                       }
                     },
-                    // ── UPDATED: matches the solid red style from the profile tab ──
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.red,
                       foregroundColor: Colors.white,
