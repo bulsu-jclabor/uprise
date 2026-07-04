@@ -149,6 +149,7 @@ class CertificateRecord {
   final String? verificationCode;
   final String? recipientName;
   final Map<String, dynamic>? namePlacement;
+  final String? eventId; 
 
   const CertificateRecord({
     required this.id,
@@ -166,6 +167,7 @@ class CertificateRecord {
     this.verificationCode,
     this.recipientName,
     this.namePlacement,
+    this.eventId,
   });
 
   factory CertificateRecord.fromFirestore(DocumentSnapshot doc) {
@@ -188,6 +190,7 @@ class CertificateRecord {
       verificationCode: d['verificationCode'] as String?,
       recipientName: d['recipientName'] as String?,
       namePlacement: d['namePlacement'] is Map ? Map<String, dynamic>.from(d['namePlacement'] as Map) : null,
+      eventId: d['eventId'] as String?,
     );
   }
 }
@@ -571,15 +574,29 @@ class _OrgCertificatesScreenState extends State<OrgCertificatesScreen> {
           ),
           Expanded(flex: 2, child: _certBadge(r.status)),
           Expanded(
-            flex: 2,
-            child: Row(mainAxisAlignment: MainAxisAlignment.end, children: [
-              _ActionIconButton(icon: Icons.visibility_outlined,    tooltip: 'View',   color: const Color(0xFF3B82F6),  onTap: () => _viewCert(r)),
-              const SizedBox(width: 6),
-              _ActionIconButton(icon: Icons.edit_outlined,          tooltip: 'Edit',   color: UpriseColors.primaryDark, onTap: () => _editCert(r)),
-              const SizedBox(width: 6),
-              _ActionIconButton(icon: Icons.delete_outline_rounded, tooltip: 'Delete', color: const Color(0xFFDC2626),  onTap: () => _confirmDelete(r)),
-            ]),
-          ),
+  flex: 2,
+  child: Row(mainAxisAlignment: MainAxisAlignment.end, children: [
+    _ActionIconButton(icon: Icons.visibility_outlined, tooltip: 'View', color: const Color(0xFF3B82F6), onTap: () => _viewCert(r)),
+    const SizedBox(width: 4),
+    // Only show extra actions for draft certificates that have an eventId
+    if (r.status == 'draft' && r.eventId != null)
+      PopupMenuButton<String>(
+        icon: Icon(Icons.more_vert, size: 16, color: const Color(0xFF64748B)),
+        onSelected: (value) {
+          if (value == 'send') _sendCertificates(r);
+          if (value == 'status') _viewAttendeeStatus(r);
+        },
+        itemBuilder: (_) => [
+          const PopupMenuItem(value: 'send', child: Text('Send Certificates')),
+          const PopupMenuItem(value: 'status', child: Text('View Attendees Status')),
+        ],
+      ),
+    if (r.status != 'draft' || r.eventId == null) const SizedBox(width: 4),
+    _ActionIconButton(icon: Icons.edit_outlined, tooltip: 'Edit', color: UpriseColors.primaryDark, onTap: () => _editCert(r)),
+    const SizedBox(width: 4),
+    _ActionIconButton(icon: Icons.delete_outline_rounded, tooltip: 'Delete', color: const Color(0xFFDC2626), onTap: () => _confirmDelete(r)),
+  ]),
+),
         ]),
       ),
     );
@@ -688,6 +705,245 @@ class _OrgCertificatesScreenState extends State<OrgCertificatesScreen> {
     );
   }
 
+  // ---------- NEW METHODS ----------
+
+/// Sends certificates to all eligible attendees (attended + evaluated) who haven't received one yet.
+Future<void> _sendCertificates(CertificateRecord draft) async {
+  final eventId = draft.eventId;
+  if (eventId == null || eventId.isEmpty) {
+    _showToast('This draft is not linked to an event.', isError: true);
+    return;
+  }
+
+  // 1. Get all attendees who were present or late
+  final attSnap = await FirebaseFirestore.instance
+      .collection('events')
+      .doc(eventId)
+      .collection('attendances')
+      .where('status', whereIn: ['present', 'late'])
+      .get();
+
+  // 2. Get all feedback submissions for this event
+  final fbSnap = await FirebaseFirestore.instance
+      .collection('event_feedback')
+      .where('eventId', isEqualTo: eventId)
+      .get();
+
+  // Build sets of eligible attendees (students + guests)
+  final eligibleKeys = <String>{};      // uid for students, email for guests
+  final eligibleNames = <String, String>{}; // key -> name
+
+  // Process attendees
+  for (final doc in attSnap.docs) {
+    final data = doc.data();
+    final isGuest = data['isGuest'] == true;
+    String key;
+    String name;
+    if (isGuest) {
+      key = (data['guestEmail'] ?? '').toString().trim();
+      name = (data['studentName'] ?? 'Guest').toString();
+    } else {
+      key = (data['studentId'] ?? '').toString();
+      name = (data['studentName'] ?? 'Unknown').toString();
+    }
+    if (key.isEmpty) continue;
+
+    // Check if this attendee submitted feedback
+    final hasFeedback = fbSnap.docs.any((fb) {
+      final fbData = fb.data();
+      if (isGuest) {
+        return fbData['isGuest'] == true && fbData['guestEmail'] == key;
+      } else {
+        return fbData['userId'] == key;
+      }
+    });
+    if (hasFeedback) {
+      eligibleKeys.add(key);
+      eligibleNames[key] = name;
+    }
+  }
+
+  if (eligibleKeys.isEmpty) {
+    _showToast('No eligible attendees found (attended + evaluated).');
+    return;
+  }
+
+  // 3. Get already distributed certificates for this event
+  final certSnap = await FirebaseFirestore.instance
+      .collection('certificates')
+      .where('eventId', isEqualTo: eventId)
+      .where('status', isEqualTo: 'distributed')
+      .get();
+  final existingKeys = <String>{};
+  for (final doc in certSnap.docs) {
+    final data = doc.data();
+    final uid = data['recipientUid'] as String?;
+    final email = data['recipientEmail'] as String?;
+    if (uid != null && uid.isNotEmpty) existingKeys.add(uid);
+    if (email != null && email.isNotEmpty) existingKeys.add(email);
+  }
+
+  // 4. Final list: eligible but not yet issued
+  final toIssue = eligibleKeys.difference(existingKeys);
+  if (toIssue.isEmpty) {
+    _showToast('All eligible attendees already have their certificates.');
+    return;
+  }
+
+  // 5. Create certificate documents
+  final batch = FirebaseFirestore.instance.batch();
+  final certsRef = FirebaseFirestore.instance.collection('certificates');
+
+  for (final key in toIssue) {
+    final name = eligibleNames[key] ?? 'Student';
+    final docRef = certsRef.doc(); // auto-generated ID
+    batch.set(docRef, {
+      'orgId': widget.orgId,
+      'eventId': eventId,
+      'eventName': draft.eventName,
+      'organization': draft.organization,
+      'templateType': draft.templateType,
+      'type': draft.type,
+      'issuedAt': FieldValue.serverTimestamp(),
+      'status': 'distributed',
+      'recipients': 1,
+      'recipientName': name,
+      'recipientUid': key,               // uid or email (guests will be matched by this)
+      'recipientEmail': key,             // same as uid for guests; for students it's their uid
+      'verificationCode': _generateVerificationCode(),
+      'templateFileUrl': draft.templateFileUrl,
+      'namePlacement': draft.namePlacement,
+    });
+  }
+  await batch.commit();
+
+  // 6. Send notifications to each student (guests don't have a user account)
+  for (final key in toIssue) {
+    // Only send to students (non-guest) – we know guests by email containing '@', but safer: check if key is a valid uid?
+    // We'll assume if key contains '@' it's a guest, else treat as student uid.
+    if (!key.contains('@')) {
+      await NotificationService.sendToUser(
+        userId: key,
+        title: 'Your certificate is ready 🎓',
+        body: 'Your certificate for "${draft.eventName}" has been issued.',
+        type: 'certificate',
+        orgId: widget.orgId,
+        data: {'eventId': eventId},
+      );
+    }
+  }
+
+  _showToast('Sent ${toIssue.length} certificate(s).');
+  // Refresh the list
+  setState(() {});
+}
+
+/// Shows a dialog with attendance, evaluation, and certificate status for each attendee.
+Future<void> _viewAttendeeStatus(CertificateRecord draft) async {
+  final eventId = draft.eventId;
+  if (eventId == null || eventId.isEmpty) {
+    _showToast('This draft is not linked to an event.', isError: true);
+    return;
+  }
+
+  // Fetch all attendees
+  final attSnap = await FirebaseFirestore.instance
+      .collection('events')
+      .doc(eventId)
+      .collection('attendances')
+      .get();
+
+  // Fetch all feedback
+  final fbSnap = await FirebaseFirestore.instance
+    .collection('feedback')
+    .where('eventId', isEqualTo: eventId)
+    .get();
+
+  // Fetch all distributed certificates for this event
+  final certSnap = await FirebaseFirestore.instance
+      .collection('certificates')
+      .where('eventId', isEqualTo: eventId)
+      .where('status', isEqualTo: 'distributed')
+      .get();
+  final certKeys = <String>{};
+  for (final doc in certSnap.docs) {
+    final data = doc.data();
+    final uid = data['recipientUid'] as String?;
+    final email = data['recipientEmail'] as String?;
+    if (uid != null && uid.isNotEmpty) certKeys.add(uid);
+    if (email != null && email.isNotEmpty) certKeys.add(email);
+  }
+
+  // Build list of status rows
+  final rows = <Map<String, String>>[];
+  for (final doc in attSnap.docs) {
+    final data = doc.data();
+    final isGuest = data['isGuest'] == true;
+    final name = (data['studentName'] ?? 'Guest').toString();
+    final status = (data['status'] ?? 'absent').toString();
+    final key = isGuest ? (data['guestEmail'] ?? '').toString() : (data['studentId'] ?? '').toString();
+    final hasFeedback = fbSnap.docs.any((fb) {
+      final fbData = fb.data();
+      if (isGuest) return fbData['isGuest'] == true && fbData['guestEmail'] == key;
+      return fbData['userId'] == key;
+    });
+    final hasCert = certKeys.contains(key);
+    rows.add({
+      'name': name,
+      'attendance': status,
+      'evaluated': hasFeedback ? '✅' : '❌',
+      'certificate': hasCert ? '✅' : '❌',
+    });
+  }
+
+  // Show dialog with a table
+  showDialog(
+    context: context,
+    builder: (_) => AlertDialog(
+      title: Text('Attendee Status – ${draft.eventName}'),
+      content: SizedBox(
+        width: double.maxFinite,
+        child: DataTable(
+          columns: const [
+            DataColumn(label: Text('Name')),
+            DataColumn(label: Text('Attendance')),
+            DataColumn(label: Text('Evaluated')),
+            DataColumn(label: Text('Certificate')),
+          ],
+          rows: rows.map((row) => DataRow(cells: [
+            DataCell(Text(row['name']!, overflow: TextOverflow.ellipsis)),
+            DataCell(Text(row['attendance']!.toUpperCase())),
+            DataCell(Text(row['evaluated']!, textAlign: TextAlign.center)),
+            DataCell(Text(row['certificate']!, textAlign: TextAlign.center)),
+          ])).toList(),
+        ),
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context), child: Text('Close')),
+      ],
+    ),
+  );
+}
+
+/// Helper to show toast messages (copied from the modal's pattern)
+void _showToast(String msg, {bool isError = false}) {
+  if (!mounted) return;
+  ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(
+      content: Text(msg, style: GoogleFonts.beVietnamPro()),
+      backgroundColor: isError ? UpriseColors.error : UpriseColors.success,
+      behavior: SnackBarBehavior.floating,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+    ),
+  );
+}
+
+// Also copy the _generateVerificationCode method from the modal if not accessible
+String _generateVerificationCode() {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  final rng = math.Random.secure();
+  return List.generate(12, (_) => chars[rng.nextInt(chars.length)]).join();
+}
   Widget _buildEmptyState() {
     return Center(
       child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
@@ -1262,10 +1518,22 @@ class _GenerateCertificateModalState extends State<_GenerateCertificateModal> {
           if (_selectedEventDocId != null) 'eventId': _selectedEventDocId,
         };
         if (widget.existingRecord != null) {
-          await FirebaseFirestore.instance.collection('certificates').doc(widget.existingRecord!.id).update(payload);
-        } else {
-          await FirebaseFirestore.instance.collection('certificates').add(payload);
-        }
+  await FirebaseFirestore.instance.collection('certificates').doc(widget.existingRecord!.id).update(payload);
+} else {
+  // Check if a draft already exists for this event
+  final existing = await FirebaseFirestore.instance
+      .collection('certificates')
+      .where('eventId', isEqualTo: _selectedEventDocId)
+      .where('status', isEqualTo: 'draft')
+      .get();
+  if (existing.docs.isNotEmpty) {
+    // Update the existing draft
+    await existing.docs.first.reference.update(payload);
+  } else {
+    // Create new draft
+    await FirebaseFirestore.instance.collection('certificates').add(payload);
+  }
+}
       }
 
       await activity_log.ActivityLogger.log(
@@ -1318,9 +1586,9 @@ class _GenerateCertificateModalState extends State<_GenerateCertificateModal> {
         .get();
 
     final feedbackSnap = await FirebaseFirestore.instance
-        .collection('event_feedback')
-        .where('eventId', isEqualTo: eventDocId)
-        .get();
+    .collection('feedback')
+    .where('eventId', isEqualTo: eventDocId)
+    .get();
     final evaluatedUids = feedbackSnap.docs
         .map((d) => d.data()['userId']?.toString())
         .whereType<String>()
