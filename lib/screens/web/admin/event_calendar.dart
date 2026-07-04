@@ -178,9 +178,6 @@ class _EventCalendarState extends State<EventCalendar> {
   @override
   void initState() {
     super.initState();
-    // One-time backend cleanup on load — no manual buttons needed.
-    // Restores any event a past auto-archive bug hid from the calendar,
-    // and silently merges any duplicate events left over from double-publishes.
     _restoreAutoArchivedEvents();
     _autoFixDuplicatesOnLoad();
   }
@@ -198,7 +195,7 @@ class _EventCalendarState extends State<EventCalendar> {
       }
       await batch.commit();
     } catch (_) {
-      // Silent — background cleanup, not user-facing.
+      // Silent
     }
   }
 
@@ -215,7 +212,7 @@ class _EventCalendarState extends State<EventCalendar> {
       if (duplicateGroups.isEmpty) return;
       await _mergeDuplicates(duplicateGroups);
     } catch (_) {
-      // Silent — background cleanup, not user-facing.
+      // Silent
     }
   }
 
@@ -273,7 +270,7 @@ class _EventCalendarState extends State<EventCalendar> {
   );
 }
 
-  // ── Toolbar (no status filter) ───────────────────────────────────
+  // ── Toolbar ──────────────────────────────────────────────────────
   Widget _buildToolbar(double horizontalPadding) {
     return Padding(
       padding: EdgeInsets.fromLTRB(horizontalPadding, 20, horizontalPadding, 0),
@@ -366,15 +363,7 @@ class _EventCalendarState extends State<EventCalendar> {
     );
   }
 
-  // ── Duplicate-event cleanup ────────────────────────────────────────
-  //
-  // One-off safety net for events created before the publish flow was
-  // guarded against duplicates (see org_event_proposals.dart): scans for
-  // events that share the same non-empty createdFromProposalId — a proposal
-  // can only ever map to one real event — and removes the extras, keeping
-  // whichever doc the proposal's own publishedEventId already points to
-  // (or the oldest one if that field is stale/missing). Runs silently from
-  // initState now — no manual button/confirmation, this is backend upkeep.
+  // ── Duplicate cleanup ─────────────────────────────────────────────
   Future<void> _mergeDuplicates(
     List<MapEntry<String, List<QueryDocumentSnapshot<Map<String, dynamic>>>>> duplicateGroups,
   ) async {
@@ -384,8 +373,6 @@ class _EventCalendarState extends State<EventCalendar> {
       final proposalId = entry.key;
       final docs = entry.value;
 
-      // Prefer the doc the proposal already points to via publishedEventId;
-      // otherwise keep whichever was created first.
       String? keepId;
       try {
         final propSnap = await firestore.collection('event_proposals').doc(proposalId).get();
@@ -433,9 +420,7 @@ class _EventCalendarState extends State<EventCalendar> {
     }
   }
 
-  // ── Calendar stream — approved events plus pending proposals, so a
-  // place/time conflict shows up before the conflicting proposal is even
-  // approved, not after. ───────────────────────────────────────────────
+  // ── Calendar stream ──────────────────────────────────────────────
   Widget _buildCalendarStream() {
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance
@@ -704,9 +689,7 @@ class _EventCalendarState extends State<EventCalendar> {
             ],
           ),
           const SizedBox(height: 4),
-          // ── Event chips — pending proposals get a dashed-look outline
-          // and a clock icon so a place/time conflict is visible even
-          // before the conflicting proposal is approved. ──────────────
+          // ── Event chips ──────────────────────────────────────────
           ...display.map((e) {
             final isPending = e.status.toLowerCase() == 'pending';
             final chipColor = isPending ? _statusColor(e.status) : _getCategoryColor(e.category);
@@ -772,13 +755,11 @@ class _EventCalendarState extends State<EventCalendar> {
   );
 }
 
-  // ── Day events dialog (web-appropriate, replaces mobile bottom sheet) ──
+  // ── Day events dialog ──────────────────────────────────────────
   Future<void> _showDayEventsSheet(int day, List<_Event> events) async {
     final dateLabel = DateFormat('EEEE, MMMM d, yyyy')
         .format(DateTime(_currentMonth.year, _currentMonth.month, day));
 
-    // Resolve the real submitted start time from each linked proposal,
-    // instead of trusting the (possibly stale) cached field on the event doc.
     final resolvedTimes = <String, String>{};
     await Future.wait(events.map((e) async {
       if (e.createdFromProposalId.isEmpty) {
@@ -806,8 +787,6 @@ class _EventCalendarState extends State<EventCalendar> {
         child: Container(
           width: 460,
           constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.85),
-          // A soft warm cream instead of stark white — ties the body back
-          // to the amber header instead of a flat, generic admin-form look.
           decoration: const BoxDecoration(
             color: Color(0xFFFFFAF5),
             borderRadius: BorderRadius.all(Radius.circular(18)),
@@ -893,7 +872,8 @@ class _EventCalendarState extends State<EventCalendar> {
     );
   }
 
- Future<void> _showEventDetailDialog(_Event event) async {
+  // ─── NEW PROFESSIONAL EVENT DETAIL DIALOG (replaces the old one) ──
+  Future<void> _showEventDetailDialog(_Event event) async {
   // Fetch latest data from proposal (if available)
   var time = event.time;
   var guestSpeaker = event.guestSpeaker;
@@ -922,203 +902,219 @@ class _EventCalendarState extends State<EventCalendar> {
     context: context,
     barrierColor: Colors.black54,
     builder: (ctx) => Dialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       child: Container(
-        width: 600,
+        width: 620,
         constraints: BoxConstraints(
           maxHeight: MediaQuery.of(context).size.height * 0.88,
         ),
-        // A soft warm cream instead of stark white — ties the body back
-        // to the amber header instead of a flat, generic admin-form look.
         decoration: const BoxDecoration(
-          color: Color(0xFFFFFAF5),
-          borderRadius: BorderRadius.all(Radius.circular(18)),
+          color: Colors.white,
+          borderRadius: BorderRadius.all(Radius.circular(20)),
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             // ─── HEADER ──────────────────────────────────────────────
-            Container(
-              padding: const EdgeInsets.fromLTRB(24, 22, 16, 20),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [UpriseColors.primaryDark, UpriseColors.primaryDark.withAlpha(225)],
+            // Gradient + soft decorative circles
+            ClipRRect(
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+              child: Container(
+                padding: const EdgeInsets.fromLTRB(26, 24, 18, 22),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [UpriseColors.primaryDark, catColor.withAlpha(230)],
+                  ),
                 ),
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(18)),
-              ),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: Column(
+                child: Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    Positioned(
+                      right: -30,
+                      top: -40,
+                      child: Container(
+                        width: 130,
+                        height: 130,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: Colors.white.withAlpha(18),
+                        ),
+                      ),
+                    ),
+                    Positioned(
+                      right: 40,
+                      bottom: -50,
+                      child: Container(
+                        width: 90,
+                        height: 90,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: Colors.white.withAlpha(14),
+                        ),
+                      ),
+                    ),
+                    Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Wrap(
-                          spacing: 8,
-                          runSpacing: 6,
-                          crossAxisAlignment: WrapCrossAlignment.center,
-                          children: [
-                            _outlinedChip(event.category.toUpperCase()),
-                            if (event.organization.isNotEmpty && event.organization != 'Unknown')
-                              _outlinedChip(event.organization, dim: true),
-                            if (event.status.toLowerCase() != 'approved')
-                              _outlinedChip(event.status.toUpperCase(), accent: _statusColor(event.status)),
-                          ],
-                        ),
-                        const SizedBox(height: 10),
-                        Text(
-                          event.title,
-                          style: GoogleFonts.beVietnamPro(
-                            fontSize: 19,
-                            fontWeight: FontWeight.w700,
-                            color: Colors.white,
-                            height: 1.25,
+                        // Icon badge
+                        Container(
+                          width: 46,
+                          height: 46,
+                          decoration: BoxDecoration(
+                            color: Colors.white.withAlpha(35),
+                            borderRadius: BorderRadius.circular(13),
+                            border: Border.all(color: Colors.white.withAlpha(90)),
                           ),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
+                          child: const Icon(Icons.event_rounded, color: Colors.white, size: 22),
+                        ),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Wrap(
+                                spacing: 8,
+                                runSpacing: 6,
+                                crossAxisAlignment: WrapCrossAlignment.center,
+                                children: [
+                                  _outlinedChip(event.category.toUpperCase()),
+                                  if (event.organization.isNotEmpty && event.organization != 'Unknown')
+                                    _outlinedChip(event.organization, dim: true),
+                                  if (event.status.toLowerCase() != 'approved')
+                                    _outlinedChip(event.status.toUpperCase(), accent: _statusColor(event.status)),
+                                ],
+                              ),
+                              const SizedBox(height: 10),
+                              Text(
+                                event.title,
+                                style: GoogleFonts.beVietnamPro(
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.w700,
+                                  color: Colors.white,
+                                  height: 1.25,
+                                ),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.close_rounded, color: Colors.white, size: 20),
+                          onPressed: () => Navigator.pop(ctx),
                         ),
                       ],
                     ),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.close_rounded, color: Colors.white, size: 20),
-                    onPressed: () => Navigator.pop(ctx),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
 
             // ─── BODY ────────────────────────────────────────────────
-            // Flexible (not Expanded) so the dialog shrinks to fit short
-            // content instead of always stretching to near-fullscreen
-            // height and leaving a big empty gap above the footer.
             Flexible(
               child: SingleChildScrollView(
-                padding: const EdgeInsets.all(24),
+                padding: const EdgeInsets.fromLTRB(24, 22, 24, 8),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // ── Event Details ──────────────────────────────────
-                    // Single source of truth for date/time/location/audience —
-                    // category and organization already live in the header
-                    // badges above, so they aren't repeated here. Rendered as
-                    // a plain inline grid (no boxed card) to avoid the
-                    // dashboard-template look of a grey box around everything.
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                    // ── Key details as tidy cards ──────────────────
+                    Wrap(
+                      spacing: 12,
+                      runSpacing: 12,
                       children: [
-                        Expanded(
-                          child: _detailItem(
-                            'Date',
-                            DateFormat('MMM d, yyyy').format(event.date),
-                            Icons.calendar_today_rounded,
-                          ),
+                        _detailCard(
+                          'Date',
+                          DateFormat('MMM d, yyyy').format(event.date),
+                          Icons.calendar_today_rounded,
+                          accent: catColor,
                         ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: _detailItem(
-                            'Time',
-                            time.isNotEmpty && time != 'TBD' ? time : 'TBD',
-                            Icons.access_time_rounded,
-                          ),
+                        _detailCard(
+                          'Time',
+                          time.isNotEmpty && time != 'TBD' ? time : 'TBD',
+                          Icons.access_time_rounded,
+                          accent: catColor,
                         ),
+                        _detailCard(
+                          'Location',
+                          event.location.isNotEmpty ? event.location : 'TBD',
+                          Icons.location_on_outlined,
+                          accent: catColor,
+                        ),
+                        _detailCard(
+                          'Audience',
+                          event.audience.isNotEmpty ? event.audience : 'Public',
+                          Icons.group_outlined,
+                          accent: catColor,
+                        ),
+                        if (event.schoolYear.isNotEmpty)
+                          _detailCard('School Year', event.schoolYear, Icons.school_outlined, accent: catColor),
+                        if (event.semester.isNotEmpty)
+                          _detailCard('Semester', event.semester, Icons.date_range_outlined, accent: catColor),
                       ],
                     ),
-                    const SizedBox(height: 16),
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(
-                          child: _detailItem(
-                            'Location',
-                            event.location.isNotEmpty ? event.location : 'TBD',
-                            Icons.location_on_outlined,
-                          ),
-                        ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: _detailItem(
-                            'Audience',
-                            event.audience.isNotEmpty ? event.audience : 'Public',
-                            Icons.group_outlined,
-                          ),
-                        ),
-                      ],
-                    ),
-                    if (event.schoolYear.isNotEmpty || event.semester.isNotEmpty) ...[
-                      const SizedBox(height: 16),
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(
-                            child: _detailItem(
-                              'School Year',
-                              event.schoolYear.isNotEmpty ? event.schoolYear : '—',
-                              Icons.school_outlined,
-                            ),
-                          ),
-                          const SizedBox(width: 16),
-                          Expanded(
-                            child: _detailItem(
-                              'Semester',
-                              event.semester.isNotEmpty ? event.semester : '—',
-                              Icons.date_range_outlined,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                    const SizedBox(height: 24),
+                    const SizedBox(height: 22),
 
                     // ── Description ──────────────────────────────────
                     if (event.description.isNotEmpty) ...[
                       _sectionLabel('Description', icon: Icons.description_outlined),
-                      Text(
-                        event.description,
-                        style: GoogleFonts.beVietnamPro(
-                          fontSize: 13.5,
-                          color: const Color(0xFF374151),
-                          height: 1.65,
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF8F9FB),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border(left: BorderSide(color: catColor, width: 3)),
+                        ),
+                        child: Text(
+                          event.description,
+                          style: GoogleFonts.beVietnamPro(
+                            fontSize: 13.5,
+                            color: const Color(0xFF374151),
+                            height: 1.65,
+                          ),
                         ),
                       ),
-                      const SizedBox(height: 24),
+                      const SizedBox(height: 22),
                     ],
 
                     // ── Guest Speaker ────────────────────────────────
                     if (guestSpeaker.isNotEmpty) ...[
                       _sectionLabel('Guest Speaker', icon: Icons.person_outline_rounded),
-                      Row(
-                        children: [
-                          Container(
-                            width: 38,
-                            height: 38,
-                            decoration: BoxDecoration(
-                              color: catColor.withAlpha(20),
-                              shape: BoxShape.circle,
-                              border: Border.all(color: catColor.withAlpha(45)),
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: catColor.withAlpha(15),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: catColor.withAlpha(45)),
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 38,
+                              height: 38,
+                              decoration: BoxDecoration(
+                                color: catColor.withAlpha(30),
+                                shape: BoxShape.circle,
+                              ),
+                              child: Icon(Icons.person_rounded, color: catColor, size: 18),
                             ),
-                            child: Icon(
-                              Icons.person_rounded,
-                              color: catColor,
-                              size: 18,
-                            ),
-                          ),
-                          const SizedBox(width: 14),
-                          Expanded(
-                            child: Text(
-                              guestSpeaker,
-                              style: GoogleFonts.beVietnamPro(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w600,
-                                color: const Color(0xFF1A202C),
+                            const SizedBox(width: 14),
+                            Expanded(
+                              child: Text(
+                                guestSpeaker,
+                                style: GoogleFonts.beVietnamPro(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                  color: const Color(0xFF1A202C),
+                                ),
                               ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
-                      const SizedBox(height: 24),
+                      const SizedBox(height: 22),
                     ],
 
                     // ── Tags ─────────────────────────────────────────
@@ -1131,6 +1127,7 @@ class _EventCalendarState extends State<EventCalendar> {
                           return Container(
                             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                             decoration: BoxDecoration(
+                              color: catColor.withAlpha(15),
                               borderRadius: BorderRadius.circular(20),
                               border: Border.all(color: catColor.withAlpha(60)),
                             ),
@@ -1145,6 +1142,7 @@ class _EventCalendarState extends State<EventCalendar> {
                           );
                         }).toList(),
                       ),
+                      const SizedBox(height: 6),
                     ],
                   ],
                 ),
@@ -1165,17 +1163,12 @@ class _EventCalendarState extends State<EventCalendar> {
                     style: OutlinedButton.styleFrom(
                       foregroundColor: const Color(0xFF374151),
                       side: const BorderSide(color: Color(0xFFE2E6EA)),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 11),
                     ),
                     child: Text(
                       'Close',
-                      style: GoogleFonts.beVietnamPro(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                      ),
+                      style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600),
                     ),
                   ),
                 ],
@@ -1188,83 +1181,93 @@ class _EventCalendarState extends State<EventCalendar> {
   );
 }
 
-            
-
-// Helper for detail rows (if not already present)
-Widget _buildDetailRow({
-  required IconData icon,
-  required String label,
-  required String value,
-  Color? valueColor,
-}) {
-  return SizedBox(
-    width: 240,
-    child: Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Icon(icon, size: 16, color: const Color(0xFF9AA5B4)),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                label,
-                style: GoogleFonts.beVietnamPro(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                  color: const Color(0xFF64748B),
-                  letterSpacing: 0.4,
-                ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                value,
-                style: GoogleFonts.beVietnamPro(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w500,
-                  color: valueColor ?? const Color(0xFF1A202C),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    ),
-  );
-}
-
- Widget _detailItem(String label, String value, IconData icon, {Color? valueColor}) {
-  return Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      Row(
+  // ─── NEW DETAIL CARD helper (used in the dialog) ──────────────────
+  Widget _detailCard(String label, String value, IconData icon, {Color? accent}) {
+    final c = accent ?? UpriseColors.primaryDark;
+    return Container(
+      width: 260,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: c.withAlpha(12),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: c.withAlpha(35)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, size: 13, color: UpriseColors.primaryDark.withAlpha(150)),
-          const SizedBox(width: 6),
-          Text(
-            label,
-            style: GoogleFonts.beVietnamPro(
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
-              color: const Color(0xFF64748B),
-              letterSpacing: 0.4,
+          Container(
+            width: 32,
+            height: 32,
+            decoration: BoxDecoration(
+              color: c.withAlpha(35),
+              borderRadius: BorderRadius.circular(9),
+            ),
+            alignment: Alignment.center,
+            child: Icon(icon, size: 16, color: c),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: GoogleFonts.beVietnamPro(
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w600,
+                    color: const Color(0xFF64748B),
+                    letterSpacing: 0.3,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  value,
+                  style: GoogleFonts.beVietnamPro(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: const Color(0xFF1A202C),
+                  ),
+                ),
+              ],
             ),
           ),
         ],
       ),
-      const SizedBox(height: 4),
-      Text(
-        value,
-        style: GoogleFonts.beVietnamPro(
-          fontSize: 13,
-          fontWeight: FontWeight.w500,
-          color: valueColor ?? const Color(0xFF1A202C),
+    );
+  }
+
+  // ─── Existing helper for detail rows (kept for other uses) ───────
+  Widget _detailItem(String label, String value, IconData icon, {Color? valueColor}) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(icon, size: 13, color: UpriseColors.primaryDark.withAlpha(150)),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: GoogleFonts.beVietnamPro(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: const Color(0xFF64748B),
+                letterSpacing: 0.4,
+              ),
+            ),
+          ],
         ),
-      ),
-    ],
-  );
-}
+        const SizedBox(height: 4),
+        Text(
+          value,
+          style: GoogleFonts.beVietnamPro(
+            fontSize: 13,
+            fontWeight: FontWeight.w500,
+            color: valueColor ?? const Color(0xFF1A202C),
+          ),
+        ),
+      ],
+    );
+  }
 
   String _formatTime(String time) {
     try {
