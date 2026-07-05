@@ -17,103 +17,116 @@ class _StudentWebinarCodeScreenState extends State<StudentWebinarCodeScreen> {
   String? _errorMessage;
   String? _successMessage;
 
-  Future<void> _submitCode() async {
-    final code = _codeController.text.trim().toUpperCase();
-    if (code.isEmpty) {
-      setState(() => _errorMessage = 'Please enter the webinar code');
-      return;
+Future<void> _submitCode() async {
+  final code = _codeController.text.trim().toUpperCase();
+  if (code.isEmpty) {
+    setState(() => _errorMessage = 'Please enter the webinar code');
+    return;
+  }
+
+  if (code.length != 6) {
+    setState(() => _errorMessage = 'Code must be 6 characters');
+    return;
+  }
+
+  setState(() {
+    _isLoading = true;
+    _errorMessage = null;
+    _successMessage = null;
+  });
+
+  try {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      throw Exception('Please login first');
     }
 
-    if (code.length != 6) {
-      setState(() => _errorMessage = 'Code must be 6 characters');
-      return;
+    // 🔍 Search ALL 'webinar_codes' collections (root + subcollections)
+    final querySnapshot = await FirebaseFirestore.instance
+        .collectionGroup('webinar_codes')
+        .where('code', isEqualTo: code)
+        .limit(1)
+        .get();
+
+    if (querySnapshot.docs.isEmpty) {
+      throw Exception(' Invalid webinar code. Please check and try again.');
     }
 
-    setState(() {
-      _isLoading = true;
-      _errorMessage = null;
-      _successMessage = null;
+    final codeDoc = querySnapshot.docs.first;
+    final data = codeDoc.data();
+
+    // Optional: ensure this is a check‑in code (if you have a 'phase' field)
+    // If you don't have a phase field, remove this check.
+    if (data['phase'] == 'checkout') {
+      throw Exception(' This is a check‑out code – please use the check‑in code.');
+    }
+
+    if (data['isActive'] != true) {
+      throw Exception(' This webinar code is no longer active.');
+    }
+
+    final eventId = data['eventId'];
+    if (eventId == null) {
+      throw Exception(' Invalid event reference in code.');
+    }
+
+    // 2. Check registration
+    final registration = await FirebaseFirestore.instance
+        .collection('registrations')
+        .where('userId', isEqualTo: user.uid)
+        .where('eventId', isEqualTo: eventId)
+        .get();
+
+    if (registration.docs.isEmpty) {
+      throw Exception(' You are not registered for this webinar.');
+    }
+
+    // 3. Check existing attendance
+    final existingAttendance = await FirebaseFirestore.instance
+        .collection('attendances')
+        .where('eventId', isEqualTo: eventId)
+        .where('studentId', isEqualTo: user.uid)
+        .get();
+
+    if (existingAttendance.docs.isNotEmpty) {
+      throw Exception(' You have already checked in to this webinar.');
+    }
+
+    // 4. Create attendance record
+    await FirebaseFirestore.instance.collection('attendances').add({
+      'eventId': eventId,
+      'studentId': user.uid,
+      'studentName': user.displayName ?? '',
+      'studentEmail': user.email ?? '',
+      'timestamp': FieldValue.serverTimestamp(),
+      'method': 'webinar_code',
+      'code': code,
+      'status': 'present',
+      'webinarCode': code,
     });
 
-    try {
-      final user = FirebaseAuth.instance.currentUser;
-      if (user == null) {
-        throw Exception('Please login first');
-      }
+    // 5. Update the code document: add the user to 'usedBy'
+    await codeDoc.reference.update({
+      'usedBy': FieldValue.arrayUnion([user.uid]),
+    });
 
-      final codeDoc = await FirebaseFirestore.instance
-          .collection('webinar_codes')
-          .doc(code)
-          .get();
+    setState(() {
+      _successMessage = ' Attendance recorded successfully!';
+      _isLoading = false;
+      _codeController.clear();
+    });
 
-      if (!codeDoc.exists) {
-        throw Exception('❌ Invalid webinar code. Please check and try again.');
-      }
+    Future.delayed(const Duration(seconds: 2), () {
+      if (mounted) Navigator.pop(context);
+    });
 
-      final data = codeDoc.data()!;
-
-      if (data['isActive'] != true) {
-        throw Exception('⏰ This webinar code is no longer active.');
-      }
-
-      final eventId = data['eventId'];
-
-      final registration = await FirebaseFirestore.instance
-          .collection('registrations')
-          .where('userId', isEqualTo: user.uid)
-          .where('eventId', isEqualTo: eventId)
-          .get();
-
-      if (registration.docs.isEmpty) {
-        throw Exception('📝 You are not registered for this webinar.');
-      }
-
-      final existingAttendance = await FirebaseFirestore.instance
-          .collection('attendances')
-          .where('eventId', isEqualTo: eventId)
-          .where('studentId', isEqualTo: user.uid)
-          .get();
-
-      if (existingAttendance.docs.isNotEmpty) {
-        throw Exception('✅ You have already checked in to this webinar.');
-      }
-
-      await FirebaseFirestore.instance.collection('attendances').add({
-        'eventId': eventId,
-        'studentId': user.uid,
-        'studentName': user.displayName ?? '',
-        'studentEmail': user.email ?? '',
-        'timestamp': FieldValue.serverTimestamp(),
-        'method': 'webinar_code',
-        'code': code,
-        'status': 'present',
-        'webinarCode': code,
-      });
-
-      await FirebaseFirestore.instance
-          .collection('webinar_codes')
-          .doc(code)
-          .update({
-            'usedBy': FieldValue.arrayUnion([user.uid]),
-          });
-
-      setState(() {
-        _successMessage = '✅ Attendance recorded successfully!';
-        _isLoading = false;
-        _codeController.clear();
-      });
-
-      Future.delayed(const Duration(seconds: 2), () {
-        if (mounted) Navigator.pop(context);
-      });
-
-    } catch (e) {
-      setState(() {
-        _errorMessage = e.toString().replaceAll('Exception: ', '');
-        _isLoading = false;
-      });
-    }
+  } catch (e) {
+    setState(() {
+      _errorMessage = e.toString().replaceAll('Exception: ', '');
+      _isLoading = false;
+    });
   }
+}
 
   @override
   Widget build(BuildContext context) {
