@@ -73,6 +73,7 @@ class _StudentNotificationsScreenState extends State<StudentNotificationsScreen>
       case 'order':
         return (icon: Icons.shopping_bag_rounded, bg: AppColors.primaryDark.withOpacity(0.1), fg: AppColors.primaryDark);
       case 'evaluation':
+      case 'feedback_required':
         return (icon: Icons.rate_review_rounded, bg: AppColors.primaryDark.withOpacity(0.1), fg: AppColors.primaryDark);
       default:
         return (icon: Icons.campaign_rounded, bg: AppColors.primaryDark.withOpacity(0.1), fg: AppColors.primaryDark);
@@ -128,7 +129,13 @@ class _StudentNotificationsScreenState extends State<StudentNotificationsScreen>
 
   void _onNotificationTap(AppNotification notif) {
     _markAsRead(notif.id);
-    if (notif.type == 'evaluation') {
+    // "feedback_required" is created server-side once an event a student
+    // registered/attended for has ended (see Task 5 / Task 4 workflow:
+    // attendance marked -> event completed -> feedback notification ->
+    // student evaluates -> certificate unlocks). Tapping it should take
+    // the student straight to the evaluation screen, same as the
+    // existing "evaluation" notifications.
+    if (notif.type == 'evaluation' || notif.type == 'feedback_required') {
       Navigator.push(
         context,
         MaterialPageRoute(
