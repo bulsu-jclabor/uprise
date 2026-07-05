@@ -17,6 +17,7 @@ import 'package:uprise/models/event_model.dart';
 import '../../widgets/student/event_image.dart';
 import '../../widgets/student/app_colors.dart';
 import 'student_feedback_screen.dart';
+import 'package:image_picker/image_picker.dart';
 
 // ─── MAIN SCREEN ──────────────────────────────────────────────
 class StudentEventsScreen extends StatefulWidget {
@@ -685,6 +686,9 @@ class _RegisteredEventsTabState extends State<RegisteredEventsTab>
 // ═══════════════════════════════════════════════════════════════
 //  TAB 4: CERTIFICATES (read‑only, no locked cards)
 // ═══════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════
+//  TAB 4: CERTIFICATES (with student upload feature)
+// ═══════════════════════════════════════════════════════════════
 class CertificatesTab extends StatefulWidget {
   final Stream<Set<String>> registeredEventIdsStream;
   const CertificatesTab({required this.registeredEventIdsStream, super.key});
@@ -693,7 +697,8 @@ class CertificatesTab extends StatefulWidget {
   State<CertificatesTab> createState() => _CertificatesTabState();
 }
 
-class _CertificatesTabState extends State<CertificatesTab> with AutomaticKeepAliveClientMixin {
+class _CertificatesTabState extends State<CertificatesTab>
+    with AutomaticKeepAliveClientMixin {
   @override
   bool get wantKeepAlive => true;
 
@@ -714,7 +719,10 @@ class _CertificatesTabState extends State<CertificatesTab> with AutomaticKeepAli
 
   // ── Certificate helpers (read‑only) ──────────────────────────
   Future<void> _fetchCertificates() async {
-    setState(() { _certLoading = true; _certError = null; });
+    setState(() {
+      _certLoading = true;
+      _certError = null;
+    });
     try {
       final query = _currentUid != null
           ? FirebaseFirestore.instance
@@ -724,8 +732,9 @@ class _CertificatesTabState extends State<CertificatesTab> with AutomaticKeepAli
       final snapshot = await query.get();
 
       var docs = snapshot.docs;
-      // Filter out drafts client‑side (avoids composite index)
-      docs = docs.where((doc) => (doc.data()['status'] ?? '') != 'draft').toList();
+      docs = docs
+          .where((doc) => (doc.data()['status'] ?? '') != 'draft')
+          .toList();
 
       docs.sort((a, b) {
         final aTs = a.data()['issuedAt'];
@@ -741,7 +750,10 @@ class _CertificatesTabState extends State<CertificatesTab> with AutomaticKeepAli
         _certLoading = false;
       });
     } catch (e) {
-      setState(() { _certError = e.toString(); _certLoading = false; });
+      setState(() {
+        _certError = e.toString();
+        _certLoading = false;
+      });
     }
   }
 
@@ -794,9 +806,11 @@ class _CertificatesTabState extends State<CertificatesTab> with AutomaticKeepAli
     if (ts == null) return 'Just now';
     if (ts is Timestamp) {
       final dt = ts.toDate();
-      const m = ['January','February','March','April','May','June',
-                 'July','August','September','October','November','December'];
-      return '${m[dt.month - 1]} ${dt.day.toString().padLeft(2,'0')}, ${dt.year}';
+      const m = [
+        'January', 'February', 'March', 'April', 'May', 'June',
+        'July', 'August', 'September', 'October', 'November', 'December'
+      ];
+      return '${m[dt.month - 1]} ${dt.day.toString().padLeft(2, '0')}, ${dt.year}';
     }
     return ts.toString();
   }
@@ -808,7 +822,8 @@ class _CertificatesTabState extends State<CertificatesTab> with AutomaticKeepAli
     if (imageUrl.isEmpty) return null;
     try {
       if (_isBase64Image(imageUrl)) {
-        final b64 = imageUrl.contains(',') ? imageUrl.split(',').last : imageUrl;
+        final b64 =
+            imageUrl.contains(',') ? imageUrl.split(',').last : imageUrl;
         return base64Decode(b64);
       }
       final resp = await http.get(Uri.parse(imageUrl));
@@ -860,7 +875,8 @@ class _CertificatesTabState extends State<CertificatesTab> with AutomaticKeepAli
           .trim()
           .replaceAll(RegExp(r'[^\w\s-]'), '')
           .replaceAll(RegExp(r'\s+'), '_');
-      final fileName = '${safeName.isEmpty ? "certificate" : safeName}_${cert['id']}.pdf';
+      final fileName =
+          '${safeName.isEmpty ? "certificate" : safeName}_${cert['id']}.pdf';
       final filePath = '${dir.path}/$fileName';
       final file = File(filePath);
       await file.writeAsBytes(await doc.save());
@@ -891,49 +907,86 @@ class _CertificatesTabState extends State<CertificatesTab> with AutomaticKeepAli
     if (imageUrl.isEmpty) return const SizedBox.shrink();
     if (_isBase64Image(imageUrl)) {
       try {
-        final b64 = imageUrl.contains(',') ? imageUrl.split(',').last : imageUrl;
+        final b64 =
+            imageUrl.contains(',') ? imageUrl.split(',').last : imageUrl;
         final bytes = base64Decode(b64);
-        return Image.memory(bytes, height: height, width: double.infinity, fit: BoxFit.cover,
+        return Image.memory(bytes,
+            height: height,
+            width: double.infinity,
+            fit: BoxFit.cover,
             errorBuilder: (_, __, ___) => const SizedBox.shrink());
       } catch (_) {
         return const SizedBox.shrink();
       }
     }
-    return Image.network(imageUrl, height: height, width: double.infinity, fit: BoxFit.cover,
+    return Image.network(imageUrl,
+        height: height,
+        width: double.infinity,
+        fit: BoxFit.cover,
         loadingBuilder: (ctx, child, p) {
           if (p == null) return child;
-          return Container(height: height, color: AppColors.primaryDark.shade50,
-              child: const Center(child: CircularProgressIndicator(color: AppColors.primaryDark)));
+          return Container(
+              height: height,
+              color: AppColors.primaryDark.shade50,
+              child: const Center(
+                  child:
+                      CircularProgressIndicator(color: AppColors.primaryDark)));
         },
         errorBuilder: (_, __, ___) => const SizedBox.shrink());
   }
 
-  Widget _certPlaceholderBanner(bool isDraft, bool isUploaded, Map<String, dynamic> cert) {
+  Widget _certPlaceholderBanner(
+      bool isDraft, bool isUploaded, Map<String, dynamic> cert) {
     return Container(
-      height: 180, width: double.infinity,
+      height: 180,
+      width: double.infinity,
       decoration: BoxDecoration(
         gradient: LinearGradient(
           colors: isUploaded
               ? [Colors.blue.shade200, Colors.blue.shade500]
-              : [AppColors.primaryDark.shade200, AppColors.primaryDark.shade500],
-          begin: Alignment.topLeft, end: Alignment.bottomRight,
+              : [
+                  AppColors.primaryDark.shade200,
+                  AppColors.primaryDark.shade500
+                ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
         ),
       ),
       child: Stack(alignment: Alignment.center, children: [
-        Icon(isUploaded ? Icons.upload_file_rounded : Icons.workspace_premium, size: 70, color: Colors.white24),
+        Icon(
+            isUploaded
+                ? Icons.upload_file_rounded
+                : Icons.workspace_premium,
+            size: 70,
+            color: Colors.white24),
         if (isDraft)
-          Positioned(top: 10, right: 10,
+          Positioned(
+            top: 10,
+            right: 10,
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              decoration: BoxDecoration(color: Colors.black26, borderRadius: BorderRadius.circular(20)),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                  color: Colors.black26,
+                  borderRadius: BorderRadius.circular(20)),
               child: const Text('DRAFT',
-                  style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
+                  style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 1.2)),
             ),
           ),
-        if ((cert['organization'] as String).isNotEmpty && cert['organization'] != 'Others')
-          Positioned(bottom: 10, left: 14,
+        if ((cert['organization'] as String).isNotEmpty &&
+            cert['organization'] != 'Others')
+          Positioned(
+            bottom: 10,
+            left: 14,
             child: Text(cert['organization'],
-                style: const TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.w500)),
+                style: const TextStyle(
+                    color: Colors.white70,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500)),
           ),
       ]),
     );
@@ -958,7 +1011,8 @@ class _CertificatesTabState extends State<CertificatesTab> with AutomaticKeepAli
                   children: [
                     Center(
                       child: Container(
-                        width: 40, height: 4,
+                        width: 40,
+                        height: 4,
                         margin: const EdgeInsets.only(bottom: 18),
                         decoration: BoxDecoration(
                           color: Colors.grey.shade300,
@@ -967,7 +1021,10 @@ class _CertificatesTabState extends State<CertificatesTab> with AutomaticKeepAli
                       ),
                     ),
                     const Text('Filter by Organization',
-                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: Colors.black87)),
+                        style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.black87)),
                     const SizedBox(height: 12),
                     Divider(height: 1, color: Colors.grey.shade300),
                     const SizedBox(height: 8),
@@ -985,8 +1042,12 @@ class _CertificatesTabState extends State<CertificatesTab> with AutomaticKeepAli
                           child: Row(
                             children: [
                               Icon(
-                                sel ? Icons.radio_button_checked_rounded : Icons.radio_button_off_rounded,
-                                color: sel ? AppColors.primaryDark : Colors.grey.shade400,
+                                sel
+                                    ? Icons.radio_button_checked_rounded
+                                    : Icons.radio_button_off_rounded,
+                                color: sel
+                                    ? AppColors.primaryDark
+                                    : Colors.grey.shade400,
                                 size: 22,
                               ),
                               const SizedBox(width: 14),
@@ -994,17 +1055,23 @@ class _CertificatesTabState extends State<CertificatesTab> with AutomaticKeepAli
                                 child: Text(f,
                                     style: TextStyle(
                                         fontSize: 15,
-                                        fontWeight: sel ? FontWeight.w700 : FontWeight.w500,
-                                        color: sel ? AppColors.primaryDark : Colors.black87)),
+                                        fontWeight: sel
+                                            ? FontWeight.w700
+                                            : FontWeight.w500,
+                                        color: sel
+                                            ? AppColors.primaryDark
+                                            : Colors.black87)),
                               ),
                               if (sel)
                                 Container(
-                                  width: 22, height: 22,
+                                  width: 22,
+                                  height: 22,
                                   decoration: const BoxDecoration(
                                     color: AppColors.primaryDark,
                                     shape: BoxShape.circle,
                                   ),
-                                  child: const Icon(Icons.check_rounded, size: 14, color: Colors.white),
+                                  child: const Icon(Icons.check_rounded,
+                                      size: 14, color: Colors.white),
                                 ),
                             ],
                           ),
@@ -1033,13 +1100,19 @@ class _CertificatesTabState extends State<CertificatesTab> with AutomaticKeepAli
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.07), blurRadius: 12, offset: const Offset(0, 4))],
+        boxShadow: [
+          BoxShadow(
+              color: Colors.black.withOpacity(0.07),
+              blurRadius: 12,
+              offset: const Offset(0, 4))
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           ClipRRect(
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+            borderRadius:
+                const BorderRadius.vertical(top: Radius.circular(16)),
             child: imageUrl.isNotEmpty
                 ? _buildCertImage(imageUrl)
                 : _certPlaceholderBanner(isDraft, isUploaded, cert),
@@ -1054,27 +1127,42 @@ class _CertificatesTabState extends State<CertificatesTab> with AutomaticKeepAli
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(cert['title'],
-                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Colors.black87)),
+                          style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 15,
+                              color: Colors.black87)),
                       const SizedBox(height: 4),
                       if (cert['category'] != 'Others') ...[
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                          decoration: BoxDecoration(color: AppColors.primaryDark.shade50,
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 2),
+                          decoration: BoxDecoration(
+                              color: AppColors.primaryDark.shade50,
                               borderRadius: BorderRadius.circular(20)),
                           child: Text(cert['category'],
-                              style: TextStyle(color: AppColors.primaryDark.shade700, fontSize: 11, fontWeight: FontWeight.w500)),
+                              style: TextStyle(
+                                  color: AppColors.primaryDark.shade700,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w500)),
                         ),
                         const SizedBox(height: 4),
                       ],
-                      Text(cert['date'], style: TextStyle(color: Colors.grey.shade500, fontSize: 12)),
+                      Text(cert['date'],
+                          style: TextStyle(
+                              color: Colors.grey.shade500, fontSize: 12)),
                       if (isUploaded) ...[
                         const SizedBox(height: 6),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                          decoration: BoxDecoration(color: Colors.blue.shade50,
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                              color: Colors.blue.shade50,
                               borderRadius: BorderRadius.circular(20)),
                           child: Text('Uploaded by you',
-                              style: TextStyle(color: Colors.blue.shade600, fontSize: 11, fontWeight: FontWeight.w500)),
+                              style: TextStyle(
+                                  color: Colors.blue.shade600,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w500)),
                         ),
                       ],
                     ],
@@ -1084,9 +1172,13 @@ class _CertificatesTabState extends State<CertificatesTab> with AutomaticKeepAli
                 GestureDetector(
                   onTap: () => _downloadCertificateAsPdf(cert),
                   child: Container(
-                    width: 40, height: 40,
-                    decoration: BoxDecoration(color: AppColors.primaryDark, borderRadius: BorderRadius.circular(10)),
-                    child: const Icon(Icons.download_rounded, color: Colors.white, size: 22),
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                        color: AppColors.primaryDark,
+                        borderRadius: BorderRadius.circular(10)),
+                    child: const Icon(Icons.download_rounded,
+                        color: Colors.white, size: 22),
                   ),
                 ),
               ],
@@ -1097,19 +1189,35 @@ class _CertificatesTabState extends State<CertificatesTab> with AutomaticKeepAli
             GestureDetector(
               onTap: () => _showVerifyDialog(cert),
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                 child: Row(children: [
-                  QrImageView(data: vCode, version: QrVersions.auto, size: 44, backgroundColor: Colors.white),
+                  QrImageView(
+                      data: vCode,
+                      version: QrVersions.auto,
+                      size: 44,
+                      backgroundColor: Colors.white),
                   const SizedBox(width: 12),
-                  Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text('Verify Certificate',
-                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Colors.grey.shade800)),
-                    const SizedBox(height: 2),
-                    Text('Code: $vCode',
-                        style: const TextStyle(fontSize: 11, fontFamily: 'monospace',
-                            letterSpacing: 1.1, color: Color(0xFFB45309), fontWeight: FontWeight.w600)),
-                  ])),
-                  Icon(Icons.open_in_new_rounded, size: 16, color: Colors.grey.shade400),
+                  Expanded(
+                      child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                        Text('Verify Certificate',
+                            style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                                color: Colors.grey.shade800)),
+                        const SizedBox(height: 2),
+                        Text('Code: $vCode',
+                            style: const TextStyle(
+                                fontSize: 11,
+                                fontFamily: 'monospace',
+                                letterSpacing: 1.1,
+                                color: Color(0xFFB45309),
+                                fontWeight: FontWeight.w600)),
+                      ])),
+                  Icon(Icons.open_in_new_rounded,
+                      size: 16, color: Colors.grey.shade400),
                 ]),
               ),
             ),
@@ -1119,7 +1227,7 @@ class _CertificatesTabState extends State<CertificatesTab> with AutomaticKeepAli
     );
   }
 
-  // ── Verification dialog (identical to previous) ──
+  // ── Verification dialog ──
   void _showVerifyDialog(Map<String, dynamic> cert) {
     final code = cert['verificationCode'] as String;
     showModalBottomSheet(
@@ -1132,163 +1240,576 @@ class _CertificatesTabState extends State<CertificatesTab> with AutomaticKeepAli
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Center(child: Container(
-              width: 40, height: 4, margin: const EdgeInsets.only(bottom: 20),
-              decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2)),
+            Center(
+                child: Container(
+              width: 40,
+              height: 4,
+              margin: const EdgeInsets.only(bottom: 20),
+              decoration: BoxDecoration(
+                  color: Colors.grey.shade300,
+                  borderRadius: BorderRadius.circular(2)),
             )),
-            const Icon(Icons.verified_rounded, color: Color(0xFF059669), size: 36),
+            const Icon(Icons.verified_rounded,
+                color: Color(0xFF059669), size: 36),
             const SizedBox(height: 10),
             const Text('Certificate Verification',
-                style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Colors.black87)),
+                style: TextStyle(
+                    fontSize: 17,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.black87)),
             const SizedBox(height: 4),
             Text(cert['title'],
-                style: TextStyle(fontSize: 13, color: Colors.grey.shade600), textAlign: TextAlign.center),
+                style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
+                textAlign: TextAlign.center),
             const SizedBox(height: 20),
-            Center(child: QrImageView(data: code, version: QrVersions.auto, size: 180, backgroundColor: Colors.white)),
+            Center(
+                child: QrImageView(
+                    data: code,
+                    version: QrVersions.auto,
+                    size: 180,
+                    backgroundColor: Colors.white)),
             const SizedBox(height: 16),
             Text('Verification Code',
-                style: TextStyle(fontSize: 11, color: Colors.grey.shade500,
-                    fontWeight: FontWeight.w600, letterSpacing: 0.5)),
+                style: TextStyle(
+                    fontSize: 11,
+                    color: Colors.grey.shade500,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 0.5)),
             const SizedBox(height: 6),
             GestureDetector(
               onTap: () {
                 Clipboard.setData(ClipboardData(text: code));
                 ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
                   content: Text('Code copied to clipboard'),
-                  backgroundColor: Colors.green, duration: Duration(seconds: 2)));
+                  backgroundColor: Colors.green,
+                  duration: Duration(seconds: 2),
+                ));
               },
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFFFF7ED), borderRadius: BorderRadius.circular(10),
+                  color: const Color(0xFFFFF7ED),
+                  borderRadius: BorderRadius.circular(10),
                   border: Border.all(color: const Color(0xFFFDE68A)),
                 ),
-                child: Row(mainAxisSize: MainAxisSize.min, children: [
-                  Text(code, style: const TextStyle(
-                      fontSize: 15, fontWeight: FontWeight.w700, fontFamily: 'monospace',
-                      letterSpacing: 2, color: Color(0xFFB45309))),
-                  const SizedBox(width: 10),
-                  const Icon(Icons.copy_rounded, size: 16, color: Color(0xFFB45309)),
-                ]),
+                child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(code,
+                          style: const TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w700,
+                              fontFamily: 'monospace',
+                              letterSpacing: 2,
+                              color: Color(0xFFB45309))),
+                      const SizedBox(width: 10),
+                      const Icon(Icons.copy_rounded,
+                          size: 16, color: Color(0xFFB45309)),
+                    ]),
               ),
             ),
             const SizedBox(height: 12),
             Text('Share this QR or code to verify authenticity.',
-                style: TextStyle(fontSize: 12, color: Colors.grey.shade500), textAlign: TextAlign.center),
+                style: TextStyle(
+                    fontSize: 12, color: Colors.grey.shade500),
+                textAlign: TextAlign.center),
           ],
         ),
       ),
     );
   }
 
+  // ═══════════════════════════════════════════════════════════════
+  // UPLOAD FEATURE (student adds their own certificate)
+  // ═══════════════════════════════════════════════════════════════
+  Future<void> _showUploadDialog() async {
+    final eventNameCtrl = TextEditingController();
+    File? pickedFile;
+    bool isUploading = false;
+
+    await showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSheet) {
+          Future<void> pickImage(ImageSource src) async {
+            final picked = await ImagePicker()
+                .pickImage(source: src, imageQuality: 60, maxWidth: 800);
+            if (picked != null) {
+              setSheet(() => pickedFile = File(picked.path));
+            }
+          }
+
+          Future<void> doUpload() async {
+            if (pickedFile == null) {
+              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                content: Text('Please select a certificate image.'),
+                backgroundColor: AppColors.primaryDark,
+              ));
+              return;
+            }
+            if (eventNameCtrl.text.trim().isEmpty) {
+              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                content: Text('Certificate name is required.'),
+                backgroundColor: AppColors.primaryDark,
+              ));
+              return;
+            }
+            setSheet(() => isUploading = true);
+            try {
+              final bytes = await pickedFile!.readAsBytes();
+              final b64Img = 'data:image/jpeg;base64,${base64Encode(bytes)}';
+              if (b64Img.length > 900000) {
+                setSheet(() => isUploading = false);
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                    content: Text(
+                        'Image is too large. Please pick a smaller image.'),
+                    backgroundColor: Colors.red,
+                    duration: Duration(seconds: 4),
+                  ));
+                }
+                return;
+              }
+
+              final docRef = await FirebaseFirestore.instance
+                  .collection('certificates')
+                  .add({
+                'eventName': eventNameCtrl.text.trim(),
+                'imageUrl': b64Img,
+                'issuedAt': FieldValue.serverTimestamp(),
+                'recipientUid': _currentUid,
+                'isUploaded': true,
+                'status': 'issued',
+              });
+
+              final now = DateTime.now();
+              const months = [
+                'January', 'February', 'March', 'April', 'May', 'June',
+                'July', 'August', 'September', 'October', 'November', 'December'
+              ];
+              final newCert = {
+                'id': docRef.id,
+                'title': eventNameCtrl.text.trim(),
+                'date':
+                    '${months[now.month - 1]} ${now.day.toString().padLeft(2, '0')}, ${now.year}',
+                'category': 'General',
+                'organization': '',
+                'signatories': '',
+                'status': 'issued',
+                'recipients': 1,
+                'templateType': '',
+                'imageUrl': b64Img,
+                'isUploaded': true,
+                'verificationCode': '',
+              };
+
+              if (ctx.mounted) Navigator.pop(ctx);
+              if (mounted) {
+                setState(() {
+                  _allCertificates.insert(0, newCert);
+                  _certFilter = 'All';
+                });
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                  content: Text('Certificate uploaded successfully!'),
+                  backgroundColor: Colors.green,
+                ));
+                _fetchCertificates(); // refresh from server
+              }
+            } catch (e) {
+              setSheet(() => isUploading = false);
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                  content: Text('Upload failed: $e'),
+                  backgroundColor: Colors.red,
+                  duration: const Duration(seconds: 6),
+                ));
+              }
+            }
+          }
+
+          return Dialog(
+            backgroundColor: Colors.white,
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(24)),
+            insetPadding:
+                const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                maxHeight: MediaQuery.of(ctx).size.height * 0.85,
+                maxWidth: 480,
+              ),
+              child: SingleChildScrollView(
+                padding: EdgeInsets.only(
+                  bottom: MediaQuery.of(ctx).viewInsets.bottom + 24,
+                  left: 24,
+                  right: 24,
+                  top: 24,
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text('Upload Certificate',
+                                  style: TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.black87)),
+                              const SizedBox(height: 4),
+                              Text(
+                                  'Add the image and name of your certificate.',
+                                  style: TextStyle(
+                                      fontSize: 12,
+                                      color: Colors.grey.shade500)),
+                            ],
+                          ),
+                        ),
+                        GestureDetector(
+                          onTap: () => Navigator.pop(ctx),
+                          child: Container(
+                            width: 32,
+                            height: 32,
+                            decoration: BoxDecoration(
+                              color: Colors.grey.shade100,
+                              shape: BoxShape.circle,
+                            ),
+                            child: Icon(Icons.close_rounded,
+                                size: 18, color: Colors.grey.shade600),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 20),
+                    GestureDetector(
+                      onTap: () => showModalBottomSheet(
+                        context: ctx,
+                        builder: (c) => SafeArea(
+                            child: Wrap(children: [
+                          ListTile(
+                            leading: const Icon(Icons.photo_library_rounded),
+                            title: const Text('Choose from Gallery'),
+                            onTap: () {
+                              Navigator.pop(c);
+                              pickImage(ImageSource.gallery);
+                            },
+                          ),
+                          ListTile(
+                            leading: const Icon(Icons.camera_alt_rounded),
+                            title: const Text('Take a Photo'),
+                            onTap: () {
+                              Navigator.pop(c);
+                              pickImage(ImageSource.camera);
+                            },
+                          ),
+                        ])),
+                      ),
+                      child: Container(
+                        height: 160,
+                        width: double.infinity,
+                        decoration: BoxDecoration(
+                          color: AppColors.primaryDark.shade50,
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(
+                              color: AppColors.primaryDark.shade200,
+                              width: 1.5),
+                        ),
+                        child: pickedFile != null
+                            ? ClipRRect(
+                                borderRadius: BorderRadius.circular(13),
+                                child: Stack(
+                                    fit: StackFit.expand,
+                                    children: [
+                                      Image.file(pickedFile!,
+                                          fit: BoxFit.cover),
+                                      Positioned(
+                                        bottom: 8,
+                                        right: 8,
+                                        child: Container(
+                                          padding: const EdgeInsets.symmetric(
+                                              horizontal: 8, vertical: 4),
+                                          decoration: BoxDecoration(
+                                              color: Colors.black54,
+                                              borderRadius:
+                                                  BorderRadius.circular(8)),
+                                          child: const Text('Tap to change',
+                                              style: TextStyle(
+                                                  color: Colors.white,
+                                                  fontSize: 11)),
+                                        ),
+                                      ),
+                                    ]),
+                              )
+                            : Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                    Icon(Icons.cloud_upload_rounded,
+                                        size: 44,
+                                        color:
+                                            AppColors.primaryDark.shade400),
+                                    const SizedBox(height: 8),
+                                    Text('Tap to upload image',
+                                        style: TextStyle(
+                                            color: AppColors
+                                                .primaryDark.shade400,
+                                            fontWeight: FontWeight.w500)),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                        'Keep image under 700KB for best results',
+                                        style: TextStyle(
+                                            color: Colors.grey.shade400,
+                                            fontSize: 11)),
+                                  ]),
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    _certSectionLabel('Certificate Details'),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: eventNameCtrl,
+                      decoration: InputDecoration(
+                        labelText: 'Certificate Name *',
+                        hintText: 'e.g. Codecraft',
+                        border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12)),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: const BorderSide(
+                              color: AppColors.primaryDark, width: 2),
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 14, vertical: 12),
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 52,
+                      child: ElevatedButton(
+                        onPressed: isUploading ? null : doUpload,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.primaryDark,
+                          disabledBackgroundColor:
+                              AppColors.primaryDark.shade200,
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14)),
+                        ),
+                        child: isUploading
+                            ? const Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                    SizedBox(
+                                        width: 20,
+                                        height: 20,
+                                        child: CircularProgressIndicator(
+                                            color: Colors.white,
+                                            strokeWidth: 2.5)),
+                                    SizedBox(width: 12),
+                                    Text('Uploading...',
+                                        style: TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 15,
+                                            fontWeight: FontWeight.w600)),
+                                  ])
+                            : const Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                    Icon(Icons.cloud_upload_rounded,
+                                        color: Colors.white, size: 20),
+                                    SizedBox(width: 8),
+                                    Text('Upload Certificate',
+                                        style: TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 15,
+                                            fontWeight: FontWeight.w600)),
+                                  ]),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _certSectionLabel(String label) => Padding(
+        padding: const EdgeInsets.only(left: 2),
+        child: Text(label,
+            style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                color: AppColors.primaryDark.shade700,
+                letterSpacing: 0.4)),
+      );
+
   @override
   Widget build(BuildContext context) {
     super.build(context);
     final filtered = _certFilter == 'All'
         ? _allCertificates
-        : _allCertificates.where((c) => c['organization'] == _certFilter).toList();
+        : _allCertificates
+            .where((c) => c['organization'] == _certFilter)
+            .toList();
 
-    return Column(children: [
-      // Filter header row (no evaluation banner)
-      Padding(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-        child: Row(
-          children: [
-            Expanded(
-              child: Text(
-                _certFilter == 'All' ? 'All Certificates' : _certFilter,
-                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: Colors.black87),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-            GestureDetector(
-              onTap: _showOrgFilterSheet,
-              child: Container(
-                padding: const EdgeInsets.all(9),
-                decoration: BoxDecoration(
-                  color: _certFilter != 'All'
-                      ? AppColors.primaryDark
-                      : Colors.grey.shade100,
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(
-                    color: _certFilter != 'All'
-                        ? AppColors.primaryDark
-                        : Colors.grey.shade300,
+    return Stack(
+      children: [
+        Column(children: [
+          // Filter header row (no evaluation banner)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    _certFilter == 'All' ? 'All Certificates' : _certFilter,
+                    style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.black87),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
-                child: Icon(
-                  Icons.filter_list_rounded,
-                  size: 20,
-                  color: _certFilter != 'All' ? Colors.white : Colors.grey.shade700,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-      const SizedBox(height: 8),
-
-      // Content
-      Expanded(
-        child: _certLoading
-            ? const Center(child: CircularProgressIndicator(color: AppColors.primaryDark))
-            : _certError != null
-                ? Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-                    const Icon(Icons.error_outline, color: Colors.red, size: 48),
-                    const SizedBox(height: 12),
-                    Text('Failed to load certificates',
-                        style: TextStyle(color: Colors.grey.shade700, fontWeight: FontWeight.w600)),
-                    const SizedBox(height: 6),
-                    Text(_certError!,
-                        style: const TextStyle(color: Colors.red, fontSize: 12), textAlign: TextAlign.center),
-                    const SizedBox(height: 12),
-                    ElevatedButton(
-                      onPressed: _fetchCertificates,
-                      style: ElevatedButton.styleFrom(backgroundColor: AppColors.primaryDark),
-                      child: const Text('Retry', style: TextStyle(color: Colors.white)),
+                GestureDetector(
+                  onTap: _showOrgFilterSheet,
+                  child: Container(
+                    padding: const EdgeInsets.all(9),
+                    decoration: BoxDecoration(
+                      color: _certFilter != 'All'
+                          ? AppColors.primaryDark
+                          : Colors.grey.shade100,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                        color: _certFilter != 'All'
+                            ? AppColors.primaryDark
+                            : Colors.grey.shade300,
+                      ),
                     ),
-                  ]))
-                : filtered.isEmpty
+                    child: Icon(
+                      Icons.filter_list_rounded,
+                      size: 20,
+                      color: _certFilter != 'All'
+                          ? Colors.white
+                          : Colors.grey.shade700,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 8),
+
+          // Content
+          Expanded(
+            child: _certLoading
+                ? const Center(
+                    child: CircularProgressIndicator(
+                        color: AppColors.primaryDark))
+                : _certError != null
                     ? Center(
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 32),
-                          child: Column(
+                        child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              Icon(Icons.workspace_premium_outlined, size: 64, color: Colors.grey.shade300),
-                              const SizedBox(height: 16),
-                              const Text(
-                                'No Certificates Yet',
-                                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: Colors.black87),
+                            const Icon(Icons.error_outline,
+                                color: Colors.red, size: 48),
+                            const SizedBox(height: 12),
+                            Text('Failed to load certificates',
+                                style: TextStyle(
+                                    color: Colors.grey.shade700,
+                                    fontWeight: FontWeight.w600)),
+                            const SizedBox(height: 6),
+                            Text(_certError!,
+                                style: const TextStyle(
+                                    color: Colors.red, fontSize: 12),
+                                textAlign: TextAlign.center),
+                            const SizedBox(height: 12),
+                            ElevatedButton(
+                              onPressed: _fetchCertificates,
+                              style: ElevatedButton.styleFrom(
+                                  backgroundColor: AppColors.primaryDark),
+                              child: const Text('Retry',
+                                  style: TextStyle(color: Colors.white)),
+                            ),
+                          ]))
+                    : filtered.isEmpty
+                        ? Center(
+                            child: Padding(
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 32),
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(Icons.workspace_premium_outlined,
+                                      size: 64, color: Colors.grey.shade300),
+                                  const SizedBox(height: 16),
+                                  const Text(
+                                    'No Certificates Yet',
+                                    style: TextStyle(
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.w700,
+                                        color: Colors.black87),
+                                  ),
+                                  const SizedBox(height: 10),
+                                  const Text(
+                                    'Your participation certificates will appear here after:\n\n'
+                                    '• Your organization sends an evaluation request.\n'
+                                    '• You complete the event evaluation.\n'
+                                    '• Your organization uploads your certificate.\n\n'
+                                    'Once available, you can preview and download your certificates from this page.',
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(
+                                        fontSize: 14,
+                                        color: Colors.grey,
+                                        height: 1.5),
+                                  ),
+                                ],
                               ),
-                              const SizedBox(height: 10),
-                              const Text(
-                                'Your participation certificates will appear here after:\n\n'
-                                '• Your organization sends an evaluation request.\n'
-                                '• You complete the event evaluation.\n'
-                                '• Your organization uploads your certificate.\n\n'
-                                'Once available, you can preview and download your certificates from this page.',
-                                textAlign: TextAlign.center,
-                                style: TextStyle(fontSize: 14, color: Colors.grey, height: 1.5),
-                              ),
-                            ],
+                            ),
+                          )
+                        : RefreshIndicator(
+                            color: AppColors.primaryDark,
+                            onRefresh: _fetchCertificates,
+                            child: ListView.builder(
+                              padding: const EdgeInsets.only(
+                                  left: 16,
+                                  right: 16,
+                                  top: 4,
+                                  bottom: 80), // space for FAB
+                              itemCount: filtered.length,
+                              itemBuilder: (_, i) =>
+                                  _buildCertificateCard(filtered[i]),
+                            ),
                           ),
-                        ),
-                      )
-                    : RefreshIndicator(
-                        color: AppColors.primaryDark,
-                        onRefresh: _fetchCertificates,
-                        child: ListView.builder(
-                          padding: const EdgeInsets.only(left: 16, right: 16, top: 4, bottom: 24),
-                          itemCount: filtered.length,
-                          itemBuilder: (_, i) => _buildCertificateCard(filtered[i]),
-                        ),
-                      ),
-      ),
-    ]);
+          ),
+        ]),
+        // ── FAB for uploading a new certificate ──
+        Positioned(
+          right: 16,
+          bottom: 16,
+          child: FloatingActionButton(
+            heroTag: 'cert_upload_fab_tab',
+            onPressed: _showUploadDialog,
+            backgroundColor: AppColors.primaryDark,
+            child: const Icon(Icons.add, color: Colors.white),
+          ),
+        ),
+      ],
+    );
   }
 }
+
+
+
 // ─── CALENDAR GRID ─────────────────────────────────────────────
 class _CalendarGrid extends StatelessWidget {
   final DateTime selectedDate;
