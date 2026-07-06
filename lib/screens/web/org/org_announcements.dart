@@ -5,6 +5,7 @@
 
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart'; // 👈 for TapGestureRecognizer
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -835,7 +836,8 @@ class _OrgAnnouncementsScreenState extends State<OrgAnnouncementsScreen> {
                     ),
                     const SizedBox(height: 12),
                   ],
-                  Text(a.content, style: GoogleFonts.beVietnamPro(fontSize: 13.5, height: 1.6, color: _C.textMid)),
+                  // Use the same link-enabled text widget here as well
+                  _buildContentWithLinks(a.content),
                 ]),
               ),
             ),
@@ -916,7 +918,6 @@ class _OrgAnnouncementsScreenState extends State<OrgAnnouncementsScreen> {
   }
 
   // ── Feed shell (same card container as StudentAccounts table) ─────────────
-
   Widget _buildFeedContent(List<AnnouncementModel> items) {
     return CustomScrollView(
       slivers: [
@@ -1000,8 +1001,6 @@ class _OrgAnnouncementsScreenState extends State<OrgAnnouncementsScreen> {
       ]),
     );
   }
-
-  
 
   Widget _buildEmptyState() {
     return Container(
@@ -1891,6 +1890,49 @@ class _OrgAnnouncementsScreenState extends State<OrgAnnouncementsScreen> {
           )),
     ]);
   }
+
+  // ── Link-detecting content widget (used in feed and view dialog) ─────────
+  Widget _buildContentWithLinks(String text) {
+    final style = GoogleFonts.beVietnamPro(fontSize: 14, height: 1.65, color: _C.textMid);
+    final urlRegex = RegExp(r'(https?:\/\/[^\s]+)');
+    final matches = urlRegex.allMatches(text);
+
+    if (matches.isEmpty) {
+      return Text(text, style: style);
+    }
+
+    final spans = <TextSpan>[];
+    int lastEnd = 0;
+    for (final match in matches) {
+      if (match.start > lastEnd) {
+        spans.add(TextSpan(text: text.substring(lastEnd, match.start)));
+      }
+      final url = match.group(0)!;
+      spans.add(TextSpan(
+        text: url,
+        style: GoogleFonts.beVietnamPro(
+          fontSize: 14,
+          color: _C.info,
+          decoration: TextDecoration.underline,
+        ),
+        recognizer: TapGestureRecognizer()
+          ..onTap = () async {
+            final uri = Uri.tryParse(url);
+            if (uri != null && await canLaunchUrl(uri)) {
+              await launchUrl(uri, mode: LaunchMode.externalApplication);
+            }
+          },
+      ));
+      lastEnd = match.end;
+    }
+    if (lastEnd < text.length) {
+      spans.add(TextSpan(text: text.substring(lastEnd)));
+    }
+
+    return RichText(
+      text: TextSpan(style: style, children: spans),
+    );
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1945,6 +1987,52 @@ class _PostCardState extends State<_PostCard> {
     final contentLines = a.content.split('\n');
     final isLong = a.content.length > 280 || contentLines.length > 4;
     final truncated = isLong && !_expanded;
+
+    // Use the parent's _buildContentWithLinks method – we need access to it.
+    // Since _PostCard is a separate class, we can't directly call _OrgAnnouncementsScreenState's method.
+    // Instead, we'll create a standalone helper function or duplicate the logic here.
+    // For simplicity, we duplicate the logic inside _PostCard.
+    Widget buildContent(String text) {
+      final style = GoogleFonts.beVietnamPro(fontSize: 14, height: 1.65, color: _C.textMid);
+      final urlRegex = RegExp(r'(https?:\/\/[^\s]+)');
+      final matches = urlRegex.allMatches(text);
+
+      if (matches.isEmpty) {
+        return Text(text, style: style);
+      }
+
+      final spans = <TextSpan>[];
+      int lastEnd = 0;
+      for (final match in matches) {
+        if (match.start > lastEnd) {
+          spans.add(TextSpan(text: text.substring(lastEnd, match.start)));
+        }
+        final url = match.group(0)!;
+        spans.add(TextSpan(
+          text: url,
+          style: GoogleFonts.beVietnamPro(
+            fontSize: 14,
+            color: _C.info,
+            decoration: TextDecoration.underline,
+          ),
+          recognizer: TapGestureRecognizer()
+            ..onTap = () async {
+              final uri = Uri.tryParse(url);
+              if (uri != null && await canLaunchUrl(uri)) {
+                await launchUrl(uri, mode: LaunchMode.externalApplication);
+              }
+            },
+        ));
+        lastEnd = match.end;
+      }
+      if (lastEnd < text.length) {
+        spans.add(TextSpan(text: text.substring(lastEnd)));
+      }
+
+      return RichText(
+        text: TextSpan(style: style, children: spans),
+      );
+    }
 
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
@@ -2115,16 +2203,14 @@ class _PostCardState extends State<_PostCard> {
                   height: 1.3)),
         ),
 
-        // ── Content ─────────────────────────────────────────────────────────
+        // ── Content (with hyperlink support) ────────────────────────────────
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(
+            buildContent(
               truncated
                   ? '${a.content.substring(0, a.content.length.clamp(0, 280))}…'
                   : a.content,
-              style: GoogleFonts.beVietnamPro(
-                  fontSize: 14, height: 1.65, color: _C.textMid),
             ),
             if (isLong) ...[
               const SizedBox(height: 4),

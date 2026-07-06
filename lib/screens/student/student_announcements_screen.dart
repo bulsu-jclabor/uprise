@@ -4,6 +4,8 @@ import 'dart:io';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart';                 // 👈 for TapGestureRecognizer
+import 'package:url_launcher/url_launcher.dart';       // 👈 for opening links
 import 'package:intl/intl.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:path_provider/path_provider.dart';
@@ -616,16 +618,10 @@ class _AnnouncementCard extends StatelessWidget {
 
                   const SizedBox(height: 6),
 
-                  // ── Body preview ──
-                  Text(
+                  // ── Body preview (now with clickable links) ──
+                  _buildRichContent(
                     ann.body,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: Colors.grey.shade600,
-                      height: 1.5,
-                    ),
+                    TextStyle(fontSize: 13, color: Colors.grey.shade600, height: 1.5),
                   ),
 
                   const SizedBox(height: 12),
@@ -692,6 +688,51 @@ class _AnnouncementCard extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+
+  /// Turns URLs in the body text into tappable links (same style as the rest of the card)
+  Widget _buildRichContent(String text, TextStyle baseStyle) {
+    final urlRegex = RegExp(r'(https?:\/\/[^\s]+)');
+    final matches = urlRegex.allMatches(text);
+    if (matches.isEmpty) {
+      return Text(text, maxLines: 2, overflow: TextOverflow.ellipsis, style: baseStyle);
+    }
+
+    final spans = <TextSpan>[];
+    int lastEnd = 0;
+    for (final match in matches) {
+      if (match.start > lastEnd) {
+        spans.add(TextSpan(text: text.substring(lastEnd, match.start)));
+      }
+      final url = match.group(0)!;
+      spans.add(TextSpan(
+        text: url,
+        style: baseStyle.copyWith(
+          color: AppColors.primaryDark,
+          decoration: TextDecoration.underline,
+        ),
+        recognizer: TapGestureRecognizer()
+          ..onTap = () async {
+            final uri = Uri.tryParse(url);
+            if (uri != null && await canLaunchUrl(uri)) {
+              await launchUrl(uri, mode: LaunchMode.externalApplication);
+            }
+          },
+      ));
+      lastEnd = match.end;
+    }
+    if (lastEnd < text.length) {
+      spans.add(TextSpan(text: text.substring(lastEnd)));
+    }
+
+    // RichText doesn't support maxLines or overflow natively – we need to wrap it in a container.
+    // Because of the two‑line limit, we'll keep the RichText inside a SizedBox with a fixed height,
+    // or simply return RichText and let the parent Column clip it.
+    return RichText(
+      text: TextSpan(style: baseStyle, children: spans),
+      maxLines: 2,
+      overflow: TextOverflow.ellipsis,
     );
   }
 }
@@ -974,14 +1015,10 @@ class AnnouncementDetailScreen extends StatelessWidget {
 
                   const SizedBox(height: 16),
 
-                  // ── Body ──
-                  Text(
+                  // ── Body (now with clickable links) ──
+                  _buildRichContent(
                     ann.body,
-                    style: TextStyle(
-                      fontSize: 15,
-                      color: Colors.grey.shade800,
-                      height: 1.8,
-                    ),
+                    TextStyle(fontSize: 15, color: Colors.grey.shade800, height: 1.8),
                   ),
 
                   const SizedBox(height: 24),
@@ -1165,6 +1202,46 @@ class AnnouncementDetailScreen extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+
+  /// Turns URLs in the body text into tappable links (detail view)
+  Widget _buildRichContent(String text, TextStyle baseStyle) {
+    final urlRegex = RegExp(r'(https?:\/\/[^\s]+)');
+    final matches = urlRegex.allMatches(text);
+    if (matches.isEmpty) {
+      return Text(text, style: baseStyle);
+    }
+
+    final spans = <TextSpan>[];
+    int lastEnd = 0;
+    for (final match in matches) {
+      if (match.start > lastEnd) {
+        spans.add(TextSpan(text: text.substring(lastEnd, match.start)));
+      }
+      final url = match.group(0)!;
+      spans.add(TextSpan(
+        text: url,
+        style: baseStyle.copyWith(
+          color: AppColors.primaryDark,
+          decoration: TextDecoration.underline,
+        ),
+        recognizer: TapGestureRecognizer()
+          ..onTap = () async {
+            final uri = Uri.tryParse(url);
+            if (uri != null && await canLaunchUrl(uri)) {
+              await launchUrl(uri, mode: LaunchMode.externalApplication);
+            }
+          },
+      ));
+      lastEnd = match.end;
+    }
+    if (lastEnd < text.length) {
+      spans.add(TextSpan(text: text.substring(lastEnd)));
+    }
+
+    return RichText(
+      text: TextSpan(style: baseStyle, children: spans),
     );
   }
 }
