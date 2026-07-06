@@ -11,7 +11,7 @@ import '../../widgets/certificate_preview.dart';
 import '../../widgets/student/app_colors.dart';
 
 // ─────────────────────────────────────────────────────────────
-//  STANDALONE SCREEN (uses CertificatesContent)
+//  STANDALONE SCREEN
 // ─────────────────────────────────────────────────────────────
 class StudentCertificatesScreen extends StatelessWidget {
   const StudentCertificatesScreen({super.key});
@@ -27,6 +27,10 @@ class StudentCertificatesScreen extends StatelessWidget {
         elevation: 0,
         centerTitle: true,
         iconTheme: const IconThemeData(color: Colors.black),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: Colors.black87),
+          onPressed: () => Navigator.pop(context),
+        ),
       ),
       body: const CertificatesContent(),
     );
@@ -34,7 +38,7 @@ class StudentCertificatesScreen extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────
-//  SHARED CONTENT WIDGET (used both standalone and as tab)
+//  SHARED CONTENT WIDGET
 // ─────────────────────────────────────────────────────────────
 class CertificatesContent extends StatefulWidget {
   const CertificatesContent({super.key});
@@ -44,11 +48,12 @@ class CertificatesContent extends StatefulWidget {
 }
 
 class _CertificatesContentState extends State<CertificatesContent> {
-  String selectedFilter = 'All';
-  final List<String> filters = ['All', 'Academic', 'Workshops', 'Events'];
-
+  String _orgFilter = 'All';
+  List<String> _orgFilters = ['All'];
+  
   List<Map<String, dynamic>> _allCertificates = [];
   bool _isLoading = true;
+  bool _orgFiltersLoading = true;
   String? _error;
 
   final String? _currentUid = FirebaseAuth.instance.currentUser?.uid;
@@ -57,13 +62,52 @@ class _CertificatesContentState extends State<CertificatesContent> {
   void initState() {
     super.initState();
     _fetchCertificates();
+    _fetchOrganizationFilters();
   }
 
   // ─────────────────────────────────────────────────────────────
-  // FETCH (read‑only)
+  // FETCH ORGANIZATION FILTERS
+  // ─────────────────────────────────────────────────────────────
+  Future<void> _fetchOrganizationFilters() async {
+    setState(() => _orgFiltersLoading = true);
+    try {
+      final snap = await FirebaseFirestore.instance
+          .collection('organizations')
+          .where('status', isEqualTo: 'active')
+          .get();
+      
+      final names = snap.docs
+          .map((d) => (d.data()['name'] ?? '').toString())
+          .where((n) => n.isNotEmpty)
+          .toSet()
+          .toList();
+      names.sort();
+      
+      // ✅ Add "Uploaded by you" filter (walang icon)
+      final filters = ['All', ...names, 'Uploaded by you'];
+      
+      setState(() {
+        _orgFilters = filters;
+        _orgFiltersLoading = false;
+      });
+    } catch (_) {
+      setState(() {
+        _orgFilters = ['All', 'Uploaded by you'];
+        _orgFiltersLoading = false;
+      });
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // FETCH CERTIFICATES
   // ─────────────────────────────────────────────────────────────
   Future<void> _fetchCertificates() async {
     try {
+      setState(() {
+        _isLoading = true;
+        _error = null;
+      });
+
       final query = _currentUid != null
           ? FirebaseFirestore.instance
               .collection('certificates')
@@ -176,94 +220,120 @@ class _CertificatesContentState extends State<CertificatesContent> {
     );
   }
 
-  // ── Verification Dialog ──────────────────────────────────────────
-  void _showVerifyDialog(Map<String, dynamic> cert) {
-    final code = cert['verificationCode'] as String;
+  // ── Filter Bottom Sheet ──────────────────────────────────────────
+  void _showOrgFilterSheet() {
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.white,
+      isScrollControlled: true,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      builder: (ctx) => Padding(
-        padding: const EdgeInsets.fromLTRB(24, 20, 24, 32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Center(
-              child: Container(
-                width: 40, height: 4,
-                margin: const EdgeInsets.only(bottom: 20),
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade300,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-            ),
-            const Icon(Icons.verified_rounded, color: Color(0xFF059669), size: 36),
-            const SizedBox(height: 10),
-            const Text('Certificate Verification',
-                style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Colors.black87)),
-            const SizedBox(height: 4),
-            Text(cert['title'],
-                style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
-                textAlign: TextAlign.center),
-            const SizedBox(height: 20),
-            Center(
-              child: QrImageView(
-                data: code,
-                version: QrVersions.auto,
-                size: 180,
-                backgroundColor: Colors.white,
-              ),
-            ),
-            const SizedBox(height: 16),
-            Text('Verification Code',
-                style: TextStyle(fontSize: 11, color: Colors.grey.shade500,
-                    fontWeight: FontWeight.w600, letterSpacing: 0.5)),
-            const SizedBox(height: 6),
-            GestureDetector(
-              onTap: () {
-                Clipboard.setData(ClipboardData(text: code));
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                  content: Text('Code copied to clipboard'),
-                  backgroundColor: Colors.green,
-                  duration: Duration(seconds: 2),
-                ));
-              },
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFFFF7ED),
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: const Color(0xFFFDE68A)),
-                ),
-                child: Row(
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setSheetState) {
+            return SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+                child: Column(
                   mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(code,
-                        style: const TextStyle(
-                            fontSize: 15, fontWeight: FontWeight.w700,
-                            fontFamily: 'monospace', letterSpacing: 2,
-                            color: Color(0xFFB45309))),
-                    const SizedBox(width: 10),
-                    const Icon(Icons.copy_rounded, size: 16, color: Color(0xFFB45309)),
+                    Center(
+                      child: Container(
+                        width: 40,
+                        height: 4,
+                        margin: const EdgeInsets.only(bottom: 18),
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade300,
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                    ),
+                    const Text(
+                      'Filter Certificates',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.black87,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    const Divider(height: 1, color: Colors.grey),
+                    const SizedBox(height: 8),
+                    if (_orgFiltersLoading)
+                      const Center(
+                        child: Padding(
+                          padding: EdgeInsets.all(20),
+                          child: CircularProgressIndicator(color: AppColors.primaryDark),
+                        ),
+                      )
+                    else
+                      ...List.generate(_orgFilters.length, (i) {
+                        final filter = _orgFilters[i];
+                        final isSelected = _orgFilter == filter;
+                        
+                        return InkWell(
+                          onTap: () {
+                            setSheetState(() {});
+                            setState(() => _orgFilter = filter);
+                            Navigator.pop(ctx);
+                          },
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  isSelected
+                                      ? Icons.radio_button_checked_rounded
+                                      : Icons.radio_button_off_rounded,
+                                  color: isSelected
+                                      ? AppColors.primaryDark
+                                      : Colors.grey.shade400,
+                                  size: 22,
+                                ),
+                                const SizedBox(width: 14),
+                                Expanded(
+                                  child: Text(
+                                    filter,
+                                    style: TextStyle(
+                                      fontSize: 15,
+                                      fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                                      color: isSelected ? AppColors.primaryDark : Colors.black87,
+                                    ),
+                                  ),
+                                ),
+                                if (isSelected)
+                                  Container(
+                                    width: 22,
+                                    height: 22,
+                                    decoration: const BoxDecoration(
+                                      color: AppColors.primaryDark,
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: const Icon(
+                                      Icons.check_rounded,
+                                      size: 14,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
+                        );
+                      }),
                   ],
                 ),
               ),
-            ),
-            const SizedBox(height: 12),
-            Text('Share this QR or code to verify authenticity.',
-                style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
-                textAlign: TextAlign.center),
-          ],
-        ),
-      ),
+            );
+          },
+        );
+      },
     );
   }
 
   // ════════════════════════════════════════════════════════════════
-  // UPLOAD FEATURE (student adds their own certificate)
+  // UPLOAD FEATURE
   // ════════════════════════════════════════════════════════════════
   Future<void> _showUploadDialog() async {
     final eventNameCtrl = TextEditingController();
@@ -332,7 +402,10 @@ class _CertificatesContentState extends State<CertificatesContent> {
               };
               if (ctx.mounted) Navigator.pop(ctx);
               if (mounted) {
-                setState(() { _allCertificates.insert(0, newCert); selectedFilter = 'All'; });
+                setState(() { 
+                  _allCertificates.insert(0, newCert); 
+                  _orgFilter = 'All';
+                });
                 ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
                   content: Text('Certificate uploaded successfully!'),
                   backgroundColor: Colors.green));
@@ -543,7 +616,7 @@ class _CertificatesContentState extends State<CertificatesContent> {
                     : _placeholderBanner(isDraft, isUploaded, cert),
           ),
           Padding(
-            padding: const EdgeInsets.fromLTRB(14, 12, 8, 12),
+            padding: const EdgeInsets.fromLTRB(14, 12, 12, 12),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -554,17 +627,23 @@ class _CertificatesContentState extends State<CertificatesContent> {
                       Text(cert['title'],
                           style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Colors.black87)),
                       const SizedBox(height: 4),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: AppColors.primaryDark.shade50,
-                          borderRadius: BorderRadius.circular(20),
+                      if (cert['organization'].toString().isNotEmpty)
+                        Text(
+                          cert['organization'],
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey.shade600,
+                            fontWeight: FontWeight.w500,
+                          ),
                         ),
-                        child: Text(cert['category'],
-                            style: TextStyle(color: AppColors.primaryDark.shade700, fontSize: 11, fontWeight: FontWeight.w500)),
-                      ),
                       const SizedBox(height: 4),
-                      Text(cert['date'], style: TextStyle(color: Colors.grey.shade500, fontSize: 12)),
+                      Text(
+                        cert['date'],
+                        style: TextStyle(
+                          color: Colors.grey.shade500,
+                          fontSize: 12,
+                        ),
+                      ),
                       if (isUploaded) ...[
                         const SizedBox(height: 6),
                         Container(
@@ -573,59 +652,38 @@ class _CertificatesContentState extends State<CertificatesContent> {
                             color: Colors.blue.shade50,
                             borderRadius: BorderRadius.circular(20),
                           ),
-                          child: Text('Uploaded by you',
-                              style: TextStyle(color: Colors.blue.shade600, fontSize: 11, fontWeight: FontWeight.w500)),
+                          child: Text(
+                            'Uploaded by you',
+                            style: TextStyle(
+                              color: Colors.blue.shade600,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
                         ),
                       ],
                     ],
                   ),
                 ),
+                // Download button
                 GestureDetector(
-                  onTap: () => _showMessage('✅ ${cert['title']} downloaded!'), // placeholder download
+                  onTap: () => _showMessage('✅ ${cert['title']} downloaded!'),
                   child: Container(
                     width: 40, height: 40,
-                    decoration: BoxDecoration(color: AppColors.primaryDark, borderRadius: BorderRadius.circular(10)),
-                    child: const Icon(Icons.download_rounded, color: Colors.white, size: 22),
+                    decoration: BoxDecoration(
+                      color: AppColors.primaryDark,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(
+                      Icons.download_rounded,
+                      color: Colors.white,
+                      size: 22,
+                    ),
                   ),
                 ),
               ],
             ),
           ),
-          // ── Verification QR ──
-          if ((cert['verificationCode'] as String).isNotEmpty) ...[
-            const Divider(height: 1, color: Color(0xFFF0F0F0)),
-            GestureDetector(
-              onTap: () => _showVerifyDialog(cert),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                child: Row(
-                  children: [
-                    QrImageView(
-                      data: cert['verificationCode'] as String,
-                      version: QrVersions.auto,
-                      size: 44,
-                      backgroundColor: Colors.white,
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('Verify Certificate',
-                              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Colors.grey.shade800)),
-                          const SizedBox(height: 2),
-                          Text('Code: ${cert['verificationCode']}',
-                              style: const TextStyle(fontSize: 11, fontFamily: 'monospace',
-                                  letterSpacing: 1.1, color: Color(0xFFB45309), fontWeight: FontWeight.w600)),
-                        ],
-                      ),
-                    ),
-                    Icon(Icons.open_in_new_rounded, size: 16, color: Colors.grey.shade400),
-                  ],
-                ),
-              ),
-            ),
-          ],
         ],
       ),
     );
@@ -659,7 +717,7 @@ class _CertificatesContentState extends State<CertificatesContent> {
             eventDate: cert['date'] as String,
             recipient: (cert['recipientName'] as String).isNotEmpty ? cert['recipientName'] as String : 'Recipient',
             signatories: signatories,
-            verificationCode: (cert['verificationCode'] as String).isNotEmpty ? cert['verificationCode'] as String : null,
+            verificationCode: null,
           ),
         ),
       ),
@@ -714,51 +772,86 @@ class _CertificatesContentState extends State<CertificatesContent> {
   // ─── BUILD ──────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
-    final filtered = selectedFilter == 'All'
-        ? _allCertificates
-        : _allCertificates.where((c) => c['category'] == selectedFilter).toList();
+    // Filter certificates
+    List<Map<String, dynamic>> filtered;
+    
+    if (_orgFilter == 'All') {
+      filtered = _allCertificates;
+    } else if (_orgFilter == 'Uploaded by you') {
+      // Show only certificates uploaded by the current user
+      filtered = _allCertificates.where((c) => c['isUploaded'] == true).toList();
+    } else {
+      // Filter by organization
+      filtered = _allCertificates.where((c) => c['organization'] == _orgFilter).toList();
+    }
 
     return Stack(
       children: [
         Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Filter chips
-            const SizedBox(height: 12),
-            SizedBox(
-              height: 48,
-              child: ListView.builder(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                itemCount: filters.length,
-                itemBuilder: (context, index) {
-                  final filter = filters[index];
-                  final isSelected = selectedFilter == filter;
-                  return GestureDetector(
-                    onTap: () => setState(() => selectedFilter = filter),
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 200),
-                      margin: const EdgeInsets.only(right: 8, top: 6, bottom: 6),
-                      padding: const EdgeInsets.symmetric(horizontal: 18),
+            // ── HEADER: "All Certificates" + Filter Icon ──
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      _orgFilter == 'All' 
+                          ? 'All Certificates' 
+                          : _orgFilter == 'Uploaded by you'
+                              ? 'Uploaded by you'
+                              : _orgFilter,
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.black87,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  GestureDetector(
+                    onTap: _showOrgFilterSheet,
+                    child: Container(
+                      padding: const EdgeInsets.all(10),
                       decoration: BoxDecoration(
-                        color: isSelected ? AppColors.primaryDark : Colors.white,
-                        borderRadius: BorderRadius.circular(20),
+                        color: _orgFilter != 'All'
+                            ? AppColors.primaryDark
+                            : Colors.grey.shade100,
+                        borderRadius: BorderRadius.circular(10),
                         border: Border.all(
-                          color: isSelected ? AppColors.primaryDark : Colors.grey.shade300,
+                          color: _orgFilter != 'All'
+                              ? AppColors.primaryDark
+                              : Colors.grey.shade300,
                         ),
                       ),
-                      alignment: Alignment.center,
-                      child: Text(filter,
-                          style: TextStyle(
-                              color: isSelected ? Colors.white : Colors.grey.shade600,
-                              fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
-                              fontSize: 13)),
+                      child: Icon(
+                        Icons.filter_list_rounded,
+                        size: 22,
+                        color: _orgFilter != 'All'
+                            ? Colors.white
+                            : Colors.grey.shade700,
+                      ),
                     ),
-                  );
-                },
+                  ),
+                ],
               ),
             ),
-            const SizedBox(height: 8),
+            
+            // ── Show count of uploaded certificates ──
+            if (_orgFilter == 'Uploaded by you')
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Text(
+                  '${filtered.length} certificate${filtered.length != 1 ? 's' : ''} uploaded by you',
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: Colors.grey.shade600,
+                  ),
+                ),
+              ),
+            const SizedBox(height: 4),
 
             // ── CONTENT ──
             Expanded(
@@ -794,21 +887,39 @@ class _CertificatesContentState extends State<CertificatesContent> {
                                 child: Column(
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
-                                    Icon(Icons.workspace_premium_outlined, size: 64, color: Colors.grey.shade300),
+                                    Icon(
+                                      _orgFilter == 'Uploaded by you'
+                                          ? Icons.cloud_upload_rounded
+                                          : Icons.workspace_premium_outlined,
+                                      size: 64,
+                                      color: Colors.grey.shade300,
+                                    ),
                                     const SizedBox(height: 16),
-                                    const Text(
-                                      'No Certificates Yet',
-                                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: Colors.black87),
+                                    Text(
+                                      _orgFilter == 'Uploaded by you'
+                                          ? 'No uploaded certificates'
+                                          : 'No Certificates Yet',
+                                      style: const TextStyle(
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.w700,
+                                        color: Colors.black87,
+                                      ),
                                     ),
                                     const SizedBox(height: 10),
-                                    const Text(
-                                      'Your participation certificates will appear here after:\n\n'
-                                      '• Your organization sends an evaluation request.\n'
-                                      '• You complete the event evaluation.\n'
-                                      '• Your organization uploads your certificate.\n\n'
-                                      'Once available, you can preview and download your certificates from this page.',
+                                    Text(
+                                      _orgFilter == 'Uploaded by you'
+                                          ? 'You haven\'t uploaded any certificates yet.\nTap the + button to upload one.'
+                                          : 'Your participation certificates will appear here after:\n\n'
+                                          '• Your organization sends an evaluation request.\n'
+                                          '• You complete the event evaluation.\n'
+                                          '• Your organization uploads your certificate.\n\n'
+                                          'Once available, you can preview and download your certificates from this page.',
                                       textAlign: TextAlign.center,
-                                      style: TextStyle(fontSize: 14, color: Colors.grey, height: 1.5),
+                                      style: TextStyle(
+                                        fontSize: 14,
+                                        color: Colors.grey,
+                                        height: 1.5,
+                                      ),
                                     ),
                                   ],
                                 ),
@@ -818,7 +929,7 @@ class _CertificatesContentState extends State<CertificatesContent> {
                               color: AppColors.primaryDark,
                               onRefresh: _fetchCertificates,
                               child: ListView.builder(
-                                padding: const EdgeInsets.only(left: 16, right: 16, top: 4, bottom: 80), // space for FAB
+                                padding: const EdgeInsets.only(left: 16, right: 16, top: 4, bottom: 80),
                                 itemCount: filtered.length,
                                 itemBuilder: (_, i) => _buildCertificateCard(filtered[i]),
                               ),
