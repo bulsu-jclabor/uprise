@@ -8,8 +8,9 @@ import 'package:intl/intl.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
-import '../../widgets/student/event_registration_form_dialog.dart';
+import 'package:uprise/models/event_model.dart';
 import '../../widgets/student/app_colors.dart';
+import 'student_events_screen.dart';
 
 
 ImageProvider _studentImageProvider(String url) {
@@ -23,6 +24,78 @@ ImageProvider _studentImageProvider(String url) {
     } catch (_) {}
   }
   return NetworkImage(url);
+}
+
+// ─────────────────────────────────────────────────────────────
+//  NAVIGATE TO LINKED EVENT (from an announcement's register button)
+// ─────────────────────────────────────────────────────────────
+Future<void> _goToLinkedEvent(BuildContext context, AnnouncementData ann) async {
+  if (ann.linkedEventId.isEmpty) return;
+
+  showDialog(
+    context: context,
+    barrierDismissible: false,
+    builder: (_) => const Center(
+      child: CircularProgressIndicator(color: AppColors.primaryDark),
+    ),
+  );
+
+  try {
+    final doc = await FirebaseFirestore.instance
+        .collection('events')
+        .doc(ann.linkedEventId)
+        .get();
+
+    if (!context.mounted) return;
+    Navigator.of(context, rootNavigator: true).pop(); // close loading spinner
+
+    if (!doc.exists) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('This event is no longer available.')),
+      );
+      return;
+    }
+
+    final event = EventModel.fromFirestore(doc);
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => EventDetailScreen(
+          event: event,
+          onRegistered: () {},
+          isPastEvent: event.isPast,
+        ),
+      ),
+    );
+  } catch (e) {
+    if (!context.mounted) return;
+    Navigator.of(context, rootNavigator: true).pop();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Could not open event: $e')),
+    );
+  }
+}
+
+bool shouldShowAnnouncementToStudent(Map<String, dynamic> data) {
+  if (data['isPublished'] == false) {
+    return false;
+  }
+
+  final isScheduled = data['isScheduled'] == true;
+  if (!isScheduled) {
+    return true;
+  }
+
+  final scheduledPublishDate = data['scheduledPublishDate'];
+  if (scheduledPublishDate is Timestamp) {
+    return !scheduledPublishDate.toDate().isAfter(DateTime.now());
+  }
+  if (scheduledPublishDate is DateTime) {
+    return !scheduledPublishDate.isAfter(DateTime.now());
+  }
+
+  return true;
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -197,7 +270,7 @@ class _StudentAnnouncementsScreenState extends State<StudentAnnouncementsScreen>
 
           final docs = (snapshot.data?.docs ?? []).where((d) {
             final data = d.data() as Map<String, dynamic>;
-            return data['isPublished'] != false;
+            return shouldShowAnnouncementToStudent(data);
           }).toList();
 
           if (docs.isEmpty) {
@@ -557,24 +630,19 @@ class _AnnouncementCard extends StatelessWidget {
 
                   const SizedBox(height: 12),
 
-                  // ── Register for Event ──
-                  if (ann.linkedProposalId.isNotEmpty) ...[
+                  // ── Go to Linked Event to Register ──
+                  if (ann.linkedEventId.isNotEmpty) ...[
                     SizedBox(
                       width: double.infinity,
                       child: OutlinedButton.icon(
-                        onPressed: () => DynamicRegistrationDialog.show(
-                          context,
-                          proposalId: ann.linkedProposalId,
-                          eventId: ann.linkedEventId,
-                          eventTitle: ann.linkedEventTitle,
-                        ),
+                        onPressed: () => _goToLinkedEvent(context, ann),
                         icon: Icon(
                           Icons.event_available_rounded,
                           size: 16,
                           color: AppColors.primaryDark,
                         ),
                         label: Text(
-                          'Register for ${ann.linkedEventTitle}',
+                          'View Event: ${ann.linkedEventTitle}',
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
                             fontWeight: FontWeight.w600,
@@ -918,8 +986,8 @@ class AnnouncementDetailScreen extends StatelessWidget {
 
                   const SizedBox(height: 24),
 
-                  // ── Register for Event ──
-                  if (ann.linkedProposalId.isNotEmpty) ...[
+                  // ── Go to Linked Event to Register ──
+                  if (ann.linkedEventId.isNotEmpty) ...[
                     Container(
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
@@ -952,7 +1020,7 @@ class AnnouncementDetailScreen extends StatelessWidget {
                           ),
                           const SizedBox(height: 6),
                           Text(
-                            'Register for ${ann.linkedEventTitle}',
+                            'This announcement is linked to ${ann.linkedEventTitle}',
                             style: TextStyle(
                               fontSize: 13,
                               color: Colors.grey.shade600,
@@ -962,15 +1030,10 @@ class AnnouncementDetailScreen extends StatelessWidget {
                           SizedBox(
                             width: double.infinity,
                             child: ElevatedButton.icon(
-                              onPressed: () => DynamicRegistrationDialog.show(
-                                context,
-                                proposalId: ann.linkedProposalId,
-                                eventId: ann.linkedEventId,
-                                eventTitle: ann.linkedEventTitle,
-                              ),
+                              onPressed: () => _goToLinkedEvent(context, ann),
                               icon: const Icon(Icons.event_available_rounded, size: 18),
                               label: const Text(
-                                'Register Now',
+                                'View Event',
                                 style: TextStyle(
                                   fontWeight: FontWeight.w600,
                                 ),
