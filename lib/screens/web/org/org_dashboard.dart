@@ -14,6 +14,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:universal_html/html.dart' as html;
 import 'package:fl_chart/fl_chart.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
@@ -769,7 +770,17 @@ class _OrgDashboardState extends State<OrgDashboard> {
     });
   }
 
-  Future<void> _logout() async => FirebaseAuth.instance.signOut();
+  Future<void> _logout() async {
+    try {
+      await FirebaseAuth.instance.signOut();
+    } catch (e) {
+      debugPrint('Logout error: $e');
+    }
+    // Force a reload on web to ensure the auth gate rebuilds to the landing/login page
+    try {
+      html.window.location.reload();
+    } catch (_) {}
+  }
 
   void _confirmLogout() {
     showDialog(

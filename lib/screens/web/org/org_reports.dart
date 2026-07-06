@@ -1035,6 +1035,9 @@ class _ViewReportModal extends StatelessWidget {
   Widget build(BuildContext context) {
     final isFinancial = report.type == 'financial';
     final hasFile = report.fileBase64 != null && report.fileBase64!.isNotEmpty;
+    final hasEventId = (report.eventId ?? '').isNotEmpty;
+    final showTxnSection = isFinancial && report.scope == 'event' && (hasEventId || report.title.isNotEmpty);
+    final currency = NumberFormat.currency(symbol: '₱', decimalDigits: 2);
 
     return Dialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
@@ -1222,6 +1225,77 @@ class _ViewReportModal extends StatelessWidget {
                           ),
                         ],
                       ),
+                    ),
+                  ],
+                  if (showTxnSection) ...[
+                    const SizedBox(height: 20),
+                    _sectionLabel('Event Transactions', icon: Icons.account_balance_wallet_outlined),
+                    StreamBuilder<QuerySnapshot>(
+                      stream: FirebaseFirestore.instance
+                          .collection('transactions')
+                          .where('orgId', isEqualTo: report.submittedBy)
+                          .snapshots(),
+                      builder: (ctx, snap) {
+                        if (snap.connectionState == ConnectionState.waiting) {
+                          return const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 12),
+                            child: Center(child: SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))),
+                          );
+                        }
+                        if (snap.hasError) {
+                          return Text('Failed to load transactions: ${snap.error}', style: GoogleFonts.beVietnamPro(color: const Color(0xFFDC2626)));
+                        }
+                        final docs = snap.data?.docs ?? [];
+                        final filteredDocs = docs.where((d) {
+                          final m = d.data() as Map<String, dynamic>;
+                          if (hasEventId) {
+                            return (m['eventId']?.toString() ?? '') == report.eventId;
+                          }
+                          return (m['eventName']?.toString().toLowerCase() ?? '') == report.title.toLowerCase();
+                        }).toList();
+                        if (filteredDocs.isEmpty) {
+                          return Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 8),
+                            child: Text('No transactions recorded for this event.', style: GoogleFonts.beVietnamPro(color: const Color(0xFF6B7280))),
+                          );
+                        }
+                        double total = 0.0;
+                        final items = filteredDocs.map((d) {
+                          final m = d.data() as Map<String, dynamic>;
+                          final amt = (m['amount'] ?? 0).toDouble();
+                          total += amt;
+                          final cat = m['category']?.toString() ?? '';
+                          final seg = m['segment']?.toString() ?? '';
+                          final ts = m['date'] as Timestamp?;
+                          final dateStr = ts != null ? DateFormat('MMM dd, yyyy').format(ts.toDate()) : '';
+                          final type = (m['type'] ?? 'income').toString();
+                          return ListTile(
+                            contentPadding: EdgeInsets.zero,
+                            title: Text('$cat • $seg', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600)),
+                            subtitle: Text(dateStr, style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF6B7280))),
+                            trailing: Text(currency.format(amt), style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w700, color: type == 'income' ? const Color(0xFF059669) : const Color(0xFFDC2626))),
+                          );
+                        }).toList();
+
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 8),
+                              child: Text('Total: ${currency.format(total)}', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w700)),
+                            ),
+                            Container(
+                              constraints: const BoxConstraints(maxHeight: 220),
+                              child: ListView.separated(
+                                shrinkWrap: true,
+                                itemCount: items.length,
+                                separatorBuilder: (_, __) => const Divider(height: 1),
+                                itemBuilder: (_, idx) => items[idx],
+                              ),
+                            ),
+                          ],
+                        );
+                      },
                     ),
                   ],
                 ],

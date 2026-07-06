@@ -7,6 +7,7 @@ import 'package:universal_html/html.dart' as html;
 import 'package:uprise/screens/web/admin/export_pdf.dart' show AdminExportPdf;
 import 'export_util.dart';
 import 'package:uprise/widgets/admin_export_button.dart';
+import '../../../widgets/student/event_image.dart';
 import 'package:pdf/widgets.dart' as pw;
 import '../../../services/activity_logger.dart' as activity_log;
 import 'dart:convert'; // for base64Decode, utf8
@@ -199,7 +200,10 @@ class _BadgeStyle {
 class EventReport {
   final String id, title, orgId, orgName, type, status;
   final DateTime date;
-  final double totalIncome, totalExpenses, budgetVariance;
+  final String description;
+  final String location;
+  final String eventImageUrl;
+  final double totalIncome, totalExpenses, budgetVariance, budgeted;
   final int registrants, attendees;
   final String submittedBy, reportPeriod;
   final DateTime? submittedDate;
@@ -219,11 +223,15 @@ class EventReport {
     this.totalIncome = 0,
     this.totalExpenses = 0,
     this.budgetVariance = 0,
+    this.budgeted = 0,
     this.registrants = 0,
     this.attendees = 0,
     this.submittedBy = '',
     this.reportPeriod = '',
     this.submittedDate,
+    this.description = '',
+    this.location = '',
+    this.eventImageUrl = '',
     this.incomeBreakdown = const [],
     this.expenseBreakdown = const [],
     this.attachments = const [],
@@ -232,6 +240,14 @@ class EventReport {
   });
 
   double get netAmount => totalIncome - totalExpenses;
+
+  double get effectiveBudgetVariance {
+    if (budgeted != 0) {
+      return budgeted - netAmount;
+    }
+    return budgetVariance;
+  }
+
   int get attendanceRatio =>
       registrants > 0 ? ((attendees / registrants) * 100).round() : 0;
 
@@ -247,15 +263,31 @@ class EventReport {
       title: d['title']?.toString() ?? 'Untitled',
       orgId: d['orgId']?.toString() ?? '',
       orgName: orgName,
-      type: d['type']?.toString() ?? 'Others',
+      type: (
+            d['category'] as String? ??
+            d['type'] as String? ??
+            'Others'
+          ).toString(),
       date: (d['date'] as Timestamp).toDate(),
       status: d['status']?.toString() ?? 'approved',
+      description: d['description']?.toString() ?? '',
+      location: d['location']?.toString() ?? '',
+      eventImageUrl: (d['bannerUrl'] as String?)?.toString() ??
+          (d['imageUrl'] as String?)?.toString() ??
+          '',
       totalIncome: (d['totalIncome'] as num?)?.toDouble() ?? 0,
       totalExpenses: (d['totalExpenses'] as num?)?.toDouble() ?? 0,
       budgetVariance: (d['budgetVariance'] as num?)?.toDouble() ?? 0,
+      budgeted: (d['budget'] as num?)?.toDouble() ??
+          (d['budgeted'] as num?)?.toDouble() ??
+          (d['totalBudget'] as num?)?.toDouble() ??
+          0,
       registrants: registrants,
       attendees: attendees,
-      submittedBy: d['submittedBy']?.toString() ?? '',
+      submittedBy: d['submittedBy']?.toString() ??
+          d['submittedByEmail']?.toString() ??
+          d['publishedBy']?.toString() ??
+          '',
       submittedDate: (d['submittedDate'] as Timestamp?)?.toDate(),
       reportPeriod: d['reportPeriod']?.toString() ?? '',
       incomeBreakdown: List<Map<String, dynamic>>.from(
@@ -372,6 +404,8 @@ class _ReportsManagementState extends State<ReportsManagement>
   List<EventReport> _events = [];
   List<Map<String, dynamic>> _organizations = [];
   bool _loadingEvents = true;
+  bool _loadingEventCounts = false;
+  
 
   // Admin reports for financial and accomplishment
   List<AdminReport> _financialReports = [];
@@ -483,6 +517,7 @@ class _ReportsManagementState extends State<ReportsManagement>
     });
   }
 
+
   Future<void> _loadEvents() async {
     if (!mounted) return;
     setState(() => _loadingEvents = true);
@@ -556,6 +591,236 @@ class _ReportsManagementState extends State<ReportsManagement>
         .collection('attendances')
         .get();
     return (regSnap.docs.length, attSnap.docs.length);
+  }
+
+  EventReport _eventWithCounts(EventReport e, int registrants, int attendees) {
+    return EventReport(
+      id: e.id,
+      title: e.title,
+      orgId: e.orgId,
+      orgName: e.orgName,
+      type: e.type,
+      date: e.date,
+      status: e.status,
+      totalIncome: e.totalIncome,
+      totalExpenses: e.totalExpenses,
+      budgetVariance: e.budgetVariance,
+      budgeted: e.budgeted,
+      registrants: registrants,
+      attendees: attendees,
+      submittedBy: e.submittedBy,
+      reportPeriod: e.reportPeriod,
+      submittedDate: e.submittedDate,
+      eventImageUrl: e.eventImageUrl,
+      incomeBreakdown: e.incomeBreakdown,
+      expenseBreakdown: e.expenseBreakdown,
+      attachments: e.attachments,
+      financialNotes: e.financialNotes,
+      recommendations: e.recommendations,
+    );
+  }
+
+  Future<void> _fetchAttendanceCountsForPage(List<EventReport> pageItems) async {
+    if (_loadingEventCounts) return;
+    if (!mounted) return;
+    setState(() => _loadingEventCounts = true);
+    try {
+      final futures = <Future<void>>[];
+      for (final e in pageItems) {
+        // Skip if we already have counts (and not both zero)
+        if (e.registrants != 0 || e.attendees != 0) continue;
+        futures.add(Future(() async {
+          try {
+            final stats = await _loadEventAttendanceStats(e.id);
+            final regs = stats.$1;
+            final atts = stats.$2;
+            if (!mounted) return;
+            setState(() {
+              final idx = _events.indexWhere((ev) => ev.id == e.id);
+              if (idx >= 0) _events[idx] = _eventWithCounts(e, regs, atts);
+            });
+          } catch (ex) {
+            debugPrint('Error fetching attendance for ${e.id}: $ex');
+          }
+        }));
+      }
+      await Future.wait(futures);
+    } finally {
+      if (mounted) setState(() => _loadingEventCounts = false);
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> _loadEventAttendeesList(String eventId) async {
+    try {
+      final snap = await FirebaseFirestore.instance
+          .collection('events')
+          .doc(eventId)
+          .collection('attendances')
+          .orderBy('timestamp')
+          .get();
+      return snap.docs.map((d) {
+        final m = Map<String, dynamic>.from(d.data() as Map<String, dynamic>);
+        m['id'] = d.id;
+        m['timestamp'] = (m['timestamp'] as Timestamp?)?.toDate();
+        return m;
+      }).toList();
+    } catch (e) {
+      debugPrint('Error loading attendees: $e');
+      return [];
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> _loadEventFeedbacks(String eventId) async {
+    final db = FirebaseFirestore.instance;
+    final results = <Map<String, dynamic>>[];
+    try {
+      // Primary 'feedback' collection (used by org analytics)
+      final fb1 = await db.collection('feedback').where('eventId', isEqualTo: eventId).get();
+      for (final d in fb1.docs) {
+        final m = Map<String, dynamic>.from(d.data() as Map<String, dynamic>);
+        m['id'] = d.id;
+        m['source'] = 'feedback';
+        results.add(m);
+      }
+    } catch (_) {}
+    try {
+      // Secondary 'event_feedback' (used elsewhere)
+      final fb2 = await db.collection('event_feedback').where('eventId', isEqualTo: eventId).get();
+      for (final d in fb2.docs) {
+        final m = Map<String, dynamic>.from(d.data() as Map<String, dynamic>);
+        m['id'] = d.id;
+        m['source'] = 'event_feedback';
+        results.add(m);
+      }
+    } catch (_) {}
+    // Normalize timestamp fields
+    for (final r in results) {
+      if (r['timestamp'] is Timestamp) r['timestamp'] = (r['timestamp'] as Timestamp).toDate();
+      if (r['createdAt'] is Timestamp) r['createdAt'] = (r['createdAt'] as Timestamp).toDate();
+    }
+    // Sort by timestamp/createdAt desc
+    results.sort((a, b) {
+      final da = (a['timestamp'] ?? a['createdAt']) as DateTime?;
+      final dbt = (b['timestamp'] ?? b['createdAt']) as DateTime?;
+      if (da == null && dbt == null) return 0;
+      if (da == null) return 1;
+      if (dbt == null) return -1;
+      return dbt.compareTo(da);
+    });
+    return results;
+  }
+
+  Stream<(
+      double totalIncome,
+      double totalExpenses,
+      double netAmount,
+      List<Map<String, dynamic>> incomeBreakdown,
+      List<Map<String, dynamic>> expenseBreakdown
+  )> _eventTransactionSummaryStream(String eventId) {
+    return FirebaseFirestore.instance
+        .collection('transactions')
+        .where('eventId', isEqualTo: eventId)
+        .snapshots()
+        .map((snap) => _computeTransactionSummaryFromDocs(snap.docs));
+  }
+
+  (
+      double totalIncome,
+      double totalExpenses,
+      double netAmount,
+      List<Map<String, dynamic>> incomeBreakdown,
+      List<Map<String, dynamic>> expenseBreakdown
+  ) _computeTransactionSummaryFromDocs(List<QueryDocumentSnapshot> docs) {
+    double totalIncome = 0;
+    double totalExpenses = 0;
+    final incomeBuckets = <String, double>{};
+    final expenseBuckets = <String, double>{};
+
+    for (final doc in docs) {
+      final data = doc.data() as Map<String, dynamic>;
+      final type = (data['type'] as String?)?.toLowerCase() ?? 'income';
+      final amount = (data['amount'] as num?)?.toDouble() ?? 0.0;
+      if (amount == 0) continue;
+      final segment = (data['segment'] as String?)?.trim() ?? '';
+      final category = (data['category'] as String?)?.trim() ?? '';
+      final bucketName = segment.isNotEmpty
+          ? segment
+          : category.isNotEmpty
+              ? category
+              : 'Other';
+      if (type == 'expense' || type == 'outflow' || type == 'cost') {
+        totalExpenses += amount;
+        expenseBuckets[bucketName] = (expenseBuckets[bucketName] ?? 0) + amount;
+      } else {
+        totalIncome += amount;
+        incomeBuckets[bucketName] = (incomeBuckets[bucketName] ?? 0) + amount;
+      }
+    }
+
+    List<Map<String, dynamic>> toList(Map<String, double> buckets) {
+      final list = buckets.entries
+          .map((e) => {'name': e.key, 'amount': e.value})
+          .toList();
+      list.sort((a, b) => (b['amount'] as double).compareTo(a['amount'] as double));
+      return list;
+    }
+
+    return (
+      totalIncome,
+      totalExpenses,
+      totalIncome - totalExpenses,
+      toList(incomeBuckets),
+      toList(expenseBuckets),
+    );
+  }
+
+  bool _loadingEventDetail = false;
+
+  Future<void> _openEventDetail(EventReport event) async {
+    // Toggle off if already viewing the same event
+    if (_detailEvent?.id == event.id) {
+      setState(() => _detailEvent = null);
+      return;
+    }
+
+    if (!mounted) return;
+    setState(() => _loadingEventDetail = true);
+
+    try {
+      final doc = await FirebaseFirestore.instance.collection('events').doc(event.id).get();
+      if (!doc.exists) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Event not found'), backgroundColor: UpriseColors.error),
+        );
+        return;
+      }
+
+      // Resolve org name from cached organizations list, fallback to event.orgName
+      final data = doc.data() as Map<String, dynamic>;
+      final orgId = data['orgId']?.toString() ?? event.orgId;
+      final org = _organizations.firstWhere(
+        (o) => o['id'] == orgId,
+        orElse: () => <String, dynamic>{'name': event.orgName},
+      );
+      final orgName = org['name'] as String? ?? event.orgName;
+
+      final stats = await _loadEventAttendanceStats(event.id);
+      final registrants = stats.$1;
+      final attendees = stats.$2;
+
+      final populated = EventReport.fromFirestore(doc, orgName, registrants, attendees);
+      if (!mounted) return;
+      setState(() => _detailEvent = populated);
+    } catch (e) {
+      debugPrint('Error loading event details: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to load event details: $e'), backgroundColor: UpriseColors.error),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _loadingEventDetail = false);
+    }
   }
 
   // ── Load Financial Reports ──────────────────────────────────
@@ -1242,9 +1507,18 @@ class _ReportsManagementState extends State<ReportsManagement>
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFFBFCFE),
-      body: _detailEvent != null
-          ? _buildDetailView(_detailEvent!)
-          : _buildMainView(),
+      body: Stack(
+        children: [
+          _detailEvent != null ? _buildDetailView(_detailEvent!) : _buildMainView(),
+          if (_loadingEventDetail)
+            Positioned.fill(
+              child: Container(
+                color: Colors.black26,
+                child: const Center(child: CircularProgressIndicator()),
+              ),
+            ),
+        ],
+      ),
     );
   }
 
@@ -1860,6 +2134,8 @@ class _ReportsManagementState extends State<ReportsManagement>
     });
   }
 
+  
+
   // Toolbar + table only — matches the layout every other tab on this page
   // uses (_buildReportTab, _buildSubmissionTrackerTab). The per-event Type
   // and attendance Ratio are already visible per-row in the table itself,
@@ -1884,6 +2160,16 @@ class _ReportsManagementState extends State<ReportsManagement>
     final start = (safePage - 1) * _pageSize;
     final end = (start + _pageSize).clamp(0, events.length);
     final pageItems = events.isEmpty ? <EventReport>[] : events.sublist(start, end);
+
+    // Ensure attendance counts are populated for visible page items.
+    if (!_loadingEventCounts) {
+      final needsCounts = pageItems.any((e) => e.registrants == 0 && e.attendees == 0);
+      if (needsCounts) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _fetchAttendanceCountsForPage(pageItems);
+        });
+      }
+    }
 
     // No horizontal margin here — the parent SingleChildScrollView
     // (_buildEventSummaryTab) already applies 28px side padding, so this
@@ -1929,6 +2215,7 @@ class _ReportsManagementState extends State<ReportsManagement>
         border: Border(bottom: BorderSide(color: Color(0xFFFB923C))),
       ),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: showFinancial
             ? [
                 Expanded(flex: 3, child: _headerCell('EVENT NAME')),
@@ -1996,7 +2283,7 @@ class _ReportsManagementState extends State<ReportsManagement>
 
     return InkWell(
       hoverColor: const Color(0xFFF8F9FB),
-      onTap: () => setState(() => _detailEvent = event),
+      onTap: () => _openEventDetail(event),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
         decoration: BoxDecoration(
@@ -2010,8 +2297,18 @@ class _ReportsManagementState extends State<ReportsManagement>
                   Expanded(
                     flex: 3,
                     child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
-                        _EventIcon(type: event.type),
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(10),
+                          child: EventImage(
+                            imageUrl: event.eventImageUrl,
+                            width: 40,
+                            height: 40,
+                            fit: BoxFit.cover,
+                            showLoadingIndicator: false,
+                          ),
+                        ),
                         const SizedBox(width: 10),
                         Expanded(
                           child: Text(
@@ -2100,13 +2397,13 @@ class _ReportsManagementState extends State<ReportsManagement>
                     ),
                   Expanded(
                     flex: 1,
-                    child: Align(
+                      child: Align(
                       alignment: Alignment.centerRight,
                       child: _ActionIconButton(
                         icon: Icons.visibility_outlined,
                         tooltip: 'View Report',
                         color: const Color(0xFF3B82F6),
-                        onTap: () => setState(() => _detailEvent = event),
+                        onTap: () => _openEventDetail(event),
                       ),
                     ),
                   ),
@@ -2115,8 +2412,18 @@ class _ReportsManagementState extends State<ReportsManagement>
                   Expanded(
                     flex: 4,
                     child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
-                        _EventIcon(type: event.type),
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(10),
+                          child: EventImage(
+                            imageUrl: event.eventImageUrl,
+                            width: 40,
+                            height: 40,
+                            fit: BoxFit.cover,
+                            showLoadingIndicator: false,
+                          ),
+                        ),
                         const SizedBox(width: 10),
                         Expanded(
                           child: Text(
@@ -2169,7 +2476,7 @@ class _ReportsManagementState extends State<ReportsManagement>
                           icon: Icons.visibility_outlined,
                           tooltip: 'View Report',
                           color: const Color(0xFF3B82F6),
-                          onTap: () => setState(() => _detailEvent = event),
+                          onTap: () => _openEventDetail(event),
                         ),
                         const SizedBox(width: 4),
                         _ActionIconButton(
@@ -2795,18 +3102,6 @@ class _ReportsManagementState extends State<ReportsManagement>
 
   // ── Detail View ───────────────────────────────────────────────────
   Widget _buildDetailView(EventReport event) {
-    final net = event.netAmount;
-    final maxInc = event.incomeBreakdown.isEmpty
-        ? 1.0
-        : event.incomeBreakdown
-              .map((i) => (i['amount'] as num?)?.toDouble() ?? 0.0)
-              .reduce((a, b) => a > b ? a : b);
-    final maxExp = event.expenseBreakdown.isEmpty
-        ? 1.0
-        : event.expenseBreakdown
-              .map((i) => (i['amount'] as num?)?.toDouble() ?? 0.0)
-              .reduce((a, b) => a > b ? a : b);
-
     return Scaffold(
       backgroundColor: const Color(0xFFFBFCFE),
       body: Column(
@@ -2950,8 +3245,8 @@ class _ReportsManagementState extends State<ReportsManagement>
                             _metaCell('EVENT NAME', event.title),
                             _metaCell('ORGANIZATION', event.orgName),
                             _metaCell(
-                              'REPORT TYPE',
-                              'Event Financial Report',
+                              'EVENT TYPE',
+                              event.type,
                               last: true,
                             ),
                           ],
@@ -2959,26 +3254,18 @@ class _ReportsManagementState extends State<ReportsManagement>
                         Row(
                           children: [
                             _metaCell(
-                              'REPORT PERIOD',
-                              event.reportPeriod.isNotEmpty
-                                  ? event.reportPeriod
-                                  : DateFormat(
-                                      'MMM dd, yyyy',
-                                    ).format(event.date),
+                              'DATE',
+                              DateFormat('MMM dd, yyyy').format(event.date),
                             ),
                             _metaCell(
-                              'SUBMITTED DATE',
-                              event.submittedDate != null
-                                  ? DateFormat(
-                                      'MMM dd, yyyy',
-                                    ).format(event.submittedDate!)
-                                  : '—',
+                              'LOCATION',
+                              event.location.isNotEmpty ? event.location : '—',
                             ),
                             _metaCell(
                               'SUBMITTED BY',
                               event.submittedBy.isNotEmpty
                                   ? event.submittedBy
-                                  : '—',
+                                  : 'Unknown',
                               last: true,
                               lastRow: true,
                             ),
@@ -2987,7 +3274,6 @@ class _ReportsManagementState extends State<ReportsManagement>
                       ],
                     ),
                   ),
-                  const SizedBox(height: 16),
                   // Registration & attendance — fetched on-demand for just
                   // this one event (cheap: two queries) rather than eagerly
                   // for every event in the list, which used to be the cause
@@ -3034,88 +3320,247 @@ class _ReportsManagementState extends State<ReportsManagement>
                     },
                   ),
                   const SizedBox(height: 16),
-                  // Financial stats
-                  Row(
-                    children: [
-                      _detailStatCard(
-                        'Total Income',
-                        '₱${_fmt(event.totalIncome)}',
-                        UpriseColors.success,
-                        UpriseColors.successBg,
-                        Icons.trending_up_rounded,
-                      ),
-                      const SizedBox(width: 14),
-                      _detailStatCard(
-                        'Total Expenses',
-                        '₱${_fmt(event.totalExpenses)}',
-                        UpriseColors.error,
-                        UpriseColors.errorBg,
-                        Icons.trending_down_rounded,
-                      ),
-                      const SizedBox(width: 14),
-                      _detailStatCard(
-                        'Net Amount',
-                        '₱${_fmt(net)}',
-                        net >= 0 ? UpriseColors.success : UpriseColors.error,
-                        net >= 0
-                            ? UpriseColors.successBg
-                            : UpriseColors.errorBg,
-                        Icons.account_balance_wallet_rounded,
-                      ),
-                      const SizedBox(width: 14),
-                      _detailStatCard(
-                        'Budget Variance',
-                        '₱${_fmt(event.budgetVariance)}',
-                        UpriseColors.primaryDark,
-                        UpriseColors.primaryLight,
-                        Icons.balance_rounded,
-                      ),
-                    ],
+                  // Participants (attendees list)
+                  FutureBuilder<List<Map<String, dynamic>>>(
+                    future: _loadEventAttendeesList(event.id),
+                    builder: (context, snap) {
+                      final loadingA = snap.connectionState == ConnectionState.waiting;
+                      final attendeesList = snap.data ?? [];
+                      return Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(18),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: const Color(0xFFE8ECF0)),
+                          boxShadow: _DS.cardShadow,
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _sectionLabel('Participants', icon: Icons.people_outline_rounded),
+                            const SizedBox(height: 8),
+                            if (loadingA)
+                              const Center(child: SizedBox(height: 36, width: 36, child: CircularProgressIndicator()))
+                            else if (attendeesList.isEmpty)
+                              Text('No attendees recorded.', style: GoogleFonts.beVietnamPro(color: const Color(0xFF64748B)))
+                            else
+                              ConstrainedBox(
+                                constraints: const BoxConstraints(maxHeight: 220),
+                                child: ListView.separated(
+                                  shrinkWrap: true,
+                                  itemCount: attendeesList.length,
+                                  separatorBuilder: (_, __) => const Divider(height: 8, color: Color(0xFFF1F5F9)),
+                                  itemBuilder: (context, i) {
+                                    final a = attendeesList[i];
+                                    final name = a['studentName'] ?? a['studentId'] ?? 'Unknown';
+                                    final email = a['studentEmail'] ?? '';
+                                    final status = a['status'] ?? '';
+                                    final ts = a['timestamp'] is DateTime ? a['timestamp'] as DateTime : null;
+                                    return ListTile(
+                                      contentPadding: EdgeInsets.zero,
+                                      title: Text(name, style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600)),
+                                      subtitle: Text('${email.isNotEmpty ? email + ' · ' : ''}${status.toString().toUpperCase()}', style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF64748B))),
+                                      trailing: Text(ts != null ? DateFormat('MMM dd, HH:mm').format(ts) : ''),
+                                    );
+                                  },
+                                ),
+                              ),
+                          ],
+                        ),
+                      );
+                    },
                   ),
                   const SizedBox(height: 16),
-                  // Breakdowns
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _breakdownCard(
-                          'Income Breakdown',
-                          event.incomeBreakdown,
-                          maxInc,
-                          UpriseColors.success,
-                          Icons.trending_up_rounded,
+                  // Evaluation / Feedback
+                  FutureBuilder<List<Map<String, dynamic>>>(
+                    future: _loadEventFeedbacks(event.id),
+                    builder: (context, snap) {
+                      final loadingF = snap.connectionState == ConnectionState.waiting;
+                      final feedbacks = snap.data ?? [];
+                      final total = feedbacks.length;
+                      final avg = total == 0 ? 0.0 : (feedbacks.fold<double>(0.0, (s, f) => s + ((f['rating'] as num?)?.toDouble() ?? 0)) / total);
+                      final starCounts = {1:0,2:0,3:0,4:0,5:0};
+                      for (final f in feedbacks) {
+                        final r = (f['rating'] as num?)?.toInt() ?? 0;
+                        if (starCounts.containsKey(r)) starCounts[r] = starCounts[r]! + 1;
+                      }
+                      return Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(18),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: const Color(0xFFE8ECF0)),
+                          boxShadow: _DS.cardShadow,
                         ),
-                      ),
-                      const SizedBox(width: 14),
-                      Expanded(
-                        child: _breakdownCard(
-                          'Expense Breakdown',
-                          event.expenseBreakdown,
-                          maxExp,
-                          UpriseColors.error,
-                          Icons.trending_down_rounded,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _sectionLabel('Evaluation & Feedback', icon: Icons.reviews_rounded),
+                            const SizedBox(height: 8),
+                            if (loadingF)
+                              const Center(child: SizedBox(height: 36, width: 36, child: CircularProgressIndicator()))
+                            else if (feedbacks.isEmpty)
+                              Text('No feedback recorded.', style: GoogleFonts.beVietnamPro(color: const Color(0xFF64748B)))
+                            else ...[
+                              Row(children: [
+                                Text('Average Rating', style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF64748B))),
+                                const SizedBox(width: 10),
+                                Text(avg.toStringAsFixed(1), style: GoogleFonts.beVietnamPro(fontSize: 22, fontWeight: FontWeight.w800, color: UpriseColors.primaryDark)),
+                                const SizedBox(width: 8),
+                                Text('· $total feedbacks', style: GoogleFonts.beVietnamPro(color: const Color(0xFF64748B))),
+                              ]),
+                              const SizedBox(height: 12),
+                              ...[5,4,3,2,1].map((star) => Padding(
+                                padding: const EdgeInsets.symmetric(vertical: 4),
+                                child: Row(children: [
+                                  Icon(Icons.star, size: 14, color: UpriseColors.primaryDark),
+                                  const SizedBox(width: 8),
+                                  Expanded(child: LinearProgressIndicator(value: total==0?0: (starCounts[star]! / total), backgroundColor: const Color(0xFFE8ECF0), color: UpriseColors.primaryDark, minHeight: 8)),
+                                  const SizedBox(width: 8),
+                                  Text('${starCounts[star]}', style: GoogleFonts.beVietnamPro(color: const Color(0xFF64748B))),
+                                ]),
+                              )).toList(),
+                              const SizedBox(height: 12),
+                              // Recent comments
+                              Column(children: feedbacks.take(5).map((f) {
+                                final author = f['userName'] ?? f['userId'] ?? 'Anonymous';
+                                final rating = (f['rating'] as num?)?.toInt() ?? 0;
+                                final comment = f['comment']?.toString() ?? '';
+                                return ListTile(
+                                  contentPadding: EdgeInsets.zero,
+                                  title: Row(children: [Text(author, style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.w600)), const SizedBox(width: 8), Text('· $rating★', style: GoogleFonts.beVietnamPro(color: const Color(0xFF64748B), fontSize: 12))]),
+                                  subtitle: comment.isEmpty ? null : Text(comment, style: GoogleFonts.beVietnamPro(color: const Color(0xFF374151))),
+                                );
+                              }).toList()),
+                            ],
+                          ],
                         ),
-                      ),
-                    ],
+                      );
+                    },
                   ),
-                  const SizedBox(height: 14),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _notesCard(
-                          'Financial Notes',
-                          event.financialNotes,
-                          Icons.notes_rounded,
-                        ),
-                      ),
-                      const SizedBox(width: 14),
-                      Expanded(
-                        child: _notesCard(
-                          'Recommendations',
-                          event.recommendations,
-                          Icons.lightbulb_outline_rounded,
-                        ),
-                      ),
-                    ],
+                  const SizedBox(height: 16),
+                  // Event Summary (non-financial)
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(18),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: const Color(0xFFE8ECF0)),
+                      boxShadow: _DS.cardShadow,
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _sectionLabel('Event Summary', icon: Icons.event_note_rounded),
+                        const SizedBox(height: 8),
+                        if (event.description.isEmpty)
+                          Text('No summary provided.', style: GoogleFonts.beVietnamPro(color: const Color(0xFF64748B)))
+                        else
+                          Text(event.description, style: GoogleFonts.beVietnamPro(color: const Color(0xFF374151), height: 1.4)),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  // Financial stats — live totals computed from transactions.
+                  StreamBuilder<(
+                      double totalIncome,
+                      double totalExpenses,
+                      double netAmount,
+                      List<Map<String, dynamic>> incomeBreakdown,
+                      List<Map<String, dynamic>> expenseBreakdown
+                    )>(
+                    stream: _eventTransactionSummaryStream(event.id),
+                    builder: (context, snapshot) {
+                      final loading = snapshot.connectionState == ConnectionState.waiting;
+                      final totalIncome = snapshot.data?.$1 ?? event.totalIncome;
+                      final totalExpenses = snapshot.data?.$2 ?? event.totalExpenses;
+                      final netAmount = snapshot.data?.$3 ?? (totalIncome - totalExpenses);
+                      final effectiveBudgetVariance = event.budgeted != 0
+                          ? event.budgeted - netAmount
+                          : event.budgetVariance;
+                      final incomeBreakdown = snapshot.data?.$4 ?? event.incomeBreakdown;
+                      final expenseBreakdown = snapshot.data?.$5 ?? event.expenseBreakdown;
+                      final maxInc = incomeBreakdown.isEmpty
+                          ? 1.0
+                          : incomeBreakdown
+                                .map((i) => (i['amount'] as num?)?.toDouble() ?? 0.0)
+                                .reduce((a, b) => a > b ? a : b);
+                      final maxExp = expenseBreakdown.isEmpty
+                          ? 1.0
+                          : expenseBreakdown
+                                .map((i) => (i['amount'] as num?)?.toDouble() ?? 0.0)
+                                .reduce((a, b) => a > b ? a : b);
+
+                      return Column(
+                        children: [
+                          Row(
+                            children: [
+                              _detailStatCard(
+                                'Total Income',
+                                loading ? '—' : '₱${_fmt(totalIncome)}',
+                                UpriseColors.success,
+                                UpriseColors.successBg,
+                                Icons.trending_up_rounded,
+                              ),
+                              const SizedBox(width: 14),
+                              _detailStatCard(
+                                'Total Expenses',
+                                loading ? '—' : '₱${_fmt(totalExpenses)}',
+                                UpriseColors.error,
+                                UpriseColors.errorBg,
+                                Icons.trending_down_rounded,
+                              ),
+                              const SizedBox(width: 14),
+                              _detailStatCard(
+                                'Net Amount',
+                                loading ? '—' : '₱${_fmt(netAmount)}',
+                                netAmount >= 0 ? UpriseColors.success : UpriseColors.error,
+                                netAmount >= 0
+                                    ? UpriseColors.successBg
+                                    : UpriseColors.errorBg,
+                                Icons.account_balance_wallet_rounded,
+                              ),
+                              const SizedBox(width: 14),
+                              _detailStatCard(
+                                'Budget Variance',
+                                '₱${_fmt(event.effectiveBudgetVariance)}',
+                                UpriseColors.primaryDark,
+                                UpriseColors.primaryLight,
+                                Icons.balance_rounded,
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 16),
+                          // Breakdowns
+                          Row(
+                            children: [
+                              Expanded(
+                                child: _breakdownCard(
+                                  'Income Breakdown',
+                                  incomeBreakdown,
+                                  maxInc,
+                                  UpriseColors.success,
+                                  Icons.trending_up_rounded,
+                                ),
+                              ),
+                              const SizedBox(width: 14),
+                              Expanded(
+                                child: _breakdownCard(
+                                  'Expense Breakdown',
+                                  expenseBreakdown,
+                                  maxExp,
+                                  UpriseColors.error,
+                                  Icons.trending_down_rounded,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      );
+                    },
                   ),
                   if (event.attachments.isNotEmpty) ...[
                     const SizedBox(height: 14),

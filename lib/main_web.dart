@@ -7,10 +7,10 @@ import 'package:google_fonts/google_fonts.dart';
 
 import 'firebase_options.dart';
 import 'auth_service.dart';
-import 'screens/web/admin/admin_login.dart';
 import 'screens/web/admin/admin_dashboard.dart';
-import 'screens/web/org/org_login.dart';
+import 'screens/web/admin/admin_landing_page.dart';
 import 'screens/web/org/org_dashboard.dart';
+import 'screens/web/org/org_landing_page.dart';
 import 'screens/student/student_login.dart';
 import 'screens/student/student_home_screen.dart';
 import 'screens/public/certificate_verify_screen.dart';
@@ -241,6 +241,16 @@ class LandingPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final query = Uri.base.queryParameters;
+    final portal = query['portal']?.toLowerCase();
+
+    if (portal == 'admin') {
+      return const AdminLandingPage();
+    }
+    if (portal == 'org') {
+      return const OrgLandingPage();
+    }
+
     return Scaffold(
       body: Container(
         decoration: const BoxDecoration(
@@ -357,7 +367,7 @@ class LandingPage extends StatelessWidget {
                       isPrimary: true,
                       onTap: () => Navigator.push(
                         context,
-                        MaterialPageRoute(builder: (_) => AdminLogin()),
+                        MaterialPageRoute(builder: (_) => const AdminLandingPage()),
                       ),
                     ),
                     const SizedBox(height: 10),
@@ -369,8 +379,7 @@ class LandingPage extends StatelessWidget {
                       isPrimary: false,
                       onTap: () => Navigator.push(
                         context,
-                        MaterialPageRoute(
-                            builder: (_) => const OrganizationLogin()),
+                        MaterialPageRoute(builder: (_) => const OrgLandingPage()),
                       ),
                     ),
                     const SizedBox(height: 18),
