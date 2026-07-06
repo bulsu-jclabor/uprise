@@ -851,6 +851,15 @@ class _AttendanceTabState extends State<AttendanceTab> with AutomaticKeepAliveCl
           stream: _attStream,
           builder: (ctx, attSnap) {
             final attDocs = attSnap.data?.docs ?? [];
+            // Load student info for all attendance records
+final uids = attDocs
+    .map((d) => (d.data() as Map)['studentId']?.toString() ?? '')
+    .where((id) => id.isNotEmpty)
+    .toSet()
+    .toList();
+if (uids.isNotEmpty) {
+  _ensureStudentsLoaded(uids);
+}
             final present = attDocs.where((d) => (d.data() as Map)['status'] == 'present').length;
             final late    = attDocs.where((d) => (d.data() as Map)['status'] == 'late').length;
 
@@ -874,7 +883,12 @@ class _AttendanceTabState extends State<AttendanceTab> with AutomaticKeepAliveCl
                 _buildSubTabToolbar(attDocs.cast()),
                 const SizedBox(height: 12),
                 if (_subTab == 0)
-                  _AttendanceTable(docs: attDocs.cast(), query: _query, statusFilter: _statusFilter)
+                  _AttendanceTable(
+  docs: attDocs.cast(),
+  query: _query,
+  statusFilter: _statusFilter,
+  studentCache: _studentCache, // <-- ADD THIS
+)
                 else
                   _RegistrantsTable(
                     stream: _regStream, attendanceDocs: attDocs.cast(),
@@ -1312,11 +1326,16 @@ class _AttendanceTabState extends State<AttendanceTab> with AutomaticKeepAliveCl
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 class _AttendanceTable extends StatelessWidget {
   final List<QueryDocumentSnapshot> docs;
   final String query, statusFilter;
-  const _AttendanceTable({required this.docs, required this.query, required this.statusFilter});
+  final Map<String, Map<String, dynamic>> studentCache; // <-- NEW
+  const _AttendanceTable({
+    required this.docs,
+    required this.query,
+    required this.statusFilter,
+    required this.studentCache, // <-- NEW
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1344,10 +1363,18 @@ class _AttendanceTable extends StatelessWidget {
       rows: filtered.map((d) {
         final m = d.data() as Map<String, dynamic>;
         final ts = (m['timestamp'] as Timestamp?)?.toDate();
+        // ---- START CHANGE ----
+        // Get the student number from the cache
+        final uid = m['studentId']?.toString() ?? '';
+        final studentData = studentCache[uid];
+        final studentNumber = studentData != null
+            ? (studentData['studentId']?.toString() ?? '—')
+            : (m['studentId']?.toString() ?? '—');
+        // ---- END CHANGE ----
         return _TableRow(
           cells: [
             _NameCell(m['studentName'] ?? '—', m['studentEmail'] ?? ''),
-            _IdText(m['studentId'] ?? '—'),
+            _IdText(studentNumber), // <-- USE THE FETCHED NUMBER
             Text(m['program'] ?? 'N/A',
                 style: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF374151)),
                 overflow: TextOverflow.ellipsis),
