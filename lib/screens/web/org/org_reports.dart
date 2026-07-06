@@ -10,8 +10,6 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:file_picker/file_picker.dart';
-// Firebase Storage is no longer needed for uploads
-// import 'package:firebase_storage/firebase_storage.dart';
 import '../../../services/activity_logger.dart' as activity_log;
 import '../../../services/notification_service.dart';
 import 'export_util.dart';
@@ -24,7 +22,7 @@ import '../../../theme/app_theme.dart';
 import '../../../widgets/admin_export_button.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Design tokens — mirrors student_accounts.dart / org_letter_request.dart
+// Design tokens — enhanced for a more polished look
 // ─────────────────────────────────────────────────────────────────────────────
 class _DS {
   static const double radiusSm = 8;
@@ -32,15 +30,23 @@ class _DS {
   static const double radiusLg = 16;
   static const double radiusPill = 100;
 
-  // Brand amber
   static const Color primary = Color(0xFFBE4700);
+  static const Color primaryLight = Color(0xFFFFE4CC);
   static const Color primaryBg = Color(0xFFFEF3C7);
+  static const Color primaryDark = Color(0xFF9A3A00);
 
-  static final cardShadow = [
+  static const Color surface = Color(0xFFFBFCFE);
+  static const Color cardBg = Color(0xFFFFFFFF);
+  static const Color border = Color(0xFFE8ECF0);
+  static const Color textPrimary = Color(0xFF1A202C);
+  static const Color textSecondary = Color(0xFF64748B);
+  static const Color textHint = Color(0xFF9AA5B4);
+
+  static const List<BoxShadow> cardShadow = [
     BoxShadow(
-      color: Colors.black.withAlpha(15),
-      blurRadius: 12,
-      offset: const Offset(0, 4),
+      color: Color(0x14000000),
+      blurRadius: 16,
+      offset: Offset(0, 4),
     ),
   ];
 
@@ -49,72 +55,73 @@ class _DS {
     String? hint,
     IconData? icon,
     int? maxLines,
-  }) => InputDecoration(
-    labelText: label,
-    hintText: hint,
-    prefixIcon: icon != null
-        ? Icon(icon, size: 18, color: const Color(0xFF9AA5B4))
-        : null,
-    alignLabelWithHint: maxLines != null && maxLines > 1,
-    labelStyle: GoogleFonts.beVietnamPro(
-      fontSize: 13,
-      color: const Color(0xFF64748B),
-    ),
-    hintStyle: GoogleFonts.beVietnamPro(
-      fontSize: 13,
-      color: const Color(0xFF9AA5B4),
-    ),
-    filled: true,
-    fillColor: const Color(0xFFF8F9FB),
-    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-    border: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(radiusSm),
-      borderSide: const BorderSide(color: Color(0xFFE2E6EA)),
-    ),
-    enabledBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(radiusSm),
-      borderSide: const BorderSide(color: Color(0xFFE2E6EA)),
-    ),
-    focusedBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(radiusSm),
-      borderSide: const BorderSide(color: _DS.primary, width: 1.5),
-    ),
-    errorBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(radiusSm),
-      borderSide: const BorderSide(color: Color(0xFFDC2626)),
-    ),
-    focusedErrorBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(radiusSm),
-      borderSide: const BorderSide(color: Color(0xFFDC2626), width: 1.5),
-    ),
-  );
+  }) =>
+      InputDecoration(
+        labelText: label,
+        hintText: hint,
+        prefixIcon: icon != null
+            ? Icon(icon, size: 18, color: const Color(0xFF9AA5B4))
+            : null,
+        alignLabelWithHint: maxLines != null && maxLines > 1,
+        labelStyle: GoogleFonts.beVietnamPro(
+          fontSize: 13,
+          color: const Color(0xFF64748B),
+        ),
+        hintStyle: GoogleFonts.beVietnamPro(
+          fontSize: 13,
+          color: const Color(0xFF9AA5B4),
+        ),
+        filled: true,
+        fillColor: const Color(0xFFF8F9FB),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(radiusSm),
+          borderSide: const BorderSide(color: Color(0xFFE2E6EA)),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(radiusSm),
+          borderSide: const BorderSide(color: Color(0xFFE2E6EA)),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(radiusSm),
+          borderSide: const BorderSide(color: _DS.primary, width: 1.5),
+        ),
+        errorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(radiusSm),
+          borderSide: const BorderSide(color: Color(0xFFDC2626)),
+        ),
+        focusedErrorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(radiusSm),
+          borderSide: const BorderSide(color: Color(0xFFDC2626), width: 1.5),
+        ),
+      );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Shared small widgets
 // ─────────────────────────────────────────────────────────────────────────────
 Widget _sectionLabel(String text, {IconData? icon}) => Padding(
-  padding: const EdgeInsets.only(bottom: 12),
-  child: Row(
-    children: [
-      if (icon != null) ...[
-        Icon(icon, size: 16, color: _DS.primary),
-        const SizedBox(width: 8),
-      ],
-      Text(
-        text,
-        style: GoogleFonts.beVietnamPro(
-          fontSize: 13,
-          fontWeight: FontWeight.w700,
-          color: _DS.primary,
-          letterSpacing: 0.3,
-        ),
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Row(
+        children: [
+          if (icon != null) ...[
+            Icon(icon, size: 16, color: _DS.primary),
+            const SizedBox(width: 8),
+          ],
+          Text(
+            text,
+            style: GoogleFonts.beVietnamPro(
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+              color: _DS.primary,
+              letterSpacing: 0.3,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(child: Divider(color: const Color(0xFFE2E6EA), thickness: 1)),
+        ],
       ),
-      const SizedBox(width: 12),
-      Expanded(child: Divider(color: const Color(0xFFE2E6EA), thickness: 1)),
-    ],
-  ),
-);
+    );
 
 Widget _statusBadge(String status) {
   final Map<String, _BadgeStyle> styles = {
@@ -139,8 +146,7 @@ Widget _statusBadge(String status) {
       'ON REVIEW',
     ),
   };
-  final s =
-      styles[status.toLowerCase()] ??
+  final s = styles[status.toLowerCase()] ??
       _BadgeStyle(
         const Color(0xFFF3F4F6),
         const Color(0xFF6B7280),
@@ -195,8 +201,6 @@ class _OrgReportsScreenState extends State<OrgReportsScreen> {
   bool _eventLoaded = false;
 
   // Deadlines — one entry per (finished event × report type) for this org.
-  // Whether each is actually still pending is resolved live in
-  // _buildDeadlineRow against the reports stream, not stored here.
   List<_PendingEventDeadline> _finishedEventDeadlines = [];
   bool _deadlinesLoaded = false;
 
@@ -257,11 +261,6 @@ class _OrgReportsScreenState extends State<OrgReportsScreen> {
       setState(() => _remaining = diff.isNegative ? Duration.zero : diff);
   }
 
-  // Every finished approved event owes its own financial + accomplishment
-  // report — not just the org's single most-recently-finished event. Each
-  // entry's deadline defaults to 7 days after that event's date, unless an
-  // admin overrode it for that specific (event, type) pair. Matches
-  // reports_management.dart's per-event model on the admin side exactly.
   Future<void> _loadReportDeadlines() async {
     try {
       final now = DateTime.now();
@@ -321,9 +320,6 @@ class _OrgReportsScreenState extends State<OrgReportsScreen> {
     if (mounted) setState(() => _deadlinesLoaded = true);
   }
 
-  // Created once, not a getter — filtering happens client-side below, so
-  // re-evaluating .snapshots() on every rebuild (search, filter changes)
-  // was re-subscribing to Firestore from scratch each time.
   late final Stream<QuerySnapshot> _reportsStream = FirebaseFirestore.instance
       .collection('reports')
       .where('orgId', isEqualTo: widget.orgId)
@@ -335,7 +331,6 @@ class _OrgReportsScreenState extends State<OrgReportsScreen> {
 
     return sorted.where((r) {
       if (r.status == 'archived') return false;
-      // Type filter
       if (_typeFilter != null) {
         final typeVal = _typeFilter == 'Financial' ? 'financial' : 'accomplishment';
         if (r.type != typeVal) return false;
@@ -354,7 +349,7 @@ class _OrgReportsScreenState extends State<OrgReportsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFFBFCFE),
+      backgroundColor: _DS.surface,
       body: StreamBuilder<QuerySnapshot>(
         stream: _reportsStream,
         builder: (context, snap) {
@@ -374,7 +369,6 @@ class _OrgReportsScreenState extends State<OrgReportsScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               _buildStatsRow(all),
-            
               if (_deadlinesLoaded) ...[_buildDeadlineRow(all)],
               _buildToolbar(),
               const SizedBox(height: 16),
@@ -387,130 +381,246 @@ class _OrgReportsScreenState extends State<OrgReportsScreen> {
     );
   }
 
+  // ── Stats row ────────────────────────────────────────────────────────────────
   Widget _buildStatsRow(List<ReportModel> all) {
-  final total = all.length;
-  final financial = all.where((r) => r.type == 'financial').length;
-  final accompl = all.where((r) => r.type == 'accomplishment').length;
+    final total = all.length;
+    final financial = all.where((r) => r.type == 'financial').length;
+    final accompl = all.where((r) => r.type == 'accomplishment').length;
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(28, 24, 28, 8),
+      child: Row(
+        children: [
+          _StatCard(
+            label: 'Total Reports',
+            value: '$total',
+            icon: Icons.article_outlined,
+            color: _DS.primary,
+          ),
+          const SizedBox(width: 14),
+          _StatCard(
+            label: 'Financial',
+            value: '$financial',
+            icon: Icons.account_balance_outlined,
+            color: const Color(0xFF059669),
+          ),
+          const SizedBox(width: 14),
+          _StatCard(
+            label: 'Accomplishment',
+            value: '$accompl',
+            icon: Icons.assignment_turned_in_outlined,
+            color: const Color(0xFF2563EB),
+          ),
+        ],
+      ),
+    );
+  }
+
+  
+  // ── Deadline row ── REPLACE THIS ENTIRE METHOD ───────────────────────────
+Widget _buildDeadlineRow(List<ReportModel> all) {
+  final submittedKeys = all
+      .where((r) => r.status != 'archived' && (r.eventId ?? '').isNotEmpty)
+      .map((r) => '${r.eventId}_${r.type}')
+      .toSet();
+
+  final pending = _finishedEventDeadlines
+      .where((d) => !submittedKeys.contains('${d.eventId}_${d.type}'))
+      .toList()
+    ..sort((a, b) => a.deadline.compareTo(b.deadline));
+
+  if (pending.isEmpty) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(28, 8, 28, 8),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+          color: const Color(0xFFECFDF5),
+          borderRadius: BorderRadius.circular(_DS.radiusPill),
+          border: Border.all(color: const Color(0xFFA7F3D0)),
+        ),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          const Icon(Icons.check_circle_outline_rounded, color: Color(0xFF059669), size: 16),
+          const SizedBox(width: 8),
+          Text(
+            'All reports for your finished events are submitted.',
+            style: GoogleFonts.beVietnamPro(
+              fontSize: 12,
+              color: const Color(0xFF065F46),
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ]),
+      ),
+    );
+  }
+
+  // Group by event
+  final groups = <String, List<_PendingEventDeadline>>{};
+  for (final d in pending) {
+    groups.putIfAbsent(d.eventId, () => []).add(d);
+  }
+  
+  final orderedEventIds = groups.keys.toList()
+    ..sort((a, b) {
+      final da = groups[a]!.map((d) => d.deadline).reduce((x, y) => x.isBefore(y) ? x : y);
+      final db = groups[b]!.map((d) => d.deadline).reduce((x, y) => x.isBefore(y) ? x : y);
+      return da.compareTo(db);
+    });
+
+  // Only show first 3 chips, rest in a "View All" expandable
+  final showCount = 3;
+  final visibleIds = orderedEventIds.take(showCount).toList();
+  final hiddenIds = orderedEventIds.skip(showCount).toList();
+  final hasMore = hiddenIds.isNotEmpty;
 
   return Padding(
-    padding: const EdgeInsets.fromLTRB(28, 24, 28, 0),
-    child: Row(
+    padding: const EdgeInsets.fromLTRB(28, 8, 28, 8),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _StatCard(
-          label: 'Total Reports',
-          value: '$total',
-          icon: Icons.article_outlined,
-          color: _DS.primary,
+        // Show count badge
+        Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFFF7ED),
+                borderRadius: BorderRadius.circular(_DS.radiusPill),
+                border: Border.all(color: const Color(0xFFFFE4CC)),
+              ),
+              child: Text(
+                '${pending.length} pending report${pending.length > 1 ? 's' : ''}',
+                style: GoogleFonts.beVietnamPro(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: _DS.primary,
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Divider(color: const Color(0xFFF1F5F9), thickness: 1),
+            ),
+          ],
         ),
-        const SizedBox(width: 14),
-        _StatCard(
-          label: 'Financial',
-          value: '$financial',
-          icon: Icons.account_balance_outlined,
-          color: const Color(0xFF059669),
-        ),
-        const SizedBox(width: 14),
-        _StatCard(
-          label: 'Accomplishment',
-          value: '$accompl',
-          icon: Icons.assignment_turned_in_outlined,
-          color: const Color(0xFF2563EB),
+        const SizedBox(height: 8),
+        // Chips row
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            ...visibleIds.map((eventId) => _PendingDeadlineChip(items: groups[eventId]!)),
+            if (hasMore)
+              _MoreDeadlineChip(
+                count: hiddenIds.length,
+                onTap: () => _showAllDeadlines(context, groups, orderedEventIds),
+              ),
+          ],
         ),
       ],
     ),
   );
 }
 
-  // ── Deadline row ───────────────────────────────────────────────────────────
-  // Pending/overdue per-event deadlines — resolved live against the
-  // reports stream so a fresh submission drops off this list immediately,
-  // without needing to re-fetch events/overrides.
-  Widget _buildDeadlineRow(List<ReportModel> all) {
-    final submittedKeys = all
-        .where((r) => r.status != 'archived' && (r.eventId ?? '').isNotEmpty)
-        .map((r) => '${r.eventId}_${r.type}')
-        .toSet();
-
-    final pending = _finishedEventDeadlines
-        .where((d) => !submittedKeys.contains('${d.eventId}_${d.type}'))
-        .toList()
-      ..sort((a, b) => a.deadline.compareTo(b.deadline));
-
-    if (pending.isEmpty) {
-      return Padding(
-        padding: const EdgeInsets.fromLTRB(28, 16, 28, 0),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-          decoration: BoxDecoration(
-            color: const Color(0xFFECFDF5),
-            borderRadius: BorderRadius.circular(_DS.radiusPill),
-            border: Border.all(color: const Color(0xFFA7F3D0)),
-          ),
-          child: Row(mainAxisSize: MainAxisSize.min, children: [
-            const Icon(Icons.check_circle_outline_rounded, color: Color(0xFF059669), size: 16),
-            const SizedBox(width: 8),
-            Text(
-              'All reports for your finished events are submitted.',
-              style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF065F46), fontWeight: FontWeight.w600),
-            ),
-          ]),
+// ── Show all deadlines in a bottom sheet ──────────────────────────────────
+void _showAllDeadlines(
+  BuildContext context,
+  Map<String, List<_PendingEventDeadline>> groups,
+  List<String> orderedEventIds,
+) {
+  showModalBottomSheet(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Colors.transparent,
+    builder: (ctx) => DraggableScrollableSheet(
+      initialChildSize: 0.6,
+      maxChildSize: 0.85,
+      minChildSize: 0.3,
+      builder: (_, scrollCtrl) => Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+          boxShadow: _DS.cardShadow,
         ),
-      );
-    }
-
-    // One chip per event (not per report type) — an event needing both a
-    // financial and accomplishment report shows as a single compact chip
-    // listing both, instead of two separate bulky cards.
-    final groups = <String, List<_PendingEventDeadline>>{};
-    for (final d in pending) {
-      groups.putIfAbsent(d.eventId, () => []).add(d);
-    }
-    final orderedEventIds = groups.keys.toList()
-      ..sort((a, b) {
-        final da = groups[a]!.map((d) => d.deadline).reduce((x, y) => x.isBefore(y) ? x : y);
-        final db = groups[b]!.map((d) => d.deadline).reduce((x, y) => x.isBefore(y) ? x : y);
-        return da.compareTo(db);
-      });
-
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(28, 16, 28, 0),
-      child: Wrap(
-        spacing: 10,
-        runSpacing: 10,
-        children: orderedEventIds
-            .map((eventId) => _PendingDeadlineChip(items: groups[eventId]!))
-            .toList(),
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Handle
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE2E6EA),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'All Pending Reports',
+              style: GoogleFonts.beVietnamPro(
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+                color: _DS.textPrimary,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              '${orderedEventIds.length} events need reports',
+              style: GoogleFonts.beVietnamPro(
+                fontSize: 13,
+                color: _DS.textSecondary,
+              ),
+            ),
+            const SizedBox(height: 16),
+            Expanded(
+              child: ListView.separated(
+                controller: scrollCtrl,
+                itemCount: orderedEventIds.length,
+                separatorBuilder: (_, __) => const Divider(height: 1),
+                itemBuilder: (_, idx) {
+                  final eventId = orderedEventIds[idx];
+                  final items = groups[eventId]!;
+                  return _PendingDeadlineListItem(items: items);
+                },
+              ),
+            ),
+          ],
+        ),
       ),
-    );
-  }
+    ),
+  );
+}
 
   // ── Toolbar ────────────────────────────────────────────────────────────────
   Widget _buildToolbar() {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(28, 20, 28, 0),
+      padding: const EdgeInsets.fromLTRB(28, 16, 28, 0),
       child: Row(
         children: [
-          // Search
           Expanded(
             child: SizedBox(
-              height: 40,
+              height: 44,
               child: TextField(
                 controller: _searchController,
-                style: GoogleFonts.beVietnamPro(fontSize: 13),
+                style: GoogleFonts.beVietnamPro(fontSize: 14),
                 decoration: InputDecoration(
                   hintText: 'Search by ID, title, or description…',
                   hintStyle: GoogleFonts.beVietnamPro(
-                    fontSize: 13,
-                    color: const Color(0xFF9AA5B4),
+                    fontSize: 14,
+                    color: _DS.textHint,
                   ),
                   prefixIcon: const Icon(
                     Icons.search_rounded,
-                    size: 18,
-                    color: Color(0xFF9AA5B4),
+                    size: 20,
+                    color: _DS.textHint,
                   ),
                   suffixIcon: _searchController.text.isNotEmpty
                       ? IconButton(
-                          icon: const Icon(Icons.close, size: 16),
+                          icon: const Icon(Icons.close, size: 18),
                           onPressed: () {
                             _searchController.clear();
                             setState(() => _currentPage = 1);
@@ -524,15 +634,15 @@ class _OrgReportsScreenState extends State<OrgReportsScreen> {
                     horizontal: 16,
                   ),
                   border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: const BorderSide(color: Color(0xFFE2E6EA)),
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: _DS.border),
                   ),
                   enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: const BorderSide(color: Color(0xFFE2E6EA)),
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: _DS.border),
                   ),
                   focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
+                    borderRadius: BorderRadius.circular(12),
                     borderSide: const BorderSide(
                       color: _DS.primary,
                       width: 1.5,
@@ -543,8 +653,7 @@ class _OrgReportsScreenState extends State<OrgReportsScreen> {
               ),
             ),
           ),
-          const SizedBox(width: 10),
-          // Type filter (no "All" option; placeholder shows "Type")
+          const SizedBox(width: 12),
           _FilterDropdown(
             value: _typeFilter,
             items: const ['Financial', 'Accomplishment'],
@@ -555,9 +664,9 @@ class _OrgReportsScreenState extends State<OrgReportsScreen> {
               _currentPage = 1;
             }),
           ),
-          const SizedBox(width: 10),
+          const SizedBox(width: 12),
           _ExportButton(orgId: widget.orgId),
-          const SizedBox(width: 10),
+          const SizedBox(width: 12),
           _ToolbarButton(
             label: 'Upload Report',
             icon: Icons.upload_file_outlined,
@@ -592,8 +701,8 @@ class _OrgReportsScreenState extends State<OrgReportsScreen> {
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFE8ECF0)),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: _DS.border),
         boxShadow: _DS.cardShadow,
       ),
       child: Column(
@@ -617,171 +726,170 @@ class _OrgReportsScreenState extends State<OrgReportsScreen> {
   }
 
   Widget _buildTableHeader() {
-  return Container(
-    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 13),
-    decoration: const BoxDecoration(
-      color: Color(0xFFFFF7ED),
-      borderRadius: BorderRadius.vertical(top: Radius.circular(14)),
-      border: Border(bottom: BorderSide(color: Color(0xFFFB923C))),
-    ),
-    child: Row(
-      children: [
-        Expanded(flex: 2, child: _headerCell('REPORT ID')),
-        Expanded(flex: 4, child: _headerCell('EVENT')),  // Changed from 'TITLE' to 'EVENT'
-        Expanded(flex: 2, child: _headerCell('TYPE')),
-        Expanded(flex: 2, child: _headerCell('DATE SUBMITTED')),
-        Expanded(
-          flex: 2,
-          child: Align(
-            alignment: Alignment.centerRight,
-            child: _headerCell('ACTIONS'),
-          ),
-        ),
-      ],
-    ),
-  );
-}
-
-  Widget _headerCell(String text) => Text(
-    text,
-    style: GoogleFonts.beVietnamPro(
-      fontSize: 11,
-      fontWeight: FontWeight.w700,
-      color: const Color(0xFF64748B),
-      letterSpacing: 0.7,
-    ),
-  );
-
-  
- Widget _buildReportRow(ReportModel report, {required bool isLast}) {
-  final isFinancial = report.type == 'financial';
-  return InkWell(
-    hoverColor: const Color(0xFFF8F9FB),
-    onTap: () => _openViewModal(report),
-    child: Container(
+    return Container(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-      decoration: BoxDecoration(
-        border: isLast
-            ? null
-            : const Border(bottom: BorderSide(color: Color(0xFFF1F5F9))),
+      decoration: const BoxDecoration(
+        color: Color(0xFFFFF7ED),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+        border: Border(bottom: BorderSide(color: Color(0xFFE8ECF0))),
       ),
       child: Row(
         children: [
-          // Report ID
+          Expanded(flex: 2, child: _headerCell('REPORT ID')),
+          Expanded(flex: 4, child: _headerCell('EVENT')),
+          Expanded(flex: 2, child: _headerCell('TYPE')),
+          Expanded(flex: 2, child: _headerCell('DATE SUBMITTED')),
           Expanded(
             flex: 2,
-            child: Text(
-              report.reportId,
-              style: GoogleFonts.beVietnamPro(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                color: _DS.primary,
-              ),
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-          // EVENT (Title + Description)
-          Expanded(
-            flex: 4,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  report.title,
-                  style: GoogleFonts.beVietnamPro(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: const Color(0xFF1A202C),
-                  ),
-                  overflow: TextOverflow.ellipsis,
-                  maxLines: 1,
-                ),
-                if (report.description.isNotEmpty)
-                  Text(
-                    report.description,
-                    style: GoogleFonts.beVietnamPro(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w400,
-                      color: const Color(0xFF64748B),
-                    ),
-                    overflow: TextOverflow.ellipsis,
-                    maxLines: 2,
-                  ),
-              ],
-            ),
-          ),
-          // Type chip
-          Expanded(
-            flex: 2,
-            child: Row(children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: isFinancial
-                      ? const Color(0xFFECFDF5)
-                      : const Color(0xFFEFF6FF),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: Text(
-                  isFinancial ? 'Financial' : 'Accomplishment',
-                  style: GoogleFonts.beVietnamPro(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    color: isFinancial
-                        ? const Color(0xFF059669)
-                        : const Color(0xFF2563EB),
-                  ),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            ]),
-          ),
-          // Date
-          Expanded(
-            flex: 2,
-            child: Text(
-              DateFormat('MMM dd, yyyy').format(report.submittedAt.toDate()),
-              style: GoogleFonts.beVietnamPro(
-                fontSize: 12,
-                color: const Color(0xFF64748B),
-              ),
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-          // Actions
-          Expanded(
-            flex: 2,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                _ActionIconButton(
-                  icon: Icons.visibility_outlined,
-                  tooltip: 'View Details',
-                  onTap: () => _openViewModal(report),
-                ),
-                const SizedBox(width: 6),
-                _ActionIconButton(
-                  icon: Icons.edit_outlined,
-                  tooltip: 'Edit Report',
-                  color: UpriseColors.primaryDark,
-                  onTap: () => _openEditModal(report),
-                ),
-                const SizedBox(width: 6),
-                _ActionIconButton(
-                  icon: Icons.archive_outlined,
-                  tooltip: 'Archive',
-                  color: const Color(0xFF6B7280),
-                  onTap: () => _archiveReport(report),
-                ),
-              ],
+            child: Align(
+              alignment: Alignment.centerRight,
+              child: _headerCell('ACTIONS'),
             ),
           ),
         ],
       ),
-    ),
-  );
-}
+    );
+  }
+
+  Widget _headerCell(String text) => Text(
+        text,
+        style: GoogleFonts.beVietnamPro(
+          fontSize: 11,
+          fontWeight: FontWeight.w700,
+          color: _DS.textSecondary,
+          letterSpacing: 0.7,
+        ),
+      );
+
+  Widget _buildReportRow(ReportModel report, {required bool isLast}) {
+    final isFinancial = report.type == 'financial';
+    return InkWell(
+      hoverColor: const Color(0xFFF8F9FB),
+      onTap: () => _openViewModal(report),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+        decoration: BoxDecoration(
+          border: isLast
+              ? null
+              : const Border(bottom: BorderSide(color: Color(0xFFF1F5F9))),
+        ),
+        child: Row(
+          children: [
+            // Report ID
+            Expanded(
+              flex: 2,
+              child: Text(
+                report.reportId,
+                style: GoogleFonts.beVietnamPro(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: _DS.primary,
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            // EVENT (Title + Description)
+            Expanded(
+              flex: 4,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    report.title,
+                    style: GoogleFonts.beVietnamPro(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: _DS.textPrimary,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                    maxLines: 1,
+                  ),
+                  if (report.description.isNotEmpty)
+                    Text(
+                      report.description,
+                      style: GoogleFonts.beVietnamPro(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w400,
+                        color: _DS.textSecondary,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                      maxLines: 2,
+                    ),
+                ],
+              ),
+            ),
+            // Type chip
+            Expanded(
+              flex: 2,
+              child: Row(children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: isFinancial
+                        ? const Color(0xFFECFDF5)
+                        : const Color(0xFFEFF6FF),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(
+                    isFinancial ? 'Financial' : 'Accomplishment',
+                    style: GoogleFonts.beVietnamPro(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: isFinancial
+                          ? const Color(0xFF059669)
+                          : const Color(0xFF2563EB),
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ]),
+            ),
+            // Date
+            Expanded(
+              flex: 2,
+              child: Text(
+                DateFormat('MMM dd, yyyy').format(report.submittedAt.toDate()),
+                style: GoogleFonts.beVietnamPro(
+                  fontSize: 12,
+                  color: _DS.textSecondary,
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            // Actions
+            Expanded(
+              flex: 2,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  _ActionIconButton(
+                    icon: Icons.visibility_outlined,
+                    tooltip: 'View Details',
+                    onTap: () => _openViewModal(report),
+                  ),
+                  const SizedBox(width: 4),
+                  _ActionIconButton(
+                    icon: Icons.edit_outlined,
+                    tooltip: 'Edit Report',
+                    color: UpriseColors.primaryDark,
+                    onTap: () => _openEditModal(report),
+                  ),
+                  const SizedBox(width: 4),
+                  _ActionIconButton(
+                    icon: Icons.archive_outlined,
+                    tooltip: 'Archive',
+                    color: const Color(0xFF6B7280),
+                    onTap: () => _archiveReport(report),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
   Widget _buildEmptyState() {
     return Center(
@@ -798,7 +906,7 @@ class _OrgReportsScreenState extends State<OrgReportsScreen> {
             child: const Icon(
               Icons.article_outlined,
               size: 40,
-              color: Color(0xFF9AA5B4),
+              color: _DS.textHint,
             ),
           ),
           const SizedBox(height: 16),
@@ -815,7 +923,7 @@ class _OrgReportsScreenState extends State<OrgReportsScreen> {
             'Try adjusting your filters or upload a new report.',
             style: GoogleFonts.beVietnamPro(
               fontSize: 13,
-              color: const Color(0xFF64748B),
+              color: _DS.textSecondary,
             ),
           ),
         ],
@@ -835,9 +943,9 @@ class _OrgReportsScreenState extends State<OrgReportsScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
       decoration: const BoxDecoration(
-        border: Border(top: BorderSide(color: Color(0xFFE8ECF0))),
+        border: Border(top: BorderSide(color: _DS.border)),
         color: Color(0xFFF8F9FB),
-        borderRadius: BorderRadius.vertical(bottom: Radius.circular(14)),
+        borderRadius: BorderRadius.vertical(bottom: Radius.circular(16)),
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -846,7 +954,7 @@ class _OrgReportsScreenState extends State<OrgReportsScreen> {
             'Showing ${total == 0 ? 0 : start + 1}–$end of $total reports',
             style: GoogleFonts.beVietnamPro(
               fontSize: 12,
-              color: const Color(0xFF64748B),
+              color: _DS.textSecondary,
             ),
           ),
           Row(
@@ -870,7 +978,7 @@ class _OrgReportsScreenState extends State<OrgReportsScreen> {
                   child: Text(
                     '…',
                     style: GoogleFonts.beVietnamPro(
-                      color: const Color(0xFF64748B),
+                      color: _DS.textSecondary,
                       fontSize: 12,
                     ),
                   ),
@@ -896,24 +1004,24 @@ class _OrgReportsScreenState extends State<OrgReportsScreen> {
 
   // ── Actions ────────────────────────────────────────────────────────────────
   void _openCreateModal() => showDialog(
-    context: context,
-    barrierDismissible: false,
-    barrierColor: Colors.black54,
-    builder: (_) => _ReportModal(orgId: widget.orgId),
-  );
+        context: context,
+        barrierDismissible: false,
+        barrierColor: Colors.black54,
+        builder: (_) => _ReportModal(orgId: widget.orgId),
+      );
 
   void _openEditModal(ReportModel r) => showDialog(
-    context: context,
-    barrierDismissible: false,
-    barrierColor: Colors.black54,
-    builder: (_) => _ReportModal(orgId: widget.orgId, existingReport: r),
-  );
+        context: context,
+        barrierDismissible: false,
+        barrierColor: Colors.black54,
+        builder: (_) => _ReportModal(orgId: widget.orgId, existingReport: r),
+      );
 
   void _openViewModal(ReportModel r) => showDialog(
-    context: context,
-    barrierColor: Colors.black54,
-    builder: (_) => _ViewReportModal(report: r),
-  );
+        context: context,
+        barrierColor: Colors.black54,
+        builder: (_) => _ViewReportModal(report: r),
+      );
 
   Future<void> _archiveReport(ReportModel report) async {
     final ok = await _confirm(
@@ -952,7 +1060,6 @@ class _OrgReportsScreenState extends State<OrgReportsScreen> {
     );
     if (ok != true) return;
     try {
-      // No storage deletion needed since files are stored in Firestore
       await FirebaseFirestore.instance
           .collection('reports')
           .doc(report.id)
@@ -971,7 +1078,6 @@ class _OrgReportsScreenState extends State<OrgReportsScreen> {
       _snack('Error: $e', error: true);
     }
   }
-
 
   void _snack(String msg, {bool error = false}) {
     if (!mounted) return;
@@ -996,21 +1102,19 @@ class _OrgReportsScreenState extends State<OrgReportsScreen> {
     required String message,
     required String confirmLabel,
     bool destructive = false,
-  }) => showDialog<bool>(
-    context: context,
-    barrierColor: Colors.black54,
-    builder: (_) => _ConfirmDialog(
-      title: title,
-      message: message,
-      confirmLabel: confirmLabel,
-      destructive: destructive,
-    ),
-  );
+  }) =>
+      showDialog<bool>(
+        context: context,
+        barrierColor: Colors.black54,
+        builder: (_) => _ConfirmDialog(
+          title: title,
+          message: message,
+          confirmLabel: confirmLabel,
+          destructive: destructive,
+        ),
+      );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// View Report Modal (updated to handle base64)
-// ─────────────────────────────────────────────────────────────────────────────
 // ─────────────────────────────────────────────────────────────────────────────
 // View Report Modal (updated: removed Status, uses event proposal file viewing)
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1018,16 +1122,23 @@ class _ViewReportModal extends StatelessWidget {
   final ReportModel report;
   const _ViewReportModal({required this.report});
 
-  // MIME type detection (copied from event proposals)
   static String _mimeFromExt(String ext) {
     switch (ext) {
-      case 'png': return 'image/png';
-      case 'jpg': case 'jpeg': return 'image/jpeg';
-      case 'pdf': return 'application/pdf';
-      case 'doc': return 'application/msword';
-      case 'docx': return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
-      case 'xlsx': return 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
-      default: return 'application/octet-stream';
+      case 'png':
+        return 'image/png';
+      case 'jpg':
+      case 'jpeg':
+        return 'image/jpeg';
+      case 'pdf':
+        return 'application/pdf';
+      case 'doc':
+        return 'application/msword';
+      case 'docx':
+        return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+      case 'xlsx':
+        return 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+      default:
+        return 'application/octet-stream';
     }
   }
 
@@ -1040,7 +1151,7 @@ class _ViewReportModal extends StatelessWidget {
     final currency = NumberFormat.currency(symbol: '₱', decimalDigits: 2);
 
     return Dialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       child: SizedBox(
         width: 500,
         child: Column(
@@ -1052,7 +1163,7 @@ class _ViewReportModal extends StatelessWidget {
               decoration: BoxDecoration(
                 color: _DS.primary,
                 borderRadius: const BorderRadius.vertical(
-                  top: Radius.circular(18),
+                  top: Radius.circular(20),
                 ),
               ),
               child: Row(
@@ -1116,11 +1227,10 @@ class _ViewReportModal extends StatelessWidget {
                     style: GoogleFonts.beVietnamPro(
                       fontSize: 15,
                       fontWeight: FontWeight.w700,
-                      color: const Color(0xFF1A202C),
+                      color: _DS.textPrimary,
                     ),
                   ),
                   const SizedBox(height: 16),
-                  // Status removed here
                   Row(
                     children: [
                       Expanded(
@@ -1148,14 +1258,12 @@ class _ViewReportModal extends StatelessWidget {
                       Expanded(
                         child: _detailItem(
                           'Date Submitted',
-                          DateFormat(
-                            'MMM dd, yyyy',
-                          ).format(report.submittedAt.toDate()),
+                          DateFormat('MMM dd, yyyy')
+                              .format(report.submittedAt.toDate()),
                           Icons.calendar_today_outlined,
                         ),
                       ),
                       const SizedBox(width: 16),
-                      // Empty space to keep layout balanced
                       const Expanded(child: SizedBox.shrink()),
                     ],
                   ),
@@ -1167,7 +1275,7 @@ class _ViewReportModal extends StatelessWidget {
                       Icons.notes_rounded,
                     ),
                   ],
-                  // File Attachment (using event proposal style)
+                  // File Attachment
                   if (hasFile) ...[
                     const SizedBox(height: 20),
                     Container(
@@ -1209,7 +1317,7 @@ class _ViewReportModal extends StatelessWidget {
                                     report.fileSize!,
                                     style: GoogleFonts.beVietnamPro(
                                       fontSize: 11,
-                                      color: const Color(0xFF64748B),
+                                      color: _DS.textSecondary,
                                     ),
                                   ),
                               ],
@@ -1239,11 +1347,19 @@ class _ViewReportModal extends StatelessWidget {
                         if (snap.connectionState == ConnectionState.waiting) {
                           return const Padding(
                             padding: EdgeInsets.symmetric(vertical: 12),
-                            child: Center(child: SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))),
+                            child: Center(
+                                child: SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )),
                           );
                         }
                         if (snap.hasError) {
-                          return Text('Failed to load transactions: ${snap.error}', style: GoogleFonts.beVietnamPro(color: const Color(0xFFDC2626)));
+                          return Text(
+                            'Failed to load transactions: ${snap.error}',
+                            style: GoogleFonts.beVietnamPro(color: const Color(0xFFDC2626)),
+                          );
                         }
                         final docs = snap.data?.docs ?? [];
                         final filteredDocs = docs.where((d) {
@@ -1251,12 +1367,16 @@ class _ViewReportModal extends StatelessWidget {
                           if (hasEventId) {
                             return (m['eventId']?.toString() ?? '') == report.eventId;
                           }
-                          return (m['eventName']?.toString().toLowerCase() ?? '') == report.title.toLowerCase();
+                          return (m['eventName']?.toString().toLowerCase() ?? '') ==
+                              report.title.toLowerCase();
                         }).toList();
                         if (filteredDocs.isEmpty) {
                           return Padding(
                             padding: const EdgeInsets.symmetric(vertical: 8),
-                            child: Text('No transactions recorded for this event.', style: GoogleFonts.beVietnamPro(color: const Color(0xFF6B7280))),
+                            child: Text(
+                              'No transactions recorded for this event.',
+                              style: GoogleFonts.beVietnamPro(color: _DS.textSecondary),
+                            ),
                           );
                         }
                         double total = 0.0;
@@ -1271,9 +1391,26 @@ class _ViewReportModal extends StatelessWidget {
                           final type = (m['type'] ?? 'income').toString();
                           return ListTile(
                             contentPadding: EdgeInsets.zero,
-                            title: Text('$cat • $seg', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600)),
-                            subtitle: Text(dateStr, style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF6B7280))),
-                            trailing: Text(currency.format(amt), style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w700, color: type == 'income' ? const Color(0xFF059669) : const Color(0xFFDC2626))),
+                            title: Text(
+                              '$cat • $seg',
+                              style: GoogleFonts.beVietnamPro(
+                                  fontSize: 13, fontWeight: FontWeight.w600),
+                            ),
+                            subtitle: Text(
+                              dateStr,
+                              style: GoogleFonts.beVietnamPro(
+                                  fontSize: 12, color: _DS.textSecondary),
+                            ),
+                            trailing: Text(
+                              currency.format(amt),
+                              style: GoogleFonts.beVietnamPro(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w700,
+                                color: type == 'income'
+                                    ? const Color(0xFF059669)
+                                    : const Color(0xFFDC2626),
+                              ),
+                            ),
                           );
                         }).toList();
 
@@ -1282,7 +1419,11 @@ class _ViewReportModal extends StatelessWidget {
                           children: [
                             Padding(
                               padding: const EdgeInsets.only(bottom: 8),
-                              child: Text('Total: ${currency.format(total)}', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w700)),
+                              child: Text(
+                                'Total: ${currency.format(total)}',
+                                style: GoogleFonts.beVietnamPro(
+                                    fontSize: 13, fontWeight: FontWeight.w700),
+                              ),
                             ),
                             Container(
                               constraints: const BoxConstraints(maxHeight: 220),
@@ -1349,14 +1490,14 @@ class _ViewReportModal extends StatelessWidget {
       children: [
         Row(
           children: [
-            Icon(icon, size: 13, color: const Color(0xFF9AA5B4)),
+            Icon(icon, size: 13, color: _DS.textHint),
             const SizedBox(width: 5),
             Text(
               label,
               style: GoogleFonts.beVietnamPro(
                 fontSize: 11,
                 fontWeight: FontWeight.w600,
-                color: const Color(0xFF64748B),
+                color: _DS.textSecondary,
                 letterSpacing: 0.4,
               ),
             ),
@@ -1368,14 +1509,13 @@ class _ViewReportModal extends StatelessWidget {
           style: GoogleFonts.beVietnamPro(
             fontSize: 13,
             fontWeight: FontWeight.w500,
-            color: valueColor ?? const Color(0xFF1A202C),
+            color: valueColor ?? _DS.textPrimary,
           ),
         ),
       ],
     );
   }
 
-  // ── OPEN ATTACHMENT (exact copy from event proposals) ──
   Future<void> _openAttachment(BuildContext context) async {
     final b64 = report.fileBase64;
     if (b64 == null || b64.isEmpty) return;
@@ -1445,7 +1585,7 @@ class _ViewReportModal extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Create / Edit Report Modal (base64 approach - identical to event proposals)
+// Create / Edit Report Modal (base64 approach)
 // ─────────────────────────────────────────────────────────────────────────────
 class _ReportModal extends StatefulWidget {
   final String orgId;
@@ -1472,7 +1612,6 @@ class _ReportModalState extends State<_ReportModal> {
   List<Map<String, dynamic>> _events = [];
   bool _eventsLoaded = false;
   String? _selectedEventId;
-  // 'event' | 'semester' | 'year' — which scope this report covers.
   String _scope = 'event';
   String _schoolYear = SchoolYearUtil.currentSchoolYear();
   String _semester = SchoolYearUtil.semesters.first;
@@ -1546,7 +1685,6 @@ class _ReportModalState extends State<_ReportModal> {
     }
   }
 
-  // ── PICK FILE (base64 encoding, identical to event proposals) ──────────
   Future<void> _pickFile() async {
     final result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
@@ -1559,7 +1697,7 @@ class _ReportModalState extends State<_ReportModal> {
       _snack('Cannot read file!', error: true);
       return;
     }
-    const maxSize = 700 * 1024; // 700 KB limit (same as event proposals)
+    const maxSize = 700 * 1024;
     if (file.bytes!.length > maxSize) {
       _snack('File too large. Max 700 KB allowed.', error: true);
       return;
@@ -1571,7 +1709,6 @@ class _ReportModalState extends State<_ReportModal> {
       _fileName = file.name;
       _fileSize = '$sizeKB KB';
     });
-    // Simulate progress (like event proposals)
     for (int i = 0; i <= 100; i += 20) {
       await Future.delayed(const Duration(milliseconds: 50));
       if (mounted) setState(() => _uploadProgress = i / 100);
@@ -1585,11 +1722,11 @@ class _ReportModalState extends State<_ReportModal> {
   }
 
   void _removeFile() => setState(() {
-    _fileBase64 = null;
-    _fileName = null;
-    _fileSize = null;
-    _uploadProgress = 0.0;
-  });
+        _fileBase64 = null;
+        _fileName = null;
+        _fileSize = null;
+        _uploadProgress = 0.0;
+      });
 
   Future<void> _submit() async {
     setState(() => _errorMsg = null);
@@ -1705,8 +1842,6 @@ class _ReportModalState extends State<_ReportModal> {
     }
   }
 
-  // Fire-and-forget — admins should hear about a new submission even if
-  // the org's own UI flow (closing this dialog) finishes first.
   Future<void> _notifyAdminsOfReportSubmission(String eventTitle) async {
     try {
       String orgName = widget.orgId;
@@ -1751,7 +1886,7 @@ class _ReportModalState extends State<_ReportModal> {
     final hasFile = _fileBase64 != null && _fileBase64!.isNotEmpty;
 
     return Dialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       child: Container(
         width: 520,
         constraints: BoxConstraints(
@@ -1766,7 +1901,7 @@ class _ReportModalState extends State<_ReportModal> {
               decoration: BoxDecoration(
                 color: _DS.primary,
                 borderRadius: const BorderRadius.vertical(
-                  top: Radius.circular(18),
+                  top: Radius.circular(20),
                 ),
               ),
               child: Row(
@@ -1830,7 +1965,7 @@ class _ReportModalState extends State<_ReportModal> {
                               'Covers *',
                               style: GoogleFonts.beVietnamPro(
                                 fontSize: 13,
-                                color: const Color(0xFF64748B),
+                                color: _DS.textSecondary,
                               ),
                             ),
                           ),
@@ -1860,34 +1995,34 @@ class _ReportModalState extends State<_ReportModal> {
                       ),
                       const SizedBox(height: 12),
                       if (_scope == 'event') ...[
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Padding(
-                            padding: const EdgeInsets.only(bottom: 8),
-                            child: Text(
-                              'Select Event *',
-                              style: GoogleFonts.beVietnamPro(
-                                fontSize: 13,
-                                color: const Color(0xFF64748B),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 8),
+                              child: Text(
+                                'Select Event *',
+                                style: GoogleFonts.beVietnamPro(
+                                  fontSize: 13,
+                                  color: _DS.textSecondary,
+                                ),
                               ),
                             ),
-                          ),
-                          _buildEventDropdown(),
-                          if (_errorMsg != null &&
-                              _selectedEventId == null &&
-                              _errorMsg!.contains('event')) ...[
-                            const SizedBox(height: 6),
-                            Text(
-                              _errorMsg!,
-                              style: GoogleFonts.beVietnamPro(
-                                fontSize: 12,
-                                color: const Color(0xFFDC2626),
+                            _buildEventDropdown(),
+                            if (_errorMsg != null &&
+                                _selectedEventId == null &&
+                                _errorMsg!.contains('event')) ...[
+                              const SizedBox(height: 6),
+                              Text(
+                                _errorMsg!,
+                                style: GoogleFonts.beVietnamPro(
+                                  fontSize: 12,
+                                  color: const Color(0xFFDC2626),
+                                ),
                               ),
-                            ),
+                            ],
                           ],
-                        ],
-                      ),
+                        ),
                       ] else ...[
                         Row(children: [
                           Expanded(
@@ -1898,12 +2033,13 @@ class _ReportModalState extends State<_ReportModal> {
                                   padding: const EdgeInsets.only(bottom: 8),
                                   child: Text('School Year *',
                                       style: GoogleFonts.beVietnamPro(
-                                          fontSize: 13, color: const Color(0xFF64748B))),
+                                          fontSize: 13, color: _DS.textSecondary)),
                                 ),
                                 DropdownButtonFormField<String>(
                                   value: _schoolYear,
                                   decoration: _DS.inputDecoration('School Year'),
-                                  style: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF1A202C)),
+                                  style: GoogleFonts.beVietnamPro(
+                                      fontSize: 13, color: _DS.textPrimary),
                                   items: SchoolYearUtil.schoolYears()
                                       .map((y) => DropdownMenuItem(value: y, child: Text(y)))
                                       .toList(),
@@ -1922,12 +2058,13 @@ class _ReportModalState extends State<_ReportModal> {
                                     padding: const EdgeInsets.only(bottom: 8),
                                     child: Text('Semester *',
                                         style: GoogleFonts.beVietnamPro(
-                                            fontSize: 13, color: const Color(0xFF64748B))),
+                                            fontSize: 13, color: _DS.textSecondary)),
                                   ),
                                   DropdownButtonFormField<String>(
                                     value: _semester,
                                     decoration: _DS.inputDecoration('Semester'),
-                                    style: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF1A202C)),
+                                    style: GoogleFonts.beVietnamPro(
+                                        fontSize: 13, color: _DS.textPrimary),
                                     items: SchoolYearUtil.semesters
                                         .map((s) => DropdownMenuItem(value: s, child: Text(s)))
                                         .toList(),
@@ -1949,7 +2086,7 @@ class _ReportModalState extends State<_ReportModal> {
                               'Report Type',
                               style: GoogleFonts.beVietnamPro(
                                 fontSize: 13,
-                                color: const Color(0xFF64748B),
+                                color: _DS.textSecondary,
                               ),
                             ),
                           ),
@@ -2032,10 +2169,10 @@ class _ReportModalState extends State<_ReportModal> {
             Container(
               padding: const EdgeInsets.fromLTRB(24, 16, 24, 20),
               decoration: const BoxDecoration(
-                border: Border(top: BorderSide(color: Color(0xFFE8ECF0))),
+                border: Border(top: BorderSide(color: _DS.border)),
                 color: Color(0xFFF8F9FB),
                 borderRadius: BorderRadius.vertical(
-                  bottom: Radius.circular(18),
+                  bottom: Radius.circular(20),
                 ),
               ),
               child: Row(
@@ -2159,7 +2296,7 @@ class _ReportModalState extends State<_ReportModal> {
           prefixIcon: const Icon(
             Icons.event_rounded,
             size: 18,
-            color: Color(0xFF9AA5B4),
+            color: _DS.textHint,
           ),
           border: InputBorder.none,
           contentPadding: const EdgeInsets.symmetric(
@@ -2171,13 +2308,9 @@ class _ReportModalState extends State<_ReportModal> {
           'Select an approved event',
           style: GoogleFonts.beVietnamPro(
             fontSize: 13,
-            color: const Color(0xFF9AA5B4),
+            color: _DS.textHint,
           ),
         ),
-        // FIX for "RenderFlex overflowed by 11 pixels on the bottom":
-        // the closed field now shows a single-line title only. The full
-        // two-line (title + date) layout still shows in the open menu via
-        // `items` below — this is exactly what selectedItemBuilder is for.
         selectedItemBuilder: (context) => _events
             .map(
               (event) => Align(
@@ -2211,7 +2344,7 @@ class _ReportModalState extends State<_ReportModal> {
                   event['dateStr'] as String,
                   style: GoogleFonts.beVietnamPro(
                     fontSize: 10,
-                    color: const Color(0xFF9AA5B4),
+                    color: _DS.textHint,
                   ),
                 ),
               ],
@@ -2256,7 +2389,7 @@ class _ReportModalState extends State<_ReportModal> {
                     style: GoogleFonts.beVietnamPro(
                       fontSize: 12,
                       fontWeight: FontWeight.w500,
-                      color: const Color(0xFF1A202C),
+                      color: _DS.textPrimary,
                     ),
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -2266,7 +2399,7 @@ class _ReportModalState extends State<_ReportModal> {
                     _fileSize!,
                     style: GoogleFonts.beVietnamPro(
                       fontSize: 11,
-                      color: const Color(0xFF64748B),
+                      color: _DS.textSecondary,
                     ),
                   ),
               ],
@@ -2286,7 +2419,7 @@ class _ReportModalState extends State<_ReportModal> {
               'Processing ${(_uploadProgress * 100).toInt()}%',
               style: GoogleFonts.beVietnamPro(
                 fontSize: 10,
-                color: const Color(0xFF64748B),
+                color: _DS.textSecondary,
               ),
             ),
           ],
@@ -2396,7 +2529,7 @@ class _ReportModalState extends State<_ReportModal> {
               TextSpan(
                 style: GoogleFonts.beVietnamPro(
                   fontSize: 13,
-                  color: const Color(0xFF64748B),
+                  color: _DS.textSecondary,
                 ),
                 children: [
                   TextSpan(
@@ -2415,7 +2548,7 @@ class _ReportModalState extends State<_ReportModal> {
               'PDF, DOC, DOCX, XLSX, JPG, PNG — max 700 KB',
               style: GoogleFonts.beVietnamPro(
                 fontSize: 11,
-                color: const Color(0xFF9AA5B4),
+                color: _DS.textHint,
               ),
             ),
           ],
@@ -2426,7 +2559,7 @@ class _ReportModalState extends State<_ReportModal> {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Type selector card (unchanged)
+// Type selector card
 // ─────────────────────────────────────────────────────────────────────────────
 class _TypeCard extends StatelessWidget {
   final String label;
@@ -2442,53 +2575,53 @@ class _TypeCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Expanded(
-    child: InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(8),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 150),
-        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
-        decoration: BoxDecoration(
-          color: selected ? _DS.primaryBg : const Color(0xFFF8F9FB),
+        child: InkWell(
+          onTap: onTap,
           borderRadius: BorderRadius.circular(8),
-          border: Border.all(
-            color: selected ? _DS.primary : const Color(0xFFE2E6EA),
-            width: selected ? 1.5 : 1,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 150),
+            padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
+            decoration: BoxDecoration(
+              color: selected ? _DS.primaryBg : const Color(0xFFF8F9FB),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(
+                color: selected ? _DS.primary : const Color(0xFFE2E6EA),
+                width: selected ? 1.5 : 1,
+              ),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  icon,
+                  size: 18,
+                  color: selected ? _DS.primary : _DS.textHint,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    label,
+                    style: GoogleFonts.beVietnamPro(
+                      fontSize: 12,
+                      fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                      color: selected ? _DS.primary : _DS.textSecondary,
+                    ),
+                  ),
+                ),
+                if (selected)
+                  const Icon(
+                    Icons.check_circle_rounded,
+                    size: 16,
+                    color: _DS.primary,
+                  ),
+              ],
+            ),
           ),
         ),
-        child: Row(
-          children: [
-            Icon(
-              icon,
-              size: 18,
-              color: selected ? _DS.primary : const Color(0xFF9AA5B4),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                label,
-                style: GoogleFonts.beVietnamPro(
-                  fontSize: 12,
-                  fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                  color: selected ? _DS.primary : const Color(0xFF64748B),
-                ),
-              ),
-            ),
-            if (selected)
-              const Icon(
-                Icons.check_circle_rounded,
-                size: 16,
-                color: _DS.primary,
-              ),
-          ],
-        ),
-      ),
-    ),
-  );
+      );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Countdown card (unchanged)
+// Countdown card (not used in main build but kept for completeness)
 // ─────────────────────────────────────────────────────────────────────────────
 class _CountdownCard extends StatelessWidget {
   final Duration remaining;
@@ -2513,7 +2646,7 @@ class _CountdownCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFE8ECF0)),
+        border: Border.all(color: _DS.border),
         boxShadow: _DS.cardShadow,
       ),
       child: Row(
@@ -2542,14 +2675,14 @@ class _CountdownCard extends StatelessWidget {
                 style: GoogleFonts.beVietnamPro(
                   fontSize: 14,
                   fontWeight: FontWeight.w700,
-                  color: const Color(0xFF1A202C),
+                  color: _DS.textPrimary,
                 ),
               ),
               Text(
                 DateFormat('MMMM d, yyyy — h:mm a').format(eventDate),
                 style: GoogleFonts.beVietnamPro(
                   fontSize: 12,
-                  color: const Color(0xFF64748B),
+                  color: _DS.textSecondary,
                 ),
               ),
             ],
@@ -2596,60 +2729,60 @@ class _CountUnit extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Column(
-    children: [
-      Container(
-        width: 48,
-        height: 42,
-        decoration: BoxDecoration(
-          color: _DS.primary,
-          borderRadius: BorderRadius.circular(8),
-        ),
-        alignment: Alignment.center,
-        child: Text(
-          value.toString().padLeft(2, '0'),
-          style: GoogleFonts.beVietnamPro(
-            fontSize: 18,
-            fontWeight: FontWeight.w700,
-            color: Colors.white,
+        children: [
+          Container(
+            width: 48,
+            height: 42,
+            decoration: BoxDecoration(
+              color: _DS.primary,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            alignment: Alignment.center,
+            child: Text(
+              value.toString().padLeft(2, '0'),
+              style: GoogleFonts.beVietnamPro(
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+                color: Colors.white,
+              ),
+            ),
           ),
-        ),
-      ),
-      const SizedBox(height: 4),
-      Text(
-        label,
-        style: GoogleFonts.beVietnamPro(
-          fontSize: 9,
-          color: const Color(0xFF64748B),
-          letterSpacing: 0.5,
-        ),
-      ),
-    ],
-  );
+          const SizedBox(height: 4),
+          Text(
+            label,
+            style: GoogleFonts.beVietnamPro(
+              fontSize: 9,
+              color: _DS.textSecondary,
+              letterSpacing: 0.5,
+            ),
+          ),
+        ],
+      );
 }
 
 class _Colon extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.symmetric(horizontal: 4),
-    child: Text(
-      ':',
-      style: GoogleFonts.beVietnamPro(
-        fontSize: 18,
-        fontWeight: FontWeight.w700,
-        color: _DS.primary,
-      ),
-    ),
-  );
+        padding: const EdgeInsets.symmetric(horizontal: 4),
+        child: Text(
+          ':',
+          style: GoogleFonts.beVietnamPro(
+            fontSize: 18,
+            fontWeight: FontWeight.w700,
+            color: _DS.primary,
+          ),
+        ),
+      );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// One financial/accomplishment report obligation for one finished event.
+// Pending deadline chip
 // ─────────────────────────────────────────────────────────────────────────────
 class _PendingEventDeadline {
   final String eventId;
   final String eventTitle;
   final DateTime eventDate;
-  final String type; // 'financial' | 'accomplishment'
+  final String type;
   final DateTime deadline;
   const _PendingEventDeadline({
     required this.eventId,
@@ -2660,13 +2793,8 @@ class _PendingEventDeadline {
   });
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Pending deadline chip — one per event (not per report type), so an event
-// needing both a financial and accomplishment report is a single compact
-// pill instead of two separate cards. Always names the event.
-// ─────────────────────────────────────────────────────────────────────────────
 class _PendingDeadlineChip extends StatelessWidget {
-  final List<_PendingEventDeadline> items; // same eventId, 1-2 entries (financial/accomplishment)
+  final List<_PendingEventDeadline> items;
   const _PendingDeadlineChip({required this.items});
 
   @override
@@ -2700,15 +2828,15 @@ class _PendingDeadlineChip extends StatelessWidget {
             style: GoogleFonts.beVietnamPro(
               fontSize: 12.5,
               fontWeight: FontWeight.w700,
-              color: const Color(0xFF1A202C),
+              color: _DS.textPrimary,
             ),
           ),
           const SizedBox(width: 6),
-          Text('·', style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF9AA5B4))),
+          Text('·', style: GoogleFonts.beVietnamPro(fontSize: 12, color: _DS.textHint)),
           const SizedBox(width: 6),
           Text(
             typesLabel,
-            style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF64748B)),
+            style: GoogleFonts.beVietnamPro(fontSize: 12, color: _DS.textSecondary),
           ),
           const SizedBox(width: 8),
           Container(
@@ -2716,7 +2844,11 @@ class _PendingDeadlineChip extends StatelessWidget {
             decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(_DS.radiusPill)),
             child: Text(
               anyOverdue ? 'Overdue' : 'Due ${DateFormat('MMM d').format(earliest)}',
-              style: GoogleFonts.beVietnamPro(fontSize: 10.5, fontWeight: FontWeight.w700, color: Colors.white),
+              style: GoogleFonts.beVietnamPro(
+                fontSize: 10.5,
+                fontWeight: FontWeight.w700,
+                color: Colors.white,
+              ),
             ),
           ),
         ],
@@ -2725,8 +2857,128 @@ class _PendingDeadlineChip extends StatelessWidget {
   }
 }
 
+
+// ── "More" chip that opens the bottom sheet ──────────────────────────────
+class _MoreDeadlineChip extends StatelessWidget {
+  final int count;
+  final VoidCallback onTap;
+  const _MoreDeadlineChip({required this.count, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF3F4F6),
+          borderRadius: BorderRadius.circular(_DS.radiusPill),
+          border: Border.all(color: const Color(0xFFE2E6EA)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(
+              Icons.more_horiz_rounded,
+              size: 16,
+              color: _DS.textSecondary,
+            ),
+            const SizedBox(width: 4),
+            Text(
+              '+$count more',
+              style: GoogleFonts.beVietnamPro(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: _DS.textSecondary,
+              ),
+            ),
+            const SizedBox(width: 4),
+            const Icon(
+              Icons.chevron_right_rounded,
+              size: 16,
+              color: _DS.textSecondary,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── List item for the bottom sheet ────────────────────────────────────────
+class _PendingDeadlineListItem extends StatelessWidget {
+  final List<_PendingEventDeadline> items;
+  const _PendingDeadlineListItem({required this.items});
+
+  @override
+  Widget build(BuildContext context) {
+    final now = DateTime.now();
+    final anyOverdue = items.any((d) => now.isAfter(d.deadline));
+    final earliest = items.map((d) => d.deadline).reduce((a, b) => a.isBefore(b) ? a : b);
+    final typesLabel = items
+        .map((d) => d.type == 'financial' ? 'Financial' : 'Accomplishment')
+        .join(' & ');
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        children: [
+          Container(
+            width: 4,
+            height: 32,
+            decoration: BoxDecoration(
+              color: anyOverdue ? const Color(0xFFDC2626) : const Color(0xFFFB923C),
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  items.first.eventTitle,
+                  style: GoogleFonts.beVietnamPro(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: _DS.textPrimary,
+                  ),
+                ),
+                Text(
+                  '$typesLabel • ${anyOverdue ? "Overdue" : "Due ${DateFormat('MMM d').format(earliest)}"}',
+                  style: GoogleFonts.beVietnamPro(
+                    fontSize: 12,
+                    color: _DS.textSecondary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            decoration: BoxDecoration(
+              color: anyOverdue ? const Color(0xFFFEF2F2) : const Color(0xFFFFF7ED),
+              borderRadius: BorderRadius.circular(_DS.radiusPill),
+              border: Border.all(
+                color: anyOverdue ? const Color(0xFFFCA5A5) : const Color(0xFFFFE4CC),
+              ),
+            ),
+            child: Text(
+              anyOverdue ? 'Overdue' : 'Due Soon',
+              style: GoogleFonts.beVietnamPro(
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                color: anyOverdue ? const Color(0xFFDC2626) : _DS.primary,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
 // ─────────────────────────────────────────────────────────────────────────────
-// Confirm dialog (unchanged)
+// Confirm dialog
 // ─────────────────────────────────────────────────────────────────────────────
 class _ConfirmDialog extends StatelessWidget {
   final String title;
@@ -2742,110 +2994,110 @@ class _ConfirmDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Dialog(
-    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-    child: Container(
-      width: 420,
-      padding: const EdgeInsets.all(28),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        child: Container(
+          width: 420,
+          padding: const EdgeInsets.all(28),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Container(
-                width: 42,
-                height: 42,
-                decoration: BoxDecoration(
-                  color: destructive ? const Color(0xFFFEF2F2) : _DS.primaryBg,
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Icon(
-                  destructive
-                      ? Icons.delete_outline_rounded
-                      : Icons.check_circle_outline_rounded,
-                  color: destructive ? const Color(0xFFDC2626) : _DS.primary,
-                  size: 20,
-                ),
+              Row(
+                children: [
+                  Container(
+                    width: 42,
+                    height: 42,
+                    decoration: BoxDecoration(
+                      color: destructive ? const Color(0xFFFEF2F2) : _DS.primaryBg,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Icon(
+                      destructive
+                          ? Icons.delete_outline_rounded
+                          : Icons.check_circle_outline_rounded,
+                      color: destructive ? const Color(0xFFDC2626) : _DS.primary,
+                      size: 20,
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+                  Text(
+                    title,
+                    style: GoogleFonts.beVietnamPro(
+                      fontSize: 17,
+                      fontWeight: FontWeight.w700,
+                      color: _DS.textPrimary,
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(width: 14),
+              const SizedBox(height: 16),
               Text(
-                title,
+                message,
                 style: GoogleFonts.beVietnamPro(
-                  fontSize: 17,
-                  fontWeight: FontWeight.w700,
-                  color: const Color(0xFF1A202C),
+                  fontSize: 14,
+                  color: _DS.textSecondary,
+                  height: 1.5,
                 ),
+              ),
+              const SizedBox(height: 24),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  OutlinedButton(
+                    onPressed: () => Navigator.pop(context, false),
+                    style: OutlinedButton.styleFrom(
+                      side: const BorderSide(color: Color(0xFFE2E6EA)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 18,
+                        vertical: 11,
+                      ),
+                    ),
+                    child: Text(
+                      'Cancel',
+                      style: GoogleFonts.beVietnamPro(
+                        fontSize: 13,
+                        color: const Color(0xFF374151),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  ElevatedButton(
+                    onPressed: () => Navigator.pop(context, true),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: destructive
+                          ? const Color(0xFFDC2626)
+                          : _DS.primary,
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 18,
+                        vertical: 11,
+                      ),
+                    ),
+                    child: Text(
+                      confirmLabel,
+                      style: GoogleFonts.beVietnamPro(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
-          const SizedBox(height: 16),
-          Text(
-            message,
-            style: GoogleFonts.beVietnamPro(
-              fontSize: 14,
-              color: const Color(0xFF64748B),
-              height: 1.5,
-            ),
-          ),
-          const SizedBox(height: 24),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: [
-              OutlinedButton(
-                onPressed: () => Navigator.pop(context, false),
-                style: OutlinedButton.styleFrom(
-                  side: const BorderSide(color: Color(0xFFE2E6EA)),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 18,
-                    vertical: 11,
-                  ),
-                ),
-                child: Text(
-                  'Cancel',
-                  style: GoogleFonts.beVietnamPro(
-                    fontSize: 13,
-                    color: const Color(0xFF374151),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 10),
-              ElevatedButton(
-                onPressed: () => Navigator.pop(context, true),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: destructive
-                      ? const Color(0xFFDC2626)
-                      : _DS.primary,
-                  foregroundColor: Colors.white,
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 18,
-                    vertical: 11,
-                  ),
-                ),
-                child: Text(
-                  confirmLabel,
-                  style: GoogleFonts.beVietnamPro(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    ),
-  );
+        ),
+      );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Error state (unchanged)
+// Error state
 // ─────────────────────────────────────────────────────────────────────────────
 class _ErrorState extends StatelessWidget {
   final String message;
@@ -2854,81 +3106,80 @@ class _ErrorState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Center(
-    child: Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        Container(
-          width: 80,
-          height: 80,
-          decoration: BoxDecoration(
-            color: const Color(0xFFFEF2F2),
-            borderRadius: BorderRadius.circular(20),
-          ),
-          child: const Icon(
-            Icons.error_outline_rounded,
-            size: 40,
-            color: Color(0xFFDC2626),
-          ),
-        ),
-        const SizedBox(height: 16),
-        Text(
-          'Failed to load reports',
-          style: GoogleFonts.beVietnamPro(
-            fontSize: 15,
-            fontWeight: FontWeight.w600,
-            color: const Color(0xFF374151),
-          ),
-        ),
-        const SizedBox(height: 6),
-        if (message.contains('index') ||
-            message.contains('FAILED_PRECONDITION'))
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 4),
-            child: Text(
-              'A Firestore composite index is missing. '
-              'Check the debug console for an auto-create link.',
-              textAlign: TextAlign.center,
-              style: GoogleFonts.beVietnamPro(
-                fontSize: 13,
-                color: const Color(0xFF64748B),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              width: 80,
+              height: 80,
+              decoration: BoxDecoration(
+                color: const Color(0xFFFEF2F2),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: const Icon(
+                Icons.error_outline_rounded,
+                size: 40,
+                color: Color(0xFFDC2626),
               ),
             ),
-          )
-        else
-          Text(
-            message,
-            textAlign: TextAlign.center,
-            style: GoogleFonts.beVietnamPro(
-              fontSize: 13,
-              color: const Color(0xFF64748B),
+            const SizedBox(height: 16),
+            Text(
+              'Failed to load reports',
+              style: GoogleFonts.beVietnamPro(
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+                color: const Color(0xFF374151),
+              ),
             ),
-          ),
-        const SizedBox(height: 20),
-        ElevatedButton.icon(
-          onPressed: onRetry,
-          icon: const Icon(Icons.refresh_rounded, size: 16),
-          label: Text(
-            'Retry',
-            style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.w600),
-          ),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: _DS.primary,
-            foregroundColor: Colors.white,
-            elevation: 0,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(8),
+            const SizedBox(height: 6),
+            if (message.contains('index') ||
+                message.contains('FAILED_PRECONDITION'))
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 4),
+                child: Text(
+                  'A Firestore composite index is missing. '
+                  'Check the debug console for an auto-create link.',
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.beVietnamPro(
+                    fontSize: 13,
+                    color: _DS.textSecondary,
+                  ),
+                ),
+              )
+            else
+              Text(
+                message,
+                textAlign: TextAlign.center,
+                style: GoogleFonts.beVietnamPro(
+                  fontSize: 13,
+                  color: _DS.textSecondary,
+                ),
+              ),
+            const SizedBox(height: 20),
+            ElevatedButton.icon(
+              onPressed: onRetry,
+              icon: const Icon(Icons.refresh_rounded, size: 16),
+              label: Text(
+                'Retry',
+                style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.w600),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _DS.primary,
+                foregroundColor: Colors.white,
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 11),
+              ),
             ),
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 11),
-          ),
+          ],
         ),
-      ],
-    ),
-  );
+      );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Export button — uses the shared AdminExportButton so styling matches
-// every other table screen (neutral gray outline, not brand orange).
+// Export button
 // ─────────────────────────────────────────────────────────────────────────────
 class _ExportButton extends StatelessWidget {
   final String orgId;
@@ -3027,7 +3278,7 @@ class _ExportButton extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Reusable widgets (unchanged)
+// Reusable widgets
 // ─────────────────────────────────────────────────────────────────────────────
 class _StatCard extends StatelessWidget {
   final String label, value;
@@ -3042,58 +3293,58 @@ class _StatCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Expanded(
-    child: Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFE8ECF0)),
-        boxShadow: _DS.cardShadow,
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              color: color.withAlpha(26),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Icon(icon, color: color, size: 22),
+        child: Container(
+          padding: const EdgeInsets.all(18),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: _DS.border),
+            boxShadow: _DS.cardShadow,
           ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  label,
-                  style: GoogleFonts.beVietnamPro(
-                    fontSize: 11,
-                    color: const Color(0xFF64748B),
-                    fontWeight: FontWeight.w500,
-                  ),
+          child: Row(
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: color.withAlpha(26),
+                  borderRadius: BorderRadius.circular(12),
                 ),
-                const SizedBox(height: 2),
-                Text(
-                  value,
-                  style: GoogleFonts.beVietnamPro(
-                    fontSize: 28,
-                    fontWeight: FontWeight.w700,
-                    color: const Color(0xFF1A202C),
-                  ),
+                child: Icon(icon, color: color, size: 22),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      label,
+                      style: GoogleFonts.beVietnamPro(
+                        fontSize: 11,
+                        color: _DS.textSecondary,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      value,
+                      style: GoogleFonts.beVietnamPro(
+                        fontSize: 28,
+                        fontWeight: FontWeight.w700,
+                        color: _DS.textPrimary,
+                      ),
+                    ),
+                  ],
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
-        ],
-      ),
-    ),
-  );
+        ),
+      );
 }
 
 class _FilterDropdown extends StatelessWidget {
-  final String? value; // now nullable, no "All" option
+  final String? value;
   final List<String> items;
   final String hint;
   final IconData icon;
@@ -3108,46 +3359,46 @@ class _FilterDropdown extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-    height: 40,
-    padding: const EdgeInsets.symmetric(horizontal: 12),
-    decoration: BoxDecoration(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(10),
-      border: Border.all(color: const Color(0xFFE2E6EA)),
-    ),
-    child: DropdownButtonHideUnderline(
-      child: DropdownButton<String>(
-        value: value, // null allowed
-        icon: const Icon(
-          Icons.keyboard_arrow_down_rounded,
-          size: 18,
-          color: Color(0xFF9AA5B4),
+        height: 44,
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: _DS.border),
         ),
-        style: GoogleFonts.beVietnamPro(
-          fontSize: 13,
-          color: const Color(0xFF374151),
-        ),
-        hint: Text(
-          hint,
-          style: GoogleFonts.beVietnamPro(
-            fontSize: 13,
-            color: const Color(0xFF9AA5B4),
+        child: DropdownButtonHideUnderline(
+          child: DropdownButton<String>(
+            value: value,
+            icon: const Icon(
+              Icons.keyboard_arrow_down_rounded,
+              size: 20,
+              color: _DS.textHint,
+            ),
+            style: GoogleFonts.beVietnamPro(
+              fontSize: 14,
+              color: _DS.textPrimary,
+            ),
+            hint: Text(
+              hint,
+              style: GoogleFonts.beVietnamPro(
+                fontSize: 14,
+                color: _DS.textHint,
+              ),
+            ),
+            items: items
+                .map(
+                  (s) => DropdownMenuItem(
+                    value: s,
+                    child: Text(s, style: GoogleFonts.beVietnamPro(fontSize: 14)),
+                  ),
+                )
+                .toList(),
+            onChanged: onChanged,
+            borderRadius: BorderRadius.circular(12),
+            dropdownColor: Colors.white,
           ),
         ),
-        items: items
-            .map(
-              (s) => DropdownMenuItem(
-                value: s,
-                child: Text(s, style: GoogleFonts.beVietnamPro(fontSize: 13)),
-              ),
-            )
-            .toList(),
-        onChanged: onChanged,
-        borderRadius: BorderRadius.circular(10),
-        dropdownColor: Colors.white,
-      ),
-    ),
-  );
+      );
 }
 
 class _ToolbarButton extends StatelessWidget {
@@ -3162,23 +3413,23 @@ class _ToolbarButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => ElevatedButton.icon(
-    onPressed: onPressed,
-    icon: Icon(icon, size: 15),
-    label: Text(
-      label,
-      style: GoogleFonts.beVietnamPro(
-        fontSize: 13,
-        fontWeight: FontWeight.w600,
-      ),
-    ),
-    style: ElevatedButton.styleFrom(
-      backgroundColor: UpriseColors.primaryDark,
-      foregroundColor: Colors.white,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-      elevation: 0,
-    ),
-  );
+        onPressed: onPressed,
+        icon: Icon(icon, size: 18),
+        label: Text(
+          label,
+          style: GoogleFonts.beVietnamPro(
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: UpriseColors.primaryDark,
+          foregroundColor: Colors.white,
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 11),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          elevation: 0,
+        ),
+      );
 }
 
 class _ActionIconButton extends StatelessWidget {
@@ -3194,14 +3445,14 @@ class _ActionIconButton extends StatelessWidget {
   });
 
   static const Map<int, Color> _bgByFg = {
-    0xFF3B82F6: Color(0xFFEFF6FF), // view - blue
-    0xFF2563EB: Color(0xFFEFF6FF), // publish - blue
-    0xFFB45309: Color(0xFFFFF7ED), // edit - orange (UpriseColors.primaryDark)
-    0xFF7C3AED: Color(0xFFF3E8FF), // revise - purple
-    0xFF0D9488: Color(0xFFECFDF5), // form builder - teal
-    0xFF6B7280: Color(0xFFF3F4F6), // archive - gray
-    0xFFDC2626: Color(0xFFFEF2F2), // delete - red
-    0xFF059669: Color(0xFFECFDF5), // approve - green
+    0xFF3B82F6: Color(0xFFEFF6FF),
+    0xFF2563EB: Color(0xFFEFF6FF),
+    0xFFB45309: Color(0xFFFFF7ED),
+    0xFF7C3AED: Color(0xFFF3E8FF),
+    0xFF0D9488: Color(0xFFECFDF5),
+    0xFF6B7280: Color(0xFFF3F4F6),
+    0xFFDC2626: Color(0xFFFEF2F2),
+    0xFF059669: Color(0xFFECFDF5),
   };
 
   @override
@@ -3220,7 +3471,7 @@ class _ActionIconButton extends StatelessWidget {
             color: bg,
             borderRadius: BorderRadius.circular(8),
           ),
-          child: Icon(icon, size: 14, color: fg),
+          child: Icon(icon, size: 16, color: fg),
         ),
       ),
     );
@@ -3239,17 +3490,17 @@ class _PageButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => InkWell(
-    onTap: enabled ? onTap : null,
-    borderRadius: BorderRadius.circular(6),
-    child: Padding(
-      padding: const EdgeInsets.all(4),
-      child: Icon(
-        icon,
-        size: 20,
-        color: enabled ? const Color(0xFF374151) : const Color(0xFFD1D5DB),
-      ),
-    ),
-  );
+        onTap: enabled ? onTap : null,
+        borderRadius: BorderRadius.circular(6),
+        child: Padding(
+          padding: const EdgeInsets.all(4),
+          child: Icon(
+            icon,
+            size: 20,
+            color: enabled ? const Color(0xFF374151) : const Color(0xFFD1D5DB),
+          ),
+        ),
+      );
 }
 
 class _PageNumButton extends StatelessWidget {
@@ -3264,30 +3515,30 @@ class _PageNumButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => GestureDetector(
-    onTap: onTap,
-    child: Container(
-      margin: const EdgeInsets.symmetric(horizontal: 2),
-      width: 28,
-      height: 28,
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        color: isActive ? _DS.primary : Colors.transparent,
-        borderRadius: BorderRadius.circular(6),
-      ),
-      child: Text(
-        '$page',
-        style: GoogleFonts.beVietnamPro(
-          fontSize: 12,
-          fontWeight: isActive ? FontWeight.w700 : FontWeight.normal,
-          color: isActive ? Colors.white : const Color(0xFF374151),
+        onTap: onTap,
+        child: Container(
+          margin: const EdgeInsets.symmetric(horizontal: 2),
+          width: 28,
+          height: 28,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: isActive ? _DS.primary : Colors.transparent,
+            borderRadius: BorderRadius.circular(6),
+          ),
+          child: Text(
+            '$page',
+            style: GoogleFonts.beVietnamPro(
+              fontSize: 12,
+              fontWeight: isActive ? FontWeight.w700 : FontWeight.normal,
+              color: isActive ? Colors.white : const Color(0xFF374151),
+            ),
+          ),
         ),
-      ),
-    ),
-  );
+      );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Report Model (updated with base64 fields)
+// Report Model
 // ─────────────────────────────────────────────────────────────────────────────
 class ReportModel {
   final String id;
@@ -3295,15 +3546,13 @@ class ReportModel {
   final String title;
   final String type;
   final String description;
-  final String? fileBase64;   // base64 encoded file data
-  final String? fileName;     // original file name
-  final String? fileSize;     // formatted size (e.g., "123.4 KB")
+  final String? fileBase64;
+  final String? fileName;
+  final String? fileSize;
   final String status;
   final Timestamp submittedAt;
   final String submittedBy;
   final String? eventId;
-  // 'event' (default, tied to eventId) | 'semester' | 'year' — a report can
-  // instead cover a whole semester or school year with no single event.
   final String scope;
   final String? schoolYear;
   final String? semester;
@@ -3330,8 +3579,7 @@ class ReportModel {
     final d = doc.data() as Map<String, dynamic>;
     return ReportModel(
       id: doc.id,
-      reportId:
-          d['reportId'] as String? ??
+      reportId: d['reportId'] as String? ??
           'REP-${doc.id.substring(0, 6).toUpperCase()}',
       title: d['title'] as String? ?? '',
       type: d['type'] as String? ?? 'financial',
