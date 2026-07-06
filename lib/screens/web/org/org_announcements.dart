@@ -996,33 +996,12 @@ class _OrgAnnouncementsScreenState extends State<OrgAnnouncementsScreen> {
         const SizedBox(height: 12),
         const Divider(height: 1, color: _C.borderSoft),
         const SizedBox(height: 10),
-        Row(children: [
-          _composerQuickAction(Icons.image_outlined, 'Photo', _C.success, 'photo'),
-          const SizedBox(width: 8),
-          _composerQuickAction(Icons.videocam_outlined, 'Video', _C.error, 'video'),
-          const SizedBox(width: 8),
-          _composerQuickAction(Icons.event_outlined, 'Event', _C.warning, 'event'),
-        ]),
+        
       ]),
     );
   }
 
-  Widget _composerQuickAction(IconData icon, String label, Color color, String focusSection) {
-    return Expanded(
-      child: InkWell(
-        onTap: () => _showAnnouncementDialog(focusSection: focusSection),
-        borderRadius: BorderRadius.circular(8),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 8),
-          child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-            Icon(icon, size: 17, color: color),
-            const SizedBox(width: 6),
-            Text(label, style: GoogleFonts.beVietnamPro(fontSize: 12.5, fontWeight: FontWeight.w600, color: _C.textMid)),
-          ]),
-        ),
-      ),
-    );
-  }
+  
 
   Widget _buildEmptyState() {
     return Container(
@@ -1137,9 +1116,8 @@ class _OrgAnnouncementsScreenState extends State<OrgAnnouncementsScreen> {
     final formKey    = GlobalKey<FormState>();
     final titleCtrl  = TextEditingController(text: existing?.title ?? '');
     final contentCtrl= TextEditingController(text: existing?.content ?? '');
-    final videoUrlCtrl = TextEditingController(text: existing?.videoUrl ?? '');
     final imageSectionKey = GlobalKey();
-    final videoSectionKey = GlobalKey();
+   
     final eventSectionKey = GlobalKey();
     bool isPinned    = existing?.isPinned ?? false;
     String? imageBase64 = existing?.imageBase64;
@@ -1171,7 +1149,6 @@ class _OrgAnnouncementsScreenState extends State<OrgAnnouncementsScreen> {
             hasScrolledToFocus = true;
             final targetKey = switch (focusSection) {
               'photo' => imageSectionKey,
-              'video' => videoSectionKey,
               'event' => eventSectionKey,
               _ => null,
             };
@@ -1328,30 +1305,8 @@ class _OrgAnnouncementsScreenState extends State<OrgAnnouncementsScreen> {
                               attachments, (v) => setDlg(() => attachments = v)),
                           const SizedBox(height: 20),
 
-                          KeyedSubtree(
-                            key: videoSectionKey,
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                _sectionLabel('Video Link', icon: Icons.videocam_outlined),
-                                TextFormField(
-                                  controller: videoUrlCtrl,
-                                  decoration: _DS.inputDecoration('Video URL (optional)',
-                                      hint: 'Paste a YouTube, Drive, or Facebook video link',
-                                      icon: Icons.link_rounded),
-                                  style: GoogleFonts.beVietnamPro(fontSize: 13),
-                                  validator: (v) {
-                                    final value = v?.trim() ?? '';
-                                    if (value.isEmpty) return null;
-                                    final uri = Uri.tryParse(value);
-                                    if (uri == null || !uri.isAbsolute) return 'Enter a valid URL';
-                                    return null;
-                                  },
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(height: 20),
+                         
+                         
 
                           KeyedSubtree(
                             key: eventSectionKey,
@@ -1701,7 +1656,6 @@ class _OrgAnnouncementsScreenState extends State<OrgAnnouncementsScreen> {
                                             })
                                         .toList(),
                                     'imageBase64': imageBase64 ?? '',
-                                    'videoUrl': videoUrlCtrl.text.trim(),
                                     'pinned': isPinned,
                                     'targetAudience': targetAudience,
                                     'category': category,
