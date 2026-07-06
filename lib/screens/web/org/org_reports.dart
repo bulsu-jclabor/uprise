@@ -416,184 +416,349 @@ class _OrgReportsScreenState extends State<OrgReportsScreen> {
     );
   }
 
-  
-  // ── Deadline row ── REPLACE THIS ENTIRE METHOD ───────────────────────────
-Widget _buildDeadlineRow(List<ReportModel> all) {
-  final submittedKeys = all
-      .where((r) => r.status != 'archived' && (r.eventId ?? '').isNotEmpty)
-      .map((r) => '${r.eventId}_${r.type}')
-      .toSet();
+  // ── Deadline row ── UPDATED WITH PROFESSIONAL UI ──────────────────────────
+  Widget _buildDeadlineRow(List<ReportModel> all) {
+    final submittedKeys = all
+        .where((r) => r.status != 'archived' && (r.eventId ?? '').isNotEmpty)
+        .map((r) => '${r.eventId}_${r.type}')
+        .toSet();
 
-  final pending = _finishedEventDeadlines
-      .where((d) => !submittedKeys.contains('${d.eventId}_${d.type}'))
-      .toList()
-    ..sort((a, b) => a.deadline.compareTo(b.deadline));
+    final pending = _finishedEventDeadlines
+        .where((d) => !submittedKeys.contains('${d.eventId}_${d.type}'))
+        .toList()
+      ..sort((a, b) => a.deadline.compareTo(b.deadline));
 
-  if (pending.isEmpty) {
+    if (pending.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(28, 8, 28, 8),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.centerLeft,
+              end: Alignment.centerRight,
+              colors: [
+                const Color(0xFFECFDF5),
+                const Color(0xFFD1FAE5),
+              ],
+            ),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: const Color(0xFFA7F3D0)),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(4),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF059669).withAlpha(26),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: const Icon(
+                  Icons.check_circle_outline_rounded,
+                  color: Color(0xFF059669),
+                  size: 18,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Text(
+                'All reports for your finished events are submitted.',
+                style: GoogleFonts.beVietnamPro(
+                  fontSize: 13,
+                  color: const Color(0xFF065F46),
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    // Group by event
+    final groups = <String, List<_PendingEventDeadline>>{};
+    for (final d in pending) {
+      groups.putIfAbsent(d.eventId, () => []).add(d);
+    }
+
+    final orderedEventIds = groups.keys.toList()
+      ..sort((a, b) {
+        final da = groups[a]!.map((d) => d.deadline).reduce((x, y) => x.isBefore(y) ? x : y);
+        final db = groups[b]!.map((d) => d.deadline).reduce((x, y) => x.isBefore(y) ? x : y);
+        return da.compareTo(db);
+      });
+
+    // Calculate stats
+    final overdueCount = pending.where((d) => DateTime.now().isAfter(d.deadline)).length;
+    final totalPending = pending.length;
+    final eventCount = orderedEventIds.length;
+
+    // Only show first 3 chips
+    final showCount = 3;
+    final visibleIds = orderedEventIds.take(showCount).toList();
+    final hiddenIds = orderedEventIds.skip(showCount).toList();
+    final hasMore = hiddenIds.isNotEmpty;
+
     return Padding(
       padding: const EdgeInsets.fromLTRB(28, 8, 28, 8),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: const Color(0xFFECFDF5),
-          borderRadius: BorderRadius.circular(_DS.radiusPill),
-          border: Border.all(color: const Color(0xFFA7F3D0)),
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: _DS.border),
+          boxShadow: _DS.cardShadow,
         ),
-        child: Row(mainAxisSize: MainAxisSize.min, children: [
-          const Icon(Icons.check_circle_outline_rounded, color: Color(0xFF059669), size: 16),
-          const SizedBox(width: 8),
-          Text(
-            'All reports for your finished events are submitted.',
-            style: GoogleFonts.beVietnamPro(
-              fontSize: 12,
-              color: const Color(0xFF065F46),
-              fontWeight: FontWeight.w600,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Header with stats
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: _DS.primary.withAlpha(20),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(
+                    Icons.pending_actions_rounded,
+                    size: 20,
+                    color: _DS.primary,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Pending Reports',
+                        style: GoogleFonts.beVietnamPro(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                          color: _DS.textPrimary,
+                        ),
+                      ),
+                      Text(
+                        '$totalPending report${totalPending > 1 ? 's' : ''} needed from $eventCount event${eventCount > 1 ? 's' : ''}',
+                        style: GoogleFonts.beVietnamPro(
+                          fontSize: 12,
+                          color: _DS.textSecondary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                if (overdueCount > 0)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFEF2F2),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: const Color(0xFFFCA5A5)),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(
+                          Icons.warning_amber_rounded,
+                          size: 14,
+                          color: Color(0xFFDC2626),
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          '$overdueCount Overdue',
+                          style: GoogleFonts.beVietnamPro(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            color: const Color(0xFFDC2626),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
             ),
-          ),
-        ]),
+            const SizedBox(height: 12),
+            // Chips row
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                ...visibleIds.map((eventId) => _PendingDeadlineChip(items: groups[eventId]!)),
+                if (hasMore)
+                  _MoreDeadlineChip(
+                    count: hiddenIds.length,
+                    onTap: () => _showAllDeadlines(context, groups, orderedEventIds),
+                  ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
 
-  // Group by event
-  final groups = <String, List<_PendingEventDeadline>>{};
-  for (final d in pending) {
-    groups.putIfAbsent(d.eventId, () => []).add(d);
-  }
-  
-  final orderedEventIds = groups.keys.toList()
-    ..sort((a, b) {
-      final da = groups[a]!.map((d) => d.deadline).reduce((x, y) => x.isBefore(y) ? x : y);
-      final db = groups[b]!.map((d) => d.deadline).reduce((x, y) => x.isBefore(y) ? x : y);
-      return da.compareTo(db);
-    });
+  // ── Show all deadlines in a beautiful bottom sheet ────────────────────────
+  void _showAllDeadlines(
+    BuildContext context,
+    Map<String, List<_PendingEventDeadline>> groups,
+    List<String> orderedEventIds,
+  ) {
+    final now = DateTime.now();
+    final totalPending = orderedEventIds.length;
+    final overdueCount = orderedEventIds
+        .where((id) => groups[id]!.any((d) => now.isAfter(d.deadline)))
+        .length;
 
-  // Only show first 3 chips, rest in a "View All" expandable
-  final showCount = 3;
-  final visibleIds = orderedEventIds.take(showCount).toList();
-  final hiddenIds = orderedEventIds.skip(showCount).toList();
-  final hasMore = hiddenIds.isNotEmpty;
-
-  return Padding(
-    padding: const EdgeInsets.fromLTRB(28, 8, 28, 8),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // Show count badge
-        Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              decoration: BoxDecoration(
-                color: const Color(0xFFFFF7ED),
-                borderRadius: BorderRadius.circular(_DS.radiusPill),
-                border: Border.all(color: const Color(0xFFFFE4CC)),
-              ),
-              child: Text(
-                '${pending.length} pending report${pending.length > 1 ? 's' : ''}',
-                style: GoogleFonts.beVietnamPro(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                  color: _DS.primary,
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => DraggableScrollableSheet(
+        initialChildSize: 0.65,
+        maxChildSize: 0.9,
+        minChildSize: 0.4,
+        builder: (_, scrollCtrl) => Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+            boxShadow: _DS.cardShadow,
+          ),
+          child: Column(
+            children: [
+              // Handle
+              Padding(
+                padding: const EdgeInsets.only(top: 12),
+                child: Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFE2E6EA),
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
                 ),
               ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Divider(color: const Color(0xFFF1F5F9), thickness: 1),
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        // Chips row
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: [
-            ...visibleIds.map((eventId) => _PendingDeadlineChip(items: groups[eventId]!)),
-            if (hasMore)
-              _MoreDeadlineChip(
-                count: hiddenIds.length,
-                onTap: () => _showAllDeadlines(context, groups, orderedEventIds),
-              ),
-          ],
-        ),
-      ],
-    ),
-  );
-}
-
-// ── Show all deadlines in a bottom sheet ──────────────────────────────────
-void _showAllDeadlines(
-  BuildContext context,
-  Map<String, List<_PendingEventDeadline>> groups,
-  List<String> orderedEventIds,
-) {
-  showModalBottomSheet(
-    context: context,
-    isScrollControlled: true,
-    backgroundColor: Colors.transparent,
-    builder: (ctx) => DraggableScrollableSheet(
-      initialChildSize: 0.6,
-      maxChildSize: 0.85,
-      minChildSize: 0.3,
-      builder: (_, scrollCtrl) => Container(
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-          boxShadow: _DS.cardShadow,
-        ),
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Handle
-            Center(
-              child: Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFE2E6EA),
-                  borderRadius: BorderRadius.circular(2),
+              // Header
+              Padding(
+                padding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: _DS.primary.withAlpha(20),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Icon(
+                        Icons.pending_actions_rounded,
+                        size: 24,
+                        color: _DS.primary,
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'All Pending Reports',
+                            style: GoogleFonts.beVietnamPro(
+                              fontSize: 20,
+                              fontWeight: FontWeight.w700,
+                              color: _DS.textPrimary,
+                            ),
+                          ),
+                          Text(
+                            '$totalPending event${totalPending > 1 ? 's' : ''} need${totalPending > 1 ? '' : 's'} attention',
+                            style: GoogleFonts.beVietnamPro(
+                              fontSize: 14,
+                              color: _DS.textSecondary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (overdueCount > 0)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFEF2F2),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: const Color(0xFFFCA5A5)),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(
+                              Icons.warning_amber_rounded,
+                              size: 16,
+                              color: Color(0xFFDC2626),
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              '$overdueCount Overdue',
+                              style: GoogleFonts.beVietnamPro(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                                color: const Color(0xFFDC2626),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                  ],
                 ),
               ),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'All Pending Reports',
-              style: GoogleFonts.beVietnamPro(
-                fontSize: 18,
-                fontWeight: FontWeight.w700,
-                color: _DS.textPrimary,
+              const Divider(height: 24, color: _DS.border),
+              // List
+              Expanded(
+                child: ListView.builder(
+                  controller: scrollCtrl,
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+                  itemCount: orderedEventIds.length,
+                  itemBuilder: (_, idx) {
+                    final eventId = orderedEventIds[idx];
+                    final items = groups[eventId]!;
+                    return _PendingDeadlineListItem(items: items);
+                  },
+                ),
               ),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              '${orderedEventIds.length} events need reports',
-              style: GoogleFonts.beVietnamPro(
-                fontSize: 13,
-                color: _DS.textSecondary,
+              // Close button
+              Padding(
+                padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
+                child: SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: () => Navigator.pop(context),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: _DS.primary,
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                    ),
+                    child: Text(
+                      'Close',
+                      style: GoogleFonts.beVietnamPro(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ),
               ),
-            ),
-            const SizedBox(height: 16),
-            Expanded(
-              child: ListView.separated(
-                controller: scrollCtrl,
-                itemCount: orderedEventIds.length,
-                separatorBuilder: (_, __) => const Divider(height: 1),
-                itemBuilder: (_, idx) {
-                  final eventId = orderedEventIds[idx];
-                  final items = groups[eventId]!;
-                  return _PendingDeadlineListItem(items: items);
-                },
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
-    ),
-  );
-}
+    );
+  }
 
   // ── Toolbar ────────────────────────────────────────────────────────────────
   Widget _buildToolbar() {
@@ -1116,7 +1281,324 @@ void _showAllDeadlines(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// View Report Modal (updated: removed Status, uses event proposal file viewing)
+// PENDING DEADLINE WIDGETS - PROFESSIONAL UI
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _PendingEventDeadline {
+  final String eventId;
+  final String eventTitle;
+  final DateTime eventDate;
+  final String type;
+  final DateTime deadline;
+  const _PendingEventDeadline({
+    required this.eventId,
+    required this.eventTitle,
+    required this.eventDate,
+    required this.type,
+    required this.deadline,
+  });
+}
+
+// ── Compact Chip for the main view ────────────────────────────────────────
+class _PendingDeadlineChip extends StatelessWidget {
+  final List<_PendingEventDeadline> items;
+  const _PendingDeadlineChip({required this.items});
+
+  @override
+  Widget build(BuildContext context) {
+    final now = DateTime.now();
+    final anyOverdue = items.any((d) => now.isAfter(d.deadline));
+    final earliest = items.map((d) => d.deadline).reduce((a, b) => a.isBefore(b) ? a : b);
+    final typesLabel = items
+        .map((d) => d.type == 'financial' ? 'Financial' : 'Accomplishment')
+        .join(' & ');
+
+    final isOverdue = anyOverdue;
+    final bgColor = isOverdue ? const Color(0xFFFEF2F2) : const Color(0xFFFFF7ED);
+    final borderColor = isOverdue ? const Color(0xFFFCA5A5) : const Color(0xFFFFE4CC);
+    final iconColor = isOverdue ? const Color(0xFFDC2626) : _DS.primary;
+    final statusText = isOverdue ? 'Overdue' : 'Due ${DateFormat('MMM d').format(earliest)}';
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: borderColor),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            isOverdue ? Icons.error_outline_rounded : Icons.schedule_rounded,
+            size: 14,
+            color: iconColor,
+          ),
+          const SizedBox(width: 6),
+          Text(
+            items.first.eventTitle,
+            style: GoogleFonts.beVietnamPro(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: _DS.textPrimary,
+            ),
+          ),
+          const SizedBox(width: 6),
+          Container(
+            width: 3,
+            height: 3,
+            decoration: BoxDecoration(
+              color: _DS.textHint,
+              borderRadius: BorderRadius.circular(1.5),
+            ),
+          ),
+          const SizedBox(width: 6),
+          Text(
+            typesLabel,
+            style: GoogleFonts.beVietnamPro(
+              fontSize: 11,
+              color: _DS.textSecondary,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+            decoration: BoxDecoration(
+              color: iconColor,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Text(
+              statusText,
+              style: GoogleFonts.beVietnamPro(
+                fontSize: 9,
+                fontWeight: FontWeight.w700,
+                color: Colors.white,
+                letterSpacing: 0.3,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── "More" chip ─────────────────────────────────────────────────────────────
+class _MoreDeadlineChip extends StatelessWidget {
+  final int count;
+  final VoidCallback onTap;
+  const _MoreDeadlineChip({required this.count, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF3F4F6),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: const Color(0xFFE2E6EA)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              '+$count more',
+              style: GoogleFonts.beVietnamPro(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: _DS.textSecondary,
+              ),
+            ),
+            const SizedBox(width: 4),
+            const Icon(
+              Icons.chevron_right_rounded,
+              size: 16,
+              color: _DS.textSecondary,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── List item for the bottom sheet ────────────────────────────────────────
+class _PendingDeadlineListItem extends StatelessWidget {
+  final List<_PendingEventDeadline> items;
+  const _PendingDeadlineListItem({required this.items});
+
+  @override
+  Widget build(BuildContext context) {
+    final now = DateTime.now();
+    final anyOverdue = items.any((d) => now.isAfter(d.deadline));
+    final earliest = items.map((d) => d.deadline).reduce((a, b) => a.isBefore(b) ? a : b);
+    final typesLabel = items
+        .map((d) => d.type == 'financial' ? 'Financial' : 'Accomplishment')
+        .join(' & ');
+    final daysLeft = now.difference(earliest).inDays.abs();
+    final isDueSoon = !anyOverdue && daysLeft <= 3;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: anyOverdue
+              ? const Color(0xFFFCA5A5)
+              : isDueSoon
+                  ? const Color(0xFFFFE4CC)
+                  : _DS.border,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withAlpha(8),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          // Status indicator bar
+          Container(
+            width: 4,
+            height: 44,
+            decoration: BoxDecoration(
+              color: anyOverdue
+                  ? const Color(0xFFDC2626)
+                  : isDueSoon
+                      ? _DS.primary
+                      : const Color(0xFF059669),
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          const SizedBox(width: 14),
+          // Content
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  items.first.eventTitle,
+                  style: GoogleFonts.beVietnamPro(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: _DS.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: anyOverdue
+                            ? const Color(0xFFFEF2F2)
+                            : isDueSoon
+                                ? const Color(0xFFFFF7ED)
+                                : const Color(0xFFECFDF5),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        typesLabel,
+                        style: GoogleFonts.beVietnamPro(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                          color: anyOverdue
+                              ? const Color(0xFFDC2626)
+                              : isDueSoon
+                                  ? _DS.primary
+                                  : const Color(0xFF059669),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      anyOverdue
+                          ? 'Overdue by ${daysLeft} day${daysLeft > 1 ? 's' : ''}'
+                          : 'Due in $daysLeft day${daysLeft > 1 ? 's' : ''}',
+                      style: GoogleFonts.beVietnamPro(
+                        fontSize: 12,
+                        color: _DS.textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          // Status badge
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              color: anyOverdue
+                  ? const Color(0xFFFEF2F2)
+                  : isDueSoon
+                      ? const Color(0xFFFFF7ED)
+                      : const Color(0xFFECFDF5),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: anyOverdue
+                    ? const Color(0xFFFCA5A5)
+                    : isDueSoon
+                        ? const Color(0xFFFFE4CC)
+                        : const Color(0xFFA7F3D0),
+              ),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  anyOverdue
+                      ? Icons.error_outline_rounded
+                      : isDueSoon
+                          ? Icons.schedule_rounded
+                          : Icons.check_circle_outline_rounded,
+                  size: 14,
+                  color: anyOverdue
+                      ? const Color(0xFFDC2626)
+                      : isDueSoon
+                          ? _DS.primary
+                          : const Color(0xFF059669),
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  anyOverdue
+                      ? 'Overdue'
+                      : isDueSoon
+                          ? 'Due Soon'
+                          : 'On Track',
+                  style: GoogleFonts.beVietnamPro(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: anyOverdue
+                        ? const Color(0xFFDC2626)
+                        : isDueSoon
+                            ? _DS.primary
+                            : const Color(0xFF059669),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// View Report Modal
+// ─────────────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// View Report Modal - REDESIGNED with Professional + Cute aesthetic
+// ─────────────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// View Report Modal - CLEAN & PROFESSIONAL
 // ─────────────────────────────────────────────────────────────────────────────
 class _ViewReportModal extends StatelessWidget {
   final ReportModel report;
@@ -1150,14 +1632,21 @@ class _ViewReportModal extends StatelessWidget {
     final showTxnSection = isFinancial && report.scope == 'event' && (hasEventId || report.title.isNotEmpty);
     final currency = NumberFormat.currency(symbol: '₱', decimalDigits: 2);
 
+    final typeLabel = isFinancial ? 'Financial Report' : 'Accomplishment Report';
+    final typeColor = isFinancial ? const Color(0xFF059669) : const Color(0xFF2563EB);
+    final typeBgColor = isFinancial ? const Color(0xFFECFDF5) : const Color(0xFFEFF6FF);
+
     return Dialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      child: SizedBox(
-        width: 500,
+      child: Container(
+        width: 560,
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(context).size.height * 0.85,
+        ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // Header
+            // ── Header ──────────────────────────────────────────────────────
             Container(
               padding: const EdgeInsets.fromLTRB(24, 20, 20, 20),
               decoration: BoxDecoration(
@@ -1169,16 +1658,18 @@ class _ViewReportModal extends StatelessWidget {
               child: Row(
                 children: [
                   Container(
-                    width: 38,
-                    height: 38,
+                    width: 40,
+                    height: 40,
                     decoration: BoxDecoration(
-                      color: Colors.white.withAlpha(38),
+                      color: Colors.white.withAlpha(30),
                       borderRadius: BorderRadius.circular(10),
                     ),
-                    child: const Icon(
-                      Icons.article_outlined,
+                    child: Icon(
+                      isFinancial 
+                          ? Icons.account_balance_wallet_rounded
+                          : Icons.assignment_rounded,
                       color: Colors.white,
-                      size: 18,
+                      size: 20,
                     ),
                   ),
                   const SizedBox(width: 14),
@@ -1198,7 +1689,7 @@ class _ViewReportModal extends StatelessWidget {
                           report.reportId,
                           style: GoogleFonts.beVietnamPro(
                             fontSize: 12,
-                            color: Colors.white.withAlpha(179),
+                            color: Colors.white.withAlpha(200),
                           ),
                         ),
                       ],
@@ -1215,239 +1706,426 @@ class _ViewReportModal extends StatelessWidget {
                 ],
               ),
             ),
-            // Body
-            Padding(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Title
-                  Text(
-                    report.title,
-                    style: GoogleFonts.beVietnamPro(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w700,
-                      color: _DS.textPrimary,
+
+            // ── Body ──────────────────────────────────────────────────────
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Title Row
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            report.title,
+                            style: GoogleFonts.beVietnamPro(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w700,
+                              color: _DS.textPrimary,
+                            ),
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 5,
+                          ),
+                          decoration: BoxDecoration(
+                            color: typeBgColor,
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            typeLabel,
+                            style: GoogleFonts.beVietnamPro(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: typeColor,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
-                  ),
-                  const SizedBox(height: 16),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _detailItem(
-                          'Report ID',
-                          report.reportId,
-                          Icons.badge_outlined,
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: _detailItem(
-                          'Type',
-                          isFinancial
-                              ? 'Financial Report'
-                              : 'Accomplishment Report',
-                          Icons.label_outlined,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 14),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _detailItem(
-                          'Date Submitted',
-                          DateFormat('MMM dd, yyyy')
-                              .format(report.submittedAt.toDate()),
-                          Icons.calendar_today_outlined,
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      const Expanded(child: SizedBox.shrink()),
-                    ],
-                  ),
-                  if (report.description.isNotEmpty) ...[
-                    const SizedBox(height: 14),
-                    _detailItem(
-                      'Description',
-                      report.description,
-                      Icons.notes_rounded,
-                    ),
-                  ],
-                  // File Attachment
-                  if (hasFile) ...[
+
                     const SizedBox(height: 20),
+
+                    // Info Grid
                     Container(
-                      padding: const EdgeInsets.all(14),
+                      padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
                         color: const Color(0xFFF8F9FB),
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: const Color(0xFFE2E6EA)),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: const Color(0xFFE8ECF0),
+                          width: 1,
+                        ),
                       ),
-                      child: Row(
+                      child: Column(
                         children: [
-                          Container(
-                            padding: const EdgeInsets.all(8),
-                            decoration: BoxDecoration(
-                              color: _DS.primary.withAlpha(26),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Icon(
-                              Icons.insert_drive_file_rounded,
-                              size: 20,
-                              color: _DS.primary,
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  report.fileName ?? 'Attached File',
-                                  style: GoogleFonts.beVietnamPro(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                  overflow: TextOverflow.ellipsis,
+                          Row(
+                            children: [
+                              Expanded(
+                                child: _InfoItem(
+                                  label: 'Report ID',
+                                  value: report.reportId,
                                 ),
-                                if (report.fileSize != null)
-                                  Text(
-                                    report.fileSize!,
-                                    style: GoogleFonts.beVietnamPro(
-                                      fontSize: 11,
-                                      color: _DS.textSecondary,
-                                    ),
-                                  ),
-                              ],
-                            ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: _InfoItem(
+                                  label: 'Date Submitted',
+                                  value: DateFormat('MMM dd, yyyy')
+                                      .format(report.submittedAt.toDate()),
+                                ),
+                              ),
+                            ],
                           ),
-                          TextButton.icon(
-                            onPressed: () => _openAttachment(context),
-                            icon: const Icon(Icons.open_in_new_rounded, size: 15),
-                            label: const Text('Open'),
-                            style: TextButton.styleFrom(
-                              foregroundColor: _DS.primary,
+                          if (report.description.isNotEmpty) ...[
+                            const SizedBox(height: 12),
+                            const Divider(height: 1, color: Color(0xFFE8ECF0)),
+                            const SizedBox(height: 12),
+                            _InfoItem(
+                              label: 'Description',
+                              value: report.description,
+                              isMultiline: true,
                             ),
-                          ),
+                          ],
                         ],
                       ),
                     ),
-                  ],
-                  if (showTxnSection) ...[
-                    const SizedBox(height: 20),
-                    _sectionLabel('Event Transactions', icon: Icons.account_balance_wallet_outlined),
-                    StreamBuilder<QuerySnapshot>(
-                      stream: FirebaseFirestore.instance
-                          .collection('transactions')
-                          .where('orgId', isEqualTo: report.submittedBy)
-                          .snapshots(),
-                      builder: (ctx, snap) {
-                        if (snap.connectionState == ConnectionState.waiting) {
-                          return const Padding(
-                            padding: EdgeInsets.symmetric(vertical: 12),
-                            child: Center(
-                                child: SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )),
-                          );
-                        }
-                        if (snap.hasError) {
-                          return Text(
-                            'Failed to load transactions: ${snap.error}',
-                            style: GoogleFonts.beVietnamPro(color: const Color(0xFFDC2626)),
-                          );
-                        }
-                        final docs = snap.data?.docs ?? [];
-                        final filteredDocs = docs.where((d) {
-                          final m = d.data() as Map<String, dynamic>;
-                          if (hasEventId) {
-                            return (m['eventId']?.toString() ?? '') == report.eventId;
-                          }
-                          return (m['eventName']?.toString().toLowerCase() ?? '') ==
-                              report.title.toLowerCase();
-                        }).toList();
-                        if (filteredDocs.isEmpty) {
-                          return Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 8),
-                            child: Text(
-                              'No transactions recorded for this event.',
-                              style: GoogleFonts.beVietnamPro(color: _DS.textSecondary),
-                            ),
-                          );
-                        }
-                        double total = 0.0;
-                        final items = filteredDocs.map((d) {
-                          final m = d.data() as Map<String, dynamic>;
-                          final amt = (m['amount'] ?? 0).toDouble();
-                          total += amt;
-                          final cat = m['category']?.toString() ?? '';
-                          final seg = m['segment']?.toString() ?? '';
-                          final ts = m['date'] as Timestamp?;
-                          final dateStr = ts != null ? DateFormat('MMM dd, yyyy').format(ts.toDate()) : '';
-                          final type = (m['type'] ?? 'income').toString();
-                          return ListTile(
-                            contentPadding: EdgeInsets.zero,
-                            title: Text(
-                              '$cat • $seg',
-                              style: GoogleFonts.beVietnamPro(
-                                  fontSize: 13, fontWeight: FontWeight.w600),
-                            ),
-                            subtitle: Text(
-                              dateStr,
-                              style: GoogleFonts.beVietnamPro(
-                                  fontSize: 12, color: _DS.textSecondary),
-                            ),
-                            trailing: Text(
-                              currency.format(amt),
-                              style: GoogleFonts.beVietnamPro(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w700,
-                                color: type == 'income'
-                                    ? const Color(0xFF059669)
-                                    : const Color(0xFFDC2626),
-                              ),
-                            ),
-                          );
-                        }).toList();
 
-                        return Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                    // File Attachment
+                    if (hasFile) ...[
+                      const SizedBox(height: 20),
+                      Container(
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF8F9FB),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: const Color(0xFFE8ECF0),
+                            width: 1,
+                          ),
+                        ),
+                        child: Row(
                           children: [
-                            Padding(
-                              padding: const EdgeInsets.only(bottom: 8),
-                              child: Text(
-                                'Total: ${currency.format(total)}',
-                                style: GoogleFonts.beVietnamPro(
-                                    fontSize: 13, fontWeight: FontWeight.w700),
+                            Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: _DS.primary.withAlpha(20),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Icon(
+                                Icons.insert_drive_file_rounded,
+                                size: 20,
+                                color: _DS.primary,
                               ),
                             ),
-                            Container(
-                              constraints: const BoxConstraints(maxHeight: 220),
-                              child: ListView.separated(
-                                shrinkWrap: true,
-                                itemCount: items.length,
-                                separatorBuilder: (_, __) => const Divider(height: 1),
-                                itemBuilder: (_, idx) => items[idx],
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    report.fileName ?? 'Attached File',
+                                    style: GoogleFonts.beVietnamPro(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w500,
+                                      color: _DS.textPrimary,
+                                    ),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  if (report.fileSize != null)
+                                    Text(
+                                      report.fileSize!,
+                                      style: GoogleFonts.beVietnamPro(
+                                        fontSize: 11,
+                                        color: _DS.textSecondary,
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
+                            TextButton.icon(
+                              onPressed: () => _openAttachment(context),
+                              icon: const Icon(Icons.open_in_new_rounded, size: 16),
+                              label: const Text('Open'),
+                              style: TextButton.styleFrom(
+                                foregroundColor: _DS.primary,
                               ),
                             ),
                           ],
-                        );
-                      },
-                    ),
+                        ),
+                      ),
+                    ],
+
+                    // Transactions
+                    if (showTxnSection) ...[
+                      const SizedBox(height: 20),
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF8F9FB),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: const Color(0xFFE8ECF0),
+                            width: 1,
+                          ),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Icon(
+                                  Icons.account_balance_wallet_rounded,
+                                  size: 18,
+                                  color: _DS.primary,
+                                ),
+                                const SizedBox(width: 8),
+                                Text(
+                                  'Event Transactions',
+                                  style: GoogleFonts.beVietnamPro(
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w700,
+                                    color: _DS.textPrimary,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 12),
+                            StreamBuilder<QuerySnapshot>(
+                              stream: FirebaseFirestore.instance
+                                  .collection('transactions')
+                                  .where('orgId', isEqualTo: report.submittedBy)
+                                  .snapshots(),
+                              builder: (ctx, snap) {
+                                if (snap.connectionState == ConnectionState.waiting) {
+                                  return const Padding(
+                                    padding: EdgeInsets.symmetric(vertical: 16),
+                                    child: Center(
+                                      child: SizedBox(
+                                        width: 20,
+                                        height: 20,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                        ),
+                                      ),
+                                    ),
+                                  );
+                                }
+                                if (snap.hasError) {
+                                  return Text(
+                                    'Failed to load transactions',
+                                    style: GoogleFonts.beVietnamPro(
+                                      color: const Color(0xFFDC2626),
+                                      fontSize: 12,
+                                    ),
+                                  );
+                                }
+                                final docs = snap.data?.docs ?? [];
+                                final filteredDocs = docs.where((d) {
+                                  final m = d.data() as Map<String, dynamic>;
+                                  if (hasEventId) {
+                                    return (m['eventId']?.toString() ?? '') ==
+                                        report.eventId;
+                                  }
+                                  return (m['eventName']?.toString().toLowerCase() ??
+                                      '') == report.title.toLowerCase();
+                                }).toList();
+                                
+                                if (filteredDocs.isEmpty) {
+                                  return Container(
+                                    padding: const EdgeInsets.symmetric(vertical: 16),
+                                    child: Center(
+                                      child: Text(
+                                        'No transactions recorded for this event.',
+                                        style: GoogleFonts.beVietnamPro(
+                                          fontSize: 13,
+                                          color: _DS.textSecondary,
+                                        ),
+                                      ),
+                                    ),
+                                  );
+                                }
+                                
+                                double total = 0.0;
+                                final items = filteredDocs.map((d) {
+                                  final m = d.data() as Map<String, dynamic>;
+                                  final amt = (m['amount'] ?? 0).toDouble();
+                                  total += amt;
+                                  final cat = m['category']?.toString() ?? '';
+                                  final seg = m['segment']?.toString() ?? '';
+                                  final ts = m['date'] as Timestamp?;
+                                  final dateStr = ts != null
+                                      ? DateFormat('MMM dd, yyyy').format(ts.toDate())
+                                      : '';
+                                  final type = (m['type'] ?? 'income').toString();
+                                  final isIncome = type == 'income';
+                                  
+                                  return Container(
+                                    margin: const EdgeInsets.only(bottom: 6),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 12,
+                                      vertical: 10,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: Colors.white,
+                                      borderRadius: BorderRadius.circular(8),
+                                      border: Border.all(
+                                        color: const Color(0xFFE8ECF0),
+                                        width: 1,
+                                      ),
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        Icon(
+                                          isIncome
+                                              ? Icons.arrow_upward_rounded
+                                              : Icons.arrow_downward_rounded,
+                                          size: 14,
+                                          color: isIncome
+                                              ? const Color(0xFF059669)
+                                              : const Color(0xFFDC2626),
+                                        ),
+                                        const SizedBox(width: 10),
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              Text(
+                                                '$cat • $seg',
+                                                style: GoogleFonts.beVietnamPro(
+                                                  fontSize: 13,
+                                                  fontWeight: FontWeight.w600,
+                                                  color: _DS.textPrimary,
+                                                ),
+                                              ),
+                                              Text(
+                                                dateStr,
+                                                style: GoogleFonts.beVietnamPro(
+                                                  fontSize: 11,
+                                                  color: _DS.textSecondary,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                        Text(
+                                          currency.format(amt),
+                                          style: GoogleFonts.beVietnamPro(
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.w700,
+                                            color: isIncome
+                                                ? const Color(0xFF059669)
+                                                : const Color(0xFFDC2626),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                }).toList();
+
+                                return Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.all(10),
+                                      decoration: BoxDecoration(
+                                        color: _DS.primary.withAlpha(10),
+                                        borderRadius: BorderRadius.circular(8),
+                                        border: Border.all(
+                                          color: _DS.primary.withAlpha(30),
+                                          width: 1,
+                                        ),
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          Text(
+                                            'Total:',
+                                            style: GoogleFonts.beVietnamPro(
+                                              fontSize: 13,
+                                              fontWeight: FontWeight.w600,
+                                              color: _DS.textSecondary,
+                                            ),
+                                          ),
+                                          const Spacer(),
+                                          Text(
+                                            currency.format(total),
+                                            style: GoogleFonts.beVietnamPro(
+                                              fontSize: 15,
+                                              fontWeight: FontWeight.w800,
+                                              color: _DS.primary,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    const SizedBox(height: 10),
+                                    Container(
+                                      constraints: const BoxConstraints(
+                                        maxHeight: 200,
+                                      ),
+                                      child: ListView(
+                                        shrinkWrap: true,
+                                        children: items,
+                                      ),
+                                    ),
+                                  ],
+                                );
+                              },
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ],
-                ],
+                ),
               ),
             ),
-            // Footer
+
+            // ── Footer ────────────────────────────────────────────────────
             Container(
-              padding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
+              padding: const EdgeInsets.fromLTRB(24, 16, 24, 20),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF8F9FB),
+                borderRadius: const BorderRadius.vertical(
+                  bottom: Radius.circular(20),
+                ),
+                border: Border(
+                  top: BorderSide(
+                    color: const Color(0xFFE8ECF0),
+                    width: 1,
+                  ),
+                ),
+              ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
+                  OutlinedButton(
+                    onPressed: () => Navigator.pop(context),
+                    style: OutlinedButton.styleFrom(
+                      side: const BorderSide(color: Color(0xFFE2E6EA)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 18,
+                        vertical: 10,
+                      ),
+                    ),
+                    child: Text(
+                      'Close',
+                      style: GoogleFonts.beVietnamPro(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: _DS.textSecondary,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
                   ElevatedButton(
                     onPressed: () => Navigator.pop(context),
                     style: ElevatedButton.styleFrom(
@@ -1459,11 +2137,11 @@ class _ViewReportModal extends StatelessWidget {
                       ),
                       padding: const EdgeInsets.symmetric(
                         horizontal: 20,
-                        vertical: 11,
+                        vertical: 10,
                       ),
                     ),
                     child: Text(
-                      'Close',
+                      'Done',
                       style: GoogleFonts.beVietnamPro(
                         fontSize: 13,
                         fontWeight: FontWeight.w600,
@@ -1479,29 +2157,23 @@ class _ViewReportModal extends StatelessWidget {
     );
   }
 
-  Widget _detailItem(
-    String label,
-    String value,
-    IconData icon, {
-    Color? valueColor,
+  // ── Info Item Widget ──────────────────────────────────────────────────
+  Widget _InfoItem({
+    required String label,
+    required String value,
+    bool isMultiline = false,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          children: [
-            Icon(icon, size: 13, color: _DS.textHint),
-            const SizedBox(width: 5),
-            Text(
-              label,
-              style: GoogleFonts.beVietnamPro(
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
-                color: _DS.textSecondary,
-                letterSpacing: 0.4,
-              ),
-            ),
-          ],
+        Text(
+          label,
+          style: GoogleFonts.beVietnamPro(
+            fontSize: 11,
+            fontWeight: FontWeight.w600,
+            color: _DS.textSecondary,
+            letterSpacing: 0.5,
+          ),
         ),
         const SizedBox(height: 4),
         Text(
@@ -1509,13 +2181,16 @@ class _ViewReportModal extends StatelessWidget {
           style: GoogleFonts.beVietnamPro(
             fontSize: 13,
             fontWeight: FontWeight.w500,
-            color: valueColor ?? _DS.textPrimary,
+            color: _DS.textPrimary,
           ),
+          maxLines: isMultiline ? 3 : 1,
+          overflow: isMultiline ? TextOverflow.ellipsis : TextOverflow.ellipsis,
         ),
       ],
     );
   }
 
+  // ── Open Attachment ──────────────────────────────────────────────────
   Future<void> _openAttachment(BuildContext context) async {
     final b64 = report.fileBase64;
     if (b64 == null || b64.isEmpty) return;
@@ -1529,22 +2204,60 @@ class _ViewReportModal extends StatelessWidget {
         showDialog(
           context: context,
           builder: (_) => Dialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Padding(
-                  padding: const EdgeInsets.all(8),
-                  child: Text(
-                    name,
-                    style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.w600),
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: _DS.primary,
+                    borderRadius: const BorderRadius.vertical(
+                      top: Radius.circular(16),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.image_rounded,
+                        color: Colors.white,
+                        size: 20,
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          name,
+                          style: GoogleFonts.beVietnamPro(
+                            fontWeight: FontWeight.w600,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(
+                          Icons.close_rounded,
+                          color: Colors.white,
+                          size: 20,
+                        ),
+                        onPressed: () => Navigator.pop(context),
+                      ),
+                    ],
                   ),
                 ),
                 Flexible(child: Image.memory(bytes)),
                 Padding(
-                  padding: const EdgeInsets.all(8),
+                  padding: const EdgeInsets.all(12),
                   child: TextButton(
                     onPressed: () => Navigator.pop(context),
-                    child: const Text('Close'),
+                    child: Text(
+                      'Close',
+                      style: GoogleFonts.beVietnamPro(
+                        fontWeight: FontWeight.w600,
+                        color: _DS.primary,
+                      ),
+                    ),
                   ),
                 ),
               ],
@@ -1556,20 +2269,42 @@ class _ViewReportModal extends StatelessWidget {
         showDialog(
           context: context,
           builder: (_) => AlertDialog(
-            title: Text(name),
+            title: Text(
+              name,
+              style: GoogleFonts.beVietnamPro(
+                fontWeight: FontWeight.w600,
+                color: _DS.textPrimary,
+              ),
+            ),
             content: SingleChildScrollView(
-              child: SelectableText(text),
+              child: SelectableText(
+                text,
+                style: GoogleFonts.beVietnamPro(
+                  fontSize: 14,
+                  height: 1.6,
+                ),
+              ),
             ),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(context),
-                child: const Text('Close'),
+                child: Text(
+                  'Close',
+                  style: GoogleFonts.beVietnamPro(
+                    fontWeight: FontWeight.w600,
+                    color: _DS.primary,
+                  ),
+                ),
               ),
             ],
           ),
         );
       } else {
-        await platform_file_utils.saveBytesToTempAndOpen(bytes, name, mimeType: mime);
+        await platform_file_utils.saveBytesToTempAndOpen(
+          bytes,
+          name,
+          mimeType: mime,
+        );
       }
     } catch (e) {
       if (context.mounted) {
@@ -1577,6 +2312,10 @@ class _ViewReportModal extends StatelessWidget {
           SnackBar(
             content: Text('Error opening attachment: $e'),
             backgroundColor: const Color(0xFFDC2626),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
           ),
         );
       }
@@ -2775,208 +3514,6 @@ class _Colon extends StatelessWidget {
       );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Pending deadline chip
-// ─────────────────────────────────────────────────────────────────────────────
-class _PendingEventDeadline {
-  final String eventId;
-  final String eventTitle;
-  final DateTime eventDate;
-  final String type;
-  final DateTime deadline;
-  const _PendingEventDeadline({
-    required this.eventId,
-    required this.eventTitle,
-    required this.eventDate,
-    required this.type,
-    required this.deadline,
-  });
-}
-
-class _PendingDeadlineChip extends StatelessWidget {
-  final List<_PendingEventDeadline> items;
-  const _PendingDeadlineChip({required this.items});
-
-  @override
-  Widget build(BuildContext context) {
-    final now = DateTime.now();
-    final anyOverdue = items.any((d) => now.isAfter(d.deadline));
-    final color = anyOverdue ? const Color(0xFFDC2626) : const Color(0xFFFB923C);
-    final earliest = items.map((d) => d.deadline).reduce((a, b) => a.isBefore(b) ? a : b);
-    final typesLabel = items
-        .map((d) => d.type == 'financial' ? 'Financial' : 'Accomplishment')
-        .join(' & ');
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: color.withAlpha(13),
-        borderRadius: BorderRadius.circular(_DS.radiusPill),
-        border: Border.all(color: color.withAlpha(70)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            anyOverdue ? Icons.error_outline_rounded : Icons.schedule_rounded,
-            size: 14,
-            color: color,
-          ),
-          const SizedBox(width: 6),
-          Text(
-            items.first.eventTitle,
-            style: GoogleFonts.beVietnamPro(
-              fontSize: 12.5,
-              fontWeight: FontWeight.w700,
-              color: _DS.textPrimary,
-            ),
-          ),
-          const SizedBox(width: 6),
-          Text('·', style: GoogleFonts.beVietnamPro(fontSize: 12, color: _DS.textHint)),
-          const SizedBox(width: 6),
-          Text(
-            typesLabel,
-            style: GoogleFonts.beVietnamPro(fontSize: 12, color: _DS.textSecondary),
-          ),
-          const SizedBox(width: 8),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-            decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(_DS.radiusPill)),
-            child: Text(
-              anyOverdue ? 'Overdue' : 'Due ${DateFormat('MMM d').format(earliest)}',
-              style: GoogleFonts.beVietnamPro(
-                fontSize: 10.5,
-                fontWeight: FontWeight.w700,
-                color: Colors.white,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-
-// ── "More" chip that opens the bottom sheet ──────────────────────────────
-class _MoreDeadlineChip extends StatelessWidget {
-  final int count;
-  final VoidCallback onTap;
-  const _MoreDeadlineChip({required this.count, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        decoration: BoxDecoration(
-          color: const Color(0xFFF3F4F6),
-          borderRadius: BorderRadius.circular(_DS.radiusPill),
-          border: Border.all(color: const Color(0xFFE2E6EA)),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(
-              Icons.more_horiz_rounded,
-              size: 16,
-              color: _DS.textSecondary,
-            ),
-            const SizedBox(width: 4),
-            Text(
-              '+$count more',
-              style: GoogleFonts.beVietnamPro(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: _DS.textSecondary,
-              ),
-            ),
-            const SizedBox(width: 4),
-            const Icon(
-              Icons.chevron_right_rounded,
-              size: 16,
-              color: _DS.textSecondary,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ── List item for the bottom sheet ────────────────────────────────────────
-class _PendingDeadlineListItem extends StatelessWidget {
-  final List<_PendingEventDeadline> items;
-  const _PendingDeadlineListItem({required this.items});
-
-  @override
-  Widget build(BuildContext context) {
-    final now = DateTime.now();
-    final anyOverdue = items.any((d) => now.isAfter(d.deadline));
-    final earliest = items.map((d) => d.deadline).reduce((a, b) => a.isBefore(b) ? a : b);
-    final typesLabel = items
-        .map((d) => d.type == 'financial' ? 'Financial' : 'Accomplishment')
-        .join(' & ');
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Row(
-        children: [
-          Container(
-            width: 4,
-            height: 32,
-            decoration: BoxDecoration(
-              color: anyOverdue ? const Color(0xFFDC2626) : const Color(0xFFFB923C),
-              borderRadius: BorderRadius.circular(2),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  items.first.eventTitle,
-                  style: GoogleFonts.beVietnamPro(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: _DS.textPrimary,
-                  ),
-                ),
-                Text(
-                  '$typesLabel • ${anyOverdue ? "Overdue" : "Due ${DateFormat('MMM d').format(earliest)}"}',
-                  style: GoogleFonts.beVietnamPro(
-                    fontSize: 12,
-                    color: _DS.textSecondary,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-            decoration: BoxDecoration(
-              color: anyOverdue ? const Color(0xFFFEF2F2) : const Color(0xFFFFF7ED),
-              borderRadius: BorderRadius.circular(_DS.radiusPill),
-              border: Border.all(
-                color: anyOverdue ? const Color(0xFFFCA5A5) : const Color(0xFFFFE4CC),
-              ),
-            ),
-            child: Text(
-              anyOverdue ? 'Overdue' : 'Due Soon',
-              style: GoogleFonts.beVietnamPro(
-                fontSize: 11,
-                fontWeight: FontWeight.w700,
-                color: anyOverdue ? const Color(0xFFDC2626) : _DS.primary,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
 // ─────────────────────────────────────────────────────────────────────────────
 // Confirm dialog
 // ─────────────────────────────────────────────────────────────────────────────
