@@ -1018,7 +1018,11 @@ if (uids.isNotEmpty) {
         ),
       );
     }
-    return _WebinarCodePanel(orgId: widget.orgId, eventDocId: widget.eventDocId!);
+     return _WebinarCodePanel(
+    orgId: widget.orgId,
+    eventDocId: widget.eventDocId!,
+    event: widget.event,   // 👈 ADD THIS LINE
+  );
   }
 
   Widget _buildQRPanel(bool active, QuerySnapshot? attSnap) {
@@ -1953,7 +1957,8 @@ class _PrimaryButton extends StatelessWidget {
 class _WebinarCodePanel extends StatefulWidget {
   final String orgId;
   final String eventDocId;
-  const _WebinarCodePanel({required this.orgId, required this.eventDocId});
+  final EventModel? event; 
+  const _WebinarCodePanel({required this.orgId, required this.eventDocId, this.event, });
 
   @override
   State<_WebinarCodePanel> createState() => _WebinarCodePanelState();
@@ -1970,6 +1975,15 @@ class _WebinarCodePanelState extends State<_WebinarCodePanel> {
     _rotationTimer?.cancel();
     super.dispose();
   }
+
+  bool get _isEventDay {
+  if (widget.event == null) return false;
+  final now = DateTime.now();
+  final eventDate = widget.event!.date;
+  return now.year == eventDate.year &&
+         now.month == eventDate.month &&
+         now.day == eventDate.day;
+}
 
   void _scheduleRotation(String type, int intervalMinutes) {
     _rotationTimer?.cancel();
@@ -2004,6 +2018,18 @@ class _WebinarCodePanelState extends State<_WebinarCodePanel> {
   }
 
   Future<void> _start() async {
+
+    if (!_isEventDay) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Attendance can only be opened on the event day!'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+    return;
+  }
     setState(() => _busy = true);
     try {
       await WebinarAttendanceService.startSession(
@@ -2027,6 +2053,17 @@ class _WebinarCodePanelState extends State<_WebinarCodePanel> {
   }
 
   Future<void> _startCheckOut(int intervalMinutes) async {
+     if (!_isEventDay) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Check-out can only be opened on the event day!'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+    return;
+  }
     setState(() => _busy = true);
     try {
       _rotationTimer?.cancel();
