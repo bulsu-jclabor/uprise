@@ -4,7 +4,6 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../../widgets/student/app_colors.dart';
 import 'student_feedback_screen.dart';
 
-
 class AppNotification {
   final String id;
   final String title;
@@ -48,10 +47,12 @@ class StudentNotificationsScreen extends StatefulWidget {
   const StudentNotificationsScreen({super.key});
 
   @override
-  State<StudentNotificationsScreen> createState() => _StudentNotificationsScreenState();
+  State<StudentNotificationsScreen> createState() =>
+      _StudentNotificationsScreenState();
 }
 
-class _StudentNotificationsScreenState extends State<StudentNotificationsScreen> {
+class _StudentNotificationsScreenState
+    extends State<StudentNotificationsScreen> {
   String? _uid;
 
   @override
@@ -129,28 +130,52 @@ class _StudentNotificationsScreenState extends State<StudentNotificationsScreen>
 
   void _onNotificationTap(AppNotification notif) {
     _markAsRead(notif.id);
-    // "feedback_required" is created server-side once an event a student
-    // registered/attended for has ended (see Task 5 / Task 4 workflow:
-    // attendance marked -> event completed -> feedback notification ->
-    // student evaluates -> certificate unlocks). Tapping it should take
-    // the student straight to the evaluation screen, same as the
-    // existing "evaluation" notifications.
+    
+    // Handle feedback/evaluation notifications
     if (notif.type == 'evaluation' || notif.type == 'feedback_required') {
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => Scaffold(
-            appBar: AppBar(
-              backgroundColor: Colors.white,
-              elevation: 0,
-              foregroundColor: Colors.black87,
-              title: const Text('Evaluate Events',
-                  style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+      // Extract event data from notification
+      final eventId = notif.data?['eventId'] as String?;
+      final eventTitle = notif.data?['eventTitle'] as String? ?? notif.title;
+      final eventDate = notif.data?['eventDate'] as String?;
+      final eventLocation = notif.data?['eventLocation'] as String?;
+      final eventImage = notif.data?['eventImage'] as String?;
+      final eventDescription = notif.data?['eventDescription'] as String?;
+      final orgName = notif.orgName;
+      
+      if (eventId != null) {
+        // Navigate to event-specific feedback screen
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => _EventFeedbackWrapper(
+              eventId: eventId,
+              eventTitle: eventTitle,
+              eventDate: eventDate,
+              eventLocation: eventLocation,
+              eventImage: eventImage,
+              eventDescription: eventDescription,
+              orgName: orgName,
             ),
-            body: const StudentFeedbackScreen(),
           ),
-        ),
-      );
+        );
+      } else {
+        // Fallback: navigate to general feedback screen
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => Scaffold(
+              appBar: AppBar(
+                backgroundColor: Colors.white,
+                elevation: 0,
+                foregroundColor: Colors.black87,
+                title: const Text('Evaluate Events',
+                    style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+              ),
+              body: const StudentFeedbackScreen(),
+            ),
+          ),
+        );
+      }
     }
   }
 
@@ -198,15 +223,6 @@ class _StudentNotificationsScreenState extends State<StudentNotificationsScreen>
     }
 
     return StreamBuilder<QuerySnapshot>(
-      // Deliberately NOT combining `.orderBy('createdAt')` with the
-      // `.where('userId', ...)` filter above — that pairing needs a
-      // composite Firestore index that isn't deployed for this collection,
-      // and without it the query throws FAILED_PRECONDITION on every load
-      // (the same failure class that broke announcements). Sorted
-      // client-side below instead.
-      // Fetches a wider window than the 50 we actually display, since
-      // without a server-side orderBy the limit can't guarantee the most
-      // recent docs — sorted and trimmed to 50 client-side below.
       stream: FirebaseFirestore.instance
           .collection('notifications')
           .where('userId', isEqualTo: _uid)
@@ -294,7 +310,9 @@ class _StudentNotificationsScreenState extends State<StudentNotificationsScreen>
   }
 }
 
-// ─── Helper Widgets ──────────────────────────────────────────────────────
+// ─── HELPER WIDGETS ─────────────────────────────────────────────
+
+// ─── SECTION HEADER ─────────────────────────────────────────────
 class _SectionHeader extends StatelessWidget {
   final String label;
   const _SectionHeader({required this.label});
@@ -311,6 +329,7 @@ class _SectionHeader extends StatelessWidget {
   }
 }
 
+// ─── NOTIFICATION TILE ──────────────────────────────────────────
 class _NotifTile extends StatelessWidget {
   final AppNotification notif;
   final ({IconData icon, Color bg, Color fg}) style;
@@ -402,6 +421,7 @@ class _NotifTile extends StatelessWidget {
   }
 }
 
+// ─── EMPTY STATE ────────────────────────────────────────────────
 class _EmptyState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
@@ -421,6 +441,357 @@ class _EmptyState extends StatelessWidget {
             style: TextStyle(fontSize: 13, color: Colors.grey.shade400),
           ),
         ],
+      ),
+    );
+  }
+}
+
+// ─── EVENT FEEDBACK WRAPPER ─────────────────────────────────────
+class _EventFeedbackWrapper extends StatefulWidget {
+  final String eventId;
+  final String eventTitle;
+  final String? eventDate;
+  final String? eventLocation;
+  final String? eventImage;
+  final String? eventDescription;
+  final String orgName;
+
+  const _EventFeedbackWrapper({
+    required this.eventId,
+    required this.eventTitle,
+    this.eventDate,
+    this.eventLocation,
+    this.eventImage,
+    this.eventDescription,
+    required this.orgName,
+  });
+
+  @override
+  State<_EventFeedbackWrapper> createState() => _EventFeedbackWrapperState();
+}
+
+class _EventFeedbackWrapperState extends State<_EventFeedbackWrapper> {
+  int _rating = 0;
+  final TextEditingController _feedbackCtrl = TextEditingController();
+  bool _feedbackSubmitted = false;
+  bool _checkingFeedback = true;
+  bool _submittingFeedback = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkFeedbackStatus();
+  }
+
+  @override
+  void dispose() {
+    _feedbackCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _checkFeedbackStatus() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      if (mounted) setState(() => _checkingFeedback = false);
+      return;
+    }
+    try {
+      final docId = '${user.uid}_${widget.eventId}';
+      final doc = await FirebaseFirestore.instance
+          .collection('feedback')
+          .doc(docId)
+          .get();
+      if (mounted) {
+        setState(() {
+          if (doc.exists) {
+            final d = doc.data()!;
+            _feedbackSubmitted = true;
+            _rating = (d['rating'] ?? 0) as int;
+            _feedbackCtrl.text = (d['comment'] ?? '').toString();
+          }
+          _checkingFeedback = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _checkingFeedback = false);
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Could not load feedback status: $e'),
+          backgroundColor: Colors.orange,
+          duration: const Duration(seconds: 4),
+        ));
+      }
+    }
+  }
+
+  Future<void> _submitFeedback() async {
+    if (_rating == 0) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Please select a star rating'),
+        backgroundColor: Colors.red,
+      ));
+      return;
+    }
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Please login to submit feedback'),
+        backgroundColor: Colors.red,
+      ));
+      return;
+    }
+    setState(() => _submittingFeedback = true);
+    try {
+      final docId = '${user.uid}_${widget.eventId}';
+      await FirebaseFirestore.instance.collection('feedback').doc(docId).set({
+        'userId': user.uid,
+        'eventId': widget.eventId,
+        'eventTitle': widget.eventTitle,
+        'rating': _rating,
+        'comment': _feedbackCtrl.text.trim(),
+        'submittedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+      if (mounted) {
+        setState(() {
+          _feedbackSubmitted = true;
+          _submittingFeedback = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Thanks for your feedback!'),
+          backgroundColor: Colors.green,
+        ));
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _submittingFeedback = false);
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Failed to submit feedback: $e'),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 6),
+        ));
+      }
+    }
+  }
+
+  Widget _buildStarSelector() {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: List.generate(5, (i) {
+        final starIndex = i + 1;
+        final filled = starIndex <= _rating;
+        return GestureDetector(
+          onTap: _feedbackSubmitted
+              ? null
+              : () => setState(() => _rating = starIndex),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            child: Icon(
+              filled ? Icons.star_rounded : Icons.star_border_rounded,
+              size: 36,
+              color: filled ? const Color(0xFFFBBF24) : Colors.grey.shade400,
+            ),
+          ),
+        );
+      }),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.white,
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        elevation: 0,
+        foregroundColor: Colors.black87,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: Colors.black87),
+          onPressed: () => Navigator.pop(context),
+        ),
+        title: const Text(
+          'Event Feedback',
+          style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
+        ),
+        centerTitle: true,
+      ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Event Card
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.grey.shade50,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.grey.shade200),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    widget.eventTitle,
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.black87,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Hosted by ${widget.orgName}',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Colors.grey.shade600,
+                    ),
+                  ),
+                  if (widget.eventDate != null) ...[
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Icon(Icons.calendar_today_outlined, size: 16, color: Colors.grey.shade600),
+                        const SizedBox(width: 8),
+                        Text(
+                          widget.eventDate!,
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: Colors.grey.shade600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                  if (widget.eventLocation != null) ...[
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        Icon(Icons.location_on_outlined, size: 16, color: Colors.grey.shade600),
+                        const SizedBox(width: 8),
+                        Text(
+                          widget.eventLocation!,
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: Colors.grey.shade600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            
+            const SizedBox(height: 24),
+            
+            // Feedback Section
+            if (_checkingFeedback)
+              const Center(
+                child: Padding(
+                  padding: EdgeInsets.symmetric(vertical: 24),
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              )
+            else
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: _feedbackSubmitted ? Colors.green.shade50 : Colors.grey.shade50,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: _feedbackSubmitted ? Colors.green.shade200 : Colors.grey.shade200,
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(
+                          _feedbackSubmitted ? Icons.check_circle_rounded : Icons.rate_review_rounded,
+                          color: _feedbackSubmitted ? Colors.green : AppColors.primaryDark,
+                          size: 20,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          _feedbackSubmitted ? 'Feedback Submitted' : 'Rate this event',
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700,
+                            color: _feedbackSubmitted ? Colors.green.shade700 : Colors.black87,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    _buildStarSelector(),
+                    const SizedBox(height: 14),
+                    TextField(
+                      controller: _feedbackCtrl,
+                      readOnly: _feedbackSubmitted,
+                      maxLines: 3,
+                      decoration: InputDecoration(
+                        hintText: 'Share your thoughts about this event (optional)',
+                        hintStyle: const TextStyle(fontSize: 13),
+                        filled: true,
+                        fillColor: Colors.white,
+                        contentPadding: const EdgeInsets.all(12),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: BorderSide(color: Colors.grey.shade300),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: BorderSide(color: Colors.grey.shade300),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: const BorderSide(color: AppColors.primaryDark, width: 1.5),
+                        ),
+                      ),
+                    ),
+                    if (!_feedbackSubmitted) ...[
+                      const SizedBox(height: 14),
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton(
+                          onPressed: _submittingFeedback ? null : _submitFeedback,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.primaryDark,
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                          ),
+                          child: _submittingFeedback
+                              ? const SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(
+                                    color: Colors.white,
+                                    strokeWidth: 2.5,
+                                  ),
+                                )
+                              : const Text(
+                                  'Submit Feedback',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            
+            const SizedBox(height: 30),
+          ],
+        ),
       ),
     );
   }

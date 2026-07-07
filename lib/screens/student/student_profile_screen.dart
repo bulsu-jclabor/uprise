@@ -14,7 +14,7 @@ import 'package:printing/printing.dart';
 import '../auth/role_router.dart';
 import '../student/student_login.dart';
 import '../student/student_events_screen.dart';
-import '../student/student_webinar_code_screen.dart';  // ⭐ ADD THIS
+import '../student/student_webinar_code_screen.dart';
 import '../../models/profile_model.dart';
 import '../../widgets/shared/app_support.dart';
 import '../../widgets/student/app_colors.dart';
@@ -302,7 +302,6 @@ class StudentProfileScreen extends StatefulWidget {
 class _StudentProfileScreenState extends State<StudentProfileScreen> {
   final ProfileModel _profile = ProfileModel();
 
-  // ⭐ ADD: Navigate to Webinar Code Screen
   void _openWebinarCode() {
     Navigator.push(
       context,
@@ -349,7 +348,6 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
                     fontWeight: FontWeight.w600,
                     fontSize: 18)),
             actions: [
-              // ⭐ QR CODE ICON ⭐
               IconButton(
                 icon: Icon(
                   Icons.qr_code_scanner_rounded,
@@ -454,7 +452,7 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
                                 shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(10)),
                                 padding:
-                                    const EdgeInsets.symmetric(vertical: 14),
+                                    const EdgeInsets.symmetric(vertical: 16),
                               ),
                               child: const Text('Edit Profile',
                                   style: TextStyle(
@@ -463,25 +461,34 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
                             ),
                           ),
                           const SizedBox(width: 10),
-                          Container(
-                            decoration: BoxDecoration(
-                              color: kOrangeLight,
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                            child: IconButton(
+                          Expanded(
+                            child: ElevatedButton(
                               onPressed: () => Navigator.push(
                                 context,
                                 MaterialPageRoute(
                                     builder: (_) => PersonalIdentityScreen(
                                         profile: _profile)),
                               ),
-                              icon: const Text('ID',
-                                  style: TextStyle(
-                                      color: kOrange,
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 15)),
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 16, vertical: 14),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: kOrange,
+                                foregroundColor: Colors.white,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                padding: const EdgeInsets.symmetric(vertical: 16),
+                                elevation: 2,
+                              ),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: const [
+                                  Icon(Icons.credit_card, size: 20),
+                                  SizedBox(width: 8),
+                                  Text('Digital Student ID',
+                                      style: TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 14)),
+                                ],
+                              ),
                             ),
                           ),
                         ],
@@ -1159,6 +1166,7 @@ class _IdCard1 extends StatelessWidget {
       clipBehavior: Clip.antiAlias,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min, // ⭐ ADD THIS - prevents extra space
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(18, 16, 18, 14),
@@ -1330,6 +1338,7 @@ class _IdCard2 extends StatelessWidget {
       ),
       clipBehavior: Clip.antiAlias,
       child: Column(
+        mainAxisSize: MainAxisSize.min, // ⭐ ADD THIS - prevents extra space
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(18, 16, 18, 0),
@@ -1370,10 +1379,11 @@ class _IdCard2 extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 18),
+                // ⭐ BIGGER QR CODE ⭐
                 Container(
-                  width: 92,
-                  height: 92,
-                  padding: const EdgeInsets.all(8),
+                  width: 140,
+                  height: 140,
+                  padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(12),
@@ -1383,6 +1393,7 @@ class _IdCard2 extends StatelessWidget {
                     data: FirebaseAuth.instance.currentUser?.uid ?? '',
                     version: QrVersions.auto,
                     backgroundColor: Colors.white,
+                    size: 120,
                   ),
                 ),
               ],
