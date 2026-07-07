@@ -878,7 +878,7 @@ if (uids.isNotEmpty) {
                 if (_inputMode == 0) _buildQRPanel(active, attSnap.data)
                 else if (_inputMode == 1) _buildManualPanel(active)
                 else if (_inputMode == 2) _buildRollCallPanel(attSnap.data)
-                else _buildWebinarPanel(),
+                else _buildWebinarPanel(active),
                 const SizedBox(height: 24),
                 _buildSubTabToolbar(attDocs.cast()),
                 const SizedBox(height: 12),
@@ -1002,7 +1002,7 @@ if (uids.isNotEmpty) {
     ]);
   }
 
-  Widget _buildWebinarPanel() {
+  Widget _buildWebinarPanel(bool active) {
     if (widget.eventDocId == null) {
       return Container(
         padding: const EdgeInsets.all(20),
@@ -1021,7 +1021,8 @@ if (uids.isNotEmpty) {
      return _WebinarCodePanel(
     orgId: widget.orgId,
     eventDocId: widget.eventDocId!,
-    event: widget.event,   // 👈 ADD THIS LINE
+    event: widget.event,
+    attendanceIsOpen: active,
   );
   }
 
@@ -1957,8 +1958,14 @@ class _PrimaryButton extends StatelessWidget {
 class _WebinarCodePanel extends StatefulWidget {
   final String orgId;
   final String eventDocId;
-  final EventModel? event; 
-  const _WebinarCodePanel({required this.orgId, required this.eventDocId, this.event, });
+  final EventModel? event;
+  final bool attendanceIsOpen;
+  const _WebinarCodePanel({
+    required this.orgId,
+    required this.eventDocId,
+    this.event,
+    required this.attendanceIsOpen,
+  });
 
   @override
   State<_WebinarCodePanel> createState() => _WebinarCodePanelState();
@@ -1975,15 +1982,6 @@ class _WebinarCodePanelState extends State<_WebinarCodePanel> {
     _rotationTimer?.cancel();
     super.dispose();
   }
-
-  bool get _isEventDay {
-  if (widget.event == null) return false;
-  final now = DateTime.now();
-  final eventDate = widget.event!.date;
-  return now.year == eventDate.year &&
-         now.month == eventDate.month &&
-         now.day == eventDate.day;
-}
 
   void _scheduleRotation(String type, int intervalMinutes) {
     _rotationTimer?.cancel();
@@ -2018,18 +2016,20 @@ class _WebinarCodePanelState extends State<_WebinarCodePanel> {
   }
 
   Future<void> _start() async {
-
-    if (!_isEventDay) {
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Attendance can only be opened on the event day!'),
-          backgroundColor: Colors.red,
-        ),
-      );
+    // Gating on the same "Open Attendance" toggle the other tabs use —
+    // the org opens attendance once from the event banner, and every
+    // input mode (QR, manual, roll call, webinar) becomes available at once.
+    if (!widget.attendanceIsOpen) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Open attendance from the event banner above first.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+      return;
     }
-    return;
-  }
     setState(() => _busy = true);
     try {
       await WebinarAttendanceService.startSession(
@@ -2038,10 +2038,6 @@ class _WebinarCodePanelState extends State<_WebinarCodePanel> {
         intervalMinutes: _intervalMinutes,
         requireCheckOut: _requireCheckOut,
       );
-      // Don't also call _scheduleRotation here — the session/code stream
-      // listener fires _ensureRotationRunning right after this write lands,
-      // and having both paths race to set _rotationTimer is what was
-      // causing extra, much-too-soon rotations.
       await activity_log.ActivityLogger.log(
         action: 'start_webinar_attendance',
         module: 'attendance',
@@ -2053,24 +2049,22 @@ class _WebinarCodePanelState extends State<_WebinarCodePanel> {
   }
 
   Future<void> _startCheckOut(int intervalMinutes) async {
-     if (!_isEventDay) {
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Check-out can only be opened on the event day!'),
-          backgroundColor: Colors.red,
-        ),
-      );
+    if (!widget.attendanceIsOpen) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Open attendance from the event banner above first.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+      return;
     }
-    return;
-  }
     setState(() => _busy = true);
     try {
       _rotationTimer?.cancel();
       _rotationTimer = null;
       await WebinarAttendanceService.startCheckOutPhase(widget.eventDocId, intervalMinutes);
-      // Same as _start() above — _ensureRotationRunning schedules the next
-      // rotation reactively once the stream picks up the new checkout code.
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -2198,12 +2192,22 @@ class _WebinarCodePanelState extends State<_WebinarCodePanel> {
         ),
       ]),
       const SizedBox(height: 20),
+      if (!widget.attendanceIsOpen)
+        Padding(
+          padding: const EdgeInsets.only(bottom: 14),
+          child: _InfoBanner(
+            color: const Color(0xFFFFFBEB), border: const Color(0xFFFDE68A),
+            icon: Icons.info_outline_rounded, iconColor: const Color(0xFFFB923C),
+            text: 'Open attendance from the event banner above to enable this.',
+            textColor: const Color(0xFF8A6D3B),
+          ),
+        ),
       _PrimaryButton(
         label: 'Start Check-In Session',
         icon: Icons.play_circle_outline_rounded,
         color: UpriseColors.primaryDark,
         loading: _busy,
-        onPressed: _busy ? null : _start,
+        onPressed: (_busy || !widget.attendanceIsOpen) ? null : _start,
       ),
     ]);
   }

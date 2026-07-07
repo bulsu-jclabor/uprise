@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../widgets/student/app_colors.dart';
+import '../../services/webinar_attendance_service.dart';
 
 class StudentWebinarCodeScreen extends StatefulWidget {
   const StudentWebinarCodeScreen({super.key});
@@ -41,85 +42,93 @@ Future<void> _submitCode() async {
       throw Exception('Please login first');
     }
 
-    // 🔍 Search ALL 'webinar_codes' collections (root + subcollections)
+    // The org side stores the CURRENT code for each event under
+    // events/{eventDocId}/webinarCode/{checkin|checkout} — search across
+    // all events for a code doc matching what was typed.
     final querySnapshot = await FirebaseFirestore.instance
-        .collectionGroup('webinar_codes')
+        .collectionGroup('webinarCode')
         .where('code', isEqualTo: code)
         .limit(1)
         .get();
 
     if (querySnapshot.docs.isEmpty) {
-      throw Exception(' Invalid webinar code. Please check and try again.');
+      throw Exception('Invalid webinar code. Please check and try again.');
     }
 
     final codeDoc = querySnapshot.docs.first;
     final data = codeDoc.data();
 
-    // Optional: ensure this is a check‑in code (if you have a 'phase' field)
-    // If you don't have a phase field, remove this check.
-    if (data['phase'] == 'checkout') {
-      throw Exception(' This is a check‑out code – please use the check‑in code.');
+    // webinarCode is a subcollection of events/{eventDocId}, so the parent
+    // of the parent is the event document.
+    final eventDocId = codeDoc.reference.parent.parent?.id;
+    if (eventDocId == null) {
+      throw Exception('Invalid event reference in code.');
     }
 
-    if (data['isActive'] != true) {
-      throw Exception(' This webinar code is no longer active.');
+    final type = (data['type'] as String?) ?? 'checkin';
+
+    // Time-based validity — the code doc always exists once a session has
+    // started (rotateCode overwrites the same doc), so we must check
+    // startsAt/expiresAt ourselves instead of relying on an 'isActive' flag
+    // that doesn't live on this doc.
+    final now = DateTime.now();
+    final startsAt = (data['startsAt'] as Timestamp?)?.toDate();
+    final expiresAt = (data['expiresAt'] as Timestamp?)?.toDate();
+    if (startsAt == null || expiresAt == null || now.isBefore(startsAt) || now.isAfter(expiresAt)) {
+      throw Exception('This code has expired. Please check the current code on screen.');
     }
 
-    final eventId = data['eventId'];
-    if (eventId == null) {
-      throw Exception(' Invalid event reference in code.');
-    }
-
-    // 2. Check registration
+    // Confirm the student is actually registered for this specific event.
     final registration = await FirebaseFirestore.instance
         .collection('registrations')
         .where('userId', isEqualTo: user.uid)
-        .where('eventId', isEqualTo: eventId)
+        .where('eventId', isEqualTo: eventDocId)
+        .limit(1)
         .get();
 
     if (registration.docs.isEmpty) {
-      throw Exception(' You are not registered for this webinar.');
+      throw Exception('You are not registered for this webinar.');
     }
 
-    // 3. Check existing attendance
-    final existingAttendance = await FirebaseFirestore.instance
-        .collection('attendances')
-        .where('eventId', isEqualTo: eventId)
-        .where('studentId', isEqualTo: user.uid)
-        .get();
+    // Delegate to the same service the organizer side uses, so both sides
+    // agree on what counts as valid (session state, duplicates, etc).
+    final result = await WebinarAttendanceService.submitCode(
+      eventDocId: eventDocId,
+      studentUid: user.uid,
+      submittedCode: code,
+      type: type,
+    );
 
-    if (existingAttendance.docs.isNotEmpty) {
-      throw Exception(' You have already checked in to this webinar.');
+    switch (result) {
+      case 'success':
+        setState(() {
+          _successMessage = type == 'checkout'
+              ? 'Check-out recorded successfully!'
+              : 'Attendance recorded successfully!';
+          _isLoading = false;
+          _codeController.clear();
+        });
+        Future.delayed(const Duration(seconds: 2), () {
+          if (mounted) Navigator.pop(context);
+        });
+        return;
+      case 'session_inactive':
+        throw Exception('Attendance is not open right now.');
+      case 'no_active_code':
+        throw Exception('No active code for this session yet.');
+      case 'expired':
+        throw Exception('This code has expired. Please check the current code on screen.');
+      case 'invalid_code':
+        throw Exception('Invalid webinar code. Please check and try again.');
+      case 'duplicate':
+        throw Exception('You have already checked in to this webinar.');
+      case 'not_checked_in':
+        throw Exception('You need to check in before you can check out.');
+      case 'not_registered':
+        throw Exception('Your student profile could not be found.');
+      default:
+        throw Exception('Something went wrong. Please try again.');
     }
-
-    // 4. Create attendance record
-    await FirebaseFirestore.instance.collection('attendances').add({
-      'eventId': eventId,
-      'studentId': user.uid,
-      'studentName': user.displayName ?? '',
-      'studentEmail': user.email ?? '',
-      'timestamp': FieldValue.serverTimestamp(),
-      'method': 'webinar_code',
-      'code': code,
-      'status': 'present',
-      'webinarCode': code,
-    });
-
-    // 5. Update the code document: add the user to 'usedBy'
-    await codeDoc.reference.update({
-      'usedBy': FieldValue.arrayUnion([user.uid]),
-    });
-
-    setState(() {
-      _successMessage = ' Attendance recorded successfully!';
-      _isLoading = false;
-      _codeController.clear();
-    });
-
-    Future.delayed(const Duration(seconds: 2), () {
-      if (mounted) Navigator.pop(context);
-    });
-
   } catch (e) {
     setState(() {
       _errorMessage = e.toString().replaceAll('Exception: ', '');
