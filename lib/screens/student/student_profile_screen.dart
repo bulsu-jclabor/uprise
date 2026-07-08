@@ -20,7 +20,7 @@ import '../../widgets/shared/app_support.dart';
 import '../../widgets/student/app_colors.dart';
 
 // ─────────────────────────────────────────────────────────────
-// Shared constants - brand palette (matches web's UpriseColors)
+// Shared constants - brand palette
 // ─────────────────────────────────────────────────────────────
 const kOrange = AppColors.primaryDark;
 const kOrangeLight = Color(0xFFF5E3D9);
@@ -142,6 +142,7 @@ class ProfileModel extends ChangeNotifier {
           'firstName': firstName,
           'middleName': middleName,
           'lastName': lastName,
+          'fullName': fullName, // Update the fullName field too
           'studentId': studentId,
           'email': email,
           'mobile': mobile,
@@ -154,6 +155,10 @@ class ProfileModel extends ChangeNotifier {
         }, SetOptions(merge: true));
       }
     }
+    
+    // 🔥 NEW: Update all registrations with the new name
+    await updateAllRegistrationsWithName();
+    
     notifyListeners();
   }
 
@@ -169,6 +174,92 @@ class ProfileModel extends ChangeNotifier {
     }
 
     notifyListeners();
+  }
+
+  // 🔥 NEW METHOD: Update all registrations with the current name
+  Future<void> updateAllRegistrationsWithName() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    try {
+      // Get all registrations for this user
+      final registrationsSnapshot = await FirebaseFirestore.instance
+          .collection('registrations')
+          .where('userId', isEqualTo: user.uid)
+          .get();
+
+      if (registrationsSnapshot.docs.isEmpty) return;
+
+      // Update each registration with the new name
+      final batch = FirebaseFirestore.instance.batch();
+      for (var doc in registrationsSnapshot.docs) {
+        batch.update(doc.reference, {
+          'studentName': fullName,
+          'firstName': firstName,
+          'lastName': lastName,
+          'fullName': fullName, // Also update fullName if it exists
+          'studentId': studentId,
+        });
+      }
+
+      await batch.commit();
+      print('✅ Updated ${registrationsSnapshot.docs.length} registrations with new name: $fullName');
+    } catch (e) {
+      print('❌ Error updating registrations: $e');
+      // Don't throw - we don't want to break the profile update
+    }
+  }
+
+  // 🔥 NEW METHOD: Manually fix all registrations (for one-time fix)
+  Future<void> fixAllRegistrationsManually() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    try {
+      // Get ALL registrations (not just this user's)
+      final allRegistrations = await FirebaseFirestore.instance
+          .collection('registrations')
+          .get();
+
+      int updatedCount = 0;
+      final batch = FirebaseFirestore.instance.batch();
+      
+      for (var doc in allRegistrations.docs) {
+        final data = doc.data();
+        final userId = data['userId'];
+        
+        // Get the student's latest info
+        if (userId != null && userId.isNotEmpty) {
+          final studentDoc = await FirebaseFirestore.instance
+              .collection('students')
+              .doc(userId)
+              .get();
+          
+          if (studentDoc.exists) {
+            final studentData = studentDoc.data()!;
+            final fullName = '${studentData['firstName'] ?? ''} ${studentData['lastName'] ?? ''}'.trim();
+            
+            if (fullName.isNotEmpty) {
+              batch.update(doc.reference, {
+                'studentName': fullName,
+                'firstName': studentData['firstName'] ?? '',
+                'lastName': studentData['lastName'] ?? '',
+                'fullName': fullName,
+                'studentId': studentData['studentId'] ?? '',
+              });
+              updatedCount++;
+            }
+          }
+        }
+      }
+      
+      if (updatedCount > 0) {
+        await batch.commit();
+        print('✅ Fixed $updatedCount registrations');
+      }
+    } catch (e) {
+      print('❌ Error fixing registrations: $e');
+    }
   }
 }
 
@@ -1166,7 +1257,7 @@ class _IdCard1 extends StatelessWidget {
       clipBehavior: Clip.antiAlias,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min, // ⭐ ADD THIS - prevents extra space
+        mainAxisSize: MainAxisSize.min,
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(18, 16, 18, 14),
@@ -1338,7 +1429,7 @@ class _IdCard2 extends StatelessWidget {
       ),
       clipBehavior: Clip.antiAlias,
       child: Column(
-        mainAxisSize: MainAxisSize.min, // ⭐ ADD THIS - prevents extra space
+        mainAxisSize: MainAxisSize.min,
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(18, 16, 18, 0),
@@ -1379,7 +1470,6 @@ class _IdCard2 extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 18),
-                // ⭐ BIGGER QR CODE ⭐
                 Container(
                   width: 140,
                   height: 140,
@@ -1586,7 +1676,7 @@ class _MajorDropdownField extends StatelessWidget {
                 fontWeight: FontWeight.w500)),
         const SizedBox(height: 6),
         DropdownButtonFormField<String>(
-          initialValue: value,
+          value: value,
           icon: const Icon(Icons.keyboard_arrow_down, size: 20),
           style: const TextStyle(fontSize: 14, color: Colors.black87),
           decoration: InputDecoration(
@@ -1831,6 +1921,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         yearLevel: _yearLevelCtrl.text.trim(),
         department: _departmentCtrl.text.trim(),
       );
+      
+      // The update() method now automatically updates all registrations
+      
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1848,10 +1941,12 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     }
     if (!mounted) return;
 
+    // Show success message with info about registrations update
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
-        content: Text('Profile updated successfully!'),
+        content: Text('Profile updated successfully! All registrations have been updated.'),
         backgroundColor: kOrange,
+        duration: Duration(seconds: 3),
       ),
     );
 
@@ -2118,6 +2213,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _showConfirmPw = false;
   bool _isLoading = false;
   String _appVersion = '...';
+  bool _isFixingRegistrations = false;
 
   @override
   void initState() {
@@ -2133,6 +2229,35 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _newPwCtrl.dispose();
     _confirmPwCtrl.dispose();
     super.dispose();
+  }
+
+  // 🔥 NEW: Manual fix for all registrations
+  Future<void> _fixAllRegistrations() async {
+    setState(() => _isFixingRegistrations = true);
+    
+    try {
+      await widget.profile.fixAllRegistrationsManually();
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('✅ All registrations fixed successfully!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('❌ Error fixing registrations: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isFixingRegistrations = false);
+    }
   }
 
   Future<void> _changePassword() async {
@@ -2541,6 +2666,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       ),
                     );
                   },
+                ),
+                const SizedBox(height: 8),
+
+                // 🔥 NEW: Fix Registrations Button
+                _buildSettingsTile(
+                  icon: Icons.sync,
+                  title: 'Fix Registrations',
+                  subtitle: 'Update all registrations with your current name',
+                  onTap: _fixAllRegistrations,
+                  iconColor: Colors.purple,
+                  trailing: _isFixingRegistrations
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.chevron_right, color: Colors.grey, size: 20),
                 ),
                 const SizedBox(height: 8),
 
