@@ -78,7 +78,8 @@ class _StudentEventsScreenState extends State<StudentEventsScreen>
         elevation: 0,
         title: const Text(
           'Events',
-          style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: Colors.black87),
+          style: TextStyle(
+              fontSize: 18, fontWeight: FontWeight.w700, color: Colors.black87),
         ),
         centerTitle: true,
         actions: [
@@ -111,7 +112,8 @@ class _StudentEventsScreenState extends State<StudentEventsScreen>
         children: [
           CalendarTab(registeredEventIdsStream: _registeredEventIdsStream),
           UpcomingTab(registeredEventIdsStream: _registeredEventIdsStream),
-          RegisteredEventsTab(registeredEventIdsStream: _registeredEventIdsStream),
+          RegisteredEventsTab(
+              registeredEventIdsStream: _registeredEventIdsStream),
         ],
       ),
     );
@@ -119,7 +121,7 @@ class _StudentEventsScreenState extends State<StudentEventsScreen>
 }
 
 // ═══════════════════════════════════════════════════════════════
-//  TAB 1: CALENDAR
+//  TAB 1: CALENDAR  (unchanged)
 // ═══════════════════════════════════════════════════════════════
 class CalendarTab extends StatefulWidget {
   final Stream<Set<String>> registeredEventIdsStream;
@@ -129,7 +131,8 @@ class CalendarTab extends StatefulWidget {
   State<CalendarTab> createState() => _CalendarTabState();
 }
 
-class _CalendarTabState extends State<CalendarTab> with AutomaticKeepAliveClientMixin {
+class _CalendarTabState extends State<CalendarTab>
+    with AutomaticKeepAliveClientMixin {
   @override
   bool get wantKeepAlive => true;
 
@@ -167,15 +170,18 @@ class _CalendarTabState extends State<CalendarTab> with AutomaticKeepAliveClient
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               IconButton(
-                icon: const Icon(Icons.chevron_left, color: AppColors.primaryDark),
+                icon: const Icon(Icons.chevron_left,
+                    color: AppColors.primaryDark),
                 onPressed: _previousMonth,
               ),
               Text(
                 DateFormat('MMMM yyyy').format(_selectedDate),
-                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                style: const TextStyle(
+                    fontSize: 16, fontWeight: FontWeight.w600),
               ),
               IconButton(
-                icon: const Icon(Icons.chevron_right, color: AppColors.primaryDark),
+                icon: const Icon(Icons.chevron_right,
+                    color: AppColors.primaryDark),
                 onPressed: _nextMonth,
               ),
             ],
@@ -196,7 +202,10 @@ class _CalendarTabState extends State<CalendarTab> with AutomaticKeepAliveClient
             children: [
               Text(
                 'Events for ${DateFormat('MMM dd, yyyy').format(_selectedDate)}',
-                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Colors.black87),
+                style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.black87),
               ),
               const Spacer(),
               StreamBuilder<Set<String>>(
@@ -220,7 +229,10 @@ class _CalendarTabState extends State<CalendarTab> with AutomaticKeepAliveClient
                           .length;
                       return Text(
                         '$count events',
-                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: Colors.grey.shade600),
+                        style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500,
+                            color: Colors.grey.shade600),
                       );
                     },
                   );
@@ -244,7 +256,8 @@ class _CalendarTabState extends State<CalendarTab> with AutomaticKeepAliveClient
                 builder: (context, snap) {
                   if (!snap.hasData) {
                     return const Center(
-                      child: CircularProgressIndicator(color: AppColors.primaryDark),
+                      child: CircularProgressIndicator(
+                          color: AppColors.primaryDark),
                     );
                   }
                   final todayEvents = snap.data!.docs
@@ -264,7 +277,10 @@ class _CalendarTabState extends State<CalendarTab> with AutomaticKeepAliveClient
                           SizedBox(height: 12),
                           Text(
                             'No events for this day',
-                            style: TextStyle(fontSize: 15, color: Colors.grey, fontWeight: FontWeight.w500),
+                            style: TextStyle(
+                                fontSize: 15,
+                                color: Colors.grey,
+                                fontWeight: FontWeight.w500),
                           ),
                         ],
                       ),
@@ -272,7 +288,8 @@ class _CalendarTabState extends State<CalendarTab> with AutomaticKeepAliveClient
                   }
 
                   return ListView.builder(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 8),
                     itemCount: todayEvents.length,
                     itemBuilder: (context, index) {
                       final event = todayEvents[index];
@@ -296,7 +313,7 @@ class _CalendarTabState extends State<CalendarTab> with AutomaticKeepAliveClient
 }
 
 // ═══════════════════════════════════════════════════════════════
-//  TAB 2: UPCOMING
+//  TAB 2: UPCOMING  (now with compact/grid toggle)
 // ═══════════════════════════════════════════════════════════════
 class UpcomingTab extends StatefulWidget {
   final Stream<Set<String>> registeredEventIdsStream;
@@ -306,9 +323,12 @@ class UpcomingTab extends StatefulWidget {
   State<UpcomingTab> createState() => _UpcomingTabState();
 }
 
-class _UpcomingTabState extends State<UpcomingTab> with AutomaticKeepAliveClientMixin {
+class _UpcomingTabState extends State<UpcomingTab>
+    with AutomaticKeepAliveClientMixin {
   @override
   bool get wantKeepAlive => true;
+
+  bool _compactView = false; // toggle state
 
   void _openDetail(EventModel event) {
     Navigator.push(
@@ -339,7 +359,8 @@ class _UpcomingTabState extends State<UpcomingTab> with AutomaticKeepAliveClient
           builder: (context, snap) {
             if (!snap.hasData) {
               return const Center(
-                child: CircularProgressIndicator(color: AppColors.primaryDark),
+                child:
+                    CircularProgressIndicator(color: AppColors.primaryDark),
               );
             }
 
@@ -357,38 +378,235 @@ class _UpcomingTabState extends State<UpcomingTab> with AutomaticKeepAliveClient
                     SizedBox(height: 12),
                     Text(
                       'No upcoming events',
-                      style: TextStyle(fontSize: 15, color: Colors.grey, fontWeight: FontWeight.w500),
+                      style: TextStyle(
+                          fontSize: 15,
+                          color: Colors.grey,
+                          fontWeight: FontWeight.w500),
                     ),
                   ],
                 ),
               );
             }
 
-            return ListView.builder(
-              padding: const EdgeInsets.all(16),
-              itemCount: allEvents.length,
-              itemBuilder: (context, index) {
-                final event = allEvents[index];
-                final isRegistered = regIds.contains(event.id);
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 16),
-                  child: _UpcomingEventCard(
-                    event: event,
-                    isRegistered: isRegistered,
-                    onTap: () => _openDetail(event),
+            return Column(
+              children: [
+                // ── View toggle bar ──
+                Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  child: Row(
+                    children: [
+                      const Text(
+                        'Upcoming Events',
+                        style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.black87),
+                      ),
+                      const Spacer(),
+                      IconButton(
+                        icon: Icon(
+                          _compactView
+                              ? Icons.view_list_rounded
+                              : Icons.grid_view_rounded,
+                          color: AppColors.primaryDark,
+                        ),
+                        tooltip: _compactView
+                            ? 'Switch to list view'
+                            : 'Switch to grid view',
+                        onPressed: () {
+                          setState(() => _compactView = !_compactView);
+                        },
+                      ),
+                    ],
                   ),
-                );
-              },
+                ),
+
+                // ── Events list / grid ──
+                Expanded(
+                  child: _compactView
+                      ? _buildCompactGrid(allEvents, regIds)
+                      : _buildDetailedList(allEvents, regIds),
+                ),
+              ],
             );
           },
         );
       },
     );
   }
+
+  // ── Detailed list view (original card) ──
+  Widget _buildDetailedList(
+      List<EventModel> events, Set<String> regIds) {
+    return ListView.builder(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+      itemCount: events.length,
+      itemBuilder: (context, index) {
+        final event = events[index];
+        final isRegistered = regIds.contains(event.id);
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 16),
+          child: _UpcomingEventCard(
+            event: event,
+            isRegistered: isRegistered,
+            onTap: () => _openDetail(event),
+          ),
+        );
+      },
+    );
+  }
+
+  // ── Compact grid view (2 columns) ──
+  Widget _buildCompactGrid(List<EventModel> events, Set<String> regIds) {
+    return GridView.builder(
+      padding: const EdgeInsets.fromLTRB(12, 0, 12, 16),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2,
+        mainAxisSpacing: 12,
+        crossAxisSpacing: 12,
+        childAspectRatio: 0.72,
+      ),
+      itemCount: events.length,
+      itemBuilder: (context, index) {
+        final event = events[index];
+        final isRegistered = regIds.contains(event.id);
+        return _CompactUpcomingCard(
+          event: event,
+          isRegistered: isRegistered,
+          onTap: () => _openDetail(event),
+        );
+      },
+    );
+  }
+}
+
+// ── Compact grid card (used inside UpcomingTab) ──
+class _CompactUpcomingCard extends StatelessWidget {
+  final EventModel event;
+  final bool isRegistered;
+  final VoidCallback onTap;
+
+  const _CompactUpcomingCard({
+    required this.event,
+    required this.isRegistered,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.08),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Smaller image
+            EventImage(
+              imageUrl: event.imageUrl,
+              height: 90,
+              width: double.infinity,
+              fit: BoxFit.cover,
+              showLoadingIndicator: true,
+            ),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.all(8),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      event.title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.black87,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        const Icon(Icons.calendar_today_outlined,
+                            size: 11, color: Colors.grey),
+                        const SizedBox(width: 3),
+                        Expanded(
+                          child: Text(
+                            event.formattedDate,
+                            style: const TextStyle(
+                                fontSize: 10, color: Colors.grey),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 2),
+                    Row(
+                      children: [
+                        const Icon(Icons.access_time,
+                            size: 11, color: Colors.grey),
+                        const SizedBox(width: 3),
+                        Expanded(
+                          child: Text(
+                            event.formattedTime,
+                            style: const TextStyle(
+                                fontSize: 10, color: Colors.grey),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const Spacer(),
+                    // Registered / View button
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: onTap,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor:
+                              isRegistered ? Colors.green : AppColors.primaryDark,
+                          padding: const EdgeInsets.symmetric(vertical: 4),
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                        child: Text(
+                          isRegistered ? 'Registered' : 'View',
+                          style: const TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════
-//  TAB 3: REGISTERED EVENTS (Simplified with Segmented Control)
+//  TAB 3: REGISTERED EVENTS  (unchanged – the class that was missing)
 // ═══════════════════════════════════════════════════════════════
 class RegisteredEventsTab extends StatefulWidget {
   final Stream<Set<String>> registeredEventIdsStream;
@@ -424,7 +642,8 @@ class _RegisteredEventsTabState extends State<RegisteredEventsTab>
   DateTime? _combineDateAndTime(DateTime date, String? timeStr) {
     if (timeStr == null || timeStr.trim().isEmpty) return null;
     final cleaned = timeStr.trim().toUpperCase();
-    final match = RegExp(r'^(\d{1,2}):(\d{2})\s*(AM|PM)?$').firstMatch(cleaned);
+    final match =
+        RegExp(r'^(\d{1,2}):(\d{2})\s*(AM|PM)?$').firstMatch(cleaned);
     if (match == null) return null;
     int hour = int.parse(match.group(1)!);
     final minute = int.parse(match.group(2)!);
@@ -618,7 +837,9 @@ class _RegisteredEventsTabState extends State<RegisteredEventsTab>
       stream: _registrationsStream,
       builder: (context, regSnap) {
         if (regSnap.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator(color: AppColors.primaryDark));
+          return const Center(
+              child:
+                  CircularProgressIndicator(color: AppColors.primaryDark));
         }
         if (regSnap.hasError) {
           return Center(
@@ -627,12 +848,10 @@ class _RegisteredEventsTabState extends State<RegisteredEventsTab>
           );
         }
 
-        // Filter events based on view filter
         final eventIds = (regSnap.data?.docs ?? [])
             .where((doc) {
               final data = doc.data() as Map<String, dynamic>;
               final isArchived = data['isArchived'] == true;
-              
               switch (_viewFilter) {
                 case _ViewFilter.active:
                   return !isArchived;
@@ -642,7 +861,8 @@ class _RegisteredEventsTabState extends State<RegisteredEventsTab>
                   return true;
               }
             })
-            .map((d) => (d.data() as Map<String, dynamic>)['eventId'] as String?)
+            .map((d) =>
+                (d.data() as Map<String, dynamic>)['eventId'] as String?)
             .whereType<String>()
             .toSet()
             .toList();
@@ -653,18 +873,21 @@ class _RegisteredEventsTabState extends State<RegisteredEventsTab>
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Icon(
-                  _viewFilter == _ViewFilter.archived 
-                      ? Icons.archive_outlined 
+                  _viewFilter == _ViewFilter.archived
+                      ? Icons.archive_outlined
                       : Icons.event_note_outlined,
                   size: 64,
                   color: Colors.grey,
                 ),
                 const SizedBox(height: 12),
                 Text(
-                  _viewFilter == _ViewFilter.archived 
-                      ? 'No archived events' 
+                  _viewFilter == _ViewFilter.archived
+                      ? 'No archived events'
                       : 'No registered events',
-                  style: TextStyle(fontSize: 15, color: Colors.grey, fontWeight: FontWeight.w500),
+                  style: TextStyle(
+                      fontSize: 15,
+                      color: Colors.grey,
+                      fontWeight: FontWeight.w500),
                 ),
               ],
             ),
@@ -673,7 +896,9 @@ class _RegisteredEventsTabState extends State<RegisteredEventsTab>
 
         final chunks = <List<String>>[];
         for (var i = 0; i < eventIds.length; i += 30) {
-          chunks.add(eventIds.sublist(i, i + 30 > eventIds.length ? eventIds.length : i + 30));
+          chunks.add(eventIds.sublist(
+              i,
+              i + 30 > eventIds.length ? eventIds.length : i + 30));
         }
 
         return FutureBuilder<List<QuerySnapshot>>(
@@ -683,7 +908,9 @@ class _RegisteredEventsTabState extends State<RegisteredEventsTab>
               .get())),
           builder: (context, evSnap) {
             if (evSnap.connectionState == ConnectionState.waiting) {
-              return const Center(child: CircularProgressIndicator(color: AppColors.primaryDark));
+              return const Center(
+                  child: CircularProgressIndicator(
+                      color: AppColors.primaryDark));
             }
             if (evSnap.hasError || !evSnap.hasData) {
               return Center(
@@ -717,9 +944,9 @@ class _RegisteredEventsTabState extends State<RegisteredEventsTab>
 
             return Column(
               children: [
-                // ── Segmented Control ──
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 16, vertical: 8),
                   color: Colors.white,
                   child: SegmentedButton<_ViewFilter>(
                     segments: const [
@@ -758,7 +985,6 @@ class _RegisteredEventsTabState extends State<RegisteredEventsTab>
                   ),
                 ),
                 const Divider(height: 1, color: Color(0xFFF0F0F0)),
-
                 Expanded(
                   child: ListView.builder(
                     padding: const EdgeInsets.only(
@@ -772,13 +998,14 @@ class _RegisteredEventsTabState extends State<RegisteredEventsTab>
                       final event = events[index];
                       final status = _statusFor(event);
                       final style = _statusStyle(status);
-                      
-                      // Check if this event is archived (for "All" view)
+
                       bool isArchived = false;
                       if (_viewFilter == _ViewFilter.all) {
-                        isArchived = (regSnap.data?.docs ?? []).any((doc) {
+                        isArchived =
+                            (regSnap.data?.docs ?? []).any((doc) {
                           final data = doc.data() as Map<String, dynamic>;
-                          return data['eventId'] == event.id && data['isArchived'] == true;
+                          return data['eventId'] == event.id &&
+                              data['isArchived'] == true;
                         });
                       }
 
@@ -799,7 +1026,6 @@ class _RegisteredEventsTabState extends State<RegisteredEventsTab>
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            // Event Image
                             Stack(
                               children: [
                                 EventImage(
@@ -809,15 +1035,18 @@ class _RegisteredEventsTabState extends State<RegisteredEventsTab>
                                   fit: BoxFit.cover,
                                   showLoadingIndicator: true,
                                 ),
-                                // Status Badge
                                 Positioned(
                                   top: 8,
                                   right: 8,
                                   child: Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 10, vertical: 4),
                                     decoration: BoxDecoration(
-                                      color: isArchived ? Colors.grey : style.color,
-                                      borderRadius: BorderRadius.circular(12),
+                                      color: isArchived
+                                          ? Colors.grey
+                                          : style.color,
+                                      borderRadius:
+                                          BorderRadius.circular(12),
                                     ),
                                     child: Text(
                                       isArchived ? 'ARCHIVED' : style.label,
@@ -832,11 +1061,11 @@ class _RegisteredEventsTabState extends State<RegisteredEventsTab>
                                 ),
                               ],
                             ),
-                            // Content
                             Padding(
                               padding: const EdgeInsets.all(12),
                               child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
+                                crossAxisAlignment:
+                                    CrossAxisAlignment.start,
                                 children: [
                                   Text(
                                     event.title,
@@ -861,19 +1090,27 @@ class _RegisteredEventsTabState extends State<RegisteredEventsTab>
                                   const SizedBox(height: 8),
                                   Row(
                                     children: [
-                                      const Icon(Icons.calendar_today_outlined, size: 12, color: Colors.grey),
+                                      const Icon(
+                                          Icons.calendar_today_outlined,
+                                          size: 12,
+                                          color: Colors.grey),
                                       const SizedBox(width: 4),
                                       Text(
                                         event.formattedDate,
-                                        style: const TextStyle(fontSize: 11, color: Colors.grey),
+                                        style: const TextStyle(
+                                            fontSize: 11,
+                                            color: Colors.grey),
                                       ),
                                       const SizedBox(width: 12),
-                                      const Icon(Icons.access_time, size: 12, color: Colors.grey),
+                                      const Icon(Icons.access_time,
+                                          size: 12, color: Colors.grey),
                                       const SizedBox(width: 4),
                                       Expanded(
                                         child: Text(
                                           event.formattedTime,
-                                          style: const TextStyle(fontSize: 11, color: Colors.grey),
+                                          style: const TextStyle(
+                                              fontSize: 11,
+                                              color: Colors.grey),
                                           overflow: TextOverflow.ellipsis,
                                         ),
                                       ),
@@ -882,12 +1119,17 @@ class _RegisteredEventsTabState extends State<RegisteredEventsTab>
                                   const SizedBox(height: 4),
                                   Row(
                                     children: [
-                                      const Icon(Icons.location_on_outlined, size: 12, color: Colors.grey),
+                                      const Icon(
+                                          Icons.location_on_outlined,
+                                          size: 12,
+                                          color: Colors.grey),
                                       const SizedBox(width: 4),
                                       Expanded(
                                         child: Text(
                                           event.location,
-                                          style: const TextStyle(fontSize: 11, color: Colors.grey),
+                                          style: const TextStyle(
+                                              fontSize: 11,
+                                              color: Colors.grey),
                                           overflow: TextOverflow.ellipsis,
                                         ),
                                       ),
@@ -898,12 +1140,20 @@ class _RegisteredEventsTabState extends State<RegisteredEventsTab>
                                     children: [
                                       Expanded(
                                         child: ElevatedButton(
-                                          onPressed: () => _openDetail(event, status == _RegStatus.completed),
+                                          onPressed: () => _openDetail(
+                                              event,
+                                              status ==
+                                                  _RegStatus.completed),
                                           style: ElevatedButton.styleFrom(
-                                            backgroundColor: isArchived ? Colors.grey : AppColors.primaryDark,
-                                            padding: const EdgeInsets.symmetric(vertical: 8),
+                                            backgroundColor: isArchived
+                                                ? Colors.grey
+                                                : AppColors.primaryDark,
+                                            padding:
+                                                const EdgeInsets.symmetric(
+                                                    vertical: 8),
                                             shape: RoundedRectangleBorder(
-                                              borderRadius: BorderRadius.circular(8),
+                                              borderRadius:
+                                                  BorderRadius.circular(8),
                                             ),
                                           ),
                                           child: const Text(
@@ -919,7 +1169,8 @@ class _RegisteredEventsTabState extends State<RegisteredEventsTab>
                                       const SizedBox(width: 8),
                                       if (!isArchived)
                                         IconButton(
-                                          onPressed: () => _archiveEvent(event),
+                                          onPressed: () =>
+                                              _archiveEvent(event),
                                           icon: Icon(
                                             Icons.archive_outlined,
                                             size: 20,
@@ -927,15 +1178,18 @@ class _RegisteredEventsTabState extends State<RegisteredEventsTab>
                                           ),
                                           tooltip: 'Archive',
                                           style: IconButton.styleFrom(
-                                            backgroundColor: Colors.grey.shade100,
+                                            backgroundColor:
+                                                Colors.grey.shade100,
                                             shape: RoundedRectangleBorder(
-                                              borderRadius: BorderRadius.circular(8),
+                                              borderRadius:
+                                                  BorderRadius.circular(8),
                                             ),
                                           ),
                                         )
                                       else
                                         IconButton(
-                                          onPressed: () => _unarchiveEvent(event),
+                                          onPressed: () =>
+                                              _unarchiveEvent(event),
                                           icon: Icon(
                                             Icons.restore_from_trash,
                                             size: 20,
@@ -943,9 +1197,11 @@ class _RegisteredEventsTabState extends State<RegisteredEventsTab>
                                           ),
                                           tooltip: 'Restore',
                                           style: IconButton.styleFrom(
-                                            backgroundColor: Colors.green.shade50,
+                                            backgroundColor:
+                                                Colors.green.shade50,
                                             shape: RoundedRectangleBorder(
-                                              borderRadius: BorderRadius.circular(8),
+                                              borderRadius:
+                                                  BorderRadius.circular(8),
                                             ),
                                           ),
                                         ),
@@ -969,18 +1225,20 @@ class _RegisteredEventsTabState extends State<RegisteredEventsTab>
   }
 }
 
-// ─── CALENDAR GRID ─────────────────────────────────────────────
+// ─── CALENDAR GRID (unchanged) ─────────────────────────────────
 class _CalendarGrid extends StatelessWidget {
   final DateTime selectedDate;
   final Function(DateTime) onDateSelected;
 
-  const _CalendarGrid({required this.selectedDate, required this.onDateSelected});
+  const _CalendarGrid(
+      {required this.selectedDate, required this.onDateSelected});
 
   @override
   Widget build(BuildContext context) {
     final firstDayOfMonth = DateTime(selectedDate.year, selectedDate.month, 1);
     final firstWeekday = firstDayOfMonth.weekday % 7;
-    final daysInMonth = DateTime(selectedDate.year, selectedDate.month + 1, 0).day;
+    final daysInMonth =
+        DateTime(selectedDate.year, selectedDate.month + 1, 0).day;
 
     final eventsStream = FirebaseFirestore.instance
         .collection('events')
@@ -1011,7 +1269,10 @@ class _CalendarGrid extends StatelessWidget {
           dayWidgets.add(Center(
             child: Text(
               day,
-              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.grey.shade600),
+              style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.grey.shade600),
             ),
           ));
         }
@@ -1021,7 +1282,8 @@ class _CalendarGrid extends StatelessWidget {
         }
 
         for (int day = 1; day <= daysInMonth; day++) {
-          final currentDate = DateTime(selectedDate.year, selectedDate.month, day);
+          final currentDate =
+              DateTime(selectedDate.year, selectedDate.month, day);
           final isSelected = currentDate.year == selectedDate.year &&
               currentDate.month == selectedDate.month &&
               currentDate.day == selectedDate.day;
@@ -1029,7 +1291,8 @@ class _CalendarGrid extends StatelessWidget {
               currentDate.month == DateTime.now().month &&
               currentDate.day == DateTime.now().day;
 
-          final dateKey = '${currentDate.year}-${currentDate.month.toString().padLeft(2, '0')}-${currentDate.day.toString().padLeft(2, '0')}';
+          final dateKey =
+              '${currentDate.year}-${currentDate.month.toString().padLeft(2, '0')}-${currentDate.day.toString().padLeft(2, '0')}';
           final hasEvent = eventDates.contains(dateKey);
 
           Color indicatorColor;
@@ -1106,7 +1369,7 @@ class _CalendarGrid extends StatelessWidget {
   }
 }
 
-// ─── COMPACT EVENT CARD ────────────────────────────────────────
+// ─── COMPACT EVENT CARD (unchanged) ────────────────────────────
 class _CompactEventCard extends StatelessWidget {
   final EventModel event;
   final VoidCallback onTap;
@@ -1163,30 +1426,37 @@ class _CompactEventCard extends StatelessWidget {
                   children: [
                     Text(
                       event.title,
-                      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: Colors.black87),
+                      style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w800,
+                          color: Colors.black87),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
                     const SizedBox(height: 4),
                     Row(
                       children: [
-                        const Icon(Icons.access_time, size: 12, color: Colors.grey),
+                        const Icon(Icons.access_time,
+                            size: 12, color: Colors.grey),
                         const SizedBox(width: 4),
                         Text(
                           event.formattedTime,
-                          style: const TextStyle(fontSize: 11, color: Colors.grey),
+                          style: const TextStyle(
+                              fontSize: 11, color: Colors.grey),
                         ),
                       ],
                     ),
                     const SizedBox(height: 2),
                     Row(
                       children: [
-                        const Icon(Icons.location_on_outlined, size: 12, color: Colors.grey),
+                        const Icon(Icons.location_on_outlined,
+                            size: 12, color: Colors.grey),
                         const SizedBox(width: 4),
                         Expanded(
                           child: Text(
                             event.location,
-                            style: const TextStyle(fontSize: 11, color: Colors.grey),
+                            style: const TextStyle(
+                                fontSize: 11, color: Colors.grey),
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
@@ -1201,13 +1471,18 @@ class _CompactEventCard extends StatelessWidget {
               child: TextButton(
                 onPressed: onTap,
                 style: TextButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 12, vertical: 8),
                   backgroundColor: AppColors.primaryDark,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(20)),
                 ),
                 child: const Text(
                   'View',
-                  style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600),
+                  style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600),
                 ),
               ),
             ),
@@ -1218,7 +1493,7 @@ class _CompactEventCard extends StatelessWidget {
   }
 }
 
-// ─── UPCOMING EVENT CARD ──────────────────────────────────────
+// ─── UPCOMING EVENT CARD (unchanged) ──────────────────────────
 class _UpcomingEventCard extends StatelessWidget {
   final EventModel event;
   final bool isRegistered;
@@ -1268,7 +1543,8 @@ class _UpcomingEventCard extends StatelessWidget {
                       const Spacer(),
                       if (isRegistered)
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 4),
                           decoration: BoxDecoration(
                             color: Colors.green.withOpacity(0.1),
                             borderRadius: BorderRadius.circular(12),
@@ -1276,7 +1552,8 @@ class _UpcomingEventCard extends StatelessWidget {
                           child: const Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Icon(Icons.check_circle, size: 12, color: Colors.green),
+                              Icon(Icons.check_circle,
+                                  size: 12, color: Colors.green),
                               SizedBox(width: 4),
                               Text(
                                 'Registered',
@@ -1294,26 +1571,33 @@ class _UpcomingEventCard extends StatelessWidget {
                   const SizedBox(height: 8),
                   Text(
                     event.title,
-                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Colors.black87),
+                    style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                        color: Colors.black87),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
                   const SizedBox(height: 4),
                   Row(
                     children: [
-                      const Icon(Icons.calendar_today_outlined, size: 12, color: Colors.grey),
+                      const Icon(Icons.calendar_today_outlined,
+                          size: 12, color: Colors.grey),
                       const SizedBox(width: 4),
                       Text(
                         event.formattedDate,
-                        style: const TextStyle(fontSize: 11, color: Colors.grey),
+                        style: const TextStyle(
+                            fontSize: 11, color: Colors.grey),
                       ),
                       const SizedBox(width: 12),
-                      const Icon(Icons.access_time, size: 12, color: Colors.grey),
+                      const Icon(Icons.access_time,
+                          size: 12, color: Colors.grey),
                       const SizedBox(width: 4),
                       Expanded(
                         child: Text(
                           event.formattedTime,
-                          style: const TextStyle(fontSize: 11, color: Colors.grey),
+                          style: const TextStyle(
+                              fontSize: 11, color: Colors.grey),
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
@@ -1322,12 +1606,14 @@ class _UpcomingEventCard extends StatelessWidget {
                   const SizedBox(height: 4),
                   Row(
                     children: [
-                      const Icon(Icons.location_on_outlined, size: 12, color: Colors.grey),
+                      const Icon(Icons.location_on_outlined,
+                          size: 12, color: Colors.grey),
                       const SizedBox(width: 4),
                       Expanded(
                         child: Text(
                           event.location,
-                          style: const TextStyle(fontSize: 11, color: Colors.grey),
+                          style: const TextStyle(
+                              fontSize: 11, color: Colors.grey),
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
@@ -1339,9 +1625,12 @@ class _UpcomingEventCard extends StatelessWidget {
                     child: ElevatedButton(
                       onPressed: onTap,
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: isRegistered ? Colors.green : AppColors.primaryDark,
+                        backgroundColor: isRegistered
+                            ? Colors.green
+                            : AppColors.primaryDark,
                         padding: const EdgeInsets.symmetric(vertical: 10),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25)),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(25)),
                       ),
                       child: Text(
                         isRegistered ? 'Registered ✓' : 'View Details',
@@ -1363,7 +1652,7 @@ class _UpcomingEventCard extends StatelessWidget {
   }
 }
 
-// ─── CATEGORY BADGE ─────────────────────────────────────────────
+// ─── CATEGORY BADGE (unchanged) ─────────────────────────────────
 class _CategoryBadge extends StatelessWidget {
   final String category;
   const _CategoryBadge({required this.category});
@@ -1402,7 +1691,8 @@ class _CategoryBadge extends StatelessWidget {
   }
 }
 
-// ─── EVENT DETAIL SCREEN ────────────────────────────────────────
+// ─── EVENT DETAIL SCREEN (unchanged) ──────────────────────────
+// (included for completeness – same as original)
 class EventDetailScreen extends StatefulWidget {
   final EventModel event;
   final VoidCallback onRegistered;
@@ -1460,7 +1750,8 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
 
   DateTime? _combineDateAndTimeString(DateTime date, String timeStr) {
     final cleaned = timeStr.trim().toUpperCase();
-    final match = RegExp(r'^(\d{1,2}):(\d{2})\s*(AM|PM)?$').firstMatch(cleaned);
+    final match =
+        RegExp(r'^(\d{1,2}):(\d{2})\s*(AM|PM)?$').firstMatch(cleaned);
     if (match == null) return null;
 
     int hour = int.parse(match.group(1)!);
@@ -1634,7 +1925,9 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
         color: _feedbackSubmitted ? Colors.green.shade50 : Colors.grey.shade50,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: _feedbackSubmitted ? Colors.green.shade200 : Colors.grey.shade200,
+          color: _feedbackSubmitted
+              ? Colors.green.shade200
+              : Colors.grey.shade200,
         ),
       ),
       child: Column(
@@ -1643,8 +1936,12 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
           Row(
             children: [
               Icon(
-                _feedbackSubmitted ? Icons.check_circle_rounded : Icons.rate_review_rounded,
-                color: _feedbackSubmitted ? Colors.green : AppColors.primaryDark,
+                _feedbackSubmitted
+                    ? Icons.check_circle_rounded
+                    : Icons.rate_review_rounded,
+                color: _feedbackSubmitted
+                    ? Colors.green
+                    : AppColors.primaryDark,
                 size: 20,
               ),
               const SizedBox(width: 8),
@@ -1653,7 +1950,9 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                 style: TextStyle(
                   fontSize: 15,
                   fontWeight: FontWeight.w700,
-                  color: _feedbackSubmitted ? Colors.green.shade700 : Colors.black87,
+                  color: _feedbackSubmitted
+                      ? Colors.green.shade700
+                      : Colors.black87,
                 ),
               ),
             ],
@@ -1681,7 +1980,8 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(10),
-                borderSide: const BorderSide(color: AppColors.primaryDark, width: 1.5),
+                borderSide: const BorderSide(
+                    color: AppColors.primaryDark, width: 1.5),
               ),
             ),
           ),
@@ -1694,16 +1994,22 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.primaryDark,
                   padding: const EdgeInsets.symmetric(vertical: 12),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10)),
                 ),
                 child: _submittingFeedback
                     ? const SizedBox(
-                        width: 20, height: 20,
-                        child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5),
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                            color: Colors.white, strokeWidth: 2.5),
                       )
                     : const Text(
                         'Submit Feedback',
-                        style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w700),
+                        style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700),
                       ),
               ),
             ),
@@ -1754,7 +2060,8 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
 
   String? _validateDynamicFields() {
     if (_formDef == null) return null;
-    final fields = (_formDef!['fields'] as List).cast<Map<String, dynamic>>();
+    final fields =
+        (_formDef!['fields'] as List).cast<Map<String, dynamic>>();
     for (final f in fields) {
       if (f['required'] != true) continue;
       final id = f['id'] as String;
@@ -1775,7 +2082,8 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
 
   Map<String, dynamic> _collectFormResponses() {
     if (_formDef == null) return {};
-    final fields = (_formDef!['fields'] as List).cast<Map<String, dynamic>>();
+    final fields =
+        (_formDef!['fields'] as List).cast<Map<String, dynamic>>();
     final out = <String, dynamic>{};
     for (final f in fields) {
       final id = f['id'] as String;
@@ -1784,9 +2092,15 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
       if (type == 'multiple_choice' || type == 'dropdown') {
         out[id] = {'label': label, 'value': _singleChoice[id]};
       } else if (type == 'checkboxes') {
-        out[id] = {'label': label, 'value': (_multiChoice[id] ?? {}).toList()};
+        out[id] = {
+          'label': label,
+          'value': (_multiChoice[id] ?? {}).toList()
+        };
       } else {
-        out[id] = {'label': label, 'value': _fieldControllers[id]?.text.trim() ?? ''};
+        out[id] = {
+          'label': label,
+          'value': _fieldControllers[id]?.text.trim() ?? ''
+        };
       }
     }
     return out;
@@ -1824,8 +2138,11 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
           .doc('${user.uid}_${widget.event.id}');
       await FirebaseFirestore.instance.runTransaction((tx) async {
         final regDoc = await tx.get(regRef);
-        if (regDoc.exists) throw Exception('You are already registered for this event');
-        final evRef = FirebaseFirestore.instance.collection('events').doc(widget.event.id);
+        if (regDoc.exists)
+          throw Exception('You are already registered for this event');
+        final evRef = FirebaseFirestore.instance
+            .collection('events')
+            .doc(widget.event.id);
         final evDoc = await tx.get(evRef);
         if (!evDoc.exists) throw Exception('Event not found');
         tx.set(regRef, {
@@ -1861,7 +2178,8 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
         hintText: hint,
         filled: true,
         fillColor: Colors.grey.shade50,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
           borderSide: BorderSide(color: Colors.grey.shade300),
@@ -1872,17 +2190,22 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
-          borderSide: const BorderSide(color: AppColors.primaryDark, width: 1.5),
+          borderSide:
+              const BorderSide(color: AppColors.primaryDark, width: 1.5),
         ),
       );
 
-  Widget _buildDynamicField(Map<String, dynamic> field, {VoidCallback? onStateChanged}) {
+  Widget _buildDynamicField(Map<String, dynamic> field,
+      {VoidCallback? onStateChanged}) {
     final id = field['id'] as String;
     final type = (field['type'] ?? 'short_text') as String;
     final label = (field['label'] ?? '').toString();
     final desc = (field['description'] ?? '').toString();
     final required = field['required'] == true;
-    final options = (field['options'] as List?)?.map((o) => o.toString()).toList() ?? [];
+    final options = (field['options'] as List?)
+            ?.map((o) => o.toString())
+            .toList() ??
+        [];
 
     Widget input;
     switch (type) {
@@ -1912,7 +2235,8 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
           controller: _fieldControllers[id],
           readOnly: true,
           decoration: _fieldDecoration('Select date').copyWith(
-            suffixIcon: const Icon(Icons.calendar_today_outlined, size: 18),
+            suffixIcon:
+                const Icon(Icons.calendar_today_outlined, size: 18),
           ),
           onTap: () async {
             final picked = await showDatePicker(
@@ -1922,7 +2246,8 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
               lastDate: DateTime(2100),
             );
             if (picked != null) {
-              _fieldControllers[id]!.text = DateFormat('MMM dd, yyyy').format(picked);
+              _fieldControllers[id]!.text =
+                  DateFormat('MMM dd, yyyy').format(picked);
               if (onStateChanged != null) onStateChanged();
             }
           },
@@ -2022,7 +2347,8 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
               if (required)
                 const TextSpan(
                   text: ' *',
-                  style: TextStyle(color: Colors.red, fontWeight: FontWeight.w700),
+                  style: TextStyle(
+                      color: Colors.red, fontWeight: FontWeight.w700),
                 ),
             ]),
           ),
@@ -2031,7 +2357,8 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
               padding: const EdgeInsets.only(top: 2, bottom: 6),
               child: Text(
                 desc,
-                style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                style:
+                    TextStyle(fontSize: 12, color: Colors.grey.shade600),
               ),
             )
           else
@@ -2044,22 +2371,28 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
 
   List<Widget> _buildDialogFields(VoidCallback setDialogState) {
     if (_formDef == null) return [];
-    final fields = (_formDef!['fields'] as List).cast<Map<String, dynamic>>();
-    final title = (_formDef!['title'] ?? 'Registration Form').toString();
+    final fields =
+        (_formDef!['fields'] as List).cast<Map<String, dynamic>>();
+    final title =
+        (_formDef!['title'] ?? 'Registration Form').toString();
     final desc = (_formDef!['description'] ?? '').toString();
 
     return [
-      Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+      Text(title,
+          style: const TextStyle(
+              fontSize: 18, fontWeight: FontWeight.w700)),
       if (desc.isNotEmpty)
         Padding(
           padding: const EdgeInsets.only(top: 4),
           child: Text(
             desc,
-            style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
+            style:
+                TextStyle(fontSize: 13, color: Colors.grey.shade600),
           ),
         ),
       const SizedBox(height: 16),
-      ...fields.map((f) => _buildDynamicField(f, onStateChanged: setDialogState)),
+      ...fields
+          .map((f) => _buildDynamicField(f, onStateChanged: setDialogState)),
     ];
   }
 
@@ -2093,7 +2426,8 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                   ),
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
-                    children: _buildDialogFields(() => setDialogState(() {})),
+                    children:
+                        _buildDialogFields(() => setDialogState(() {})),
                   ),
                 ),
               ),
@@ -2144,7 +2478,8 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
           icon: const Icon(Icons.arrow_back, color: Colors.black87),
           onPressed: () => Navigator.pop(context),
         ),
-        title: const Text('Event Details', style: TextStyle(color: Colors.black87)),
+        title: const Text('Event Details',
+            style: TextStyle(color: Colors.black87)),
         centerTitle: true,
       ),
       body: SingleChildScrollView(
@@ -2167,12 +2502,14 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                   const SizedBox(height: 12),
                   Text(
                     widget.event.title,
-                    style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800),
+                    style: const TextStyle(
+                        fontSize: 24, fontWeight: FontWeight.w800),
                   ),
                   const SizedBox(height: 4),
                   Text(
                     'Hosted by ${widget.event.orgName}',
-                    style: const TextStyle(fontSize: 14, color: Colors.grey),
+                    style:
+                        const TextStyle(fontSize: 14, color: Colors.grey),
                   ),
                   const SizedBox(height: 20),
                   _InfoRow(
@@ -2192,12 +2529,16 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                   const SizedBox(height: 20),
                   const Text(
                     'Description',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+                    style: TextStyle(
+                        fontSize: 18, fontWeight: FontWeight.w700),
                   ),
                   const SizedBox(height: 8),
                   Text(
                     widget.event.description,
-                    style: const TextStyle(fontSize: 14, color: Colors.black87, height: 1.4),
+                    style: const TextStyle(
+                        fontSize: 14,
+                        color: Colors.black87,
+                        height: 1.4),
                   ),
                   const SizedBox(height: 10),
 
@@ -2206,7 +2547,8 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                       const Center(
                         child: Padding(
                           padding: EdgeInsets.symmetric(vertical: 12),
-                          child: CircularProgressIndicator(strokeWidth: 2),
+                          child:
+                              CircularProgressIndicator(strokeWidth: 2),
                         ),
                       )
                     else
@@ -2216,14 +2558,17 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                           onPressed: _showRegistrationDialog,
                           style: ElevatedButton.styleFrom(
                             backgroundColor: AppColors.primaryDark,
-                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            padding:
+                                const EdgeInsets.symmetric(vertical: 14),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(12),
                             ),
                           ),
                           child: const Text(
                             'Register Now',
-                            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                            style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w700),
                           ),
                         ),
                       ),
@@ -2232,11 +2577,13 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                   if (_isRegistered && !_isEventReallyOver)
                     Container(
                       width: double.infinity,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      padding:
+                          const EdgeInsets.symmetric(vertical: 14),
                       decoration: BoxDecoration(
                         color: Colors.green.shade50,
                         borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Colors.green.shade200),
+                        border:
+                            Border.all(color: Colors.green.shade200),
                       ),
                       child: const Center(
                         child: Text(
@@ -2263,7 +2610,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
   }
 }
 
-// ─── INFO ROW ──────────────────────────────────────────────────
+// ─── INFO ROW (unchanged) ──────────────────────────────────────
 class _InfoRow extends StatelessWidget {
   final IconData icon;
   final String text;
@@ -2279,7 +2626,8 @@ class _InfoRow extends StatelessWidget {
         Expanded(
           child: Text(
             text,
-            style: const TextStyle(fontSize: 14, color: Colors.black87),
+            style:
+                const TextStyle(fontSize: 14, color: Colors.black87),
           ),
         ),
       ],
