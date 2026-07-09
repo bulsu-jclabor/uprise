@@ -15,6 +15,7 @@ class CountdownWidget extends StatefulWidget {
 class _CountdownWidgetState extends State<CountdownWidget> {
   late Timer _timer;
   Duration _duration = Duration.zero;
+  bool _isEventStarted = false;
 
   @override
   void initState() {
@@ -29,22 +30,80 @@ class _CountdownWidgetState extends State<CountdownWidget> {
     if (widget.event == null) {
       setState(() {
         _duration = Duration.zero;
+        _isEventStarted = false;
       });
       return;
     }
 
-    // ⭐ GAMITIN ANG FULL DATE + TIME NG EVENT ⭐
-    final eventDateTime = widget.event!.fullDateTime;
-    final now = DateTime.now();
-    final difference = eventDateTime.difference(now);
+    try {
+      // ⭐ GAMITIN ANG date + startTime NG EVENT ⭐
+      final eventDate = widget.event!.date;
+      final timeStr = widget.event!.startTime;
+      
+      DateTime? eventDateTime;
+      
+      // Parse time string (e.g., "9:00 AM" or "14:30")
+      if (timeStr.isNotEmpty) {
+        try {
+          final cleaned = timeStr.trim().toUpperCase();
+          final match = RegExp(r'^(\d{1,2}):(\d{2})\s*(AM|PM)?$').firstMatch(cleaned);
+          if (match != null) {
+            int hour = int.parse(match.group(1)!);
+            final minute = int.parse(match.group(2)!);
+            final meridiem = match.group(3);
+            
+            if (meridiem == 'PM' && hour != 12) hour += 12;
+            if (meridiem == 'AM' && hour == 12) hour = 0;
+            
+            eventDateTime = DateTime(
+              eventDate.year,
+              eventDate.month,
+              eventDate.day,
+              hour,
+              minute,
+            );
+          }
+        } catch (_) {
+          // If time parsing fails, use midnight
+          eventDateTime = DateTime(
+            eventDate.year,
+            eventDate.month,
+            eventDate.day,
+          );
+        }
+      } else {
+        // If no time, use midnight
+        eventDateTime = DateTime(
+          eventDate.year,
+          eventDate.month,
+          eventDate.day,
+        );
+      }
 
-    if (difference.isNegative) {
+      if (eventDateTime == null) {
+        setState(() {
+          _duration = Duration.zero;
+          _isEventStarted = false;
+        });
+        return;
+      }
+
+      final now = DateTime.now();
+      final difference = eventDateTime.difference(now);
+
+      setState(() {
+        if (difference.isNegative) {
+          _duration = Duration.zero;
+          _isEventStarted = true;
+        } else {
+          _duration = difference;
+          _isEventStarted = false;
+        }
+      });
+    } catch (e) {
       setState(() {
         _duration = Duration.zero;
-      });
-    } else {
-      setState(() {
-        _duration = difference;
+        _isEventStarted = false;
       });
     }
   }
@@ -67,56 +126,9 @@ class _CountdownWidgetState extends State<CountdownWidget> {
 
   @override
   Widget build(BuildContext context) {
+    // ✅ If no event, don't show anything
     if (widget.event == null) {
-      return Container(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            colors: [AppColors.primaryDark, AppColors.primaryLight],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color: AppColors.primaryDark.withOpacity(0.3),
-              blurRadius: 12,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(
-              Icons.event_busy,
-              color: Colors.white,
-              size: 24,
-            ),
-            const SizedBox(width: 12),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'No registered events',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                Text(
-                  'Register an event to start the countdown!',
-                  style: TextStyle(
-                    color: Colors.white.withOpacity(0.8),
-                    fontSize: 12,
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      );
+      return const SizedBox.shrink();
     }
 
     final days = _duration.inDays;
@@ -124,6 +136,64 @@ class _CountdownWidgetState extends State<CountdownWidget> {
     final minutes = _duration.inMinutes.remainder(60);
     final seconds = _duration.inSeconds.remainder(60);
 
+    // ✅ If event has started, show different UI
+    if (_isEventStarted) {
+      return Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            colors: [Colors.green, Colors.greenAccent],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.green.withOpacity(0.3),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            const Icon(
+              Icons.emoji_events,
+              color: Colors.white,
+              size: 32,
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    widget.event!.title,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const Text(
+                    '🎉 Event has started!',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // ✅ Show countdown
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -147,9 +217,9 @@ class _CountdownWidgetState extends State<CountdownWidget> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text(
-                'CICT EVENT',
-                style: TextStyle(
+              Text(
+                widget.event!.orgName.toUpperCase(),
+                style: const TextStyle(
                   color: Colors.white,
                   fontSize: 14,
                   fontWeight: FontWeight.w600,
@@ -203,14 +273,14 @@ class _CountdownWidgetState extends State<CountdownWidget> {
               const Icon(Icons.calendar_today, color: Colors.white, size: 14),
               const SizedBox(width: 6),
               Text(
-                widget.event!.formattedDate, // ⭐ GAMITIN ANG formattedDate
+                widget.event!.formattedDate,
                 style: TextStyle(color: Colors.white.withOpacity(0.9), fontSize: 12),
               ),
               const SizedBox(width: 16),
               const Icon(Icons.access_time, color: Colors.white, size: 14),
               const SizedBox(width: 6),
               Text(
-                widget.event!.startTime,
+                widget.event!.formattedTime,
                 style: TextStyle(color: Colors.white.withOpacity(0.9), fontSize: 12),
               ),
             ],

@@ -48,9 +48,9 @@ class _StudentEventsScreenState extends State<StudentEventsScreen>
   void initState() {
     super.initState();
     _tabController = TabController(
-      length: 4,
+      length: 3,
       vsync: this,
-      initialIndex: widget.initialTabIndex.clamp(0, 3),
+      initialIndex: widget.initialTabIndex.clamp(0, 2),
     );
   }
 
@@ -103,7 +103,6 @@ class _StudentEventsScreenState extends State<StudentEventsScreen>
             Tab(text: 'Calendar'),
             Tab(text: 'Upcoming'),
             Tab(text: 'Registered'),
-            Tab(text: 'Archived'),
           ],
         ),
       ),
@@ -113,7 +112,6 @@ class _StudentEventsScreenState extends State<StudentEventsScreen>
           CalendarTab(registeredEventIdsStream: _registeredEventIdsStream),
           UpcomingTab(registeredEventIdsStream: _registeredEventIdsStream),
           RegisteredEventsTab(registeredEventIdsStream: _registeredEventIdsStream),
-          ArchivedEventsTab(registeredEventIdsStream: _registeredEventIdsStream),
         ],
       ),
     );
@@ -390,7 +388,7 @@ class _UpcomingTabState extends State<UpcomingTab> with AutomaticKeepAliveClient
 }
 
 // ═══════════════════════════════════════════════════════════════
-//  TAB 3: REGISTERED EVENTS (with Archive - icon only)
+//  TAB 3: REGISTERED EVENTS (Simplified with Segmented Control)
 // ═══════════════════════════════════════════════════════════════
 class RegisteredEventsTab extends StatefulWidget {
   final Stream<Set<String>> registeredEventIdsStream;
@@ -400,6 +398,7 @@ class RegisteredEventsTab extends StatefulWidget {
   State<RegisteredEventsTab> createState() => _RegisteredEventsTabState();
 }
 
+enum _ViewFilter { all, active, archived }
 enum _RegStatus { upcoming, ongoing, completed }
 
 class _RegisteredEventsTabState extends State<RegisteredEventsTab>
@@ -408,6 +407,7 @@ class _RegisteredEventsTabState extends State<RegisteredEventsTab>
   bool get wantKeepAlive => true;
 
   Stream<QuerySnapshot>? _registrationsStream;
+  _ViewFilter _viewFilter = _ViewFilter.all;
 
   @override
   void initState() {
@@ -490,6 +490,7 @@ class _RegisteredEventsTabState extends State<RegisteredEventsTab>
         title: const Text('Archive Event'),
         content: Text(
           'Are you sure you want to archive "${event.title}"?',
+          style: const TextStyle(fontSize: 15),
         ),
         actions: [
           TextButton(
@@ -540,6 +541,68 @@ class _RegisteredEventsTabState extends State<RegisteredEventsTab>
     }
   }
 
+  Future<void> _unarchiveEvent(EventModel event) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Restore Event'),
+        content: Text(
+          'Restore "${event.title}" to your registered events?',
+          style: const TextStyle(fontSize: 15),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.green,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Restore'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    try {
+      final docId = '${user.uid}_${event.id}';
+      await FirebaseFirestore.instance
+          .collection('registrations')
+          .doc(docId)
+          .update({
+        'isArchived': false,
+        'archivedAt': FieldValue.delete(),
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('"${event.title}" restored'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to restore: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     super.build(context);
@@ -564,10 +627,20 @@ class _RegisteredEventsTabState extends State<RegisteredEventsTab>
           );
         }
 
+        // Filter events based on view filter
         final eventIds = (regSnap.data?.docs ?? [])
             .where((doc) {
               final data = doc.data() as Map<String, dynamic>;
-              return data['isArchived'] != true;
+              final isArchived = data['isArchived'] == true;
+              
+              switch (_viewFilter) {
+                case _ViewFilter.active:
+                  return !isArchived;
+                case _ViewFilter.archived:
+                  return isArchived;
+                case _ViewFilter.all:
+                  return true;
+              }
             })
             .map((d) => (d.data() as Map<String, dynamic>)['eventId'] as String?)
             .whereType<String>()
@@ -575,20 +648,23 @@ class _RegisteredEventsTabState extends State<RegisteredEventsTab>
             .toList();
 
         if (eventIds.isEmpty) {
-          return const Center(
+          return Center(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(Icons.event_note_outlined, size: 64, color: Colors.grey),
-                SizedBox(height: 12),
-                Text(
-                  'No registered events',
-                  style: TextStyle(fontSize: 15, color: Colors.grey, fontWeight: FontWeight.w500),
+                Icon(
+                  _viewFilter == _ViewFilter.archived 
+                      ? Icons.archive_outlined 
+                      : Icons.event_note_outlined,
+                  size: 64,
+                  color: Colors.grey,
                 ),
-                SizedBox(height: 8),
+                const SizedBox(height: 12),
                 Text(
-                  'Register for an event to see it here',
-                  style: TextStyle(fontSize: 13, color: Colors.grey),
+                  _viewFilter == _ViewFilter.archived 
+                      ? 'No archived events' 
+                      : 'No registered events',
+                  style: TextStyle(fontSize: 15, color: Colors.grey, fontWeight: FontWeight.w500),
                 ),
               ],
             ),
@@ -637,606 +713,254 @@ class _RegisteredEventsTabState extends State<RegisteredEventsTab>
                   : a.date.compareTo(b.date);
             });
 
-            if (events.isEmpty) {
-              return const Center(
-                child: Text('No registered events found',
-                    style: TextStyle(color: Colors.grey)),
-              );
-            }
+            final isArchivedView = _viewFilter == _ViewFilter.archived;
 
-            return ListView.builder(
-              padding: const EdgeInsets.all(16),
-              itemCount: events.length,
-              itemBuilder: (context, index) {
-                final event = events[index];
-                final status = _statusFor(event);
-                final style = _statusStyle(status);
-                return Container(
-                  margin: const EdgeInsets.only(bottom: 14),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(16),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.06),
-                        blurRadius: 10,
-                        offset: const Offset(0, 3),
+            return Column(
+              children: [
+                // ── Segmented Control ──
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  color: Colors.white,
+                  child: SegmentedButton<_ViewFilter>(
+                    segments: const [
+                      ButtonSegment(
+                        value: _ViewFilter.all,
+                        label: Text('All'),
+                        icon: Icon(Icons.view_list_rounded, size: 16),
+                      ),
+                      ButtonSegment(
+                        value: _ViewFilter.active,
+                        label: Text('Active'),
+                        icon: Icon(Icons.event_note_rounded, size: 16),
+                      ),
+                      ButtonSegment(
+                        value: _ViewFilter.archived,
+                        label: Text('Archived'),
+                        icon: Icon(Icons.archive_rounded, size: 16),
                       ),
                     ],
-                  ),
-                  clipBehavior: Clip.antiAlias,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Stack(
-                        children: [
-                          EventImage(
-                            imageUrl: event.imageUrl,
-                            height: 130,
-                            width: double.infinity,
-                            fit: BoxFit.cover,
-                            showLoadingIndicator: true,
-                          ),
-                          Positioned(
-                            top: 10,
-                            right: 10,
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                              decoration: BoxDecoration(
-                                color: style.color,
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Text(
-                                style.label,
-                                style: const TextStyle(
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.white,
-                                  letterSpacing: 0.6,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
+                    selected: {_viewFilter},
+                    onSelectionChanged: (Set<_ViewFilter> newSelection) {
+                      setState(() {
+                        _viewFilter = newSelection.first;
+                      });
+                    },
+                    style: SegmentedButton.styleFrom(
+                      selectedBackgroundColor: AppColors.primaryDark,
+                      selectedForegroundColor: Colors.white,
+                      foregroundColor: Colors.grey.shade600,
+                      backgroundColor: Colors.grey.shade100,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
                       ),
-                      Padding(
-                        padding: const EdgeInsets.all(14),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              event.title,
-                              style: const TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w800,
-                                color: Colors.black87,
-                              ),
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              event.orgName,
-                              style: TextStyle(
-                                fontSize: 13,
-                                color: Colors.grey.shade600,
-                                fontWeight: FontWeight.w500,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            const SizedBox(height: 10),
-                            Row(
-                              children: [
-                                const Icon(Icons.calendar_today_outlined, size: 14, color: Colors.grey),
-                                const SizedBox(width: 4),
-                                Text(
-                                  event.formattedDate,
-                                  style: const TextStyle(fontSize: 12, color: Colors.grey),
-                                ),
-                                const SizedBox(width: 14),
-                                const Icon(Icons.access_time, size: 14, color: Colors.grey),
-                                const SizedBox(width: 4),
-                                Expanded(
-                                  child: Text(
-                                    event.formattedTime,
-                                    style: const TextStyle(fontSize: 12, color: Colors.grey),
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 6),
-                            Row(
-                              children: [
-                                const Icon(Icons.location_on_outlined, size: 14, color: Colors.grey),
-                                const SizedBox(width: 4),
-                                Expanded(
-                                  child: Text(
-                                    event.location,
-                                    style: const TextStyle(fontSize: 12, color: Colors.grey),
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 12),
-                            // ── Buttons Row (View Details + Archive Icon) ──
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: ElevatedButton(
-                                    onPressed: () => _openDetail(event, status == _RegStatus.completed),
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: AppColors.primaryDark,
-                                      padding: const EdgeInsets.symmetric(vertical: 10),
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(8),
-                                      ),
-                                    ),
-                                    child: const Text(
-                                      'View Details',
-                                      style: TextStyle(
-                                        fontSize: 13,
-                                        fontWeight: FontWeight.w600,
-                                        color: Colors.white,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                // Archive Button (icon only)
-                                Container(
-                                  width: 44,
-                                  height: 44,
-                                  decoration: BoxDecoration(
-                                    color: Colors.grey.shade100,
-                                    borderRadius: BorderRadius.circular(8),
-                                    border: Border.all(color: Colors.grey.shade300),
-                                  ),
-                                  child: IconButton(
-                                    onPressed: () => _archiveEvent(event),
-                                    icon: Icon(
-                                      Icons.archive_rounded,
-                                      size: 22,
-                                      color: Colors.grey.shade700,
-                                    ),
-                                    padding: EdgeInsets.zero,
-                                    tooltip: 'Archive',
-                                  ),
-                                ),
-                              ],
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                    ),
+                  ),
+                ),
+                const Divider(height: 1, color: Color(0xFFF0F0F0)),
+
+                Expanded(
+                  child: ListView.builder(
+                    padding: const EdgeInsets.only(
+                      left: 16,
+                      right: 16,
+                      top: 12,
+                      bottom: 100,
+                    ),
+                    itemCount: events.length,
+                    itemBuilder: (context, index) {
+                      final event = events[index];
+                      final status = _statusFor(event);
+                      final style = _statusStyle(status);
+                      
+                      // Check if this event is archived (for "All" view)
+                      bool isArchived = false;
+                      if (_viewFilter == _ViewFilter.all) {
+                        isArchived = (regSnap.data?.docs ?? []).any((doc) {
+                          final data = doc.data() as Map<String, dynamic>;
+                          return data['eventId'] == event.id && data['isArchived'] == true;
+                        });
+                      }
+
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 12),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(12),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.05),
+                              blurRadius: 8,
+                              offset: const Offset(0, 2),
                             ),
                           ],
                         ),
-                      ),
-                    ],
-                  ),
-                );
-              },
-            );
-          },
-        );
-      },
-    );
-  }
-}
-
-// ═══════════════════════════════════════════════════════════════
-//  TAB 4: ARCHIVED EVENTS (with Restore - icon only)
-// ═══════════════════════════════════════════════════════════════
-class ArchivedEventsTab extends StatefulWidget {
-  final Stream<Set<String>> registeredEventIdsStream;
-  const ArchivedEventsTab({required this.registeredEventIdsStream, super.key});
-
-  @override
-  State<ArchivedEventsTab> createState() => _ArchivedEventsTabState();
-}
-
-class _ArchivedEventsTabState extends State<ArchivedEventsTab>
-    with AutomaticKeepAliveClientMixin {
-  @override
-  bool get wantKeepAlive => true;
-
-  Stream<QuerySnapshot>? _registrationsStream;
-
-  @override
-  void initState() {
-    super.initState();
-    final user = FirebaseAuth.instance.currentUser;
-    if (user != null) {
-      _registrationsStream = FirebaseFirestore.instance
-          .collection('registrations')
-          .where('userId', isEqualTo: user.uid)
-          .where('isArchived', isEqualTo: true)
-          .snapshots();
-    }
-  }
-
-  void _openDetail(EventModel event) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => EventDetailScreen(
-          event: event,
-          onRegistered: () => setState(() {}),
-          isPastEvent: event.isPast,
-        ),
-      ),
-    );
-  }
-
-  Future<void> _unarchiveEvent(String eventId, String title) async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
-
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Restore Event'),
-        content: Text('Restore "$title" to your registered events?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.green,
-              foregroundColor: Colors.white,
-            ),
-            child: const Text('Restore'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirm != true) return;
-
-    try {
-      final docId = '${user.uid}_$eventId';
-      await FirebaseFirestore.instance
-          .collection('registrations')
-          .doc(docId)
-          .update({
-        'isArchived': false,
-        'archivedAt': FieldValue.delete(),
-      });
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('"$title" restored'),
-            backgroundColor: Colors.green,
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to restore: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    super.build(context);
-
-    if (_registrationsStream == null) {
-      return const Center(
-        child: Text('Please log in to see your archived events.',
-            style: TextStyle(color: Colors.grey)),
-      );
-    }
-
-    return StreamBuilder<QuerySnapshot>(
-      stream: _registrationsStream,
-      builder: (context, regSnap) {
-        if (regSnap.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator(color: AppColors.primaryDark));
-        }
-        if (regSnap.hasError) {
-          return Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.error_outline, color: Colors.red, size: 48),
-                const SizedBox(height: 12),
-                Text(
-                  'Failed to load archived events',
-                  style: TextStyle(color: Colors.grey.shade700, fontWeight: FontWeight.w600),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'Please create the required index or try again.',
-                  style: TextStyle(color: Colors.grey.shade500, fontSize: 12),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 12),
-                ElevatedButton(
-                  onPressed: () => setState(() {}),
-                  style: ElevatedButton.styleFrom(backgroundColor: AppColors.primaryDark),
-                  child: const Text('Retry', style: TextStyle(color: Colors.white)),
-                ),
-              ],
-            ),
-          );
-        }
-
-        final eventIds = (regSnap.data?.docs ?? [])
-            .map((d) => (d.data() as Map<String, dynamic>)['eventId'] as String?)
-            .whereType<String>()
-            .toSet()
-            .toList();
-
-        if (eventIds.isEmpty) {
-          return const Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.archive_outlined, size: 64, color: Colors.grey),
-                SizedBox(height: 12),
-                Text(
-                  'No archived events',
-                  style: TextStyle(fontSize: 15, color: Colors.grey, fontWeight: FontWeight.w500),
-                ),
-                SizedBox(height: 8),
-                Text(
-                  'Archived events will appear here',
-                  style: TextStyle(fontSize: 13, color: Colors.grey),
-                ),
-              ],
-            ),
-          );
-        }
-
-        final chunks = <List<String>>[];
-        for (var i = 0; i < eventIds.length; i += 30) {
-          chunks.add(eventIds.sublist(i, i + 30 > eventIds.length ? eventIds.length : i + 30));
-        }
-
-        return FutureBuilder<List<QuerySnapshot>>(
-          future: Future.wait(chunks.map((chunk) => FirebaseFirestore.instance
-              .collection('events')
-              .where(FieldPath.documentId, whereIn: chunk)
-              .get())),
-          builder: (context, evSnap) {
-            if (evSnap.connectionState == ConnectionState.waiting) {
-              return const Center(child: CircularProgressIndicator(color: AppColors.primaryDark));
-            }
-            if (evSnap.hasError || !evSnap.hasData) {
-              return Center(
-                child: Text('Failed to load events',
-                    style: TextStyle(color: Colors.grey.shade600)),
-              );
-            }
-
-            final eventsWithDates = <Map<String, dynamic>>[];
-            
-            for (final doc in regSnap.data!.docs) {
-              final data = doc.data() as Map<String, dynamic>;
-              final eventId = data['eventId'] as String;
-              final archivedAt = data['archivedAt'] as Timestamp?;
-              
-              final eventDoc = evSnap.data!
-                  .expand((snap) => snap.docs)
-                  .where((d) => d.id == eventId)
-                  .firstOrNull;
-                  
-              if (eventDoc != null) {
-                final event = EventModel.fromFirestore(eventDoc);
-                eventsWithDates.add({
-                  'event': event,
-                  'archivedAt': archivedAt,
-                });
-              }
-            }
-
-            eventsWithDates.sort((a, b) {
-              final aDate = a['archivedAt'] as Timestamp?;
-              final bDate = b['archivedAt'] as Timestamp?;
-              if (aDate == null && bDate == null) return 0;
-              if (aDate == null) return 1;
-              if (bDate == null) return -1;
-              return bDate.compareTo(aDate);
-            });
-
-            if (eventsWithDates.isEmpty) {
-              return const Center(
-                child: Text('No archived events found',
-                    style: TextStyle(color: Colors.grey)),
-              );
-            }
-
-            return ListView.builder(
-              padding: const EdgeInsets.all(16),
-              itemCount: eventsWithDates.length,
-              itemBuilder: (context, index) {
-                final item = eventsWithDates[index];
-                final event = item['event'] as EventModel;
-                final archivedAt = item['archivedAt'] as Timestamp?;
-
-                return Container(
-                  margin: const EdgeInsets.only(bottom: 14),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(16),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.06),
-                        blurRadius: 10,
-                        offset: const Offset(0, 3),
-                      ),
-                    ],
-                  ),
-                  clipBehavior: Clip.antiAlias,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Stack(
-                        children: [
-                          EventImage(
-                            imageUrl: event.imageUrl,
-                            height: 130,
-                            width: double.infinity,
-                            fit: BoxFit.cover,
-                            showLoadingIndicator: true,
-                          ),
-                          Positioned(
-                            top: 10,
-                            left: 10,
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                              decoration: BoxDecoration(
-                                color: Colors.grey.shade800.withOpacity(0.8),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: const Text(
-                                'ARCHIVED',
-                                style: TextStyle(
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.white,
-                                  letterSpacing: 0.6,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.all(14),
+                        clipBehavior: Clip.antiAlias,
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
-                              event.title,
-                              style: const TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w800,
-                                color: Colors.black87,
-                              ),
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              event.orgName,
-                              style: TextStyle(
-                                fontSize: 13,
-                                color: Colors.grey.shade600,
-                                fontWeight: FontWeight.w500,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            const SizedBox(height: 10),
-                            Row(
+                            // Event Image
+                            Stack(
                               children: [
-                                const Icon(Icons.calendar_today_outlined, size: 14, color: Colors.grey),
-                                const SizedBox(width: 4),
-                                Text(
-                                  event.formattedDate,
-                                  style: const TextStyle(fontSize: 12, color: Colors.grey),
+                                EventImage(
+                                  imageUrl: event.imageUrl,
+                                  height: 120,
+                                  width: double.infinity,
+                                  fit: BoxFit.cover,
+                                  showLoadingIndicator: true,
                                 ),
-                                const SizedBox(width: 14),
-                                const Icon(Icons.access_time, size: 14, color: Colors.grey),
-                                const SizedBox(width: 4),
-                                Expanded(
-                                  child: Text(
-                                    event.formattedTime,
-                                    style: const TextStyle(fontSize: 12, color: Colors.grey),
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 6),
-                            Row(
-                              children: [
-                                const Icon(Icons.location_on_outlined, size: 14, color: Colors.grey),
-                                const SizedBox(width: 4),
-                                Expanded(
-                                  child: Text(
-                                    event.location,
-                                    style: const TextStyle(fontSize: 12, color: Colors.grey),
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            if (archivedAt != null) ...[
-                              const SizedBox(height: 8),
-                              Text(
-                                'Archived: ${DateFormat('MMM dd, yyyy h:mm a').format(archivedAt.toDate())}',
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  color: Colors.grey.shade400,
-                                  fontStyle: FontStyle.italic,
-                                ),
-                              ),
-                            ],
-                            const SizedBox(height: 12),
-                            // ── Buttons Row (View Details + Restore Icon) ──
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: ElevatedButton(
-                                    onPressed: () => _openDetail(event),
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: Colors.grey.shade400,
-                                      padding: const EdgeInsets.symmetric(vertical: 10),
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(8),
-                                      ),
+                                // Status Badge
+                                Positioned(
+                                  top: 8,
+                                  right: 8,
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                    decoration: BoxDecoration(
+                                      color: isArchived ? Colors.grey : style.color,
+                                      borderRadius: BorderRadius.circular(12),
                                     ),
-                                    child: const Text(
-                                      'View Details',
-                                      style: TextStyle(
-                                        fontSize: 13,
-                                        fontWeight: FontWeight.w600,
+                                    child: Text(
+                                      isArchived ? 'ARCHIVED' : style.label,
+                                      style: const TextStyle(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.bold,
                                         color: Colors.white,
+                                        letterSpacing: 0.5,
                                       ),
                                     ),
                                   ),
                                 ),
-                                const SizedBox(width: 8),
-                                // Restore Button (icon only)
-                                Container(
-                                  width: 44,
-                                  height: 44,
-                                  decoration: BoxDecoration(
-                                    color: Colors.green.shade50,
-                                    borderRadius: BorderRadius.circular(8),
-                                    border: Border.all(color: Colors.green.shade200),
-                                  ),
-                                  child: IconButton(
-                                    onPressed: () => _unarchiveEvent(event.id, event.title),
-                                    icon: Icon(
-                                      Icons.restore_from_trash_rounded,
-                                      size: 22,
-                                      color: Colors.green.shade700,
-                                    ),
-                                    padding: EdgeInsets.zero,
-                                    tooltip: 'Restore',
-                                  ),
-                                ),
                               ],
+                            ),
+                            // Content
+                            Padding(
+                              padding: const EdgeInsets.all(12),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    event.title,
+                                    style: const TextStyle(
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.w700,
+                                      color: Colors.black87,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    event.orgName,
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: Colors.grey.shade600,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Row(
+                                    children: [
+                                      const Icon(Icons.calendar_today_outlined, size: 12, color: Colors.grey),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        event.formattedDate,
+                                        style: const TextStyle(fontSize: 11, color: Colors.grey),
+                                      ),
+                                      const SizedBox(width: 12),
+                                      const Icon(Icons.access_time, size: 12, color: Colors.grey),
+                                      const SizedBox(width: 4),
+                                      Expanded(
+                                        child: Text(
+                                          event.formattedTime,
+                                          style: const TextStyle(fontSize: 11, color: Colors.grey),
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Row(
+                                    children: [
+                                      const Icon(Icons.location_on_outlined, size: 12, color: Colors.grey),
+                                      const SizedBox(width: 4),
+                                      Expanded(
+                                        child: Text(
+                                          event.location,
+                                          style: const TextStyle(fontSize: 11, color: Colors.grey),
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 10),
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: ElevatedButton(
+                                          onPressed: () => _openDetail(event, status == _RegStatus.completed),
+                                          style: ElevatedButton.styleFrom(
+                                            backgroundColor: isArchived ? Colors.grey : AppColors.primaryDark,
+                                            padding: const EdgeInsets.symmetric(vertical: 8),
+                                            shape: RoundedRectangleBorder(
+                                              borderRadius: BorderRadius.circular(8),
+                                            ),
+                                          ),
+                                          child: const Text(
+                                            'View',
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.w600,
+                                              color: Colors.white,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      if (!isArchived)
+                                        IconButton(
+                                          onPressed: () => _archiveEvent(event),
+                                          icon: Icon(
+                                            Icons.archive_outlined,
+                                            size: 20,
+                                            color: Colors.grey.shade600,
+                                          ),
+                                          tooltip: 'Archive',
+                                          style: IconButton.styleFrom(
+                                            backgroundColor: Colors.grey.shade100,
+                                            shape: RoundedRectangleBorder(
+                                              borderRadius: BorderRadius.circular(8),
+                                            ),
+                                          ),
+                                        )
+                                      else
+                                        IconButton(
+                                          onPressed: () => _unarchiveEvent(event),
+                                          icon: Icon(
+                                            Icons.restore_from_trash,
+                                            size: 20,
+                                            color: Colors.green.shade700,
+                                          ),
+                                          tooltip: 'Restore',
+                                          style: IconButton.styleFrom(
+                                            backgroundColor: Colors.green.shade50,
+                                            shape: RoundedRectangleBorder(
+                                              borderRadius: BorderRadius.circular(8),
+                                            ),
+                                          ),
+                                        ),
+                                    ],
+                                  ),
+                                ],
+                              ),
                             ),
                           ],
                         ),
-                      ),
-                    ],
+                      );
+                    },
                   ),
-                );
-              },
+                ),
+              ],
             );
           },
         );

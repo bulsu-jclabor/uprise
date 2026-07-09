@@ -116,7 +116,6 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
   int _currentIndex = 0;
   String _userName = '';
   
-  // Key for the home content to refresh it
   final GlobalKey<_HomeContentState> _homeKey = GlobalKey<_HomeContentState>();
 
   @override
@@ -128,16 +127,10 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
     });
   }
 
-  // ── Builds the "Hello, ___" name from the split first/middle name
-  //    fields in Firestore (firstName + middleName only — last name
-  //    is intentionally left out of the greeting). Falls back to
-  //    Firebase Auth display name / email if the student doc or the
-  //    name fields are missing. ──
   Future<void> _loadUserName() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user != null) {
       try {
-        // students doc ID is the uid itself — direct lookup, no query/index.
         final doc = await FirebaseFirestore.instance
             .collection('students')
             .doc(user.uid)
@@ -164,10 +157,8 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
     }
   }
 
-  // Method to refresh user name when home tab is tapped
   void _refreshUserName() async {
     await _loadUserName();
-    // Also refresh the home content if it's mounted
     if (_homeKey.currentState != null) {
       _homeKey.currentState!.refreshData();
     }
@@ -185,7 +176,6 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
             _currentIndex = index;
           });
           
-          // If home tab is tapped (index 0), refresh the name
           if (index == 0) {
             _refreshUserName();
           }
@@ -224,11 +214,17 @@ class _HomeContentState extends State<_HomeContent> {
   bool _orgLoading = true;
   bool _isOffline = false;
   StreamSubscription<QuerySnapshot>? _cacheMonitor;
+  
+  // ⭐ REGISTERED EVENTS STATE ⭐
+  Set<String> _registeredEventIds = {};
+  bool _loadingRegistered = true;
 
   @override
   void initState() {
     super.initState();
     _loadOrgData();
+    _loadRegisteredEvents();
+    
     _cacheMonitor = FirebaseFirestore.instance
         .collection('events')
         .limit(1)
@@ -236,13 +232,6 @@ class _HomeContentState extends State<_HomeContent> {
         .listen((snap) {
       if (mounted && snap.metadata.isFromCache != _isOffline) {
         setState(() => _isOffline = snap.metadata.isFromCache);
-      }
-    });
-    
-    // ⭐ LOAD REGISTERED EVENTS FOR COUNTDOWN ⭐
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
-        Provider.of<EventProvider>(context, listen: false).loadRegisteredEvents();
       }
     });
   }
@@ -253,13 +242,162 @@ class _HomeContentState extends State<_HomeContent> {
     super.dispose();
   }
 
-  // Method to refresh data when home tab is tapped
+  // ⭐ LOAD ONLY THIS STUDENT'S REGISTERED EVENTS ⭐
+  Future<void> _loadRegisteredEvents() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      setState(() {
+        _registeredEventIds = {};
+        _loadingRegistered = false;
+      });
+      return;
+    }
+
+    try {
+      final snap = await FirebaseFirestore.instance
+          .collection('registrations')
+          .where('userId', isEqualTo: user.uid)
+          .get();
+
+      final ids = snap.docs
+          .map((doc) => doc['eventId'] as String)
+          .toSet();
+
+      debugPrint('✅ Registered event IDs: $ids');
+      debugPrint('✅ Number of registered events: ${ids.length}');
+
+      setState(() {
+        _registeredEventIds = ids;
+        _loadingRegistered = false;
+      });
+    } catch (e) {
+      debugPrint('❌ Error loading registrations: $e');
+      setState(() {
+        _registeredEventIds = {};
+        _loadingRegistered = false;
+      });
+    }
+  }
+
+  // ⭐ GET EARLIEST REGISTERED EVENT - Only future events ⭐
+  Future<EventModel?> _getEarliestRegisteredEvent() async {
+    if (_registeredEventIds.isEmpty) {
+      debugPrint('📌 No registered events');
+      return null;
+    }
+
+    final eventIds = _registeredEventIds.toList();
+    debugPrint('📌 Event IDs count: ${eventIds.length}');
+    
+    // If less than or equal to 30, query directly
+    if (eventIds.length <= 30) {
+      try {
+        final snap = await FirebaseFirestore.instance
+            .collection('events')
+            .where(FieldPath.documentId, whereIn: eventIds)
+            .where('date', isGreaterThanOrEqualTo: Timestamp.now())
+            .orderBy('date')
+            .limit(1)
+            .get();
+        
+        if (snap.docs.isEmpty) {
+          debugPrint('📌 No future events found');
+          return null;
+        }
+        
+        final event = EventModel.fromFirestore(snap.docs.first);
+        debugPrint('✅ Earliest future event found: ${event.title} - ${event.date}');
+        debugPrint('✅ Event ID: ${event.id}');
+        return event;
+      } catch (e) {
+        debugPrint('❌ Error querying events (direct): $e');
+        // FALLBACK: Query without date filter
+        try {
+          final snap = await FirebaseFirestore.instance
+              .collection('events')
+              .where(FieldPath.documentId, whereIn: eventIds)
+              .get();
+          
+          if (snap.docs.isEmpty) return null;
+          
+          final now = DateTime.now();
+          final futureEvents = snap.docs
+              .map((doc) => EventModel.fromFirestore(doc))
+              .where((event) => event.fullDateTime.isAfter(now))
+              .toList();
+          
+          if (futureEvents.isEmpty) {
+            debugPrint('📌 No future events found (fallback)');
+            return null;
+          }
+          
+          futureEvents.sort((a, b) => a.fullDateTime.compareTo(b.fullDateTime));
+          final event = futureEvents.first;
+          debugPrint('✅ Earliest future event (fallback): ${event.title} - ${event.date}');
+          return event;
+        } catch (e2) {
+          debugPrint('❌ Error querying events (fallback): $e2');
+          return null;
+        }
+      }
+    }
+
+    // If more than 30, query in batches
+    final allEvents = <EventModel>[];
+    for (var i = 0; i < eventIds.length; i += 30) {
+      final end = (i + 30 < eventIds.length) ? i + 30 : eventIds.length;
+      final batch = eventIds.sublist(i, end);
+      
+      if (batch.isEmpty) continue;
+      
+      try {
+        final snap = await FirebaseFirestore.instance
+            .collection('events')
+            .where(FieldPath.documentId, whereIn: batch)
+            .where('date', isGreaterThanOrEqualTo: Timestamp.now())
+            .get();
+        
+        for (final doc in snap.docs) {
+          allEvents.add(EventModel.fromFirestore(doc));
+        }
+      } catch (e) {
+        debugPrint('❌ Error querying batch: $e');
+        // FALLBACK: Query without date filter for this batch
+        try {
+          final snap = await FirebaseFirestore.instance
+              .collection('events')
+              .where(FieldPath.documentId, whereIn: batch)
+              .get();
+          
+          for (final doc in snap.docs) {
+            allEvents.add(EventModel.fromFirestore(doc));
+          }
+        } catch (e2) {
+          debugPrint('❌ Error querying batch (fallback): $e2');
+        }
+      }
+    }
+
+    // Filter future events in code
+    final now = DateTime.now();
+    final futureEvents = allEvents
+        .where((event) => event.fullDateTime.isAfter(now))
+        .toList();
+    
+    if (futureEvents.isEmpty) {
+      debugPrint('📌 No future events found in batches');
+      return null;
+    }
+    
+    futureEvents.sort((a, b) => a.fullDateTime.compareTo(b.fullDateTime));
+    final earliest = futureEvents.first;
+    debugPrint('✅ Earliest future event: ${earliest.title} - ${earliest.date}');
+    return earliest;
+  }
+
   void refreshData() {
-    setState(() {
-      // This will trigger a rebuild with the new userName from parent
-    });
-    // ⭐ REFRESH REGISTERED EVENTS ⭐
-    Provider.of<EventProvider>(context, listen: false).refreshRegisteredEvents();
+    setState(() {});
+    _loadRegisteredEvents();
   }
 
   Future<void> _loadOrgData() async {
@@ -269,7 +407,6 @@ class _HomeContentState extends State<_HomeContent> {
       return;
     }
     try {
-      // students doc ID is the uid itself — direct lookup, no query/index.
       final studentDoc = await FirebaseFirestore.instance
           .collection('students')
           .doc(user.uid)
@@ -307,7 +444,6 @@ class _HomeContentState extends State<_HomeContent> {
         builder: (context) => EventDetailScreen(
           event: event,
           onRegistered: () {
-            // Refresh the home screen when registered
             refreshData();
           },
           isPastEvent: event.isPast,
@@ -330,8 +466,6 @@ class _HomeContentState extends State<_HomeContent> {
   @override
   Widget build(BuildContext context) {
     final user = FirebaseAuth.instance.currentUser;
-    // Use the userName passed from parent (already first + middle name
-    // only — see _loadUserName in StudentHomeScreen), or fallback
     final userName = widget.userName.isNotEmpty 
         ? widget.userName 
         : user?.displayName ?? user?.email?.split('@').first ?? 'Student';
@@ -370,7 +504,6 @@ class _HomeContentState extends State<_HomeContent> {
               ],
             ),
             actions: [
-              // ── Shopping Cart ──
               IconButton(
                 icon: Icon(
                   Icons.shopping_cart_outlined,
@@ -386,7 +519,6 @@ class _HomeContentState extends State<_HomeContent> {
                 },
               ),
               
-              // ── NOTIFICATION ICON WITH BADGE ──
               StreamBuilder<QuerySnapshot>(
                 stream: FirebaseFirestore.instance
                     .collection('notifications')
@@ -582,39 +714,64 @@ class _HomeContentState extends State<_HomeContent> {
             ),
           ),
 
-          // ⭐ COUNTDOWN SECTION ⭐
+          // ⭐ COUNTDOWN SECTION - Only for THIS STUDENT's future registered events ⭐
           SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              child: Consumer<EventProvider>(
-                builder: (context, provider, child) {
-                  if (provider.isLoading) {
-                    return Container(
-                      height: 180,
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: const Center(
-                        child: SizedBox(
-                          height: 30,
-                          width: 30,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: AppColors.primaryDark,
-                          ),
+            child: _loadingRegistered
+                ? Container(
+                    height: 180,
+                    margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: const Center(
+                      child: SizedBox(
+                        height: 30,
+                        width: 30,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: AppColors.primaryDark,
                         ),
                       ),
-                    );
-                  }
-                  
-                  // Display countdown for the EARLIEST registered event
-                  return CountdownWidget(
-                    event: provider.earliestEvent,
-                  );
-                },
-              ),
-            ),
+                    ),
+                  )
+                : _registeredEventIds.isEmpty
+                    ? const SizedBox.shrink()
+                    : Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                        child: FutureBuilder<EventModel?>(
+                          future: _getEarliestRegisteredEvent(),
+                          builder: (context, snapshot) {
+                            if (snapshot.connectionState == ConnectionState.waiting) {
+                              return Container(
+                                height: 180,
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                                child: const Center(
+                                  child: SizedBox(
+                                    height: 30,
+                                    width: 30,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: AppColors.primaryDark,
+                                    ),
+                                  ),
+                                ),
+                              );
+                            }
+
+                            // ✅ If no future events, don't show anything
+                            if (snapshot.hasError || snapshot.data == null) {
+                              return const SizedBox.shrink();
+                            }
+
+                            final event = snapshot.data!;
+                            return CountdownWidget(event: event);
+                          },
+                        ),
+                      ),
           ),
 
           // Upcoming Events Section Header
@@ -708,7 +865,6 @@ class _HomeContentState extends State<_HomeContent> {
                       final doc = events[index];
                       final data = doc.data() as Map<String, dynamic>;
                       
-                      // Convert to EventData
                       final eventData = EventModel.fromFirestore(doc);
                       
                       Timestamp? timestamp = data['date'];
@@ -745,7 +901,6 @@ class _HomeContentState extends State<_HomeContent> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              // ── ORANGE TOP ──
                               Container(
                                 height: 90,
                                 width: double.infinity,
@@ -782,8 +937,6 @@ class _HomeContentState extends State<_HomeContent> {
                                   ],
                                 ),
                               ),
-                              
-                              // ── WHITE BOTTOM ──
                               Padding(
                                 padding: const EdgeInsets.all(10),
                                 child: Column(
