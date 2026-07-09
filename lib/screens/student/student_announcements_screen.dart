@@ -4,8 +4,8 @@ import 'dart:io';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/gestures.dart';                 // 👈 for TapGestureRecognizer
-import 'package:url_launcher/url_launcher.dart';       // 👈 for opening links
+import 'package:flutter/gestures.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:intl/intl.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:path_provider/path_provider.dart';
@@ -14,22 +14,49 @@ import 'package:uprise/models/event_model.dart';
 import '../../widgets/student/app_colors.dart';
 import 'student_events_screen.dart';
 
-
+// ─────────────────────────────────────────────────────────────
+//  HELPER: IMAGE PROVIDER - FIXED FOR YOUR DATA FORMAT
+// ─────────────────────────────────────────────────────────────
 ImageProvider _studentImageProvider(String url) {
   if (url.isEmpty) return const AssetImage('assets/placeholder.png');
-  if (url.startsWith('data:image')) {
-    return MemoryImage(base64Decode(url.split(',').last));
+  
+  // Handle "dataimage" without colon (YOUR FORMAT)
+  if (url.startsWith('dataimage')) {
+    try {
+      final base64Str = url.split('base64,').last;
+      final bytes = base64Decode(base64Str);
+      return MemoryImage(bytes);
+    } catch (_) {
+      return const AssetImage('assets/placeholder.png');
+    }
   }
+  
+  // Handle "data:image" format
+  if (url.startsWith('data:image')) {
+    try {
+      final base64Str = url.split(',').last;
+      final bytes = base64Decode(base64Str);
+      return MemoryImage(bytes);
+    } catch (_) {
+      return const AssetImage('assets/placeholder.png');
+    }
+  }
+  
+  // Handle raw base64
   if (!url.startsWith('http')) {
     try {
-      return MemoryImage(base64Decode(url));
-    } catch (_) {}
+      final bytes = base64Decode(url);
+      return MemoryImage(bytes);
+    } catch (_) {
+      return const AssetImage('assets/placeholder.png');
+    }
   }
+  
   return NetworkImage(url);
 }
 
 // ─────────────────────────────────────────────────────────────
-//  NAVIGATE TO LINKED EVENT (from an announcement's register button)
+//  NAVIGATE TO LINKED EVENT
 // ─────────────────────────────────────────────────────────────
 Future<void> _goToLinkedEvent(BuildContext context, AnnouncementData ann) async {
   if (ann.linkedEventId.isEmpty) return;
@@ -49,7 +76,7 @@ Future<void> _goToLinkedEvent(BuildContext context, AnnouncementData ann) async 
         .get();
 
     if (!context.mounted) return;
-    Navigator.of(context, rootNavigator: true).pop(); // close loading spinner
+    Navigator.of(context, rootNavigator: true).pop();
 
     if (!doc.exists) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -79,6 +106,9 @@ Future<void> _goToLinkedEvent(BuildContext context, AnnouncementData ann) async 
   }
 }
 
+// ─────────────────────────────────────────────────────────────
+//  SHOULD SHOW ANNOUNCEMENT
+// ─────────────────────────────────────────────────────────────
 bool shouldShowAnnouncementToStudent(Map<String, dynamic> data) {
   if (data['isPublished'] == false) {
     return false;
@@ -101,6 +131,50 @@ bool shouldShowAnnouncementToStudent(Map<String, dynamic> data) {
 }
 
 // ─────────────────────────────────────────────────────────────
+//  ORGANIZATION LOGO CACHE
+// ─────────────────────────────────────────────────────────────
+class OrgLogoCache {
+  static final Map<String, String> _cache = {};
+  
+  static Future<void> loadAllOrganizations() async {
+    try {
+      final querySnapshot = await FirebaseFirestore.instance
+          .collection('organizations')
+          .get();
+      
+      for (var doc in querySnapshot.docs) {
+        final data = doc.data();
+        final name = (data['name'] as String? ?? '').trim().toLowerCase();
+        
+        // Try all possible field names
+        String logo = data['logouUrl'] as String? ?? '';
+        if (logo.isEmpty) logo = data['logoUrl'] as String? ?? '';
+        if (logo.isEmpty) logo = data['logo'] as String? ?? '';
+        if (logo.isEmpty) logo = data['imageUrl'] as String? ?? '';
+        if (logo.isEmpty) logo = data['profileImage'] as String? ?? '';
+        
+        if (logo.isNotEmpty) {
+          _cache[name] = logo;
+        }
+      }
+      
+      print('✅ Loaded ${_cache.length} organization logos');
+      print('📋 Available organizations: ${_cache.keys.join(", ")}');
+    } catch (e) {
+      print('❌ Error loading organizations: $e');
+    }
+  }
+  
+  static String? getLogo(String orgName) {
+    if (orgName.isEmpty) return null;
+    final key = orgName.trim().toLowerCase();
+    return _cache[key];
+  }
+  
+  static bool get isLoaded => _cache.isNotEmpty;
+}
+
+// ─────────────────────────────────────────────────────────────
 //  DATA MODEL
 // ─────────────────────────────────────────────────────────────
 class AnnouncementData {
@@ -120,6 +194,8 @@ class AnnouncementData {
   final String linkedEventId;
   final String linkedProposalId;
   final String linkedEventTitle;
+  final String authorId;
+  final String authorName;
 
   AnnouncementData({
     required this.id,
@@ -138,6 +214,8 @@ class AnnouncementData {
     this.linkedEventId = '',
     this.linkedProposalId = '',
     this.linkedEventTitle = '',
+    this.authorId = '',
+    this.authorName = '',
   });
 
   factory AnnouncementData.fromFirestore(DocumentSnapshot doc) {
@@ -150,6 +228,8 @@ class AnnouncementData {
             : DateTime.now();
 
     final rawImage = d['imageBase64'] as String? ?? d['imageUrl'] as String? ?? '';
+    
+    String logoUrl = d['logoUrl'] as String? ?? '';
 
     return AnnouncementData(
       id: doc.id,
@@ -162,7 +242,7 @@ class AnnouncementData {
       tag: (d['targetAudience'] as String?)?.toUpperCase() ??
           (d['category'] as String?)?.toUpperCase() ?? 'ANNOUNCEMENT',
       imageUrl: rawImage,
-      logoUrl: d['logoUrl'] as String? ?? '',
+      logoUrl: logoUrl,
       body: d['content'] as String? ?? '',
       hashtags: [],
       attachments: ((d['attachmentsBase64'] as List?) ?? [])
@@ -177,6 +257,8 @@ class AnnouncementData {
       linkedEventId: d['linkedEventId'] as String? ?? '',
       linkedProposalId: d['linkedProposalId'] as String? ?? '',
       linkedEventTitle: d['linkedEventTitle'] as String? ?? '',
+      authorId: d['authorId'] as String? ?? '',
+      authorName: d['authorName'] as String? ?? '',
     );
   }
 
@@ -189,7 +271,7 @@ class AnnouncementData {
 }
 
 // ─────────────────────────────────────────────────────────────
-//  LIST SCREEN
+//  MAIN LIST SCREEN
 // ─────────────────────────────────────────────────────────────
 class StudentAnnouncementsScreen extends StatefulWidget {
   const StudentAnnouncementsScreen({super.key});
@@ -200,12 +282,28 @@ class StudentAnnouncementsScreen extends StatefulWidget {
 
 class _StudentAnnouncementsScreenState extends State<StudentAnnouncementsScreen> {
   final String? _userId = FirebaseAuth.instance.currentUser?.uid;
+  bool _orgsLoaded = false;
 
   late final Stream<QuerySnapshot> _announcementsStream =
       FirebaseFirestore.instance
           .collection('announcements')
           .orderBy('timestamp', descending: true)
           .snapshots();
+
+  @override
+  void initState() {
+    super.initState();
+    _loadOrganizations();
+  }
+
+  Future<void> _loadOrganizations() async {
+    await OrgLogoCache.loadAllOrganizations();
+    if (mounted) {
+      setState(() {
+        _orgsLoaded = true;
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -235,7 +333,7 @@ class _StudentAnnouncementsScreenState extends State<StudentAnnouncementsScreen>
       body: StreamBuilder<QuerySnapshot>(
         stream: _announcementsStream,
         builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
+          if (snapshot.connectionState == ConnectionState.waiting || !_orgsLoaded) {
             return const Center(
               child: CircularProgressIndicator(
                 color: AppColors.primaryDark,
@@ -338,12 +436,23 @@ class _StudentAnnouncementsScreenState extends State<StudentAnnouncementsScreen>
 }
 
 // ─────────────────────────────────────────────────────────────
-//  ANNOUNCEMENT CARD - UPRISE THEME COLORS
+//  ANNOUNCEMENT CARD - WITH ORGANIZATION LOGO
 // ─────────────────────────────────────────────────────────────
 class _AnnouncementCard extends StatelessWidget {
   final AnnouncementData ann;
 
   const _AnnouncementCard({required this.ann});
+
+  String? get _logoUrl {
+    // First check if the announcement has a logo
+    if (ann.logoUrl.isNotEmpty) return ann.logoUrl;
+    
+    // Then check the cache by organization name
+    final cachedLogo = OrgLogoCache.getLogo(ann.org);
+    if (cachedLogo != null && cachedLogo.isNotEmpty) return cachedLogo;
+    
+    return null;
+  }
 
   void _navigateToDetail(BuildContext context) {
     Navigator.push(
@@ -357,6 +466,11 @@ class _AnnouncementCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ann = this.ann;
+    final logoUrl = _logoUrl;
+    
+    print('📢 Announcement: ${ann.title}');
+    print('🏢 Organization: ${ann.org}');
+    print('🖼️ Logo URL: ${logoUrl != null ? "Found" : "Not found"}');
 
     return GestureDetector(
       onTap: () => _navigateToDetail(context),
@@ -552,7 +666,7 @@ class _AnnouncementCard extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // ── Organization Row ──
+                  // ── Organization Row with Logo ──
                   Row(
                     children: [
                       Container(
@@ -563,9 +677,9 @@ class _AnnouncementCard extends StatelessWidget {
                           color: AppColors.primaryDark.withOpacity(0.1),
                         ),
                         child: ClipOval(
-                          child: ann.logoUrl.isNotEmpty
+                          child: (logoUrl != null && logoUrl.isNotEmpty)
                               ? Image(
-                                  image: _studentImageProvider(ann.logoUrl),
+                                  image: _studentImageProvider(logoUrl),
                                   fit: BoxFit.cover,
                                   errorBuilder: (_, __, ___) => Icon(
                                     Icons.business_center_outlined,
@@ -618,7 +732,7 @@ class _AnnouncementCard extends StatelessWidget {
 
                   const SizedBox(height: 6),
 
-                  // ── Body preview (now with clickable links) ──
+                  // ── Body preview ──
                   _buildRichContent(
                     ann.body,
                     TextStyle(fontSize: 13, color: Colors.grey.shade600, height: 1.5),
@@ -626,7 +740,7 @@ class _AnnouncementCard extends StatelessWidget {
 
                   const SizedBox(height: 12),
 
-                  // ── Go to Linked Event to Register ──
+                  // ── Go to Linked Event ──
                   if (ann.linkedEventId.isNotEmpty) ...[
                     SizedBox(
                       width: double.infinity,
@@ -691,7 +805,7 @@ class _AnnouncementCard extends StatelessWidget {
     );
   }
 
-  /// Turns URLs in the body text into tappable links (same style as the rest of the card)
+  /// Turns URLs in the body text into tappable links
   Widget _buildRichContent(String text, TextStyle baseStyle) {
     final urlRegex = RegExp(r'(https?:\/\/[^\s]+)');
     final matches = urlRegex.allMatches(text);
@@ -726,9 +840,6 @@ class _AnnouncementCard extends StatelessWidget {
       spans.add(TextSpan(text: text.substring(lastEnd)));
     }
 
-    // RichText doesn't support maxLines or overflow natively – we need to wrap it in a container.
-    // Because of the two‑line limit, we'll keep the RichText inside a SizedBox with a fixed height,
-    // or simply return RichText and let the parent Column clip it.
     return RichText(
       text: TextSpan(style: baseStyle, children: spans),
       maxLines: 2,
@@ -738,7 +849,7 @@ class _AnnouncementCard extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────
-//  DETAIL SCREEN - UPRISE THEME COLORS (NO "Mark as Read")
+//  DETAIL SCREEN
 // ─────────────────────────────────────────────────────────────
 class AnnouncementDetailScreen extends StatelessWidget {
   final AnnouncementData announcement;
@@ -748,9 +859,17 @@ class AnnouncementDetailScreen extends StatelessWidget {
     required this.announcement,
   });
 
+  String? get _logoUrl {
+    if (announcement.logoUrl.isNotEmpty) return announcement.logoUrl;
+    final cachedLogo = OrgLogoCache.getLogo(announcement.org);
+    if (cachedLogo != null && cachedLogo.isNotEmpty) return cachedLogo;
+    return null;
+  }
+
   @override
   Widget build(BuildContext context) {
     final ann = announcement;
+    final logoUrl = _logoUrl;
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -944,7 +1063,7 @@ class AnnouncementDetailScreen extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // ── Organization Row ──
+                  // ── Organization Row with Logo ──
                   Row(
                     children: [
                       Container(
@@ -955,9 +1074,9 @@ class AnnouncementDetailScreen extends StatelessWidget {
                           color: AppColors.primaryDark.withOpacity(0.1),
                         ),
                         child: ClipOval(
-                          child: ann.logoUrl.isNotEmpty
+                          child: (logoUrl != null && logoUrl.isNotEmpty)
                               ? Image(
-                                  image: _studentImageProvider(ann.logoUrl),
+                                  image: _studentImageProvider(logoUrl),
                                   fit: BoxFit.cover,
                                   errorBuilder: (_, __, ___) => Icon(
                                     Icons.business_center_outlined,
@@ -1015,7 +1134,7 @@ class AnnouncementDetailScreen extends StatelessWidget {
 
                   const SizedBox(height: 16),
 
-                  // ── Body (now with clickable links) ──
+                  // ── Body ──
                   _buildRichContent(
                     ann.body,
                     TextStyle(fontSize: 15, color: Colors.grey.shade800, height: 1.8),
@@ -1023,7 +1142,7 @@ class AnnouncementDetailScreen extends StatelessWidget {
 
                   const SizedBox(height: 24),
 
-                  // ── Go to Linked Event to Register ──
+                  // ── Go to Linked Event ──
                   if (ann.linkedEventId.isNotEmpty) ...[
                     Container(
                       padding: const EdgeInsets.all(16),
@@ -1205,7 +1324,6 @@ class AnnouncementDetailScreen extends StatelessWidget {
     );
   }
 
-  /// Turns URLs in the body text into tappable links (detail view)
   Widget _buildRichContent(String text, TextStyle baseStyle) {
     final urlRegex = RegExp(r'(https?:\/\/[^\s]+)');
     final matches = urlRegex.allMatches(text);
@@ -1247,7 +1365,7 @@ class AnnouncementDetailScreen extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────
-//  ATTACHMENT TILE (With Actual Download via Share)
+//  ATTACHMENT TILE
 // ─────────────────────────────────────────────────────────────
 class _AttachmentTile extends StatefulWidget {
   final Map<String, String> attachment;
