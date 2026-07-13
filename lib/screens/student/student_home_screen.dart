@@ -1,5 +1,6 @@
 // lib/screens/student/student_home_screen.dart
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -45,6 +46,68 @@ class _UiTokens {
         border: Border.all(color: cardBorder, width: 1),
         boxShadow: subtleShadow,
       );
+}
+
+// Helper widget to display base64 images
+class Base64Image extends StatelessWidget {
+  final String base64String;
+  final double height;
+  final double width;
+  final BoxFit fit;
+
+  const Base64Image({
+    super.key,
+    required this.base64String,
+    this.height = 100,
+    this.width = double.infinity,
+    this.fit = BoxFit.cover,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    try {
+      // Extract the base64 part if it's a data URL
+      String base64Data = base64String;
+      if (base64String.startsWith('data:image')) {
+        // Find the comma that separates the metadata from the base64 data
+        final commaIndex = base64String.indexOf(',');
+        if (commaIndex != -1) {
+          base64Data = base64String.substring(commaIndex + 1);
+        }
+      }
+      
+      final bytes = base64Decode(base64Data);
+      return Image.memory(
+        bytes,
+        height: height,
+        width: width,
+        fit: fit,
+        errorBuilder: (context, error, stackTrace) {
+          return Container(
+            height: height,
+            width: width,
+            color: AppColors.primaryDark.withOpacity(0.1),
+            child: const Icon(
+              Icons.image_not_supported,
+              color: Colors.grey,
+              size: 40,
+            ),
+          );
+        },
+      );
+    } catch (e) {
+      return Container(
+        height: height,
+        width: width,
+        color: AppColors.primaryDark.withOpacity(0.1),
+        child: const Icon(
+          Icons.image_not_supported,
+          color: Colors.grey,
+          size: 40,
+        ),
+      );
+    }
+  }
 }
 
 // Reusable section header used across Quick Access / Events / Announcements
@@ -564,6 +627,12 @@ class _HomeContentState extends State<_HomeContent> {
     );
   }
 
+  String _formatDate(Timestamp? timestamp) {
+    if (timestamp == null) return 'TBA';
+    final date = timestamp.toDate();
+    return DateFormat('MMM dd, yyyy').format(date);
+  }
+
   @override
   Widget build(BuildContext context) {
     final user = FirebaseAuth.instance.currentUser;
@@ -843,7 +912,6 @@ class _HomeContentState extends State<_HomeContent> {
                         child: FutureBuilder<EventModel?>(
                           future: _getEarliestRegisteredEvent(),
                           builder: (context, snapshot) {
-                            // Debug print para malaman kung ano nangyayari
                             debugPrint('🔍 Countdown FutureBuilder: connectionState=${snapshot.connectionState}, hasData=${snapshot.hasData}, error=${snapshot.error}');
 
                             if (snapshot.connectionState == ConnectionState.waiting) {
@@ -877,7 +945,6 @@ class _HomeContentState extends State<_HomeContent> {
                               );
                             }
 
-                            // ✅ If no future events, don't show anything
                             if (snapshot.data == null) {
                               debugPrint('📌 No future events found - hiding countdown');
                               return const SizedBox.shrink();
@@ -886,7 +953,6 @@ class _HomeContentState extends State<_HomeContent> {
                             final event = snapshot.data!;
                             debugPrint('✅ Countdown event found: ${event.title} - ${event.date}');
                             
-                            // ✅ Directly return CountdownWidget without FittedBox
                             return CountdownWidget(event: event);
                           },
                         ),
@@ -950,89 +1016,56 @@ class _HomeContentState extends State<_HomeContent> {
                 final events = snapshot.data!.docs;
 
                 return SizedBox(
-                  height: 204,
+                  height: 240, // Increased height to accommodate date
                   child: ListView.builder(
                     scrollDirection: Axis.horizontal,
                     padding: const EdgeInsets.symmetric(horizontal: 20),
                     itemCount: events.length,
                     itemBuilder: (context, index) {
                       final doc = events[index];
+                      final eventData = EventModel.fromFirestore(doc);
                       final data = doc.data() as Map<String, dynamic>;
 
-                      final eventData = EventModel.fromFirestore(doc);
-
-                      Timestamp? timestamp = data['date'];
-                      DateTime eventDate;
-
-                      if (timestamp != null) {
-                        eventDate = timestamp.toDate();
-                      } else {
-                        eventDate = DateTime.now();
-                      }
-
-                      final monthName = DateFormat('MMM').format(eventDate).toUpperCase();
-                      final dayNumber = DateFormat('dd').format(eventDate);
-                      final formattedTime = data['startTime'] ?? 'TBA';
-                      final title = data['title'] ?? 'Untitled Event';
-                      final location = data['location'] ?? 'TBA';
+                      // Get the banner URL (base64 data URL)
+                      final bannerUrl = data['bannerUrl'] as String? ?? '';
+                      final eventDate = data['date'] as Timestamp?;
+                      final formattedDate = _formatDate(eventDate);
 
                       return GestureDetector(
                         onTap: () => _navigateToEventDetail(eventData),
                         child: Container(
-                          width: 182,
+                          width: 200,
                           margin: const EdgeInsets.only(right: 12),
                           decoration: _UiTokens.card(),
                           clipBehavior: Clip.antiAlias,
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Container(
-                                height: 78,
-                                width: double.infinity,
-                                color: AppColors.primaryDark,
-                                child: Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                      decoration: BoxDecoration(
-                                        color: Colors.white.withOpacity(0.12),
-                                        borderRadius: BorderRadius.circular(8),
-                                      ),
-                                      child: Column(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          Text(
-                                            monthName,
-                                            style: TextStyle(
-                                              fontSize: 10.5,
-                                              fontWeight: FontWeight.w700,
-                                              letterSpacing: 0.8,
-                                              color: Colors.white.withOpacity(0.85),
-                                            ),
-                                          ),
-                                          Text(
-                                            dayNumber,
-                                            style: const TextStyle(
-                                              fontSize: 20,
-                                              fontWeight: FontWeight.w800,
-                                              color: Colors.white,
-                                              height: 1.1,
-                                            ),
-                                          ),
-                                        ],
+                              // Event Image (cover photo) - Using Base64Image widget
+                              bannerUrl.isNotEmpty
+                                  ? Base64Image(
+                                      base64String: bannerUrl,
+                                      height: 100,
+                                      width: double.infinity,
+                                      fit: BoxFit.cover,
+                                    )
+                                  : Container(
+                                      height: 100,
+                                      width: double.infinity,
+                                      color: AppColors.primaryDark.withOpacity(0.1),
+                                      child: const Icon(
+                                        Icons.image_not_supported,
+                                        color: Colors.grey,
+                                        size: 40,
                                       ),
                                     ),
-                                  ],
-                                ),
-                              ),
                               Padding(
                                 padding: const EdgeInsets.all(11),
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(
-                                      title,
+                                      data['title'] ?? 'Untitled Event',
                                       style: const TextStyle(
                                         fontSize: 13,
                                         fontWeight: FontWeight.w700,
@@ -1041,7 +1074,32 @@ class _HomeContentState extends State<_HomeContent> {
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
                                     ),
-                                    const SizedBox(height: 5),
+                                    const SizedBox(height: 4),
+                                    // Event Date
+                                    Row(
+                                      children: [
+                                        Icon(
+                                          Icons.calendar_today_outlined,
+                                          size: 11,
+                                          color: Colors.grey.shade500,
+                                        ),
+                                        const SizedBox(width: 4),
+                                        Expanded(
+                                          child: Text(
+                                            formattedDate,
+                                            style: TextStyle(
+                                              fontSize: 10.5,
+                                              color: Colors.grey.shade600,
+                                              fontWeight: FontWeight.w500,
+                                            ),
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 3),
+                                    // Event Time
                                     Row(
                                       children: [
                                         Icon(
@@ -1052,7 +1110,7 @@ class _HomeContentState extends State<_HomeContent> {
                                         const SizedBox(width: 4),
                                         Expanded(
                                           child: Text(
-                                            formattedTime,
+                                            data['startTime'] ?? 'TBA',
                                             style: TextStyle(
                                               fontSize: 10.5,
                                               color: Colors.grey.shade600,
@@ -1064,6 +1122,7 @@ class _HomeContentState extends State<_HomeContent> {
                                       ],
                                     ),
                                     const SizedBox(height: 3),
+                                    // Event Location
                                     Row(
                                       children: [
                                         Icon(
@@ -1074,7 +1133,7 @@ class _HomeContentState extends State<_HomeContent> {
                                         const SizedBox(width: 4),
                                         Expanded(
                                           child: Text(
-                                            location,
+                                            data['location'] ?? 'TBA',
                                             style: TextStyle(
                                               fontSize: 10.5,
                                               color: Colors.grey.shade600,
