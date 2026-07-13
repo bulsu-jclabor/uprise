@@ -21,6 +21,100 @@ import 'student_notifications_screen.dart';
 import 'student_merchandise_screen.dart';
 import 'student_feedback_prompt.dart';
 
+// ─────────────────────────────────────────────────────────────
+// Shared style tokens (UI only — no logic here)
+// ─────────────────────────────────────────────────────────────
+class _UiTokens {
+  static const double radius = 12;
+  static const Color divider = Color(0xFFE7E7E9);
+  static const Color cardBorder = Color(0xFFEDEDEF);
+  static const Color mutedText = Color(0xFF6B6B70);
+  static const Color headingText = Color(0xFF1B1B1D);
+
+  static List<BoxShadow> get subtleShadow => [
+        BoxShadow(
+          color: Colors.black.withOpacity(0.05),
+          blurRadius: 12,
+          offset: const Offset(0, 4),
+        ),
+      ];
+
+  static BoxDecoration card({double radiusOverride = radius}) => BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(radiusOverride),
+        border: Border.all(color: cardBorder, width: 1),
+        boxShadow: subtleShadow,
+      );
+}
+
+// Reusable section header used across Quick Access / Events / Announcements
+class _SectionHeader extends StatelessWidget {
+  final String title;
+  final String? actionLabel;
+  final VoidCallback? onAction;
+
+  const _SectionHeader({
+    required this.title,
+    this.actionLabel,
+    this.onAction,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Row(
+          children: [
+            Container(
+              width: 3,
+              height: 16,
+              decoration: BoxDecoration(
+                color: AppColors.primaryDark,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              title,
+              style: const TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+                color: _UiTokens.headingText,
+                letterSpacing: 0.1,
+              ),
+            ),
+          ],
+        ),
+        if (actionLabel != null)
+          TextButton(
+            onPressed: onAction,
+            style: TextButton.styleFrom(
+              foregroundColor: AppColors.primaryDark,
+              padding: EdgeInsets.zero,
+              minimumSize: const Size(0, 0),
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  actionLabel!,
+                  style: const TextStyle(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.primaryDark,
+                  ),
+                ),
+                const SizedBox(width: 2),
+                const Icon(Icons.arrow_forward_ios, size: 11, color: AppColors.primaryDark),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+}
 
 // ─────────────────────────────────────────────────────────────
 // Bottom Nav Bar - Integrated
@@ -50,47 +144,54 @@ class BottomNavBar extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.08),
-            blurRadius: 10,
-            offset: const Offset(0, -2),
-          ),
-        ],
+        border: const Border(
+          top: BorderSide(color: _UiTokens.divider, width: 1),
+        ),
       ),
       child: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: List.generate(items.length, (index) {
               final item = items[index];
               final isSelected = currentIndex == index;
-              
+
               return Expanded(
                 child: GestureDetector(
                   onTap: () => onTap(index),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        isSelected ? item.selectedIcon : item.icon,
-                        color: isSelected ? AppColors.primaryDark : Colors.grey,
-                        size: 24,
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        item.label,
-                        style: TextStyle(
-                          fontSize: 10,
-                          fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
-                          color: isSelected ? AppColors.primaryDark : Colors.grey,
+                  behavior: HitTestBehavior.opaque,
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 150),
+                    padding: const EdgeInsets.symmetric(vertical: 6),
+                    decoration: BoxDecoration(
+                      color: isSelected
+                          ? AppColors.primaryDark.withOpacity(0.06)
+                          : Colors.transparent,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          isSelected ? item.selectedIcon : item.icon,
+                          color: isSelected ? AppColors.primaryDark : _UiTokens.mutedText,
+                          size: 22,
                         ),
-                        textAlign: TextAlign.center,
-                        overflow: TextOverflow.visible,
-                        softWrap: false,
-                      ),
-                    ],
+                        const SizedBox(height: 4),
+                        Text(
+                          item.label,
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                            color: isSelected ? AppColors.primaryDark : _UiTokens.mutedText,
+                          ),
+                          textAlign: TextAlign.center,
+                          overflow: TextOverflow.visible,
+                          softWrap: false,
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               );
@@ -115,7 +216,7 @@ class StudentHomeScreen extends StatefulWidget {
 class _StudentHomeScreenState extends State<StudentHomeScreen> {
   int _currentIndex = 0;
   String _userName = '';
-  
+
   final GlobalKey<_HomeContentState> _homeKey = GlobalKey<_HomeContentState>();
 
   @override
@@ -175,7 +276,7 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
           setState(() {
             _currentIndex = index;
           });
-          
+
           if (index == 0) {
             _refreshUserName();
           }
@@ -192,17 +293,17 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
   }
 
   List<Widget> get _screens => [
-    _HomeContent(key: _homeKey, userName: _userName),
-    const StudentAnnouncementsScreen(),
-    const StudentEventsScreen(),
-    const StudentOrganizationsScreen(),
-    const StudentProfileScreen(),
-  ];
+        _HomeContent(key: _homeKey, userName: _userName),
+        const StudentAnnouncementsScreen(),
+        const StudentEventsScreen(),
+        const StudentOrganizationsScreen(),
+        const StudentProfileScreen(),
+      ];
 }
 
 class _HomeContent extends StatefulWidget {
   final String userName;
-  
+
   const _HomeContent({super.key, required this.userName});
 
   @override
@@ -214,7 +315,7 @@ class _HomeContentState extends State<_HomeContent> {
   bool _orgLoading = true;
   bool _isOffline = false;
   StreamSubscription<QuerySnapshot>? _cacheMonitor;
-  
+
   // ⭐ REGISTERED EVENTS STATE ⭐
   Set<String> _registeredEventIds = {};
   bool _loadingRegistered = true;
@@ -224,7 +325,7 @@ class _HomeContentState extends State<_HomeContent> {
     super.initState();
     _loadOrgData();
     _loadRegisteredEvents();
-    
+
     _cacheMonitor = FirebaseFirestore.instance
         .collection('events')
         .limit(1)
@@ -288,7 +389,7 @@ class _HomeContentState extends State<_HomeContent> {
 
     final eventIds = _registeredEventIds.toList();
     debugPrint('📌 Event IDs count: ${eventIds.length}');
-    
+
     // If less than or equal to 30, query directly
     if (eventIds.length <= 30) {
       try {
@@ -299,12 +400,12 @@ class _HomeContentState extends State<_HomeContent> {
             .orderBy('date')
             .limit(1)
             .get();
-        
+
         if (snap.docs.isEmpty) {
           debugPrint('📌 No future events found');
           return null;
         }
-        
+
         final event = EventModel.fromFirestore(snap.docs.first);
         debugPrint('✅ Earliest future event found: ${event.title} - ${event.date}');
         debugPrint('✅ Event ID: ${event.id}');
@@ -317,20 +418,20 @@ class _HomeContentState extends State<_HomeContent> {
               .collection('events')
               .where(FieldPath.documentId, whereIn: eventIds)
               .get();
-          
+
           if (snap.docs.isEmpty) return null;
-          
+
           final now = DateTime.now();
           final futureEvents = snap.docs
               .map((doc) => EventModel.fromFirestore(doc))
               .where((event) => event.fullDateTime.isAfter(now))
               .toList();
-          
+
           if (futureEvents.isEmpty) {
             debugPrint('📌 No future events found (fallback)');
             return null;
           }
-          
+
           futureEvents.sort((a, b) => a.fullDateTime.compareTo(b.fullDateTime));
           final event = futureEvents.first;
           debugPrint('✅ Earliest future event (fallback): ${event.title} - ${event.date}');
@@ -347,16 +448,16 @@ class _HomeContentState extends State<_HomeContent> {
     for (var i = 0; i < eventIds.length; i += 30) {
       final end = (i + 30 < eventIds.length) ? i + 30 : eventIds.length;
       final batch = eventIds.sublist(i, end);
-      
+
       if (batch.isEmpty) continue;
-      
+
       try {
         final snap = await FirebaseFirestore.instance
             .collection('events')
             .where(FieldPath.documentId, whereIn: batch)
             .where('date', isGreaterThanOrEqualTo: Timestamp.now())
             .get();
-        
+
         for (final doc in snap.docs) {
           allEvents.add(EventModel.fromFirestore(doc));
         }
@@ -368,7 +469,7 @@ class _HomeContentState extends State<_HomeContent> {
               .collection('events')
               .where(FieldPath.documentId, whereIn: batch)
               .get();
-          
+
           for (final doc in snap.docs) {
             allEvents.add(EventModel.fromFirestore(doc));
           }
@@ -383,12 +484,12 @@ class _HomeContentState extends State<_HomeContent> {
     final futureEvents = allEvents
         .where((event) => event.fullDateTime.isAfter(now))
         .toList();
-    
+
     if (futureEvents.isEmpty) {
       debugPrint('📌 No future events found in batches');
       return null;
     }
-    
+
     futureEvents.sort((a, b) => a.fullDateTime.compareTo(b.fullDateTime));
     final earliest = futureEvents.first;
     debugPrint('✅ Earliest future event: ${earliest.title} - ${earliest.date}');
@@ -466,8 +567,8 @@ class _HomeContentState extends State<_HomeContent> {
   @override
   Widget build(BuildContext context) {
     final user = FirebaseAuth.instance.currentUser;
-    final userName = widget.userName.isNotEmpty 
-        ? widget.userName 
+    final userName = widget.userName.isNotEmpty
+        ? widget.userName
         : user?.displayName ?? user?.email?.split('@').first ?? 'Student';
 
     return Container(
@@ -479,25 +580,31 @@ class _HomeContentState extends State<_HomeContent> {
             floating: true,
             backgroundColor: Colors.white,
             elevation: 0,
+            scrolledUnderElevation: 0,
+            bottom: const PreferredSize(
+              preferredSize: Size.fromHeight(1),
+              child: Divider(height: 1, thickness: 1, color: _UiTokens.divider),
+            ),
             title: Row(
               children: [
                 Image.asset(
                   'assets/images/logo.png',
-                  height: 36,
-                  width: 36,
+                  height: 44,
+                  width: 44,
                   fit: BoxFit.contain,
                   errorBuilder: (_, __, ___) => const Icon(
                     Icons.school,
                     color: AppColors.primaryDark,
-                    size: 32,
+                    size: 38,
                   ),
                 ),
                 const SizedBox(width: 10),
-                Text(
+                const Text(
                   'UPRISE',
-                  style: const TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.bold,
+                  style: TextStyle(
+                    fontSize: 19,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0.6,
                     color: Color(0xFFBE4700),
                   ),
                 ),
@@ -505,9 +612,10 @@ class _HomeContentState extends State<_HomeContent> {
             ),
             actions: [
               IconButton(
-                icon: Icon(
-                  Icons.shopping_cart_outlined,
+                icon: const Icon(
+                  Icons.shopping_bag_outlined,
                   color: AppColors.primaryDark,
+                  size: 22,
                 ),
                 onPressed: () {
                   Navigator.push(
@@ -518,7 +626,6 @@ class _HomeContentState extends State<_HomeContent> {
                   );
                 },
               ),
-              
               StreamBuilder<QuerySnapshot>(
                 stream: FirebaseFirestore.instance
                     .collection('notifications')
@@ -527,14 +634,15 @@ class _HomeContentState extends State<_HomeContent> {
                     .snapshots(),
                 builder: (context, snapshot) {
                   final unreadCount = snapshot.hasData ? snapshot.data!.docs.length : 0;
-                  
+
                   return Stack(
                     alignment: Alignment.center,
                     children: [
                       IconButton(
-                        icon: Icon(
+                        icon: const Icon(
                           Icons.notifications_outlined,
                           color: AppColors.primaryDark,
+                          size: 22,
                         ),
                         onPressed: () {
                           Navigator.push(
@@ -547,25 +655,26 @@ class _HomeContentState extends State<_HomeContent> {
                       ),
                       if (unreadCount > 0)
                         Positioned(
-                          top: 4,
-                          right: 4,
+                          top: 6,
+                          right: 6,
                           child: Container(
-                            padding: const EdgeInsets.all(4),
-                            decoration: const BoxDecoration(
-                              color: Colors.red,
+                            padding: const EdgeInsets.all(3.5),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFC0392B),
                               shape: BoxShape.circle,
+                              border: Border.all(color: Colors.white, width: 1.5),
                             ),
                             constraints: const BoxConstraints(
-                              minWidth: 18,
-                              minHeight: 18,
+                              minWidth: 16,
+                              minHeight: 16,
                             ),
                             child: Center(
                               child: Text(
                                 unreadCount > 9 ? '9+' : '$unreadCount',
                                 style: const TextStyle(
                                   color: Colors.white,
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.bold,
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.w700,
                                 ),
                               ),
                             ),
@@ -575,25 +684,26 @@ class _HomeContentState extends State<_HomeContent> {
                   );
                 },
               ),
+              const SizedBox(width: 6),
             ],
           ),
-          
+
           // Offline indicator
           if (_isOffline)
             SliverToBoxAdapter(
               child: Container(
-                color: const Color(0xFFFFF3CD),
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                color: const Color(0xFFF6EEDD),
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
                 child: const Row(
                   children: [
-                    Icon(Icons.wifi_off_rounded, size: 14, color: Color(0xFF856404)),
-                    SizedBox(width: 6),
+                    Icon(Icons.wifi_off_rounded, size: 14, color: Color(0xFF8A6D1F)),
+                    SizedBox(width: 8),
                     Text(
                       'Offline — showing cached data',
                       style: TextStyle(
                         fontSize: 12,
-                        color: Color(0xFF856404),
-                        fontWeight: FontWeight.w500,
+                        color: Color(0xFF8A6D1F),
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                   ],
@@ -604,34 +714,35 @@ class _HomeContentState extends State<_HomeContent> {
           // Welcome Section
           SliverToBoxAdapter(
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
+              padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'GOOD DAY,',
+                    'GOOD DAY',
                     style: TextStyle(
-                      fontSize: 14,
-                      color: Colors.grey.shade600,
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: 1.2,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    'Hello, $userName',
-                    style: const TextStyle(
-                      fontSize: 28,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.black87,
+                      fontSize: 12,
+                      color: Colors.grey.shade500,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 1.4,
                     ),
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    'Ready to explore today\'s campus activities?',
+                    userName,
+                    style: const TextStyle(
+                      fontSize: 25,
+                      fontWeight: FontWeight.w700,
+                      color: _UiTokens.headingText,
+                      letterSpacing: 0.1,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'Here\'s what\'s happening on campus today.',
                     style: TextStyle(
-                      fontSize: 14,
-                      color: Colors.grey.shade500,
+                      fontSize: 13.5,
+                      color: Colors.grey.shade600,
                     ),
                   ),
                 ],
@@ -642,27 +753,20 @@ class _HomeContentState extends State<_HomeContent> {
           // Quick Access
           SliverToBoxAdapter(
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 12, 20, 4),
-              child: Text(
-                'Quick Access',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.grey.shade700,
-                ),
-              ),
+              padding: const EdgeInsets.fromLTRB(20, 8, 20, 10),
+              child: const _SectionHeader(title: 'Quick Access'),
             ),
           ),
 
           // Quick Access Icons
           SliverToBoxAdapter(
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: [
                   _QuickAccessItem(
-                    icon: Icons.calendar_today,
+                    icon: Icons.calendar_today_outlined,
                     label: 'Calendar',
                     onTap: () {
                       Navigator.push(
@@ -674,7 +778,7 @@ class _HomeContentState extends State<_HomeContent> {
                     },
                   ),
                   _QuickAccessItem(
-                    icon: Icons.card_membership,
+                    icon: Icons.card_membership_outlined,
                     label: 'Certificates',
                     onTap: () {
                       Navigator.push(
@@ -686,7 +790,7 @@ class _HomeContentState extends State<_HomeContent> {
                     },
                   ),
                   _QuickAccessItem(
-                    icon: Icons.groups,
+                    icon: Icons.groups_outlined,
                     label: 'Orgs',
                     onTap: () {
                       Navigator.push(
@@ -698,7 +802,7 @@ class _HomeContentState extends State<_HomeContent> {
                     },
                   ),
                   _QuickAccessItem(
-                    icon: Icons.person,
+                    icon: Icons.person_outline,
                     label: 'Profile',
                     onTap: () {
                       Navigator.push(
@@ -718,16 +822,13 @@ class _HomeContentState extends State<_HomeContent> {
           SliverToBoxAdapter(
             child: _loadingRegistered
                 ? Container(
-                    height: 180,
-                    margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(16),
-                    ),
+                    height: 130,
+                    margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                    decoration: _UiTokens.card(),
                     child: const Center(
                       child: SizedBox(
-                        height: 30,
-                        width: 30,
+                        height: 24,
+                        width: 24,
                         child: CircularProgressIndicator(
                           strokeWidth: 2,
                           color: AppColors.primaryDark,
@@ -738,21 +839,21 @@ class _HomeContentState extends State<_HomeContent> {
                 : _registeredEventIds.isEmpty
                     ? const SizedBox.shrink()
                     : Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
                         child: FutureBuilder<EventModel?>(
                           future: _getEarliestRegisteredEvent(),
                           builder: (context, snapshot) {
+                            // Debug print para malaman kung ano nangyayari
+                            debugPrint('🔍 Countdown FutureBuilder: connectionState=${snapshot.connectionState}, hasData=${snapshot.hasData}, error=${snapshot.error}');
+
                             if (snapshot.connectionState == ConnectionState.waiting) {
                               return Container(
-                                height: 180,
-                                decoration: BoxDecoration(
-                                  color: Colors.white,
-                                  borderRadius: BorderRadius.circular(16),
-                                ),
+                                height: 130,
+                                decoration: _UiTokens.card(),
                                 child: const Center(
                                   child: SizedBox(
-                                    height: 30,
-                                    width: 30,
+                                    height: 24,
+                                    width: 24,
                                     child: CircularProgressIndicator(
                                       strokeWidth: 2,
                                       color: AppColors.primaryDark,
@@ -762,12 +863,30 @@ class _HomeContentState extends State<_HomeContent> {
                               );
                             }
 
+                            if (snapshot.hasError) {
+                              return Container(
+                                height: 130,
+                                decoration: _UiTokens.card(),
+                                child: Center(
+                                  child: Text(
+                                    'Error: ${snapshot.error}',
+                                    style: const TextStyle(color: Colors.red, fontSize: 12),
+                                    textAlign: TextAlign.center,
+                                  ),
+                                ),
+                              );
+                            }
+
                             // ✅ If no future events, don't show anything
-                            if (snapshot.hasError || snapshot.data == null) {
+                            if (snapshot.data == null) {
+                              debugPrint('📌 No future events found - hiding countdown');
                               return const SizedBox.shrink();
                             }
 
                             final event = snapshot.data!;
+                            debugPrint('✅ Countdown event found: ${event.title} - ${event.date}');
+                            
+                            // ✅ Directly return CountdownWidget without FittedBox
                             return CountdownWidget(event: event);
                           },
                         ),
@@ -777,47 +896,22 @@ class _HomeContentState extends State<_HomeContent> {
           // Upcoming Events Section Header
           SliverToBoxAdapter(
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    'Upcoming Events',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.grey.shade700,
+              padding: const EdgeInsets.fromLTRB(20, 14, 20, 10),
+              child: _SectionHeader(
+                title: 'Upcoming Events',
+                actionLabel: 'View all',
+                onAction: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const StudentEventsScreen(initialTabIndex: 1),
                     ),
-                  ),
-                  TextButton(
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const StudentEventsScreen(initialTabIndex: 1),
-                        ),
-                      );
-                    },
-                    style: TextButton.styleFrom(
-                      foregroundColor: AppColors.primaryDark,
-                      padding: EdgeInsets.zero,
-                      minimumSize: const Size(0, 0),
-                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    ),
-                    child: const Text(
-                      'View all',
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w500,
-                        color: AppColors.primaryDark,
-                      ),
-                    ),
-                  ),
-                ],
+                  );
+                },
               ),
             ),
           ),
-          
+
           // Upcoming Events - Horizontal Scroll Cards
           SliverToBoxAdapter(
             child: StreamBuilder<QuerySnapshot>(
@@ -830,21 +924,21 @@ class _HomeContentState extends State<_HomeContent> {
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return const Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    padding: EdgeInsets.symmetric(horizontal: 20, vertical: 4),
                     child: SkeletonLoader(count: 2, height: 120),
                   );
                 }
 
                 if (snapshot.hasError) {
                   return const Padding(
-                    padding: EdgeInsets.all(16),
+                    padding: EdgeInsets.all(20),
                     child: UpriseErrorState(message: 'Could not load events.'),
                   );
                 }
 
                 if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
                   return const Padding(
-                    padding: EdgeInsets.all(16),
+                    padding: EdgeInsets.all(20),
                     child: UpriseEmptyState(
                       icon: Icons.calendar_today_outlined,
                       title: 'No upcoming events',
@@ -854,91 +948,86 @@ class _HomeContentState extends State<_HomeContent> {
                 }
 
                 final events = snapshot.data!.docs;
-                
+
                 return SizedBox(
-                  height: 200,
+                  height: 204,
                   child: ListView.builder(
                     scrollDirection: Axis.horizontal,
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
                     itemCount: events.length,
                     itemBuilder: (context, index) {
                       final doc = events[index];
                       final data = doc.data() as Map<String, dynamic>;
-                      
+
                       final eventData = EventModel.fromFirestore(doc);
-                      
+
                       Timestamp? timestamp = data['date'];
                       DateTime eventDate;
-                      
+
                       if (timestamp != null) {
                         eventDate = timestamp.toDate();
                       } else {
                         eventDate = DateTime.now();
                       }
-                      
-                      final monthName = DateFormat('MMM').format(eventDate);
+
+                      final monthName = DateFormat('MMM').format(eventDate).toUpperCase();
                       final dayNumber = DateFormat('dd').format(eventDate);
                       final formattedTime = data['startTime'] ?? 'TBA';
                       final title = data['title'] ?? 'Untitled Event';
                       final location = data['location'] ?? 'TBA';
-                      
+
                       return GestureDetector(
                         onTap: () => _navigateToEventDetail(eventData),
                         child: Container(
-                          width: 180,
+                          width: 182,
                           margin: const EdgeInsets.only(right: 12),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(14),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.grey.withOpacity(0.12),
-                                blurRadius: 8,
-                                offset: const Offset(0, 3),
-                              ),
-                            ],
-                          ),
+                          decoration: _UiTokens.card(),
+                          clipBehavior: Clip.antiAlias,
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Container(
-                                height: 90,
+                                height: 78,
                                 width: double.infinity,
-                                decoration: const BoxDecoration(
-                                  gradient: LinearGradient(
-                                    begin: Alignment.topLeft,
-                                    end: Alignment.bottomRight,
-                                    colors: [
-                                      AppColors.primaryDark,
-                                      AppColors.primaryLight,
-                                    ],
-                                  ),
-                                  borderRadius: BorderRadius.vertical(
-                                    top: Radius.circular(14),
-                                  ),
-                                ),
-                                child: Column(
+                                color: AppColors.primaryDark,
+                                child: Row(
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
-                                    Icon(
-                                      Icons.calendar_today,
-                                      color: Colors.white.withOpacity(0.8),
-                                      size: 22,
-                                    ),
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      '$monthName $dayNumber',
-                                      style: const TextStyle(
-                                        fontSize: 15,
-                                        fontWeight: FontWeight.bold,
-                                        color: Colors.white,
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                      decoration: BoxDecoration(
+                                        color: Colors.white.withOpacity(0.12),
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      child: Column(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Text(
+                                            monthName,
+                                            style: TextStyle(
+                                              fontSize: 10.5,
+                                              fontWeight: FontWeight.w700,
+                                              letterSpacing: 0.8,
+                                              color: Colors.white.withOpacity(0.85),
+                                            ),
+                                          ),
+                                          Text(
+                                            dayNumber,
+                                            style: const TextStyle(
+                                              fontSize: 20,
+                                              fontWeight: FontWeight.w800,
+                                              color: Colors.white,
+                                              height: 1.1,
+                                            ),
+                                          ),
+                                        ],
                                       ),
                                     ),
                                   ],
                                 ),
                               ),
                               Padding(
-                                padding: const EdgeInsets.all(10),
+                                padding: const EdgeInsets.all(11),
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
@@ -946,13 +1035,13 @@ class _HomeContentState extends State<_HomeContent> {
                                       title,
                                       style: const TextStyle(
                                         fontSize: 13,
-                                        fontWeight: FontWeight.bold,
-                                        color: Colors.black87,
+                                        fontWeight: FontWeight.w700,
+                                        color: _UiTokens.headingText,
                                       ),
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
                                     ),
-                                    const SizedBox(height: 3),
+                                    const SizedBox(height: 5),
                                     Row(
                                       children: [
                                         Icon(
@@ -960,12 +1049,12 @@ class _HomeContentState extends State<_HomeContent> {
                                           size: 11,
                                           color: Colors.grey.shade500,
                                         ),
-                                        const SizedBox(width: 3),
+                                        const SizedBox(width: 4),
                                         Expanded(
                                           child: Text(
                                             formattedTime,
                                             style: TextStyle(
-                                              fontSize: 10,
+                                              fontSize: 10.5,
                                               color: Colors.grey.shade600,
                                             ),
                                             maxLines: 1,
@@ -974,20 +1063,20 @@ class _HomeContentState extends State<_HomeContent> {
                                         ),
                                       ],
                                     ),
-                                    const SizedBox(height: 2),
+                                    const SizedBox(height: 3),
                                     Row(
                                       children: [
                                         Icon(
-                                          Icons.location_on,
+                                          Icons.location_on_outlined,
                                           size: 11,
                                           color: Colors.grey.shade500,
                                         ),
-                                        const SizedBox(width: 3),
+                                        const SizedBox(width: 4),
                                         Expanded(
                                           child: Text(
                                             location,
                                             style: TextStyle(
-                                              fontSize: 10,
+                                              fontSize: 10.5,
                                               color: Colors.grey.shade600,
                                             ),
                                             maxLines: 1,
@@ -1009,51 +1098,26 @@ class _HomeContentState extends State<_HomeContent> {
               },
             ),
           ),
-          
+
           // Announcements Section
           SliverToBoxAdapter(
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 24, 20, 8),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    'Announcements',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.grey.shade700,
+              padding: const EdgeInsets.fromLTRB(20, 26, 20, 10),
+              child: _SectionHeader(
+                title: 'Announcements',
+                actionLabel: 'See all',
+                onAction: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const StudentAnnouncementsScreen(),
                     ),
-                  ),
-                  TextButton(
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const StudentAnnouncementsScreen(),
-                        ),
-                      );
-                    },
-                    style: TextButton.styleFrom(
-                      foregroundColor: AppColors.primaryDark,
-                      padding: EdgeInsets.zero,
-                      minimumSize: const Size(0, 0),
-                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    ),
-                    child: const Text(
-                      'See all',
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w500,
-                        color: AppColors.primaryDark,
-                      ),
-                    ),
-                  ),
-                ],
+                  );
+                },
               ),
             ),
           ),
-          
+
           // Announcements Feed
           SliverToBoxAdapter(
             child: AnnouncementsFeed(
@@ -1064,7 +1128,7 @@ class _HomeContentState extends State<_HomeContent> {
           ),
 
           const SliverToBoxAdapter(
-            child: SizedBox(height: 80),
+            child: SizedBox(height: 84),
           ),
         ],
       ),
@@ -1090,35 +1154,30 @@ class _QuickAccessItem extends StatelessWidget {
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: onTap,
+      behavior: HitTestBehavior.opaque,
       child: Column(
         children: [
           Container(
-            width: 64,
-            height: 64,
+            width: 58,
+            height: 58,
             decoration: BoxDecoration(
-              color: AppColors.primaryDark,
-              borderRadius: BorderRadius.circular(16),
-              boxShadow: [
-                BoxShadow(
-                  color: AppColors.primaryDark.withOpacity(0.25),
-                  blurRadius: 6,
-                  offset: const Offset(0, 3),
-                ),
-              ],
+              color: AppColors.primaryDark.withOpacity(0.08),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: AppColors.primaryDark.withOpacity(0.15), width: 1),
             ),
             child: Icon(
               icon,
-              color: Colors.white,
-              size: 28,
+              color: AppColors.primaryDark,
+              size: 24,
             ),
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 7),
           Text(
             label,
-            style: TextStyle(
-              fontSize: 12,
+            style: const TextStyle(
+              fontSize: 11.5,
               fontWeight: FontWeight.w600,
-              color: Colors.grey.shade700,
+              color: _UiTokens.mutedText,
             ),
           ),
         ],
