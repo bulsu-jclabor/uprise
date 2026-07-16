@@ -1929,110 +1929,141 @@ class _AdviserForm extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF8F9FB),
-        borderRadius: BorderRadius.circular(_DS.radiusSm),
-        border: Border.all(color: const Color(0xFFE2E6EA)),
-      ),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-          Text(
-            'Adviser ${index + 1}',
-            style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.w700, color: UpriseColors.primaryDark),
-          ),
-          if (canRemove)
-            InkWell(
-              onTap: onRemove,
-              borderRadius: BorderRadius.circular(6),
-              child: Padding(
-                padding: const EdgeInsets.all(4),
-                child: Icon(Icons.remove_circle_outline_rounded, size: 18, color: UpriseColors.error),
-              ),
-            ),
-        ]),
-        const SizedBox(height: 10),
-        Row(children: [
-          Expanded(
-            child: TextFormField(
-              initialValue: adviser.name,
-              decoration: _DS.inputDecoration('Full Name', hint: 'e.g., Dr. Juan dela Cruz', icon: Icons.badge_outlined),
-              style: GoogleFonts.beVietnamPro(fontSize: 13),
-              onChanged: (v) => onChanged(adviser.copyWith(name: v)),
-              validator: (v) => index == 0 && (v == null || v.trim().isEmpty) ? 'Required' : null,
+Widget build(BuildContext context) {
+  // Listahan ng mga valid na position
+  final validPositions = ['Dean', 'Program Chair', 'Department Head', 'Coordinator', 'Faculty'];
+  
+  // Check kung valid ang current title ni adviser
+  final bool isValidTitle = adviser.title.isNotEmpty && validPositions.contains(adviser.title);
+  
+  // Kung invalid (e.g., "wawa"), gagawin nating null ang value para hindi mag-error
+  final String? selectedValue = isValidTitle ? adviser.title : null;
+
+  return Container(
+    margin: const EdgeInsets.only(bottom: 12),
+    padding: const EdgeInsets.all(14),
+    decoration: BoxDecoration(
+      color: const Color(0xFFF8F9FB),
+      borderRadius: BorderRadius.circular(_DS.radiusSm),
+      border: Border.all(color: const Color(0xFFE2E6EA)),
+    ),
+    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+        Text(
+          'Adviser ${index + 1}',
+          style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.w700, color: UpriseColors.primaryDark),
+        ),
+        if (canRemove)
+          InkWell(
+            onTap: onRemove,
+            borderRadius: BorderRadius.circular(6),
+            child: Padding(
+              padding: const EdgeInsets.all(4),
+              child: Icon(Icons.remove_circle_outline_rounded, size: 18, color: UpriseColors.error),
             ),
           ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: DropdownButtonFormField<String>(
-              value: adviser.title.isNotEmpty ? adviser.title : null,
-              decoration: InputDecoration(
-                labelText: 'Position',
-                hintText: 'Select position',
-                prefixIcon: Icon(Icons.work_outline, size: 18, color: UpriseColors.darkGray),
-                labelStyle: GoogleFonts.beVietnamPro(fontSize: 13, color: UpriseColors.darkGray),
-                hintStyle: GoogleFonts.beVietnamPro(fontSize: 13, color: UpriseColors.mediumGray),
-                filled: true,
-                fillColor: const Color(0xFFF8F9FB),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(_DS.radiusSm),
-                  borderSide: BorderSide(color: UpriseColors.mediumGray, width: 1),
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(_DS.radiusSm),
-                  borderSide: const BorderSide(color: Color(0xFFE2E6EA), width: 1),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(_DS.radiusSm),
-                  borderSide: BorderSide(color: UpriseColors.primaryDark, width: 1.5),
-                ),
-              ),
-              style: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF1A202C)),
-              items: ['Dean', 'Program Chair', 'Department Head', 'Coordinator', 'Faculty']
-                  .map((pos) => DropdownMenuItem(value: pos, child: Text(pos)))
-                  .toList(),
-              onChanged: (v) => onChanged(adviser.copyWith(title: v ?? '')),
-            ),
-          ),
-        ]),
-        const SizedBox(height: 10),
-        Row(children: [
-          Expanded(
-            child: TextFormField(
-              initialValue: adviser.email,
-              decoration: _DS.inputDecoration('Email', hint: 'e.g., jdelacruz@university.edu.ph', icon: Icons.email_outlined),
-              style: GoogleFonts.beVietnamPro(fontSize: 13),
-              keyboardType: TextInputType.emailAddress,
-              onChanged: (v) => onChanged(adviser.copyWith(email: v)),
-              validator: (v) {
-                if (index == 0) {
-                  if (v == null || v.trim().isEmpty) return 'Required';
-                  if (!v.contains('@') || !v.contains('.')) return 'Enter a valid email';
-                } else if (v != null && v.trim().isNotEmpty) {
-                  if (!v.contains('@') || !v.contains('.')) return 'Enter a valid email';
-                }
-                return null;
-              },
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: TextFormField(
-              initialValue: adviser.phone,
-              decoration: _DS.inputDecoration('Phone Number', hint: 'e.g., +63 912 345 6789', icon: Icons.phone_outlined),
-              style: GoogleFonts.beVietnamPro(fontSize: 13),
-              keyboardType: TextInputType.phone,
-              onChanged: (v) => onChanged(adviser.copyWith(phone: v)),
-            ),
-          ),
-        ]),
       ]),
-    );
-  }
+      const SizedBox(height: 10),
+      Row(children: [
+        Expanded(
+          child: TextFormField(
+            initialValue: adviser.name,
+            decoration: _DS.inputDecoration('Full Name', hint: 'e.g., Dr. Juan dela Cruz', icon: Icons.badge_outlined),
+            style: GoogleFonts.beVietnamPro(fontSize: 13),
+            onChanged: (v) => onChanged(adviser.copyWith(name: v)),
+            validator: (v) => index == 0 && (v == null || v.trim().isEmpty) ? 'Required' : null,
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: DropdownButtonFormField<String>(
+            // Ito yung magiging selected value. Kung invalid (wawa), null ito.
+            value: selectedValue,
+            decoration: InputDecoration(
+              labelText: 'Position',
+              hintText: 'Select position',
+              prefixIcon: Icon(Icons.work_outline, size: 18, color: UpriseColors.darkGray),
+              labelStyle: GoogleFonts.beVietnamPro(fontSize: 13, color: UpriseColors.darkGray),
+              hintStyle: GoogleFonts.beVietnamPro(fontSize: 13, color: UpriseColors.mediumGray),
+              filled: true,
+              fillColor: const Color(0xFFF8F9FB),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(_DS.radiusSm),
+                borderSide: BorderSide(color: UpriseColors.mediumGray, width: 1),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(_DS.radiusSm),
+                borderSide: const BorderSide(color: Color(0xFFE2E6EA), width: 1),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(_DS.radiusSm),
+                borderSide: BorderSide(color: UpriseColors.primaryDark, width: 1.5),
+              ),
+            ),
+            style: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF1A202C)),
+            items: [
+              // Unang item: placeholder. Kung invalid ang title, magpapakita ng warning.
+              DropdownMenuItem<String>(
+                value: null,
+                child: Text(
+                  isValidTitle ? 'Select position' : '⚠️ Invalid position, select a new one',
+                  style: GoogleFonts.beVietnamPro(
+                    fontSize: 13,
+                    color: isValidTitle ? UpriseColors.darkGray : UpriseColors.error,
+                    fontStyle: isValidTitle ? FontStyle.normal : FontStyle.italic,
+                  ),
+                ),
+              ),
+              // Mga valid na positions
+              ...validPositions.map((pos) {
+                return DropdownMenuItem<String>(
+                  value: pos,
+                  child: Text(pos),
+                );
+              }),
+            ],
+            onChanged: (newValue) {
+              // Pag pumili si user ng valid na position, i-a-update natin yung title.
+              onChanged(adviser.copyWith(title: newValue ?? ''));
+            },
+          ),
+        ),
+      ]),
+      const SizedBox(height: 10),
+      Row(children: [
+        Expanded(
+          child: TextFormField(
+            initialValue: adviser.email,
+            decoration: _DS.inputDecoration('Email', hint: 'e.g., jdelacruz@university.edu.ph', icon: Icons.email_outlined),
+            style: GoogleFonts.beVietnamPro(fontSize: 13),
+            keyboardType: TextInputType.emailAddress,
+            onChanged: (v) => onChanged(adviser.copyWith(email: v)),
+            validator: (v) {
+              if (index == 0) {
+                if (v == null || v.trim().isEmpty) return 'Required';
+                if (!v.contains('@') || !v.contains('.')) return 'Enter a valid email';
+              } else if (v != null && v.trim().isNotEmpty) {
+                if (!v.contains('@') || !v.contains('.')) return 'Enter a valid email';
+              }
+              return null;
+            },
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: TextFormField(
+            initialValue: adviser.phone,
+            decoration: _DS.inputDecoration('Phone Number', hint: 'e.g., +63 912 345 6789', icon: Icons.phone_outlined),
+            style: GoogleFonts.beVietnamPro(fontSize: 13),
+            keyboardType: TextInputType.phone,
+            onChanged: (v) => onChanged(adviser.copyWith(phone: v)),
+          ),
+        ),
+      ]),
+    ]),
+  );
+}
 }
 
 // ============ CREATE ORGANIZATION DIALOG ============
