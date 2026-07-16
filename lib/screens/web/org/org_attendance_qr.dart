@@ -427,6 +427,45 @@ class _AttendanceTabState extends State<AttendanceTab> with AutomaticKeepAliveCl
     if (mounted) setState(() {});
   }
 
+
+    void _showMarkedModal(BuildContext context, String name, String status) {
+    showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (ctx) {
+        Future.delayed(const Duration(milliseconds: 1500), () {
+          if (Navigator.of(ctx).canPop()) Navigator.of(ctx).pop();
+        });
+        final isLate = status == 'late';
+        return Dialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          child: Padding(
+            padding: const EdgeInsets.all(28),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.check_circle_rounded,
+                  size: 72,
+                  color: isLate ? const Color(0xFFFB923C) : const Color(0xFF059669),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  name,
+                  style: GoogleFonts.beVietnamPro(fontSize: 18, fontWeight: FontWeight.w700),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  'Marked ${status.toUpperCase()}',
+                  style: GoogleFonts.beVietnamPro(fontSize: 14, color: const Color(0xFF64748B)),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
   @override
   void dispose() { _scanner.dispose(); _search.dispose(); _manualCtrl.dispose(); super.dispose(); }
 
@@ -516,8 +555,7 @@ class _AttendanceTabState extends State<AttendanceTab> with AutomaticKeepAliveCl
           'studentId': userDoc.id, 'status': status, 'method': isManual ? 'manual' : 'qr' },
     );
     if (mounted) {
-      _toast(context,
-          '${data['fullName'] ?? 'Student'} marked ${status.toUpperCase()} ${status == 'late' ? '⏰' : '✓'}');
+      _showMarkedModal(context, data['fullName'] ?? 'Student', status);
     }
   } catch (e) {
     if (mounted) {
@@ -601,8 +639,8 @@ class _AttendanceTabState extends State<AttendanceTab> with AutomaticKeepAliveCl
             'guestEmail': email, 'status': status, 'method': 'qr' },
       );
       if (mounted) {
-        _toast(context, '$name marked ${status.toUpperCase()} ${status == 'late' ? '⏰' : '✓'}');
-      }
+  _showMarkedModal(context, name, status);
+}
     } catch (e) {
       if (mounted) {
         _toast(context, e.toString().replaceFirst('Exception: ', ''), error: true);
@@ -726,19 +764,21 @@ class _AttendanceTabState extends State<AttendanceTab> with AutomaticKeepAliveCl
   Future<void> _exportAttendanceCsv(List<QueryDocumentSnapshot> docs) async {
     final rows = [
       ['Student Name', 'Student ID', 'Program', 'Year Level', 'Time In', 'Status', 'Method'],
-      ...docs.map((d) {
-        final m = d.data() as Map<String, dynamic>;
-        final ts = (m['timestamp'] as Timestamp?)?.toDate();
-        return [
-          m['studentName'] ?? '',
-          m['studentId'] ?? '',
-          m['program'] ?? '',
-          m['yearLevel'] ?? '',
-          ts != null ? DateFormat('yyyy-MM-dd HH:mm').format(ts) : '',
-          m['status'] ?? '',
-          m['method'] ?? 'qr',
-        ];
-      }),
+        ...docs.map((d) {
+    final m = d.data() as Map<String, dynamic>;
+    final ts = (m['timestamp'] as Timestamp?)?.toDate();
+    final uid = m['studentId']?.toString() ?? '';
+    final realStudentNo = _studentCache[uid]?['studentId']?.toString() ?? m['studentId'] ?? '';
+    return [
+      m['studentName'] ?? '',
+      realStudentNo,         
+      m['program'] ?? '',
+      m['yearLevel'] ?? '',
+      ts != null ? DateFormat('yyyy-MM-dd HH:mm').format(ts) : '',
+      m['status'] ?? '',
+      m['method'] ?? 'qr',
+    ];
+  }),
     ];
     final csv = const ListToCsvConverter().convert(rows);
     await FileSaver.instance.saveAs(
@@ -794,18 +834,20 @@ class _AttendanceTabState extends State<AttendanceTab> with AutomaticKeepAliveCl
 
   Future<void> _exportAttendancePdf(List<QueryDocumentSnapshot> docs) async {
     final rows = docs.map<List<String>>((d) {
-      final m = d.data() as Map<String, dynamic>;
-      final ts = (m['timestamp'] as Timestamp?)?.toDate();
-      return <String>[
-        m['studentName'] ?? '',
-        m['studentId'] ?? '',
-        m['program'] ?? '',
-        m['yearLevel'] ?? '',
-        ts != null ? DateFormat('yyyy-MM-dd HH:mm').format(ts) : '',
-        m['status'] ?? '',
-        m['method'] ?? 'qr',
-      ];
-    }).toList();
+  final m = d.data() as Map<String, dynamic>;
+  final ts = (m['timestamp'] as Timestamp?)?.toDate();
+  final uid = m['studentId']?.toString() ?? '';
+  final realStudentNo = _studentCache[uid]?['studentId']?.toString() ?? m['studentId'] ?? '';
+  return <String>[
+    m['studentName'] ?? '',
+    realStudentNo,   // <-- use looked-up number
+    m['program'] ?? '',
+    m['yearLevel'] ?? '',
+    ts != null ? DateFormat('yyyy-MM-dd HH:mm').format(ts) : '',
+    m['status'] ?? '',
+    m['method'] ?? 'qr',
+  ];
+}).toList();
     await _exportPdf(
       title: 'Attendance Report',
       headers: ['Student Name', 'Student ID', 'Program', 'Year Level', 'Time In', 'Status', 'Method'],

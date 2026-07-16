@@ -204,24 +204,16 @@ Widget _sectionLabel(String text, {IconData? icon}) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// NEW: Signatory model
-//
-// Used by the Certificate module (org side) to auto-insert a signature
-// image, name, and title into a generated certificate wherever the template
-// contains a matching {{PLACEHOLDER_KEY}} placement. Lives in Admin
-// Settings because signatories (e.g. the university president, the dean)
-// are managed centrally by admins, not per-organization.
+// Signatory model - NO PLACEHOLDER KEY
 // ─────────────────────────────────────────────────────────────────────────────
 class SignatoryEntry {
   final String id;
-  final String placeholderKey; // e.g. "PRESIDENT", "DEAN", "ADVISER"
   final String fullName;
   final String title;
   final String? signatureBase64;
 
   const SignatoryEntry({
     required this.id,
-    required this.placeholderKey,
     required this.fullName,
     required this.title,
     this.signatureBase64,
@@ -231,7 +223,6 @@ class SignatoryEntry {
     final d = (doc.data() as Map<String, dynamic>?) ?? {};
     return SignatoryEntry(
       id: doc.id,
-      placeholderKey: (d['placeholderKey'] ?? '').toString(),
       fullName: (d['fullName'] ?? '').toString(),
       title: (d['title'] ?? '').toString(),
       signatureBase64: d['signatureBase64'] as String?,
@@ -239,7 +230,6 @@ class SignatoryEntry {
   }
 
   Map<String, dynamic> toMap() => {
-    'placeholderKey': placeholderKey.trim().toUpperCase(),
     'fullName': fullName.trim(),
     'title': title.trim(),
     if (signatureBase64 != null) 'signatureBase64': signatureBase64,
@@ -251,10 +241,6 @@ class SignatoryEntry {
 // Main Widget
 // ─────────────────────────────────────────────────────────────────────────────
 class AdminSettings extends StatefulWidget {
-  // Settings renders inside the dashboard's persistent shell (the top bar
-  // with the admin's name/avatar stays mounted), so a profile save here
-  // needs to tell that shell to re-fetch — otherwise the name/photo only
-  // updates after navigating away and back.
   final VoidCallback? onProfileUpdated;
   const AdminSettings({super.key, this.onProfileUpdated});
 
@@ -282,7 +268,6 @@ class _AdminSettingsState extends State<AdminSettings>
   @override
   void initState() {
     super.initState();
-    // NOTE: length bumped from 3 to 4 to fit the new "Signatories" tab.
     _tabController = TabController(length: 4, vsync: this);
     _currentUser = FirebaseAuth.instance.currentUser;
     _loadUserData();
@@ -311,10 +296,8 @@ class _AdminSettingsState extends State<AdminSettings>
       }).toList();
     } catch (e) {
       final msg = e.toString().toLowerCase();
-      // Firestore returns a failed-precondition indicating an index is required.
       if (msg.contains('requires an index') ||
           msg.contains('failed-precondition')) {
-        // Fallback: fetch matching docs without ordering and sort client-side.
         final qs = await col.where('user', isEqualTo: email).limit(50).get();
         final list = qs.docs.map((d) {
           final m = Map<String, dynamic>.from(d.data() as Map<String, dynamic>);
@@ -352,7 +335,6 @@ class _AdminSettingsState extends State<AdminSettings>
     super.dispose();
   }
 
-  // ── Data loaders ──────────────────────────────────────────────────
   Future<void> _loadUserData() async {
     if (_currentUser != null) {
       _fullNameController.text = _currentUser!.displayName ?? '';
@@ -385,7 +367,6 @@ class _AdminSettingsState extends State<AdminSettings>
     }
   }
 
-  // ── Actions ───────────────────────────────────────────────────────
   Future<void> _pickAndUploadImage() async {
     final picker = ImagePicker();
     final picked = await picker.pickImage(
@@ -482,7 +463,6 @@ class _AdminSettingsState extends State<AdminSettings>
     );
   }
 
-  // ── Build ─────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -497,7 +477,6 @@ class _AdminSettingsState extends State<AdminSettings>
                 _buildProfileTab(),
                 _buildSecurityTab(),
                 _buildAuditLogsTab(),
-                // NEW: certificate signatory management.
                 const _SignatoriesTab(),
               ],
             ),
@@ -539,9 +518,6 @@ class _AdminSettingsState extends State<AdminSettings>
     );
   }
 
-  // ═══════════════════════════════════════════════════════════════════
-  // PROFILE TAB
-  // ═══════════════════════════════════════════════════════════════════
   Widget _buildProfileTab() {
     ImageProvider? imageProvider;
     if (_profileImageBase64 != null && _profileImageBase64!.isNotEmpty) {
@@ -556,7 +532,6 @@ class _AdminSettingsState extends State<AdminSettings>
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Avatar card
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(28),
@@ -682,7 +657,6 @@ class _AdminSettingsState extends State<AdminSettings>
                 ),
               ),
               const SizedBox(height: 20),
-              // Personal info card
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(24),
@@ -845,9 +819,6 @@ class _AdminSettingsState extends State<AdminSettings>
     );
   }
 
-  // ═══════════════════════════════════════════════════════════════════
-  // SECURITY TAB
-  // ═══════════════════════════════════════════════════════════════════
   Widget _buildSecurityTab() {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(28),
@@ -857,7 +828,6 @@ class _AdminSettingsState extends State<AdminSettings>
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Change password card
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(24),
@@ -987,7 +957,6 @@ class _AdminSettingsState extends State<AdminSettings>
                 ),
               ),
               const SizedBox(height: 20),
-              // 2FA card
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(24),
@@ -1016,7 +985,6 @@ class _AdminSettingsState extends State<AdminSettings>
                 ),
               ),
               const SizedBox(height: 20),
-              // Danger zone
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(24),
@@ -1095,9 +1063,6 @@ class _AdminSettingsState extends State<AdminSettings>
     );
   }
 
-  // ═══════════════════════════════════════════════════════════════════
-  // AUDIT LOGS TAB
-  // ═══════════════════════════════════════════════════════════════════
   Widget _buildAuditLogsTab() {
     final email = _currentUser?.email ?? '';
     if (email.isEmpty) {
@@ -1194,7 +1159,6 @@ class _AdminSettingsState extends State<AdminSettings>
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Log count header
             Padding(
               padding: const EdgeInsets.fromLTRB(28, 20, 28, 12),
               child: Row(
@@ -1229,7 +1193,6 @@ class _AdminSettingsState extends State<AdminSettings>
                 ],
               ),
             ),
-            // Table
             Expanded(
               child: Container(
                 margin: const EdgeInsets.symmetric(horizontal: 28),
@@ -1241,7 +1204,6 @@ class _AdminSettingsState extends State<AdminSettings>
                 ),
                 child: Column(
                   children: [
-                    // Table header
                     Container(
                       padding: const EdgeInsets.symmetric(
                         horizontal: 20,
@@ -1265,7 +1227,6 @@ class _AdminSettingsState extends State<AdminSettings>
                         ],
                       ),
                     ),
-                    // Rows
                     Expanded(
                       child: ListView.builder(
                         itemCount: logs.length,
@@ -1375,7 +1336,6 @@ class _AdminSettingsState extends State<AdminSettings>
                         },
                       ),
                     ),
-                    // Footer note
                     Container(
                       padding: const EdgeInsets.symmetric(
                         horizontal: 20,
@@ -1421,13 +1381,7 @@ class _AdminSettingsState extends State<AdminSettings>
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// NEW: SIGNATORIES TAB
-//
-// Lets an admin maintain the roster of people whose signature/name/title
-// can be auto-inserted into a certificate template wherever it contains a
-// matching {{PLACEHOLDER_KEY}}. This tab only manages the roster — actual
-// placement on a specific template happens in the Certificate module
-// (org side) when a signatory key is dropped onto the template canvas.
+// SIGNATORIES TAB - NO PLACEHOLDER KEY
 // ─────────────────────────────────────────────────────────────────────────────
 class _SignatoriesTab extends StatefulWidget {
   const _SignatoriesTab();
@@ -1492,7 +1446,7 @@ class _SignatoriesTabState extends State<_SignatoriesTab> {
               ),
               const SizedBox(height: 16),
               Text(
-                'Delete "${s.fullName}" (${s.placeholderKey})? Templates that reference this placeholder will show a missing-signatory warning until it is replaced.',
+                'Delete "${s.fullName}"? This will remove them from the signatory list.',
                 style: GoogleFonts.beVietnamPro(
                   fontSize: 13,
                   color: const Color(0xFF64748B),
@@ -1553,7 +1507,7 @@ class _SignatoriesTabState extends State<_SignatoriesTab> {
     if (confirmed != true) return;
     await _col.doc(s.id).delete();
     await ActivityLogger.log(
-      action: 'Deleted signatory ${s.fullName} (${s.placeholderKey})',
+      action: 'Deleted signatory ${s.fullName}',
       module: 'Admin Settings',
     );
   }
@@ -1607,7 +1561,7 @@ class _SignatoriesTabState extends State<_SignatoriesTab> {
               ),
               const SizedBox(height: 6),
               Text(
-                'Signatories added here can be auto-inserted into any certificate template in the Certificates module by matching their placeholder key (e.g. {{PRESIDENT}}).',
+                'Signatories added here can be auto-inserted into any certificate template in the Certificates module.',
                 style: GoogleFonts.beVietnamPro(
                   fontSize: 12.5,
                   color: const Color(0xFF64748B),
@@ -1616,7 +1570,7 @@ class _SignatoriesTabState extends State<_SignatoriesTab> {
               ),
               const SizedBox(height: 20),
               StreamBuilder<QuerySnapshot>(
-                stream: _col.orderBy('placeholderKey').snapshots(),
+                stream: _col.orderBy('fullName').snapshots(),
                 builder: (context, snapshot) {
                   if (snapshot.connectionState == ConnectionState.waiting) {
                     return const Padding(
@@ -1734,28 +1688,6 @@ class _SignatoriesTabState extends State<_SignatoriesTab> {
                                     ],
                                   ),
                                 ),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 10,
-                                    vertical: 5,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: UpriseColors.primaryDark.withOpacity(
-                                      0.08,
-                                    ),
-                                    borderRadius: BorderRadius.circular(
-                                      _DS.radiusPill,
-                                    ),
-                                  ),
-                                  child: Text(
-                                    '{{${s.placeholderKey}}}',
-                                    style: GoogleFonts.beVietnamPro(
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.w700,
-                                      color: UpriseColors.primaryDark,
-                                    ),
-                                  ),
-                                ),
                                 const SizedBox(width: 8),
                                 IconButton(
                                   icon: const Icon(
@@ -1791,7 +1723,7 @@ class _SignatoriesTabState extends State<_SignatoriesTab> {
   }
 }
 
-// Add/Edit signatory dialog.
+// Add/Edit signatory dialog - NO PLACEHOLDER KEY
 class _SignatoryFormDialog extends StatefulWidget {
   final SignatoryEntry? existing;
   const _SignatoryFormDialog({this.existing});
@@ -1802,7 +1734,6 @@ class _SignatoryFormDialog extends StatefulWidget {
 
 class _SignatoryFormDialogState extends State<_SignatoryFormDialog> {
   final _formKey = GlobalKey<FormState>();
-  late final TextEditingController _keyCtrl;
   late final TextEditingController _nameCtrl;
   late final TextEditingController _titleCtrl;
   String? _signatureBase64;
@@ -1812,7 +1743,6 @@ class _SignatoryFormDialogState extends State<_SignatoryFormDialog> {
   void initState() {
     super.initState();
     final e = widget.existing;
-    _keyCtrl = TextEditingController(text: e?.placeholderKey ?? '');
     _nameCtrl = TextEditingController(text: e?.fullName ?? '');
     _titleCtrl = TextEditingController(text: e?.title ?? '');
     _signatureBase64 = e?.signatureBase64;
@@ -1820,7 +1750,6 @@ class _SignatoryFormDialogState extends State<_SignatoryFormDialog> {
 
   @override
   void dispose() {
-    _keyCtrl.dispose();
     _nameCtrl.dispose();
     _titleCtrl.dispose();
     super.dispose();
@@ -1843,7 +1772,6 @@ class _SignatoryFormDialogState extends State<_SignatoryFormDialog> {
     try {
       final entry = SignatoryEntry(
         id: widget.existing?.id ?? '',
-        placeholderKey: _keyCtrl.text.trim(),
         fullName: _nameCtrl.text.trim(),
         title: _titleCtrl.text.trim(),
         signatureBase64: _signatureBase64,
@@ -1854,8 +1782,7 @@ class _SignatoryFormDialogState extends State<_SignatoryFormDialog> {
             .doc(widget.existing!.id)
             .set(entry.toMap(), SetOptions(merge: true));
         await ActivityLogger.log(
-          action:
-              'Updated signatory ${entry.fullName} (${entry.placeholderKey})',
+          action: 'Updated signatory ${entry.fullName}',
           module: 'Admin Settings',
         );
       } else {
@@ -1864,7 +1791,7 @@ class _SignatoryFormDialogState extends State<_SignatoryFormDialog> {
           'createdAt': FieldValue.serverTimestamp(),
         });
         await ActivityLogger.log(
-          action: 'Added signatory ${entry.fullName} (${entry.placeholderKey})',
+          action: 'Added signatory ${entry.fullName}',
           module: 'Admin Settings',
         );
       }
@@ -1967,29 +1894,6 @@ class _SignatoryFormDialogState extends State<_SignatoryFormDialog> {
                   icon: Icons.badge_outlined,
                 ),
                 validator: (v) => v?.trim().isEmpty == true ? 'Required' : null,
-              ),
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: _keyCtrl,
-                style: GoogleFonts.beVietnamPro(
-                  fontSize: 13,
-                  letterSpacing: 0.5,
-                ),
-                textCapitalization: TextCapitalization.characters,
-                decoration: _DS.inputDecoration(
-                  'Placeholder Key',
-                  hint: 'e.g., DEAN',
-                  icon: Icons.tag_rounded,
-                ),
-                validator: (v) => v?.trim().isEmpty == true ? 'Required' : null,
-              ),
-              const SizedBox(height: 6),
-              Text(
-                'Use this exact key (e.g. {{DEAN}}) when placing this signatory on a certificate template.',
-                style: GoogleFonts.beVietnamPro(
-                  fontSize: 11,
-                  color: const Color(0xFF9AA5B4),
-                ),
               ),
               const SizedBox(height: 22),
               Row(
