@@ -19,16 +19,16 @@ class ActivityLogger {
     String severity = 'info',
     Map<String, dynamic>? details,
   }) async {
-    final user     = FirebaseAuth.instance.currentUser;
+    final user = FirebaseAuth.instance.currentUser;
     final userName = user?.email ?? 'Unknown User';
     await _firestore.collection('activity_logs').add({
-      'user':      userName,
-      'action':    action,
-      'module':    module,
-      'severity':  severity,
+      'user': userName,
+      'action': action,
+      'module': module,
+      'severity': severity,
       'timestamp': FieldValue.serverTimestamp(),
       'ipAddress': '',
-      'details':   details,
+      'details': details,
     });
   }
 }
@@ -37,9 +37,9 @@ class ActivityLogger {
 // Design tokens
 // ─────────────────────────────────────────────────────────────────────────────
 class _DS {
-  static const double radiusSm  = 8;
-  static const double radiusMd  = 12;
-  static const double radiusLg  = 16;
+  static const double radiusSm = 8;
+  static const double radiusMd = 12;
+  static const double radiusLg = 16;
   static const double radiusPill = 100;
 
   static final cardShadow = [
@@ -62,8 +62,14 @@ class _DS {
       prefixIcon: icon != null
           ? Icon(icon, size: 18, color: const Color(0xFF9AA5B4))
           : null,
-      labelStyle: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF64748B)),
-      hintStyle: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF9AA5B4)),
+      labelStyle: GoogleFonts.beVietnamPro(
+        fontSize: 13,
+        color: const Color(0xFF64748B),
+      ),
+      hintStyle: GoogleFonts.beVietnamPro(
+        fontSize: 13,
+        color: const Color(0xFF9AA5B4),
+      ),
       filled: true,
       fillColor: enabled ? const Color(0xFFF8F9FB) : const Color(0xFFF1F5F9),
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
@@ -105,13 +111,34 @@ class _SeverityBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final Map<String, _BadgeStyle> styles = {
-      'info':     _BadgeStyle(const Color(0xFFEFF6FF), const Color(0xFF2563EB), 'INFO'),
-      'warning':  _BadgeStyle(const Color(0xFFFFFBEB), const Color(0xFFFB923C), 'WARNING'),
-      'error':    _BadgeStyle(const Color(0xFFFEF2F2), const Color(0xFFDC2626), 'ERROR'),
-      'critical': _BadgeStyle(const Color(0xFFFDF2F8), const Color(0xFF9333EA), 'CRITICAL'),
+      'info': _BadgeStyle(
+        const Color(0xFFEFF6FF),
+        const Color(0xFF2563EB),
+        'INFO',
+      ),
+      'warning': _BadgeStyle(
+        const Color(0xFFFFFBEB),
+        const Color(0xFFFB923C),
+        'WARNING',
+      ),
+      'error': _BadgeStyle(
+        const Color(0xFFFEF2F2),
+        const Color(0xFFDC2626),
+        'ERROR',
+      ),
+      'critical': _BadgeStyle(
+        const Color(0xFFFDF2F8),
+        const Color(0xFF9333EA),
+        'CRITICAL',
+      ),
     };
-    final s = styles[severity.toLowerCase()] ??
-        _BadgeStyle(const Color(0xFFF3F4F6), const Color(0xFF6B7280), severity.toUpperCase());
+    final s =
+        styles[severity.toLowerCase()] ??
+        _BadgeStyle(
+          const Color(0xFFF3F4F6),
+          const Color(0xFF6B7280),
+          severity.toUpperCase(),
+        );
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
       decoration: BoxDecoration(
@@ -121,7 +148,11 @@ class _SeverityBadge extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Container(width: 6, height: 6, decoration: BoxDecoration(color: s.fg, shape: BoxShape.circle)),
+          Container(
+            width: 6,
+            height: 6,
+            decoration: BoxDecoration(color: s.fg, shape: BoxShape.circle),
+          ),
           const SizedBox(width: 5),
           Text(
             s.label,
@@ -173,6 +204,50 @@ Widget _sectionLabel(String text, {IconData? icon}) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// NEW: Signatory model
+//
+// Used by the Certificate module (org side) to auto-insert a signature
+// image, name, and title into a generated certificate wherever the template
+// contains a matching {{PLACEHOLDER_KEY}} placement. Lives in Admin
+// Settings because signatories (e.g. the university president, the dean)
+// are managed centrally by admins, not per-organization.
+// ─────────────────────────────────────────────────────────────────────────────
+class SignatoryEntry {
+  final String id;
+  final String placeholderKey; // e.g. "PRESIDENT", "DEAN", "ADVISER"
+  final String fullName;
+  final String title;
+  final String? signatureBase64;
+
+  const SignatoryEntry({
+    required this.id,
+    required this.placeholderKey,
+    required this.fullName,
+    required this.title,
+    this.signatureBase64,
+  });
+
+  factory SignatoryEntry.fromDoc(DocumentSnapshot doc) {
+    final d = (doc.data() as Map<String, dynamic>?) ?? {};
+    return SignatoryEntry(
+      id: doc.id,
+      placeholderKey: (d['placeholderKey'] ?? '').toString(),
+      fullName: (d['fullName'] ?? '').toString(),
+      title: (d['title'] ?? '').toString(),
+      signatureBase64: d['signatureBase64'] as String?,
+    );
+  }
+
+  Map<String, dynamic> toMap() => {
+    'placeholderKey': placeholderKey.trim().toUpperCase(),
+    'fullName': fullName.trim(),
+    'title': title.trim(),
+    if (signatureBase64 != null) 'signatureBase64': signatureBase64,
+    'updatedAt': FieldValue.serverTimestamp(),
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Main Widget
 // ─────────────────────────────────────────────────────────────────────────────
 class AdminSettings extends StatefulWidget {
@@ -192,23 +267,24 @@ class _AdminSettingsState extends State<AdminSettings>
   late TabController _tabController;
 
   // Profile
-  final _fullNameController    = TextEditingController();
-  final _emailController       = TextEditingController();
-  bool   _isLoading            = false;
-  User?  _currentUser;
+  final _fullNameController = TextEditingController();
+  final _emailController = TextEditingController();
+  bool _isLoading = false;
+  User? _currentUser;
   String? _profileImageBase64;
 
   // Password
-  final _newPasswordController     = TextEditingController();
+  final _newPasswordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
-  bool _showNewPassword            = false;
-  bool _showConfirmPassword        = false;
+  bool _showNewPassword = false;
+  bool _showConfirmPassword = false;
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
-    _currentUser   = FirebaseAuth.instance.currentUser;
+    // NOTE: length bumped from 3 to 4 to fit the new "Signatories" tab.
+    _tabController = TabController(length: 4, vsync: this);
+    _currentUser = FirebaseAuth.instance.currentUser;
     _loadUserData();
     _loadProfileImage();
   }
@@ -225,8 +301,10 @@ class _AdminSettingsState extends State<AdminSettings>
         final m = Map<String, dynamic>.from(d.data() as Map<String, dynamic>);
         final tsField = m['timestamp'];
         DateTime? ts;
-        if (tsField is Timestamp) ts = tsField.toDate();
-        else if (tsField is DateTime) ts = tsField;
+        if (tsField is Timestamp)
+          ts = tsField.toDate();
+        else if (tsField is DateTime)
+          ts = tsField;
         m['_ts'] = ts;
         m['_id'] = d.id;
         return m;
@@ -234,15 +312,18 @@ class _AdminSettingsState extends State<AdminSettings>
     } catch (e) {
       final msg = e.toString().toLowerCase();
       // Firestore returns a failed-precondition indicating an index is required.
-      if (msg.contains('requires an index') || msg.contains('failed-precondition')) {
+      if (msg.contains('requires an index') ||
+          msg.contains('failed-precondition')) {
         // Fallback: fetch matching docs without ordering and sort client-side.
         final qs = await col.where('user', isEqualTo: email).limit(50).get();
         final list = qs.docs.map((d) {
           final m = Map<String, dynamic>.from(d.data() as Map<String, dynamic>);
           final tsField = m['timestamp'];
           DateTime? ts;
-          if (tsField is Timestamp) ts = tsField.toDate();
-          else if (tsField is DateTime) ts = tsField;
+          if (tsField is Timestamp)
+            ts = tsField.toDate();
+          else if (tsField is DateTime)
+            ts = tsField;
           m['_ts'] = ts;
           m['_id'] = d.id;
           return m;
@@ -275,7 +356,7 @@ class _AdminSettingsState extends State<AdminSettings>
   Future<void> _loadUserData() async {
     if (_currentUser != null) {
       _fullNameController.text = _currentUser!.displayName ?? '';
-      _emailController.text    = _currentUser!.email ?? '';
+      _emailController.text = _currentUser!.email ?? '';
     }
     final doc = await FirebaseFirestore.instance
         .collection('users')
@@ -285,7 +366,7 @@ class _AdminSettingsState extends State<AdminSettings>
       final data = doc.data();
       if (data != null) {
         _fullNameController.text = data['fullName'] ?? _fullNameController.text;
-        _emailController.text    = data['email']    ?? _emailController.text;
+        _emailController.text = data['email'] ?? _emailController.text;
       }
     }
     setState(() {});
@@ -307,7 +388,10 @@ class _AdminSettingsState extends State<AdminSettings>
   // ── Actions ───────────────────────────────────────────────────────
   Future<void> _pickAndUploadImage() async {
     final picker = ImagePicker();
-    final picked = await picker.pickImage(source: ImageSource.gallery, imageQuality: 50);
+    final picked = await picker.pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 50,
+    );
     if (picked == null) return;
     setState(() => _isLoading = true);
     try {
@@ -319,7 +403,9 @@ class _AdminSettingsState extends State<AdminSettings>
           .set({'photoBase64': base64String}, SetOptions(merge: true));
       setState(() => _profileImageBase64 = base64String);
       await ActivityLogger.log(
-          action: 'Updated profile picture', module: 'Admin Settings');
+        action: 'Updated profile picture',
+        module: 'Admin Settings',
+      );
       widget.onProfileUpdated?.call();
       _showSnack('Profile picture updated', success: true);
     } catch (e) {
@@ -341,13 +427,14 @@ class _AdminSettingsState extends State<AdminSettings>
           .collection('users')
           .doc(_currentUser!.uid)
           .set({
-        'fullName':  _fullNameController.text.trim(),
-        'email':     _emailController.text.trim(),
-        'updatedAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
+            'fullName': _fullNameController.text.trim(),
+            'email': _emailController.text.trim(),
+            'updatedAt': FieldValue.serverTimestamp(),
+          }, SetOptions(merge: true));
       await ActivityLogger.log(
-          action: 'Updated profile name to ${_fullNameController.text.trim()}',
-          module: 'Admin Settings');
+        action: 'Updated profile name to ${_fullNameController.text.trim()}',
+        module: 'Admin Settings',
+      );
       widget.onProfileUpdated?.call();
       _showSnack('Profile updated successfully', success: true);
     } catch (e) {
@@ -372,7 +459,9 @@ class _AdminSettingsState extends State<AdminSettings>
       _newPasswordController.clear();
       _confirmPasswordController.clear();
       await ActivityLogger.log(
-          action: 'Changed account password', module: 'Admin Settings');
+        action: 'Changed account password',
+        module: 'Admin Settings',
+      );
       _showSnack('Password changed successfully', success: true);
     } catch (e) {
       _showSnack('Error: $e', success: false);
@@ -408,6 +497,8 @@ class _AdminSettingsState extends State<AdminSettings>
                 _buildProfileTab(),
                 _buildSecurityTab(),
                 _buildAuditLogsTab(),
+                // NEW: certificate signatory management.
+                const _SignatoriesTab(),
               ],
             ),
           ),
@@ -424,18 +515,26 @@ class _AdminSettingsState extends State<AdminSettings>
       ),
       child: TabBar(
         controller: _tabController,
+        isScrollable: false,
         tabs: const [
           Tab(text: 'Profile'),
           Tab(text: 'Security'),
           Tab(text: 'Audit Logs'),
+          Tab(text: 'Signatories'),
         ],
         labelColor: UpriseColors.primaryDark,
         unselectedLabelColor: const Color(0xFF64748B),
         indicatorColor: UpriseColors.primaryDark,
         indicatorWeight: 2.5,
         indicatorSize: TabBarIndicatorSize.label,
-        labelStyle: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w700),
-        unselectedLabelStyle: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w500),
+        labelStyle: GoogleFonts.beVietnamPro(
+          fontSize: 13,
+          fontWeight: FontWeight.w700,
+        ),
+        unselectedLabelStyle: GoogleFonts.beVietnamPro(
+          fontSize: 13,
+          fontWeight: FontWeight.w500,
+        ),
       ),
     );
   }
@@ -477,17 +576,24 @@ class _AdminSettingsState extends State<AdminSettings>
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
                             border: Border.all(
-                                color: UpriseColors.primaryDark.withOpacity(0.15),
-                                width: 3),
+                              color: UpriseColors.primaryDark.withOpacity(0.15),
+                              width: 3,
+                            ),
                             boxShadow: _DS.cardShadow,
                           ),
                           child: ClipOval(
                             child: imageProvider != null
                                 ? Image(image: imageProvider, fit: BoxFit.cover)
                                 : Container(
-                                    color: UpriseColors.primaryDark.withOpacity(0.08),
-                                    child: Icon(Icons.person_rounded,
-                                        size: 48, color: UpriseColors.primaryDark.withOpacity(0.4)),
+                                    color: UpriseColors.primaryDark.withOpacity(
+                                      0.08,
+                                    ),
+                                    child: Icon(
+                                      Icons.person_rounded,
+                                      size: 48,
+                                      color: UpriseColors.primaryDark
+                                          .withOpacity(0.4),
+                                    ),
                                   ),
                           ),
                         ),
@@ -502,16 +608,24 @@ class _AdminSettingsState extends State<AdminSettings>
                               decoration: BoxDecoration(
                                 color: UpriseColors.primaryDark,
                                 shape: BoxShape.circle,
-                                border: Border.all(color: Colors.white, width: 2),
+                                border: Border.all(
+                                  color: Colors.white,
+                                  width: 2,
+                                ),
                               ),
                               child: _isLoading
                                   ? const Padding(
                                       padding: EdgeInsets.all(6),
                                       child: CircularProgressIndicator(
-                                          strokeWidth: 2, color: Colors.white),
+                                        strokeWidth: 2,
+                                        color: Colors.white,
+                                      ),
                                     )
-                                  : const Icon(Icons.camera_alt_rounded,
-                                      size: 14, color: Colors.white),
+                                  : const Icon(
+                                      Icons.camera_alt_rounded,
+                                      size: 14,
+                                      color: Colors.white,
+                                    ),
                             ),
                           ),
                         ),
@@ -532,11 +646,16 @@ class _AdminSettingsState extends State<AdminSettings>
                     Text(
                       _emailController.text,
                       style: GoogleFonts.beVietnamPro(
-                          fontSize: 13, color: const Color(0xFF64748B)),
+                        fontSize: 13,
+                        color: const Color(0xFF64748B),
+                      ),
                     ),
                     const SizedBox(height: 12),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 5,
+                      ),
                       decoration: BoxDecoration(
                         color: UpriseColors.primaryDark.withOpacity(0.08),
                         borderRadius: BorderRadius.circular(_DS.radiusPill),
@@ -555,7 +674,9 @@ class _AdminSettingsState extends State<AdminSettings>
                     Text(
                       'Tap the camera icon to change your photo',
                       style: GoogleFonts.beVietnamPro(
-                          fontSize: 11, color: const Color(0xFF9AA5B4)),
+                        fontSize: 11,
+                        color: const Color(0xFF9AA5B4),
+                      ),
                     ),
                   ],
                 ),
@@ -574,12 +695,18 @@ class _AdminSettingsState extends State<AdminSettings>
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _sectionLabel('Personal Information', icon: Icons.badge_outlined),
+                    _sectionLabel(
+                      'Personal Information',
+                      icon: Icons.badge_outlined,
+                    ),
                     TextFormField(
                       controller: _fullNameController,
                       style: GoogleFonts.beVietnamPro(fontSize: 13),
-                      decoration: _DS.inputDecoration('Full Name',
-                          hint: 'e.g., Juan dela Cruz', icon: Icons.person_outline_rounded),
+                      decoration: _DS.inputDecoration(
+                        'Full Name',
+                        hint: 'e.g., Juan dela Cruz',
+                        icon: Icons.person_outline_rounded,
+                      ),
                       onChanged: (_) => setState(() {}),
                     ),
                     const SizedBox(height: 12),
@@ -587,9 +714,14 @@ class _AdminSettingsState extends State<AdminSettings>
                       controller: _emailController,
                       enabled: false,
                       style: GoogleFonts.beVietnamPro(
-                          fontSize: 13, color: const Color(0xFF9AA5B4)),
-                      decoration: _DS.inputDecoration('Email Address',
-                          icon: Icons.email_outlined, enabled: false),
+                        fontSize: 13,
+                        color: const Color(0xFF9AA5B4),
+                      ),
+                      decoration: _DS.inputDecoration(
+                        'Email Address',
+                        icon: Icons.email_outlined,
+                        enabled: false,
+                      ),
                     ),
                     const SizedBox(height: 8),
                     Padding(
@@ -597,7 +729,9 @@ class _AdminSettingsState extends State<AdminSettings>
                       child: Text(
                         'Email address cannot be changed here.',
                         style: GoogleFonts.beVietnamPro(
-                            fontSize: 11, color: const Color(0xFF9AA5B4)),
+                          fontSize: 11,
+                          color: const Color(0xFF9AA5B4),
+                        ),
                       ),
                     ),
                     const SizedBox(height: 20),
@@ -608,12 +742,17 @@ class _AdminSettingsState extends State<AdminSettings>
                               width: 14,
                               height: 14,
                               child: CircularProgressIndicator(
-                                  strokeWidth: 2, color: Colors.white))
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
                           : const Icon(Icons.save_rounded, size: 16),
                       label: Text(
                         'Save Changes',
                         style: GoogleFonts.beVietnamPro(
-                            fontSize: 13, fontWeight: FontWeight.w600),
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: UpriseColors.primaryDark,
@@ -621,7 +760,8 @@ class _AdminSettingsState extends State<AdminSettings>
                         elevation: 0,
                         minimumSize: const Size(double.infinity, 44),
                         shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(_DS.radiusSm)),
+                          borderRadius: BorderRadius.circular(_DS.radiusSm),
+                        ),
                       ),
                     ),
                   ],
@@ -653,47 +793,55 @@ class _AdminSettingsState extends State<AdminSettings>
               : const Color(0xFFE2E6EA),
         ),
       ),
-      child: Row(children: [
-        Container(
-          width: 36,
-          height: 36,
-          decoration: BoxDecoration(
-            color: value
-                ? UpriseColors.primaryDark.withOpacity(0.10)
-                : const Color(0xFFE8ECF0),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Icon(icon,
-              size: 18,
+      child: Row(
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
               color: value
-                  ? UpriseColors.primaryDark
-                  : const Color(0xFF9AA5B4)),
-        ),
-        const SizedBox(width: 14),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(title,
+                  ? UpriseColors.primaryDark.withOpacity(0.10)
+                  : const Color(0xFFE8ECF0),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(
+              icon,
+              size: 18,
+              color: value ? UpriseColors.primaryDark : const Color(0xFF9AA5B4),
+            ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
                   style: GoogleFonts.beVietnamPro(
                     fontSize: 13,
                     fontWeight: FontWeight.w600,
                     color: const Color(0xFF1A202C),
-                  )),
-              const SizedBox(height: 2),
-              Text(subtitle,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  subtitle,
                   style: GoogleFonts.beVietnamPro(
-                      fontSize: 11, color: const Color(0xFF64748B))),
-            ],
+                    fontSize: 11,
+                    color: const Color(0xFF64748B),
+                  ),
+                ),
+              ],
+            ),
           ),
-        ),
-        Switch(
-          value: value,
-          onChanged: onChanged,
-          activeColor: UpriseColors.primaryDark,
-          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-        ),
-      ]),
+          Switch(
+            value: value,
+            onChanged: onChanged,
+            activeColor: UpriseColors.primaryDark,
+            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          ),
+        ],
+      ),
     );
   }
 
@@ -722,7 +870,10 @@ class _AdminSettingsState extends State<AdminSettings>
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _sectionLabel('Change Password', icon: Icons.lock_outline_rounded),
+                    _sectionLabel(
+                      'Change Password',
+                      icon: Icons.lock_outline_rounded,
+                    ),
                     Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
@@ -730,18 +881,26 @@ class _AdminSettingsState extends State<AdminSettings>
                         borderRadius: BorderRadius.circular(_DS.radiusSm),
                         border: Border.all(color: const Color(0xFFBFD7FF)),
                       ),
-                      child: Row(children: [
-                        const Icon(Icons.info_outline_rounded,
-                            size: 15, color: Color(0xFF2563EB)),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            'Regularly updating your password keeps your account secure.',
-                            style: GoogleFonts.beVietnamPro(
-                                fontSize: 12, color: const Color(0xFF1D4ED8), height: 1.4),
+                      child: Row(
+                        children: [
+                          const Icon(
+                            Icons.info_outline_rounded,
+                            size: 15,
+                            color: Color(0xFF2563EB),
                           ),
-                        ),
-                      ]),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'Regularly updating your password keeps your account secure.',
+                              style: GoogleFonts.beVietnamPro(
+                                fontSize: 12,
+                                color: const Color(0xFF1D4ED8),
+                                height: 1.4,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                     const SizedBox(height: 16),
                     TextFormField(
@@ -749,7 +908,10 @@ class _AdminSettingsState extends State<AdminSettings>
                       obscureText: !_showNewPassword,
                       style: GoogleFonts.beVietnamPro(fontSize: 13),
                       decoration: _DS
-                          .inputDecoration('New Password', icon: Icons.lock_outline_rounded)
+                          .inputDecoration(
+                            'New Password',
+                            icon: Icons.lock_outline_rounded,
+                          )
                           .copyWith(
                             suffixIcon: IconButton(
                               icon: Icon(
@@ -759,8 +921,9 @@ class _AdminSettingsState extends State<AdminSettings>
                                 size: 18,
                                 color: const Color(0xFF9AA5B4),
                               ),
-                              onPressed: () =>
-                                  setState(() => _showNewPassword = !_showNewPassword),
+                              onPressed: () => setState(
+                                () => _showNewPassword = !_showNewPassword,
+                              ),
                             ),
                           ),
                     ),
@@ -770,8 +933,10 @@ class _AdminSettingsState extends State<AdminSettings>
                       obscureText: !_showConfirmPassword,
                       style: GoogleFonts.beVietnamPro(fontSize: 13),
                       decoration: _DS
-                          .inputDecoration('Confirm New Password',
-                              icon: Icons.lock_outline_rounded)
+                          .inputDecoration(
+                            'Confirm New Password',
+                            icon: Icons.lock_outline_rounded,
+                          )
                           .copyWith(
                             suffixIcon: IconButton(
                               icon: Icon(
@@ -781,8 +946,10 @@ class _AdminSettingsState extends State<AdminSettings>
                                 size: 18,
                                 color: const Color(0xFF9AA5B4),
                               ),
-                              onPressed: () =>
-                                  setState(() => _showConfirmPassword = !_showConfirmPassword),
+                              onPressed: () => setState(
+                                () => _showConfirmPassword =
+                                    !_showConfirmPassword,
+                              ),
                             ),
                           ),
                     ),
@@ -794,12 +961,17 @@ class _AdminSettingsState extends State<AdminSettings>
                               width: 14,
                               height: 14,
                               child: CircularProgressIndicator(
-                                  strokeWidth: 2, color: Colors.white))
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
                           : const Icon(Icons.update_rounded, size: 16),
                       label: Text(
                         'Update Password',
                         style: GoogleFonts.beVietnamPro(
-                            fontSize: 13, fontWeight: FontWeight.w600),
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: UpriseColors.primaryDark,
@@ -807,7 +979,8 @@ class _AdminSettingsState extends State<AdminSettings>
                         elevation: 0,
                         minimumSize: const Size(double.infinity, 44),
                         shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(_DS.radiusSm)),
+                          borderRadius: BorderRadius.circular(_DS.radiusSm),
+                        ),
                       ),
                     ),
                   ],
@@ -827,7 +1000,10 @@ class _AdminSettingsState extends State<AdminSettings>
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _sectionLabel('Two-Factor Authentication', icon: Icons.shield_outlined),
+                    _sectionLabel(
+                      'Two-Factor Authentication',
+                      icon: Icons.shield_outlined,
+                    ),
                     _notificationTile(
                       title: 'Enable 2FA',
                       subtitle:
@@ -853,25 +1029,32 @@ class _AdminSettingsState extends State<AdminSettings>
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(children: [
-                      const Icon(Icons.warning_amber_rounded,
-                          size: 16, color: Color(0xFFDC2626)),
-                      const SizedBox(width: 8),
-                      Text(
-                        'Danger Zone',
-                        style: GoogleFonts.beVietnamPro(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700,
-                          color: const Color(0xFFDC2626),
-                          letterSpacing: 0.3,
+                    Row(
+                      children: [
+                        const Icon(
+                          Icons.warning_amber_rounded,
+                          size: 16,
+                          color: Color(0xFFDC2626),
                         ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
+                        const SizedBox(width: 8),
+                        Text(
+                          'Danger Zone',
+                          style: GoogleFonts.beVietnamPro(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: const Color(0xFFDC2626),
+                            letterSpacing: 0.3,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
                           child: Divider(
-                              color: const Color(0xFFFCA5A5),
-                              thickness: 1)),
-                    ]),
+                            color: const Color(0xFFFCA5A5),
+                            thickness: 1,
+                          ),
+                        ),
+                      ],
+                    ),
                     const SizedBox(height: 16),
                     OutlinedButton.icon(
                       onPressed: () async {
@@ -879,7 +1062,8 @@ class _AdminSettingsState extends State<AdminSettings>
                         if (context.mounted) {
                           Navigator.of(context).pushAndRemoveUntil(
                             MaterialPageRoute(
-                                builder: (_) => const AdminLogin()),
+                              builder: (_) => const AdminLogin(),
+                            ),
                             (_) => false,
                           );
                         }
@@ -888,14 +1072,17 @@ class _AdminSettingsState extends State<AdminSettings>
                       label: Text(
                         'Sign Out',
                         style: GoogleFonts.beVietnamPro(
-                            fontSize: 13, fontWeight: FontWeight.w600),
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                       style: OutlinedButton.styleFrom(
                         foregroundColor: const Color(0xFFDC2626),
                         side: const BorderSide(color: Color(0xFFFCA5A5)),
                         minimumSize: const Size(double.infinity, 44),
                         shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(_DS.radiusSm)),
+                          borderRadius: BorderRadius.circular(_DS.radiusSm),
+                        ),
                       ),
                     ),
                   ],
@@ -935,19 +1122,29 @@ class _AdminSettingsState extends State<AdminSettings>
                     color: const Color(0xFFFEF2F2),
                     borderRadius: BorderRadius.circular(16),
                   ),
-                  child: const Icon(Icons.error_outline_rounded,
-                      size: 32, color: Color(0xFFDC2626)),
+                  child: const Icon(
+                    Icons.error_outline_rounded,
+                    size: 32,
+                    color: Color(0xFFDC2626),
+                  ),
                 ),
                 const SizedBox(height: 14),
-                Text('Error loading logs',
-                    style: GoogleFonts.beVietnamPro(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600,
-                        color: const Color(0xFF374151))),
+                Text(
+                  'Error loading logs',
+                  style: GoogleFonts.beVietnamPro(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: const Color(0xFF374151),
+                  ),
+                ),
                 const SizedBox(height: 6),
-                Text('${snapshot.error}',
-                    style: GoogleFonts.beVietnamPro(
-                        fontSize: 12, color: const Color(0xFF64748B))),
+                Text(
+                  '${snapshot.error}',
+                  style: GoogleFonts.beVietnamPro(
+                    fontSize: 12,
+                    color: const Color(0xFF64748B),
+                  ),
+                ),
               ],
             ),
           );
@@ -966,8 +1163,11 @@ class _AdminSettingsState extends State<AdminSettings>
                     color: const Color(0xFFF1F5F9),
                     borderRadius: BorderRadius.circular(20),
                   ),
-                  child: const Icon(Icons.history_rounded,
-                      size: 40, color: Color(0xFF9AA5B4)),
+                  child: const Icon(
+                    Icons.history_rounded,
+                    size: 40,
+                    color: Color(0xFF9AA5B4),
+                  ),
                 ),
                 const SizedBox(height: 16),
                 Text(
@@ -982,7 +1182,9 @@ class _AdminSettingsState extends State<AdminSettings>
                 Text(
                   'Actions you perform will appear here.',
                   style: GoogleFonts.beVietnamPro(
-                      fontSize: 13, color: const Color(0xFF64748B)),
+                    fontSize: 13,
+                    color: const Color(0xFF64748B),
+                  ),
                 ),
               ],
             ),
@@ -995,32 +1197,37 @@ class _AdminSettingsState extends State<AdminSettings>
             // Log count header
             Padding(
               padding: const EdgeInsets.fromLTRB(28, 20, 28, 12),
-              child: Row(children: [
-                Text(
-                  'Your Recent Actions',
-                  style: GoogleFonts.beVietnamPro(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    color: const Color(0xFF1A202C),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: UpriseColors.primaryDark.withOpacity(0.08),
-                    borderRadius: BorderRadius.circular(_DS.radiusPill),
-                  ),
-                  child: Text(
-                    '${logs.length} entries',
+              child: Row(
+                children: [
+                  Text(
+                    'Your Recent Actions',
                     style: GoogleFonts.beVietnamPro(
-                      fontSize: 11,
+                      fontSize: 13,
                       fontWeight: FontWeight.w700,
-                      color: UpriseColors.primaryDark,
+                      color: const Color(0xFF1A202C),
                     ),
                   ),
-                ),
-              ]),
+                  const SizedBox(width: 10),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 3,
+                    ),
+                    decoration: BoxDecoration(
+                      color: UpriseColors.primaryDark.withOpacity(0.08),
+                      borderRadius: BorderRadius.circular(_DS.radiusPill),
+                    ),
+                    child: Text(
+                      '${logs.length} entries',
+                      style: GoogleFonts.beVietnamPro(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: UpriseColors.primaryDark,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
             // Table
             Expanded(
@@ -1032,149 +1239,167 @@ class _AdminSettingsState extends State<AdminSettings>
                   border: Border.all(color: const Color(0xFFE8ECF0)),
                   boxShadow: _DS.cardShadow,
                 ),
-                child: Column(children: [
-                  // Table header
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 20, vertical: 13),
-                    decoration: const BoxDecoration(
-                      color: Color(0xFFF8F9FB),
-                      borderRadius:
-                          BorderRadius.vertical(top: Radius.circular(14)),
-                      border: Border(
-                          bottom: BorderSide(color: Color(0xFFE8ECF0))),
+                child: Column(
+                  children: [
+                    // Table header
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 20,
+                        vertical: 13,
+                      ),
+                      decoration: const BoxDecoration(
+                        color: Color(0xFFF8F9FB),
+                        borderRadius: BorderRadius.vertical(
+                          top: Radius.circular(14),
+                        ),
+                        border: Border(
+                          bottom: BorderSide(color: Color(0xFFE8ECF0)),
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Expanded(flex: 5, child: _headerCell('ACTION')),
+                          Expanded(flex: 3, child: _headerCell('MODULE')),
+                          Expanded(flex: 2, child: _headerCell('SEVERITY')),
+                          Expanded(flex: 3, child: _headerCell('TIMESTAMP')),
+                        ],
+                      ),
                     ),
-                    child: Row(children: [
-                      Expanded(
-                          flex: 5,
-                          child: _headerCell('ACTION')),
-                      Expanded(
-                          flex: 3,
-                          child: _headerCell('MODULE')),
-                      Expanded(
-                          flex: 2,
-                          child: _headerCell('SEVERITY')),
-                      Expanded(
-                          flex: 3,
-                          child: _headerCell('TIMESTAMP')),
-                    ]),
-                  ),
-                  // Rows
-                  Expanded(
-                    child: ListView.builder(
-                      itemCount: logs.length,
-                      itemBuilder: (_, i) {
-                      final data = logs[i] as Map<String, dynamic>;
-                      final ts = data['_ts'] as DateTime?;
-                      final severity = (data['severity'] ?? 'info').toString();
-                      final module = (data['module'] ?? 'System').toString();
-                      final action = (data['action'] ?? '—').toString();
-                      final isLast = i == logs.length - 1;
+                    // Rows
+                    Expanded(
+                      child: ListView.builder(
+                        itemCount: logs.length,
+                        itemBuilder: (_, i) {
+                          final data = logs[i] as Map<String, dynamic>;
+                          final ts = data['_ts'] as DateTime?;
+                          final severity = (data['severity'] ?? 'info')
+                              .toString();
+                          final module = (data['module'] ?? 'System')
+                              .toString();
+                          final action = (data['action'] ?? '—').toString();
+                          final isLast = i == logs.length - 1;
 
-                        return Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 20, vertical: 14),
-                          decoration: BoxDecoration(
-                            border: isLast
-                                ? null
-                                : const Border(
-                                    bottom: BorderSide(
-                                        color: Color(0xFFF1F5F9))),
-                          ),
-                          child: Row(children: [
-                            Expanded(
-                              flex: 5,
-                              child: Text(
-                                action,
-                                style: GoogleFonts.beVietnamPro(
-                                  fontSize: 13,
-                                  color: const Color(0xFF374151),
-                                ),
-                                overflow: TextOverflow.ellipsis,
-                                maxLines: 2,
-                              ),
+                          return Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 20,
+                              vertical: 14,
                             ),
-                            Expanded(
-                              flex: 3,
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 8, vertical: 3),
-                                decoration: BoxDecoration(
-                                  color: UpriseColors.primaryDark
-                                      .withOpacity(0.07),
-                                  borderRadius:
-                                      BorderRadius.circular(6),
-                                ),
-                                child: Text(
-                                  module,
-                                  style: GoogleFonts.beVietnamPro(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w600,
-                                    color: UpriseColors.primaryDark,
+                            decoration: BoxDecoration(
+                              border: isLast
+                                  ? null
+                                  : const Border(
+                                      bottom: BorderSide(
+                                        color: Color(0xFFF1F5F9),
+                                      ),
+                                    ),
+                            ),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  flex: 5,
+                                  child: Text(
+                                    action,
+                                    style: GoogleFonts.beVietnamPro(
+                                      fontSize: 13,
+                                      color: const Color(0xFF374151),
+                                    ),
+                                    overflow: TextOverflow.ellipsis,
+                                    maxLines: 2,
                                   ),
-                                  overflow: TextOverflow.ellipsis,
                                 ),
-                              ),
-                            ),
-                            Expanded(
-                              flex: 2,
-                              child: _SeverityBadge(severity),
-                            ),
-                            Expanded(
-                              flex: 3,
-                              child: ts != null
-                                  ? Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Text(
-                                          DateFormat('MMM dd, yyyy')
-                                              .format(ts),
+                                Expanded(
+                                  flex: 3,
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 8,
+                                      vertical: 3,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: UpriseColors.primaryDark
+                                          .withOpacity(0.07),
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                    child: Text(
+                                      module,
+                                      style: GoogleFonts.beVietnamPro(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w600,
+                                        color: UpriseColors.primaryDark,
+                                      ),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                ),
+                                Expanded(
+                                  flex: 2,
+                                  child: _SeverityBadge(severity),
+                                ),
+                                Expanded(
+                                  flex: 3,
+                                  child: ts != null
+                                      ? Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Text(
+                                              DateFormat(
+                                                'MMM dd, yyyy',
+                                              ).format(ts),
+                                              style: GoogleFonts.beVietnamPro(
+                                                fontSize: 12,
+                                                fontWeight: FontWeight.w500,
+                                                color: const Color(0xFF374151),
+                                              ),
+                                            ),
+                                            Text(
+                                              DateFormat('hh:mm a').format(ts),
+                                              style: GoogleFonts.beVietnamPro(
+                                                fontSize: 11,
+                                                color: const Color(0xFF9AA5B4),
+                                              ),
+                                            ),
+                                          ],
+                                        )
+                                      : Text(
+                                          '—',
                                           style: GoogleFonts.beVietnamPro(
                                             fontSize: 12,
-                                            fontWeight: FontWeight.w500,
-                                            color: const Color(0xFF374151),
+                                            color: const Color(0xFF9AA5B4),
                                           ),
                                         ),
-                                        Text(
-                                          DateFormat('hh:mm a').format(ts),
-                                          style: GoogleFonts.beVietnamPro(
-                                              fontSize: 11,
-                                              color:
-                                                  const Color(0xFF9AA5B4)),
-                                        ),
-                                      ],
-                                    )
-                                  : Text('—',
-                                      style: GoogleFonts.beVietnamPro(
-                                          fontSize: 12,
-                                          color:
-                                              const Color(0xFF9AA5B4))),
+                                ),
+                              ],
                             ),
-                          ]),
-                        );
-                      },
+                          );
+                        },
+                      ),
                     ),
-                  ),
-                  // Footer note
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 20, vertical: 11),
-                    decoration: const BoxDecoration(
-                      border: Border(
-                          top: BorderSide(color: Color(0xFFE8ECF0))),
-                      color: Color(0xFFF8F9FB),
-                      borderRadius: BorderRadius.vertical(
-                          bottom: Radius.circular(14)),
+                    // Footer note
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 20,
+                        vertical: 11,
+                      ),
+                      decoration: const BoxDecoration(
+                        border: Border(
+                          top: BorderSide(color: Color(0xFFE8ECF0)),
+                        ),
+                        color: Color(0xFFF8F9FB),
+                        borderRadius: BorderRadius.vertical(
+                          bottom: Radius.circular(14),
+                        ),
+                      ),
+                      child: Text(
+                        'Showing your last ${logs.length} actions. Visit Activity Logs for the full audit trail.',
+                        style: GoogleFonts.beVietnamPro(
+                          fontSize: 11,
+                          color: const Color(0xFF9AA5B4),
+                        ),
+                      ),
                     ),
-                    child: Text(
-                      'Showing your last ${logs.length} actions. Visit Activity Logs for the full audit trail.',
-                      style: GoogleFonts.beVietnamPro(
-                          fontSize: 11, color: const Color(0xFF9AA5B4)),
-                    ),
-                  ),
-                ]),
+                  ],
+                ),
               ),
             ),
             const SizedBox(height: 24),
@@ -1185,12 +1410,646 @@ class _AdminSettingsState extends State<AdminSettings>
   }
 
   Widget _headerCell(String text) => Text(
-        text,
-        style: GoogleFonts.beVietnamPro(
-          fontSize: 11,
-          fontWeight: FontWeight.w700,
-          color: const Color(0xFF64748B),
-          letterSpacing: 0.7,
+    text,
+    style: GoogleFonts.beVietnamPro(
+      fontSize: 11,
+      fontWeight: FontWeight.w700,
+      color: const Color(0xFF64748B),
+      letterSpacing: 0.7,
+    ),
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// NEW: SIGNATORIES TAB
+//
+// Lets an admin maintain the roster of people whose signature/name/title
+// can be auto-inserted into a certificate template wherever it contains a
+// matching {{PLACEHOLDER_KEY}}. This tab only manages the roster — actual
+// placement on a specific template happens in the Certificate module
+// (org side) when a signatory key is dropped onto the template canvas.
+// ─────────────────────────────────────────────────────────────────────────────
+class _SignatoriesTab extends StatefulWidget {
+  const _SignatoriesTab();
+
+  @override
+  State<_SignatoriesTab> createState() => _SignatoriesTabState();
+}
+
+class _SignatoriesTabState extends State<_SignatoriesTab> {
+  final CollectionReference _col = FirebaseFirestore.instance.collection(
+    'signatories',
+  );
+
+  void _openForm({SignatoryEntry? existing}) {
+    showDialog(
+      context: context,
+      barrierColor: Colors.black54,
+      builder: (_) => _SignatoryFormDialog(existing: existing),
+    );
+  }
+
+  Future<void> _confirmDelete(SignatoryEntry s) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      barrierColor: Colors.black54,
+      builder: (ctx) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        child: Container(
+          width: 420,
+          padding: const EdgeInsets.all(28),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 42,
+                    height: 42,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFEF2F2),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(
+                      Icons.delete_outline_rounded,
+                      color: Color(0xFFDC2626),
+                      size: 20,
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Text(
+                      'Delete Signatory',
+                      style: GoogleFonts.beVietnamPro(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w700,
+                        color: const Color(0xFF1A202C),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Delete "${s.fullName}" (${s.placeholderKey})? Templates that reference this placeholder will show a missing-signatory warning until it is replaced.',
+                style: GoogleFonts.beVietnamPro(
+                  fontSize: 13,
+                  color: const Color(0xFF64748B),
+                  height: 1.5,
+                ),
+              ),
+              const SizedBox(height: 24),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  OutlinedButton(
+                    onPressed: () => Navigator.pop(ctx, false),
+                    style: OutlinedButton.styleFrom(
+                      side: const BorderSide(color: Color(0xFFE2E6EA)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 18,
+                        vertical: 11,
+                      ),
+                    ),
+                    child: Text(
+                      'Cancel',
+                      style: GoogleFonts.beVietnamPro(fontSize: 13),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  ElevatedButton(
+                    onPressed: () => Navigator.pop(ctx, true),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: UpriseColors.error,
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 18,
+                        vertical: 11,
+                      ),
+                    ),
+                    child: Text(
+                      'Delete',
+                      style: GoogleFonts.beVietnamPro(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
+      ),
+    );
+    if (confirmed != true) return;
+    await _col.doc(s.id).delete();
+    await ActivityLogger.log(
+      action: 'Deleted signatory ${s.fullName} (${s.placeholderKey})',
+      module: 'Admin Settings',
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(28),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 780),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Certificate Signatories',
+                      style: GoogleFonts.beVietnamPro(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w700,
+                        color: const Color(0xFF1A202C),
+                      ),
+                    ),
+                  ),
+                  ElevatedButton.icon(
+                    onPressed: () => _openForm(),
+                    icon: const Icon(Icons.add_rounded, size: 16),
+                    label: Text(
+                      'Add Signatory',
+                      style: GoogleFonts.beVietnamPro(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: UpriseColors.primaryDark,
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 12,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(_DS.radiusSm),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'Signatories added here can be auto-inserted into any certificate template in the Certificates module by matching their placeholder key (e.g. {{PRESIDENT}}).',
+                style: GoogleFonts.beVietnamPro(
+                  fontSize: 12.5,
+                  color: const Color(0xFF64748B),
+                  height: 1.5,
+                ),
+              ),
+              const SizedBox(height: 20),
+              StreamBuilder<QuerySnapshot>(
+                stream: _col.orderBy('placeholderKey').snapshots(),
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 40),
+                      child: Center(child: CircularProgressIndicator()),
+                    );
+                  }
+                  final docs = snapshot.data?.docs ?? [];
+                  if (docs.isEmpty) {
+                    return Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(vertical: 48),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(_DS.radiusLg),
+                        border: Border.all(color: const Color(0xFFE8ECF0)),
+                      ),
+                      child: Column(
+                        children: [
+                          Icon(
+                            Icons.draw_outlined,
+                            size: 36,
+                            color: const Color(0xFF9AA5B4),
+                          ),
+                          const SizedBox(height: 12),
+                          Text(
+                            'No signatories yet',
+                            style: GoogleFonts.beVietnamPro(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: const Color(0xFF374151),
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Add one to make it available in the Certificates module.',
+                            style: GoogleFonts.beVietnamPro(
+                              fontSize: 12,
+                              color: const Color(0xFF9AA5B4),
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }
+                  final entries = docs
+                      .map((d) => SignatoryEntry.fromDoc(d))
+                      .toList();
+                  return Column(
+                    children: entries
+                        .map(
+                          (s) => Container(
+                            margin: const EdgeInsets.only(bottom: 10),
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(_DS.radiusMd),
+                              border: Border.all(
+                                color: const Color(0xFFE8ECF0),
+                              ),
+                              boxShadow: _DS.cardShadow,
+                            ),
+                            child: Row(
+                              children: [
+                                Container(
+                                  width: 52,
+                                  height: 52,
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFF8F9FB),
+                                    borderRadius: BorderRadius.circular(10),
+                                    border: Border.all(
+                                      color: const Color(0xFFE2E6EA),
+                                    ),
+                                  ),
+                                  child: s.signatureBase64 != null
+                                      ? ClipRRect(
+                                          borderRadius: BorderRadius.circular(
+                                            9,
+                                          ),
+                                          child: Image.memory(
+                                            base64Decode(s.signatureBase64!),
+                                            fit: BoxFit.contain,
+                                          ),
+                                        )
+                                      : const Icon(
+                                          Icons.draw_outlined,
+                                          size: 20,
+                                          color: Color(0xFF9AA5B4),
+                                        ),
+                                ),
+                                const SizedBox(width: 14),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        s.fullName.isEmpty
+                                            ? '(No name)'
+                                            : s.fullName,
+                                        style: GoogleFonts.beVietnamPro(
+                                          fontSize: 13.5,
+                                          fontWeight: FontWeight.w700,
+                                          color: const Color(0xFF1A202C),
+                                        ),
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        s.title.isEmpty ? '—' : s.title,
+                                        style: GoogleFonts.beVietnamPro(
+                                          fontSize: 12,
+                                          color: const Color(0xFF64748B),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 10,
+                                    vertical: 5,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: UpriseColors.primaryDark.withOpacity(
+                                      0.08,
+                                    ),
+                                    borderRadius: BorderRadius.circular(
+                                      _DS.radiusPill,
+                                    ),
+                                  ),
+                                  child: Text(
+                                    '{{${s.placeholderKey}}}',
+                                    style: GoogleFonts.beVietnamPro(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w700,
+                                      color: UpriseColors.primaryDark,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                IconButton(
+                                  icon: const Icon(
+                                    Icons.edit_outlined,
+                                    size: 18,
+                                    color: Color(0xFF64748B),
+                                  ),
+                                  tooltip: 'Edit',
+                                  onPressed: () => _openForm(existing: s),
+                                ),
+                                IconButton(
+                                  icon: const Icon(
+                                    Icons.delete_outline_rounded,
+                                    size: 18,
+                                    color: Color(0xFFDC2626),
+                                  ),
+                                  tooltip: 'Delete',
+                                  onPressed: () => _confirmDelete(s),
+                                ),
+                              ],
+                            ),
+                          ),
+                        )
+                        .toList(),
+                  );
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// Add/Edit signatory dialog.
+class _SignatoryFormDialog extends StatefulWidget {
+  final SignatoryEntry? existing;
+  const _SignatoryFormDialog({this.existing});
+
+  @override
+  State<_SignatoryFormDialog> createState() => _SignatoryFormDialogState();
+}
+
+class _SignatoryFormDialogState extends State<_SignatoryFormDialog> {
+  final _formKey = GlobalKey<FormState>();
+  late final TextEditingController _keyCtrl;
+  late final TextEditingController _nameCtrl;
+  late final TextEditingController _titleCtrl;
+  String? _signatureBase64;
+  bool _isSaving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final e = widget.existing;
+    _keyCtrl = TextEditingController(text: e?.placeholderKey ?? '');
+    _nameCtrl = TextEditingController(text: e?.fullName ?? '');
+    _titleCtrl = TextEditingController(text: e?.title ?? '');
+    _signatureBase64 = e?.signatureBase64;
+  }
+
+  @override
+  void dispose() {
+    _keyCtrl.dispose();
+    _nameCtrl.dispose();
+    _titleCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _pickSignature() async {
+    final picker = ImagePicker();
+    final picked = await picker.pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 70,
+    );
+    if (picked == null) return;
+    final bytes = await picked.readAsBytes();
+    setState(() => _signatureBase64 = base64Encode(bytes));
+  }
+
+  Future<void> _save() async {
+    if (_formKey.currentState?.validate() != true) return;
+    setState(() => _isSaving = true);
+    try {
+      final entry = SignatoryEntry(
+        id: widget.existing?.id ?? '',
+        placeholderKey: _keyCtrl.text.trim(),
+        fullName: _nameCtrl.text.trim(),
+        title: _titleCtrl.text.trim(),
+        signatureBase64: _signatureBase64,
       );
+      final col = FirebaseFirestore.instance.collection('signatories');
+      if (widget.existing != null) {
+        await col
+            .doc(widget.existing!.id)
+            .set(entry.toMap(), SetOptions(merge: true));
+        await ActivityLogger.log(
+          action:
+              'Updated signatory ${entry.fullName} (${entry.placeholderKey})',
+          module: 'Admin Settings',
+        );
+      } else {
+        await col.add({
+          ...entry.toMap(),
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+        await ActivityLogger.log(
+          action: 'Added signatory ${entry.fullName} (${entry.placeholderKey})',
+          module: 'Admin Settings',
+        );
+      }
+      if (mounted) Navigator.pop(context);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: $e'),
+            backgroundColor: UpriseColors.error,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isEdit = widget.existing != null;
+    return Dialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+      child: Container(
+        width: 460,
+        padding: const EdgeInsets.all(24),
+        child: Form(
+          key: _formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                isEdit ? 'Edit Signatory' : 'Add Signatory',
+                style: GoogleFonts.beVietnamPro(
+                  fontSize: 17,
+                  fontWeight: FontWeight.w700,
+                  color: const Color(0xFF1A202C),
+                ),
+              ),
+              const SizedBox(height: 18),
+              Center(
+                child: GestureDetector(
+                  onTap: _pickSignature,
+                  child: Container(
+                    width: 140,
+                    height: 80,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF8F9FB),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: const Color(0xFFE2E6EA)),
+                    ),
+                    child: _signatureBase64 != null
+                        ? ClipRRect(
+                            borderRadius: BorderRadius.circular(9),
+                            child: Image.memory(
+                              base64Decode(_signatureBase64!),
+                              fit: BoxFit.contain,
+                            ),
+                          )
+                        : Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                Icons.upload_rounded,
+                                size: 20,
+                                color: const Color(0xFF9AA5B4),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                'Upload signature',
+                                style: GoogleFonts.beVietnamPro(
+                                  fontSize: 11,
+                                  color: const Color(0xFF9AA5B4),
+                                ),
+                              ),
+                            ],
+                          ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 18),
+              TextFormField(
+                controller: _nameCtrl,
+                style: GoogleFonts.beVietnamPro(fontSize: 13),
+                decoration: _DS.inputDecoration(
+                  'Full Name',
+                  hint: 'e.g., Dr. Maria Santos',
+                  icon: Icons.person_outline_rounded,
+                ),
+                validator: (v) => v?.trim().isEmpty == true ? 'Required' : null,
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _titleCtrl,
+                style: GoogleFonts.beVietnamPro(fontSize: 13),
+                decoration: _DS.inputDecoration(
+                  'Position / Title',
+                  hint: 'e.g., College Dean',
+                  icon: Icons.badge_outlined,
+                ),
+                validator: (v) => v?.trim().isEmpty == true ? 'Required' : null,
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _keyCtrl,
+                style: GoogleFonts.beVietnamPro(
+                  fontSize: 13,
+                  letterSpacing: 0.5,
+                ),
+                textCapitalization: TextCapitalization.characters,
+                decoration: _DS.inputDecoration(
+                  'Placeholder Key',
+                  hint: 'e.g., DEAN',
+                  icon: Icons.tag_rounded,
+                ),
+                validator: (v) => v?.trim().isEmpty == true ? 'Required' : null,
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'Use this exact key (e.g. {{DEAN}}) when placing this signatory on a certificate template.',
+                style: GoogleFonts.beVietnamPro(
+                  fontSize: 11,
+                  color: const Color(0xFF9AA5B4),
+                ),
+              ),
+              const SizedBox(height: 22),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  OutlinedButton(
+                    onPressed: _isSaving ? null : () => Navigator.pop(context),
+                    style: OutlinedButton.styleFrom(
+                      side: const BorderSide(color: Color(0xFFE2E6EA)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 18,
+                        vertical: 11,
+                      ),
+                    ),
+                    child: Text(
+                      'Cancel',
+                      style: GoogleFonts.beVietnamPro(fontSize: 13),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  ElevatedButton(
+                    onPressed: _isSaving ? null : _save,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: UpriseColors.primaryDark,
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 18,
+                        vertical: 11,
+                      ),
+                    ),
+                    child: _isSaving
+                        ? const SizedBox(
+                            width: 14,
+                            height: 14,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : Text(
+                            'Save',
+                            style: GoogleFonts.beVietnamPro(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }

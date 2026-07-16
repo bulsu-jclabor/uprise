@@ -18,9 +18,9 @@ import '../../../widgets/certificate_preview.dart';
 // Design tokens — identical to student_accounts / org_event_proposals
 // ─────────────────────────────────────────────────────────────────────────────
 class _DS {
-  static const double radiusSm   = 8;
-  static const double radiusMd   = 12;
-  static const double radiusLg   = 16;
+  static const double radiusSm = 8;
+  static const double radiusMd = 12;
+  static const double radiusLg = 16;
   static const double radiusPill = 100;
 
   static final cardShadow = [
@@ -43,13 +43,34 @@ class _BadgeStyle {
 
 Widget _certBadge(String status) {
   final Map<String, _BadgeStyle> styles = {
-    'distributed':   _BadgeStyle(UpriseColors.success.withOpacity(0.18), UpriseColors.success, 'DISTRIBUTED'),
-    'pending':       _BadgeStyle(UpriseColors.warning.withOpacity(0.18), UpriseColors.warning, 'PENDING'),
-    'draft':         _BadgeStyle(UpriseColors.lightGray, UpriseColors.darkGray, 'DRAFT'),
-    'undistributed': _BadgeStyle(UpriseColors.error.withOpacity(0.18), UpriseColors.error, 'UNDISTRIBUTED'),
+    'distributed': _BadgeStyle(
+      UpriseColors.success.withOpacity(0.18),
+      UpriseColors.success,
+      'DISTRIBUTED',
+    ),
+    'pending': _BadgeStyle(
+      UpriseColors.warning.withOpacity(0.18),
+      UpriseColors.warning,
+      'PENDING',
+    ),
+    'draft': _BadgeStyle(
+      UpriseColors.lightGray,
+      UpriseColors.darkGray,
+      'DRAFT',
+    ),
+    'undistributed': _BadgeStyle(
+      UpriseColors.error.withOpacity(0.18),
+      UpriseColors.error,
+      'UNDISTRIBUTED',
+    ),
   };
-  final s = styles[status.toLowerCase()] ??
-      _BadgeStyle(UpriseColors.lightGray, UpriseColors.darkGray, status.toUpperCase());
+  final s =
+      styles[status.toLowerCase()] ??
+      _BadgeStyle(
+        UpriseColors.lightGray,
+        UpriseColors.darkGray,
+        status.toUpperCase(),
+      );
   return Container(
     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
     decoration: BoxDecoration(
@@ -68,42 +89,149 @@ Widget _certBadge(String status) {
   );
 }
 
+// NEW: batch-level status badge (Draft / Partially Sent / Sent / Archived).
+Widget _batchBadge(String status) {
+  final Map<String, _BadgeStyle> styles = {
+    'sent': _BadgeStyle(
+      UpriseColors.success.withOpacity(0.18),
+      UpriseColors.success,
+      'SENT',
+    ),
+    'partially_sent': _BadgeStyle(
+      UpriseColors.warning.withOpacity(0.18),
+      UpriseColors.warning,
+      'PARTIALLY SENT',
+    ),
+    'draft': _BadgeStyle(
+      UpriseColors.lightGray,
+      UpriseColors.darkGray,
+      'DRAFT',
+    ),
+    'archived': _BadgeStyle(
+      const Color(0xFFF3F4F6),
+      const Color(0xFF6B7280),
+      'ARCHIVED',
+    ),
+  };
+  final s =
+      styles[status] ??
+      _BadgeStyle(
+        UpriseColors.lightGray,
+        UpriseColors.darkGray,
+        status.toUpperCase(),
+      );
+  return Container(
+    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+    decoration: BoxDecoration(
+      color: s.bg,
+      borderRadius: BorderRadius.circular(_DS.radiusPill),
+    ),
+    child: Text(
+      s.label,
+      style: GoogleFonts.beVietnamPro(
+        fontSize: 10,
+        fontWeight: FontWeight.w700,
+        color: s.fg,
+        letterSpacing: 0.8,
+      ),
+    ),
+  );
+}
+
+// NEW: per-recipient send-status badge (Sent / Delivered / Failed / Resent).
+Widget _sendStatusBadge(String? status) {
+  final s = (status ?? 'sent').toLowerCase();
+  final Map<String, _BadgeStyle> styles = {
+    'sent': _BadgeStyle(
+      const Color(0xFFEFF6FF),
+      const Color(0xFF2563EB),
+      'SENT',
+    ),
+    'delivered': _BadgeStyle(
+      UpriseColors.success.withOpacity(0.18),
+      UpriseColors.success,
+      'DELIVERED',
+    ),
+    'failed': _BadgeStyle(
+      UpriseColors.error.withOpacity(0.18),
+      UpriseColors.error,
+      'FAILED',
+    ),
+    'resent': _BadgeStyle(
+      const Color(0xFFF3E8FF),
+      const Color(0xFF7C3AED),
+      'RESENT',
+    ),
+  };
+  final style = styles[s] ?? styles['sent']!;
+  return Container(
+    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+    decoration: BoxDecoration(
+      color: style.bg,
+      borderRadius: BorderRadius.circular(_DS.radiusPill),
+    ),
+    child: Text(
+      style.label,
+      style: GoogleFonts.beVietnamPro(
+        fontSize: 9.5,
+        fontWeight: FontWeight.w700,
+        color: style.fg,
+        letterSpacing: 0.6,
+      ),
+    ),
+  );
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Section label helper
 // ─────────────────────────────────────────────────────────────────────────────
 Widget _sectionLabel(String text, {IconData? icon}) {
   return Padding(
     padding: const EdgeInsets.only(bottom: 12),
-    child: Row(children: [
-      if (icon != null) ...[
-        Icon(icon, size: 16, color: UpriseColors.primaryDark),
-        const SizedBox(width: 8),
-      ],
-      Text(
-        text,
-        style: GoogleFonts.beVietnamPro(
-          fontSize: 13,
-          fontWeight: FontWeight.w700,
-          color: UpriseColors.primaryDark,
-          letterSpacing: 0.3,
+    child: Row(
+      children: [
+        if (icon != null) ...[
+          Icon(icon, size: 16, color: UpriseColors.primaryDark),
+          const SizedBox(width: 8),
+        ],
+        Text(
+          text,
+          style: GoogleFonts.beVietnamPro(
+            fontSize: 13,
+            fontWeight: FontWeight.w700,
+            color: UpriseColors.primaryDark,
+            letterSpacing: 0.3,
+          ),
         ),
-      ),
-      const SizedBox(width: 12),
-      Expanded(child: Divider(color: const Color(0xFFE2E6EA), thickness: 1)),
-    ]),
+        const SizedBox(width: 12),
+        Expanded(child: Divider(color: const Color(0xFFE2E6EA), thickness: 1)),
+      ],
+    ),
   );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Input decoration helper
 // ─────────────────────────────────────────────────────────────────────────────
-InputDecoration _fieldDecoration({String? label, String? hint, IconData? icon}) {
+InputDecoration _fieldDecoration({
+  String? label,
+  String? hint,
+  IconData? icon,
+}) {
   return InputDecoration(
     labelText: label,
     hintText: hint,
-    prefixIcon: icon != null ? Icon(icon, size: 18, color: const Color(0xFF9AA5B4)) : null,
-    labelStyle: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF64748B)),
-    hintStyle: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF9AA5B4)),
+    prefixIcon: icon != null
+        ? Icon(icon, size: 18, color: const Color(0xFF9AA5B4))
+        : null,
+    labelStyle: GoogleFonts.beVietnamPro(
+      fontSize: 13,
+      color: const Color(0xFF64748B),
+    ),
+    hintStyle: GoogleFonts.beVietnamPro(
+      fontSize: 13,
+      color: const Color(0xFF9AA5B4),
+    ),
     filled: true,
     fillColor: const Color(0xFFF8F9FB),
     contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
@@ -131,6 +259,59 @@ InputDecoration _fieldDecoration({String? label, String? hint, IconData? icon}) 
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// NEW: Signatory model (read-only mirror of Admin Settings' "signatories"
+// collection). Kept local to this file so the Certificates module doesn't
+// need a cross-import into the Admin Settings screen.
+// ─────────────────────────────────────────────────────────────────────────────
+class SignatoryData {
+  final String id;
+  final String placeholderKey;
+  final String fullName;
+  final String title;
+  final String? signatureBase64;
+
+  const SignatoryData({
+    required this.id,
+    required this.placeholderKey,
+    required this.fullName,
+    required this.title,
+    this.signatureBase64,
+  });
+
+  factory SignatoryData.fromDoc(DocumentSnapshot doc) {
+    final d = (doc.data() as Map<String, dynamic>?) ?? {};
+    return SignatoryData(
+      id: doc.id,
+      placeholderKey: (d['placeholderKey'] ?? '').toString(),
+      fullName: (d['fullName'] ?? '').toString(),
+      title: (d['title'] ?? '').toString(),
+      signatureBase64: d['signatureBase64'] as String?,
+    );
+  }
+}
+
+// NEW: auto-fit helper. Shrinks a base font size until the recipient's
+// name is estimated to fit within [maxWidthPx], so long names never
+// overflow the certificate layout. This works with the existing
+// CertNamePlacement/CertificateImageWithName widgets unchanged — it only
+// computes a per-recipient fontSize to feed into them.
+double _autoFitFontSize({
+  required String text,
+  required double baseFontSize,
+  required double maxWidthPx,
+  double minFontSize = 11,
+  double avgCharWidthFactor = 0.56,
+}) {
+  if (text.isEmpty || maxWidthPx <= 0) return baseFontSize;
+  double fs = baseFontSize;
+  double estWidth() => text.length * fs * avgCharWidthFactor;
+  while (fs > minFontSize && estWidth() > maxWidthPx) {
+    fs -= 1;
+  }
+  return fs;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Models
 // ─────────────────────────────────────────────────────────────────────────────
 class CertificateRecord {
@@ -144,12 +325,19 @@ class CertificateRecord {
   final String status;
   final String templateType;
   final String? templateFileUrl;
-  final String? signatureImage; // legacy single-signature certs, pre-multi-signatory
+  final String?
+  signatureImage; // legacy single-signature certs, pre-multi-signatory
   final List<Map<String, dynamic>> signatories;
   final String? verificationCode;
   final String? recipientName;
   final Map<String, dynamic>? namePlacement;
-  final String? eventId; 
+  final String? eventId;
+  // NEW fields — additive only, existing readers/writers of this model are
+  // unaffected since these all have safe defaults.
+  final String? sendStatus; // sent | delivered | failed | resent
+  final int resendCount;
+  final bool archived;
+  final Map<String, dynamic>? signatoryPlacements; // key -> placement map
 
   const CertificateRecord({
     required this.id,
@@ -168,30 +356,101 @@ class CertificateRecord {
     this.recipientName,
     this.namePlacement,
     this.eventId,
+    this.sendStatus,
+    this.resendCount = 0,
+    this.archived = false,
+    this.signatoryPlacements,
   });
 
   factory CertificateRecord.fromFirestore(DocumentSnapshot doc) {
     final d = doc.data() as Map<String, dynamic>;
     return CertificateRecord(
-      id:            doc.id,
+      id: doc.id,
       certificateId: 'CERT-${doc.id.substring(0, 4).toUpperCase()}',
-      eventName:     d['eventName'] as String? ?? d['certificateName'] as String? ?? 'Untitled',
-      organization:  d['organization'] as String? ?? 'N/A',
-      type:          d['type'] as String? ?? 'Participation',
-      date:          (d['issuedAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
-      recipients:    (d['recipients'] as num?)?.toInt() ?? 1,
-      status:        d['status'] as String? ?? 'draft',
-      templateType:  d['templateType'] as String? ?? 'Formal Academic',
+      eventName:
+          d['eventName'] as String? ??
+          d['certificateName'] as String? ??
+          'Untitled',
+      organization: d['organization'] as String? ?? 'N/A',
+      type: d['type'] as String? ?? 'Participation',
+      date: (d['issuedAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
+      recipients: (d['recipients'] as num?)?.toInt() ?? 1,
+      status: d['status'] as String? ?? 'draft',
+      templateType: d['templateType'] as String? ?? 'Formal Academic',
       templateFileUrl: d['templateFileUrl'] as String?,
       signatureImage: d['signatureImage'] as String?,
       signatories: d['signatories'] is List
-          ? (d['signatories'] as List).whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList()
+          ? (d['signatories'] as List)
+                .whereType<Map>()
+                .map((e) => Map<String, dynamic>.from(e))
+                .toList()
           : const [],
       verificationCode: d['verificationCode'] as String?,
       recipientName: d['recipientName'] as String?,
-      namePlacement: d['namePlacement'] is Map ? Map<String, dynamic>.from(d['namePlacement'] as Map) : null,
+      namePlacement: d['namePlacement'] is Map
+          ? Map<String, dynamic>.from(d['namePlacement'] as Map)
+          : null,
       eventId: d['eventId'] as String?,
+      sendStatus: d['sendStatus'] as String?,
+      resendCount: (d['resendCount'] as num?)?.toInt() ?? 0,
+      archived: d['archived'] == true,
+      signatoryPlacements: d['signatoryPlacements'] is Map
+          ? Map<String, dynamic>.from(d['signatoryPlacements'] as Map)
+          : null,
     );
+  }
+}
+
+// NEW: groups one-or-more CertificateRecord docs that belong to the same
+// event into a single row for the table (requirement #3 — no duplicate
+// event rows). A "batch" is:
+//  - a single draft placeholder doc (status == 'draft'), or
+//  - all the per-recipient docs created when a batch was distributed.
+// Records without an eventId (legacy/manually imported certs) are each
+// treated as their own single-record batch so nothing is silently merged.
+class CertificateBatch {
+  final String batchKey;
+  final List<CertificateRecord> records;
+  CertificateBatch({required this.batchKey, required this.records});
+
+  CertificateRecord get primary => records.first;
+  String get eventName => primary.eventName;
+  String get organization => primary.organization;
+  String get templateType => primary.templateType;
+  DateTime get date =>
+      records.map((r) => r.date).reduce((a, b) => a.isAfter(b) ? a : b);
+  String? get eventId => primary.eventId;
+
+  int get totalRecipients => records.length;
+  int get sentCount => records.where((r) => r.status == 'distributed').length;
+  int get failedCount => records.where((r) => r.sendStatus == 'failed').length;
+  bool get isArchived => records.every((r) => r.archived);
+
+  /// Draft / Partially Sent / Sent / Archived — drives both the badge and
+  /// whether editing is still allowed (requirement #5: lock editing once
+  /// anything has been sent).
+  String get batchStatus {
+    if (isArchived) return 'archived';
+    if (sentCount == 0) return 'draft';
+    if (sentCount < totalRecipients) return 'partially_sent';
+    return 'sent';
+  }
+
+  bool get isEditable => batchStatus == 'draft';
+
+  static List<CertificateBatch> groupByEvent(List<CertificateRecord> records) {
+    final Map<String, List<CertificateRecord>> grouped = {};
+    for (final r in records) {
+      final key = (r.eventId != null && r.eventId!.isNotEmpty)
+          ? r.eventId!
+          : 'solo_${r.id}';
+      grouped.putIfAbsent(key, () => []).add(r);
+    }
+    final batches = grouped.entries
+        .map((e) => CertificateBatch(batchKey: e.key, records: e.value))
+        .toList();
+    batches.sort((a, b) => b.date.compareTo(a.date));
+    return batches;
   }
 }
 
@@ -208,9 +467,9 @@ class OrgCertificatesScreen extends StatefulWidget {
 
 class _OrgCertificatesScreenState extends State<OrgCertificatesScreen> {
   final TextEditingController _searchController = TextEditingController();
-  String _searchQuery  = '';
+  String _searchQuery = '';
   String _filterStatus = 'All';
-  int _currentPage     = 1;
+  int _currentPage = 1;
   static const int _pageSize = 10;
 
   @override
@@ -249,7 +508,7 @@ class _OrgCertificatesScreenState extends State<OrgCertificatesScreen> {
     final screenWidth = MediaQuery.of(context).size.width;
     final isMobile = screenWidth < 768;
     final isTablet = screenWidth < 1200;
-    
+
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: Column(
@@ -270,23 +529,63 @@ class _OrgCertificatesScreenState extends State<OrgCertificatesScreen> {
     return StreamBuilder<QuerySnapshot>(
       stream: _certsStream,
       builder: (context, snapshot) {
-        final docs         = snapshot.data?.docs ?? [];
-        final total        = docs.length;
-        final totalRec     = docs.fold<int>(0, (s, d) => s + ((d.data() as Map<String, dynamic>)['recipients'] as num? ?? 1).toInt());
-        final distributed  = docs.where((d) => (d.data() as Map<String, dynamic>)['status'] == 'distributed').length;
-        final pending      = docs.where((d) => (d.data() as Map<String, dynamic>)['status'] == 'pending').length;
+        final docs = snapshot.data?.docs ?? [];
+        final total = docs.length;
+        final totalRec = docs.fold<int>(
+          0,
+          (s, d) =>
+              s +
+              ((d.data() as Map<String, dynamic>)['recipients'] as num? ?? 1)
+                  .toInt(),
+        );
+        final distributed = docs
+            .where(
+              (d) =>
+                  (d.data() as Map<String, dynamic>)['status'] == 'distributed',
+            )
+            .length;
+        final pending = docs
+            .where(
+              (d) => (d.data() as Map<String, dynamic>)['status'] == 'pending',
+            )
+            .length;
 
         final horizontalPadding = isMobile ? 16.0 : (isTablet ? 20.0 : 28.0);
         final cardGap = isMobile ? 8.0 : 14.0;
         final statCards = [
-          _StatCard(label: 'Total Certificates', value: total,       icon: Icons.card_membership_outlined,     color: UpriseColors.primaryDark),
-          _StatCard(label: 'Total Recipients',   value: totalRec,    icon: Icons.people_outline_rounded,       color: UpriseColors.accent),
-          _StatCard(label: 'Distributed',        value: distributed, icon: Icons.assignment_turned_in_outlined, color: UpriseColors.success),
-          _StatCard(label: 'Pending',            value: pending,     icon: Icons.pending_outlined,             color: UpriseColors.warning),
+          _StatCard(
+            label: 'Total Certificates',
+            value: total,
+            icon: Icons.card_membership_outlined,
+            color: UpriseColors.primaryDark,
+          ),
+          _StatCard(
+            label: 'Total Recipients',
+            value: totalRec,
+            icon: Icons.people_outline_rounded,
+            color: UpriseColors.accent,
+          ),
+          _StatCard(
+            label: 'Distributed',
+            value: distributed,
+            icon: Icons.assignment_turned_in_outlined,
+            color: UpriseColors.success,
+          ),
+          _StatCard(
+            label: 'Pending',
+            value: pending,
+            icon: Icons.pending_outlined,
+            color: UpriseColors.warning,
+          ),
         ];
 
         return Padding(
-          padding: EdgeInsets.fromLTRB(horizontalPadding, isMobile ? 16 : 24, horizontalPadding, 0),
+          padding: EdgeInsets.fromLTRB(
+            horizontalPadding,
+            isMobile ? 16 : 24,
+            horizontalPadding,
+            0,
+          ),
           child: isMobile
               ? SingleChildScrollView(
                   scrollDirection: Axis.horizontal,
@@ -294,7 +593,9 @@ class _OrgCertificatesScreenState extends State<OrgCertificatesScreen> {
                     children: List.generate(
                       statCards.length,
                       (i) => Padding(
-                        padding: EdgeInsets.only(right: i < statCards.length - 1 ? cardGap : 0),
+                        padding: EdgeInsets.only(
+                          right: i < statCards.length - 1 ? cardGap : 0,
+                        ),
                         child: SizedBox(width: 200, child: statCards[i]),
                       ),
                     ),
@@ -305,7 +606,9 @@ class _OrgCertificatesScreenState extends State<OrgCertificatesScreen> {
                     statCards.length,
                     (i) => Expanded(
                       child: Padding(
-                        padding: EdgeInsets.only(right: i < statCards.length - 1 ? cardGap : 0),
+                        padding: EdgeInsets.only(
+                          right: i < statCards.length - 1 ? cardGap : 0,
+                        ),
                         child: statCards[i],
                       ),
                     ),
@@ -320,9 +623,14 @@ class _OrgCertificatesScreenState extends State<OrgCertificatesScreen> {
   Widget _buildToolbar(bool isMobile, bool isTablet) {
     final horizontalPadding = isMobile ? 16.0 : (isTablet ? 20.0 : 28.0);
     final itemGap = isMobile ? 8.0 : 10.0;
-    
+
     return Padding(
-      padding: EdgeInsets.fromLTRB(horizontalPadding, isMobile ? 14 : 20, horizontalPadding, 0),
+      padding: EdgeInsets.fromLTRB(
+        horizontalPadding,
+        isMobile ? 14 : 20,
+        horizontalPadding,
+        0,
+      ),
       child: isMobile
           ? Column(
               spacing: itemGap,
@@ -334,16 +642,41 @@ class _OrgCertificatesScreenState extends State<OrgCertificatesScreen> {
                     style: GoogleFonts.beVietnamPro(fontSize: 12),
                     decoration: InputDecoration(
                       hintText: 'Search certificates...',
-                      hintStyle: GoogleFonts.beVietnamPro(fontSize: 12, color: UpriseColors.greyText),
-                      prefixIcon: Icon(Icons.search_rounded, size: 16, color: UpriseColors.greyText),
+                      hintStyle: GoogleFonts.beVietnamPro(
+                        fontSize: 12,
+                        color: UpriseColors.greyText,
+                      ),
+                      prefixIcon: Icon(
+                        Icons.search_rounded,
+                        size: 16,
+                        color: UpriseColors.greyText,
+                      ),
                       filled: true,
                       fillColor: UpriseColors.white,
-                      contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 12),
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: UpriseColors.mediumGray)),
-                      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: UpriseColors.mediumGray)),
-                      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: UpriseColors.primaryDark, width: 1.5)),
+                      contentPadding: const EdgeInsets.symmetric(
+                        vertical: 0,
+                        horizontal: 12,
+                      ),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: BorderSide(color: UpriseColors.mediumGray),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: BorderSide(color: UpriseColors.mediumGray),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: BorderSide(
+                          color: UpriseColors.primaryDark,
+                          width: 1.5,
+                        ),
+                      ),
                     ),
-                    onChanged: (v) => setState(() { _searchQuery = v.toLowerCase(); _currentPage = 1; }),
+                    onChanged: (v) => setState(() {
+                      _searchQuery = v.toLowerCase();
+                      _currentPage = 1;
+                    }),
                   ),
                 ),
                 Row(
@@ -352,20 +685,40 @@ class _OrgCertificatesScreenState extends State<OrgCertificatesScreen> {
                     Expanded(
                       child: _FilterDropdown(
                         value: _filterStatus,
-                        items: const ['All', 'Distributed', 'Pending', 'Draft', 'Undistributed'],
-                        onChanged: (v) => setState(() { _filterStatus = v!; _currentPage = 1; }),
+                        items: const [
+                          'All',
+                          'Draft',
+                          'Partially Sent',
+                          'Sent',
+                          'Archived',
+                        ],
+                        onChanged: (v) => setState(() {
+                          _filterStatus = v!;
+                          _currentPage = 1;
+                        }),
                       ),
                     ),
                     Expanded(
                       child: ElevatedButton.icon(
                         onPressed: _openGenerateFlow,
                         icon: const Icon(Icons.add_rounded, size: 14),
-                        label: Text('Generate', style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.w600)),
+                        label: Text(
+                          'Generate',
+                          style: GoogleFonts.beVietnamPro(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: UpriseColors.primaryDark,
                           foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 10,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
                           elevation: 0,
                         ),
                       ),
@@ -385,35 +738,85 @@ class _OrgCertificatesScreenState extends State<OrgCertificatesScreen> {
                       style: GoogleFonts.beVietnamPro(fontSize: 13),
                       decoration: InputDecoration(
                         hintText: 'Search by ID, event name, or organization…',
-                        hintStyle: GoogleFonts.beVietnamPro(fontSize: 13, color: UpriseColors.greyText),
-                        prefixIcon: Icon(Icons.search_rounded, size: 18, color: UpriseColors.greyText),
+                        hintStyle: GoogleFonts.beVietnamPro(
+                          fontSize: 13,
+                          color: UpriseColors.greyText,
+                        ),
+                        prefixIcon: Icon(
+                          Icons.search_rounded,
+                          size: 18,
+                          color: UpriseColors.greyText,
+                        ),
                         filled: true,
                         fillColor: UpriseColors.white,
-                        contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: UpriseColors.mediumGray)),
-                        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: UpriseColors.mediumGray)),
-                        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: UpriseColors.primaryDark, width: 1.5)),
+                        contentPadding: const EdgeInsets.symmetric(
+                          vertical: 0,
+                          horizontal: 16,
+                        ),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: BorderSide(
+                            color: UpriseColors.mediumGray,
+                          ),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: BorderSide(
+                            color: UpriseColors.mediumGray,
+                          ),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: BorderSide(
+                            color: UpriseColors.primaryDark,
+                            width: 1.5,
+                          ),
+                        ),
                       ),
-                      onChanged: (v) => setState(() { _searchQuery = v.toLowerCase(); _currentPage = 1; }),
+                      onChanged: (v) => setState(() {
+                        _searchQuery = v.toLowerCase();
+                        _currentPage = 1;
+                      }),
                     ),
                   ),
                 ),
                 _FilterDropdown(
                   value: _filterStatus,
-                  items: const ['All', 'Distributed', 'Pending', 'Draft', 'Undistributed'],
-                  onChanged: (v) => setState(() { _filterStatus = v!; _currentPage = 1; }),
+                  items: const [
+                    'All',
+                    'Draft',
+                    'Partially Sent',
+                    'Sent',
+                    'Archived',
+                  ],
+                  onChanged: (v) => setState(() {
+                    _filterStatus = v!;
+                    _currentPage = 1;
+                  }),
                 ),
                 Tooltip(
-                  message: 'Only approved event proposals that issue certificates can be selected.',
+                  message:
+                      'Only approved event proposals that issue certificates can be selected.',
                   child: ElevatedButton.icon(
                     onPressed: _openGenerateFlow,
                     icon: const Icon(Icons.add_rounded, size: 15),
-                    label: Text('Generate Certificate', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600)),
+                    label: Text(
+                      'Generate Certificate',
+                      style: GoogleFonts.beVietnamPro(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: UpriseColors.primaryDark,
                       foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 10,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
                       elevation: 0,
                     ),
                   ),
@@ -423,10 +826,10 @@ class _OrgCertificatesScreenState extends State<OrgCertificatesScreen> {
     );
   }
 
-  // ── Table ─────────────────────────────────────────────────────────────────
+  // ── Table (now grouped into one row per event / batch) ─────────────────────
   Widget _buildTable(bool isMobile, bool isTablet) {
     final horizontalMargin = isMobile ? 12.0 : (isTablet ? 16.0 : 28.0);
-    
+
     return StreamBuilder<QuerySnapshot>(
       stream: _certsStream,
       builder: (context, snapshot) {
@@ -437,31 +840,38 @@ class _OrgCertificatesScreenState extends State<OrgCertificatesScreen> {
           return Center(child: Text('Error: ${snapshot.error}'));
         }
 
-        var docs = (snapshot.data?.docs ?? []).cast<QueryDocumentSnapshot>();
+        final docs = (snapshot.data?.docs ?? []).cast<QueryDocumentSnapshot>();
+        final allRecords = docs
+            .map((d) => CertificateRecord.fromFirestore(d))
+            .toList();
+        var batches = CertificateBatch.groupByEvent(allRecords);
 
-        // Filters
+        // Filters — now operate on batch status instead of per-doc status.
         if (_filterStatus != 'All') {
-          docs = docs.where((d) =>
-              (d.data() as Map<String, dynamic>)['status']?.toString().toLowerCase() ==
-              _filterStatus.toLowerCase()).toList();
+          final key = _filterStatus.toLowerCase().replaceAll(' ', '_');
+          batches = batches.where((b) => b.batchStatus == key).toList();
         }
         if (_searchQuery.isNotEmpty) {
-          docs = docs.where((d) {
-            final data = d.data() as Map<String, dynamic>;
-            final name = (data['eventName'] ?? '').toString().toLowerCase();
-            final org  = (data['organization'] ?? '').toString().toLowerCase();
-            final id   = 'CERT-${d.id.substring(0, 4).toUpperCase()}'.toLowerCase();
-            return name.contains(_searchQuery) || org.contains(_searchQuery) || id.contains(_searchQuery);
+          batches = batches.where((b) {
+            final name = b.eventName.toLowerCase();
+            final org = b.organization.toLowerCase();
+            final id = 'CERT-${b.primary.id.substring(0, 4).toUpperCase()}'
+                .toLowerCase();
+            return name.contains(_searchQuery) ||
+                org.contains(_searchQuery) ||
+                id.contains(_searchQuery);
           }).toList();
         }
 
-        final records = docs.map((d) => CertificateRecord.fromFirestore(d)).toList();
-
-        final totalPages = records.isEmpty ? 1 : (records.length / _pageSize).ceil();
-        final safePage   = _currentPage.clamp(1, totalPages);
-        final start      = (safePage - 1) * _pageSize;
-        final end        = (start + _pageSize).clamp(0, records.length);
-        final pageItems  = records.isEmpty ? <CertificateRecord>[] : records.sublist(start, end);
+        final totalPages = batches.isEmpty
+            ? 1
+            : (batches.length / _pageSize).ceil();
+        final safePage = _currentPage.clamp(1, totalPages);
+        final start = (safePage - 1) * _pageSize;
+        final end = (start + _pageSize).clamp(0, batches.length);
+        final pageItems = batches.isEmpty
+            ? <CertificateBatch>[]
+            : batches.sublist(start, end);
 
         return Container(
           margin: EdgeInsets.symmetric(horizontal: horizontalMargin),
@@ -472,23 +882,29 @@ class _OrgCertificatesScreenState extends State<OrgCertificatesScreen> {
             border: Border.all(color: const Color(0xFFE8ECF0)),
             boxShadow: _DS.cardShadow,
           ),
-          child: Column(children: [
-            if (!isMobile) _buildTableHeader(),
-            Expanded(
-              child: records.isEmpty
-                  ? _buildEmptyState()
-                  : isMobile
-                      ? ListView.builder(
-                          itemCount: pageItems.length,
-                          itemBuilder: (_, i) => _buildCardRow(pageItems[i], i == pageItems.length - 1),
-                        )
-                      : ListView.builder(
-                          itemCount: pageItems.length,
-                          itemBuilder: (_, i) => _buildRow(pageItems[i], i == pageItems.length - 1),
+          child: Column(
+            children: [
+              if (!isMobile) _buildTableHeader(),
+              Expanded(
+                child: batches.isEmpty
+                    ? _buildEmptyState()
+                    : isMobile
+                    ? ListView.builder(
+                        itemCount: pageItems.length,
+                        itemBuilder: (_, i) => _buildCardRow(
+                          pageItems[i],
+                          i == pageItems.length - 1,
                         ),
-            ),
-            _buildFooter(records.length, totalPages, start, end, isMobile),
-          ]),
+                      )
+                    : ListView.builder(
+                        itemCount: pageItems.length,
+                        itemBuilder: (_, i) =>
+                            _buildRow(pageItems[i], i == pageItems.length - 1),
+                      ),
+              ),
+              _buildFooter(batches.length, totalPages, start, end, isMobile),
+            ],
+          ),
         );
       },
     );
@@ -502,16 +918,24 @@ class _OrgCertificatesScreenState extends State<OrgCertificatesScreen> {
         borderRadius: BorderRadius.vertical(top: Radius.circular(14)),
         border: Border(bottom: BorderSide(color: Color(0xFFFB923C))),
       ),
-      child: Row(children: [
-        Expanded(flex: 2, child: _headerCell('CERTIFICATE ID')),
-        Expanded(flex: 3, child: _headerCell('EVENT NAME')),
-        Expanded(flex: 2, child: _headerCell('ORGANIZATION')),
-        Expanded(flex: 2, child: _headerCell('TYPE')),
-        Expanded(flex: 2, child: _headerCell('DATE ISSUED')),
-        Expanded(flex: 2, child: _headerCell('RECIPIENTS')),
-        Expanded(flex: 2, child: _headerCell('STATUS')),
-        Expanded(flex: 2, child: Align(alignment: Alignment.centerRight, child: _headerCell('ACTIONS'))),
-      ]),
+      child: Row(
+        children: [
+          Expanded(flex: 2, child: _headerCell('CERTIFICATE ID')),
+          Expanded(flex: 3, child: _headerCell('EVENT NAME')),
+          Expanded(flex: 2, child: _headerCell('ORGANIZATION')),
+          Expanded(flex: 2, child: _headerCell('TYPE')),
+          Expanded(flex: 2, child: _headerCell('DATE ISSUED')),
+          Expanded(flex: 2, child: _headerCell('RECIPIENTS')),
+          Expanded(flex: 2, child: _headerCell('STATUS')),
+          Expanded(
+            flex: 3,
+            child: Align(
+              alignment: Alignment.centerRight,
+              child: _headerCell('ACTIONS'),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -520,91 +944,167 @@ class _OrgCertificatesScreenState extends State<OrgCertificatesScreen> {
     maxLines: 1,
     softWrap: false,
     overflow: TextOverflow.ellipsis,
-    style: GoogleFonts.beVietnamPro(fontSize: 11, fontWeight: FontWeight.w700, color: const Color(0xFF64748B), letterSpacing: 0.7),
+    style: GoogleFonts.beVietnamPro(
+      fontSize: 11,
+      fontWeight: FontWeight.w700,
+      color: const Color(0xFF64748B),
+      letterSpacing: 0.7,
+    ),
   );
 
-  Widget _buildRow(CertificateRecord r, bool isLast) {
+  Widget _buildRow(CertificateBatch b, bool isLast) {
+    final r = b.primary;
     return InkWell(
       hoverColor: const Color(0xFFF8F9FB),
-      onTap: () => _viewCert(r),
+      onTap: () => _viewBatch(b),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
         decoration: BoxDecoration(
-          border: isLast ? null : const Border(bottom: BorderSide(color: Color(0xFFF1F5F9))),
+          border: isLast
+              ? null
+              : const Border(bottom: BorderSide(color: Color(0xFFF1F5F9))),
         ),
-        child: Row(children: [
-          Expanded(
-            flex: 2,
-            child: Text(r.certificateId,
-                style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600, color: UpriseColors.primaryDark)),
-          ),
-          Expanded(
-            flex: 3,
-            child: Text(r.eventName,
-                style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w500, color: const Color(0xFF1A202C)),
-                overflow: TextOverflow.ellipsis),
-          ),
-          Expanded(
-            flex: 2,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-              decoration: BoxDecoration(
-                color: UpriseColors.primaryDark.withOpacity(0.07),
-                borderRadius: BorderRadius.circular(6),
+        child: Row(
+          children: [
+            Expanded(
+              flex: 2,
+              child: Text(
+                r.certificateId,
+                style: GoogleFonts.beVietnamPro(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: UpriseColors.primaryDark,
+                ),
               ),
-              child: Text(r.organization,
-                  style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.w600, color: UpriseColors.primaryDark),
-                  overflow: TextOverflow.ellipsis),
             ),
-          ),
-          Expanded(
-            flex: 2,
-            child: Text(r.type,
-                style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF64748B))),
-          ),
-          Expanded(
-            flex: 2,
-            child: Text(DateFormat('MMM d, yyyy').format(r.date),
-                style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF64748B))),
-          ),
-          Expanded(
-            flex: 2,
-            child: Text('${r.recipients}',
-                style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600, color: const Color(0xFF1A202C))),
-          ),
-          Expanded(flex: 2, child: _certBadge(r.status)),
-          Expanded(
-  flex: 2,
-  child: Row(mainAxisAlignment: MainAxisAlignment.end, children: [
-    _ActionIconButton(icon: Icons.visibility_outlined, tooltip: 'View', color: const Color(0xFF3B82F6), onTap: () => _viewCert(r)),
-    const SizedBox(width: 4),
-    // Only show extra actions for draft certificates that have an eventId
-    if (r.status == 'draft' && r.eventId != null)
-      PopupMenuButton<String>(
-        icon: Icon(Icons.more_vert, size: 16, color: const Color(0xFF64748B)),
-        onSelected: (value) {
-          if (value == 'send') _sendCertificates(r);
-          if (value == 'status') _viewAttendeeStatus(r);
-        },
-        itemBuilder: (_) => [
-          const PopupMenuItem(value: 'send', child: Text('Send Certificates')),
-          const PopupMenuItem(value: 'status', child: Text('View Attendees Status')),
-        ],
-      ),
-    if (r.status != 'draft' || r.eventId == null) const SizedBox(width: 4),
-    _ActionIconButton(icon: Icons.edit_outlined, tooltip: 'Edit', color: UpriseColors.primaryDark, onTap: () => _editCert(r)),
-    const SizedBox(width: 4),
-    _ActionIconButton(icon: Icons.delete_outline_rounded, tooltip: 'Delete', color: const Color(0xFFDC2626), onTap: () => _confirmDelete(r)),
-  ]),
-),
-        ]),
+            Expanded(
+              flex: 3,
+              child: Text(
+                b.eventName,
+                style: GoogleFonts.beVietnamPro(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                  color: const Color(0xFF1A202C),
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            Expanded(
+              flex: 2,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: UpriseColors.primaryDark.withOpacity(0.07),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text(
+                  b.organization,
+                  style: GoogleFonts.beVietnamPro(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: UpriseColors.primaryDark,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ),
+            Expanded(
+              flex: 2,
+              child: Text(
+                r.type,
+                style: GoogleFonts.beVietnamPro(
+                  fontSize: 12,
+                  color: const Color(0xFF64748B),
+                ),
+              ),
+            ),
+            Expanded(
+              flex: 2,
+              child: Text(
+                DateFormat('MMM d, yyyy').format(b.date),
+                style: GoogleFonts.beVietnamPro(
+                  fontSize: 12,
+                  color: const Color(0xFF64748B),
+                ),
+              ),
+            ),
+            Expanded(
+              flex: 2,
+              child: Text(
+                b.batchStatus == 'draft'
+                    ? '${b.totalRecipients}'
+                    : '${b.sentCount}/${b.totalRecipients}',
+                style: GoogleFonts.beVietnamPro(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: const Color(0xFF1A202C),
+                ),
+              ),
+            ),
+            Expanded(flex: 2, child: _batchBadge(b.batchStatus)),
+            Expanded(
+              flex: 3,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  _ActionIconButton(
+                    icon: Icons.visibility_outlined,
+                    tooltip: 'View',
+                    color: const Color(0xFF3B82F6),
+                    onTap: () => _viewBatch(b),
+                  ),
+                  const SizedBox(width: 4),
+                  // Draft batches linked to an event can be sent straight
+                  // from the row for convenience.
+                  if (b.batchStatus == 'draft' && r.eventId != null)
+                    _ActionIconButton(
+                      icon: Icons.send_outlined,
+                      tooltip: 'Send Certificates',
+                      color: const Color(0xFF2563EB),
+                      onTap: () => _sendCertificates(r),
+                    ),
+                  const SizedBox(width: 4),
+                  // Requirement #5: edit is only available while the batch
+                  // is still a draft — nothing has been sent yet.
+                  _ActionIconButton(
+                    icon: Icons.edit_outlined,
+                    tooltip: b.isEditable
+                        ? 'Edit'
+                        : 'Locked — certificates already sent',
+                    color: UpriseColors.primaryDark,
+                    onTap: b.isEditable ? () => _editCert(r) : null,
+                  ),
+                  const SizedBox(width: 4),
+                  // Requirement #6: no destructive delete — archive instead,
+                  // preserving certificate history for audit purposes.
+                  _ActionIconButton(
+                    icon: b.isArchived
+                        ? Icons.unarchive_outlined
+                        : Icons.archive_outlined,
+                    tooltip: b.isArchived ? 'Unarchive' : 'Archive',
+                    color: const Color(0xFF6B7280),
+                    onTap: () => _toggleArchive(b),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
 
   // ── Actions ───────────────────────────────────────────────────────────────
-  void _viewCert(CertificateRecord r) {
-    showDialog(context: context, barrierColor: Colors.black54, builder: (_) => _CertPreviewDialog(record: r));
+  void _viewBatch(CertificateBatch b) {
+    showDialog(
+      context: context,
+      barrierColor: Colors.black54,
+      builder: (_) => _BatchDetailModal(
+        batch: b,
+        onResend: _resendCertificate,
+        onSendAll: () => _sendCertificates(b.primary),
+      ),
+    );
   }
 
   void _editCert(CertificateRecord r) {
@@ -621,367 +1121,414 @@ class _OrgCertificatesScreenState extends State<OrgCertificatesScreen> {
     );
   }
 
-  void _confirmDelete(CertificateRecord r) {
-    showDialog(
-      context: context,
-      barrierColor: Colors.black54,
-      builder: (ctx) => Dialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        child: Container(
-          width: 420,
-          padding: const EdgeInsets.all(28),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(children: [
-                Container(
-                  width: 42, height: 42,
-                  decoration: BoxDecoration(color: const Color(0xFFFEF2F2), borderRadius: BorderRadius.circular(10)),
-                  child: const Icon(Icons.delete_outline_rounded, color: Color(0xFFDC2626), size: 20),
-                ),
-                const SizedBox(width: 14),
-                Text('Delete Certificate',
-                    style: GoogleFonts.beVietnamPro(fontSize: 17, fontWeight: FontWeight.w700, color: const Color(0xFF1A202C))),
-                const Spacer(),
-                IconButton(
-                  icon: const Icon(Icons.close_rounded, color: Color(0xFF1A202C), size: 20),
-                  tooltip: 'Close',
-                  onPressed: () => Navigator.pop(ctx),
-                ),
-              ]),
-              const SizedBox(height: 16),
-              Text('Delete "${r.certificateId}"? This action cannot be undone.',
-                  style: GoogleFonts.beVietnamPro(fontSize: 14, color: const Color(0xFF64748B), height: 1.5)),
-              const SizedBox(height: 24),
-              Row(mainAxisAlignment: MainAxisAlignment.end, children: [
-                OutlinedButton(
-                  onPressed: () => Navigator.pop(ctx),
-                  style: OutlinedButton.styleFrom(
-                    side: const BorderSide(color: Color(0xFFE2E6EA)),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 11),
-                  ),
-                  child: Text('Cancel', style: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF374151))),
-                ),
-                const SizedBox(width: 10),
-                ElevatedButton(
-                  onPressed: () async {
-                    Navigator.pop(ctx);
-                    try {
-                      await FirebaseFirestore.instance.collection('certificates').doc(r.id).delete();
-                      await activity_log.ActivityLogger.log(
-                        action: 'delete_certificate', module: 'certificates',
-                        details: {'certId': r.id, 'eventName': r.eventName},
-                      );
-                      if (mounted) {
-                        ScaffoldMessenger.of(context as BuildContext).showSnackBar(SnackBar(
-                          content: Text('Certificate deleted', style: GoogleFonts.beVietnamPro(color: Colors.white)),
-                          backgroundColor: UpriseColors.success,
-                          behavior: SnackBarBehavior.floating,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                        ));
-                      }
-                    } catch (e) {
-                      if (mounted) {
-                        ScaffoldMessenger.of(context as BuildContext).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: UpriseColors.error));
-                      }
-                    }
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: UpriseColors.error,
-                    foregroundColor: Colors.white,
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 11),
-                  ),
-                  child: Text('Delete', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600)),
-                ),
-              ]),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  // ---------- NEW METHODS ----------
-
-/// Sends certificates to all eligible attendees (attended + evaluated) who haven't received one yet.
-Future<void> _sendCertificates(CertificateRecord draft) async {
-  final eventId = draft.eventId;
-  if (eventId == null || eventId.isEmpty) {
-    _showToast('This draft is not linked to an event.', isError: true);
-    return;
-  }
-
-  // 1. Get all attendees who were present or late
-  final attSnap = await FirebaseFirestore.instance
-      .collection('events')
-      .doc(eventId)
-      .collection('attendances')
-      .where('status', whereIn: ['present', 'late'])
-      .get();
-
-  // 2. Get all feedback submissions for this event
-  final fbSnap = await FirebaseFirestore.instance
-      .collection('event_feedback')
-      .where('eventId', isEqualTo: eventId)
-      .get();
-
-  // Build sets of eligible attendees (students + guests)
-  final eligibleKeys = <String>{};      // uid for students, email for guests
-  final eligibleNames = <String, String>{}; // key -> name
-
-  // Process attendees
-  for (final doc in attSnap.docs) {
-    final data = doc.data();
-    final isGuest = data['isGuest'] == true;
-    String key;
-    String name;
-    if (isGuest) {
-      key = (data['guestEmail'] ?? '').toString().trim();
-      name = (data['studentName'] ?? 'Guest').toString();
-    } else {
-      key = (data['studentId'] ?? '').toString();
-      name = (data['studentName'] ?? 'Unknown').toString();
-    }
-    if (key.isEmpty) continue;
-
-    // Check if this attendee submitted feedback
-    final hasFeedback = fbSnap.docs.any((fb) {
-      final fbData = fb.data();
-      if (isGuest) {
-        return fbData['isGuest'] == true && fbData['guestEmail'] == key;
-      } else {
-        return fbData['userId'] == key;
-      }
-    });
-    if (hasFeedback) {
-      eligibleKeys.add(key);
-      eligibleNames[key] = name;
-    }
-  }
-
-  if (eligibleKeys.isEmpty) {
-    _showToast('No eligible attendees found (attended + evaluated).');
-    return;
-  }
-
-  // 3. Get already distributed certificates for this event
-  final certSnap = await FirebaseFirestore.instance
-      .collection('certificates')
-      .where('eventId', isEqualTo: eventId)
-      .where('status', isEqualTo: 'distributed')
-      .get();
-  final existingKeys = <String>{};
-  for (final doc in certSnap.docs) {
-    final data = doc.data();
-    final uid = data['recipientUid'] as String?;
-    final email = data['recipientEmail'] as String?;
-    if (uid != null && uid.isNotEmpty) existingKeys.add(uid);
-    if (email != null && email.isNotEmpty) existingKeys.add(email);
-  }
-
-  // 4. Final list: eligible but not yet issued
-  final toIssue = eligibleKeys.difference(existingKeys);
-  if (toIssue.isEmpty) {
-    _showToast('All eligible attendees already have their certificates.');
-    return;
-  }
-
-  // 5. Create certificate documents
-  final batch = FirebaseFirestore.instance.batch();
-  final certsRef = FirebaseFirestore.instance.collection('certificates');
-
-  for (final key in toIssue) {
-    final name = eligibleNames[key] ?? 'Student';
-    final docRef = certsRef.doc(); // auto-generated ID
-    batch.set(docRef, {
-      'orgId': widget.orgId,
-      'eventId': eventId,
-      'eventName': draft.eventName,
-      'organization': draft.organization,
-      'templateType': draft.templateType,
-      'type': draft.type,
-      'issuedAt': FieldValue.serverTimestamp(),
-      'status': 'distributed',
-      'recipients': 1,
-      'recipientName': name,
-      'recipientUid': key,               // uid or email (guests will be matched by this)
-      'recipientEmail': key,             // same as uid for guests; for students it's their uid
-      'verificationCode': _generateVerificationCode(),
-      'templateFileUrl': draft.templateFileUrl,
-      'namePlacement': draft.namePlacement,
-    });
-  }
-  await batch.commit();
-
-  // 6. Send notifications to each student (guests don't have a user account)
-  for (final key in toIssue) {
-    // Only send to students (non-guest) – we know guests by email containing '@', but safer: check if key is a valid uid?
-    // We'll assume if key contains '@' it's a guest, else treat as student uid.
-    if (!key.contains('@')) {
-      await NotificationService.sendToUser(
-        userId: key,
-        title: 'Your certificate is ready 🎓',
-        body: 'Your certificate for "${draft.eventName}" has been issued.',
-        type: 'certificate',
-        orgId: widget.orgId,
-        data: {'eventId': eventId},
+  /// Toggles the archived flag across every record in the batch. Archiving
+  /// replaces hard deletion — the certificate history is always preserved.
+  Future<void> _toggleArchive(CertificateBatch b) async {
+    final newValue = !b.isArchived;
+    final batchWrite = FirebaseFirestore.instance.batch();
+    for (final r in b.records) {
+      batchWrite.update(
+        FirebaseFirestore.instance.collection('certificates').doc(r.id),
+        {'archived': newValue},
       );
     }
+    try {
+      await batchWrite.commit();
+      await activity_log.ActivityLogger.log(
+        action: newValue
+            ? 'archive_certificate_batch'
+            : 'unarchive_certificate_batch',
+        module: 'certificates',
+        details: {'eventName': b.eventName, 'recipients': b.totalRecipients},
+      );
+      _showToast(newValue ? 'Batch archived.' : 'Batch restored.');
+    } catch (e) {
+      _showToast('Error: $e', isError: true);
+    }
   }
 
-  _showToast('Sent ${toIssue.length} certificate(s).');
-  // Refresh the list
-  setState(() {});
-}
+  // ---------- Sending / Resending ----------
 
-/// Shows a dialog with attendance, evaluation, and certificate status for each attendee.
-Future<void> _viewAttendeeStatus(CertificateRecord draft) async {
-  final eventId = draft.eventId;
-  if (eventId == null || eventId.isEmpty) {
-    _showToast('This draft is not linked to an event.', isError: true);
-    return;
+  /// Sends certificates to all eligible attendees (attended + evaluated) who haven't received one yet.
+  Future<void> _sendCertificates(CertificateRecord draft) async {
+    final eventId = draft.eventId;
+    if (eventId == null || eventId.isEmpty) {
+      _showToast('This draft is not linked to an event.', isError: true);
+      return;
+    }
+
+    // 1. Get all attendees who were present or late
+    final attSnap = await FirebaseFirestore.instance
+        .collection('events')
+        .doc(eventId)
+        .collection('attendances')
+        .where('status', whereIn: ['present', 'late'])
+        .get();
+
+    // 2. Get all feedback submissions for this event
+    final fbSnap = await FirebaseFirestore.instance
+        .collection('event_feedback')
+        .where('eventId', isEqualTo: eventId)
+        .get();
+
+    // Build sets of eligible attendees (students + guests)
+    final eligibleKeys = <String>{}; // uid for students, email for guests
+    final eligibleNames = <String, String>{}; // key -> name
+
+    // Process attendees
+    for (final doc in attSnap.docs) {
+      final data = doc.data();
+      final isGuest = data['isGuest'] == true;
+      String key;
+      String name;
+      if (isGuest) {
+        key = (data['guestEmail'] ?? '').toString().trim();
+        name = (data['studentName'] ?? 'Guest').toString();
+      } else {
+        key = (data['studentId'] ?? '').toString();
+        name = (data['studentName'] ?? 'Unknown').toString();
+      }
+      if (key.isEmpty) continue;
+
+      // Check if this attendee submitted feedback
+      final hasFeedback = fbSnap.docs.any((fb) {
+        final fbData = fb.data();
+        if (isGuest) {
+          return fbData['isGuest'] == true && fbData['guestEmail'] == key;
+        } else {
+          return fbData['userId'] == key;
+        }
+      });
+      if (hasFeedback) {
+        eligibleKeys.add(key);
+        eligibleNames[key] = name;
+      }
+    }
+
+    if (eligibleKeys.isEmpty) {
+      _showToast('No eligible attendees found (attended + evaluated).');
+      return;
+    }
+
+    // 3. Get already distributed certificates for this event
+    final certSnap = await FirebaseFirestore.instance
+        .collection('certificates')
+        .where('eventId', isEqualTo: eventId)
+        .where('status', isEqualTo: 'distributed')
+        .get();
+    final existingKeys = <String>{};
+    for (final doc in certSnap.docs) {
+      final data = doc.data();
+      final uid = data['recipientUid'] as String?;
+      final email = data['recipientEmail'] as String?;
+      if (uid != null && uid.isNotEmpty) existingKeys.add(uid);
+      if (email != null && email.isNotEmpty) existingKeys.add(email);
+    }
+
+    // 4. Final list: eligible but not yet issued
+    final toIssue = eligibleKeys.difference(existingKeys);
+    if (toIssue.isEmpty) {
+      _showToast('All eligible attendees already have their certificates.');
+      return;
+    }
+
+    // 5. Create certificate documents
+    final batch = FirebaseFirestore.instance.batch();
+    final certsRef = FirebaseFirestore.instance.collection('certificates');
+
+    for (final key in toIssue) {
+      final name = eligibleNames[key] ?? 'Student';
+      final docRef = certsRef.doc(); // auto-generated ID
+      batch.set(docRef, {
+        'orgId': widget.orgId,
+        'eventId': eventId,
+        'eventName': draft.eventName,
+        'organization': draft.organization,
+        'templateType': draft.templateType,
+        'type': draft.type,
+        'issuedAt': FieldValue.serverTimestamp(),
+        'status': 'distributed',
+        'recipients': 1,
+        'recipientName': name,
+        'recipientUid': key, // uid or email (guests will be matched by this)
+        'recipientEmail':
+            key, // same as uid for guests; for students it's their uid
+        'verificationCode': _generateVerificationCode(),
+        'templateFileUrl': draft.templateFileUrl,
+        'namePlacement': draft.namePlacement,
+        'signatoryPlacements': draft.signatoryPlacements,
+        // NEW — send-status tracking (requirement #4).
+        'sendStatus': 'sent',
+        'resendCount': 0,
+      });
+    }
+    await batch.commit();
+
+    // 6. Send notifications to each student (guests don't have a user account)
+    for (final key in toIssue) {
+      // Only send to students (non-guest) – we know guests by email containing '@', but safer: check if key is a valid uid?
+      // We'll assume if key contains '@' it's a guest, else treat as student uid.
+      if (!key.contains('@')) {
+        await NotificationService.sendToUser(
+          userId: key,
+          title: 'Your certificate is ready 🎓',
+          body: 'Your certificate for "${draft.eventName}" has been issued.',
+          type: 'certificate',
+          orgId: widget.orgId,
+          data: {'eventId': eventId},
+        );
+      }
+    }
+
+    _showToast('Sent ${toIssue.length} certificate(s).');
+    // Refresh the list
+    setState(() {});
   }
 
-  // Fetch all attendees
-  final attSnap = await FirebaseFirestore.instance
-      .collection('events')
-      .doc(eventId)
-      .collection('attendances')
-      .get();
+  /// NEW: resends a single already-distributed certificate. Per requirement
+  /// #4, this is allowed even if the student hasn't evaluated the event —
+  /// resend is a delivery-reminder action, not a fresh eligibility check.
+  Future<void> _resendCertificate(CertificateRecord r) async {
+    try {
+      await FirebaseFirestore.instance
+          .collection('certificates')
+          .doc(r.id)
+          .update({
+            'sendStatus': 'resent',
+            'resendCount': FieldValue.increment(1),
+            'lastResentAt': FieldValue.serverTimestamp(),
+          });
 
-  // Fetch all feedback
-  final fbSnap = await FirebaseFirestore.instance
-    .collection('feedback')
-    .where('eventId', isEqualTo: eventId)
-    .get();
+      final recipientKey = r.recipientName; // fallback label only
+      // Only students (non-guest, uid-keyed) have a notifiable account.
+      // We stored the uid/email under recipientUid on the doc itself.
+      final doc = await FirebaseFirestore.instance
+          .collection('certificates')
+          .doc(r.id)
+          .get();
+      final uid = (doc.data()?['recipientUid'] as String?) ?? '';
+      if (uid.isNotEmpty && !uid.contains('@')) {
+        await NotificationService.sendToUser(
+          userId: uid,
+          title: 'Your certificate was resent 🎓',
+          body: 'Your certificate for "${r.eventName}" has been resent.',
+          type: 'certificate',
+          orgId: widget.orgId,
+          data: {'eventId': r.eventId ?? ''},
+        );
+      }
 
-  // Fetch all distributed certificates for this event
-  final certSnap = await FirebaseFirestore.instance
-      .collection('certificates')
-      .where('eventId', isEqualTo: eventId)
-      .where('status', isEqualTo: 'distributed')
-      .get();
-  final certKeys = <String>{};
-  for (final doc in certSnap.docs) {
-    final data = doc.data();
-    final uid = data['recipientUid'] as String?;
-    final email = data['recipientEmail'] as String?;
-    if (uid != null && uid.isNotEmpty) certKeys.add(uid);
-    if (email != null && email.isNotEmpty) certKeys.add(email);
+      await activity_log.ActivityLogger.log(
+        action: 'resend_certificate',
+        module: 'certificates',
+        details: {
+          'certId': r.id,
+          'eventName': r.eventName,
+          'recipient': recipientKey,
+        },
+      );
+      _showToast('Certificate resent.');
+    } catch (e) {
+      _showToast('Error resending: $e', isError: true);
+    }
   }
 
-  // Build list of status rows
-  final rows = <Map<String, String>>[];
-  for (final doc in attSnap.docs) {
-    final data = doc.data();
-    final isGuest = data['isGuest'] == true;
-    final name = (data['studentName'] ?? 'Guest').toString();
-    final status = (data['status'] ?? 'absent').toString();
-    final key = isGuest ? (data['guestEmail'] ?? '').toString() : (data['studentId'] ?? '').toString();
-    final hasFeedback = fbSnap.docs.any((fb) {
-      final fbData = fb.data();
-      if (isGuest) return fbData['isGuest'] == true && fbData['guestEmail'] == key;
-      return fbData['userId'] == key;
-    });
-    final hasCert = certKeys.contains(key);
-    rows.add({
-      'name': name,
-      'attendance': status,
-      'evaluated': hasFeedback ? '✅' : '❌',
-      'certificate': hasCert ? '✅' : '❌',
-    });
-  }
+  /// Shows a dialog with attendance, evaluation, and certificate status for each attendee.
+  Future<void> _viewAttendeeStatus(CertificateRecord draft) async {
+    final eventId = draft.eventId;
+    if (eventId == null || eventId.isEmpty) {
+      _showToast('This draft is not linked to an event.', isError: true);
+      return;
+    }
 
-  // Show dialog with a table
-  showDialog(
-    context: context,
-    builder: (_) => AlertDialog(
-      title: Text('Attendee Status – ${draft.eventName}'),
-      content: SizedBox(
-        width: double.maxFinite,
-        child: DataTable(
-          columns: const [
-            DataColumn(label: Text('Name')),
-            DataColumn(label: Text('Attendance')),
-            DataColumn(label: Text('Evaluated')),
-            DataColumn(label: Text('Certificate')),
-          ],
-          rows: rows.map((row) => DataRow(cells: [
-            DataCell(Text(row['name']!, overflow: TextOverflow.ellipsis)),
-            DataCell(Text(row['attendance']!.toUpperCase())),
-            DataCell(Text(row['evaluated']!, textAlign: TextAlign.center)),
-            DataCell(Text(row['certificate']!, textAlign: TextAlign.center)),
-          ])).toList(),
-        ),
-      ),
-      actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: Text('Close')),
-      ],
-    ),
-  );
-}
+    // Fetch all attendees
+    final attSnap = await FirebaseFirestore.instance
+        .collection('events')
+        .doc(eventId)
+        .collection('attendances')
+        .get();
 
-/// Helper to show toast messages (copied from the modal's pattern)
-void _showToast(String msg, {bool isError = false}) {
-  if (!mounted) return;
-  ScaffoldMessenger.of(context).showSnackBar(
-    SnackBar(
-      content: Text(msg, style: GoogleFonts.beVietnamPro()),
-      backgroundColor: isError ? UpriseColors.error : UpriseColors.success,
-      behavior: SnackBarBehavior.floating,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-    ),
-  );
-}
+    // Fetch all feedback
+    final fbSnap = await FirebaseFirestore.instance
+        .collection('feedback')
+        .where('eventId', isEqualTo: eventId)
+        .get();
 
-// Also copy the _generateVerificationCode method from the modal if not accessible
-String _generateVerificationCode() {
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-  final rng = math.Random.secure();
-  return List.generate(12, (_) => chars[rng.nextInt(chars.length)]).join();
-}
-  Widget _buildEmptyState() {
-    return Center(
-      child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-        Container(
-          width: 80, height: 80,
-          decoration: BoxDecoration(color: const Color(0xFFF1F5F9), borderRadius: BorderRadius.circular(20)),
-          child: const Icon(Icons.card_membership_outlined, size: 40, color: Color(0xFF9AA5B4)),
-        ),
-        const SizedBox(height: 16),
-        Text('No certificates issued yet',
-            style: GoogleFonts.beVietnamPro(fontSize: 15, fontWeight: FontWeight.w600, color: const Color(0xFF374151))),
-        const SizedBox(height: 6),
-        Text('Click "Generate Certificate" to create your first one.',
-            style: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF64748B))),
-        const SizedBox(height: 16),
-        ElevatedButton.icon(
-          onPressed: _openGenerateFlow,
-          icon: const Icon(Icons.add_rounded, size: 15),
-          label: Text('Generate Certificate', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600)),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: UpriseColors.primaryDark,
-            foregroundColor: Colors.white,
-            elevation: 0,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 11),
+    // Fetch all distributed certificates for this event
+    final certSnap = await FirebaseFirestore.instance
+        .collection('certificates')
+        .where('eventId', isEqualTo: eventId)
+        .where('status', isEqualTo: 'distributed')
+        .get();
+    final certKeys = <String>{};
+    for (final doc in certSnap.docs) {
+      final data = doc.data();
+      final uid = data['recipientUid'] as String?;
+      final email = data['recipientEmail'] as String?;
+      if (uid != null && uid.isNotEmpty) certKeys.add(uid);
+      if (email != null && email.isNotEmpty) certKeys.add(email);
+    }
+
+    // Build list of status rows
+    final rows = <Map<String, String>>[];
+    for (final doc in attSnap.docs) {
+      final data = doc.data();
+      final isGuest = data['isGuest'] == true;
+      final name = (data['studentName'] ?? 'Guest').toString();
+      final status = (data['status'] ?? 'absent').toString();
+      final key = isGuest
+          ? (data['guestEmail'] ?? '').toString()
+          : (data['studentId'] ?? '').toString();
+      final hasFeedback = fbSnap.docs.any((fb) {
+        final fbData = fb.data();
+        if (isGuest)
+          return fbData['isGuest'] == true && fbData['guestEmail'] == key;
+        return fbData['userId'] == key;
+      });
+      final hasCert = certKeys.contains(key);
+      rows.add({
+        'name': name,
+        'attendance': status,
+        'evaluated': hasFeedback ? '✅' : '❌',
+        'certificate': hasCert ? '✅' : '❌',
+      });
+    }
+
+    // Show dialog with a table
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: Text('Attendee Status – ${draft.eventName}'),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: DataTable(
+            columns: const [
+              DataColumn(label: Text('Name')),
+              DataColumn(label: Text('Attendance')),
+              DataColumn(label: Text('Evaluated')),
+              DataColumn(label: Text('Certificate')),
+            ],
+            rows: rows
+                .map(
+                  (row) => DataRow(
+                    cells: [
+                      DataCell(
+                        Text(row['name']!, overflow: TextOverflow.ellipsis),
+                      ),
+                      DataCell(Text(row['attendance']!.toUpperCase())),
+                      DataCell(
+                        Text(row['evaluated']!, textAlign: TextAlign.center),
+                      ),
+                      DataCell(
+                        Text(row['certificate']!, textAlign: TextAlign.center),
+                      ),
+                    ],
+                  ),
+                )
+                .toList(),
           ),
         ),
-      ]),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('Close'),
+          ),
+        ],
+      ),
     );
   }
 
-  Widget _buildCardRow(CertificateRecord r, bool isLast) {
+  /// Helper to show toast messages (copied from the modal's pattern)
+  void _showToast(String msg, {bool isError = false}) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(msg, style: GoogleFonts.beVietnamPro()),
+        backgroundColor: isError ? UpriseColors.error : UpriseColors.success,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      ),
+    );
+  }
+
+  // Also copy the _generateVerificationCode method from the modal if not accessible
+  String _generateVerificationCode() {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    final rng = math.Random.secure();
+    return List.generate(12, (_) => chars[rng.nextInt(chars.length)]).join();
+  }
+
+  Widget _buildEmptyState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            width: 80,
+            height: 80,
+            decoration: BoxDecoration(
+              color: const Color(0xFFF1F5F9),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: const Icon(
+              Icons.card_membership_outlined,
+              size: 40,
+              color: Color(0xFF9AA5B4),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'No certificates issued yet',
+            style: GoogleFonts.beVietnamPro(
+              fontSize: 15,
+              fontWeight: FontWeight.w600,
+              color: const Color(0xFF374151),
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Click "Generate Certificate" to create your first one.',
+            style: GoogleFonts.beVietnamPro(
+              fontSize: 13,
+              color: const Color(0xFF64748B),
+            ),
+          ),
+          const SizedBox(height: 16),
+          ElevatedButton.icon(
+            onPressed: _openGenerateFlow,
+            icon: const Icon(Icons.add_rounded, size: 15),
+            label: Text(
+              'Generate Certificate',
+              style: GoogleFonts.beVietnamPro(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: UpriseColors.primaryDark,
+              foregroundColor: Colors.white,
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 11),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCardRow(CertificateBatch b, bool isLast) {
+    final r = b.primary;
     return InkWell(
-      onTap: () => _viewCert(r),
+      onTap: () => _viewBatch(b),
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          border: isLast ? null : const Border(bottom: BorderSide(color: Color(0xFFF1F5F9))),
+          border: isLast
+              ? null
+              : const Border(bottom: BorderSide(color: Color(0xFFF1F5F9))),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -991,32 +1538,73 @@ String _generateVerificationCode() {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Expanded(
-                  child: Text(r.certificateId,
-                      style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600, color: UpriseColors.primaryDark)),
+                  child: Text(
+                    r.certificateId,
+                    style: GoogleFonts.beVietnamPro(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: UpriseColors.primaryDark,
+                    ),
+                  ),
                 ),
-                _certBadge(r.status),
+                _batchBadge(b.batchStatus),
               ],
             ),
-            Text(r.eventName,
-                style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.w500, color: const Color(0xFF1A202C)),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis),
+            Text(
+              b.eventName,
+              style: GoogleFonts.beVietnamPro(
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+                color: const Color(0xFF1A202C),
+              ),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(DateFormat('MMM d, yyyy').format(r.date),
-                    style: GoogleFonts.beVietnamPro(fontSize: 11, color: const Color(0xFF64748B))),
-                Text('${r.recipients} recipient${r.recipients != 1 ? 's' : ''}',
-                    style: GoogleFonts.beVietnamPro(fontSize: 11, color: const Color(0xFF64748B))),
+                Text(
+                  DateFormat('MMM d, yyyy').format(b.date),
+                  style: GoogleFonts.beVietnamPro(
+                    fontSize: 11,
+                    color: const Color(0xFF64748B),
+                  ),
+                ),
+                Text(
+                  b.batchStatus == 'draft'
+                      ? '${b.totalRecipients} recipient${b.totalRecipients != 1 ? 's' : ''}'
+                      : '${b.sentCount}/${b.totalRecipients} sent',
+                  style: GoogleFonts.beVietnamPro(
+                    fontSize: 11,
+                    color: const Color(0xFF64748B),
+                  ),
+                ),
               ],
             ),
             Row(
               mainAxisAlignment: MainAxisAlignment.end,
               spacing: 6,
               children: [
-                _ActionIconButton(icon: Icons.visibility_outlined,    tooltip: 'View',   color: const Color(0xFF3B82F6),  onTap: () => _viewCert(r)),
-                _ActionIconButton(icon: Icons.edit_outlined,          tooltip: 'Edit',   color: UpriseColors.primaryDark, onTap: () => _editCert(r)),
-                _ActionIconButton(icon: Icons.delete_outline_rounded, tooltip: 'Delete', color: const Color(0xFFDC2626),  onTap: () => _confirmDelete(r)),
+                _ActionIconButton(
+                  icon: Icons.visibility_outlined,
+                  tooltip: 'View',
+                  color: const Color(0xFF3B82F6),
+                  onTap: () => _viewBatch(b),
+                ),
+                _ActionIconButton(
+                  icon: Icons.edit_outlined,
+                  tooltip: b.isEditable ? 'Edit' : 'Locked',
+                  color: UpriseColors.primaryDark,
+                  onTap: b.isEditable ? () => _editCert(r) : null,
+                ),
+                _ActionIconButton(
+                  icon: b.isArchived
+                      ? Icons.unarchive_outlined
+                      : Icons.archive_outlined,
+                  tooltip: b.isArchived ? 'Unarchive' : 'Archive',
+                  color: const Color(0xFF6B7280),
+                  onTap: () => _toggleArchive(b),
+                ),
               ],
             ),
           ],
@@ -1025,17 +1613,26 @@ String _generateVerificationCode() {
     );
   }
 
-  Widget _buildFooter(int total, int totalPages, int start, int end, bool isMobile) {
+  Widget _buildFooter(
+    int total,
+    int totalPages,
+    int start,
+    int end,
+    bool isMobile,
+  ) {
     final int maxVisible = isMobile ? 3 : 5;
     int firstPage = (_currentPage - maxVisible ~/ 2).clamp(1, totalPages);
-    int lastPage  = (firstPage + maxVisible - 1).clamp(1, totalPages);
+    int lastPage = (firstPage + maxVisible - 1).clamp(1, totalPages);
     if (lastPage - firstPage + 1 < maxVisible && firstPage > 1) {
       firstPage = (lastPage - maxVisible + 1).clamp(1, totalPages);
     }
     final pages = List.generate(lastPage - firstPage + 1, (i) => firstPage + i);
 
     return Container(
-      padding: EdgeInsets.symmetric(horizontal: isMobile ? 12 : 20, vertical: 12),
+      padding: EdgeInsets.symmetric(
+        horizontal: isMobile ? 12 : 20,
+        vertical: 12,
+      ),
       decoration: const BoxDecoration(
         border: Border(top: BorderSide(color: Color(0xFFE8ECF0))),
         color: Color(0xFFF8F9FB),
@@ -1046,41 +1643,111 @@ String _generateVerificationCode() {
               spacing: 12,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Showing ${total == 0 ? 0 : start + 1}–$end of $total',
-                    style: GoogleFonts.beVietnamPro(fontSize: 11, color: const Color(0xFF64748B))),
+                Text(
+                  'Showing ${total == 0 ? 0 : start + 1}–$end of $total',
+                  style: GoogleFonts.beVietnamPro(
+                    fontSize: 11,
+                    color: const Color(0xFF64748B),
+                  ),
+                ),
                 Center(
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      _PageButton(icon: Icons.chevron_left_rounded,  enabled: _currentPage > 1,          onTap: () => setState(() => _currentPage--)),
+                      _PageButton(
+                        icon: Icons.chevron_left_rounded,
+                        enabled: _currentPage > 1,
+                        onTap: () => setState(() => _currentPage--),
+                      ),
                       const SizedBox(width: 4),
-                      ...pages.map((p) => _PageNumButton(page: p, isActive: p == _currentPage, onTap: () => setState(() => _currentPage = p))),
+                      ...pages.map(
+                        (p) => _PageNumButton(
+                          page: p,
+                          isActive: p == _currentPage,
+                          onTap: () => setState(() => _currentPage = p),
+                        ),
+                      ),
                       if (lastPage < totalPages) ...[
-                        Padding(padding: const EdgeInsets.symmetric(horizontal: 4), child: Text('…', style: GoogleFonts.beVietnamPro(color: const Color(0xFF64748B), fontSize: 12))),
-                        _PageNumButton(page: totalPages, isActive: _currentPage == totalPages, onTap: () => setState(() => _currentPage = totalPages)),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 4),
+                          child: Text(
+                            '…',
+                            style: GoogleFonts.beVietnamPro(
+                              color: const Color(0xFF64748B),
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
+                        _PageNumButton(
+                          page: totalPages,
+                          isActive: _currentPage == totalPages,
+                          onTap: () =>
+                              setState(() => _currentPage = totalPages),
+                        ),
                       ],
                       const SizedBox(width: 4),
-                      _PageButton(icon: Icons.chevron_right_rounded, enabled: _currentPage < totalPages, onTap: () => setState(() => _currentPage++)),
+                      _PageButton(
+                        icon: Icons.chevron_right_rounded,
+                        enabled: _currentPage < totalPages,
+                        onTap: () => setState(() => _currentPage++),
+                      ),
                     ],
                   ),
                 ),
               ],
             )
-          : Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-              Text('Showing ${total == 0 ? 0 : start + 1}–$end of $total certificates',
-                  style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF64748B))),
-              Row(children: [
-                _PageButton(icon: Icons.chevron_left_rounded,  enabled: _currentPage > 1,          onTap: () => setState(() => _currentPage--)),
-                const SizedBox(width: 4),
-                ...pages.map((p) => _PageNumButton(page: p, isActive: p == _currentPage, onTap: () => setState(() => _currentPage = p))),
-                if (lastPage < totalPages) ...[
-                  Padding(padding: const EdgeInsets.symmetric(horizontal: 4), child: Text('…', style: GoogleFonts.beVietnamPro(color: const Color(0xFF64748B), fontSize: 12))),
-                  _PageNumButton(page: totalPages, isActive: _currentPage == totalPages, onTap: () => setState(() => _currentPage = totalPages)),
-                ],
-                const SizedBox(width: 4),
-                _PageButton(icon: Icons.chevron_right_rounded, enabled: _currentPage < totalPages, onTap: () => setState(() => _currentPage++)),
-              ]),
-            ]),
+          : Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Showing ${total == 0 ? 0 : start + 1}–$end of $total certificate batches',
+                  style: GoogleFonts.beVietnamPro(
+                    fontSize: 12,
+                    color: const Color(0xFF64748B),
+                  ),
+                ),
+                Row(
+                  children: [
+                    _PageButton(
+                      icon: Icons.chevron_left_rounded,
+                      enabled: _currentPage > 1,
+                      onTap: () => setState(() => _currentPage--),
+                    ),
+                    const SizedBox(width: 4),
+                    ...pages.map(
+                      (p) => _PageNumButton(
+                        page: p,
+                        isActive: p == _currentPage,
+                        onTap: () => setState(() => _currentPage = p),
+                      ),
+                    ),
+                    if (lastPage < totalPages) ...[
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 4),
+                        child: Text(
+                          '…',
+                          style: GoogleFonts.beVietnamPro(
+                            color: const Color(0xFF64748B),
+                            fontSize: 12,
+                          ),
+                        ),
+                      ),
+                      _PageNumButton(
+                        page: totalPages,
+                        isActive: _currentPage == totalPages,
+                        onTap: () => setState(() => _currentPage = totalPages),
+                      ),
+                    ],
+                    const SizedBox(width: 4),
+                    _PageButton(
+                      icon: Icons.chevron_right_rounded,
+                      enabled: _currentPage < totalPages,
+                      onTap: () => setState(() => _currentPage++),
+                    ),
+                  ],
+                ),
+              ],
+            ),
     );
   }
 }
@@ -1093,7 +1760,12 @@ class _StatCard extends StatelessWidget {
   final int value;
   final IconData icon;
   final Color color;
-  const _StatCard({required this.label, required this.value, required this.icon, required this.color});
+  const _StatCard({
+    required this.label,
+    required this.value,
+    required this.icon,
+    required this.color,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1105,20 +1777,45 @@ class _StatCard extends StatelessWidget {
         border: Border.all(color: const Color(0xFFE8ECF0)),
         boxShadow: _DS.cardShadow,
       ),
-      child: Row(children: [
-        Container(
-          width: 44, height: 44,
-          decoration: BoxDecoration(color: color.withOpacity(0.10), borderRadius: BorderRadius.circular(12)),
-          child: Icon(icon, color: color, size: 22),
-        ),
-        const SizedBox(width: 14),
-        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(label, style: GoogleFonts.beVietnamPro(fontSize: 11, color: const Color(0xFF64748B), fontWeight: FontWeight.w500)),
-            const SizedBox(height: 2),
-            Text('$value', style: GoogleFonts.beVietnamPro(fontSize: 28, fontWeight: FontWeight.w700, color: const Color(0xFF1A202C))),
-          ])),
-        ]),
-      );
+      child: Row(
+        children: [
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.10),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(icon, color: color, size: 22),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: GoogleFonts.beVietnamPro(
+                    fontSize: 11,
+                    color: const Color(0xFF64748B),
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  '$value',
+                  style: GoogleFonts.beVietnamPro(
+                    fontSize: 28,
+                    fontWeight: FontWeight.w700,
+                    color: const Color(0xFF1A202C),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 
@@ -1129,7 +1826,11 @@ class _FilterDropdown extends StatelessWidget {
   final String value;
   final List<String> items;
   final ValueChanged<String?> onChanged;
-  const _FilterDropdown({required this.value, required this.items, required this.onChanged});
+  const _FilterDropdown({
+    required this.value,
+    required this.items,
+    required this.onChanged,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1144,9 +1845,23 @@ class _FilterDropdown extends StatelessWidget {
       child: DropdownButtonHideUnderline(
         child: DropdownButton<String>(
           value: value,
-          icon: Icon(Icons.keyboard_arrow_down_rounded, size: 18, color: UpriseColors.greyText),
-          style: GoogleFonts.beVietnamPro(fontSize: 13, color: UpriseColors.charcoal),
-          items: items.map((s) => DropdownMenuItem(value: s, child: Text(s, style: GoogleFonts.beVietnamPro(fontSize: 13)))).toList(),
+          icon: Icon(
+            Icons.keyboard_arrow_down_rounded,
+            size: 18,
+            color: UpriseColors.greyText,
+          ),
+          style: GoogleFonts.beVietnamPro(
+            fontSize: 13,
+            color: UpriseColors.charcoal,
+          ),
+          items: items
+              .map(
+                (s) => DropdownMenuItem(
+                  value: s,
+                  child: Text(s, style: GoogleFonts.beVietnamPro(fontSize: 13)),
+                ),
+              )
+              .toList(),
           onChanged: onChanged,
         ),
       ),
@@ -1159,7 +1874,12 @@ class _ActionIconButton extends StatelessWidget {
   final String tooltip;
   final Color color;
   final VoidCallback? onTap;
-  const _ActionIconButton({required this.icon, required this.tooltip, required this.color, required this.onTap});
+  const _ActionIconButton({
+    required this.icon,
+    required this.tooltip,
+    required this.color,
+    required this.onTap,
+  });
 
   static const Map<int, Color> _bgByFg = {
     0xFF3B82F6: Color(0xFFEFF6FF), // view - blue
@@ -1175,7 +1895,9 @@ class _ActionIconButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final fg = onTap == null ? const Color(0xFFD1D5DB) : color;
-    final bg = onTap == null ? const Color(0xFFF1F5F9) : (_bgByFg[fg.value] ?? fg.withAlpha(26));
+    final bg = onTap == null
+        ? const Color(0xFFF1F5F9)
+        : (_bgByFg[fg.value] ?? fg.withAlpha(26));
     return Tooltip(
       message: tooltip,
       waitDuration: const Duration(milliseconds: 400),
@@ -1199,7 +1921,11 @@ class _PageButton extends StatelessWidget {
   final IconData icon;
   final bool enabled;
   final VoidCallback onTap;
-  const _PageButton({required this.icon, required this.enabled, required this.onTap});
+  const _PageButton({
+    required this.icon,
+    required this.enabled,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) => InkWell(
@@ -1207,7 +1933,11 @@ class _PageButton extends StatelessWidget {
     borderRadius: BorderRadius.circular(6),
     child: Padding(
       padding: const EdgeInsets.all(4),
-      child: Icon(icon, size: 20, color: enabled ? const Color(0xFF374151) : const Color(0xFFD1D5DB)),
+      child: Icon(
+        icon,
+        size: 20,
+        color: enabled ? const Color(0xFF374151) : const Color(0xFFD1D5DB),
+      ),
     ),
   );
 }
@@ -1216,29 +1946,485 @@ class _PageNumButton extends StatelessWidget {
   final int page;
   final bool isActive;
   final VoidCallback onTap;
-  const _PageNumButton({required this.page, required this.isActive, required this.onTap});
+  const _PageNumButton({
+    required this.page,
+    required this.isActive,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) => GestureDetector(
     onTap: onTap,
     child: Container(
       margin: const EdgeInsets.symmetric(horizontal: 2),
-      width: 28, height: 28,
+      width: 28,
+      height: 28,
       alignment: Alignment.center,
       decoration: BoxDecoration(
         color: isActive ? UpriseColors.primaryDark : Colors.transparent,
         borderRadius: BorderRadius.circular(6),
       ),
-      child: Text('$page',
-          style: GoogleFonts.beVietnamPro(
-            fontSize: 12,
-            fontWeight: isActive ? FontWeight.w700 : FontWeight.normal,
-            color: isActive ? Colors.white : const Color(0xFF374151),
-          )),
+      child: Text(
+        '$page',
+        style: GoogleFonts.beVietnamPro(
+          fontSize: 12,
+          fontWeight: isActive ? FontWeight.w700 : FontWeight.normal,
+          color: isActive ? Colors.white : const Color(0xFF374151),
+        ),
+      ),
     ),
   );
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// NEW: Batch Detail Modal — the "View" destination for a certificate batch.
+// Shows every recipient in the batch with their certificate/send/evaluation
+// status, plus per-recipient and bulk Resend actions (requirements #3 & #4).
+// ─────────────────────────────────────────────────────────────────────────────
+class _BatchDetailModal extends StatefulWidget {
+  final CertificateBatch batch;
+  final Future<void> Function(CertificateRecord) onResend;
+  final VoidCallback onSendAll;
+  const _BatchDetailModal({
+    required this.batch,
+    required this.onResend,
+    required this.onSendAll,
+  });
+
+  @override
+  State<_BatchDetailModal> createState() => _BatchDetailModalState();
+}
+
+class _BatchDetailModalState extends State<_BatchDetailModal> {
+  final Set<String> _selected = {};
+  bool _isResending = false;
+
+  Future<void> _resendSelected() async {
+    setState(() => _isResending = true);
+    try {
+      final targets = widget.batch.records
+          .where((r) => _selected.contains(r.id))
+          .toList();
+      for (final r in targets) {
+        await widget.onResend(r);
+      }
+      setState(() => _selected.clear());
+    } finally {
+      if (mounted) setState(() => _isResending = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final b = widget.batch;
+    final isDraft = b.batchStatus == 'draft';
+
+    return Dialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+      child: Container(
+        width: 720,
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(context).size.height * 0.85,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.fromLTRB(24, 20, 20, 20),
+              decoration: BoxDecoration(
+                color: UpriseColors.primaryDark,
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(18),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 38,
+                    height: 38,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(
+                      Icons.card_membership_outlined,
+                      color: Colors.white,
+                      size: 18,
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          b.eventName,
+                          style: GoogleFonts.beVietnamPro(
+                            fontSize: 17,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.white,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        Text(
+                          '${b.totalRecipients} recipient(s) · ${b.sentCount} sent',
+                          style: GoogleFonts.beVietnamPro(
+                            fontSize: 11,
+                            color: Colors.white.withOpacity(0.7),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  _batchBadge(b.batchStatus),
+                  const SizedBox(width: 8),
+                  IconButton(
+                    icon: const Icon(
+                      Icons.close_rounded,
+                      color: Colors.white,
+                      size: 20,
+                    ),
+                    tooltip: 'Close',
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: isDraft
+                  ? _buildDraftBody(context, b)
+                  : _buildRecipientList(context, b),
+            ),
+            Container(
+              padding: const EdgeInsets.fromLTRB(24, 14, 24, 18),
+              decoration: const BoxDecoration(
+                border: Border(top: BorderSide(color: Color(0xFFE8ECF0))),
+                color: Color(0xFFF8F9FB),
+                borderRadius: BorderRadius.vertical(
+                  bottom: Radius.circular(18),
+                ),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  if (!isDraft && _selected.isNotEmpty)
+                    Text(
+                      '${_selected.length} selected',
+                      style: GoogleFonts.beVietnamPro(
+                        fontSize: 12,
+                        color: const Color(0xFF64748B),
+                      ),
+                    )
+                  else
+                    const SizedBox.shrink(),
+                  Row(
+                    children: [
+                      if (isDraft)
+                        ElevatedButton.icon(
+                          onPressed: widget.onSendAll,
+                          icon: const Icon(Icons.send_rounded, size: 15),
+                          label: Text(
+                            'Send Certificates',
+                            style: GoogleFonts.beVietnamPro(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: UpriseColors.primaryDark,
+                            foregroundColor: Colors.white,
+                            elevation: 0,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 18,
+                              vertical: 11,
+                            ),
+                          ),
+                        )
+                      else
+                        ElevatedButton.icon(
+                          onPressed: (_selected.isEmpty || _isResending)
+                              ? null
+                              : _resendSelected,
+                          icon: _isResending
+                              ? const SizedBox(
+                                  width: 14,
+                                  height: 14,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Colors.white,
+                                  ),
+                                )
+                              : const Icon(Icons.refresh_rounded, size: 15),
+                          label: Text(
+                            'Resend Selected',
+                            style: GoogleFonts.beVietnamPro(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: UpriseColors.primaryDark,
+                            foregroundColor: Colors.white,
+                            elevation: 0,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 18,
+                              vertical: 11,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDraftBody(BuildContext context, CertificateBatch b) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(24),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: const Color(0xFFEFF6FF),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: const Color(0xFFBFD7FF)),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Icon(
+              Icons.info_outline_rounded,
+              size: 16,
+              color: Color(0xFF2563EB),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                'This batch is still a draft — no certificates have been sent yet. '
+                'Recipients are determined automatically from event attendance and '
+                'evaluation records at send time.',
+                style: GoogleFonts.beVietnamPro(
+                  fontSize: 12.5,
+                  color: const Color(0xFF1D4ED8),
+                  height: 1.5,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRecipientList(BuildContext context, CertificateBatch b) {
+    return ListView.separated(
+      padding: const EdgeInsets.all(16),
+      itemCount: b.records.length,
+      separatorBuilder: (_, __) => const SizedBox(height: 8),
+      itemBuilder: (_, i) {
+        final r = b.records[i];
+        final selected = _selected.contains(r.id);
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          decoration: BoxDecoration(
+            color: selected ? const Color(0xFFF0F6FF) : const Color(0xFFF8F9FB),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: selected
+                  ? UpriseColors.primaryDark.withOpacity(0.4)
+                  : const Color(0xFFE8ECF0),
+            ),
+          ),
+          child: Row(
+            children: [
+              Checkbox(
+                value: selected,
+                onChanged: (v) => setState(() {
+                  if (v == true) {
+                    _selected.add(r.id);
+                  } else {
+                    _selected.remove(r.id);
+                  }
+                }),
+                activeColor: UpriseColors.primaryDark,
+              ),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      r.recipientName ?? 'Unknown recipient',
+                      style: GoogleFonts.beVietnamPro(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: const Color(0xFF1A202C),
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      r.verificationCode != null
+                          ? 'Code: ${r.verificationCode}'
+                          : '—',
+                      style: GoogleFonts.beVietnamPro(
+                        fontSize: 11,
+                        color: const Color(0xFF9AA5B4),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              _sendStatusBadge(r.sendStatus),
+              if (r.resendCount > 0) ...[
+                const SizedBox(width: 6),
+                Text(
+                  '×${r.resendCount + 1}',
+                  style: GoogleFonts.beVietnamPro(
+                    fontSize: 10,
+                    color: const Color(0xFF9AA5B4),
+                  ),
+                ),
+              ],
+              const SizedBox(width: 8),
+              IconButton(
+                icon: const Icon(Icons.refresh_rounded, size: 16),
+                tooltip: 'Resend',
+                color: UpriseColors.primaryDark,
+                onPressed: () => widget.onResend(r),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// NEW: Composite certificate preview — stacks the background, the
+// auto-fit-sized recipient name, and any placed signatories on top of each
+// other. Reused by both the live preview (generate modal) and the read-only
+// certificate view dialog so they can never show something different from
+// each other.
+// ─────────────────────────────────────────────────────────────────────────────
+class _CertificateComposite extends StatelessWidget {
+  final ImageProvider background;
+  final String recipientName;
+  final CertNamePlacement namePlacement;
+  final Map<String, CertNamePlacement> signatoryPlacements; // key -> position
+  final Map<String, SignatoryData> signatories; // key -> resolved signatory
+
+  const _CertificateComposite({
+    required this.background,
+    required this.recipientName,
+    required this.namePlacement,
+    this.signatoryPlacements = const {},
+    this.signatories = const {},
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final boxSize = constraints.biggest;
+        // Auto-resize (requirement #1): reserve ~65% of the canvas width for
+        // the name so it never overflows the certificate layout, regardless
+        // of how long the recipient's name is.
+        final fittedFontSize = _autoFitFontSize(
+          text: recipientName,
+          baseFontSize: namePlacement.fontSize,
+          maxWidthPx: boxSize.width * 0.65,
+        );
+        final effectivePlacement = namePlacement.copyWith(
+          fontSize: fittedFontSize,
+        );
+
+        return Stack(
+          children: [
+            Positioned.fill(
+              child: CertificateImageWithName(
+                recipientName: recipientName,
+                placement: effectivePlacement,
+                background: Image(image: background, fit: BoxFit.cover),
+              ),
+            ),
+            for (final entry in signatoryPlacements.entries)
+              if (signatories.containsKey(entry.key))
+                _buildSignatoryOverlay(
+                  boxSize: boxSize,
+                  placement: entry.value,
+                  signatory: signatories[entry.key]!,
+                ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildSignatoryOverlay({
+    required Size boxSize,
+    required CertNamePlacement placement,
+    required SignatoryData signatory,
+  }) {
+    const overlayWidth = 130.0;
+    final left = (placement.xPct * boxSize.width - overlayWidth / 2)
+        .clamp(0.0, math.max(0.0, boxSize.width - overlayWidth))
+        .toDouble();
+    final top = (placement.yPct * boxSize.height - 30)
+        .clamp(0.0, math.max(0.0, boxSize.height - 60))
+        .toDouble();
+    final textColor = placement.light ? Colors.white : const Color(0xFF1A202C);
+
+    return Positioned(
+      left: left,
+      top: top,
+      width: overlayWidth,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (signatory.signatureBase64 != null)
+            SizedBox(
+              height: 32,
+              child: Image.memory(
+                base64Decode(signatory.signatureBase64!),
+                fit: BoxFit.contain,
+              ),
+            ),
+          Text(
+            signatory.fullName,
+            textAlign: TextAlign.center,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: GoogleFonts.beVietnamPro(
+              fontSize: (placement.fontSize * 0.7).clamp(9, 14),
+              fontWeight: FontWeight.w700,
+              color: textColor,
+            ),
+          ),
+          Text(
+            signatory.title,
+            textAlign: TextAlign.center,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: GoogleFonts.beVietnamPro(
+              fontSize: (placement.fontSize * 0.55).clamp(8, 12),
+              color: textColor.withOpacity(0.85),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Generate Certificate Modal — event comes first, certificates are only
@@ -1249,17 +2435,23 @@ class _GenerateCertificateModal extends StatefulWidget {
   final String selectedTemplateType;
   final String? selectedTemplateUrl;
   final CertificateRecord? existingRecord;
-  const _GenerateCertificateModal({required this.orgId, required this.selectedTemplateType, this.selectedTemplateUrl, this.existingRecord});
+  const _GenerateCertificateModal({
+    required this.orgId,
+    required this.selectedTemplateType,
+    this.selectedTemplateUrl,
+    this.existingRecord,
+  });
 
   @override
-  State<_GenerateCertificateModal> createState() => _GenerateCertificateModalState();
+  State<_GenerateCertificateModal> createState() =>
+      _GenerateCertificateModalState();
 }
 
 class _GenerateCertificateModalState extends State<_GenerateCertificateModal> {
-  final _formKey       = GlobalKey<FormState>();
-  final _titleCtrl     = TextEditingController();
-  final _orgCtrl       = TextEditingController();
-  final _dateCtrl      = TextEditingController();
+  final _formKey = GlobalKey<FormState>();
+  final _titleCtrl = TextEditingController();
+  final _orgCtrl = TextEditingController();
+  final _dateCtrl = TextEditingController();
 
   String? _selectedEventId;
   String? _selectedEventName;
@@ -1268,14 +2460,16 @@ class _GenerateCertificateModalState extends State<_GenerateCertificateModal> {
   // Attendees who showed up AND submitted their event evaluation —
   // these are exactly who "Generate & Distribute" issues a certificate to.
   List<Map<String, String>> _eligibleRecipients = [];
-  int    _attendeeCount = 0;
-  bool   _attendanceSynced = false;
+  int _attendeeCount = 0;
+  bool _attendanceSynced = false;
   bool get _hasEligibleRecipients => _eligibleRecipients.isNotEmpty;
 
   String? _selectedTemplateUrl;
   CertNamePlacement? _selectedTemplatePlacement;
-  String  _certType    = 'Formal Academic';
-  bool    _isSubmitting = false;
+  // NEW: key -> placement for any signatories placed on this template.
+  Map<String, CertNamePlacement> _signatoryPlacements = {};
+  String _certType = 'Formal Academic';
+  bool _isSubmitting = false;
 
   // Pre-filters to only approved proposals that issue certificates. Created
   // once (not a getter) — re-evaluating .snapshots() on every keystroke was
@@ -1288,18 +2482,39 @@ class _GenerateCertificateModalState extends State<_GenerateCertificateModal> {
       .orderBy('date', descending: false)
       .snapshots();
 
+  // NEW: all signatories on file (Admin Settings roster), keyed by
+  // placeholderKey, used to resolve _signatoryPlacements to actual
+  // name/title/signature at preview & submit time.
+  late final Stream<QuerySnapshot> _signatoriesStream = FirebaseFirestore
+      .instance
+      .collection('signatories')
+      .snapshots();
+
   @override
   void initState() {
     super.initState();
     _certType = widget.selectedTemplateType;
     _selectedTemplateUrl = widget.selectedTemplateUrl;
-    _orgCtrl.text  = '';
+    _orgCtrl.text = '';
     _dateCtrl.text = DateFormat('MM/dd/yyyy').format(DateTime.now());
     if (widget.existingRecord != null) {
       _titleCtrl.text = widget.existingRecord!.eventName;
-      _orgCtrl.text   = widget.existingRecord!.organization;
-      _dateCtrl.text  = DateFormat('MM/dd/yyyy').format(widget.existingRecord!.date);
-      _selectedTemplatePlacement = CertNamePlacement.fromMap(widget.existingRecord!.namePlacement);
+      _orgCtrl.text = widget.existingRecord!.organization;
+      _dateCtrl.text = DateFormat(
+        'MM/dd/yyyy',
+      ).format(widget.existingRecord!.date);
+      _selectedTemplatePlacement = CertNamePlacement.fromMap(
+        widget.existingRecord!.namePlacement,
+      );
+      final rawPlacements = widget.existingRecord!.signatoryPlacements;
+      if (rawPlacements != null) {
+        _signatoryPlacements = rawPlacements.map(
+          (k, v) => MapEntry(
+            k,
+            CertNamePlacement.fromMap(Map<String, dynamic>.from(v as Map)),
+          ),
+        );
+      }
     }
   }
 
@@ -1326,7 +2541,20 @@ class _GenerateCertificateModalState extends State<_GenerateCertificateModal> {
       setState(() {
         _certType = result['name']!;
         _selectedTemplateUrl = result['url'];
-        _selectedTemplatePlacement = CertNamePlacement.fromMap(result['namePlacement'] as Map<String, dynamic>?);
+        _selectedTemplatePlacement = CertNamePlacement.fromMap(
+          result['namePlacement'] as Map<String, dynamic>?,
+        );
+        final rawSig = result['signatoryPlacements'] as Map<String, dynamic>?;
+        _signatoryPlacements = rawSig == null
+            ? {}
+            : rawSig.map(
+                (k, v) => MapEntry(
+                  k,
+                  CertNamePlacement.fromMap(
+                    Map<String, dynamic>.from(v as Map),
+                  ),
+                ),
+              );
       });
     }
   }
@@ -1341,54 +2569,81 @@ class _GenerateCertificateModalState extends State<_GenerateCertificateModal> {
     // available; the sample name demonstrates where each real recipient's
     // name will actually land.
     if (_selectedTemplateUrl != null) {
-      return ClipRRect(
-        borderRadius: BorderRadius.circular(12),
-        child: CertificateImageWithName(
-          recipientName: 'Recipient Name',
-          placement: _selectedTemplatePlacement ?? const CertNamePlacement(),
-          background: Image.network(
-            _selectedTemplateUrl!,
-            fit: BoxFit.cover,
-            loadingBuilder: (context, child, progress) => progress == null
-                ? child
-                : Container(color: const Color(0xFFF1F4F8), child: const Center(child: CircularProgressIndicator())),
-            errorBuilder: (_, __, ___) => Container(
-              color: const Color(0xFFF1F4F8),
-              padding: const EdgeInsets.all(16),
-              child: Text('Could not load the custom template image.',
-                  style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF94A3B8)), textAlign: TextAlign.center),
+      return StreamBuilder<QuerySnapshot>(
+        stream: _signatoriesStream,
+        builder: (context, snap) {
+          final signatories = <String, SignatoryData>{
+            for (final doc in (snap.data?.docs ?? []))
+              SignatoryData.fromDoc(doc).placeholderKey: SignatoryData.fromDoc(
+                doc,
+              ),
+          };
+          return ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: _CertificateComposite(
+              recipientName: 'Recipient Name',
+              namePlacement:
+                  _selectedTemplatePlacement ?? const CertNamePlacement(),
+              signatoryPlacements: _signatoryPlacements,
+              signatories: signatories,
+              background: NetworkImage(_selectedTemplateUrl!),
             ),
-          ),
-        ),
+          );
+        },
       );
     }
     return Container(
       decoration: BoxDecoration(
         color: const Color(0xFFF8F9FB),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFE2E6EA), style: BorderStyle.solid),
+        border: Border.all(
+          color: const Color(0xFFE2E6EA),
+          style: BorderStyle.solid,
+        ),
       ),
       child: Center(
         child: Padding(
           padding: const EdgeInsets.all(24),
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
-            Icon(Icons.image_outlined, size: 36, color: const Color(0xFFB8C2CE)),
-            const SizedBox(height: 10),
-            Text('Upload your certificate design to see the live preview',
-                textAlign: TextAlign.center,
-                style: GoogleFonts.beVietnamPro(fontSize: 12.5, color: const Color(0xFF94A3B8))),
-            const SizedBox(height: 12),
-            OutlinedButton.icon(
-              onPressed: _openImportTemplate,
-              icon: const Icon(Icons.upload_file_outlined, size: 14),
-              label: Text('Upload Custom Design', style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.w600)),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: UpriseColors.primaryDark,
-                side: BorderSide(color: UpriseColors.primaryDark.withOpacity(0.4)),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.image_outlined,
+                size: 36,
+                color: const Color(0xFFB8C2CE),
               ),
-            ),
-          ]),
+              const SizedBox(height: 10),
+              Text(
+                'Upload your certificate design to see the live preview',
+                textAlign: TextAlign.center,
+                style: GoogleFonts.beVietnamPro(
+                  fontSize: 12.5,
+                  color: const Color(0xFF94A3B8),
+                ),
+              ),
+              const SizedBox(height: 12),
+              OutlinedButton.icon(
+                onPressed: _openImportTemplate,
+                icon: const Icon(Icons.upload_file_outlined, size: 14),
+                label: Text(
+                  'Upload Custom Design',
+                  style: GoogleFonts.beVietnamPro(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: UpriseColors.primaryDark,
+                  side: BorderSide(
+                    color: UpriseColors.primaryDark.withOpacity(0.4),
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -1401,56 +2656,122 @@ class _GenerateCertificateModalState extends State<_GenerateCertificateModal> {
       builder: (ctx) => Dialog(
         backgroundColor: Colors.transparent,
         insetPadding: const EdgeInsets.all(40),
-        child: Stack(clipBehavior: Clip.none, children: [
-          Container(
-            constraints: const BoxConstraints(maxWidth: 1000),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
-              boxShadow: const [BoxShadow(color: Colors.black54, blurRadius: 32, offset: Offset(0, 12))],
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Container(
+              constraints: const BoxConstraints(maxWidth: 1000),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: const [
+                  BoxShadow(
+                    color: Colors.black54,
+                    blurRadius: 32,
+                    offset: Offset(0, 12),
+                  ),
+                ],
+              ),
+              padding: const EdgeInsets.all(20),
+              child: AspectRatio(
+                aspectRatio: 600 / 424,
+                child: _buildPreviewVisual(),
+              ),
             ),
-            padding: const EdgeInsets.all(20),
-            child: AspectRatio(
-              aspectRatio: 600 / 424,
-              child: _buildPreviewVisual(),
+            Positioned(
+              top: -16,
+              right: -16,
+              child: IconButton(
+                icon: const Icon(Icons.close_rounded, color: Colors.white),
+                style: IconButton.styleFrom(
+                  backgroundColor: Colors.black54,
+                  shape: const CircleBorder(),
+                ),
+                onPressed: () => Navigator.pop(ctx),
+              ),
             ),
-          ),
-          Positioned(
-            top: -16, right: -16,
-            child: IconButton(
-              icon: const Icon(Icons.close_rounded, color: Colors.white),
-              style: IconButton.styleFrom(backgroundColor: Colors.black54, shape: const CircleBorder()),
-              onPressed: () => Navigator.pop(ctx),
-            ),
-          ),
-        ]),
+          ],
+        ),
       ),
     );
+  }
+
+  /// NEW: which placed signatory keys don't have a matching roster entry
+  /// yet. Requirement #2 — block generation with a clear warning instead of
+  /// producing an incomplete certificate.
+  List<String> _missingSignatoryKeys(List<SignatoryData> roster) {
+    final available = roster.map((s) => s.placeholderKey).toSet();
+    return _signatoryPlacements.keys
+        .where((k) => !available.contains(k))
+        .toList();
   }
 
   Future<void> _submit({required bool distribute}) async {
     if (_formKey.currentState?.validate() != true) return;
     if (_selectedTemplateUrl == null) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('Upload your certificate design first.', style: GoogleFonts.beVietnamPro(color: Colors.white)),
-          backgroundColor: UpriseColors.error,
-        ));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Upload your certificate design first.',
+              style: GoogleFonts.beVietnamPro(color: Colors.white),
+            ),
+            backgroundColor: UpriseColors.error,
+          ),
+        );
       }
       return;
     }
     if (distribute && !_hasEligibleRecipients) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('No attendees have completed their evaluation yet — certificates can only be distributed to attendees who attended and evaluated the event.', style: GoogleFonts.beVietnamPro(color: Colors.white)),
-          backgroundColor: UpriseColors.error,
-        ));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'No attendees have completed their evaluation yet — certificates can only be distributed to attendees who attended and evaluated the event.',
+              style: GoogleFonts.beVietnamPro(color: Colors.white),
+            ),
+            backgroundColor: UpriseColors.error,
+          ),
+        );
       }
       return;
     }
+
+    // NEW: verify every placed signatory placeholder still resolves to a
+    // real signatory before allowing a distribute.
+    if (distribute && _signatoryPlacements.isNotEmpty) {
+      final rosterSnap = await FirebaseFirestore.instance
+          .collection('signatories')
+          .get();
+      final roster = rosterSnap.docs
+          .map((d) => SignatoryData.fromDoc(d))
+          .toList();
+      final missing = _missingSignatoryKeys(roster);
+      if (missing.isNotEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'Missing signatory data for: ${missing.join(", ")}. Add them in Admin Settings → Signatories first.',
+                style: GoogleFonts.beVietnamPro(color: Colors.white),
+              ),
+              backgroundColor: UpriseColors.error,
+            ),
+          );
+        }
+        return;
+      }
+    }
+
     setState(() => _isSubmitting = true);
 
-    final eventName = _titleCtrl.text.trim().isNotEmpty ? _titleCtrl.text.trim() : (_selectedEventName ?? 'Untitled');
+    final eventName = _titleCtrl.text.trim().isNotEmpty
+        ? _titleCtrl.text.trim()
+        : (_selectedEventName ?? 'Untitled');
+
+    final signatoryPlacementsMap = {
+      for (final e in _signatoryPlacements.entries) e.key: e.value.toMap(),
+    };
 
     try {
       if (distribute) {
@@ -1462,17 +2783,17 @@ class _GenerateCertificateModalState extends State<_GenerateCertificateModal> {
           final key = r['recipientKey']!;
           final docRef = certsRef.doc('${_selectedEventDocId}_$key');
           batch.set(docRef, {
-            'orgId':            widget.orgId,
-            'eventId':          _selectedEventDocId,
-            'eventName':        eventName,
-            'organization':     _orgCtrl.text.trim(),
-            'templateType':     _certType,
-            'type':             'Participation',
-            'issuedAt':         FieldValue.serverTimestamp(),
-            'status':           'distributed',
-            'recipients':       1,
-            'recipientName':    r['recipientName'],
-            'isGuest':          isGuest,
+            'orgId': widget.orgId,
+            'eventId': _selectedEventDocId,
+            'eventName': eventName,
+            'organization': _orgCtrl.text.trim(),
+            'templateType': _certType,
+            'type': 'Participation',
+            'issuedAt': FieldValue.serverTimestamp(),
+            'status': 'distributed',
+            'recipients': 1,
+            'recipientName': r['recipientName'],
+            'isGuest': isGuest,
             // recipientUid must always be set, guest or not — the student
             // viewer matches certificates by exact recipientUid equality, so
             // a guest's email here will simply never match any real
@@ -1483,78 +2804,121 @@ class _GenerateCertificateModalState extends State<_GenerateCertificateModal> {
             'recipientId': key, 'recipientUid': key,
             if (isGuest) 'recipientEmail': key,
             'verificationCode': _generateVerificationCode(),
-            'autoGenerated':    false,
-            if (_selectedTemplateUrl != null) 'templateFileUrl': _selectedTemplateUrl,
-            if (_selectedTemplateUrl != null) 'namePlacement': (_selectedTemplatePlacement ?? const CertNamePlacement()).toMap(),
+            'autoGenerated': false,
+            if (_selectedTemplateUrl != null)
+              'templateFileUrl': _selectedTemplateUrl,
+            if (_selectedTemplateUrl != null)
+              'namePlacement':
+                  (_selectedTemplatePlacement ?? const CertNamePlacement())
+                      .toMap(),
+            if (signatoryPlacementsMap.isNotEmpty)
+              'signatoryPlacements': signatoryPlacementsMap,
+            // NEW — send-status tracking (requirement #4).
+            'sendStatus': 'sent',
+            'resendCount': 0,
           }, SetOptions(merge: true));
         }
         await batch.commit();
 
         // Guests have no `users` doc to notify against — only students get
         // an in-app notification that their certificate is ready.
-        await Future.wait(_eligibleRecipients
-            .where((r) => r['isGuest'] != 'true')
-            .map((r) => NotificationService.sendToUser(
+        await Future.wait(
+          _eligibleRecipients
+              .where((r) => r['isGuest'] != 'true')
+              .map(
+                (r) => NotificationService.sendToUser(
                   userId: r['recipientKey']!,
                   title: 'Your certificate is ready 🎓',
                   body: 'Your certificate for "$eventName" has been issued.',
                   type: 'certificate',
                   orgId: widget.orgId,
                   data: {'eventId': _selectedEventDocId ?? ''},
-                )));
+                ),
+              ),
+        );
       } else {
         // Draft: a single placeholder record, since no certificates are issued yet.
         final payload = <String, dynamic>{
-          'orgId':        widget.orgId,
-          'eventName':    eventName,
+          'orgId': widget.orgId,
+          'eventName': eventName,
           'organization': _orgCtrl.text.trim(),
           'templateType': _certType,
-          'type':         'Participation',
-          'issuedAt':     FieldValue.serverTimestamp(),
-          'status':       'draft',
-          'recipients':   _eligibleRecipients.length,
-          if (_selectedTemplateUrl != null) 'templateFileUrl': _selectedTemplateUrl,
-          if (_selectedTemplateUrl != null) 'namePlacement': (_selectedTemplatePlacement ?? const CertNamePlacement()).toMap(),
+          'type': 'Participation',
+          'issuedAt': FieldValue.serverTimestamp(),
+          'status': 'draft',
+          'recipients': _eligibleRecipients.length,
+          if (_selectedTemplateUrl != null)
+            'templateFileUrl': _selectedTemplateUrl,
+          if (_selectedTemplateUrl != null)
+            'namePlacement':
+                (_selectedTemplatePlacement ?? const CertNamePlacement())
+                    .toMap(),
+          if (signatoryPlacementsMap.isNotEmpty)
+            'signatoryPlacements': signatoryPlacementsMap,
           if (_selectedEventDocId != null) 'eventId': _selectedEventDocId,
         };
         if (widget.existingRecord != null) {
-  await FirebaseFirestore.instance.collection('certificates').doc(widget.existingRecord!.id).update(payload);
-} else {
-  // Check if a draft already exists for this event
-  final existing = await FirebaseFirestore.instance
-      .collection('certificates')
-      .where('eventId', isEqualTo: _selectedEventDocId)
-      .where('status', isEqualTo: 'draft')
-      .get();
-  if (existing.docs.isNotEmpty) {
-    // Update the existing draft
-    await existing.docs.first.reference.update(payload);
-  } else {
-    // Create new draft
-    await FirebaseFirestore.instance.collection('certificates').add(payload);
-  }
-}
+          await FirebaseFirestore.instance
+              .collection('certificates')
+              .doc(widget.existingRecord!.id)
+              .update(payload);
+        } else {
+          // Check if a draft already exists for this event
+          final existing = await FirebaseFirestore.instance
+              .collection('certificates')
+              .where('eventId', isEqualTo: _selectedEventDocId)
+              .where('status', isEqualTo: 'draft')
+              .get();
+          if (existing.docs.isNotEmpty) {
+            // Update the existing draft
+            await existing.docs.first.reference.update(payload);
+          } else {
+            // Create new draft
+            await FirebaseFirestore.instance
+                .collection('certificates')
+                .add(payload);
+          }
+        }
       }
 
       await activity_log.ActivityLogger.log(
-        action: distribute ? 'generate_distribute_certificate' : 'save_draft_certificate',
+        action: distribute
+            ? 'generate_distribute_certificate'
+            : 'save_draft_certificate',
         module: 'certificates',
-        details: {'orgId': widget.orgId, 'templateType': _certType, 'recipients': _eligibleRecipients.length},
+        details: {
+          'orgId': widget.orgId,
+          'templateType': _certType,
+          'recipients': _eligibleRecipients.length,
+        },
       );
       if (mounted) {
         Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(distribute ? 'Distributed ${_eligibleRecipients.length} certificate(s)!' : 'Saved as draft.',
-              style: GoogleFonts.beVietnamPro(color: Colors.white)),
-          backgroundColor: distribute ? UpriseColors.success : UpriseColors.darkGray,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-        ));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              distribute
+                  ? 'Distributed ${_eligibleRecipients.length} certificate(s)!'
+                  : 'Saved as draft.',
+              style: GoogleFonts.beVietnamPro(color: Colors.white),
+            ),
+            backgroundColor: distribute
+                ? UpriseColors.success
+                : UpriseColors.darkGray,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
+          ),
+        );
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e'), backgroundColor: UpriseColors.error),
+          SnackBar(
+            content: Text('Error: $e'),
+            backgroundColor: UpriseColors.error,
+          ),
         );
       }
     } finally {
@@ -1578,7 +2942,9 @@ class _GenerateCertificateModalState extends State<_GenerateCertificateModal> {
   /// Returns both students (keyed by uid) and guests (keyed by email) —
   /// disambiguated via the 'isGuest' flag ('true'/'false' string, since this
   /// method's `Map<String, String>` signature is relied on elsewhere).
-  Future<List<Map<String, String>>> _fetchEligibleRecipients(String eventDocId) async {
+  Future<List<Map<String, String>>> _fetchEligibleRecipients(
+    String eventDocId,
+  ) async {
     final attSnap = await FirebaseFirestore.instance
         .collection('events')
         .doc(eventDocId)
@@ -1586,9 +2952,9 @@ class _GenerateCertificateModalState extends State<_GenerateCertificateModal> {
         .get();
 
     final feedbackSnap = await FirebaseFirestore.instance
-    .collection('feedback')
-    .where('eventId', isEqualTo: eventDocId)
-    .get();
+        .collection('feedback')
+        .where('eventId', isEqualTo: eventDocId)
+        .get();
     final evaluatedUids = feedbackSnap.docs
         .map((d) => d.data()['userId']?.toString())
         .whereType<String>()
@@ -1638,295 +3004,572 @@ class _GenerateCertificateModalState extends State<_GenerateCertificateModal> {
         // renders at ~600px instead of shrinking to a noticeably smaller,
         // harder to judge preview.
         width: 1080,
-        constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.90),
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(context).size.height * 0.90,
+        ),
         child: Form(
           key: _formKey,
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
-            // ── Header — unchanged ──────────────────────────────────
-            Container(
-              padding: const EdgeInsets.fromLTRB(24, 20, 20, 20),
-              decoration: BoxDecoration(
-                color: UpriseColors.primaryDark,
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(18)),
-              ),
-              child: Row(children: [
-                Container(
-                  width: 38, height: 38,
-                  decoration: BoxDecoration(color: Colors.white.withOpacity(0.15), borderRadius: BorderRadius.circular(10)),
-                  child: const Icon(Icons.workspace_premium_outlined, color: Colors.white, size: 18),
-                ),
-                const SizedBox(width: 14),
-                Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text(isEdit ? 'Edit Certificate' : 'Generate New Certificate',
-                      style: GoogleFonts.beVietnamPro(fontSize: 17, fontWeight: FontWeight.w700, color: Colors.white)),
-                  Text(
-                    'Create certificates only for approved events that issue certificates',
-                    style: GoogleFonts.beVietnamPro(fontSize: 11, color: Colors.white.withOpacity(0.7)),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // ── Header — unchanged ──────────────────────────────────
+              Container(
+                padding: const EdgeInsets.fromLTRB(24, 20, 20, 20),
+                decoration: BoxDecoration(
+                  color: UpriseColors.primaryDark,
+                  borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(18),
                   ),
-                ])),
-                IconButton(
-                  icon: const Icon(Icons.close_rounded, color: Colors.white, size: 20),
-                  tooltip: 'Close',
-                  onPressed: _isSubmitting ? null : () => Navigator.pop(context),
                 ),
-              ]),
-            ),
-            // ── Body ───────────────────────────────────────────────
-            Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(24),
-                child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  // Left — form
-                  Expanded(
-                    flex: 2,
-                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      _sectionLabel('Event & Template', icon: Icons.event_outlined),
-                      _FieldWrapper(
-                        label: 'Select Event *',
-                        child: StreamBuilder<QuerySnapshot>(
-                          stream: _eventsStream,
-                          builder: (context, snapshot) {
-                            final events = snapshot.data?.docs ?? [];
-                            return DropdownButtonFormField<String>(
-                              value: _selectedEventId,
-                              isExpanded: true,
-                              hint: Text(
-                                events.isEmpty
-                                    ? 'No approved certificate events found'
-                                    : 'Choose an approved event',
-                                style: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF9AA5B4)),
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              decoration: _fieldDecoration(),
-                              style: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF1A202C)),
-                              validator: (_) => _selectedEventId == null ? 'Required' : null,
-                              items: events.map((doc) {
-                                final data = doc.data() as Map<String, dynamic>;
-                                return DropdownMenuItem(
-                                  value: doc.id,
-                                  child: Text(data['title'] as String? ?? 'Untitled', overflow: TextOverflow.ellipsis),
-                                );
-                              }).toList(),
-                              onChanged: (v) async {
-                                if (v == null) return;
-                                final doc  = events.firstWhere((d) => d.id == v);
-                                final data = doc.data() as Map<String, dynamic>;
-                                setState(() {
-                                  _selectedEventId   = v;
-                                  _selectedEventName = data['title'] as String?;
-                                  _titleCtrl.text    = _selectedEventName ?? '';
-                                  _orgCtrl.text       = (data['orgName'] as String?) ?? _orgCtrl.text;
-                                  final eventDate = (data['date'] as Timestamp?)?.toDate();
-                                  if (eventDate != null) _dateCtrl.text = DateFormat('MM/dd/yyyy').format(eventDate);
-                                  _selectedEventDocId = null;
-                                  _attendeeCount = 0;
-                                  _attendanceSynced = false;
-                                  _eligibleRecipients = [];
-                                });
-
-                                try {
-                                  final evQ = await FirebaseFirestore.instance
-                                      .collection('events')
-                                      .where('createdFromProposalId', isEqualTo: v)
-                                      .limit(1)
-                                      .get();
-
-                                  if (mounted && evQ.docs.isNotEmpty) {
-                                    final eventDoc = evQ.docs.first;
-                                    final attendeeCount = await _fetchAttendanceCount(eventDoc.id);
-                                    final eligible = await _fetchEligibleRecipients(eventDoc.id);
-                                    if (mounted) {
-                                      setState(() {
-                                        _selectedEventDocId = eventDoc.id;
-                                        _attendeeCount = attendeeCount;
-                                        _eligibleRecipients = eligible;
-                                        _attendanceSynced = true;
-                                      });
-                                    }
-                                  }
-                                } catch (_) {
-                                  // Fall back to proposal-only detection.
-                                }
-                              },
-                            );
-                          },
-                        ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 38,
+                      height: 38,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.15),
+                        borderRadius: BorderRadius.circular(10),
                       ),
-                      const SizedBox(height: 10),
-                      Row(children: [
-                        OutlinedButton.icon(
-                          onPressed: _openImportTemplate,
-                          icon: const Icon(Icons.upload_file_outlined, size: 14),
-                          label: Text('Upload Custom Design', style: GoogleFonts.beVietnamPro(fontSize: 12.5, fontWeight: FontWeight.w600)),
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: UpriseColors.primaryDark,
-                            side: BorderSide(color: UpriseColors.primaryDark.withOpacity(0.4)),
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Text(
-                            'Designed it in Canva or elsewhere? Export as PNG/PDF and upload it here.',
-                            style: GoogleFonts.beVietnamPro(fontSize: 11.5, color: const Color(0xFF94A3B8)),
-                          ),
-                        ),
-                      ]),
-                      const SizedBox(height: 20),
-                      _sectionLabel('Certificate Details', icon: Icons.description_outlined),
-                      _FieldWrapper(
-                        label: 'Certificate Title *',
-                        child: TextFormField(
-                          controller: _titleCtrl,
-                          onChanged: (_) => setState(() {}),
-                          decoration: _fieldDecoration(hint: 'e.g. Certificate of Participation'),
-                          style: GoogleFonts.beVietnamPro(fontSize: 13),
-                          validator: (v) => v?.trim().isEmpty == true ? 'Required' : null,
-                        ),
+                      child: const Icon(
+                        Icons.workspace_premium_outlined,
+                        color: Colors.white,
+                        size: 18,
                       ),
-                      const SizedBox(height: 12),
-                      // Organization, event date, and signatories aren't collected
-                      // here anymore — they're already part of the certificate
-                      // design itself (drawn in Canva), so asking for them again
-                      // would just be duplicate data entry. Organization and date
-                      // are still auto-filled from the selected event above for
-                      // the system's own records (search/filter/export).
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFEFF6FF),
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: const Color(0xFFBFD7FF)),
-                        ),
-                        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                          const Icon(Icons.info_outline_rounded, size: 16, color: Color(0xFF2563EB)),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              'Organization, date, and signatories should already be part of your uploaded design — Uprise only fills in each recipient\'s name.',
-                              style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF1D4ED8), height: 1.4),
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            isEdit
+                                ? 'Edit Certificate'
+                                : 'Generate New Certificate',
+                            style: GoogleFonts.beVietnamPro(
+                              fontSize: 17,
+                              fontWeight: FontWeight.w700,
+                              color: Colors.white,
                             ),
                           ),
-                        ]),
+                          Text(
+                            'Create certificates only for approved events that issue certificates',
+                            style: GoogleFonts.beVietnamPro(
+                              fontSize: 11,
+                              color: Colors.white.withOpacity(0.7),
+                            ),
+                          ),
+                        ],
                       ),
-                      const SizedBox(height: 16),
+                    ),
+                    IconButton(
+                      icon: const Icon(
+                        Icons.close_rounded,
+                        color: Colors.white,
+                        size: 20,
+                      ),
+                      tooltip: 'Close',
+                      onPressed: _isSubmitting
+                          ? null
+                          : () => Navigator.pop(context),
+                    ),
+                  ],
+                ),
+              ),
+              // ── Body ───────────────────────────────────────────────
+              Expanded(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(24),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Left — form
+                      Expanded(
+                        flex: 2,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _sectionLabel(
+                              'Event & Template',
+                              icon: Icons.event_outlined,
+                            ),
+                            _FieldWrapper(
+                              label: 'Select Event *',
+                              child: StreamBuilder<QuerySnapshot>(
+                                stream: _eventsStream,
+                                builder: (context, snapshot) {
+                                  final events = snapshot.data?.docs ?? [];
+                                  return DropdownButtonFormField<String>(
+                                    value: _selectedEventId,
+                                    isExpanded: true,
+                                    hint: Text(
+                                      events.isEmpty
+                                          ? 'No approved certificate events found'
+                                          : 'Choose an approved event',
+                                      style: GoogleFonts.beVietnamPro(
+                                        fontSize: 13,
+                                        color: const Color(0xFF9AA5B4),
+                                      ),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                    decoration: _fieldDecoration(),
+                                    style: GoogleFonts.beVietnamPro(
+                                      fontSize: 13,
+                                      color: const Color(0xFF1A202C),
+                                    ),
+                                    validator: (_) => _selectedEventId == null
+                                        ? 'Required'
+                                        : null,
+                                    items: events.map((doc) {
+                                      final data =
+                                          doc.data() as Map<String, dynamic>;
+                                      return DropdownMenuItem(
+                                        value: doc.id,
+                                        child: Text(
+                                          data['title'] as String? ??
+                                              'Untitled',
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      );
+                                    }).toList(),
+                                    onChanged: (v) async {
+                                      if (v == null) return;
+                                      final doc = events.firstWhere(
+                                        (d) => d.id == v,
+                                      );
+                                      final data =
+                                          doc.data() as Map<String, dynamic>;
+                                      setState(() {
+                                        _selectedEventId = v;
+                                        _selectedEventName =
+                                            data['title'] as String?;
+                                        _titleCtrl.text =
+                                            _selectedEventName ?? '';
+                                        _orgCtrl.text =
+                                            (data['orgName'] as String?) ??
+                                            _orgCtrl.text;
+                                        final eventDate =
+                                            (data['date'] as Timestamp?)
+                                                ?.toDate();
+                                        if (eventDate != null)
+                                          _dateCtrl.text = DateFormat(
+                                            'MM/dd/yyyy',
+                                          ).format(eventDate);
+                                        _selectedEventDocId = null;
+                                        _attendeeCount = 0;
+                                        _attendanceSynced = false;
+                                        _eligibleRecipients = [];
+                                      });
 
-                      // Single recipient-status banner — replaces the recipient
-                      // count field entirely: recipients are always exactly the
-                      // attendees who showed up and submitted their evaluation.
-                      Builder(builder: (_) {
-                        final noEventSelected = _selectedEventId == null;
-                        final checking = !noEventSelected && !_attendanceSynced;
-                        final ready = _hasEligibleRecipients;
-                        final bg = noEventSelected || checking
-                            ? UpriseColors.lightGray
-                            : (ready ? UpriseColors.success.withOpacity(0.18) : UpriseColors.warning.withOpacity(0.18));
-                        final border = noEventSelected || checking
-                            ? UpriseColors.primaryDark.withOpacity(0.12)
-                            : (ready ? UpriseColors.success.withOpacity(0.45) : UpriseColors.warning.withOpacity(0.45));
-                        final fg = noEventSelected || checking
-                            ? UpriseColors.charcoal
-                            : (ready ? UpriseColors.success : UpriseColors.warning);
-                        final icon = noEventSelected || checking
-                            ? Icons.info_outline_rounded
-                            : (ready ? Icons.check_circle_outline_rounded : Icons.warning_amber_rounded);
-                        final message = noEventSelected
-                            ? 'Recipients are detected automatically: certificates go to attendees who attended and completed their event evaluation. Select an event to see who qualifies.'
-                            : checking
-                                ? 'Checking attendance and evaluations…'
-                                : ready
+                                      try {
+                                        final evQ = await FirebaseFirestore
+                                            .instance
+                                            .collection('events')
+                                            .where(
+                                              'createdFromProposalId',
+                                              isEqualTo: v,
+                                            )
+                                            .limit(1)
+                                            .get();
+
+                                        if (mounted && evQ.docs.isNotEmpty) {
+                                          final eventDoc = evQ.docs.first;
+                                          final attendeeCount =
+                                              await _fetchAttendanceCount(
+                                                eventDoc.id,
+                                              );
+                                          final eligible =
+                                              await _fetchEligibleRecipients(
+                                                eventDoc.id,
+                                              );
+                                          if (mounted) {
+                                            setState(() {
+                                              _selectedEventDocId = eventDoc.id;
+                                              _attendeeCount = attendeeCount;
+                                              _eligibleRecipients = eligible;
+                                              _attendanceSynced = true;
+                                            });
+                                          }
+                                        }
+                                      } catch (_) {
+                                        // Fall back to proposal-only detection.
+                                      }
+                                    },
+                                  );
+                                },
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                            Row(
+                              children: [
+                                OutlinedButton.icon(
+                                  onPressed: _openImportTemplate,
+                                  icon: const Icon(
+                                    Icons.upload_file_outlined,
+                                    size: 14,
+                                  ),
+                                  label: Text(
+                                    'Upload Custom Design',
+                                    style: GoogleFonts.beVietnamPro(
+                                      fontSize: 12.5,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                  style: OutlinedButton.styleFrom(
+                                    foregroundColor: UpriseColors.primaryDark,
+                                    side: BorderSide(
+                                      color: UpriseColors.primaryDark
+                                          .withOpacity(0.4),
+                                    ),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 12,
+                                      vertical: 9,
+                                    ),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Text(
+                                    'Designed it in Canva or elsewhere? Export as PNG/PDF and upload it here.',
+                                    style: GoogleFonts.beVietnamPro(
+                                      fontSize: 11.5,
+                                      color: const Color(0xFF94A3B8),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 20),
+                            _sectionLabel(
+                              'Certificate Details',
+                              icon: Icons.description_outlined,
+                            ),
+                            _FieldWrapper(
+                              label: 'Certificate Title *',
+                              child: TextFormField(
+                                controller: _titleCtrl,
+                                onChanged: (_) => setState(() {}),
+                                decoration: _fieldDecoration(
+                                  hint: 'e.g. Certificate of Participation',
+                                ),
+                                style: GoogleFonts.beVietnamPro(fontSize: 13),
+                                validator: (v) => v?.trim().isEmpty == true
+                                    ? 'Required'
+                                    : null,
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            // Organization, event date, and signatories aren't collected
+                            // here anymore — they're already part of the certificate
+                            // design itself (drawn in Canva), so asking for them again
+                            // would just be duplicate data entry. Organization and date
+                            // are still auto-filled from the selected event above for
+                            // the system's own records (search/filter/export).
+                            Container(
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFEFF6FF),
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(
+                                  color: const Color(0xFFBFD7FF),
+                                ),
+                              ),
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Icon(
+                                    Icons.info_outline_rounded,
+                                    size: 16,
+                                    color: Color(0xFF2563EB),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      'Organization and date are auto-filled from the selected event. Signatories placed on your uploaded design (via "Upload Custom Design") are auto-inserted from Admin Settings → Signatories.',
+                                      style: GoogleFonts.beVietnamPro(
+                                        fontSize: 12,
+                                        color: const Color(0xFF1D4ED8),
+                                        height: 1.4,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            // NEW: surfaces any placed signatory placeholders
+                            // that no longer resolve to a roster entry.
+                            if (_signatoryPlacements.isNotEmpty)
+                              StreamBuilder<QuerySnapshot>(
+                                stream: _signatoriesStream,
+                                builder: (context, snap) {
+                                  final roster = (snap.data?.docs ?? [])
+                                      .map((d) => SignatoryData.fromDoc(d))
+                                      .toList();
+                                  final missing = _missingSignatoryKeys(roster);
+                                  if (missing.isEmpty) {
+                                    return Container(
+                                      margin: const EdgeInsets.only(bottom: 12),
+                                      padding: const EdgeInsets.all(10),
+                                      decoration: BoxDecoration(
+                                        color: UpriseColors.success.withOpacity(
+                                          0.12,
+                                        ),
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      child: Text(
+                                        '${_signatoryPlacements.length} signatory placeholder(s) placed and matched.',
+                                        style: GoogleFonts.beVietnamPro(
+                                          fontSize: 11.5,
+                                          color: UpriseColors.success,
+                                        ),
+                                      ),
+                                    );
+                                  }
+                                  return Container(
+                                    margin: const EdgeInsets.only(bottom: 12),
+                                    padding: const EdgeInsets.all(10),
+                                    decoration: BoxDecoration(
+                                      color: UpriseColors.warning.withOpacity(
+                                        0.14,
+                                      ),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Text(
+                                      'Missing signatory data for: ${missing.join(", ")}. Add them in Admin Settings → Signatories.',
+                                      style: GoogleFonts.beVietnamPro(
+                                        fontSize: 11.5,
+                                        color: UpriseColors.warning,
+                                      ),
+                                    ),
+                                  );
+                                },
+                              ),
+
+                            // Single recipient-status banner — replaces the recipient
+                            // count field entirely: recipients are always exactly the
+                            // attendees who showed up and submitted their evaluation.
+                            Builder(
+                              builder: (_) {
+                                final noEventSelected =
+                                    _selectedEventId == null;
+                                final checking =
+                                    !noEventSelected && !_attendanceSynced;
+                                final ready = _hasEligibleRecipients;
+                                final bg = noEventSelected || checking
+                                    ? UpriseColors.lightGray
+                                    : (ready
+                                          ? UpriseColors.success.withOpacity(
+                                              0.18,
+                                            )
+                                          : UpriseColors.warning.withOpacity(
+                                              0.18,
+                                            ));
+                                final border = noEventSelected || checking
+                                    ? UpriseColors.primaryDark.withOpacity(0.12)
+                                    : (ready
+                                          ? UpriseColors.success.withOpacity(
+                                              0.45,
+                                            )
+                                          : UpriseColors.warning.withOpacity(
+                                              0.45,
+                                            ));
+                                final fg = noEventSelected || checking
+                                    ? UpriseColors.charcoal
+                                    : (ready
+                                          ? UpriseColors.success
+                                          : UpriseColors.warning);
+                                final icon = noEventSelected || checking
+                                    ? Icons.info_outline_rounded
+                                    : (ready
+                                          ? Icons.check_circle_outline_rounded
+                                          : Icons.warning_amber_rounded);
+                                final message = noEventSelected
+                                    ? 'Recipients are detected automatically: certificates go to attendees who attended and completed their event evaluation. Select an event to see who qualifies.'
+                                    : checking
+                                    ? 'Checking attendance and evaluations…'
+                                    : ready
                                     ? '${_eligibleRecipients.length} of $_attendeeCount attendee(s) evaluated the event and will receive a certificate.'
                                     : '$_attendeeCount attendee(s) recorded, but none have submitted their evaluation yet. You can save a draft — "Generate & Distribute" unlocks once at least one attendee evaluates.';
-                        return Container(
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: bg,
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: border),
-                          ),
-                          child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                            Icon(icon, size: 16, color: fg),
-                            const SizedBox(width: 8),
-                            Expanded(child: Text(message, style: GoogleFonts.beVietnamPro(fontSize: 12, color: fg, height: 1.4))),
-                          ]),
-                        );
-                      }),
-                    ]),
-                  ),
-                  const SizedBox(width: 24),
-                  // Right — live preview
-                  Expanded(
-                    flex: 3,
-                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      Row(children: [
-                        Expanded(child: _sectionLabel('Live Preview', icon: Icons.preview_outlined)),
-                        IconButton(
-                          icon: const Icon(Icons.zoom_out_map_rounded, size: 16, color: UpriseColors.darkGray),
-                          tooltip: 'View larger',
-                          padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
-                          onPressed: () => _showPreviewFullscreen(),
+                                return Container(
+                                  padding: const EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    color: bg,
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(color: border),
+                                  ),
+                                  child: Row(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Icon(icon, size: 16, color: fg),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: Text(
+                                          message,
+                                          style: GoogleFonts.beVietnamPro(
+                                            fontSize: 12,
+                                            color: fg,
+                                            height: 1.4,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              },
+                            ),
+                          ],
                         ),
-                        if (_selectedTemplateUrl != null)
-                          TextButton(
-                            onPressed: () => setState(() {
-                              _selectedTemplateUrl = null;
-                              _selectedTemplatePlacement = null;
-                            }),
-                            style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 6), minimumSize: Size.zero),
-                            child: Text('Remove design', style: GoogleFonts.beVietnamPro(fontSize: 11.5, color: UpriseColors.primaryDark)),
-                          ),
-                      ]),
-                      const SizedBox(height: 4),
-                      AspectRatio(
-                        aspectRatio: 600 / 424,
-                        child: _buildPreviewVisual(),
                       ),
-                    ]),
+                      const SizedBox(width: 24),
+                      // Right — live preview
+                      Expanded(
+                        flex: 3,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: _sectionLabel(
+                                    'Live Preview',
+                                    icon: Icons.preview_outlined,
+                                  ),
+                                ),
+                                IconButton(
+                                  icon: const Icon(
+                                    Icons.zoom_out_map_rounded,
+                                    size: 16,
+                                    color: UpriseColors.darkGray,
+                                  ),
+                                  tooltip: 'View larger',
+                                  padding: EdgeInsets.zero,
+                                  constraints: const BoxConstraints(
+                                    minWidth: 28,
+                                    minHeight: 28,
+                                  ),
+                                  onPressed: () => _showPreviewFullscreen(),
+                                ),
+                                if (_selectedTemplateUrl != null)
+                                  TextButton(
+                                    onPressed: () => setState(() {
+                                      _selectedTemplateUrl = null;
+                                      _selectedTemplatePlacement = null;
+                                      _signatoryPlacements = {};
+                                    }),
+                                    style: TextButton.styleFrom(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 6,
+                                      ),
+                                      minimumSize: Size.zero,
+                                    ),
+                                    child: Text(
+                                      'Remove design',
+                                      style: GoogleFonts.beVietnamPro(
+                                        fontSize: 11.5,
+                                        color: UpriseColors.primaryDark,
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                            const SizedBox(height: 4),
+                            AspectRatio(
+                              aspectRatio: 600 / 424,
+                              child: _buildPreviewVisual(),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
-                ]),
-              ),
-            ),
-            // ── Footer ─────────────────────────────────────────────
-            Container(
-              padding: const EdgeInsets.fromLTRB(24, 16, 24, 20),
-              decoration: BoxDecoration(
-                border: Border(top: BorderSide(color: UpriseColors.mediumGray)),
-                color: UpriseColors.lightGray,
-                borderRadius: BorderRadius.vertical(bottom: Radius.circular(18)),
-              ),
-              child: Row(mainAxisAlignment: MainAxisAlignment.end, children: [
-                OutlinedButton(
-                  onPressed: _isSubmitting ? null : () => _submit(distribute: false),
-                  style: OutlinedButton.styleFrom(
-                    side: BorderSide(color: UpriseColors.mediumGray),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 11),
-                  ),
-                  child: Text('Save as Draft', style: GoogleFonts.beVietnamPro(fontSize: 13, color: UpriseColors.charcoal)),
                 ),
-                const SizedBox(width: 12),
-                // Disabled until a design is uploaded and at least one attendee has evaluated the event
-                ElevatedButton.icon(
-                  onPressed: (_isSubmitting || _selectedTemplateUrl == null || (_selectedEventId != null && !_hasEligibleRecipients))
-                      ? null
-                      : () => _submit(distribute: true),
-                  icon: _isSubmitting
-                      ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                      : const Icon(Icons.send_rounded, size: 16),
-                  label: Text('Generate & Distribute', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600)),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: UpriseColors.primaryDark,
-                    foregroundColor: Colors.white,
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 11),
+              ),
+              // ── Footer ─────────────────────────────────────────────
+              Container(
+                padding: const EdgeInsets.fromLTRB(24, 16, 24, 20),
+                decoration: BoxDecoration(
+                  border: Border(
+                    top: BorderSide(color: UpriseColors.mediumGray),
+                  ),
+                  color: UpriseColors.lightGray,
+                  borderRadius: BorderRadius.vertical(
+                    bottom: Radius.circular(18),
                   ),
                 ),
-              ]),
-            ),
-          ]),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    OutlinedButton(
+                      onPressed: _isSubmitting
+                          ? null
+                          : () => _submit(distribute: false),
+                      style: OutlinedButton.styleFrom(
+                        side: BorderSide(color: UpriseColors.mediumGray),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 18,
+                          vertical: 11,
+                        ),
+                      ),
+                      child: Text(
+                        'Save as Draft',
+                        style: GoogleFonts.beVietnamPro(
+                          fontSize: 13,
+                          color: UpriseColors.charcoal,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    // Disabled until a design is uploaded and at least one attendee has evaluated the event
+                    ElevatedButton.icon(
+                      onPressed:
+                          (_isSubmitting ||
+                              _selectedTemplateUrl == null ||
+                              (_selectedEventId != null &&
+                                  !_hasEligibleRecipients))
+                          ? null
+                          : () => _submit(distribute: true),
+                      icon: _isSubmitting
+                          ? const SizedBox(
+                              width: 14,
+                              height: 14,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
+                          : const Icon(Icons.send_rounded, size: 16),
+                      label: Text(
+                        'Generate & Distribute',
+                        style: GoogleFonts.beVietnamPro(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: UpriseColors.primaryDark,
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 20,
+                          vertical: 11,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -1941,17 +3584,28 @@ class _FieldWrapper extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Text(label, style: GoogleFonts.beVietnamPro(fontSize: 12, fontWeight: FontWeight.w600, color: const Color(0xFF374151))),
-      const SizedBox(height: 6),
-      child,
-    ]);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: GoogleFonts.beVietnamPro(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: const Color(0xFF374151),
+          ),
+        ),
+        const SizedBox(height: 6),
+        child,
+      ],
+    );
   }
 }
 
-// One row in the repeatable signatories list: name, title, signature import.
 // ─────────────────────────────────────────────────────────────────────────────
-// Certificate Preview Dialog (view mode) — unchanged
+// Certificate Preview Dialog (view mode) — now renders through the shared
+// _CertificateComposite so signatories placed on the template appear here
+// too, and the recipient name auto-fits regardless of its length.
 // ─────────────────────────────────────────────────────────────────────────────
 class _CertPreviewDialog extends StatelessWidget {
   final CertificateRecord record;
@@ -1963,86 +3617,179 @@ class _CertPreviewDialog extends StatelessWidget {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
       child: SizedBox(
         width: 440,
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          Container(
-            padding: const EdgeInsets.fromLTRB(24, 20, 20, 20),
-            decoration: BoxDecoration(
-              color: UpriseColors.primaryDark,
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(18)),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.fromLTRB(24, 20, 20, 20),
+              decoration: BoxDecoration(
+                color: UpriseColors.primaryDark,
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(18),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 38,
+                    height: 38,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(
+                      Icons.card_membership_outlined,
+                      color: Colors.white,
+                      size: 18,
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          record.certificateId,
+                          style: GoogleFonts.beVietnamPro(
+                            fontSize: 17,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.white,
+                          ),
+                        ),
+                        Text(
+                          record.eventName,
+                          style: GoogleFonts.beVietnamPro(
+                            fontSize: 11,
+                            color: Colors.white.withOpacity(0.7),
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+                  _certBadge(record.status),
+                  const SizedBox(width: 8),
+                  IconButton(
+                    icon: const Icon(
+                      Icons.close_rounded,
+                      color: Colors.white,
+                      size: 20,
+                    ),
+                    tooltip: 'Close',
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ],
+              ),
             ),
-            child: Row(children: [
-              Container(
-                width: 38, height: 38,
-                decoration: BoxDecoration(color: Colors.white.withOpacity(0.15), borderRadius: BorderRadius.circular(10)),
-                child: const Icon(Icons.card_membership_outlined, color: Colors.white, size: 18),
-              ),
-              const SizedBox(width: 14),
-              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text(record.certificateId,
-                    style: GoogleFonts.beVietnamPro(fontSize: 17, fontWeight: FontWeight.w700, color: Colors.white)),
-                Text(record.eventName,
-                    style: GoogleFonts.beVietnamPro(fontSize: 11, color: Colors.white.withOpacity(0.7)),
-                    overflow: TextOverflow.ellipsis),
-              ])),
-              _certBadge(record.status),
-              const SizedBox(width: 8),
-              IconButton(
-                icon: const Icon(Icons.close_rounded, color: Colors.white, size: 20),
-                tooltip: 'Close',
-                onPressed: () => Navigator.pop(context),
-              ),
-            ]),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(24),
-            child: record.templateFileUrl != null
-                ? AspectRatio(
-                    aspectRatio: 600 / 424,
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(12),
-                      child: CertificateImageWithName(
-                        recipientName: record.recipientName ?? '[Recipient Name]',
-                        placement: CertNamePlacement.fromMap(record.namePlacement),
-                        background: Image.network(record.templateFileUrl!, fit: BoxFit.cover),
+            Padding(
+              padding: const EdgeInsets.all(24),
+              child: record.templateFileUrl != null
+                  ? AspectRatio(
+                      aspectRatio: 600 / 424,
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(12),
+                        child: StreamBuilder<QuerySnapshot>(
+                          stream: FirebaseFirestore.instance
+                              .collection('signatories')
+                              .snapshots(),
+                          builder: (context, snap) {
+                            final signatories = <String, SignatoryData>{
+                              for (final doc in (snap.data?.docs ?? []))
+                                SignatoryData.fromDoc(doc).placeholderKey:
+                                    SignatoryData.fromDoc(doc),
+                            };
+                            final sigPlacements =
+                                record.signatoryPlacements?.map(
+                                  (k, v) => MapEntry(
+                                    k,
+                                    CertNamePlacement.fromMap(
+                                      Map<String, dynamic>.from(v as Map),
+                                    ),
+                                  ),
+                                ) ??
+                                <String, CertNamePlacement>{};
+                            return _CertificateComposite(
+                              recipientName:
+                                  record.recipientName ?? '[Recipient Name]',
+                              namePlacement: CertNamePlacement.fromMap(
+                                record.namePlacement,
+                              ),
+                              signatoryPlacements: sigPlacements,
+                              signatories: signatories,
+                              background: NetworkImage(record.templateFileUrl!),
+                            );
+                          },
+                        ),
+                      ),
+                    )
+                  : CertificatePreview(
+                      theme: CertTheme.forType(
+                        record.templateType,
+                        primaryDark: UpriseColors.primaryDark,
+                        primaryLight: UpriseColors.primaryLight,
+                        accentColor: UpriseColors.accent,
+                      ),
+                      orgName: record.organization,
+                      eventTitle: record.eventName,
+                      eventDate: DateFormat(
+                        'MMMM dd, yyyy',
+                      ).format(record.date),
+                      recipient: record.recipientName ?? '[Recipient Name]',
+                      signatories: record.signatories.isNotEmpty
+                          ? record.signatories
+                                .map(
+                                  (s) => CertSignatory(
+                                    name: (s['name'] ?? '').toString(),
+                                    title: (s['title'] ?? '').toString(),
+                                    signatureImageBase64:
+                                        s['signatureImage'] as String?,
+                                  ),
+                                )
+                                .toList()
+                          : (record.signatureImage != null
+                                ? [
+                                    CertSignatory(
+                                      name: 'Authorized Signatory',
+                                      signatureImageBase64:
+                                          record.signatureImage,
+                                    ),
+                                  ]
+                                : const []),
+                      verificationCode: record.verificationCode,
+                    ),
+            ),
+            Container(
+              padding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  ElevatedButton(
+                    onPressed: () => Navigator.pop(context),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: UpriseColors.primaryDark,
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 20,
+                        vertical: 11,
                       ),
                     ),
-                  )
-                : CertificatePreview(
-                    theme: CertTheme.forType(record.templateType,
-                        primaryDark: UpriseColors.primaryDark, primaryLight: UpriseColors.primaryLight, accentColor: UpriseColors.accent),
-                    orgName:   record.organization,
-                    eventTitle: record.eventName,
-                    eventDate:  DateFormat('MMMM dd, yyyy').format(record.date),
-                    recipient:  record.recipientName ?? '[Recipient Name]',
-                    signatories: record.signatories.isNotEmpty
-                        ? record.signatories.map((s) => CertSignatory(
-                              name: (s['name'] ?? '').toString(),
-                              title: (s['title'] ?? '').toString(),
-                              signatureImageBase64: s['signatureImage'] as String?,
-                            )).toList()
-                        : (record.signatureImage != null
-                            ? [CertSignatory(name: 'Authorized Signatory', signatureImageBase64: record.signatureImage)]
-                            : const []),
-                    verificationCode: record.verificationCode,
+                    child: Text(
+                      'Close',
+                      style: GoogleFonts.beVietnamPro(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                   ),
-          ),
-          Container(
-            padding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
-            child: Row(mainAxisAlignment: MainAxisAlignment.end, children: [
-              ElevatedButton(
-                onPressed: () => Navigator.pop(context),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: UpriseColors.primaryDark,
-                  foregroundColor: Colors.white,
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 11),
-                ),
-                child: Text('Close', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600)),
+                ],
               ),
-            ]),
-          ),
-        ]),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -2050,7 +3797,8 @@ class _CertPreviewDialog extends StatelessWidget {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Import Template Modal — upload a design exported from Canva (or anywhere
-// else) as the certificate background.
+// else) as the certificate background. Now also lets the org place
+// signatory placeholders (requirement #2) alongside the recipient name.
 // ─────────────────────────────────────────────────────────────────────────────
 class _ImportTemplateModal extends StatefulWidget {
   final String orgId;
@@ -2066,10 +3814,18 @@ class _ImportTemplateModalState extends State<_ImportTemplateModal> {
   bool _isUploading = false;
   CertNamePlacement _placement = const CertNamePlacement();
 
+  // NEW: signatory placeholders placed on this template — key -> position.
+  final Map<String, CertNamePlacement> _signatoryPlacements = {};
+  String? _activeSignatoryKey; // which chip is currently being dragged/edited
+
   static const int _maxBytes = 5 * 1024 * 1024; // 5 MB
 
   Future<void> _pickFile() async {
-    final res = await FilePicker.platform.pickFiles(withData: true, type: FileType.custom, allowedExtensions: ['png', 'jpg', 'jpeg', 'pdf']);
+    final res = await FilePicker.platform.pickFiles(
+      withData: true,
+      type: FileType.custom,
+      allowedExtensions: ['png', 'jpg', 'jpeg', 'pdf'],
+    );
     if (res == null || res.files.isEmpty) return;
     final picked = res.files.first;
     // Caught here, before attempting the upload — otherwise an oversized file
@@ -2077,70 +3833,89 @@ class _ImportTemplateModalState extends State<_ImportTemplateModal> {
     // like the picker is just hanging and then mysteriously failing.
     if ((picked.size) > _maxBytes) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('${picked.name} is ${(picked.size / (1024 * 1024)).toStringAsFixed(1)} MB — max size is 5 MB.'),
-          backgroundColor: UpriseColors.error,
-        ));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              '${picked.name} is ${(picked.size / (1024 * 1024)).toStringAsFixed(1)} MB — max size is 5 MB.',
+            ),
+            backgroundColor: UpriseColors.error,
+          ),
+        );
       }
       return;
     }
     setState(() => _file = picked);
   }
 
-Future<void> _upload() async {
-  if (_file == null || _name?.trim().isEmpty == true) return;
-  setState(() => _isUploading = true);
+  Future<void> _upload() async {
+    if (_file == null || _name?.trim().isEmpty == true) return;
+    setState(() => _isUploading = true);
 
-  try {
-    final data = _file!.bytes;
-    if (data == null) throw Exception('File data is null');
+    try {
+      final data = _file!.bytes;
+      if (data == null) throw Exception('File data is null');
 
-    const cloudName = 'igawal9n';     // <- palitan
-    const uploadPreset = 'uprise_certs'; // <- palitan
+      const cloudName = 'igawal9n'; // <- palitan
+      const uploadPreset = 'uprise_certs'; // <- palitan
 
-    final uri = Uri.parse('https://api.cloudinary.com/v1_1/$cloudName/auto/upload');
-    final request = http.MultipartRequest('POST', uri)
-      ..fields['upload_preset'] = uploadPreset
-      ..files.add(http.MultipartFile.fromBytes('file', data, filename: _file!.name));
+      final uri = Uri.parse(
+        'https://api.cloudinary.com/v1_1/$cloudName/auto/upload',
+      );
+      final request = http.MultipartRequest('POST', uri)
+        ..fields['upload_preset'] = uploadPreset
+        ..files.add(
+          http.MultipartFile.fromBytes('file', data, filename: _file!.name),
+        );
 
-    final streamedResponse = await request.send();
-    final response = await http.Response.fromStream(streamedResponse);
+      final streamedResponse = await request.send();
+      final response = await http.Response.fromStream(streamedResponse);
 
-    if (response.statusCode != 200) {
-      throw Exception('Upload failed: ${response.body}');
-    }
+      if (response.statusCode != 200) {
+        throw Exception('Upload failed: ${response.body}');
+      }
 
-    final json = jsonDecode(response.body);
-    final url = json['secure_url'] as String;
+      final json = jsonDecode(response.body);
+      final url = json['secure_url'] as String;
 
-    await FirebaseFirestore.instance.collection('certificate_templates').add({
-      'orgId': widget.orgId,
-      'name': _name!.trim(),
-      'url': url,
-      'namePlacement': _placement.toMap(),
-      'createdAt': FieldValue.serverTimestamp(),
-    });
+      final signatoryPlacementsMap = {
+        for (final e in _signatoryPlacements.entries) e.key: e.value.toMap(),
+      };
 
-    if (mounted) {
-      Navigator.pop(context, {
+      await FirebaseFirestore.instance.collection('certificate_templates').add({
+        'orgId': widget.orgId,
         'name': _name!.trim(),
         'url': url,
         'namePlacement': _placement.toMap(),
+        if (signatoryPlacementsMap.isNotEmpty)
+          'signatoryPlacements': signatoryPlacementsMap,
+        'createdAt': FieldValue.serverTimestamp(),
       });
+
+      if (mounted) {
+        Navigator.pop(context, {
+          'name': _name!.trim(),
+          'url': url,
+          'namePlacement': _placement.toMap(),
+          'signatoryPlacements': signatoryPlacementsMap,
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: $e'),
+            backgroundColor: UpriseColors.error,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isUploading = false);
     }
-  } catch (e) {
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: $e'), backgroundColor: UpriseColors.error),
-      );
-    }
-  } finally {
-    if (mounted) setState(() => _isUploading = false);
   }
-}
+
   // Lets the org drag the recipient's name onto the right spot on their
-  // uploaded design — everything else (org/event info, signatories) is
-  // already part of the image, so this is the only configurable part.
+  // uploaded design — everything else (org/event info) is already part of
+  // the image except signatories, which can now also be placed here.
   // Position is stored as 0..1 fractions of the image, not pixels, so it
   // stays correct regardless of how big the image is rendered later.
   Widget _buildPositionPicker() {
@@ -2151,7 +3926,10 @@ Future<void> _upload() async {
         padding: const EdgeInsets.only(top: 14),
         child: Text(
           'PDF uploads use a centered default position for the recipient\'s name. Pick PNG/JPG instead to position it yourself.',
-          style: GoogleFonts.beVietnamPro(fontSize: 11.5, color: const Color(0xFF94A3B8)),
+          style: GoogleFonts.beVietnamPro(
+            fontSize: 11.5,
+            color: const Color(0xFF94A3B8),
+          ),
         ),
       );
     }
@@ -2160,87 +3938,334 @@ Future<void> _upload() async {
 
     return Padding(
       padding: const EdgeInsets.only(top: 14),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text('Position the recipient\'s name',
-            style: GoogleFonts.beVietnamPro(fontSize: 12.5, fontWeight: FontWeight.w600, color: const Color(0xFF374151))),
-        const SizedBox(height: 4),
-        Text('Drag the label onto the right spot — everything else is already in your design.',
-            style: GoogleFonts.beVietnamPro(fontSize: 11, color: const Color(0xFF94A3B8))),
-        const SizedBox(height: 10),
-        ClipRRect(
-          borderRadius: BorderRadius.circular(_DS.radiusSm),
-          child: AspectRatio(
-            aspectRatio: 600 / 424,
-            child: LayoutBuilder(builder: (context, constraints) {
-              final boxSize = constraints.biggest;
-              return Stack(children: [
-                Positioned.fill(child: Image.memory(bytes, fit: BoxFit.cover)),
-                Positioned(
-                  left: (_placement.xPct * boxSize.width - 60).clamp(0.0, boxSize.width - 120),
-                  top: (_placement.yPct * boxSize.height - 14).clamp(0.0, boxSize.height - 28),
-                  width: 120,
-                  child: GestureDetector(
-                    onPanUpdate: (details) {
-                      setState(() {
-                        final newX = (_placement.xPct * boxSize.width + details.delta.dx).clamp(0.0, boxSize.width);
-                        final newY = (_placement.yPct * boxSize.height + details.delta.dy).clamp(0.0, boxSize.height);
-                        _placement = _placement.copyWith(xPct: newX / boxSize.width, yPct: newY / boxSize.height);
-                      });
-                    },
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: (_placement.light ? Colors.black : Colors.white).withAlpha(180),
-                        borderRadius: BorderRadius.circular(6),
-                        border: Border.all(color: UpriseColors.primaryDark, width: 1.5),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Position the recipient\'s name',
+            style: GoogleFonts.beVietnamPro(
+              fontSize: 12.5,
+              fontWeight: FontWeight.w600,
+              color: const Color(0xFF374151),
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Drag the labels onto the right spots — everything else is already in your design. Tap "Add Signatory" below to place a signatory placeholder too.',
+            style: GoogleFonts.beVietnamPro(
+              fontSize: 11,
+              color: const Color(0xFF94A3B8),
+            ),
+          ),
+          const SizedBox(height: 10),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(_DS.radiusSm),
+            child: AspectRatio(
+              aspectRatio: 600 / 424,
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final boxSize = constraints.biggest;
+                  return Stack(
+                    children: [
+                      Positioned.fill(
+                        child: Image.memory(bytes, fit: BoxFit.cover),
                       ),
-                      child: Text(
-                        'Recipient Name',
-                        textAlign: TextAlign.center,
-                        style: GoogleFonts.beVietnamPro(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700,
-                          fontStyle: FontStyle.italic,
-                          color: _placement.light ? Colors.white : const Color(0xFF1A202C),
+                      Positioned(
+                        left: (_placement.xPct * boxSize.width - 60).clamp(
+                          0.0,
+                          boxSize.width - 120,
+                        ),
+                        top: (_placement.yPct * boxSize.height - 14).clamp(
+                          0.0,
+                          boxSize.height - 28,
+                        ),
+                        width: 120,
+                        child: GestureDetector(
+                          onPanUpdate: (details) {
+                            setState(() {
+                              final newX =
+                                  (_placement.xPct * boxSize.width +
+                                          details.delta.dx)
+                                      .clamp(0.0, boxSize.width);
+                              final newY =
+                                  (_placement.yPct * boxSize.height +
+                                          details.delta.dy)
+                                      .clamp(0.0, boxSize.height);
+                              _placement = _placement.copyWith(
+                                xPct: newX / boxSize.width,
+                                yPct: newY / boxSize.height,
+                              );
+                            });
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color:
+                                  (_placement.light
+                                          ? Colors.black
+                                          : Colors.white)
+                                      .withAlpha(180),
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(
+                                color: UpriseColors.primaryDark,
+                                width: 1.5,
+                              ),
+                            ),
+                            child: Text(
+                              'Recipient Name',
+                              textAlign: TextAlign.center,
+                              style: GoogleFonts.beVietnamPro(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w700,
+                                fontStyle: FontStyle.italic,
+                                color: _placement.light
+                                    ? Colors.white
+                                    : const Color(0xFF1A202C),
+                              ),
+                            ),
+                          ),
                         ),
                       ),
+                      // NEW: draggable chips for each placed signatory.
+                      for (final entry in _signatoryPlacements.entries)
+                        Positioned(
+                          left: (entry.value.xPct * boxSize.width - 45).clamp(
+                            0.0,
+                            math.max(0.0, boxSize.width - 90),
+                          ),
+                          top: (entry.value.yPct * boxSize.height - 12).clamp(
+                            0.0,
+                            math.max(0.0, boxSize.height - 24),
+                          ),
+                          width: 90,
+                          child: GestureDetector(
+                            onPanUpdate: (details) {
+                              setState(() {
+                                final current =
+                                    _signatoryPlacements[entry.key]!;
+                                final newX =
+                                    (current.xPct * boxSize.width +
+                                            details.delta.dx)
+                                        .clamp(0.0, boxSize.width);
+                                final newY =
+                                    (current.yPct * boxSize.height +
+                                            details.delta.dy)
+                                        .clamp(0.0, boxSize.height);
+                                _signatoryPlacements[entry.key] = current
+                                    .copyWith(
+                                      xPct: newX / boxSize.width,
+                                      yPct: newY / boxSize.height,
+                                    );
+                              });
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6,
+                                vertical: 3,
+                              ),
+                              decoration: BoxDecoration(
+                                color: UpriseColors.primaryDark.withAlpha(210),
+                                borderRadius: BorderRadius.circular(6),
+                                border: Border.all(color: Colors.white),
+                              ),
+                              child: Text(
+                                '{{${entry.key}}}',
+                                textAlign: TextAlign.center,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: GoogleFonts.beVietnamPro(
+                                  fontSize: 10.5,
+                                  fontWeight: FontWeight.w700,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
+                  );
+                },
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Size',
+                      style: GoogleFonts.beVietnamPro(
+                        fontSize: 11,
+                        color: const Color(0xFF94A3B8),
+                      ),
+                    ),
+                    Slider(
+                      value: _placement.fontSize,
+                      min: 10,
+                      max: 36,
+                      activeColor: UpriseColors.primaryDark,
+                      onChanged: (v) => setState(
+                        () => _placement = _placement.copyWith(fontSize: v),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 10),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Text Color',
+                    style: GoogleFonts.beVietnamPro(
+                      fontSize: 11,
+                      color: const Color(0xFF94A3B8),
                     ),
                   ),
-                ),
-              ]);
-            }),
-          ),
-        ),
-        const SizedBox(height: 12),
-        Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Expanded(
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text('Size', style: GoogleFonts.beVietnamPro(fontSize: 11, color: const Color(0xFF94A3B8))),
-              Slider(
-                value: _placement.fontSize,
-                min: 10,
-                max: 36,
-                activeColor: UpriseColors.primaryDark,
-                onChanged: (v) => setState(() => _placement = _placement.copyWith(fontSize: v)),
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      _colorChoiceChip(
+                        label: 'Dark',
+                        selected: !_placement.light,
+                        onTap: () => setState(
+                          () => _placement = _placement.copyWith(light: false),
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      _colorChoiceChip(
+                        label: 'Light',
+                        selected: _placement.light,
+                        onTap: () => setState(
+                          () => _placement = _placement.copyWith(light: true),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
               ),
-            ]),
+            ],
           ),
-          const SizedBox(width: 10),
-          Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text('Text Color', style: GoogleFonts.beVietnamPro(fontSize: 11, color: const Color(0xFF94A3B8))),
-            const SizedBox(height: 6),
-            Row(children: [
-              _colorChoiceChip(label: 'Dark', selected: !_placement.light, onTap: () => setState(() => _placement = _placement.copyWith(light: false))),
-              const SizedBox(width: 6),
-              _colorChoiceChip(label: 'Light', selected: _placement.light, onTap: () => setState(() => _placement = _placement.copyWith(light: true))),
-            ]),
-          ]),
-        ]),
-      ]),
+          const SizedBox(height: 16),
+          _buildSignatoryPicker(),
+        ],
+      ),
     );
   }
 
-  Widget _colorChoiceChip({required String label, required bool selected, required VoidCallback onTap}) {
+  // NEW: lets the org pick a signatory from the Admin Settings roster and
+  // drop its placeholder onto the canvas above.
+  Widget _buildSignatoryPicker() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Signatories',
+          style: GoogleFonts.beVietnamPro(
+            fontSize: 12.5,
+            fontWeight: FontWeight.w600,
+            color: const Color(0xFF374151),
+          ),
+        ),
+        const SizedBox(height: 8),
+        StreamBuilder<QuerySnapshot>(
+          stream: FirebaseFirestore.instance
+              .collection('signatories')
+              .snapshots(),
+          builder: (context, snap) {
+            final roster = (snap.data?.docs ?? [])
+                .map((d) => SignatoryData.fromDoc(d))
+                .toList();
+            if (roster.isEmpty) {
+              return Text(
+                'No signatories on file yet. Add them in Admin Settings → Signatories.',
+                style: GoogleFonts.beVietnamPro(
+                  fontSize: 11.5,
+                  color: const Color(0xFF9AA5B4),
+                ),
+              );
+            }
+            return Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: roster.map((s) {
+                final placed = _signatoryPlacements.containsKey(
+                  s.placeholderKey,
+                );
+                return InkWell(
+                  onTap: () => setState(() {
+                    if (placed) {
+                      _signatoryPlacements.remove(s.placeholderKey);
+                    } else {
+                      _signatoryPlacements[s.placeholderKey] =
+                          const CertNamePlacement().copyWith(
+                            xPct: 0.5,
+                            yPct: 0.75,
+                          );
+                    }
+                  }),
+                  borderRadius: BorderRadius.circular(8),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 7,
+                    ),
+                    decoration: BoxDecoration(
+                      color: placed
+                          ? UpriseColors.primaryDark
+                          : const Color(0xFFF7F8FA),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: placed
+                            ? UpriseColors.primaryDark
+                            : const Color(0xFFE4E8EF),
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          placed ? Icons.check_rounded : Icons.add_rounded,
+                          size: 13,
+                          color: placed
+                              ? Colors.white
+                              : const Color(0xFF374151),
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          '{{${s.placeholderKey}}} — ${s.fullName}',
+                          style: GoogleFonts.beVietnamPro(
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w600,
+                            color: placed
+                                ? Colors.white
+                                : const Color(0xFF374151),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              }).toList(),
+            );
+          },
+        ),
+      ],
+    );
+  }
+
+  Widget _colorChoiceChip({
+    required String label,
+    required bool selected,
+    required VoidCallback onTap,
+  }) {
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(6),
@@ -2249,11 +4274,20 @@ Future<void> _upload() async {
         decoration: BoxDecoration(
           color: selected ? UpriseColors.primaryDark : const Color(0xFFF7F8FA),
           borderRadius: BorderRadius.circular(6),
-          border: Border.all(color: selected ? UpriseColors.primaryDark : const Color(0xFFE4E8EF)),
+          border: Border.all(
+            color: selected
+                ? UpriseColors.primaryDark
+                : const Color(0xFFE4E8EF),
+          ),
         ),
-        child: Text(label,
-            style: GoogleFonts.beVietnamPro(
-                fontSize: 11.5, fontWeight: FontWeight.w600, color: selected ? Colors.white : const Color(0xFF374151))),
+        child: Text(
+          label,
+          style: GoogleFonts.beVietnamPro(
+            fontSize: 11.5,
+            fontWeight: FontWeight.w600,
+            color: selected ? Colors.white : const Color(0xFF374151),
+          ),
+        ),
       ),
     );
   }
@@ -2263,114 +4297,226 @@ Future<void> _upload() async {
     return Dialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
       child: ConstrainedBox(
-        constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.85),
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(context).size.height * 0.85,
+        ),
         child: SizedBox(
-        width: 480,
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          Container(
-
-            padding: const EdgeInsets.fromLTRB(24, 20, 20, 20),
-            decoration: BoxDecoration(
-              color: UpriseColors.primaryDark,
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(18)),
-            ),
-            child: Row(children: [
+          width: 480,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
               Container(
-                width: 38, height: 38,
-                decoration: BoxDecoration(color: Colors.white.withOpacity(0.15), borderRadius: BorderRadius.circular(10)),
-                child: const Icon(Icons.upload_file_outlined, color: Colors.white, size: 18),
-              ),
-              const SizedBox(width: 14),
-              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text('Import Certificate Template',
-                    style: GoogleFonts.beVietnamPro(fontSize: 17, fontWeight: FontWeight.w700, color: Colors.white)),
-                Text('Bring in a design from outside Uprise',
-                    style: GoogleFonts.beVietnamPro(fontSize: 11, color: Colors.white.withOpacity(0.7))),
-              ])),
-              IconButton(
-                icon: const Icon(Icons.close_rounded, color: Colors.white, size: 20),
-                tooltip: 'Close',
-                onPressed: () => Navigator.pop(context),
-              ),
-            ]),
-          ),
-          Flexible(
-            child: SingleChildScrollView(
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
-                  _FieldWrapper(
-                    label: 'Template Name *',
-                    child: TextField(
-                      decoration: _fieldDecoration(hint: 'e.g. CICT Awards Design', icon: Icons.badge_outlined),
-                      style: GoogleFonts.beVietnamPro(fontSize: 13),
-                      onChanged: (v) => setState(() => _name = v),
-                    ),
+                padding: const EdgeInsets.fromLTRB(24, 20, 20, 20),
+                decoration: BoxDecoration(
+                  color: UpriseColors.primaryDark,
+                  borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(18),
                   ),
-                  const SizedBox(height: 14),
-                  _FieldWrapper(
-                    label: 'File (PNG, JPG, or PDF) *',
-                    child: InkWell(
-                      onTap: _pickFile,
-                      borderRadius: BorderRadius.circular(_DS.radiusSm),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFF7F8FA),
-                          borderRadius: BorderRadius.circular(_DS.radiusSm),
-                          border: Border.all(color: const Color(0xFFE4E8EF)),
-                        ),
-                        child: Row(children: [
-                          Icon(Icons.upload_file_outlined, size: 17, color: UpriseColors.primaryDark),
-                          const SizedBox(width: 10),
-                          Expanded(child: Text(_file?.name ?? 'Choose a file…',
-                              style: GoogleFonts.beVietnamPro(fontSize: 13, color: _file == null ? const Color(0xFF9AA5B4) : const Color(0xFF1A202C)),
-                              overflow: TextOverflow.ellipsis)),
-                          Text('Browse', style: GoogleFonts.beVietnamPro(fontSize: 12.5, fontWeight: FontWeight.w600, color: UpriseColors.primaryDark)),
-                        ]),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 38,
+                      height: 38,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.15),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Icon(
+                        Icons.upload_file_outlined,
+                        color: Colors.white,
+                        size: 18,
                       ),
                     ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Import Certificate Template',
+                            style: GoogleFonts.beVietnamPro(
+                              fontSize: 17,
+                              fontWeight: FontWeight.w700,
+                              color: Colors.white,
+                            ),
+                          ),
+                          Text(
+                            'Bring in a design from outside Uprise',
+                            style: GoogleFonts.beVietnamPro(
+                              fontSize: 11,
+                              color: Colors.white.withOpacity(0.7),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(
+                        Icons.close_rounded,
+                        color: Colors.white,
+                        size: 20,
+                      ),
+                      tooltip: 'Close',
+                      onPressed: () => Navigator.pop(context),
+                    ),
+                  ],
+                ),
+              ),
+              Flexible(
+                child: SingleChildScrollView(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        _FieldWrapper(
+                          label: 'Template Name *',
+                          child: TextField(
+                            decoration: _fieldDecoration(
+                              hint: 'e.g. CICT Awards Design',
+                              icon: Icons.badge_outlined,
+                            ),
+                            style: GoogleFonts.beVietnamPro(fontSize: 13),
+                            onChanged: (v) => setState(() => _name = v),
+                          ),
+                        ),
+                        const SizedBox(height: 14),
+                        _FieldWrapper(
+                          label: 'File (PNG, JPG, or PDF) *',
+                          child: InkWell(
+                            onTap: _pickFile,
+                            borderRadius: BorderRadius.circular(_DS.radiusSm),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 14,
+                                vertical: 13,
+                              ),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFF7F8FA),
+                                borderRadius: BorderRadius.circular(
+                                  _DS.radiusSm,
+                                ),
+                                border: Border.all(
+                                  color: const Color(0xFFE4E8EF),
+                                ),
+                              ),
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    Icons.upload_file_outlined,
+                                    size: 17,
+                                    color: UpriseColors.primaryDark,
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: Text(
+                                      _file?.name ?? 'Choose a file…',
+                                      style: GoogleFonts.beVietnamPro(
+                                        fontSize: 13,
+                                        color: _file == null
+                                            ? const Color(0xFF9AA5B4)
+                                            : const Color(0xFF1A202C),
+                                      ),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                  Text(
+                                    'Browse',
+                                    style: GoogleFonts.beVietnamPro(
+                                      fontSize: 12.5,
+                                      fontWeight: FontWeight.w600,
+                                      color: UpriseColors.primaryDark,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                        _buildPositionPicker(),
+                      ],
+                    ),
                   ),
-                  _buildPositionPicker(),
-                ]),
-              ),
-            ),
-          ),
-          Container(
-            padding: const EdgeInsets.fromLTRB(24, 16, 24, 20),
-            decoration: const BoxDecoration(
-              border: Border(top: BorderSide(color: Color(0xFFE8ECF0))),
-              color: Color(0xFFF8F9FB),
-              borderRadius: BorderRadius.vertical(bottom: Radius.circular(18)),
-            ),
-            child: Row(mainAxisAlignment: MainAxisAlignment.end, children: [
-              OutlinedButton(
-                onPressed: () => Navigator.pop(context),
-                style: OutlinedButton.styleFrom(
-                  side: const BorderSide(color: Color(0xFFE2E6EA)),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 11),
-                ),
-                child: Text('Cancel', style: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF374151))),
-              ),
-              const SizedBox(width: 12),
-              ElevatedButton.icon(
-                onPressed: (_file == null || _name == null || _name!.trim().isEmpty || _isUploading) ? null : _upload,
-                icon: _isUploading
-                    ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                    : const Icon(Icons.check_rounded, size: 16),
-                label: Text('Upload', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600)),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: UpriseColors.primaryDark,
-                  foregroundColor: Colors.white,
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 11),
                 ),
               ),
-            ]),
+              Container(
+                padding: const EdgeInsets.fromLTRB(24, 16, 24, 20),
+                decoration: const BoxDecoration(
+                  border: Border(top: BorderSide(color: Color(0xFFE8ECF0))),
+                  color: Color(0xFFF8F9FB),
+                  borderRadius: BorderRadius.vertical(
+                    bottom: Radius.circular(18),
+                  ),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    OutlinedButton(
+                      onPressed: () => Navigator.pop(context),
+                      style: OutlinedButton.styleFrom(
+                        side: const BorderSide(color: Color(0xFFE2E6EA)),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 18,
+                          vertical: 11,
+                        ),
+                      ),
+                      child: Text(
+                        'Cancel',
+                        style: GoogleFonts.beVietnamPro(
+                          fontSize: 13,
+                          color: const Color(0xFF374151),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    ElevatedButton.icon(
+                      onPressed:
+                          (_file == null ||
+                              _name == null ||
+                              _name!.trim().isEmpty ||
+                              _isUploading)
+                          ? null
+                          : _upload,
+                      icon: _isUploading
+                          ? const SizedBox(
+                              width: 14,
+                              height: 14,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
+                          : const Icon(Icons.check_rounded, size: 16),
+                      label: Text(
+                        'Upload',
+                        style: GoogleFonts.beVietnamPro(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: UpriseColors.primaryDark,
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 20,
+                          vertical: 11,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
-        ]),
         ),
       ),
     );
