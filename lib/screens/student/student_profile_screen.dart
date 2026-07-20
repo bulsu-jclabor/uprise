@@ -435,6 +435,9 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
   Future<List<QueryDocumentSnapshot>> _fetchEventsByIds(
     List<String> eventIds,
   ) async {
+<<<<<<< HEAD
+>>>>>>> f247f8f4e06298c731dad7b37e38c042d06cdf76
+=======
 >>>>>>> f247f8f4e06298c731dad7b37e38c042d06cdf76
     if (eventIds.isEmpty) return [];
 
@@ -476,6 +479,20 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
                 color: Colors.black,
                 fontWeight: FontWeight.w600,
                 fontSize: 18,
+<<<<<<< HEAD
+=======
+              ),
+            ),
+            actions: [
+              IconButton(
+                icon: Icon(
+                  Icons.qr_code_scanner_rounded,
+                  color: AppColors.primaryDark,
+                  size: 26,
+                ),
+                onPressed: _openWebinarCode,
+                tooltip: 'Enter Webinar Code',
+>>>>>>> f247f8f4e06298c731dad7b37e38c042d06cdf76
               ),
             ),
             actions: [
