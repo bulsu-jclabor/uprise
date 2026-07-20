@@ -5,9 +5,26 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../widgets/student/app_colors.dart';
 import 'student_organization_details_screen.dart';
 
+// ─────────────────────────────────────────────────────────────
+// Shared style tokens (kept consistent with the rest of the app)
+// ─────────────────────────────────────────────────────────────
+class _UiTokens {
+  static const Color divider = Color(0xFFE7E7E9);
+  static const Color cardBorder = Color(0xFFEDEDEF);
+  static const Color mutedText = Color(0xFF6B6B70);
+  static const Color headingText = Color(0xFF1B1B1D);
+
+  static List<BoxShadow> get subtleShadow => [
+        BoxShadow(
+          color: Colors.black.withOpacity(0.05),
+          blurRadius: 12,
+          offset: const Offset(0, 4),
+        ),
+      ];
+}
 
 // ─────────────────────────────────────────────────────────────
-//  MAIN ORGANIZATIONS SCREEN - BETTER COLORS
+//  MAIN ORGANIZATIONS SCREEN
 // ─────────────────────────────────────────────────────────────
 class StudentOrganizationsScreen extends StatefulWidget {
   const StudentOrganizationsScreen({super.key});
@@ -51,20 +68,20 @@ class _StudentOrganizationsScreenState extends State<StudentOrganizationsScreen>
           'Organizations',
           style: TextStyle(
             fontWeight: FontWeight.w700,
-            fontSize: 20,
-            color: Colors.black87,
+            fontSize: 17,
+            color: _UiTokens.headingText,
           ),
         ),
         backgroundColor: Colors.white,
-        foregroundColor: Colors.black,
+        foregroundColor: _UiTokens.headingText,
         elevation: 0,
+        scrolledUnderElevation: 0,
+        surfaceTintColor: Colors.transparent,
         centerTitle: true,
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(1),
-          child: Container(
-            height: 1,
-            color: Colors.grey.shade200,
-          ),
+        iconTheme: const IconThemeData(color: AppColors.primaryDark),
+        bottom: const PreferredSize(
+          preferredSize: Size.fromHeight(1),
+          child: Divider(height: 1, thickness: 1, color: _UiTokens.divider),
         ),
       ),
       body: _buildDiscoverTab(),
@@ -77,14 +94,16 @@ class _StudentOrganizationsScreenState extends State<StudentOrganizationsScreen>
         // ── Search Bar ──
         Container(
           color: Colors.white,
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+          padding: const EdgeInsets.fromLTRB(20, 14, 20, 16),
           child: Container(
             decoration: BoxDecoration(
               color: AppColors.background,
               borderRadius: BorderRadius.circular(12),
               border: Border.all(
-                color: _searchQuery.isNotEmpty ? AppColors.primaryDark : Colors.transparent,
-                width: 1.5,
+                color: _searchQuery.isNotEmpty
+                    ? AppColors.primaryDark.withOpacity(0.5)
+                    : _UiTokens.divider,
+                width: 1.2,
               ),
             ),
             child: TextField(
@@ -94,8 +113,9 @@ class _StudentOrganizationsScreenState extends State<StudentOrganizationsScreen>
                   _searchQuery = value.toLowerCase();
                 });
               },
+              style: const TextStyle(fontSize: 13.5),
               decoration: InputDecoration(
-                hintText: 'Search organizations...',
+                hintText: 'Search organizations',
                 hintStyle: TextStyle(fontSize: 13, color: Colors.grey.shade500),
                 prefixIcon: Icon(
                   Icons.search_rounded,
@@ -104,7 +124,7 @@ class _StudentOrganizationsScreenState extends State<StudentOrganizationsScreen>
                 ),
                 suffixIcon: _searchQuery.isNotEmpty
                     ? IconButton(
-                        icon: Icon(Icons.clear_rounded, size: 18, color: AppColors.primaryDark),
+                        icon: const Icon(Icons.clear_rounded, size: 18, color: AppColors.primaryDark),
                         onPressed: () {
                           _searchController.clear();
                           setState(() {
@@ -120,12 +140,13 @@ class _StudentOrganizationsScreenState extends State<StudentOrganizationsScreen>
                   borderRadius: BorderRadius.circular(12),
                   borderSide: BorderSide.none,
                 ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide.none,
+                ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(
-                    color: AppColors.primaryDark.withOpacity(0.3),
-                    width: 1.5,
-                  ),
+                  borderSide: BorderSide.none,
                 ),
               ),
             ),
@@ -144,6 +165,7 @@ class _StudentOrganizationsScreenState extends State<StudentOrganizationsScreen>
                 return const Center(
                   child: CircularProgressIndicator(
                     color: AppColors.primaryDark,
+                    strokeWidth: 2.2,
                   ),
                 );
               }
@@ -152,6 +174,7 @@ class _StudentOrganizationsScreenState extends State<StudentOrganizationsScreen>
                 return const Center(
                   child: CircularProgressIndicator(
                     color: AppColors.primaryDark,
+                    strokeWidth: 2.2,
                   ),
                 );
               }
@@ -176,26 +199,26 @@ class _StudentOrganizationsScreenState extends State<StudentOrganizationsScreen>
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Container(
-                          padding: const EdgeInsets.all(24),
+                          padding: const EdgeInsets.all(22),
                           decoration: BoxDecoration(
-                            color: AppColors.primaryDark.withOpacity(0.08),
+                            color: AppColors.primaryDark.withOpacity(0.06),
                             shape: BoxShape.circle,
                           ),
                           child: Icon(
-                            _searchQuery.isNotEmpty ? Icons.search_off : Icons.business_outlined,
-                            size: 48,
-                            color: AppColors.primaryDark.withOpacity(0.4),
+                            _searchQuery.isNotEmpty ? Icons.search_off_rounded : Icons.business_outlined,
+                            size: 42,
+                            color: AppColors.primaryDark.withOpacity(0.45),
                           ),
                         ),
-                        const SizedBox(height: 16),
+                        const SizedBox(height: 18),
                         Text(
                           _searchQuery.isNotEmpty
                               ? 'No organizations found'
                               : 'No organizations available',
                           style: const TextStyle(
-                            fontSize: 18,
+                            fontSize: 16,
                             fontWeight: FontWeight.w700,
-                            color: Colors.black87,
+                            color: _UiTokens.headingText,
                           ),
                         ),
                         const SizedBox(height: 4),
@@ -204,7 +227,7 @@ class _StudentOrganizationsScreenState extends State<StudentOrganizationsScreen>
                               ? 'Try a different search term'
                               : 'Check back later',
                           style: TextStyle(
-                            fontSize: 14,
+                            fontSize: 13,
                             color: Colors.grey.shade500,
                           ),
                         ),
@@ -215,7 +238,7 @@ class _StudentOrganizationsScreenState extends State<StudentOrganizationsScreen>
               }
 
               return GridView.builder(
-                padding: const EdgeInsets.all(16),
+                padding: const EdgeInsets.fromLTRB(20, 4, 20, 20),
                 gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                   crossAxisCount: 2,
                   childAspectRatio: 0.85,
@@ -249,7 +272,7 @@ class _StudentOrganizationsScreenState extends State<StudentOrganizationsScreen>
 }
 
 // ─────────────────────────────────────────────────────────────
-//  ORGANIZATION CARD - BETTER COLORS
+//  ORGANIZATION CARD
 // ─────────────────────────────────────────────────────────────
 class _OrganizationCard extends StatelessWidget {
   final String id;
@@ -295,44 +318,28 @@ class _OrganizationCard extends StatelessWidget {
       child: Container(
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(14),
           border: Border.all(
-            color: AppColors.primaryDark.withOpacity(0.12),
+            color: _UiTokens.cardBorder,
             width: 1,
           ),
-          boxShadow: [
-            BoxShadow(
-              color: AppColors.primaryDark.withOpacity(0.06),
-              blurRadius: 12,
-              offset: const Offset(0, 4),
-            ),
-          ],
+          boxShadow: _UiTokens.subtleShadow,
         ),
+        clipBehavior: Clip.antiAlias,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // ── Logo / Image Section ──
-            Container(
-              height: 100,
+            SizedBox(
+              height: 96,
               width: double.infinity,
-              decoration: BoxDecoration(
-                color: AppColors.primaryDark.withOpacity(0.06),
-                borderRadius: const BorderRadius.vertical(
-                  top: Radius.circular(16),
-                ),
-              ),
-              child: ClipRRect(
-                borderRadius: const BorderRadius.vertical(
-                  top: Radius.circular(16),
-                ),
-                child: _buildLogoImage() != null
-                    ? Image(
-                        image: _buildLogoImage()!,
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => _buildPlaceholder(),
-                      )
-                    : _buildPlaceholder(),
-              ),
+              child: _buildLogoImage() != null
+                  ? Image(
+                      image: _buildLogoImage()!,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => _buildPlaceholder(),
+                    )
+                  : _buildPlaceholder(),
             ),
 
             // ── Content ──
@@ -345,9 +352,9 @@ class _OrganizationCard extends StatelessWidget {
                   Text(
                     name,
                     style: const TextStyle(
-                      fontSize: 14,
+                      fontSize: 13.5,
                       fontWeight: FontWeight.w700,
-                      color: Colors.black87,
+                      color: _UiTokens.headingText,
                     ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
@@ -360,8 +367,8 @@ class _OrganizationCard extends StatelessWidget {
                     description,
                     style: TextStyle(
                       fontSize: 11,
-                      color: Colors.grey.shade600,
-                      height: 1.3,
+                      color: _UiTokens.mutedText,
+                      height: 1.35,
                     ),
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
@@ -373,18 +380,23 @@ class _OrganizationCard extends StatelessWidget {
                   if (category.isNotEmpty)
                     Container(
                       padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
+                        horizontal: 9,
                         vertical: 3,
                       ),
                       decoration: BoxDecoration(
                         color: AppColors.primaryDark.withOpacity(0.08),
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: AppColors.primaryDark.withOpacity(0.16),
+                          width: 1,
+                        ),
                       ),
                       child: Text(
                         category,
-                        style: TextStyle(
+                        style: const TextStyle(
                           fontSize: 9,
-                          fontWeight: FontWeight.w600,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 0.2,
                           color: AppColors.primaryDark,
                         ),
                       ),
@@ -400,21 +412,16 @@ class _OrganizationCard extends StatelessWidget {
 
   Widget _buildPlaceholder() {
     return Container(
-      height: 100,
+      height: 96,
       width: double.infinity,
-      decoration: BoxDecoration(
-        color: AppColors.primaryDark.withOpacity(0.06),
-        borderRadius: const BorderRadius.vertical(
-          top: Radius.circular(16),
-        ),
-      ),
+      color: AppColors.primaryDark.withOpacity(0.06),
       child: Center(
         child: Text(
-          name[0].toUpperCase(),
+          name.isNotEmpty ? name[0].toUpperCase() : '?',
           style: TextStyle(
-            fontSize: 36,
+            fontSize: 32,
             fontWeight: FontWeight.w700,
-            color: AppColors.primaryDark.withOpacity(0.15),
+            color: AppColors.primaryDark.withOpacity(0.35),
           ),
         ),
       ),
