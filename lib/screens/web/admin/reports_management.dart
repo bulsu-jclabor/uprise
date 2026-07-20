@@ -2,16 +2,16 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
-import 'package:pdf/pdf.dart';
 import 'package:universal_html/html.dart' as html;
 import 'package:uprise/screens/web/admin/export_pdf.dart' show AdminExportPdf;
 import 'export_util.dart';
 import 'package:uprise/widgets/admin_export_button.dart';
 import '../../../widgets/student/event_image.dart';
-import 'package:pdf/widgets.dart' as pw;
 import '../../../services/activity_logger.dart' as activity_log;
+import '../../../services/ai_service.dart';
 import 'dart:convert'; // for base64Decode, utf8
-import '../../../utils/platform_file_utils.dart' as platform_file_utils; // adjust path if needed
+import '../../../utils/platform_file_utils.dart'
+    as platform_file_utils; // adjust path if needed
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Design tokens — mirrors student_accounts.dart exactly
@@ -82,7 +82,10 @@ class AdminReport {
     this.archived = false,
   });
 
-  factory AdminReport.fromFirestore(DocumentSnapshot doc, Map<String, String> orgMap) {
+  factory AdminReport.fromFirestore(
+    DocumentSnapshot doc,
+    Map<String, String> orgMap,
+  ) {
     final data = doc.data() as Map<String, dynamic>;
     final orgId = data['orgId']?.toString() ?? '';
     return AdminReport(
@@ -92,7 +95,8 @@ class AdminReport {
       eventTitle: data['title']?.toString() ?? 'Untitled',
       type: data['type']?.toString() ?? 'financial',
       description: data['description']?.toString() ?? '',
-      submittedAt: (data['submittedAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
+      submittedAt:
+          (data['submittedAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
       fileBase64: data['fileBase64'] as String?,
       fileName: data['fileName'] as String?,
       fileSize: data['fileSize'] as String?,
@@ -141,11 +145,7 @@ Widget _statusBadge(String status) {
       UpriseColors.success,
       'ON TIME',
     ),
-    'late': _BadgeStyle(
-      UpriseColors.warningBg,
-      UpriseColors.warning,
-      'LATE',
-    ),
+    'late': _BadgeStyle(UpriseColors.warningBg, UpriseColors.warning, 'LATE'),
     'pending': _BadgeStyle(
       UpriseColors.warningBg,
       UpriseColors.warning,
@@ -263,28 +263,28 @@ class EventReport {
       title: d['title']?.toString() ?? 'Untitled',
       orgId: d['orgId']?.toString() ?? '',
       orgName: orgName,
-      type: (
-            d['category'] as String? ??
-            d['type'] as String? ??
-            'Others'
-          ).toString(),
+      type: (d['category'] as String? ?? d['type'] as String? ?? 'Others')
+          .toString(),
       date: (d['date'] as Timestamp).toDate(),
       status: d['status']?.toString() ?? 'approved',
       description: d['description']?.toString() ?? '',
       location: d['location']?.toString() ?? '',
-      eventImageUrl: (d['bannerUrl'] as String?)?.toString() ??
+      eventImageUrl:
+          (d['bannerUrl'] as String?)?.toString() ??
           (d['imageUrl'] as String?)?.toString() ??
           '',
       totalIncome: (d['totalIncome'] as num?)?.toDouble() ?? 0,
       totalExpenses: (d['totalExpenses'] as num?)?.toDouble() ?? 0,
       budgetVariance: (d['budgetVariance'] as num?)?.toDouble() ?? 0,
-      budgeted: (d['budget'] as num?)?.toDouble() ??
+      budgeted:
+          (d['budget'] as num?)?.toDouble() ??
           (d['budgeted'] as num?)?.toDouble() ??
           (d['totalBudget'] as num?)?.toDouble() ??
           0,
       registrants: registrants,
       attendees: attendees,
-      submittedBy: d['submittedBy']?.toString() ??
+      submittedBy:
+          d['submittedBy']?.toString() ??
           d['submittedByEmail']?.toString() ??
           d['publishedBy']?.toString() ??
           '',
@@ -342,10 +342,13 @@ class OrgSubmission {
   // for period-scoped ones.
   String get displayTitle {
     if (!isPeriodScope) return eventTitle ?? '—';
-    return scope == 'semester' ? '${schoolYear ?? '—'} — ${semester ?? '—'}' : '${schoolYear ?? '—'} (Whole Year)';
+    return scope == 'semester'
+        ? '${schoolYear ?? '—'} — ${semester ?? '—'}'
+        : '${schoolYear ?? '—'} (Whole Year)';
   }
 
-  bool get hasApprovedEvent => isPeriodScope || (eventDate != null && eventTitle != null);
+  bool get hasApprovedEvent =>
+      isPeriodScope || (eventDate != null && eventTitle != null);
 
   // Submission deadline rule: automatically 1 week AFTER the event date,
   // unless an admin has set a per-org override for this report type.
@@ -383,7 +386,8 @@ class _ReportsManagementState extends State<ReportsManagement>
 
   final TextEditingController _eventSearchController = TextEditingController();
   final TextEditingController _reportSearchController = TextEditingController();
-  final TextEditingController _submissionSearchController = TextEditingController();
+  final TextEditingController _submissionSearchController =
+      TextEditingController();
 
   String _filterOrg = 'All Organizations';
   String _filterType = 'All Types';
@@ -395,17 +399,25 @@ class _ReportsManagementState extends State<ReportsManagement>
   final String _reportView = 'By Event';
 
   static const List<String> _academicYears = [
-    'All Years', '2025-2026', '2024-2025', '2023-2024',
+    'All Years',
+    '2025-2026',
+    '2024-2025',
+    '2023-2024',
   ];
   static const List<String> _semesters = [
-    'All Semesters', '1st Semester', '2nd Semester', 'Summer',
+    'All Semesters',
+    '1st Semester',
+    '2nd Semester',
+    'Summer',
   ];
 
   List<EventReport> _events = [];
   List<Map<String, dynamic>> _organizations = [];
   bool _loadingEvents = true;
   bool _loadingEventCounts = false;
-  
+  bool _loadingAiInsight = false;
+  String? _aiInsight;
+  String? _aiInsightError;
 
   // Admin reports for financial and accomplishment
   List<AdminReport> _financialReports = [];
@@ -474,11 +486,20 @@ class _ReportsManagementState extends State<ReportsManagement>
 
     switch (_filterSemester) {
       case '1st Semester':
-        return (DateTime(startYear, 8, 1), DateTime(startYear + 1, 1, 31, 23, 59));
+        return (
+          DateTime(startYear, 8, 1),
+          DateTime(startYear + 1, 1, 31, 23, 59),
+        );
       case '2nd Semester':
-        return (DateTime(startYear + 1, 2, 1), DateTime(startYear + 1, 6, 30, 23, 59));
+        return (
+          DateTime(startYear + 1, 2, 1),
+          DateTime(startYear + 1, 6, 30, 23, 59),
+        );
       case 'Summer':
-        return (DateTime(startYear + 1, 6, 1), DateTime(startYear + 1, 8, 31, 23, 59));
+        return (
+          DateTime(startYear + 1, 6, 1),
+          DateTime(startYear + 1, 8, 31, 23, 59),
+        );
       default: // All Semesters within academic year
         if (_filterAcademicYear != 'All Years') {
           return (DateTime(startYear, 8, 1), DateTime(endYear, 7, 31, 23, 59));
@@ -517,7 +538,6 @@ class _ReportsManagementState extends State<ReportsManagement>
     });
   }
 
-
   Future<void> _loadEvents() async {
     if (!mounted) return;
     setState(() => _loadingEvents = true);
@@ -540,10 +560,16 @@ class _ReportsManagementState extends State<ReportsManagement>
       }
       final (rangeStart, rangeEnd) = _computeDateRange();
       if (rangeStart != null) {
-        query = query.where('date', isGreaterThanOrEqualTo: Timestamp.fromDate(rangeStart));
+        query = query.where(
+          'date',
+          isGreaterThanOrEqualTo: Timestamp.fromDate(rangeStart),
+        );
       }
       if (rangeEnd != null) {
-        query = query.where('date', isLessThanOrEqualTo: Timestamp.fromDate(rangeEnd));
+        query = query.where(
+          'date',
+          isLessThanOrEqualTo: Timestamp.fromDate(rangeEnd),
+        );
       }
       final eventsSnap = await query.get();
       final orgMap = {
@@ -558,7 +584,8 @@ class _ReportsManagementState extends State<ReportsManagement>
         for (final doc in eventsSnap.docs)
           EventReport.fromFirestore(
             doc,
-            orgMap[(doc.data() as Map<String, dynamic>)['orgId']?.toString() ?? ''] ??
+            orgMap[(doc.data() as Map<String, dynamic>)['orgId']?.toString() ??
+                    ''] ??
                 (doc.data() as Map<String, dynamic>)['orgName']?.toString() ??
                 'Unknown',
             0,
@@ -567,6 +594,7 @@ class _ReportsManagementState extends State<ReportsManagement>
       ];
       if (!mounted) return;
       setState(() => _events = loaded);
+      _maybeRefreshAiInsight();
     } catch (e) {
       debugPrint('Error loading events: $e');
     } finally {
@@ -620,7 +648,9 @@ class _ReportsManagementState extends State<ReportsManagement>
     );
   }
 
-  Future<void> _fetchAttendanceCountsForPage(List<EventReport> pageItems) async {
+  Future<void> _fetchAttendanceCountsForPage(
+    List<EventReport> pageItems,
+  ) async {
     if (_loadingEventCounts) return;
     if (!mounted) return;
     setState(() => _loadingEventCounts = true);
@@ -629,20 +659,22 @@ class _ReportsManagementState extends State<ReportsManagement>
       for (final e in pageItems) {
         // Skip if we already have counts (and not both zero)
         if (e.registrants != 0 || e.attendees != 0) continue;
-        futures.add(Future(() async {
-          try {
-            final stats = await _loadEventAttendanceStats(e.id);
-            final regs = stats.$1;
-            final atts = stats.$2;
-            if (!mounted) return;
-            setState(() {
-              final idx = _events.indexWhere((ev) => ev.id == e.id);
-              if (idx >= 0) _events[idx] = _eventWithCounts(e, regs, atts);
-            });
-          } catch (ex) {
-            debugPrint('Error fetching attendance for ${e.id}: $ex');
-          }
-        }));
+        futures.add(
+          Future(() async {
+            try {
+              final stats = await _loadEventAttendanceStats(e.id);
+              final regs = stats.$1;
+              final atts = stats.$2;
+              if (!mounted) return;
+              setState(() {
+                final idx = _events.indexWhere((ev) => ev.id == e.id);
+                if (idx >= 0) _events[idx] = _eventWithCounts(e, regs, atts);
+              });
+            } catch (ex) {
+              debugPrint('Error fetching attendance for ${e.id}: $ex');
+            }
+          }),
+        );
       }
       await Future.wait(futures);
     } finally {
@@ -650,7 +682,9 @@ class _ReportsManagementState extends State<ReportsManagement>
     }
   }
 
-  Future<List<Map<String, dynamic>>> _loadEventAttendeesList(String eventId) async {
+  Future<List<Map<String, dynamic>>> _loadEventAttendeesList(
+    String eventId,
+  ) async {
     try {
       final snap = await FirebaseFirestore.instance
           .collection('events')
@@ -675,7 +709,10 @@ class _ReportsManagementState extends State<ReportsManagement>
     final results = <Map<String, dynamic>>[];
     try {
       // Primary 'feedback' collection (used by org analytics)
-      final fb1 = await db.collection('feedback').where('eventId', isEqualTo: eventId).get();
+      final fb1 = await db
+          .collection('feedback')
+          .where('eventId', isEqualTo: eventId)
+          .get();
       for (final d in fb1.docs) {
         final m = Map<String, dynamic>.from(d.data() as Map<String, dynamic>);
         m['id'] = d.id;
@@ -685,7 +722,10 @@ class _ReportsManagementState extends State<ReportsManagement>
     } catch (_) {}
     try {
       // Secondary 'event_feedback' (used elsewhere)
-      final fb2 = await db.collection('event_feedback').where('eventId', isEqualTo: eventId).get();
+      final fb2 = await db
+          .collection('event_feedback')
+          .where('eventId', isEqualTo: eventId)
+          .get();
       for (final d in fb2.docs) {
         final m = Map<String, dynamic>.from(d.data() as Map<String, dynamic>);
         m['id'] = d.id;
@@ -695,8 +735,10 @@ class _ReportsManagementState extends State<ReportsManagement>
     } catch (_) {}
     // Normalize timestamp fields
     for (final r in results) {
-      if (r['timestamp'] is Timestamp) r['timestamp'] = (r['timestamp'] as Timestamp).toDate();
-      if (r['createdAt'] is Timestamp) r['createdAt'] = (r['createdAt'] as Timestamp).toDate();
+      if (r['timestamp'] is Timestamp)
+        r['timestamp'] = (r['timestamp'] as Timestamp).toDate();
+      if (r['createdAt'] is Timestamp)
+        r['createdAt'] = (r['createdAt'] as Timestamp).toDate();
     }
     // Sort by timestamp/createdAt desc
     results.sort((a, b) {
@@ -710,13 +752,16 @@ class _ReportsManagementState extends State<ReportsManagement>
     return results;
   }
 
-  Stream<(
+  Stream<
+    (
       double totalIncome,
       double totalExpenses,
       double netAmount,
       List<Map<String, dynamic>> incomeBreakdown,
-      List<Map<String, dynamic>> expenseBreakdown
-  )> _eventTransactionSummaryStream(String eventId) {
+      List<Map<String, dynamic>> expenseBreakdown,
+    )
+  >
+  _eventTransactionSummaryStream(String eventId) {
     return FirebaseFirestore.instance
         .collection('transactions')
         .where('eventId', isEqualTo: eventId)
@@ -725,12 +770,13 @@ class _ReportsManagementState extends State<ReportsManagement>
   }
 
   (
-      double totalIncome,
-      double totalExpenses,
-      double netAmount,
-      List<Map<String, dynamic>> incomeBreakdown,
-      List<Map<String, dynamic>> expenseBreakdown
-  ) _computeTransactionSummaryFromDocs(List<QueryDocumentSnapshot> docs) {
+    double totalIncome,
+    double totalExpenses,
+    double netAmount,
+    List<Map<String, dynamic>> incomeBreakdown,
+    List<Map<String, dynamic>> expenseBreakdown,
+  )
+  _computeTransactionSummaryFromDocs(List<QueryDocumentSnapshot> docs) {
     double totalIncome = 0;
     double totalExpenses = 0;
     final incomeBuckets = <String, double>{};
@@ -746,8 +792,8 @@ class _ReportsManagementState extends State<ReportsManagement>
       final bucketName = segment.isNotEmpty
           ? segment
           : category.isNotEmpty
-              ? category
-              : 'Other';
+          ? category
+          : 'Other';
       if (type == 'expense' || type == 'outflow' || type == 'cost') {
         totalExpenses += amount;
         expenseBuckets[bucketName] = (expenseBuckets[bucketName] ?? 0) + amount;
@@ -761,7 +807,9 @@ class _ReportsManagementState extends State<ReportsManagement>
       final list = buckets.entries
           .map((e) => {'name': e.key, 'amount': e.value})
           .toList();
-      list.sort((a, b) => (b['amount'] as double).compareTo(a['amount'] as double));
+      list.sort(
+        (a, b) => (b['amount'] as double).compareTo(a['amount'] as double),
+      );
       return list;
     }
 
@@ -787,10 +835,16 @@ class _ReportsManagementState extends State<ReportsManagement>
     setState(() => _loadingEventDetail = true);
 
     try {
-      final doc = await FirebaseFirestore.instance.collection('events').doc(event.id).get();
+      final doc = await FirebaseFirestore.instance
+          .collection('events')
+          .doc(event.id)
+          .get();
       if (!doc.exists) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Event not found'), backgroundColor: UpriseColors.error),
+          SnackBar(
+            content: Text('Event not found'),
+            backgroundColor: UpriseColors.error,
+          ),
         );
         return;
       }
@@ -808,14 +862,22 @@ class _ReportsManagementState extends State<ReportsManagement>
       final registrants = stats.$1;
       final attendees = stats.$2;
 
-      final populated = EventReport.fromFirestore(doc, orgName, registrants, attendees);
+      final populated = EventReport.fromFirestore(
+        doc,
+        orgName,
+        registrants,
+        attendees,
+      );
       if (!mounted) return;
       setState(() => _detailEvent = populated);
     } catch (e) {
       debugPrint('Error loading event details: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to load event details: $e'), backgroundColor: UpriseColors.error),
+          SnackBar(
+            content: Text('Failed to load event details: $e'),
+            backgroundColor: UpriseColors.error,
+          ),
         );
       }
     } finally {
@@ -838,7 +900,8 @@ class _ReportsManagementState extends State<ReportsManagement>
           .collection('organizations')
           .get();
       final orgMap = {
-        for (var doc in orgsSnap.docs) doc.id: doc.data()['name']?.toString() ?? 'Unknown'
+        for (var doc in orgsSnap.docs)
+          doc.id: doc.data()['name']?.toString() ?? 'Unknown',
       };
 
       final allReports = reportsSnap.docs
@@ -853,6 +916,7 @@ class _ReportsManagementState extends State<ReportsManagement>
         _financialReports = activeReports;
         _loadingFinancial = false;
       });
+      _maybeRefreshAiInsight();
     } catch (e) {
       debugPrint('Error loading financial reports: $e');
       if (mounted) {
@@ -883,7 +947,8 @@ class _ReportsManagementState extends State<ReportsManagement>
           .collection('organizations')
           .get();
       final orgMap = {
-        for (var doc in orgsSnap.docs) doc.id: doc.data()['name']?.toString() ?? 'Unknown'
+        for (var doc in orgsSnap.docs)
+          doc.id: doc.data()['name']?.toString() ?? 'Unknown',
       };
 
       final allReports = reportsSnap.docs
@@ -898,6 +963,7 @@ class _ReportsManagementState extends State<ReportsManagement>
         _accomplishmentReports = activeReports;
         _loadingAccomplishment = false;
       });
+      _maybeRefreshAiInsight();
     } catch (e) {
       debugPrint('Error loading accomplishment reports: $e');
       if (mounted) {
@@ -919,7 +985,8 @@ class _ReportsManagementState extends State<ReportsManagement>
       barrierColor: Colors.black54,
       builder: (_) => _ConfirmDialog(
         title: 'Archive Report',
-        message: 'Are you sure you want to archive "${report.eventTitle}" from ${report.orgName}?',
+        message:
+            'Are you sure you want to archive "${report.eventTitle}" from ${report.orgName}?',
         confirmLabel: 'Archive',
         destructive: false,
       ),
@@ -988,7 +1055,8 @@ class _ReportsManagementState extends State<ReportsManagement>
       barrierColor: Colors.black54,
       builder: (_) => _ConfirmDialog(
         title: 'Archive Event',
-        message: 'Archive "${event.title}" from ${event.orgName}? It will no longer show up as an active event.',
+        message:
+            'Archive "${event.title}" from ${event.orgName}? It will no longer show up as an active event.',
         confirmLabel: 'Archive',
         destructive: false,
       ),
@@ -1068,7 +1136,10 @@ class _ReportsManagementState extends State<ReportsManagement>
       final data = doc.data() as Map<String, dynamic>;
       final orgId = data['orgId']?.toString();
       final date = (data['date'] as Timestamp?)?.toDate();
-      if (orgId == null || orgId.isEmpty || date == null || !date.isBefore(now)) {
+      if (orgId == null ||
+          orgId.isEmpty ||
+          date == null ||
+          !date.isBefore(now)) {
         continue;
       }
       eventsByOrg.putIfAbsent(orgId, () => []).add({
@@ -1078,11 +1149,13 @@ class _ReportsManagementState extends State<ReportsManagement>
       });
     }
     for (final list in eventsByOrg.values) {
-      list.sort((a, b) => (b['eventDate'] as DateTime).compareTo(a['eventDate'] as DateTime));
+      list.sort(
+        (a, b) =>
+            (b['eventDate'] as DateTime).compareTo(a['eventDate'] as DateTime),
+      );
     }
     return eventsByOrg;
   }
-
 
   Future<void> _loadSubmissionData() async {
     await Future.wait([
@@ -1106,7 +1179,10 @@ class _ReportsManagementState extends State<ReportsManagement>
       final orgId = data['orgId']?.toString();
       final eventId = data['eventId']?.toString();
       final deadline = (data['deadline'] as Timestamp?)?.toDate();
-      if (orgId != null && eventId != null && eventId.isNotEmpty && deadline != null) {
+      if (orgId != null &&
+          eventId != null &&
+          eventId.isNotEmpty &&
+          deadline != null) {
         map['${orgId}_$eventId'] = deadline;
       }
     }
@@ -1158,7 +1234,9 @@ class _ReportsManagementState extends State<ReportsManagement>
       barrierColor: Colors.black54,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDlg) => Dialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
           child: Container(
             width: 380,
             padding: const EdgeInsets.all(24),
@@ -1168,22 +1246,36 @@ class _ReportsManagementState extends State<ReportsManagement>
               children: [
                 Text(
                   'Edit ${type == 'financial' ? 'Financial' : 'Accomplishment'} Deadline',
-                  style: GoogleFonts.beVietnamPro(fontSize: 16, fontWeight: FontWeight.w700),
+                  style: GoogleFonts.beVietnamPro(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  sub.eventTitle != null ? '${sub.orgName} — ${sub.eventTitle}' : sub.orgName,
-                  style: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF64748B)),
+                  sub.eventTitle != null
+                      ? '${sub.orgName} — ${sub.eventTitle}'
+                      : sub.orgName,
+                  style: GoogleFonts.beVietnamPro(
+                    fontSize: 13,
+                    color: const Color(0xFF64748B),
+                  ),
                 ),
                 const SizedBox(height: 16),
                 if (autoDeadline != null)
                   Text(
                     'Default (7 days after event): ${DateFormat('MMM dd, yyyy').format(autoDeadline)}',
-                    style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF9AA5B4)),
+                    style: GoogleFonts.beVietnamPro(
+                      fontSize: 12,
+                      color: const Color(0xFF9AA5B4),
+                    ),
                   ),
                 const SizedBox(height: 10),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
                   decoration: BoxDecoration(
                     color: const Color(0xFFF8F9FB),
                     borderRadius: BorderRadius.circular(_DS.radiusSm),
@@ -1200,20 +1292,31 @@ class _ReportsManagementState extends State<ReportsManagement>
                         ),
                       ),
                       IconButton(
-                        icon: const Icon(Icons.calendar_today_rounded, size: 18, color: UpriseColors.primaryDark),
+                        icon: const Icon(
+                          Icons.calendar_today_rounded,
+                          size: 18,
+                          color: UpriseColors.primaryDark,
+                        ),
                         onPressed: () async {
                           final result = await showDatePicker(
                             context: ctx,
-                            initialDate: picked ?? autoDeadline ?? DateTime.now(),
+                            initialDate:
+                                picked ?? autoDeadline ?? DateTime.now(),
                             firstDate: DateTime(2020),
-                            lastDate: DateTime.now().add(const Duration(days: 730)),
+                            lastDate: DateTime.now().add(
+                              const Duration(days: 730),
+                            ),
                           );
                           if (result != null) setDlg(() => picked = result);
                         },
                       ),
                       if (picked != null)
                         IconButton(
-                          icon: const Icon(Icons.clear_rounded, size: 18, color: Color(0xFF9AA5B4)),
+                          icon: const Icon(
+                            Icons.clear_rounded,
+                            size: 18,
+                            color: Color(0xFF9AA5B4),
+                          ),
                           tooltip: 'Reset to default',
                           onPressed: () => setDlg(() => picked = null),
                         ),
@@ -1226,7 +1329,10 @@ class _ReportsManagementState extends State<ReportsManagement>
                   children: [
                     TextButton(
                       onPressed: () => Navigator.pop(ctx),
-                      child: Text('Cancel', style: GoogleFonts.beVietnamPro(fontSize: 13)),
+                      child: Text(
+                        'Cancel',
+                        style: GoogleFonts.beVietnamPro(fontSize: 13),
+                      ),
                     ),
                     const SizedBox(width: 8),
                     ElevatedButton(
@@ -1238,9 +1344,17 @@ class _ReportsManagementState extends State<ReportsManagement>
                         backgroundColor: UpriseColors.primaryDark,
                         foregroundColor: Colors.white,
                         elevation: 0,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
                       ),
-                      child: Text('Save', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600)),
+                      child: Text(
+                        'Save',
+                        style: GoogleFonts.beVietnamPro(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
                     ),
                   ],
                 ),
@@ -1261,9 +1375,16 @@ class _ReportsManagementState extends State<ReportsManagement>
   // orgId alone) that got silently overwritten by every new upload
   // regardless of which event it was actually for.
   Future<List<OrgSubmission>> _loadSubmissionRows(String type) async {
-    final orgsSnap = await FirebaseFirestore.instance.collection('organizations').get();
+    final orgsSnap = await FirebaseFirestore.instance
+        .collection('organizations')
+        .get();
     final allOrgs = orgsSnap.docs
-        .map((doc) => {'id': doc.id, 'name': doc.data()['name']?.toString() ?? 'Unknown'})
+        .map(
+          (doc) => {
+            'id': doc.id,
+            'name': doc.data()['name']?.toString() ?? 'Unknown',
+          },
+        )
         .toList();
     final eventsByOrg = await _loadFinishedEventsByOrg();
     final overrides = await _loadDeadlineOverrides(type);
@@ -1301,18 +1422,20 @@ class _ReportsManagementState extends State<ReportsManagement>
         final eventId = ev['eventId'] as String;
         final key = '${orgId}_$eventId';
         final sub = subsMap[key];
-        rows.add(OrgSubmission(
-          orgId: orgId,
-          orgName: org['name']!,
-          submittedAt: sub?['submittedAt'] as DateTime?,
-          fileBase64: sub?['fileBase64'] as String?,
-          fileName: sub?['fileName'] as String?,
-          submissionId: sub?['submissionId'] as String?,
-          eventId: eventId,
-          eventTitle: ev['eventTitle'] as String,
-          eventDate: ev['eventDate'] as DateTime,
-          deadlineOverride: overrides[key],
-        ));
+        rows.add(
+          OrgSubmission(
+            orgId: orgId,
+            orgName: org['name']!,
+            submittedAt: sub?['submittedAt'] as DateTime?,
+            fileBase64: sub?['fileBase64'] as String?,
+            fileName: sub?['fileName'] as String?,
+            submissionId: sub?['submissionId'] as String?,
+            eventId: eventId,
+            eventTitle: ev['eventTitle'] as String,
+            eventDate: ev['eventDate'] as DateTime,
+            deadlineOverride: overrides[key],
+          ),
+        );
       }
     }
 
@@ -1324,17 +1447,19 @@ class _ReportsManagementState extends State<ReportsManagement>
       final data = doc.data();
       final orgId = data['orgId']?.toString() ?? '';
       if (orgId.isEmpty) continue;
-      rows.add(OrgSubmission(
-        orgId: orgId,
-        orgName: orgNames[orgId] ?? 'Unknown',
-        submittedAt: (data['submittedAt'] as Timestamp?)?.toDate(),
-        fileBase64: data['fileBase64'],
-        fileName: data['fileName'],
-        submissionId: doc.id,
-        scope: (data['scope'] ?? 'event').toString(),
-        schoolYear: data['schoolYear']?.toString(),
-        semester: data['semester']?.toString(),
-      ));
+      rows.add(
+        OrgSubmission(
+          orgId: orgId,
+          orgName: orgNames[orgId] ?? 'Unknown',
+          submittedAt: (data['submittedAt'] as Timestamp?)?.toDate(),
+          fileBase64: data['fileBase64'],
+          fileName: data['fileName'],
+          submissionId: doc.id,
+          scope: (data['scope'] ?? 'event').toString(),
+          schoolYear: data['schoolYear']?.toString(),
+          semester: data['semester']?.toString(),
+        ),
+      );
     }
     return rows;
   }
@@ -1346,6 +1471,7 @@ class _ReportsManagementState extends State<ReportsManagement>
       final rows = await _loadSubmissionRows('financial');
       if (!mounted) return;
       setState(() => _financialSubs = rows);
+      _maybeRefreshAiInsight();
     } catch (e) {
       debugPrint('Error loading financial submissions: $e');
     } finally {
@@ -1360,6 +1486,7 @@ class _ReportsManagementState extends State<ReportsManagement>
       final rows = await _loadSubmissionRows('accomplishment');
       if (!mounted) return;
       setState(() => _accomplishmentSubs = rows);
+      _maybeRefreshAiInsight();
     } catch (e) {
       debugPrint('Error loading accomplishment submissions: $e');
     } finally {
@@ -1393,7 +1520,8 @@ class _ReportsManagementState extends State<ReportsManagement>
       severity: 'info',
       details: {
         'fileName': fileName,
-        'filters': 'Org: $_filterOrg, Type: $_filterType, AY: $_filterAcademicYear, Sem: $_filterSemester, Status: $_filterStatus',
+        'filters':
+            'Org: $_filterOrg, Type: $_filterType, AY: $_filterAcademicYear, Sem: $_filterSemester, Status: $_filterStatus',
       },
     );
   }
@@ -1500,7 +1628,6 @@ class _ReportsManagementState extends State<ReportsManagement>
     await _logGeneratedReport(fileName, 'CSV', 'Accomplishment');
   }
 
-
   // ── Build ─────────────────────────────────────────────────────────
 
   @override
@@ -1509,7 +1636,9 @@ class _ReportsManagementState extends State<ReportsManagement>
       backgroundColor: const Color(0xFFFBFCFE),
       body: Stack(
         children: [
-          _detailEvent != null ? _buildDetailView(_detailEvent!) : _buildMainView(),
+          _detailEvent != null
+              ? _buildDetailView(_detailEvent!)
+              : _buildMainView(),
           if (_loadingEventDetail)
             Positioned.fill(
               child: Container(
@@ -1526,10 +1655,29 @@ class _ReportsManagementState extends State<ReportsManagement>
   // pattern as the stats row on event_proposals.dart / external_account.dart.
   Widget _buildPageStatsRow() {
     final trackedFin = _financialSubs.where((s) => s.hasApprovedEvent).toList();
-    final trackedAcc = _accomplishmentSubs.where((s) => s.hasApprovedEvent).toList();
-    final overdue = trackedFin.where((s) => s.submittedAt == null && s.eventDeadline != null && DateTime.now().isAfter(s.eventDeadline!)).length +
-        trackedAcc.where((s) => s.submittedAt == null && s.eventDeadline != null && DateTime.now().isAfter(s.eventDeadline!)).length;
-    final late = trackedFin.where((s) => s.isLate).length + trackedAcc.where((s) => s.isLate).length;
+    final trackedAcc = _accomplishmentSubs
+        .where((s) => s.hasApprovedEvent)
+        .toList();
+    final overdue =
+        trackedFin
+            .where(
+              (s) =>
+                  s.submittedAt == null &&
+                  s.eventDeadline != null &&
+                  DateTime.now().isAfter(s.eventDeadline!),
+            )
+            .length +
+        trackedAcc
+            .where(
+              (s) =>
+                  s.submittedAt == null &&
+                  s.eventDeadline != null &&
+                  DateTime.now().isAfter(s.eventDeadline!),
+            )
+            .length;
+    final late =
+        trackedFin.where((s) => s.isLate).length +
+        trackedAcc.where((s) => s.isLate).length;
 
     final cards = [
       _StatCard(
@@ -1577,6 +1725,8 @@ class _ReportsManagementState extends State<ReportsManagement>
       children: [
         _buildPageStatsRow(),
         const SizedBox(height: 16),
+        _buildAiInsightCard(),
+        const SizedBox(height: 16),
         _buildTabBar(),
         const SizedBox(height: 16),
         Expanded(
@@ -1585,8 +1735,16 @@ class _ReportsManagementState extends State<ReportsManagement>
             physics: const NeverScrollableScrollPhysics(),
             children: [
               _buildEventSummaryTab(),
-              _buildReportTab('Accomplishment', _accomplishmentReports, _loadingAccomplishment),
-              _buildReportTab('Financial', _financialReports, _loadingFinancial),
+              _buildReportTab(
+                'Accomplishment',
+                _accomplishmentReports,
+                _loadingAccomplishment,
+              ),
+              _buildReportTab(
+                'Financial',
+                _financialReports,
+                _loadingFinancial,
+              ),
               _buildSubmissionTrackerTab(),
             ],
           ),
@@ -1596,6 +1754,242 @@ class _ReportsManagementState extends State<ReportsManagement>
   }
 
   // ── Tab Bar ───────────────────────────────────────────────────────
+  Widget _buildAiInsightCard() {
+    final trackedFin = _financialSubs.where((s) => s.hasApprovedEvent).toList();
+    final trackedAcc = _accomplishmentSubs
+        .where((s) => s.hasApprovedEvent)
+        .toList();
+    final overdue =
+        trackedFin
+            .where(
+              (s) =>
+                  s.submittedAt == null &&
+                  s.eventDeadline != null &&
+                  DateTime.now().isAfter(s.eventDeadline!),
+            )
+            .length +
+        trackedAcc
+            .where(
+              (s) =>
+                  s.submittedAt == null &&
+                  s.eventDeadline != null &&
+                  DateTime.now().isAfter(s.eventDeadline!),
+            )
+            .length;
+    final late =
+        trackedFin.where((s) => s.isLate).length +
+        trackedAcc.where((s) => s.isLate).length;
+    final pending =
+        trackedFin.where((s) => s.submittedAt == null).length +
+        trackedAcc.where((s) => s.submittedAt == null).length;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFE8ECF0)),
+        boxShadow: _DS.cardShadow,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'AI Report Summary',
+                style: GoogleFonts.beVietnamPro(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              if (_loadingAiInsight)
+                Row(
+                  children: [
+                    const SizedBox(width: 8),
+                    const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  ],
+                )
+              else
+                TextButton(
+                  onPressed: _loadAiInsight,
+                  style: TextButton.styleFrom(
+                    foregroundColor: UpriseColors.primaryDark,
+                    textStyle: GoogleFonts.beVietnamPro(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  child: const Text('Refresh'),
+                ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(
+            'This AI insight helps you spot report backlog, submission delays, and important follow-up actions for organizations.',
+            style: GoogleFonts.beVietnamPro(
+              fontSize: 12,
+              color: const Color(0xFF64748B),
+              height: 1.5,
+            ),
+          ),
+          const SizedBox(height: 14),
+          if (_aiInsightError != null) ...[
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: UpriseColors.errorBg,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Text(
+                _aiInsightError!,
+                style: GoogleFonts.beVietnamPro(
+                  fontSize: 12,
+                  color: UpriseColors.error,
+                ),
+              ),
+            ),
+          ] else ...[
+            Text(
+              _aiInsight ??
+                  'AI is reviewing the report status and will show recommendations here.',
+              style: GoogleFonts.beVietnamPro(
+                fontSize: 13,
+                color: const Color(0xFF1F2937),
+                height: 1.6,
+              ),
+            ),
+          ],
+          const SizedBox(height: 14),
+          Wrap(
+            spacing: 12,
+            runSpacing: 8,
+            children: [
+              _StatCard(
+                label: 'Overdue Reports',
+                value: '$overdue',
+                icon: Icons.error_outline_rounded,
+                color: UpriseColors.error,
+              ),
+              _StatCard(
+                label: 'Late Submissions',
+                value: '$late',
+                icon: Icons.history_toggle_off_rounded,
+                color: UpriseColors.warning,
+              ),
+              _StatCard(
+                label: 'Pending Reports',
+                value: '$pending',
+                icon: Icons.pending_actions_rounded,
+                color: UpriseColors.info,
+              ),
+              _StatCard(
+                label: 'Tracked Events',
+                value: '${_events.length}',
+                icon: Icons.event_available_rounded,
+                color: UpriseColors.primary,
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _maybeRefreshAiInsight() async {
+    if (_loadingAiInsight ||
+        _loadingEvents ||
+        _loadingFinancial ||
+        _loadingAccomplishment ||
+        _loadingFinancialSubs ||
+        _loadingAccomplishmentSubs) {
+      return;
+    }
+    await _loadAiInsight();
+  }
+
+  Future<void> _loadAiInsight() async {
+    if (_loadingAiInsight) return;
+
+    final trackedFin = _financialSubs.where((s) => s.hasApprovedEvent).toList();
+    final trackedAcc = _accomplishmentSubs
+        .where((s) => s.hasApprovedEvent)
+        .toList();
+    final overdue =
+        trackedFin
+            .where(
+              (s) =>
+                  s.submittedAt == null &&
+                  s.eventDeadline != null &&
+                  DateTime.now().isAfter(s.eventDeadline!),
+            )
+            .length +
+        trackedAcc
+            .where(
+              (s) =>
+                  s.submittedAt == null &&
+                  s.eventDeadline != null &&
+                  DateTime.now().isAfter(s.eventDeadline!),
+            )
+            .length;
+    final late =
+        trackedFin.where((s) => s.isLate).length +
+        trackedAcc.where((s) => s.isLate).length;
+    final pending =
+        trackedFin.where((s) => s.submittedAt == null).length +
+        trackedAcc.where((s) => s.submittedAt == null).length;
+    final activeOrganizations = _organizations.length;
+    final activeEvents = _events.length;
+    final topOrgByOverdue = <String, int>{};
+    for (final sub in [...trackedFin, ...trackedAcc]) {
+      if (sub.submittedAt == null &&
+          sub.eventDeadline != null &&
+          DateTime.now().isAfter(sub.eventDeadline!)) {
+        topOrgByOverdue[sub.orgName] = (topOrgByOverdue[sub.orgName] ?? 0) + 1;
+      }
+    }
+    final topOrg = topOrgByOverdue.isEmpty
+        ? 'No organization is currently overdue'
+        : topOrgByOverdue.entries
+              .reduce((a, b) => a.value >= b.value ? a : b)
+              .key;
+
+    setState(() {
+      _loadingAiInsight = true;
+      _aiInsightError = null;
+    });
+
+    try {
+      final prompt = AiService.buildReportManagementInsightPrompt(
+        activeOrganizations: activeOrganizations,
+        activeEvents: activeEvents,
+        overdueReports: overdue,
+        lateSubmissions: late,
+        pendingReports: pending,
+        topOrganization: topOrg,
+      );
+      final insight = await AiService.ask(prompt);
+      if (!mounted) return;
+      setState(() {
+        _aiInsight = insight.trim();
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _aiInsightError = 'AI summary unavailable: ${e.toString()}';
+      });
+    } finally {
+      if (mounted) setState(() => _loadingAiInsight = false);
+    }
+  }
+
   Widget _buildTabBar() {
     return Padding(
       padding: const EdgeInsets.fromLTRB(28, 20, 28, 0),
@@ -1638,7 +2032,11 @@ class _ReportsManagementState extends State<ReportsManagement>
   // ── Report Tab (Accomplishment / Financial) ──────────────────────
   // Pure viewing of whatever orgs have uploaded — filters apply live, no
   // "generate" step needed since the data already exists.
-  Widget _buildReportTab(String reportType, List<AdminReport> reports, bool loading) {
+  Widget _buildReportTab(
+    String reportType,
+    List<AdminReport> reports,
+    bool loading,
+  ) {
     final filtered = _applyReportFilters(reports);
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(28, 8, 28, 24),
@@ -1658,9 +2056,11 @@ class _ReportsManagementState extends State<ReportsManagement>
     final term = _reportSearchController.text.trim().toLowerCase();
     if (term.isNotEmpty) {
       filtered = filtered
-          .where((r) =>
-              r.orgName.toLowerCase().contains(term) ||
-              r.eventTitle.toLowerCase().contains(term))
+          .where(
+            (r) =>
+                r.orgName.toLowerCase().contains(term) ||
+                r.eventTitle.toLowerCase().contains(term),
+          )
           .toList();
     }
     if (_filterOrg != 'All Organizations') {
@@ -1678,7 +2078,10 @@ class _ReportsManagementState extends State<ReportsManagement>
 
   // Same bare search-field-plus-dropdowns layout as the other admin
   // tables — no card wrapper, no section label.
-  Widget _buildReportFilterRow(String reportType, List<AdminReport> filteredReports) {
+  Widget _buildReportFilterRow(
+    String reportType,
+    List<AdminReport> filteredReports,
+  ) {
     final orgNames = [
       'All Organizations',
       ..._organizations.map((o) => o['name'] as String),
@@ -1691,14 +2094,33 @@ class _ReportsManagementState extends State<ReportsManagement>
         style: GoogleFonts.beVietnamPro(fontSize: 13),
         decoration: InputDecoration(
           hintText: 'Search by event or organization…',
-          hintStyle: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF9AA5B4)),
-          prefixIcon: const Icon(Icons.search_rounded, size: 18, color: Color(0xFF9AA5B4)),
+          hintStyle: GoogleFonts.beVietnamPro(
+            fontSize: 13,
+            color: const Color(0xFF9AA5B4),
+          ),
+          prefixIcon: const Icon(
+            Icons.search_rounded,
+            size: 18,
+            color: Color(0xFF9AA5B4),
+          ),
           filled: true,
           fillColor: Colors.white,
-          contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE2E6EA))),
-          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE2E6EA))),
-          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: UpriseColors.primaryDark, width: 1.5)),
+          contentPadding: const EdgeInsets.symmetric(
+            vertical: 0,
+            horizontal: 16,
+          ),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: const BorderSide(color: Color(0xFFE2E6EA)),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: const BorderSide(color: Color(0xFFE2E6EA)),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: BorderSide(color: UpriseColors.primaryDark, width: 1.5),
+          ),
         ),
         onChanged: (_) => setState(() {}),
       ),
@@ -1731,32 +2153,41 @@ class _ReportsManagementState extends State<ReportsManagement>
           onChanged: (v) => setState(() => _filterSemester = v!),
         ),
         _ExportButton(
-          onExportCsv: () => _exportAdminReportsCsv(reportType, filteredReports),
-          onExportPdf: () => _exportAdminReportsPdf(reportType, filteredReports),
+          onExportCsv: () =>
+              _exportAdminReportsCsv(reportType, filteredReports),
+          onExportPdf: () =>
+              _exportAdminReportsPdf(reportType, filteredReports),
         ),
       ],
     );
 
-    return LayoutBuilder(builder: (context, constraints) {
-      if (constraints.maxWidth < 760) {
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [searchField, const SizedBox(height: 10), filters],
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth < 760) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [searchField, const SizedBox(height: 10), filters],
+          );
+        }
+        return Row(
+          children: [
+            Expanded(child: searchField),
+            const SizedBox(width: 10),
+            filters,
+          ],
         );
-      }
-      return Row(
-        children: [
-          Expanded(child: searchField),
-          const SizedBox(width: 10),
-          filters,
-        ],
-      );
-    });
+      },
+    );
   }
 
-  Future<void> _exportAdminReportsCsv(String reportType, List<AdminReport> reports) async {
+  Future<void> _exportAdminReportsCsv(
+    String reportType,
+    List<AdminReport> reports,
+  ) async {
     if (reports.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No data to export.')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('No data to export.')));
       return;
     }
     final rows = <List<String>>[
@@ -1779,33 +2210,54 @@ class _ReportsManagementState extends State<ReportsManagement>
     await _logGeneratedReport(fileName, 'CSV', reportType);
   }
 
-  Future<void> _exportAdminReportsPdf(String reportType, List<AdminReport> reports) async {
+  Future<void> _exportAdminReportsPdf(
+    String reportType,
+    List<AdminReport> reports,
+  ) async {
     if (reports.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No data to export.')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('No data to export.')));
       return;
     }
     final rows = reports
-        .map((r) => [
-              r.orgName,
-              r.eventTitle,
-              r.type,
-              r.description,
-              DateFormat('yyyy-MM-dd').format(r.submittedAt),
-            ])
+        .map(
+          (r) => [
+            r.orgName,
+            r.eventTitle,
+            r.type,
+            r.description,
+            DateFormat('yyyy-MM-dd').format(r.submittedAt),
+          ],
+        )
         .toList();
     final pdfBytes = await AdminExportPdf.generateTablePdf(
       title: '$reportType Reports',
-      headers: const ['Organization', 'Event', 'Type', 'Description', 'Date Submitted'],
+      headers: const [
+        'Organization',
+        'Event',
+        'Type',
+        'Description',
+        'Date Submitted',
+      ],
       rows: rows,
     );
     final ts = DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
     final fileName = '${reportType.toLowerCase()}_reports_$ts.pdf';
-    await AdminExportUtil.saveBytes(pdfBytes, fileName, mimeType: 'application/pdf');
+    await AdminExportUtil.saveBytes(
+      pdfBytes,
+      fileName,
+      mimeType: 'application/pdf',
+    );
     await _logGeneratedReport(fileName, 'PDF', reportType);
   }
 
   // ── Report Table ─────────────────────────────────────────────────
-  Widget _buildReportTable(String reportType, List<AdminReport> reports, bool loading) {
+  Widget _buildReportTable(
+    String reportType,
+    List<AdminReport> reports,
+    bool loading,
+  ) {
     if (loading) {
       return const Padding(
         padding: EdgeInsets.all(32),
@@ -1862,11 +2314,16 @@ class _ReportsManagementState extends State<ReportsManagement>
                 hoverColor: const Color(0xFFF8F9FB),
                 onTap: () => _viewReport(report),
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 14,
+                  ),
                   decoration: BoxDecoration(
                     border: isLast
                         ? null
-                        : const Border(bottom: BorderSide(color: Color(0xFFF1F5F9))),
+                        : const Border(
+                            bottom: BorderSide(color: Color(0xFFF1F5F9)),
+                          ),
                   ),
                   child: Row(
                     children: [
@@ -1910,7 +2367,10 @@ class _ReportsManagementState extends State<ReportsManagement>
                         child: Align(
                           alignment: Alignment.centerLeft,
                           child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 3,
+                            ),
                             decoration: BoxDecoration(
                               color: report.type == 'financial'
                                   ? const Color(0xFFECFDF5)
@@ -1918,7 +2378,9 @@ class _ReportsManagementState extends State<ReportsManagement>
                               borderRadius: BorderRadius.circular(6),
                             ),
                             child: Text(
-                              report.type == 'financial' ? 'Financial' : 'Accomplishment',
+                              report.type == 'financial'
+                                  ? 'Financial'
+                                  : 'Accomplishment',
                               style: GoogleFonts.beVietnamPro(
                                 fontSize: 11,
                                 fontWeight: FontWeight.w700,
@@ -2025,9 +2487,11 @@ class _ReportsManagementState extends State<ReportsManagement>
     final term = _eventSearchController.text.trim().toLowerCase();
     if (term.isEmpty) return _events;
     return _events
-        .where((e) =>
-            e.title.toLowerCase().contains(term) ||
-            e.orgName.toLowerCase().contains(term))
+        .where(
+          (e) =>
+              e.title.toLowerCase().contains(term) ||
+              e.orgName.toLowerCase().contains(term),
+        )
         .toList();
   }
 
@@ -2049,14 +2513,33 @@ class _ReportsManagementState extends State<ReportsManagement>
         style: GoogleFonts.beVietnamPro(fontSize: 13),
         decoration: InputDecoration(
           hintText: 'Search by event or organization…',
-          hintStyle: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF9AA5B4)),
-          prefixIcon: const Icon(Icons.search_rounded, size: 18, color: Color(0xFF9AA5B4)),
+          hintStyle: GoogleFonts.beVietnamPro(
+            fontSize: 13,
+            color: const Color(0xFF9AA5B4),
+          ),
+          prefixIcon: const Icon(
+            Icons.search_rounded,
+            size: 18,
+            color: Color(0xFF9AA5B4),
+          ),
           filled: true,
           fillColor: Colors.white,
-          contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE2E6EA))),
-          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE2E6EA))),
-          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: UpriseColors.primaryDark, width: 1.5)),
+          contentPadding: const EdgeInsets.symmetric(
+            vertical: 0,
+            horizontal: 16,
+          ),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: const BorderSide(color: Color(0xFFE2E6EA)),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: const BorderSide(color: Color(0xFFE2E6EA)),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: BorderSide(color: UpriseColors.primaryDark, width: 1.5),
+          ),
         ),
         onChanged: (_) => setState(() {}),
       ),
@@ -2080,8 +2563,13 @@ class _ReportsManagementState extends State<ReportsManagement>
         _FilterDropdown(
           value: _filterType,
           items: const [
-            'All Types', 'Seminar', 'Workshop', 'Exhibition',
-            'Social', 'Cultural', 'Competition',
+            'All Types',
+            'Seminar',
+            'Workshop',
+            'Exhibition',
+            'Social',
+            'Cultural',
+            'Competition',
           ],
           hint: 'Event Type',
           icon: Icons.category_rounded,
@@ -2117,31 +2605,35 @@ class _ReportsManagementState extends State<ReportsManagement>
       ],
     );
 
-    return LayoutBuilder(builder: (context, constraints) {
-      if (constraints.maxWidth < 760) {
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [searchField, const SizedBox(height: 10), filters],
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth < 760) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [searchField, const SizedBox(height: 10), filters],
+          );
+        }
+        return Row(
+          children: [
+            Expanded(child: searchField),
+            const SizedBox(width: 10),
+            filters,
+          ],
         );
-      }
-      return Row(
-        children: [
-          Expanded(child: searchField),
-          const SizedBox(width: 10),
-          filters,
-        ],
-      );
-    });
+      },
+    );
   }
-
-  
 
   // Toolbar + table only — matches the layout every other tab on this page
   // uses (_buildReportTab, _buildSubmissionTrackerTab). The per-event Type
   // and attendance Ratio are already visible per-row in the table itself,
   // so a separate aggregate chart above it was just duplicate noise.
   Widget _buildEventSummaryResults() {
-    return _buildEventsTable(_filteredEvents, showFinancial: false, showCountdown: false);
+    return _buildEventsTable(
+      _filteredEvents,
+      showFinancial: false,
+      showCountdown: false,
+    );
   }
 
   // ── Events Table ──────────────────────────────────────────────────
@@ -2159,11 +2651,15 @@ class _ReportsManagementState extends State<ReportsManagement>
     final safePage = _currentPage.clamp(1, totalPages);
     final start = (safePage - 1) * _pageSize;
     final end = (start + _pageSize).clamp(0, events.length);
-    final pageItems = events.isEmpty ? <EventReport>[] : events.sublist(start, end);
+    final pageItems = events.isEmpty
+        ? <EventReport>[]
+        : events.sublist(start, end);
 
     // Ensure attendance counts are populated for visible page items.
     if (!_loadingEventCounts) {
-      final needsCounts = pageItems.any((e) => e.registrants == 0 && e.attendees == 0);
+      final needsCounts = pageItems.any(
+        (e) => e.registrants == 0 && e.attendees == 0,
+      );
       if (needsCounts) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
           _fetchAttendanceCountsForPage(pageItems);
@@ -2191,12 +2687,14 @@ class _ReportsManagementState extends State<ReportsManagement>
           if (events.isEmpty)
             _buildEmptyState()
           else
-            ...pageItems.asMap().entries.map((entry) => _buildEventRow(
-                  event: entry.value,
-                  isLast: entry.key == pageItems.length - 1,
-                  showFinancial: showFinancial,
-                  showCountdown: showCountdown,
-                )),
+            ...pageItems.asMap().entries.map(
+              (entry) => _buildEventRow(
+                event: entry.value,
+                isLast: entry.key == pageItems.length - 1,
+                showFinancial: showFinancial,
+                showCountdown: showCountdown,
+              ),
+            ),
           _buildTableFooter(events.length, totalPages, start, end),
         ],
       ),
@@ -2397,7 +2895,7 @@ class _ReportsManagementState extends State<ReportsManagement>
                     ),
                   Expanded(
                     flex: 1,
-                      child: Align(
+                    child: Align(
                       alignment: Alignment.centerRight,
                       child: _ActionIconButton(
                         icon: Icons.visibility_outlined,
@@ -2655,14 +3153,33 @@ class _ReportsManagementState extends State<ReportsManagement>
         style: GoogleFonts.beVietnamPro(fontSize: 13),
         decoration: InputDecoration(
           hintText: 'Search by organization or event…',
-          hintStyle: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF9AA5B4)),
-          prefixIcon: const Icon(Icons.search_rounded, size: 18, color: Color(0xFF9AA5B4)),
+          hintStyle: GoogleFonts.beVietnamPro(
+            fontSize: 13,
+            color: const Color(0xFF9AA5B4),
+          ),
+          prefixIcon: const Icon(
+            Icons.search_rounded,
+            size: 18,
+            color: Color(0xFF9AA5B4),
+          ),
           filled: true,
           fillColor: Colors.white,
-          contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE2E6EA))),
-          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE2E6EA))),
-          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: UpriseColors.primaryDark, width: 1.5)),
+          contentPadding: const EdgeInsets.symmetric(
+            vertical: 0,
+            horizontal: 16,
+          ),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: const BorderSide(color: Color(0xFFE2E6EA)),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: const BorderSide(color: Color(0xFFE2E6EA)),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: BorderSide(color: UpriseColors.primaryDark, width: 1.5),
+          ),
         ),
         onChanged: (_) => setState(() {}),
       ),
@@ -2694,21 +3211,23 @@ class _ReportsManagementState extends State<ReportsManagement>
       ],
     );
 
-    return LayoutBuilder(builder: (context, constraints) {
-      if (constraints.maxWidth < 760) {
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [searchField, const SizedBox(height: 10), filters],
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth < 760) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [searchField, const SizedBox(height: 10), filters],
+          );
+        }
+        return Row(
+          children: [
+            Expanded(child: searchField),
+            const SizedBox(width: 10),
+            filters,
+          ],
         );
-      }
-      return Row(
-        children: [
-          Expanded(child: searchField),
-          const SizedBox(width: 10),
-          filters,
-        ],
-      );
-    });
+      },
+    );
   }
 
   // Shared by both tables and the combined export, so what you export
@@ -2718,9 +3237,11 @@ class _ReportsManagementState extends State<ReportsManagement>
     var filtered = subs.where((s) => s.hasApprovedEvent).toList();
     if (term.isNotEmpty) {
       filtered = filtered
-          .where((s) =>
-              s.orgName.toLowerCase().contains(term) ||
-              s.displayTitle.toLowerCase().contains(term))
+          .where(
+            (s) =>
+                s.orgName.toLowerCase().contains(term) ||
+                s.displayTitle.toLowerCase().contains(term),
+          )
           .toList();
     }
     if (_filterOrg != 'All Organizations') {
@@ -2730,13 +3251,21 @@ class _ReportsManagementState extends State<ReportsManagement>
       filtered = filtered.where((s) {
         final isSubmitted = s.submittedAt != null;
         final deadline = s.eventDeadline;
-        final isOverdue = !isSubmitted && deadline != null && DateTime.now().isAfter(deadline);
-        final isLate = isSubmitted && deadline != null && s.submittedAt!.isAfter(deadline);
+        final isOverdue =
+            !isSubmitted &&
+            deadline != null &&
+            DateTime.now().isAfter(deadline);
+        final isLate =
+            isSubmitted && deadline != null && s.submittedAt!.isAfter(deadline);
         switch (_submissionStatusFilter) {
-          case 'Submitted': return isSubmitted && !isLate;
-          case 'Late': return isLate;
-          case 'Overdue': return isOverdue;
-          case 'Pending': return !isSubmitted && !isOverdue;
+          case 'Submitted':
+            return isSubmitted && !isLate;
+          case 'Late':
+            return isLate;
+          case 'Overdue':
+            return isOverdue;
+          case 'Pending':
+            return !isSubmitted && !isOverdue;
         }
         return true;
       }).toList();
@@ -2748,11 +3277,21 @@ class _ReportsManagementState extends State<ReportsManagement>
     final finRows = _filterSubmissionRows(_financialSubs);
     final accRows = _filterSubmissionRows(_accomplishmentSubs);
     if (finRows.isEmpty && accRows.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No data to export.')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('No data to export.')));
       return;
     }
     final rows = <List<String>>[
-      ['Type', 'Organization', 'Event / Period', 'Event Date', 'Deadline', 'Submitted On', 'Status'],
+      [
+        'Type',
+        'Organization',
+        'Event / Period',
+        'Event Date',
+        'Deadline',
+        'Submitted On',
+        'Status',
+      ],
     ];
     for (final entry in [('Financial', finRows), ('Accomplishment', accRows)]) {
       for (final s in entry.$2) {
@@ -2771,7 +3310,9 @@ class _ReportsManagementState extends State<ReportsManagement>
     final finRows = _filterSubmissionRows(_financialSubs);
     final accRows = _filterSubmissionRows(_accomplishmentSubs);
     if (finRows.isEmpty && accRows.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No data to export.')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('No data to export.')));
       return;
     }
     final rows = <List<String>>[];
@@ -2782,20 +3323,35 @@ class _ReportsManagementState extends State<ReportsManagement>
     }
     final pdfBytes = await AdminExportPdf.generateTablePdf(
       title: 'Submission Tracker Report',
-      headers: const ['Type', 'Organization', 'Event / Period', 'Event Date', 'Deadline', 'Submitted On', 'Status'],
+      headers: const [
+        'Type',
+        'Organization',
+        'Event / Period',
+        'Event Date',
+        'Deadline',
+        'Submitted On',
+        'Status',
+      ],
       rows: rows,
     );
     final ts = DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
     final fileName = 'submission_tracker_$ts.pdf';
-    await AdminExportUtil.saveBytes(pdfBytes, fileName, mimeType: 'application/pdf');
+    await AdminExportUtil.saveBytes(
+      pdfBytes,
+      fileName,
+      mimeType: 'application/pdf',
+    );
     await _logGeneratedReport(fileName, 'PDF', 'Submission Tracker');
   }
 
   List<String> _submissionExportRow(String type, OrgSubmission s) {
     final isSubmitted = s.submittedAt != null;
     final deadline = s.eventDeadline;
-    final isOverdue = !isSubmitted && deadline != null && DateTime.now().isAfter(deadline);
-    final status = isSubmitted ? (s.isLate ? 'Late' : 'On Time') : (isOverdue ? 'Overdue' : 'Pending');
+    final isOverdue =
+        !isSubmitted && deadline != null && DateTime.now().isAfter(deadline);
+    final status = isSubmitted
+        ? (s.isLate ? 'Late' : 'On Time')
+        : (isOverdue ? 'Overdue' : 'Pending');
     return [
       type,
       s.orgName,
@@ -2853,20 +3409,20 @@ class _ReportsManagementState extends State<ReportsManagement>
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 13),
             decoration: const BoxDecoration(
-        color: Color(0xFFFFF7ED),
-        borderRadius: BorderRadius.vertical(top: Radius.circular(14)),
-        border: Border(bottom: BorderSide(color: Color(0xFFFB923C))),
+              color: Color(0xFFFFF7ED),
+              borderRadius: BorderRadius.vertical(top: Radius.circular(14)),
+              border: Border(bottom: BorderSide(color: Color(0xFFFB923C))),
             ),
             child: Row(
               children: [
                 Expanded(flex: 2, child: _headerCell('ORGANIZATION')),
                 Expanded(
-  flex: 3,
-  child: Padding(
-    padding: const EdgeInsets.only(left: 8),
-    child: _headerCell('EVENT / PERIOD'),
-  ),
-),
+                  flex: 3,
+                  child: Padding(
+                    padding: const EdgeInsets.only(left: 8),
+                    child: _headerCell('EVENT / PERIOD'),
+                  ),
+                ),
                 Expanded(flex: 2, child: _headerCell('EVENT DATE')),
                 Expanded(flex: 2, child: _headerCell('DEADLINE')),
                 Expanded(flex: 2, child: _headerCell('SUBMITTED ON')),
@@ -2896,188 +3452,216 @@ class _ReportsManagementState extends State<ReportsManagement>
               ),
             )
           else
-          ...sorted.asMap().entries.map((entry) {
-            final i = entry.key;
-            final sub = entry.value;
-            final isSubmitted = sub.submittedAt != null;
-            // Precedence: this org's own override beats the automatic
-            // 7-days-after-event rule. Period-scoped (semester/whole-year)
-            // submissions have no deadline concept at all — they only ever
-            // appear in this list once actually uploaded.
-            final rowDeadline = sub.eventDeadline;
-            final isOverdue = !isSubmitted && rowDeadline != null && DateTime.now().isAfter(rowDeadline);
-            final isLate = isSubmitted && rowDeadline != null && sub.submittedAt!.isAfter(rowDeadline);
-            final daysLeft = (!isSubmitted && rowDeadline != null)
-                ? rowDeadline.difference(DateTime.now()).inDays
-                : 0;
-            final isLast = i == sorted.length - 1;
-            return InkWell(
-              hoverColor: const Color(0xFFF8F9FB),
-              onTap: isSubmitted ? () => _viewSubmission(sub, title) : null,
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 20,
-                  vertical: 14,
-                ),
-                decoration: BoxDecoration(
-                  border: isLast
-                      ? null
-                      : const Border(
-                          bottom: BorderSide(color: Color(0xFFF1F5F9)),
+            ...sorted.asMap().entries.map((entry) {
+              final i = entry.key;
+              final sub = entry.value;
+              final isSubmitted = sub.submittedAt != null;
+              // Precedence: this org's own override beats the automatic
+              // 7-days-after-event rule. Period-scoped (semester/whole-year)
+              // submissions have no deadline concept at all — they only ever
+              // appear in this list once actually uploaded.
+              final rowDeadline = sub.eventDeadline;
+              final isOverdue =
+                  !isSubmitted &&
+                  rowDeadline != null &&
+                  DateTime.now().isAfter(rowDeadline);
+              final isLate =
+                  isSubmitted &&
+                  rowDeadline != null &&
+                  sub.submittedAt!.isAfter(rowDeadline);
+              final daysLeft = (!isSubmitted && rowDeadline != null)
+                  ? rowDeadline.difference(DateTime.now()).inDays
+                  : 0;
+              final isLast = i == sorted.length - 1;
+              return InkWell(
+                hoverColor: const Color(0xFFF8F9FB),
+                onTap: isSubmitted ? () => _viewSubmission(sub, title) : null,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 14,
+                  ),
+                  decoration: BoxDecoration(
+                    border: isLast
+                        ? null
+                        : const Border(
+                            bottom: BorderSide(color: Color(0xFFF1F5F9)),
+                          ),
+                  ),
+                  child: Row(
+                    children: [
+                      // ---- NEW: Organization column ----
+                      Expanded(
+                        flex: 2,
+                        child: Row(
+                          children: [
+                            _OrgAvatar(name: sub.orgName),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                sub.orgName,
+                                style: GoogleFonts.beVietnamPro(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: const Color(0xFF1A202C),
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
                         ),
-                ),
-                child: Row(
-  children: [
-    // ---- NEW: Organization column ----
-    Expanded(
-      flex: 2,
-      child: Row(
-        children: [
-          _OrgAvatar(name: sub.orgName),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              sub.orgName,
-              style: GoogleFonts.beVietnamPro(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                color: const Color(0xFF1A202C),
-              ),
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-        ],
-      ),
-    ),
-    // ---- NEW: Event column ----
-    Expanded(
-  flex: 3,
-  child: Padding(
-    padding: const EdgeInsets.only(left: 8),
-    child: Text(
-      sub.displayTitle,
-      style: GoogleFonts.beVietnamPro(
-        fontSize: 13,
-        fontWeight: FontWeight.w600,
-        color: UpriseColors.primaryDark,
-      ),
-      overflow: TextOverflow.ellipsis,
-    ),
-  ),
-),
-    // ---- Keep the remaining columns, but adjust their flex to match the new header ----
-    // Event Date
-    Expanded(
-      flex: 2,
-      child: Text(
-        sub.eventDate != null
-            ? DateFormat('MMM dd, yyyy').format(sub.eventDate!)
-            : '—',
-        style: GoogleFonts.beVietnamPro(
-          fontSize: 12,
-          color: const Color(0xFF64748B),
-        ),
-      ),
-    ),
-    // Deadline
-    Expanded(
-      flex: 2,
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Flexible(
-            child: Text(
-              rowDeadline != null ? DateFormat('MMM dd, yyyy').format(rowDeadline) : '—',
-              style: GoogleFonts.beVietnamPro(
-                fontSize: 12,
-                color: const Color(0xFF64748B),
-              ),
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-          if (sub.deadlineOverride != null) ...[
-            const SizedBox(width: 4),
-            const Tooltip(
-              message: 'Custom deadline set by admin',
-              child: Icon(Icons.push_pin_rounded, size: 12, color: UpriseColors.primaryDark),
-            ),
-          ],
-        ],
-      ),
-    ),
-    // Submitted On
-    Expanded(
-      flex: 2,
-      child: Text(
-        isSubmitted
-            ? DateFormat('MMM dd, yyyy').format(sub.submittedAt!)
-            : '—',
-        style: GoogleFonts.beVietnamPro(
-          fontSize: 12,
-          color: isSubmitted ? const Color(0xFF374151) : const Color(0xFF9AA5B4),
-        ),
-      ),
-    ),
-    // Status
-    Expanded(
-      flex: 2,
-      child: isSubmitted
-          ? Align(alignment: Alignment.centerLeft, child: _statusBadge(isLate ? 'late' : 'on time'))
-          : isOverdue
-              ? Align(alignment: Alignment.centerLeft, child: _statusBadge('overdue'))
-              : Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    _statusBadge('pending'),
-                    const SizedBox(width: 6),
-                    Text(
-                      daysLeft > 0 ? '$daysLeft d left' : 'today',
-                      style: GoogleFonts.beVietnamPro(
-                        fontSize: 10,
-                        color: UpriseColors.warning,
-                        fontWeight: FontWeight.w600,
                       ),
-                    ),
-                  ],
+                      // ---- NEW: Event column ----
+                      Expanded(
+                        flex: 3,
+                        child: Padding(
+                          padding: const EdgeInsets.only(left: 8),
+                          child: Text(
+                            sub.displayTitle,
+                            style: GoogleFonts.beVietnamPro(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: UpriseColors.primaryDark,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ),
+                      // ---- Keep the remaining columns, but adjust their flex to match the new header ----
+                      // Event Date
+                      Expanded(
+                        flex: 2,
+                        child: Text(
+                          sub.eventDate != null
+                              ? DateFormat(
+                                  'MMM dd, yyyy',
+                                ).format(sub.eventDate!)
+                              : '—',
+                          style: GoogleFonts.beVietnamPro(
+                            fontSize: 12,
+                            color: const Color(0xFF64748B),
+                          ),
+                        ),
+                      ),
+                      // Deadline
+                      Expanded(
+                        flex: 2,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Flexible(
+                              child: Text(
+                                rowDeadline != null
+                                    ? DateFormat(
+                                        'MMM dd, yyyy',
+                                      ).format(rowDeadline)
+                                    : '—',
+                                style: GoogleFonts.beVietnamPro(
+                                  fontSize: 12,
+                                  color: const Color(0xFF64748B),
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            if (sub.deadlineOverride != null) ...[
+                              const SizedBox(width: 4),
+                              const Tooltip(
+                                message: 'Custom deadline set by admin',
+                                child: Icon(
+                                  Icons.push_pin_rounded,
+                                  size: 12,
+                                  color: UpriseColors.primaryDark,
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                      // Submitted On
+                      Expanded(
+                        flex: 2,
+                        child: Text(
+                          isSubmitted
+                              ? DateFormat(
+                                  'MMM dd, yyyy',
+                                ).format(sub.submittedAt!)
+                              : '—',
+                          style: GoogleFonts.beVietnamPro(
+                            fontSize: 12,
+                            color: isSubmitted
+                                ? const Color(0xFF374151)
+                                : const Color(0xFF9AA5B4),
+                          ),
+                        ),
+                      ),
+                      // Status
+                      Expanded(
+                        flex: 2,
+                        child: isSubmitted
+                            ? Align(
+                                alignment: Alignment.centerLeft,
+                                child: _statusBadge(
+                                  isLate ? 'late' : 'on time',
+                                ),
+                              )
+                            : isOverdue
+                            ? Align(
+                                alignment: Alignment.centerLeft,
+                                child: _statusBadge('overdue'),
+                              )
+                            : Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  _statusBadge('pending'),
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    daysLeft > 0 ? '$daysLeft d left' : 'today',
+                                    style: GoogleFonts.beVietnamPro(
+                                      fontSize: 10,
+                                      color: UpriseColors.warning,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                      ),
+                      // Actions
+                      Expanded(
+                        flex: 1,
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.end,
+                          children: [
+                            if (isSubmitted)
+                              _ActionIconButton(
+                                icon: Icons.visibility_outlined,
+                                tooltip: 'View Report',
+                                color: const Color(0xFF3B82F6),
+                                onTap: () => _viewSubmission(sub, title),
+                              )
+                            else
+                              _ActionIconButton(
+                                icon: Icons.send_outlined,
+                                tooltip: 'Send Reminder',
+                                color: const Color(0xFF7C3AED),
+                                onTap: () => _sendReminder(sub, title),
+                              ),
+                            if (!sub.isPeriodScope) ...[
+                              const SizedBox(width: 4),
+                              _ActionIconButton(
+                                icon: Icons.edit_calendar_outlined,
+                                tooltip: 'Edit Deadline',
+                                color: UpriseColors.primaryDark,
+                                onTap: () => _showEditDeadlineDialog(sub, type),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-    ),
-    // Actions
-    Expanded(
-      flex: 1,
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.end,
-        children: [
-          if (isSubmitted)
-            _ActionIconButton(
-              icon: Icons.visibility_outlined,
-              tooltip: 'View Report',
-              color: const Color(0xFF3B82F6),
-              onTap: () => _viewSubmission(sub, title),
-            )
-          else
-            _ActionIconButton(
-              icon: Icons.send_outlined,
-              tooltip: 'Send Reminder',
-              color: const Color(0xFF7C3AED),
-              onTap: () => _sendReminder(sub, title),
-            ),
-          if (!sub.isPeriodScope) ...[
-            const SizedBox(width: 4),
-            _ActionIconButton(
-              icon: Icons.edit_calendar_outlined,
-              tooltip: 'Edit Deadline',
-              color: UpriseColors.primaryDark,
-              onTap: () => _showEditDeadlineDialog(sub, type),
-            ),
-          ],
-        ],
-      ),
-    ),
-  ],
-),
-              ),
-            );
-          }),
+              );
+            }),
           // Footer — count only now; export moved to the shared toolbar
           // above both tables instead of a separate button per table.
           Container(
@@ -3244,11 +3828,7 @@ class _ReportsManagementState extends State<ReportsManagement>
                           children: [
                             _metaCell('EVENT NAME', event.title),
                             _metaCell('ORGANIZATION', event.orgName),
-                            _metaCell(
-                              'EVENT TYPE',
-                              event.type,
-                              last: true,
-                            ),
+                            _metaCell('EVENT TYPE', event.type, last: true),
                           ],
                         ),
                         Row(
@@ -3289,7 +3869,8 @@ class _ReportsManagementState extends State<ReportsManagement>
                       final ratio = registrants > 0
                           ? ((attendees / registrants) * 100).round()
                           : 0;
-                      final loading = snapshot.connectionState == ConnectionState.waiting;
+                      final loading =
+                          snapshot.connectionState == ConnectionState.waiting;
                       return Row(
                         children: [
                           _detailStatCard(
@@ -3311,8 +3892,12 @@ class _ReportsManagementState extends State<ReportsManagement>
                           _detailStatCard(
                             'Attendance Rate',
                             loading ? '—' : '$ratio%',
-                            ratio >= 50 ? UpriseColors.success : UpriseColors.warning,
-                            ratio >= 50 ? UpriseColors.successBg : UpriseColors.warningBg,
+                            ratio >= 50
+                                ? UpriseColors.success
+                                : UpriseColors.warning,
+                            ratio >= 50
+                                ? UpriseColors.successBg
+                                : UpriseColors.warningBg,
                             Icons.donut_large_rounded,
                           ),
                         ],
@@ -3324,7 +3909,8 @@ class _ReportsManagementState extends State<ReportsManagement>
                   FutureBuilder<List<Map<String, dynamic>>>(
                     future: _loadEventAttendeesList(event.id),
                     builder: (context, snap) {
-                      final loadingA = snap.connectionState == ConnectionState.waiting;
+                      final loadingA =
+                          snap.connectionState == ConnectionState.waiting;
                       final attendeesList = snap.data ?? [];
                       return Container(
                         width: double.infinity,
@@ -3338,30 +3924,72 @@ class _ReportsManagementState extends State<ReportsManagement>
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            _sectionLabel('Participants', icon: Icons.people_outline_rounded),
+                            _sectionLabel(
+                              'Participants',
+                              icon: Icons.people_outline_rounded,
+                            ),
                             const SizedBox(height: 8),
                             if (loadingA)
-                              const Center(child: SizedBox(height: 36, width: 36, child: CircularProgressIndicator()))
+                              const Center(
+                                child: SizedBox(
+                                  height: 36,
+                                  width: 36,
+                                  child: CircularProgressIndicator(),
+                                ),
+                              )
                             else if (attendeesList.isEmpty)
-                              Text('No attendees recorded.', style: GoogleFonts.beVietnamPro(color: const Color(0xFF64748B)))
+                              Text(
+                                'No attendees recorded.',
+                                style: GoogleFonts.beVietnamPro(
+                                  color: const Color(0xFF64748B),
+                                ),
+                              )
                             else
                               ConstrainedBox(
-                                constraints: const BoxConstraints(maxHeight: 220),
+                                constraints: const BoxConstraints(
+                                  maxHeight: 220,
+                                ),
                                 child: ListView.separated(
                                   shrinkWrap: true,
                                   itemCount: attendeesList.length,
-                                  separatorBuilder: (_, __) => const Divider(height: 8, color: Color(0xFFF1F5F9)),
+                                  separatorBuilder: (_, __) => const Divider(
+                                    height: 8,
+                                    color: Color(0xFFF1F5F9),
+                                  ),
                                   itemBuilder: (context, i) {
                                     final a = attendeesList[i];
-                                    final name = a['studentName'] ?? a['studentId'] ?? 'Unknown';
+                                    final name =
+                                        a['studentName'] ??
+                                        a['studentId'] ??
+                                        'Unknown';
                                     final email = a['studentEmail'] ?? '';
                                     final status = a['status'] ?? '';
-                                    final ts = a['timestamp'] is DateTime ? a['timestamp'] as DateTime : null;
+                                    final ts = a['timestamp'] is DateTime
+                                        ? a['timestamp'] as DateTime
+                                        : null;
                                     return ListTile(
                                       contentPadding: EdgeInsets.zero,
-                                      title: Text(name, style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600)),
-                                      subtitle: Text('${email.isNotEmpty ? email + ' · ' : ''}${status.toString().toUpperCase()}', style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF64748B))),
-                                      trailing: Text(ts != null ? DateFormat('MMM dd, HH:mm').format(ts) : ''),
+                                      title: Text(
+                                        name,
+                                        style: GoogleFonts.beVietnamPro(
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                      subtitle: Text(
+                                        '${email.isNotEmpty ? email + ' · ' : ''}${status.toString().toUpperCase()}',
+                                        style: GoogleFonts.beVietnamPro(
+                                          fontSize: 12,
+                                          color: const Color(0xFF64748B),
+                                        ),
+                                      ),
+                                      trailing: Text(
+                                        ts != null
+                                            ? DateFormat(
+                                                'MMM dd, HH:mm',
+                                              ).format(ts)
+                                            : '',
+                                      ),
                                     );
                                   },
                                 ),
@@ -3376,14 +4004,24 @@ class _ReportsManagementState extends State<ReportsManagement>
                   FutureBuilder<List<Map<String, dynamic>>>(
                     future: _loadEventFeedbacks(event.id),
                     builder: (context, snap) {
-                      final loadingF = snap.connectionState == ConnectionState.waiting;
+                      final loadingF =
+                          snap.connectionState == ConnectionState.waiting;
                       final feedbacks = snap.data ?? [];
                       final total = feedbacks.length;
-                      final avg = total == 0 ? 0.0 : (feedbacks.fold<double>(0.0, (s, f) => s + ((f['rating'] as num?)?.toDouble() ?? 0)) / total);
-                      final starCounts = {1:0,2:0,3:0,4:0,5:0};
+                      final avg = total == 0
+                          ? 0.0
+                          : (feedbacks.fold<double>(
+                                  0.0,
+                                  (s, f) =>
+                                      s +
+                                      ((f['rating'] as num?)?.toDouble() ?? 0),
+                                ) /
+                                total);
+                      final starCounts = {1: 0, 2: 0, 3: 0, 4: 0, 5: 0};
                       for (final f in feedbacks) {
                         final r = (f['rating'] as num?)?.toInt() ?? 0;
-                        if (starCounts.containsKey(r)) starCounts[r] = starCounts[r]! + 1;
+                        if (starCounts.containsKey(r))
+                          starCounts[r] = starCounts[r]! + 1;
                       }
                       return Container(
                         width: double.infinity,
@@ -3397,43 +4035,136 @@ class _ReportsManagementState extends State<ReportsManagement>
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            _sectionLabel('Evaluation & Feedback', icon: Icons.reviews_rounded),
+                            _sectionLabel(
+                              'Evaluation & Feedback',
+                              icon: Icons.reviews_rounded,
+                            ),
                             const SizedBox(height: 8),
                             if (loadingF)
-                              const Center(child: SizedBox(height: 36, width: 36, child: CircularProgressIndicator()))
+                              const Center(
+                                child: SizedBox(
+                                  height: 36,
+                                  width: 36,
+                                  child: CircularProgressIndicator(),
+                                ),
+                              )
                             else if (feedbacks.isEmpty)
-                              Text('No feedback recorded.', style: GoogleFonts.beVietnamPro(color: const Color(0xFF64748B)))
+                              Text(
+                                'No feedback recorded.',
+                                style: GoogleFonts.beVietnamPro(
+                                  color: const Color(0xFF64748B),
+                                ),
+                              )
                             else ...[
-                              Row(children: [
-                                Text('Average Rating', style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF64748B))),
-                                const SizedBox(width: 10),
-                                Text(avg.toStringAsFixed(1), style: GoogleFonts.beVietnamPro(fontSize: 22, fontWeight: FontWeight.w800, color: UpriseColors.primaryDark)),
-                                const SizedBox(width: 8),
-                                Text('· $total feedbacks', style: GoogleFonts.beVietnamPro(color: const Color(0xFF64748B))),
-                              ]),
+                              Row(
+                                children: [
+                                  Text(
+                                    'Average Rating',
+                                    style: GoogleFonts.beVietnamPro(
+                                      fontSize: 12,
+                                      color: const Color(0xFF64748B),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Text(
+                                    avg.toStringAsFixed(1),
+                                    style: GoogleFonts.beVietnamPro(
+                                      fontSize: 22,
+                                      fontWeight: FontWeight.w800,
+                                      color: UpriseColors.primaryDark,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    '· $total feedbacks',
+                                    style: GoogleFonts.beVietnamPro(
+                                      color: const Color(0xFF64748B),
+                                    ),
+                                  ),
+                                ],
+                              ),
                               const SizedBox(height: 12),
-                              ...[5,4,3,2,1].map((star) => Padding(
-                                padding: const EdgeInsets.symmetric(vertical: 4),
-                                child: Row(children: [
-                                  Icon(Icons.star, size: 14, color: UpriseColors.primaryDark),
-                                  const SizedBox(width: 8),
-                                  Expanded(child: LinearProgressIndicator(value: total==0?0: (starCounts[star]! / total), backgroundColor: const Color(0xFFE8ECF0), color: UpriseColors.primaryDark, minHeight: 8)),
-                                  const SizedBox(width: 8),
-                                  Text('${starCounts[star]}', style: GoogleFonts.beVietnamPro(color: const Color(0xFF64748B))),
-                                ]),
-                              )).toList(),
+                              ...[5, 4, 3, 2, 1]
+                                  .map(
+                                    (star) => Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                        vertical: 4,
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          Icon(
+                                            Icons.star,
+                                            size: 14,
+                                            color: UpriseColors.primaryDark,
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Expanded(
+                                            child: LinearProgressIndicator(
+                                              value: total == 0
+                                                  ? 0
+                                                  : (starCounts[star]! / total),
+                                              backgroundColor: const Color(
+                                                0xFFE8ECF0,
+                                              ),
+                                              color: UpriseColors.primaryDark,
+                                              minHeight: 8,
+                                            ),
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Text(
+                                            '${starCounts[star]}',
+                                            style: GoogleFonts.beVietnamPro(
+                                              color: const Color(0xFF64748B),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  )
+                                  .toList(),
                               const SizedBox(height: 12),
                               // Recent comments
-                              Column(children: feedbacks.take(5).map((f) {
-                                final author = f['userName'] ?? f['userId'] ?? 'Anonymous';
-                                final rating = (f['rating'] as num?)?.toInt() ?? 0;
-                                final comment = f['comment']?.toString() ?? '';
-                                return ListTile(
-                                  contentPadding: EdgeInsets.zero,
-                                  title: Row(children: [Text(author, style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.w600)), const SizedBox(width: 8), Text('· $rating★', style: GoogleFonts.beVietnamPro(color: const Color(0xFF64748B), fontSize: 12))]),
-                                  subtitle: comment.isEmpty ? null : Text(comment, style: GoogleFonts.beVietnamPro(color: const Color(0xFF374151))),
-                                );
-                              }).toList()),
+                              Column(
+                                children: feedbacks.take(5).map((f) {
+                                  final author =
+                                      f['userName'] ??
+                                      f['userId'] ??
+                                      'Anonymous';
+                                  final rating =
+                                      (f['rating'] as num?)?.toInt() ?? 0;
+                                  final comment =
+                                      f['comment']?.toString() ?? '';
+                                  return ListTile(
+                                    contentPadding: EdgeInsets.zero,
+                                    title: Row(
+                                      children: [
+                                        Text(
+                                          author,
+                                          style: GoogleFonts.beVietnamPro(
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Text(
+                                          '· $rating★',
+                                          style: GoogleFonts.beVietnamPro(
+                                            color: const Color(0xFF64748B),
+                                            fontSize: 12,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    subtitle: comment.isEmpty
+                                        ? null
+                                        : Text(
+                                            comment,
+                                            style: GoogleFonts.beVietnamPro(
+                                              color: const Color(0xFF374151),
+                                            ),
+                                          ),
+                                  );
+                                }).toList(),
+                              ),
                             ],
                           ],
                         ),
@@ -3454,44 +4185,72 @@ class _ReportsManagementState extends State<ReportsManagement>
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        _sectionLabel('Event Summary', icon: Icons.event_note_rounded),
+                        _sectionLabel(
+                          'Event Summary',
+                          icon: Icons.event_note_rounded,
+                        ),
                         const SizedBox(height: 8),
                         if (event.description.isEmpty)
-                          Text('No summary provided.', style: GoogleFonts.beVietnamPro(color: const Color(0xFF64748B)))
+                          Text(
+                            'No summary provided.',
+                            style: GoogleFonts.beVietnamPro(
+                              color: const Color(0xFF64748B),
+                            ),
+                          )
                         else
-                          Text(event.description, style: GoogleFonts.beVietnamPro(color: const Color(0xFF374151), height: 1.4)),
+                          Text(
+                            event.description,
+                            style: GoogleFonts.beVietnamPro(
+                              color: const Color(0xFF374151),
+                              height: 1.4,
+                            ),
+                          ),
                       ],
                     ),
                   ),
                   const SizedBox(height: 16),
                   // Financial stats — live totals computed from transactions.
-                  StreamBuilder<(
+                  StreamBuilder<
+                    (
                       double totalIncome,
                       double totalExpenses,
                       double netAmount,
                       List<Map<String, dynamic>> incomeBreakdown,
-                      List<Map<String, dynamic>> expenseBreakdown
-                    )>(
+                      List<Map<String, dynamic>> expenseBreakdown,
+                    )
+                  >(
                     stream: _eventTransactionSummaryStream(event.id),
                     builder: (context, snapshot) {
-                      final loading = snapshot.connectionState == ConnectionState.waiting;
-                      final totalIncome = snapshot.data?.$1 ?? event.totalIncome;
-                      final totalExpenses = snapshot.data?.$2 ?? event.totalExpenses;
-                      final netAmount = snapshot.data?.$3 ?? (totalIncome - totalExpenses);
+                      final loading =
+                          snapshot.connectionState == ConnectionState.waiting;
+                      final totalIncome =
+                          snapshot.data?.$1 ?? event.totalIncome;
+                      final totalExpenses =
+                          snapshot.data?.$2 ?? event.totalExpenses;
+                      final netAmount =
+                          snapshot.data?.$3 ?? (totalIncome - totalExpenses);
                       final effectiveBudgetVariance = event.budgeted != 0
                           ? event.budgeted - netAmount
                           : event.budgetVariance;
-                      final incomeBreakdown = snapshot.data?.$4 ?? event.incomeBreakdown;
-                      final expenseBreakdown = snapshot.data?.$5 ?? event.expenseBreakdown;
+                      final incomeBreakdown =
+                          snapshot.data?.$4 ?? event.incomeBreakdown;
+                      final expenseBreakdown =
+                          snapshot.data?.$5 ?? event.expenseBreakdown;
                       final maxInc = incomeBreakdown.isEmpty
                           ? 1.0
                           : incomeBreakdown
-                                .map((i) => (i['amount'] as num?)?.toDouble() ?? 0.0)
+                                .map(
+                                  (i) =>
+                                      (i['amount'] as num?)?.toDouble() ?? 0.0,
+                                )
                                 .reduce((a, b) => a > b ? a : b);
                       final maxExp = expenseBreakdown.isEmpty
                           ? 1.0
                           : expenseBreakdown
-                                .map((i) => (i['amount'] as num?)?.toDouble() ?? 0.0)
+                                .map(
+                                  (i) =>
+                                      (i['amount'] as num?)?.toDouble() ?? 0.0,
+                                )
                                 .reduce((a, b) => a > b ? a : b);
 
                       return Column(
@@ -3517,7 +4276,9 @@ class _ReportsManagementState extends State<ReportsManagement>
                               _detailStatCard(
                                 'Net Amount',
                                 loading ? '—' : '₱${_fmt(netAmount)}',
-                                netAmount >= 0 ? UpriseColors.success : UpriseColors.error,
+                                netAmount >= 0
+                                    ? UpriseColors.success
+                                    : UpriseColors.error,
                                 netAmount >= 0
                                     ? UpriseColors.successBg
                                     : UpriseColors.errorBg,
@@ -3912,7 +4673,9 @@ class _ReportsManagementState extends State<ReportsManagement>
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
         child: Container(
           width: 460,
-          constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.85),
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(context).size.height * 0.85,
+          ),
           decoration: const BoxDecoration(
             color: Color(0xFFFFFAF5),
             borderRadius: BorderRadius.all(Radius.circular(18)),
@@ -3926,9 +4689,14 @@ class _ReportsManagementState extends State<ReportsManagement>
                   gradient: LinearGradient(
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
-                    colors: [UpriseColors.primaryDark, UpriseColors.primaryDark.withAlpha(225)],
+                    colors: [
+                      UpriseColors.primaryDark,
+                      UpriseColors.primaryDark.withAlpha(225),
+                    ],
                   ),
-                  borderRadius: const BorderRadius.vertical(top: Radius.circular(18)),
+                  borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(18),
+                  ),
                 ),
                 child: Row(
                   children: [
@@ -3969,7 +4737,11 @@ class _ReportsManagementState extends State<ReportsManagement>
                       ),
                     ),
                     IconButton(
-                      icon: const Icon(Icons.close_rounded, color: Colors.white, size: 20),
+                      icon: const Icon(
+                        Icons.close_rounded,
+                        color: Colors.white,
+                        size: 20,
+                      ),
                       onPressed: () => Navigator.pop(ctx),
                     ),
                   ],
@@ -3979,34 +4751,37 @@ class _ReportsManagementState extends State<ReportsManagement>
                 child: SingleChildScrollView(
                   padding: const EdgeInsets.all(24),
                   child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-              _credentialRow(
-                label: sub.isPeriodScope ? 'For Period' : 'For Event',
-                value: sub.isPeriodScope
-                    ? sub.displayTitle
-                    : (sub.eventDate != null
-                        ? '${sub.eventTitle} (${DateFormat('MMM dd, yyyy').format(sub.eventDate!)})'
-                        : (sub.eventTitle ?? '—')),
-                icon: sub.isPeriodScope ? Icons.school_outlined : Icons.event_rounded,
-              ),
-              const SizedBox(height: 12),
-              _credentialRow(
-                label: 'Submitted On',
-                value: DateFormat(
-                  'MMMM dd, yyyy HH:mm',
-                ).format(sub.submittedAt!),
-                icon: Icons.calendar_today_rounded,
-              ),
-              const SizedBox(height: 12),
-              _credentialRow(
-                label: 'File',
-                value: sub.fileBase64 != null && sub.fileBase64!.isNotEmpty
-                    ? (sub.fileName ?? 'Attached file')
-                    : 'No file attached.',
-                icon: Icons.attach_file_rounded,
-              ),
-                  ],
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _credentialRow(
+                        label: sub.isPeriodScope ? 'For Period' : 'For Event',
+                        value: sub.isPeriodScope
+                            ? sub.displayTitle
+                            : (sub.eventDate != null
+                                  ? '${sub.eventTitle} (${DateFormat('MMM dd, yyyy').format(sub.eventDate!)})'
+                                  : (sub.eventTitle ?? '—')),
+                        icon: sub.isPeriodScope
+                            ? Icons.school_outlined
+                            : Icons.event_rounded,
+                      ),
+                      const SizedBox(height: 12),
+                      _credentialRow(
+                        label: 'Submitted On',
+                        value: DateFormat(
+                          'MMMM dd, yyyy HH:mm',
+                        ).format(sub.submittedAt!),
+                        icon: Icons.calendar_today_rounded,
+                      ),
+                      const SizedBox(height: 12),
+                      _credentialRow(
+                        label: 'File',
+                        value:
+                            sub.fileBase64 != null && sub.fileBase64!.isNotEmpty
+                            ? (sub.fileName ?? 'Attached file')
+                            : 'No file attached.',
+                        icon: Icons.attach_file_rounded,
+                      ),
+                    ],
                   ),
                 ),
               ),
@@ -4016,81 +4791,88 @@ class _ReportsManagementState extends State<ReportsManagement>
                   border: Border(top: BorderSide(color: Color(0xFFEDF0F3))),
                 ),
                 child: Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  if (sub.fileBase64 != null && sub.fileBase64!.isNotEmpty) ...[
-                    ElevatedButton.icon(
-                      onPressed: () => _openSubmissionFile(sub.fileBase64!, sub.fileName ?? 'document'),
-                      icon: const Icon(Icons.open_in_new_rounded, size: 15),
-                      label: Text(
-                        'Open File',
-                        style: GoogleFonts.beVietnamPro(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    if (sub.fileBase64 != null &&
+                        sub.fileBase64!.isNotEmpty) ...[
+                      ElevatedButton.icon(
+                        onPressed: () => _openSubmissionFile(
+                          sub.fileBase64!,
+                          sub.fileName ?? 'document',
+                        ),
+                        icon: const Icon(Icons.open_in_new_rounded, size: 15),
+                        label: Text(
+                          'Open File',
+                          style: GoogleFonts.beVietnamPro(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: UpriseColors.primaryDark,
+                          foregroundColor: Colors.white,
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 18,
+                            vertical: 11,
+                          ),
                         ),
                       ),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: UpriseColors.primaryDark,
-                        foregroundColor: Colors.white,
-                        elevation: 0,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
+                      const SizedBox(width: 10),
+                      ElevatedButton.icon(
+                        onPressed: () => _downloadSubmissionFile(
+                          sub.fileBase64!,
+                          sub.fileName ?? 'document',
                         ),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 18,
-                          vertical: 11,
+                        icon: const Icon(Icons.download_rounded, size: 15),
+                        label: Text(
+                          'Download File',
+                          style: GoogleFonts.beVietnamPro(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: UpriseColors.primaryDark,
+                          foregroundColor: Colors.white,
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 18,
+                            vertical: 11,
+                          ),
                         ),
                       ),
-                    ),
+                    ],
                     const SizedBox(width: 10),
-                    ElevatedButton.icon(
-                      onPressed: () => _downloadSubmissionFile(sub.fileBase64!, sub.fileName ?? 'document'),
-                      icon: const Icon(Icons.download_rounded, size: 15),
-                      label: Text(
-                        'Download File',
-                        style: GoogleFonts.beVietnamPro(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: UpriseColors.primaryDark,
-                        foregroundColor: Colors.white,
-                        elevation: 0,
+                    OutlinedButton(
+                      onPressed: () => Navigator.pop(ctx),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: const Color(0xFF374151),
+                        side: const BorderSide(color: Color(0xFFE2E6EA)),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(8),
                         ),
                         padding: const EdgeInsets.symmetric(
                           horizontal: 18,
                           vertical: 11,
+                        ),
+                      ),
+                      child: Text(
+                        'Close',
+                        style: GoogleFonts.beVietnamPro(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
                     ),
                   ],
-                  const SizedBox(width: 10),
-                  OutlinedButton(
-                    onPressed: () => Navigator.pop(ctx),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: const Color(0xFF374151),
-                      side: const BorderSide(color: Color(0xFFE2E6EA)),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 18,
-                        vertical: 11,
-                      ),
-                    ),
-                    child: Text(
-                      'Close',
-                      style: GoogleFonts.beVietnamPro(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
+                ),
               ),
             ],
           ),
@@ -4109,7 +4891,11 @@ class _ReportsManagementState extends State<ReportsManagement>
       children: [
         Row(
           children: [
-            Icon(icon, size: 14, color: UpriseColors.primaryDark.withAlpha(150)),
+            Icon(
+              icon,
+              size: 14,
+              color: UpriseColors.primaryDark.withAlpha(150),
+            ),
             const SizedBox(width: 6),
             Text(
               label,
@@ -4149,7 +4935,9 @@ class _ReportsManagementState extends State<ReportsManagement>
   // pattern on _ViewAdminReportModal for the same fileBase64/fileName shape.
   void _openSubmissionFile(String fileBase64, String fileName) {
     try {
-      final ext = fileName.contains('.') ? fileName.split('.').last.toLowerCase() : '';
+      final ext = fileName.contains('.')
+          ? fileName.split('.').last.toLowerCase()
+          : '';
       final mime = _ViewAdminReportModal._mimeFromExt(ext);
       final anchor = html.AnchorElement(href: 'data:$mime;base64,$fileBase64')
         ..target = '_blank';
@@ -4182,7 +4970,9 @@ class _ReportsManagementState extends State<ReportsManagement>
 
   void _downloadSubmissionFile(String fileBase64, String fileName) {
     try {
-      final ext = fileName.contains('.') ? fileName.split('.').last.toLowerCase() : '';
+      final ext = fileName.contains('.')
+          ? fileName.split('.').last.toLowerCase()
+          : '';
       final mime = _ViewAdminReportModal._mimeFromExt(ext);
       final anchor = html.AnchorElement(href: 'data:$mime;base64,$fileBase64')
         ..target = '_blank'
@@ -4269,13 +5059,21 @@ class _ViewAdminReportModal extends StatelessWidget {
 
   static String _mimeFromExt(String ext) {
     switch (ext) {
-      case 'png': return 'image/png';
-      case 'jpg': case 'jpeg': return 'image/jpeg';
-      case 'pdf': return 'application/pdf';
-      case 'doc': return 'application/msword';
-      case 'docx': return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
-      case 'xlsx': return 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
-      default: return 'application/octet-stream';
+      case 'png':
+        return 'image/png';
+      case 'jpg':
+      case 'jpeg':
+        return 'image/jpeg';
+      case 'pdf':
+        return 'application/pdf';
+      case 'doc':
+        return 'application/msword';
+      case 'docx':
+        return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+      case 'xlsx':
+        return 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+      default:
+        return 'application/octet-stream';
     }
   }
 
@@ -4288,7 +5086,9 @@ class _ViewAdminReportModal extends StatelessWidget {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
       child: Container(
         width: 500,
-        constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.85),
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(context).size.height * 0.85,
+        ),
         decoration: const BoxDecoration(
           color: Color(0xFFFFFAF5),
           borderRadius: BorderRadius.all(Radius.circular(18)),
@@ -4303,7 +5103,10 @@ class _ViewAdminReportModal extends StatelessWidget {
                 gradient: LinearGradient(
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
-                  colors: [UpriseColors.primaryDark, UpriseColors.primaryDark.withAlpha(225)],
+                  colors: [
+                    UpriseColors.primaryDark,
+                    UpriseColors.primaryDark.withAlpha(225),
+                  ],
                 ),
                 borderRadius: const BorderRadius.vertical(
                   top: Radius.circular(18),
@@ -4363,131 +5166,134 @@ class _ViewAdminReportModal extends StatelessWidget {
               child: SingleChildScrollView(
                 padding: const EdgeInsets.all(24),
                 child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Event Title
-                  Text(
-                    report.eventTitle,
-                    style: GoogleFonts.beVietnamPro(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w700,
-                      color: const Color(0xFF1A202C),
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Event Title
+                    Text(
+                      report.eventTitle,
+                      style: GoogleFonts.beVietnamPro(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                        color: const Color(0xFF1A202C),
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 16),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _detailItem(
-                          'Organization',
-                          report.orgName,
-                          Icons.business_rounded,
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _detailItem(
+                            'Organization',
+                            report.orgName,
+                            Icons.business_rounded,
+                          ),
                         ),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: _detailItem(
-                          'Type',
-                          isFinancial
-                              ? 'Financial Report'
-                              : 'Accomplishment Report',
-                          Icons.label_outlined,
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: _detailItem(
+                            'Type',
+                            isFinancial
+                                ? 'Financial Report'
+                                : 'Accomplishment Report',
+                            Icons.label_outlined,
+                          ),
                         ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 14),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _detailItem(
-                          'Date Submitted',
-                          DateFormat(
-                            'MMM dd, yyyy',
-                          ).format(report.submittedAt),
-                          Icons.calendar_today_outlined,
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: _detailItem(
-                          'Event',
-                          report.eventTitle,
-                          Icons.event_rounded,
-                        ),
-                      ),
-                    ],
-                  ),
-                  if (report.description.isNotEmpty) ...[
+                      ],
+                    ),
                     const SizedBox(height: 14),
-                    _detailItem(
-                      'Description',
-                      report.description,
-                      Icons.notes_rounded,
-                    ),
-                  ],
-                  // File Attachment
-                  if (hasFile) ...[
-                    const SizedBox(height: 20),
-                    Container(
-                      padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: const Color(0xFFE2E6EA)),
-                      ),
-                      child: Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.all(8),
-                            decoration: BoxDecoration(
-                              color: UpriseColors.primaryDark.withAlpha(26),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Icon(
-                              Icons.insert_drive_file_rounded,
-                              size: 20,
-                              color: UpriseColors.primaryDark,
-                            ),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _detailItem(
+                            'Date Submitted',
+                            DateFormat(
+                              'MMM dd, yyyy',
+                            ).format(report.submittedAt),
+                            Icons.calendar_today_outlined,
                           ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  report.fileName ?? 'Attached File',
-                                  style: GoogleFonts.beVietnamPro(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                                if (report.fileSize != null)
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: _detailItem(
+                            'Event',
+                            report.eventTitle,
+                            Icons.event_rounded,
+                          ),
+                        ),
+                      ],
+                    ),
+                    if (report.description.isNotEmpty) ...[
+                      const SizedBox(height: 14),
+                      _detailItem(
+                        'Description',
+                        report.description,
+                        Icons.notes_rounded,
+                      ),
+                    ],
+                    // File Attachment
+                    if (hasFile) ...[
+                      const SizedBox(height: 20),
+                      Container(
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: const Color(0xFFE2E6EA)),
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: UpriseColors.primaryDark.withAlpha(26),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Icon(
+                                Icons.insert_drive_file_rounded,
+                                size: 20,
+                                color: UpriseColors.primaryDark,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
                                   Text(
-                                    report.fileSize!,
+                                    report.fileName ?? 'Attached File',
                                     style: GoogleFonts.beVietnamPro(
-                                      fontSize: 11,
-                                      color: const Color(0xFF64748B),
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w500,
                                     ),
+                                    overflow: TextOverflow.ellipsis,
                                   ),
-                              ],
+                                  if (report.fileSize != null)
+                                    Text(
+                                      report.fileSize!,
+                                      style: GoogleFonts.beVietnamPro(
+                                        fontSize: 11,
+                                        color: const Color(0xFF64748B),
+                                      ),
+                                    ),
+                                ],
+                              ),
                             ),
-                          ),
-                          TextButton.icon(
-                            onPressed: () => _openAttachment(context),
-                            icon: const Icon(Icons.open_in_new_rounded, size: 15),
-                            label: const Text('Open'),
-                            style: TextButton.styleFrom(
-                              foregroundColor: UpriseColors.primaryDark,
+                            TextButton.icon(
+                              onPressed: () => _openAttachment(context),
+                              icon: const Icon(
+                                Icons.open_in_new_rounded,
+                                size: 15,
+                              ),
+                              label: const Text('Open'),
+                              style: TextButton.styleFrom(
+                                foregroundColor: UpriseColors.primaryDark,
+                              ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
-                    ),
+                    ],
                   ],
-                ],
-              ),
+                ),
               ),
             ),
             // Footer
@@ -4540,7 +5346,11 @@ class _ViewAdminReportModal extends StatelessWidget {
       children: [
         Row(
           children: [
-            Icon(icon, size: 13, color: UpriseColors.primaryDark.withAlpha(150)),
+            Icon(
+              icon,
+              size: 13,
+              color: UpriseColors.primaryDark.withAlpha(150),
+            ),
             const SizedBox(width: 5),
             Text(
               label,
@@ -4586,7 +5396,9 @@ class _ViewAdminReportModal extends StatelessWidget {
                   padding: const EdgeInsets.all(8),
                   child: Text(
                     name,
-                    style: GoogleFonts.beVietnamPro(fontWeight: FontWeight.w600),
+                    style: GoogleFonts.beVietnamPro(
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
                 Flexible(child: Image.memory(bytes)),
@@ -4607,9 +5419,7 @@ class _ViewAdminReportModal extends StatelessWidget {
           context: context,
           builder: (_) => AlertDialog(
             title: Text(name),
-            content: SingleChildScrollView(
-              child: SelectableText(text),
-            ),
+            content: SingleChildScrollView(child: SelectableText(text)),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(context),
@@ -4621,12 +5431,14 @@ class _ViewAdminReportModal extends StatelessWidget {
       } else {
         // Use platform_file_utils if available, otherwise fallback
         try {
-          await platform_file_utils.saveBytesToTempAndOpen(bytes, name, mimeType: mime);
+          await platform_file_utils.saveBytesToTempAndOpen(
+            bytes,
+            name,
+            mimeType: mime,
+          );
         } catch (e) {
           // Fallback: download via HTML
-          final anchor = html.AnchorElement(
-            href: 'data:$mime;base64,$b64',
-          )
+          final anchor = html.AnchorElement(href: 'data:$mime;base64,$b64')
             ..download = name
             ..target = '_blank';
           html.document.body?.append(anchor);
@@ -4678,14 +5490,18 @@ class _ConfirmDialog extends StatelessWidget {
                 width: 42,
                 height: 42,
                 decoration: BoxDecoration(
-                  color: destructive ? const Color(0xFFFEF2F2) : UpriseColors.primaryLight,
+                  color: destructive
+                      ? const Color(0xFFFEF2F2)
+                      : UpriseColors.primaryLight,
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Icon(
                   destructive
                       ? Icons.delete_outline_rounded
                       : Icons.check_circle_outline_rounded,
-                  color: destructive ? const Color(0xFFDC2626) : UpriseColors.primaryDark,
+                  color: destructive
+                      ? const Color(0xFFDC2626)
+                      : UpriseColors.primaryDark,
                   size: 20,
                 ),
               ),
@@ -4885,7 +5701,6 @@ class _FilterDropdown extends StatelessWidget {
     );
   }
 }
-
 
 class _ExportButton extends StatelessWidget {
   final VoidCallback onExportCsv, onExportPdf;

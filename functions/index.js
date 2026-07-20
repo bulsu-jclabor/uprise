@@ -4,14 +4,70 @@ const nodemailer = require("nodemailer");
 
 admin.initializeApp();
 
+const geminiApiKey = process.env.GEMINI_API_KEY || process.env.GEMINI_API_KEY;
+
+exports.askAi = functions.https.onCall(async (data, context) => {
+  if (!context.auth) {
+    throw new functions.https.HttpsError("unauthenticated", "Please sign in first.");
+  }
+
+  const prompt = (data?.prompt || "").toString().trim();
+  if (!prompt) {
+    throw new functions.https.HttpsError("invalid-argument", "Prompt is required.");
+  }
+
+  if (!geminiApiKey) {
+    throw new functions.https.HttpsError(
+      "failed-precondition",
+      "Gemini API key is not configured. Set it with firebase functions:config:set gemini.key=YOUR_KEY"
+    );
+  }
+
+  const model = (data?.model || "gemini-2.0-flash").toString();
+  const temperature = Number(data?.temperature ?? 0.2);
+  const maxOutputTokens = Number(data?.maxOutputTokens ?? 600);
+
+  const response = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiApiKey}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: {
+          temperature: Number.isFinite(temperature) ? temperature : 0.2,
+          maxOutputTokens: Number.isFinite(maxOutputTokens) ? maxOutputTokens : 600,
+        },
+      }),
+    }
+  );
+
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const message = body?.error?.message || "AI request failed";
+    throw new functions.https.HttpsError("internal", message);
+  }
+
+  const text =
+    body?.candidates?.[0]?.content?.parts
+      ?.map((part) => part.text || "")
+      .join("") || "";
+
+  return {
+    success: true,
+    text,
+    model,
+  };
+});
+
 // ─────────────────────────────────────────────
 //  EMAIL CONFIGURATION
 // ─────────────────────────────────────────────
 const transporter = nodemailer.createTransport({
   service: "gmail",
   auth: {
-    user: functions.config().gmail.user,
-    pass: functions.config().gmail.pass,
+    user: process.env.GMAIL_USER || "",
+    pass: process.env.GMAIL_PASS || "",
   },
 });
 
@@ -218,7 +274,7 @@ exports.processQueuedEmail = functions.https.onCall(async (data, context) => {
   const password = payload.password;
 
   const mailOptions = {
-    from: '"UPRISE System 🎓" <' + (functions.config().gmail.user || 'noreply@example.com') + '>',
+    from: '"UPRISE System 🎓" <' + (process.env.GMAIL_USER || 'noreply@example.com') + '>',
     to: to,
     subject: `UPRISE – Student Credentials for ${studentId}`,
     html: `<div style="font-family: Arial, sans-serif; max-width:500px; margin:auto;">
@@ -251,7 +307,7 @@ exports.processEmailQueue = functions.pubsub.schedule('every 5 minutes').onRun(a
     const studentId = payload.student_id;
     const password = payload.password;
     const mailOptions = {
-      from: '"UPRISE System 🎓" <' + (functions.config().gmail.user || 'noreply@example.com') + '>',
+      from: '"UPRISE System 🎓" <' + (process.env.GMAIL_USER || 'noreply@example.com') + '>',
       to: to,
       subject: `UPRISE – Student Credentials for ${studentId}`,
       html: `<div style="font-family: Arial, sans-serif; max-width:500px; margin:auto;">
@@ -289,7 +345,7 @@ exports.onEmailQueued = functions.firestore
     const docRef = snap.ref;
 
     const mailOptions = {
-      from: '"UPRISE System 🎓" <' + (functions.config().gmail.user || 'noreply@example.com') + '>',
+      from: '"UPRISE System 🎓" <' + (process.env.GMAIL_USER || 'noreply@example.com') + '>',
       to: to,
       subject: `UPRISE – Student Credentials for ${studentId}`,
       html: `<div style="font-family: Arial, sans-serif; max-width:500px; margin:auto;">
