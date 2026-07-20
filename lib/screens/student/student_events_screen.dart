@@ -18,6 +18,7 @@ import '../../widgets/student/event_image.dart';
 import '../../widgets/student/app_colors.dart';
 import 'student_feedback_screen.dart';
 import 'student_certificates_screen.dart';
+import 'student_webinar_code_screen.dart';
 import 'package:image_picker/image_picker.dart';
 
 // ─── MAIN SCREEN ──────────────────────────────────────────────
@@ -69,6 +70,15 @@ class _StudentEventsScreenState extends State<StudentEventsScreen>
     );
   }
 
+  void _openWebinarCode() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => const StudentWebinarCodeScreen(),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -83,6 +93,15 @@ class _StudentEventsScreenState extends State<StudentEventsScreen>
         ),
         centerTitle: true,
         actions: [
+          IconButton(
+            onPressed: _openWebinarCode,
+            icon: Icon(
+              Icons.qr_code_scanner_rounded,
+              color: AppColors.primaryDark,
+              size: 26,
+            ),
+            tooltip: 'Enter Webinar Code',
+          ),
           IconButton(
             onPressed: _openCertificates,
             icon: Icon(

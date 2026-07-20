@@ -503,22 +503,19 @@ class _AttendanceTabState extends State<AttendanceTab> with AutomaticKeepAliveCl
     final evDoc = await FirebaseFirestore.instance.collection('events').doc(widget.eventDocId).get();
     if (!_isActive(evDoc)) throw Exception('Attendance is not open for this event');
 
-    // Hanapin ang student - HINDI na kailangan ng orgId check!
     DocumentSnapshot? userDoc;
-    
-    // 1. Subukan muna ang direct lookup gamit ang UID (para sa QR scan)
+
     final direct = await FirebaseFirestore.instance.collection('students').doc(uid).get();
     if (direct.exists) {
       userDoc = direct;
     } else {
-      // 2. Kung hindi, subukan ang studentId (para sa manual entry)
       final q = await FirebaseFirestore.instance.collection('students')
           .where('studentId', isEqualTo: uid)
           .limit(1)
           .get();
       if (q.docs.isNotEmpty) userDoc = q.docs.first;
     }
-    
+
     if (userDoc == null) throw Exception('Student not found');
 
     final existing = await FirebaseFirestore.instance.collection('events')
@@ -539,13 +536,13 @@ class _AttendanceTabState extends State<AttendanceTab> with AutomaticKeepAliveCl
     final data = userDoc.data() as Map<String, dynamic>;
     await FirebaseFirestore.instance.collection('events').doc(widget.eventDocId)
         .collection('attendances').add({
-      'studentId': userDoc.id, 
+      'studentId': userDoc.id,
       'studentName': data['fullName'] ?? data['email'] ?? 'Unknown',
-      'studentEmail': data['email'] ?? '', 
+      'studentEmail': data['email'] ?? '',
       'program': data['course'] ?? 'N/A',
-      'yearLevel': data['yearLevel'] ?? '', 
+      'yearLevel': data['yearLevel'] ?? '',
       'timestamp': FieldValue.serverTimestamp(),
-      'status': status, 
+      'status': status,
       'method': isManual ? 'manual' : 'qr',
     });
 
@@ -554,6 +551,28 @@ class _AttendanceTabState extends State<AttendanceTab> with AutomaticKeepAliveCl
       details: { 'orgId': widget.orgId, 'eventId': widget.eventDocId,
           'studentId': userDoc.id, 'status': status, 'method': isManual ? 'manual' : 'qr' },
     );
+
+    // 🔔 Notify the student that they've been marked for this event.
+    // Wrapped in its own try/catch so a notification failure never
+    // undoes or blocks the attendance that was already recorded.
+    try {
+      await NotificationService.sendToUser(
+        userId: userDoc.id,
+        title: status == 'late' ? 'Marked Late' : "You're Marked Present!",
+        body: status == 'late'
+            ? 'You checked in late to "${widget.event?.title ?? 'the event'}".'
+            : 'You\'ve been marked present for "${widget.event?.title ?? 'the event'}".',
+        type: 'event',
+        orgId: widget.orgId,
+        data: {
+          'eventId': widget.eventDocId,
+          'status': status,
+        },
+      );
+    } catch (_) {
+      // Non-critical — attendance is already recorded, so don't surface this.
+    }
+
     if (mounted) {
       _showMarkedModal(context, data['fullName'] ?? 'Student', status);
     }
