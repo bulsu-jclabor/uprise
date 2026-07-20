@@ -18,6 +18,7 @@ import 'letter_request.dart';
 import 'external_account.dart';
 import '../../../services/activity_logger.dart' as activity_log;
 import '../../../services/notification_service.dart';
+import '../../../services/ai_service.dart';
 import 'reports_management.dart';
 import 'settings.dart';
 
@@ -105,9 +106,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
     _fetchUnreadNotifications();
     _updateDateTime();
     _screens = [
-      DashboardHome(
-        onNavigateToCalendar: () => _selectTab(5),
-      ),
+      DashboardHome(onNavigateToCalendar: () => _selectTab(5)),
       const OrganizationManagement(),
       const StudentAccounts(),
       const AdviserRoles(),
@@ -199,14 +198,16 @@ class _AdminDashboardState extends State<AdminDashboard> {
           .where('userId', isEqualTo: uid)
           .get();
       final all = snap.docs
-          .map((d) => {
-                'id': d.id,
-                'title': d.data()['title'] ?? 'New Notification',
-                'message': d.data()['body'] ?? d.data()['message'] ?? '',
-                'timestamp': d.data()['createdAt'],
-                'isRead': d.data()['isRead'] ?? false,
-                'type': d.data()['type'],
-              })
+          .map(
+            (d) => {
+              'id': d.id,
+              'title': d.data()['title'] ?? 'New Notification',
+              'message': d.data()['body'] ?? d.data()['message'] ?? '',
+              'timestamp': d.data()['createdAt'],
+              'isRead': d.data()['isRead'] ?? false,
+              'type': d.data()['type'],
+            },
+          )
           .toList();
       all.sort((a, b) {
         final ta = a['timestamp'];
@@ -233,11 +234,11 @@ class _AdminDashboardState extends State<AdminDashboard> {
         setState(() {
           final idx = _notifications.indexWhere((n) => n['id'] == id);
           if (idx != -1) {
-            _notifications[idx] =
-                Map<String, dynamic>.from(_notifications[idx])
-                  ..['isRead'] = true;
-            _unreadNotifications =
-                _notifications.where((n) => n['isRead'] == false).length;
+            _notifications[idx] = Map<String, dynamic>.from(_notifications[idx])
+              ..['isRead'] = true;
+            _unreadNotifications = _notifications
+                .where((n) => n['isRead'] == false)
+                .length;
           }
         });
       }
@@ -245,8 +246,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
   }
 
   Future<void> _markAllNotificationsAsRead() async {
-    final unread =
-        _notifications.where((n) => n['isRead'] == false).toList();
+    final unread = _notifications.where((n) => n['isRead'] == false).toList();
     if (unread.isEmpty) return;
     try {
       final batch = FirebaseFirestore.instance.batch();
@@ -297,7 +297,9 @@ class _AdminDashboardState extends State<AdminDashboard> {
   // offset + internal clamping) repositions itself differently depending
   // on how much room is left in the viewport, which is what made the
   // dropdown/"View All" land in inconsistent spots before.
-  ({double top, double right, double maxHeight}) _bellAnchor({required double preferredHeight}) {
+  ({double top, double right, double maxHeight}) _bellAnchor({
+    required double preferredHeight,
+  }) {
     final bellBox = _bellKey.currentContext?.findRenderObject() as RenderBox?;
     final screenSize = MediaQuery.of(context).size;
     double top = 76;
@@ -306,10 +308,15 @@ class _AdminDashboardState extends State<AdminDashboard> {
       final bellTopLeft = bellBox.localToGlobal(Offset.zero);
       final bellSize = bellBox.size;
       top = bellTopLeft.dy + bellSize.height + 12;
-      right = (screenSize.width - (bellTopLeft.dx + bellSize.width) - 6)
-          .clamp(8.0, screenSize.width - 360);
+      right = (screenSize.width - (bellTopLeft.dx + bellSize.width) - 6).clamp(
+        8.0,
+        screenSize.width - 360,
+      );
     }
-    final maxHeight = (screenSize.height - top - 24).clamp(200.0, preferredHeight);
+    final maxHeight = (screenSize.height - top - 24).clamp(
+      200.0,
+      preferredHeight,
+    );
     return (top: top, right: right, maxHeight: maxHeight);
   }
 
@@ -334,7 +341,11 @@ class _AdminDashboardState extends State<AdminDashboard> {
                 side: const BorderSide(color: Color(0xFFE8ECF0), width: 0.5),
               ),
               child: ConstrainedBox(
-                constraints: BoxConstraints(maxWidth: 360, minWidth: 360, maxHeight: anchor.maxHeight),
+                constraints: BoxConstraints(
+                  maxWidth: 360,
+                  minWidth: 360,
+                  maxHeight: anchor.maxHeight,
+                ),
                 child: _AdminNotificationPanel(
                   notifications: List.from(_notifications),
                   onMarkRead: _markNotificationAsRead,
@@ -374,7 +385,11 @@ class _AdminDashboardState extends State<AdminDashboard> {
                 side: const BorderSide(color: Color(0xFFE8ECF0), width: 0.5),
               ),
               child: ConstrainedBox(
-                constraints: BoxConstraints(maxWidth: 360, minWidth: 360, maxHeight: anchor.maxHeight),
+                constraints: BoxConstraints(
+                  maxWidth: 360,
+                  minWidth: 360,
+                  maxHeight: anchor.maxHeight,
+                ),
                 child: _AdminNotificationPanel(
                   notifications: List.from(_notifications),
                   onMarkRead: _markNotificationAsRead,
@@ -546,7 +561,9 @@ class _AdminDashboardState extends State<AdminDashboard> {
                     index: _selectedIndex == -1 ? 10 : _selectedIndex,
                     children: List.generate(
                       _screens.length,
-                      (i) => _visitedIndices.contains(i) ? _screens[i] : const SizedBox.shrink(),
+                      (i) => _visitedIndices.contains(i)
+                          ? _screens[i]
+                          : const SizedBox.shrink(),
                     ),
                   ),
                 ),
@@ -586,11 +603,8 @@ class _AdminDashboardState extends State<AdminDashboard> {
                     'assets/images/logo.png',
                     fit: BoxFit.contain,
                     filterQuality: FilterQuality.high,
-                    errorBuilder: (_, __, ___) => const Icon(
-                      Icons.school,
-                      color: Colors.white,
-                      size: 26,
-                    ),
+                    errorBuilder: (_, __, ___) =>
+                        const Icon(Icons.school, color: Colors.white, size: 26),
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -770,7 +784,9 @@ class _AdminDashboardState extends State<AdminDashboard> {
       padding: const EdgeInsets.symmetric(horizontal: 28),
       decoration: BoxDecoration(
         color: Colors.white,
-        border: const Border(bottom: BorderSide(color: Color(0xFFE8ECF0), width: 1)),
+        border: const Border(
+          bottom: BorderSide(color: Color(0xFFE8ECF0), width: 1),
+        ),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withAlpha(8),
@@ -831,7 +847,11 @@ class _AdminDashboardState extends State<AdminDashboard> {
             ),
             child: Row(
               children: [
-                const Icon(Icons.access_time_rounded, size: 12, color: UpriseColors.primaryDark),
+                const Icon(
+                  Icons.access_time_rounded,
+                  size: 12,
+                  color: UpriseColors.primaryDark,
+                ),
                 const SizedBox(width: 6),
                 Text(
                   _currentDateTime,
@@ -871,68 +891,69 @@ class _AdminDashboardState extends State<AdminDashboard> {
             child: KeyedSubtree(
               key: _bellKey,
               child: StreamBuilder<int>(
-              // Live count so a new notification updates the badge
-              // immediately, without needing to reopen the dropdown.
-              stream: FirebaseAuth.instance.currentUser != null
-                  ? NotificationService.unreadCountStream(
-                      FirebaseAuth.instance.currentUser!.uid)
-                  : const Stream<int>.empty(),
-              initialData: _unreadNotifications,
-              builder: (context, snapshot) {
-                final unread = snapshot.data ?? _unreadNotifications;
-                return Stack(
-              clipBehavior: Clip.none,
-              children: [
-                Container(
-                  width: 38,
-                  height: 38,
-                  decoration: BoxDecoration(
-                    color: unread > 0
-                        ? UpriseColors.primaryDark.withAlpha(12)
-                        : const Color(0xFFF8F9FB),
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(
-                      color: unread > 0
-                          ? UpriseColors.primaryDark.withAlpha(60)
-                          : const Color(0xFFE8ECF0),
-                    ),
-                  ),
-                  child: Icon(
-                    unread > 0
-                        ? Icons.notifications_rounded
-                        : Icons.notifications_none_rounded,
-                    color: unread > 0
-                        ? UpriseColors.primaryDark
-                        : const Color(0xFF64748B),
-                    size: 18,
-                  ),
-                ),
-                if (unread > 0)
-                  Positioned(
-                    right: -3,
-                    top: -3,
-                    child: Container(
-                      width: 18,
-                      height: 18,
-                      alignment: Alignment.center,
-                      decoration: const BoxDecoration(
-                        color: Color(0xFFDC2626),
-                        shape: BoxShape.circle,
-                      ),
-                      child: Text(
-                        unread > 9 ? '9+' : '$unread',
-                        style: GoogleFonts.beVietnamPro(
-                          color: Colors.white,
-                          fontSize: 9,
-                          fontWeight: FontWeight.w700,
+                // Live count so a new notification updates the badge
+                // immediately, without needing to reopen the dropdown.
+                stream: FirebaseAuth.instance.currentUser != null
+                    ? NotificationService.unreadCountStream(
+                        FirebaseAuth.instance.currentUser!.uid,
+                      )
+                    : const Stream<int>.empty(),
+                initialData: _unreadNotifications,
+                builder: (context, snapshot) {
+                  final unread = snapshot.data ?? _unreadNotifications;
+                  return Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      Container(
+                        width: 38,
+                        height: 38,
+                        decoration: BoxDecoration(
+                          color: unread > 0
+                              ? UpriseColors.primaryDark.withAlpha(12)
+                              : const Color(0xFFF8F9FB),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                            color: unread > 0
+                                ? UpriseColors.primaryDark.withAlpha(60)
+                                : const Color(0xFFE8ECF0),
+                          ),
+                        ),
+                        child: Icon(
+                          unread > 0
+                              ? Icons.notifications_rounded
+                              : Icons.notifications_none_rounded,
+                          color: unread > 0
+                              ? UpriseColors.primaryDark
+                              : const Color(0xFF64748B),
+                          size: 18,
                         ),
                       ),
-                    ),
-                  ),
-              ],
-            );
-              },
-            ),
+                      if (unread > 0)
+                        Positioned(
+                          right: -3,
+                          top: -3,
+                          child: Container(
+                            width: 18,
+                            height: 18,
+                            alignment: Alignment.center,
+                            decoration: const BoxDecoration(
+                              color: Color(0xFFDC2626),
+                              shape: BoxShape.circle,
+                            ),
+                            child: Text(
+                              unread > 9 ? '9+' : '$unread',
+                              style: GoogleFonts.beVietnamPro(
+                                color: Colors.white,
+                                fontSize: 9,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
+                  );
+                },
+              ),
             ),
           ),
           const SizedBox(width: 10),
@@ -950,7 +971,9 @@ class _AdminDashboardState extends State<AdminDashboard> {
                 decoration: BoxDecoration(
                   color: UpriseColors.primaryDark.withAlpha(25),
                   borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: UpriseColors.primaryDark.withAlpha(50)),
+                  border: Border.all(
+                    color: UpriseColors.primaryDark.withAlpha(50),
+                  ),
                 ),
                 clipBehavior: Clip.antiAlias,
                 child: _buildAdminAvatar(),
@@ -1004,6 +1027,10 @@ class _DashboardHomeState extends State<DashboardHome> {
   String _selectedMonth = '';
   List<int> _chartData = List.filled(12, 0);
   bool _chartLoading = true;
+  bool _aiLoading = false;
+  String? _aiInsight;
+  String? _aiError;
+  bool _useFallbackInsight = false;
 
   late final Stream<QuerySnapshot> _organizationsStream;
   late final Stream<QuerySnapshot> _eventsStream;
@@ -1019,7 +1046,20 @@ class _DashboardHomeState extends State<DashboardHome> {
   }
 
   String _monthLabel(int index) {
-    const m = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+    const m = [
+      'JAN',
+      'FEB',
+      'MAR',
+      'APR',
+      'MAY',
+      'JUN',
+      'JUL',
+      'AUG',
+      'SEP',
+      'OCT',
+      'NOV',
+      'DEC',
+    ];
     return m[index];
   }
 
@@ -1053,6 +1093,7 @@ class _DashboardHomeState extends State<DashboardHome> {
         .snapshots();
 
     _fetchChartData();
+    _analyzeDashboard();
   }
 
   void _fetchChartData() {
@@ -1085,6 +1126,82 @@ class _DashboardHomeState extends State<DashboardHome> {
         .catchError((_) {
           if (mounted) setState(() => _chartLoading = false);
         });
+  }
+
+  Future<void> _analyzeDashboard() async {
+    if (!mounted) return;
+    setState(() {
+      _aiLoading = true;
+      _aiError = null;
+    });
+
+    try {
+      final orgSnap = await FirebaseFirestore.instance
+          .collection('organizations')
+          .where('status', isEqualTo: 'active')
+          .get();
+      final activeEventsSnap = await FirebaseFirestore.instance
+          .collection('event_proposals')
+          .where('status', isEqualTo: 'approved')
+          .get();
+      final pendingProposalsSnap = await FirebaseFirestore.instance
+          .collection('event_proposals')
+          .where('status', isEqualTo: 'pending')
+          .get();
+      final overdueReportsSnap = await FirebaseFirestore.instance
+          .collection('reports')
+          .where('status', isEqualTo: 'overdue')
+          .get();
+
+      final orgDocs = orgSnap.docs;
+      final topOrganization = orgDocs.isNotEmpty
+          ? ((orgDocs.first.data())['name'] ?? 'No organization')
+          : 'No organization';
+
+      final prompt = AiService.buildAdminDashboardInsightPrompt(
+        activeOrganizations: orgSnap.docs.length,
+        activeEvents: activeEventsSnap.docs.length,
+        pendingProposals: pendingProposalsSnap.docs.length,
+        overdueReports: overdueReportsSnap.docs.length,
+        topOrganization: topOrganization.toString(),
+      );
+
+      String insight;
+      try {
+        insight = await AiService.ask(prompt);
+      } catch (_) {
+        insight = AiService.buildAdminDashboardSummary(
+          activeOrganizations: orgSnap.docs.length,
+          activeEvents: activeEventsSnap.docs.length,
+          pendingProposals: pendingProposalsSnap.docs.length,
+          overdueReports: overdueReportsSnap.docs.length,
+          topOrganization: topOrganization.toString(),
+        );
+        if (!mounted) return;
+        setState(() {
+          _useFallbackInsight = true;
+          _aiInsight = insight;
+          _aiLoading = false;
+        });
+        return;
+      }
+
+      if (!mounted) return;
+      setState(() {
+        _useFallbackInsight = false;
+        _aiInsight = insight.trim().isNotEmpty
+            ? insight
+            : 'No insight generated.';
+        _aiLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _aiInsight = null;
+        _aiError = e.toString();
+        _aiLoading = false;
+      });
+    }
   }
 
   // Helper to filter upcoming events (filter in memory)
@@ -1129,6 +1246,8 @@ class _DashboardHomeState extends State<DashboardHome> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _buildWelcomeHeader(isMobile),
+          const SizedBox(height: 20),
+          _buildAiInsightCard(),
           const SizedBox(height: 20),
           if (isMobile) ...[
             _buildStatCards(isMobile, isTablet),
@@ -1306,6 +1425,151 @@ class _DashboardHomeState extends State<DashboardHome> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildAiInsightCard() {
+    final needsAttention =
+        (_aiError != null) ||
+        (_aiInsight != null &&
+            _aiInsight!.toLowerCase().contains('attention')) ||
+        (_aiInsight != null && _aiInsight!.toLowerCase().contains('urgent'));
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(_DS.radiusLg),
+        border: Border.all(color: const Color(0xFFE8ECF0)),
+        boxShadow: _DS.cardShadow,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: UpriseColors.primaryDark.withAlpha(22),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(
+                  Icons.auto_awesome_rounded,
+                  color: UpriseColors.primaryDark,
+                  size: 18,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Admin Health',
+                      style: GoogleFonts.beVietnamPro(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                        color: UpriseColors.charcoal,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Current operational status and priority actions for the admin team.',
+                      style: GoogleFonts.beVietnamPro(
+                        fontSize: 12,
+                        color: const Color(0xFF64748B),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (needsAttention)
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 5,
+                  ),
+                  decoration: BoxDecoration(
+                    color: UpriseColors.warning.withAlpha(24),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    needsAttention ? 'Needs attention' : 'Looks steady',
+                    style: GoogleFonts.beVietnamPro(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: UpriseColors.warning,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          if (_aiLoading)
+            Row(
+              children: [
+                SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: UpriseColors.primaryDark,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Text(
+                  'Checking dashboard health…',
+                  style: GoogleFonts.beVietnamPro(
+                    fontSize: 12,
+                    color: const Color(0xFF64748B),
+                  ),
+                ),
+              ],
+            )
+          else if (_aiError != null)
+            Text(
+              'AI review is unavailable right now. Showing a local fallback summary instead.\n\n${_aiError!}',
+              style: GoogleFonts.beVietnamPro(
+                fontSize: 12.5,
+                color: UpriseColors.error,
+              ),
+            )
+          else if (_aiInsight != null)
+            Text(
+              _aiInsight!,
+              style: GoogleFonts.beVietnamPro(
+                fontSize: 13.5,
+                color: const Color(0xFF374151),
+                height: 1.55,
+              ),
+            )
+          else
+            Text(
+              'No health check available yet.',
+              style: GoogleFonts.beVietnamPro(
+                fontSize: 12.5,
+                color: const Color(0xFF64748B),
+              ),
+            ),
+          const SizedBox(height: 12),
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton.icon(
+              onPressed: _aiLoading ? null : _analyzeDashboard,
+              icon: const Icon(Icons.refresh_rounded, size: 16),
+              label: Text(
+                'Refresh',
+                style: GoogleFonts.beVietnamPro(
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -1563,8 +1827,8 @@ class _DashboardHomeState extends State<DashboardHome> {
     final semesterStart = now.month >= 8
         ? DateTime(now.year, 8, 1)
         : now.month >= 2
-            ? DateTime(now.year, 2, 1)
-            : DateTime(now.year - 1, 8, 1);
+        ? DateTime(now.year, 2, 1)
+        : DateTime(now.year - 1, 8, 1);
 
     return Container(
       padding: const EdgeInsets.all(24),
@@ -1580,25 +1844,37 @@ class _DashboardHomeState extends State<DashboardHome> {
           Row(
             children: [
               Container(
-                width: 36, height: 36,
+                width: 36,
+                height: 36,
                 decoration: BoxDecoration(
                   color: UpriseColors.primaryDark.withAlpha(26),
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: const Icon(Icons.leaderboard_rounded,
-                    color: UpriseColors.primaryDark, size: 18),
+                child: const Icon(
+                  Icons.leaderboard_rounded,
+                  color: UpriseColors.primaryDark,
+                  size: 18,
+                ),
               ),
               const SizedBox(width: 12),
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Top Organizations',
-                      style: GoogleFonts.beVietnamPro(
-                          fontSize: 15, fontWeight: FontWeight.w700,
-                          color: UpriseColors.accent)),
-                  Text('Most active orgs this semester by approved events',
-                      style: GoogleFonts.beVietnamPro(
-                          fontSize: 12, color: const Color(0xFF9AA5B4))),
+                  Text(
+                    'Top Organizations',
+                    style: GoogleFonts.beVietnamPro(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                      color: UpriseColors.accent,
+                    ),
+                  ),
+                  Text(
+                    'Most active orgs this semester by approved events',
+                    style: GoogleFonts.beVietnamPro(
+                      fontSize: 12,
+                      color: const Color(0xFF9AA5B4),
+                    ),
+                  ),
                 ],
               ),
             ],
@@ -1608,15 +1884,20 @@ class _DashboardHomeState extends State<DashboardHome> {
             future: FirebaseFirestore.instance
                 .collection('events')
                 .where('status', isEqualTo: 'approved')
-                .where('date', isGreaterThanOrEqualTo: Timestamp.fromDate(semesterStart))
+                .where(
+                  'date',
+                  isGreaterThanOrEqualTo: Timestamp.fromDate(semesterStart),
+                )
                 .get(),
             builder: (ctx, evSnap) {
               if (!evSnap.hasData) {
                 return const Center(
                   child: Padding(
                     padding: EdgeInsets.symmetric(vertical: 24),
-                    child: CircularProgressIndicator(strokeWidth: 2,
-                        color: UpriseColors.primaryDark),
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: UpriseColors.primaryDark,
+                    ),
                   ),
                 );
               }
@@ -1638,9 +1919,13 @@ class _DashboardHomeState extends State<DashboardHome> {
                 return Padding(
                   padding: const EdgeInsets.symmetric(vertical: 24),
                   child: Center(
-                    child: Text('No events found this semester.',
-                        style: GoogleFonts.beVietnamPro(
-                            fontSize: 13, color: const Color(0xFF9AA5B4))),
+                    child: Text(
+                      'No events found this semester.',
+                      style: GoogleFonts.beVietnamPro(
+                        fontSize: 13,
+                        color: const Color(0xFF9AA5B4),
+                      ),
+                    ),
                   ),
                 );
               }
@@ -1661,10 +1946,10 @@ class _DashboardHomeState extends State<DashboardHome> {
                   final rankColor = rank == 1
                       ? const Color(0xFFEAB308)
                       : rank == 2
-                          ? const Color(0xFF94A3B8)
-                          : rank == 3
-                              ? const Color(0xFFCD7C37)
-                              : const Color(0xFFCBD5E1);
+                      ? const Color(0xFF94A3B8)
+                      : rank == 3
+                      ? const Color(0xFFCD7C37)
+                      : const Color(0xFFCBD5E1);
 
                   return Padding(
                     padding: const EdgeInsets.only(bottom: 14),
@@ -1672,22 +1957,30 @@ class _DashboardHomeState extends State<DashboardHome> {
                       children: [
                         SizedBox(
                           width: 24,
-                          child: Text('#$rank',
-                              style: GoogleFonts.beVietnamPro(
-                                  fontSize: 12, fontWeight: FontWeight.w700,
-                                  color: rankColor)),
+                          child: Text(
+                            '#$rank',
+                            style: GoogleFonts.beVietnamPro(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              color: rankColor,
+                            ),
+                          ),
                         ),
                         const SizedBox(width: 10),
                         SizedBox(
-                          width: 28, height: 28,
+                          width: 28,
+                          height: 28,
                           child: CircleAvatar(
-                            backgroundColor:
-                                UpriseColors.primaryDark.withAlpha(26),
+                            backgroundColor: UpriseColors.primaryDark.withAlpha(
+                              26,
+                            ),
                             child: Text(
                               name.isNotEmpty ? name[0].toUpperCase() : '?',
                               style: GoogleFonts.beVietnamPro(
-                                  fontSize: 11, fontWeight: FontWeight.w800,
-                                  color: UpriseColors.primaryDark),
+                                fontSize: 11,
+                                fontWeight: FontWeight.w800,
+                                color: UpriseColors.primaryDark,
+                              ),
                             ),
                           ),
                         ),
@@ -1696,11 +1989,15 @@ class _DashboardHomeState extends State<DashboardHome> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(name,
-                                  style: GoogleFonts.beVietnamPro(
-                                      fontSize: 13, fontWeight: FontWeight.w600,
-                                      color: const Color(0xFF1A202C)),
-                                  overflow: TextOverflow.ellipsis),
+                              Text(
+                                name,
+                                style: GoogleFonts.beVietnamPro(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: const Color(0xFF1A202C),
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
                               const SizedBox(height: 4),
                               ClipRRect(
                                 borderRadius: BorderRadius.circular(3),
@@ -1717,15 +2014,21 @@ class _DashboardHomeState extends State<DashboardHome> {
                         const SizedBox(width: 12),
                         Container(
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 10, vertical: 4),
+                            horizontal: 10,
+                            vertical: 4,
+                          ),
                           decoration: BoxDecoration(
                             color: UpriseColors.primaryDark.withAlpha(20),
                             borderRadius: BorderRadius.circular(20),
                           ),
-                          child: Text('$count event${count > 1 ? 's' : ''}',
-                              style: GoogleFonts.beVietnamPro(
-                                  fontSize: 11, fontWeight: FontWeight.w700,
-                                  color: UpriseColors.primaryDark)),
+                          child: Text(
+                            '$count event${count > 1 ? 's' : ''}',
+                            style: GoogleFonts.beVietnamPro(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: UpriseColors.primaryDark,
+                            ),
+                          ),
                         ),
                       ],
                     ),
@@ -1818,7 +2121,8 @@ class _DashboardHomeState extends State<DashboardHome> {
                         ),
                         items: _yearOptions
                             .map(
-                              (y) => DropdownMenuItem(value: y, child: Text('$y')),
+                              (y) =>
+                                  DropdownMenuItem(value: y, child: Text('$y')),
                             )
                             .toList(),
                         onChanged: (v) {
@@ -2269,8 +2573,9 @@ class _DashboardHomeState extends State<DashboardHome> {
         child: StreamBuilder<QuerySnapshot>(
           stream: _allEventsStream,
           builder: (ctx, snap) {
-            final upcomingEvents =
-                snap.hasData ? _getUpcomingEvents(snap.data!) : <QueryDocumentSnapshot>[];
+            final upcomingEvents = snap.hasData
+                ? _getUpcomingEvents(snap.data!)
+                : <QueryDocumentSnapshot>[];
             final displayEvents = upcomingEvents.take(4).toList();
             final showViewAll = upcomingEvents.length >= 4;
 
@@ -2300,7 +2605,9 @@ class _DashboardHomeState extends State<DashboardHome> {
                             ),
                             decoration: BoxDecoration(
                               color: UpriseColors.primaryDark.withAlpha(20),
-                              borderRadius: BorderRadius.circular(_DS.radiusPill),
+                              borderRadius: BorderRadius.circular(
+                                _DS.radiusPill,
+                              ),
                             ),
                             child: Text(
                               'View All',
@@ -2520,7 +2827,8 @@ class _AdminNotificationPanelState extends State<_AdminNotificationPanel> {
     setState(() {
       final idx = _notifs.indexWhere((n) => n['id'] == id);
       if (idx != -1) {
-        _notifs[idx] = Map<String, dynamic>.from(_notifs[idx])..['isRead'] = true;
+        _notifs[idx] = Map<String, dynamic>.from(_notifs[idx])
+          ..['isRead'] = true;
       }
     });
     await widget.onMarkRead(id);
@@ -2627,8 +2935,9 @@ class _AdminNotificationPanelState extends State<_AdminNotificationPanel> {
                             n['title']?.toString() ?? 'Notification',
                             style: GoogleFonts.beVietnamPro(
                               fontSize: 13,
-                              fontWeight:
-                                  isRead ? FontWeight.w600 : FontWeight.w700,
+                              fontWeight: isRead
+                                  ? FontWeight.w600
+                                  : FontWeight.w700,
                               color: isRead
                                   ? const Color(0xFF6B7280)
                                   : const Color(0xFF1A202C),
@@ -2679,19 +2988,21 @@ class _AdminNotificationPanelState extends State<_AdminNotificationPanel> {
     for (final groupKey in groupOrder) {
       final items = groups[groupKey];
       if (items == null || items.isEmpty) continue;
-      widgets.add(Container(
-        width: double.infinity,
-        color: const Color(0xFFF8F9FB),
-        padding: const EdgeInsets.fromLTRB(18, 8, 18, 8),
-        child: Text(
-          groupKey,
-          style: GoogleFonts.beVietnamPro(
-            fontSize: 12,
-            fontWeight: FontWeight.w600,
-            color: const Color(0xFF64748B),
+      widgets.add(
+        Container(
+          width: double.infinity,
+          color: const Color(0xFFF8F9FB),
+          padding: const EdgeInsets.fromLTRB(18, 8, 18, 8),
+          child: Text(
+            groupKey,
+            style: GoogleFonts.beVietnamPro(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: const Color(0xFF64748B),
+            ),
           ),
         ),
-      ));
+      );
       for (final n in items) {
         widgets.add(_buildNotifItem(n));
       }
@@ -2733,19 +3044,25 @@ class _AdminNotificationPanelState extends State<_AdminNotificationPanel> {
                     borderRadius: BorderRadius.circular(6),
                     child: Padding(
                       padding: const EdgeInsets.all(4),
-                      child: Row(mainAxisSize: MainAxisSize.min, children: [
-                        const Icon(Icons.done_all_rounded,
-                            size: 15, color: UpriseColors.primaryDark),
-                        const SizedBox(width: 4),
-                        Text(
-                          'Mark all as read',
-                          style: GoogleFonts.beVietnamPro(
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(
+                            Icons.done_all_rounded,
+                            size: 15,
                             color: UpriseColors.primaryDark,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
                           ),
-                        ),
-                      ]),
+                          const SizedBox(width: 4),
+                          Text(
+                            'Mark all as read',
+                            style: GoogleFonts.beVietnamPro(
+                              color: UpriseColors.primaryDark,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
               ],
@@ -2816,7 +3133,9 @@ class _AdminNotificationPanelState extends State<_AdminNotificationPanel> {
                 decoration: const BoxDecoration(
                   color: Colors.white,
                   border: Border(top: BorderSide(color: Color(0xFFE8ECF0))),
-                  borderRadius: BorderRadius.vertical(bottom: Radius.circular(16)),
+                  borderRadius: BorderRadius.vertical(
+                    bottom: Radius.circular(16),
+                  ),
                 ),
                 child: Text(
                   'View all notifications',
@@ -2869,8 +3188,12 @@ class _ActivityBarChart extends StatelessWidget {
         ),
         borderData: FlBorderData(show: false),
         titlesData: FlTitlesData(
-          topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-          rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+          topTitles: const AxisTitles(
+            sideTitles: SideTitles(showTitles: false),
+          ),
+          rightTitles: const AxisTitles(
+            sideTitles: SideTitles(showTitles: false),
+          ),
           leftTitles: AxisTitles(
             sideTitles: SideTitles(
               showTitles: true,
@@ -2878,7 +3201,10 @@ class _ActivityBarChart extends StatelessWidget {
               interval: maxY / 4,
               getTitlesWidget: (v, _) => Text(
                 '${v.toInt()}',
-                style: GoogleFonts.beVietnamPro(fontSize: 10, color: const Color(0xFF9AA5B4)),
+                style: GoogleFonts.beVietnamPro(
+                  fontSize: 10,
+                  color: const Color(0xFF9AA5B4),
+                ),
               ),
             ),
           ),
@@ -2894,8 +3220,12 @@ class _ActivityBarChart extends StatelessWidget {
                     label,
                     style: GoogleFonts.beVietnamPro(
                       fontSize: 10,
-                      fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-                      color: isSelected ? UpriseColors.primaryDark : const Color(0xFF9AA5B4),
+                      fontWeight: isSelected
+                          ? FontWeight.w700
+                          : FontWeight.w500,
+                      color: isSelected
+                          ? UpriseColors.primaryDark
+                          : const Color(0xFF9AA5B4),
                     ),
                   ),
                 );
@@ -2908,11 +3238,18 @@ class _ActivityBarChart extends StatelessWidget {
             getTooltipColor: (_) => const Color(0xFF1A202C),
             getTooltipItem: (group, _, rod, __) => BarTooltipItem(
               '${monthLabel(group.x)}\n',
-              GoogleFonts.beVietnamPro(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 11),
+              GoogleFonts.beVietnamPro(
+                color: Colors.white,
+                fontWeight: FontWeight.w700,
+                fontSize: 11,
+              ),
               children: [
                 TextSpan(
                   text: '${rod.toY.toInt()} proposal(s)',
-                  style: GoogleFonts.beVietnamPro(color: Colors.white70, fontSize: 11),
+                  style: GoogleFonts.beVietnamPro(
+                    color: Colors.white70,
+                    fontSize: 11,
+                  ),
                 ),
               ],
             ),
@@ -2920,14 +3257,19 @@ class _ActivityBarChart extends StatelessWidget {
         ),
         barGroups: List.generate(data.length, (i) {
           final isSelected = monthLabel(i) == selectedMonth;
-          return BarChartGroupData(x: i, barRods: [
-            BarChartRodData(
-              toY: data[i].toDouble(),
-              color: isSelected ? UpriseColors.primaryDark : UpriseColors.primaryDark.withAlpha(110),
-              width: 35,
-              borderRadius: BorderRadius.circular(4),
-            ),
-          ]);
+          return BarChartGroupData(
+            x: i,
+            barRods: [
+              BarChartRodData(
+                toY: data[i].toDouble(),
+                color: isSelected
+                    ? UpriseColors.primaryDark
+                    : UpriseColors.primaryDark.withAlpha(110),
+                width: 35,
+                borderRadius: BorderRadius.circular(4),
+              ),
+            ],
+          );
         }),
       ),
     );
@@ -3160,4 +3502,3 @@ class _ActivityRow extends StatelessWidget {
     );
   }
 }
-

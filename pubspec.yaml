@@ -1,6 +1,6 @@
 name: uprise
 description: UPRISE App
-publish_to: 'none'
+publish_to: "none"
 
 version: 1.0.0+1
 
@@ -15,6 +15,7 @@ dependencies:
 
   # FIREBASE
   cloud_firestore: ^5.6.12
+  cloud_functions: ^5.0.0
   firebase_core: ^3.15.2
   firebase_auth: ^5.4.0
   firebase_storage: ^12.4.10

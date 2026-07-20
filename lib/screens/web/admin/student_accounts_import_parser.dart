@@ -1,0 +1,158 @@
+class StudentImportParser {
+  static List<Map<String, String>> parseRows(
+    List<List<dynamic>> rows, {
+    bool hasHeaderRow = true,
+  }) {
+    if (rows.isEmpty) return const [];
+
+    final List<List<String>> normalizedRows = [];
+    for (final rawRow in rows) {
+      normalizedRows.add(
+        rawRow.map((cell) => cell?.toString().trim() ?? '').toList(),
+      );
+    }
+
+    final dataRows = hasHeaderRow
+        ? normalizedRows.skip(1).toList()
+        : normalizedRows;
+    final headers = hasHeaderRow ? normalizedRows.first : null;
+
+    final students = <Map<String, String>>[];
+    for (final row in dataRows) {
+      if (row.every((cell) => cell.isEmpty)) continue;
+
+      final record = _parseRecord(row, headers: headers);
+      if (record['studentId']!.isNotEmpty || record['email']!.isNotEmpty) {
+        students.add(record);
+      }
+    }
+
+    students.removeWhere((s) => s['studentId']!.isEmpty || s['email']!.isEmpty);
+    return students;
+  }
+
+  static Map<String, String> _parseRecord(
+    List<String> row, {
+    List<String>? headers,
+  }) {
+    final fallback = <String, String>{
+      'studentId': row.isNotEmpty ? row[0] : '',
+      'fullName': row.length > 1 ? row[1] : '',
+      'course': row.length > 2 ? row[2] : '',
+      'college': row.length > 6 ? row[6] : '',
+      'program': row.length > 7 ? row[7] : '',
+      'schoolYear': row.length > 3 ? row[3] : '',
+      'semester': row.length > 8 ? row[8] : '',
+      'section': row.length > 4 ? row[4] : '',
+      'email': row.length > 5 ? row[5] : '',
+      'yearLevel': row.length > 3 ? row[3] : '',
+    };
+
+    if (headers == null) {
+      return fallback;
+    }
+
+    final normalizedHeaders = headers
+        .map((header) => normalizeHeader(header))
+        .toList(growable: false);
+
+    final indexByHeader = <String, int>{};
+    for (var i = 0; i < normalizedHeaders.length; i++) {
+      if (normalizedHeaders[i].isEmpty) continue;
+      indexByHeader.putIfAbsent(normalizedHeaders[i], () => i);
+    }
+
+    String getValue(String key) {
+      final index = indexByHeader[key];
+      if (index == null || index >= row.length) return '';
+      return row[index];
+    }
+
+    final studentId = getValue('student id');
+    final fullName = getValue('full name');
+    final course = getValue('course');
+    final college = getValue('college');
+    final program = getValue('program');
+    final schoolYear = getValue('school year') != ''
+        ? getValue('school year')
+        : (getValue('year level') != ''
+              ? getValue('year level')
+              : getValue('year'));
+    final semester = getValue('semester');
+    final section = getValue('section');
+    final email = getValue('email');
+
+    return {
+      'studentId': studentId,
+      'fullName': fullName,
+      'course': course,
+      'college': college,
+      'program': program,
+      'schoolYear': schoolYear,
+      'semester': semester,
+      'section': section,
+      'email': email,
+      'yearLevel': schoolYear,
+    };
+  }
+
+  static String normalizeHeader(String header) {
+    final normalized = header
+        .trim()
+        .toLowerCase()
+        .replaceAll(RegExp(r'[^a-z0-9]+'), ' ')
+        .trim();
+
+    const synonyms = {
+      'student no': 'student id',
+      'student number': 'student id',
+      'studentid': 'student id',
+      'id number': 'student id',
+      'id': 'student id',
+      'name': 'full name',
+      'fullname': 'full name',
+      'email address': 'email',
+      'email addr': 'email',
+      'e mail': 'email',
+      'school year': 'school year',
+      'year level': 'year level',
+      'yearlevel': 'year level',
+      'sem': 'semester',
+      'section name': 'section',
+      'programme': 'program',
+      'major': 'program',
+      'course code': 'course',
+    };
+
+    return synonyms[normalized] ?? normalized;
+  }
+
+  static Map<String, String> inferHeaderMapping(List<String> headers) {
+    final normalizedHeaders = headers
+        .map(normalizeHeader)
+        .toList(growable: false);
+    final expectedFields = {
+      'student id': 'Student ID',
+      'full name': 'Full Name',
+      'course': 'Course',
+      'college': 'College',
+      'program': 'Program',
+      'school year': 'School Year',
+      'year level': 'Year Level',
+      'semester': 'Semester',
+      'section': 'Section',
+      'email': 'Email',
+    };
+
+    final mapping = <String, String>{};
+    for (final entry in expectedFields.entries) {
+      final index = normalizedHeaders.indexWhere((h) => h == entry.key);
+      if (index != -1) {
+        mapping[entry.value] = headers[index];
+      } else {
+        mapping[entry.value] = '';
+      }
+    }
+    return mapping;
+  }
+}

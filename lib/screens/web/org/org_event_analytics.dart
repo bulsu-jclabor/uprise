@@ -278,11 +278,13 @@ class _OrgEventAnalyticsScreenState extends State<OrgEventAnalyticsScreen>
           .get();
 
       final feedbacks = feedbackSnapshot.docs
-          .map((d) => {
-                ...d.data(),
-                'id': d.id,
-                'eventId': d.data()['eventId'] as String? ?? '',
-              })
+          .map(
+            (d) => {
+              ...d.data(),
+              'id': d.id,
+              'eventId': d.data()['eventId'] as String? ?? '',
+            },
+          )
           .toList();
 
       final events = eventsSnapshot.docs.map((d) {
@@ -314,15 +316,18 @@ class _OrgEventAnalyticsScreenState extends State<OrgEventAnalyticsScreen>
     _feedbackSubscription = FirebaseFirestore.instance
         .collection('feedback')
         .snapshots()
-        .listen((snapshot) {
-      if (mounted) {
-        setState(() {
-          _dataFuture = _loadAll();
-        });
-      }
-    }, onError: (error) {
-      debugPrint('Feedback listener error: $error');
-    });
+        .listen(
+          (snapshot) {
+            if (mounted) {
+              setState(() {
+                _dataFuture = _loadAll();
+              });
+            }
+          },
+          onError: (error) {
+            debugPrint('Feedback listener error: $error');
+          },
+        );
   }
 
   void _refresh() {
@@ -344,10 +349,12 @@ class _OrgEventAnalyticsScreenState extends State<OrgEventAnalyticsScreen>
       final comment = (f['comment'] as String? ?? '').toLowerCase();
       final rating = f['rating'] as int? ?? 0;
 
-      final matchSearch = _searchQuery.isEmpty ||
+      final matchSearch =
+          _searchQuery.isEmpty ||
           eventTitle.contains(_searchQuery) ||
           comment.contains(_searchQuery);
-      final matchEvent = _selectedEvent == 'All Events' ||
+      final matchEvent =
+          _selectedEvent == 'All Events' ||
           data.eventTitle(eventId) == _selectedEvent;
       final matchRating = _selectedRating == null || rating == _selectedRating;
 
@@ -363,8 +370,10 @@ class _OrgEventAnalyticsScreenState extends State<OrgEventAnalyticsScreen>
   Future<void> _exportAnalytics(String choice, _AnalyticsData data) async {
     final filtered = _applyFilters([...data.feedbacks], data)
       ..sort((a, b) {
-        final ta = (a['submittedAt'] as Timestamp?)?.millisecondsSinceEpoch ?? 0;
-        final tb = (b['submittedAt'] as Timestamp?)?.millisecondsSinceEpoch ?? 0;
+        final ta =
+            (a['submittedAt'] as Timestamp?)?.millisecondsSinceEpoch ?? 0;
+        final tb =
+            (b['submittedAt'] as Timestamp?)?.millisecondsSinceEpoch ?? 0;
         return tb.compareTo(ta);
       });
 
@@ -445,7 +454,10 @@ class _OrgEventAnalyticsScreenState extends State<OrgEventAnalyticsScreen>
               children: [
                 const Icon(Icons.error_outline, color: _C.red, size: 48),
                 const SizedBox(height: 12),
-                Text('Failed to load analytics', style: GoogleFonts.beVietnamPro()),
+                Text(
+                  'Failed to load analytics',
+                  style: GoogleFonts.beVietnamPro(),
+                ),
                 const SizedBox(height: 8),
                 TextButton(onPressed: _refresh, child: const Text('Retry')),
               ],
@@ -464,8 +476,9 @@ class _OrgEventAnalyticsScreenState extends State<OrgEventAnalyticsScreen>
               final width = MediaQuery.of(context).size.width;
               final isMobile = width < 720;
               final isTablet = width >= 720 && width < 1200;
-              final horizontalPadding =
-                  isMobile ? 16.0 : (isTablet ? 22.0 : 28.0);
+              final horizontalPadding = isMobile
+                  ? 16.0
+                  : (isTablet ? 22.0 : 28.0);
 
               return SingleChildScrollView(
                 padding: EdgeInsets.all(horizontalPadding),
@@ -487,7 +500,12 @@ class _OrgEventAnalyticsScreenState extends State<OrgEventAnalyticsScreen>
                           _buildTabBar(data),
                           [
                             _buildAnalyticsTab(data),
-                            _buildFeedbackTab(data, filtered, eventOptions, isMobile),
+                            _buildFeedbackTab(
+                              data,
+                              filtered,
+                              eventOptions,
+                              isMobile,
+                            ),
                           ][_tabCtrl.index],
                         ],
                       ),
@@ -503,31 +521,48 @@ class _OrgEventAnalyticsScreenState extends State<OrgEventAnalyticsScreen>
   }
 
   Widget _buildStatsRow(_AnalyticsData data, bool isMobile) {
-    final published = data.evalForms.where((f) => f['status'] == 'published').length;
+    final published = data.evalForms
+        .where((f) => f['status'] == 'published')
+        .length;
     final totalEvents = data.events.length;
 
     final cards = [
-      _StatCardData('Total evaluations', data.totalFeedbacks.toString(),
-          Icons.assignment_outlined, _C.blue),
       _StatCardData(
-          'Average rating',
-          data.totalFeedbacks > 0 ? data.avgRating.toStringAsFixed(1) : '—',
-          Icons.star_outline,
-          _C.amber),
+        'Total evaluations',
+        data.totalFeedbacks.toString(),
+        Icons.assignment_outlined,
+        _C.blue,
+      ),
       _StatCardData(
-          'Active events', totalEvents.toString(), Icons.event_outlined, _C.green),
-      _StatCardData('Published forms', published.toString(),
-          Icons.assignment_outlined, UpriseColors.primaryDark),
+        'Average rating',
+        data.totalFeedbacks > 0 ? data.avgRating.toStringAsFixed(1) : '—',
+        Icons.star_outline,
+        _C.amber,
+      ),
+      _StatCardData(
+        'Active events',
+        totalEvents.toString(),
+        Icons.event_outlined,
+        _C.green,
+      ),
+      _StatCardData(
+        'Published forms',
+        published.toString(),
+        Icons.assignment_outlined,
+        UpriseColors.primaryDark,
+      ),
     ];
 
     if (isMobile) {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: cards
-            .map((c) => Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: _StatCard(c),
-                ))
+            .map(
+              (c) => Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: _StatCard(c),
+              ),
+            )
             .toList(),
       );
     }
@@ -571,18 +606,27 @@ class _OrgEventAnalyticsScreenState extends State<OrgEventAnalyticsScreen>
             return GestureDetector(
               onTap: () => setState(() => _tabCtrl.animateTo(idx)),
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 18,
+                  vertical: 14,
+                ),
                 decoration: BoxDecoration(
                   border: Border(
                     bottom: BorderSide(
-                      color: active ? UpriseColors.primaryDark : Colors.transparent,
+                      color: active
+                          ? UpriseColors.primaryDark
+                          : Colors.transparent,
                       width: 2,
                     ),
                   ),
                 ),
                 child: Row(
                   children: [
-                    Icon(icon, size: 15, color: active ? UpriseColors.primaryDark : _C.muted),
+                    Icon(
+                      icon,
+                      size: 15,
+                      color: active ? UpriseColors.primaryDark : _C.muted,
+                    ),
                     const SizedBox(width: 6),
                     Text(
                       label,
@@ -595,7 +639,10 @@ class _OrgEventAnalyticsScreenState extends State<OrgEventAnalyticsScreen>
                     if (badge != null) ...[
                       const SizedBox(width: 6),
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 7,
+                          vertical: 2,
+                        ),
                         decoration: BoxDecoration(
                           color: const Color(0xFFEFF6FF),
                           borderRadius: BorderRadius.circular(99),
@@ -623,7 +670,10 @@ class _OrgEventAnalyticsScreenState extends State<OrgEventAnalyticsScreen>
                 Container(
                   width: 7,
                   height: 7,
-                  decoration: const BoxDecoration(color: _C.green, shape: BoxShape.circle),
+                  decoration: const BoxDecoration(
+                    color: _C.green,
+                    shape: BoxShape.circle,
+                  ),
                 ),
                 const SizedBox(width: 5),
                 Text(
@@ -678,79 +728,100 @@ class _OrgEventAnalyticsScreenState extends State<OrgEventAnalyticsScreen>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          LayoutBuilder(builder: (context, constraints) {
-            final narrow = constraints.maxWidth < 900;
-            final kpis = [
-              _KpiCard(
-                icon: Icons.bar_chart_rounded,
-                label: 'Total evaluations',
-                value: data.totalFeedbacks.toString(),
-                sub: data.totalFeedbacks > 0 ? 'All responses collected' : 'No data yet',
-                color: _C.blue,
-              ),
-              _KpiCard(
-                icon: Icons.star_outline,
-                label: 'Average rating',
-                value: data.totalFeedbacks > 0 ? data.avgRating.toStringAsFixed(1) : '—',
-                sub: data.totalFeedbacks > 0
-                    ? 'Based on ${data.totalFeedbacks} responses'
-                    : 'No ratings yet',
-                color: _C.amber,
-              ),
-              _KpiCard(
-                icon: Icons.emoji_events_outlined,
-                label: 'Highest rated',
-                value: highestEvent,
-                sub: avgByEvent.isNotEmpty
-                    ? 'Score: ${highestScore.toStringAsFixed(1)} / 5.0'
-                    : 'No data yet',
-                color: _C.green,
-              ),
-              _KpiCard(
-                icon: Icons.trending_down_rounded,
-                label: 'Needs improvement',
-                value: lowestEvent,
-                sub: avgByEvent.isNotEmpty
-                    ? 'Score: ${lowestScore.toStringAsFixed(1)} / 5.0'
-                    : 'No data yet',
-                color: _C.red,
-              ),
-            ];
-            if (narrow) {
-              return Wrap(
-                spacing: 14,
-                runSpacing: 14,
-                children: kpis.map((k) => SizedBox(width: (constraints.maxWidth - 14) / 2, child: k)).toList(),
-              );
-            }
-            return Row(
-              children: kpis.asMap().entries.map((e) {
-                return Expanded(
-                  child: Padding(
-                    padding: EdgeInsets.only(left: e.key == 0 ? 0 : 14),
-                    child: e.value,
-                  ),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final narrow = constraints.maxWidth < 900;
+              final kpis = [
+                _KpiCard(
+                  icon: Icons.bar_chart_rounded,
+                  label: 'Total evaluations',
+                  value: data.totalFeedbacks.toString(),
+                  sub: data.totalFeedbacks > 0
+                      ? 'All responses collected'
+                      : 'No data yet',
+                  color: _C.blue,
+                ),
+                _KpiCard(
+                  icon: Icons.star_outline,
+                  label: 'Average rating',
+                  value: data.totalFeedbacks > 0
+                      ? data.avgRating.toStringAsFixed(1)
+                      : '—',
+                  sub: data.totalFeedbacks > 0
+                      ? 'Based on ${data.totalFeedbacks} responses'
+                      : 'No ratings yet',
+                  color: _C.amber,
+                ),
+                _KpiCard(
+                  icon: Icons.emoji_events_outlined,
+                  label: 'Highest rated',
+                  value: highestEvent,
+                  sub: avgByEvent.isNotEmpty
+                      ? 'Score: ${highestScore.toStringAsFixed(1)} / 5.0'
+                      : 'No data yet',
+                  color: _C.green,
+                ),
+                _KpiCard(
+                  icon: Icons.trending_down_rounded,
+                  label: 'Needs improvement',
+                  value: lowestEvent,
+                  sub: avgByEvent.isNotEmpty
+                      ? 'Score: ${lowestScore.toStringAsFixed(1)} / 5.0'
+                      : 'No data yet',
+                  color: _C.red,
+                ),
+              ];
+              if (narrow) {
+                return Wrap(
+                  spacing: 14,
+                  runSpacing: 14,
+                  children: kpis
+                      .map(
+                        (k) => SizedBox(
+                          width: (constraints.maxWidth - 14) / 2,
+                          child: k,
+                        ),
+                      )
+                      .toList(),
                 );
-              }).toList(),
-            );
-          }),
+              }
+              return Row(
+                children: kpis.asMap().entries.map((e) {
+                  return Expanded(
+                    child: Padding(
+                      padding: EdgeInsets.only(left: e.key == 0 ? 0 : 14),
+                      child: e.value,
+                    ),
+                  );
+                }).toList(),
+              );
+            },
+          ),
           const SizedBox(height: 20),
-          LayoutBuilder(builder: (context, constraints) {
-            final stack = constraints.maxWidth < 900;
-            final satisfaction = _SatisfactionCard(data: data);
-            final distribution = _DistributionCard(data: data);
-            if (stack) {
-              return Column(children: [satisfaction, const SizedBox(height: 20), distribution]);
-            }
-            return Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(child: satisfaction),
-                const SizedBox(width: 20),
-                Expanded(child: distribution),
-              ],
-            );
-          }),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final stack = constraints.maxWidth < 900;
+              final satisfaction = _SatisfactionCard(data: data);
+              final distribution = _DistributionCard(data: data);
+              if (stack) {
+                return Column(
+                  children: [
+                    satisfaction,
+                    const SizedBox(height: 20),
+                    distribution,
+                  ],
+                );
+              }
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(child: satisfaction),
+                  const SizedBox(width: 20),
+                  Expanded(child: distribution),
+                ],
+              );
+            },
+          ),
           const SizedBox(height: 20),
           _CompletionCard(data: data),
         ],
@@ -767,8 +838,10 @@ class _OrgEventAnalyticsScreenState extends State<OrgEventAnalyticsScreen>
   ) {
     final sorted = [...filtered]
       ..sort((a, b) {
-        final ta = (a['submittedAt'] as Timestamp?)?.millisecondsSinceEpoch ?? 0;
-        final tb = (b['submittedAt'] as Timestamp?)?.millisecondsSinceEpoch ?? 0;
+        final ta =
+            (a['submittedAt'] as Timestamp?)?.millisecondsSinceEpoch ?? 0;
+        final tb =
+            (b['submittedAt'] as Timestamp?)?.millisecondsSinceEpoch ?? 0;
         return tb.compareTo(ta);
       });
     final items = sorted.take(50).toList();
@@ -806,7 +879,8 @@ class _OrgEventAnalyticsScreenState extends State<OrgEventAnalyticsScreen>
               filteredCount: filtered.length,
               totalCount: data.totalFeedbacks,
               onRemoveSearch: () => _searchCtrl.clear(),
-              onRemoveEvent: () => setState(() => _selectedEvent = 'All Events'),
+              onRemoveEvent: () =>
+                  setState(() => _selectedEvent = 'All Events'),
               onRemoveRating: () => setState(() => _selectedRating = null),
               onClearAll: () => setState(() {
                 _searchCtrl.clear();
@@ -826,7 +900,10 @@ class _OrgEventAnalyticsScreenState extends State<OrgEventAnalyticsScreen>
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 14,
+                  ),
                   decoration: const BoxDecoration(
                     color: _C.surface,
                     border: Border(bottom: BorderSide(color: _C.border)),
@@ -846,11 +923,18 @@ class _OrgEventAnalyticsScreenState extends State<OrgEventAnalyticsScreen>
                     child: Center(
                       child: Column(
                         children: [
-                          const Icon(Icons.search_off, size: 42, color: Color(0xFFD1D5DB)),
+                          const Icon(
+                            Icons.search_off,
+                            size: 42,
+                            color: Color(0xFFD1D5DB),
+                          ),
                           const SizedBox(height: 10),
                           Text(
                             'No feedback matches your filters',
-                            style: GoogleFonts.beVietnamPro(fontSize: 13, color: _C.muted),
+                            style: GoogleFonts.beVietnamPro(
+                              fontSize: 13,
+                              color: _C.muted,
+                            ),
                           ),
                         ],
                       ),
@@ -865,26 +949,32 @@ class _OrgEventAnalyticsScreenState extends State<OrgEventAnalyticsScreen>
                     final eventId = f['eventId'] as String? ?? '';
                     final eventTitle = data.eventDisplayTitle(eventId);
                     final createdAt =
-                        (f['submittedAt'] as Timestamp?)?.toDate() ?? DateTime.now();
+                        (f['submittedAt'] as Timestamp?)?.toDate() ??
+                        DateTime.now();
                     final isLast = i == items.length - 1;
                     final ratingColor = rating >= 4
                         ? _C.green
                         : rating == 3
-                            ? _C.amber
-                            : _C.red;
+                        ? _C.amber
+                        : _C.red;
                     final ratingBg = rating >= 4
                         ? const Color(0xFFECFDF5)
                         : rating == 3
-                            ? const Color(0xFFFFFBEB)
-                            : const Color(0xFFFEF2F2);
+                        ? const Color(0xFFFFFBEB)
+                        : const Color(0xFFFEF2F2);
 
                     return Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 20,
+                        vertical: 16,
+                      ),
                       decoration: BoxDecoration(
                         color: i.isOdd ? const Color(0xFFFBFCFE) : Colors.white,
                         border: isLast
                             ? null
-                            : const Border(bottom: BorderSide(color: Color(0xFFF1F5F9))),
+                            : const Border(
+                                bottom: BorderSide(color: Color(0xFFF1F5F9)),
+                              ),
                       ),
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.center,
@@ -904,7 +994,10 @@ class _OrgEventAnalyticsScreenState extends State<OrgEventAnalyticsScreen>
                           Expanded(
                             flex: 2,
                             child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 5,
+                              ),
                               decoration: BoxDecoration(
                                 color: ratingBg,
                                 borderRadius: BorderRadius.circular(20),
@@ -912,7 +1005,11 @@ class _OrgEventAnalyticsScreenState extends State<OrgEventAnalyticsScreen>
                               child: Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  Icon(Icons.star_rounded, size: 14, color: ratingColor),
+                                  Icon(
+                                    Icons.star_rounded,
+                                    size: 14,
+                                    color: ratingColor,
+                                  ),
                                   const SizedBox(width: 4),
                                   Text(
                                     '$rating.0',
@@ -932,7 +1029,10 @@ class _OrgEventAnalyticsScreenState extends State<OrgEventAnalyticsScreen>
                               padding: const EdgeInsets.only(right: 12),
                               child: Text(
                                 comment.isEmpty ? '—' : comment,
-                                style: GoogleFonts.beVietnamPro(fontSize: 12.5, color: _C.muted),
+                                style: GoogleFonts.beVietnamPro(
+                                  fontSize: 12.5,
+                                  color: _C.muted,
+                                ),
                                 overflow: TextOverflow.ellipsis,
                                 maxLines: 2,
                               ),
@@ -942,7 +1042,10 @@ class _OrgEventAnalyticsScreenState extends State<OrgEventAnalyticsScreen>
                             flex: 2,
                             child: Text(
                               DateFormat('MMM dd, yyyy').format(createdAt),
-                              style: GoogleFonts.beVietnamPro(fontSize: 12, color: _C.muted),
+                              style: GoogleFonts.beVietnamPro(
+                                fontSize: 12,
+                                color: _C.muted,
+                              ),
                             ),
                           ),
                         ],
@@ -950,15 +1053,23 @@ class _OrgEventAnalyticsScreenState extends State<OrgEventAnalyticsScreen>
                     );
                   }),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 12,
+                  ),
                   decoration: BoxDecoration(
                     border: const Border(top: BorderSide(color: _C.border)),
                     color: _C.surface,
-                    borderRadius: const BorderRadius.vertical(bottom: Radius.circular(_DS.radiusMd)),
+                    borderRadius: const BorderRadius.vertical(
+                      bottom: Radius.circular(_DS.radiusMd),
+                    ),
                   ),
                   child: Text(
                     '${items.length} result${items.length == 1 ? '' : 's'}',
-                    style: GoogleFonts.beVietnamPro(fontSize: 12, color: _C.muted),
+                    style: GoogleFonts.beVietnamPro(
+                      fontSize: 12,
+                      color: _C.muted,
+                    ),
                   ),
                 ),
               ],
@@ -969,7 +1080,10 @@ class _OrgEventAnalyticsScreenState extends State<OrgEventAnalyticsScreen>
     );
   }
 
-  Widget _buildFeedbackFilterBar(_AnalyticsData data, List<String> eventOptions) {
+  Widget _buildFeedbackFilterBar(
+    _AnalyticsData data,
+    List<String> eventOptions,
+  ) {
     return LayoutBuilder(
       builder: (context, constraints) {
         final useRow = constraints.maxWidth > 900;
@@ -983,8 +1097,15 @@ class _OrgEventAnalyticsScreenState extends State<OrgEventAnalyticsScreen>
             style: GoogleFonts.beVietnamPro(fontSize: 13, color: _C.charcoal),
             decoration: InputDecoration(
               hintText: 'Search event name or feedback comment…',
-              hintStyle: GoogleFonts.beVietnamPro(fontSize: 13, color: _C.muted),
-              prefixIcon: const Icon(Icons.search_rounded, size: 18, color: _C.muted),
+              hintStyle: GoogleFonts.beVietnamPro(
+                fontSize: 13,
+                color: _C.muted,
+              ),
+              prefixIcon: const Icon(
+                Icons.search_rounded,
+                size: 18,
+                color: _C.muted,
+              ),
               suffixIcon: _searchQuery.isNotEmpty
                   ? IconButton(
                       icon: const Icon(Icons.close, size: 15, color: _C.muted),
@@ -1004,7 +1125,10 @@ class _OrgEventAnalyticsScreenState extends State<OrgEventAnalyticsScreen>
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(10),
-                borderSide: BorderSide(color: UpriseColors.primaryDark, width: 1.5),
+                borderSide: BorderSide(
+                  color: UpriseColors.primaryDark,
+                  width: 1.5,
+                ),
               ),
             ),
           ),
@@ -1014,14 +1138,18 @@ class _OrgEventAnalyticsScreenState extends State<OrgEventAnalyticsScreen>
           _FilterDropdown(
             value: _selectedEvent,
             items: eventOptions,
-            onChanged: (v) => setState(() => _selectedEvent = v ?? 'All Events'),
+            onChanged: (v) =>
+                setState(() => _selectedEvent = v ?? 'All Events'),
           ),
           _FilterDropdown(
-            value: _selectedRating == null ? 'All Ratings' : '$_selectedRating ★',
+            value: _selectedRating == null
+                ? 'All Ratings'
+                : '$_selectedRating ★',
             items: ['All Ratings', ...List.generate(5, (i) => '${5 - i} ★')],
             onChanged: (v) => setState(
-              () => _selectedRating =
-                  v == 'All Ratings' ? null : int.tryParse(v?.split(' ').first ?? ''),
+              () => _selectedRating = v == 'All Ratings'
+                  ? null
+                  : int.tryParse(v?.split(' ').first ?? ''),
             ),
           ),
           AdminExportButton(
@@ -1054,14 +1182,14 @@ class _OrgEventAnalyticsScreenState extends State<OrgEventAnalyticsScreen>
   }
 
   Widget _hCell(String t) => Text(
-        t.toUpperCase(),
-        style: GoogleFonts.inter(
-          fontSize: 10,
-          fontWeight: FontWeight.w700,
-          color: _C.muted,
-          letterSpacing: 0.8,
-        ),
-      );
+    t.toUpperCase(),
+    style: GoogleFonts.inter(
+      fontSize: 10,
+      fontWeight: FontWeight.w700,
+      color: _C.muted,
+      letterSpacing: 0.8,
+    ),
+  );
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -1074,20 +1202,27 @@ class _RefreshButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => OutlinedButton.icon(
-        onPressed: onTap,
-        icon: const Icon(Icons.refresh_rounded, size: 15, color: UpriseColors.primaryDark),
-        label: Text(
-          'Refresh',
-          style: GoogleFonts.beVietnamPro(fontSize: 12.5, color: UpriseColors.primaryDark),
-        ),
-        style: OutlinedButton.styleFrom(
-          side: BorderSide(color: UpriseColors.primaryDark.withOpacity(0.35)),
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          minimumSize: Size.zero,
-          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-        ),
-      );
+    onPressed: onTap,
+    icon: const Icon(
+      Icons.refresh_rounded,
+      size: 15,
+      color: UpriseColors.primaryDark,
+    ),
+    label: Text(
+      'Refresh',
+      style: GoogleFonts.beVietnamPro(
+        fontSize: 12.5,
+        color: UpriseColors.primaryDark,
+      ),
+    ),
+    style: OutlinedButton.styleFrom(
+      side: BorderSide(color: UpriseColors.primaryDark.withOpacity(0.35)),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      minimumSize: Size.zero,
+      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+    ),
+  );
 }
 
 class _StatCardData {
@@ -1103,58 +1238,58 @@ class _StatCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: _C.white,
-          borderRadius: BorderRadius.circular(_DS.radiusMd),
-          border: Border.all(color: _C.border.withOpacity(0.5)),
-          boxShadow: _DS.cardShadow,
+    padding: const EdgeInsets.all(20),
+    decoration: BoxDecoration(
+      color: _C.white,
+      borderRadius: BorderRadius.circular(_DS.radiusMd),
+      border: Border.all(color: _C.border.withOpacity(0.5)),
+      boxShadow: _DS.cardShadow,
+    ),
+    child: Row(
+      children: [
+        Container(
+          width: 48,
+          height: 48,
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [c.color.withOpacity(0.15), c.color.withOpacity(0.05)],
+            ),
+            borderRadius: BorderRadius.circular(_DS.radiusMd),
+          ),
+          child: Icon(c.icon, color: c.color, size: 22),
         ),
-        child: Row(
-          children: [
-            Container(
-              width: 48,
-              height: 48,
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [c.color.withOpacity(0.15), c.color.withOpacity(0.05)],
+        const SizedBox(width: 14),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                c.label,
+                style: GoogleFonts.inter(
+                  fontSize: 12,
+                  color: _C.muted,
+                  fontWeight: FontWeight.w500,
+                  letterSpacing: 0.3,
                 ),
-                borderRadius: BorderRadius.circular(_DS.radiusMd),
               ),
-              child: Icon(c.icon, color: c.color, size: 22),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    c.label,
-                    style: GoogleFonts.inter(
-                      fontSize: 12,
-                      color: _C.muted,
-                      fontWeight: FontWeight.w500,
-                      letterSpacing: 0.3,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    c.value,
-                    style: GoogleFonts.inter(
-                      fontSize: 28,
-                      fontWeight: FontWeight.w700,
-                      color: _C.charcoal,
-                      letterSpacing: -0.5,
-                    ),
-                  ),
-                ],
+              const SizedBox(height: 4),
+              Text(
+                c.value,
+                style: GoogleFonts.inter(
+                  fontSize: 28,
+                  fontWeight: FontWeight.w700,
+                  color: _C.charcoal,
+                  letterSpacing: -0.5,
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
-      );
+      ],
+    ),
+  );
 }
 
 class _KpiCard extends StatelessWidget {
@@ -1171,63 +1306,67 @@ class _KpiCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: _C.white,
-          borderRadius: BorderRadius.circular(_DS.radiusMd),
-          border: Border.all(color: _C.border.withOpacity(0.5)),
-          boxShadow: _DS.cardShadow,
+    padding: const EdgeInsets.all(16),
+    decoration: BoxDecoration(
+      color: _C.white,
+      borderRadius: BorderRadius.circular(_DS.radiusMd),
+      border: Border.all(color: _C.border.withOpacity(0.5)),
+      boxShadow: _DS.cardShadow,
+    ),
+    child: Row(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [color.withOpacity(0.15), color.withOpacity(0.05)],
+            ),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Icon(icon, color: color, size: 20),
         ),
-        child: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [color.withOpacity(0.15), color.withOpacity(0.05)],
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: GoogleFonts.inter(
+                  fontSize: 11,
+                  color: _C.muted,
+                  fontWeight: FontWeight.w500,
+                  letterSpacing: 0.3,
                 ),
-                borderRadius: BorderRadius.circular(10),
               ),
-              child: Icon(icon, color: color, size: 20),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    label,
-                    style: GoogleFonts.inter(
-                      fontSize: 11,
-                      color: _C.muted,
-                      fontWeight: FontWeight.w500,
-                      letterSpacing: 0.3,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    value,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: GoogleFonts.inter(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                      color: _C.charcoal,
-                      letterSpacing: -0.3,
-                    ),
-                  ),
-                  Text(
-                    sub,
-                    style: GoogleFonts.inter(fontSize: 10, color: _C.muted, fontWeight: FontWeight.w400),
-                  ),
-                ],
+              const SizedBox(height: 2),
+              Text(
+                value,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: GoogleFonts.inter(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                  color: _C.charcoal,
+                  letterSpacing: -0.3,
+                ),
               ),
-            ),
-          ],
+              Text(
+                sub,
+                style: GoogleFonts.inter(
+                  fontSize: 10,
+                  color: _C.muted,
+                  fontWeight: FontWeight.w400,
+                ),
+              ),
+            ],
+          ),
         ),
-      );
+      ],
+    ),
+  );
 }
 
 class _SatisfactionCard extends StatelessWidget {
@@ -1259,12 +1398,20 @@ class _SatisfactionCard extends StatelessWidget {
                     color: const Color(0xFFEFF6FF),
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  child: const Icon(Icons.emoji_events_outlined, size: 16, color: _C.blue),
+                  child: const Icon(
+                    Icons.emoji_events_outlined,
+                    size: 16,
+                    color: _C.blue,
+                  ),
                 ),
                 const SizedBox(width: 10),
                 Text(
                   'Event satisfaction scores',
-                  style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w600, color: _C.charcoal),
+                  style: GoogleFonts.inter(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: _C.charcoal,
+                  ),
                 ),
               ],
             ),
@@ -1278,7 +1425,10 @@ class _SatisfactionCard extends StatelessWidget {
                   children: [
                     Icon(Icons.inbox_outlined, size: 40, color: _C.border),
                     const SizedBox(height: 8),
-                    Text('No feedback data yet', style: GoogleFonts.inter(fontSize: 13, color: _C.muted)),
+                    Text(
+                      'No feedback data yet',
+                      style: GoogleFonts.inter(fontSize: 13, color: _C.muted),
+                    ),
                   ],
                 ),
               ),
@@ -1293,7 +1443,10 @@ class _SatisfactionCard extends StatelessWidget {
               return Column(
                 children: [
                   Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 12,
+                    ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -1311,13 +1464,16 @@ class _SatisfactionCard extends StatelessWidget {
                               ),
                             ),
                             Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 3,
+                              ),
                               decoration: BoxDecoration(
                                 color: score >= 4.0
                                     ? const Color(0xFFECFDF5)
                                     : score >= 3.0
-                                        ? const Color(0xFFFFFBEB)
-                                        : const Color(0xFFFEF2F2),
+                                    ? const Color(0xFFFFFBEB)
+                                    : const Color(0xFFFEF2F2),
                                 borderRadius: BorderRadius.circular(20),
                               ),
                               child: Text(
@@ -1325,7 +1481,9 @@ class _SatisfactionCard extends StatelessWidget {
                                 style: GoogleFonts.inter(
                                   fontSize: 13,
                                   fontWeight: FontWeight.w700,
-                                  color: score >= 4.0 ? _C.green : (score >= 3.0 ? _C.amber : _C.red),
+                                  color: score >= 4.0
+                                      ? _C.green
+                                      : (score >= 3.0 ? _C.amber : _C.red),
                                 ),
                               ),
                             ),
@@ -1337,7 +1495,9 @@ class _SatisfactionCard extends StatelessWidget {
                           child: LinearProgressIndicator(
                             value: score / 5.0,
                             backgroundColor: const Color(0xFFF1F5F9),
-                            color: score >= 4.0 ? _C.green : (score >= 3.0 ? _C.amber : _C.red),
+                            color: score >= 4.0
+                                ? _C.green
+                                : (score >= 3.0 ? _C.amber : _C.red),
                             minHeight: 6,
                           ),
                         ),
@@ -1391,12 +1551,20 @@ class _DistributionCard extends StatelessWidget {
                   color: const Color(0xFFFFFBEB),
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: const Icon(Icons.insert_chart_outlined, size: 16, color: _C.amber),
+                child: const Icon(
+                  Icons.insert_chart_outlined,
+                  size: 16,
+                  color: _C.amber,
+                ),
               ),
               const SizedBox(width: 10),
               Text(
                 'Rating distribution',
-                style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w600, color: _C.charcoal),
+                style: GoogleFonts.inter(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: _C.charcoal,
+                ),
               ),
             ],
           ),
@@ -1410,7 +1578,10 @@ class _DistributionCard extends StatelessWidget {
                 children: [
                   Icon(Icons.insert_chart_outlined, size: 40, color: _C.border),
                   const SizedBox(height: 8),
-                  Text('No feedback yet', style: GoogleFonts.inter(fontSize: 13, color: _C.muted)),
+                  Text(
+                    'No feedback yet',
+                    style: GoogleFonts.inter(fontSize: 13, color: _C.muted),
+                  ),
                 ],
               ),
             )
@@ -1422,14 +1593,20 @@ class _DistributionCard extends StatelessWidget {
                   width: 140,
                   height: 140,
                   child: CustomPaint(
-                    painter: _DonutPainter(segs: segs, total: total, label: data.avgRating.toStringAsFixed(1)),
+                    painter: _DonutPainter(
+                      segs: segs,
+                      total: total,
+                      label: data.avgRating.toStringAsFixed(1),
+                    ),
                   ),
                 ),
                 const SizedBox(width: 16),
                 Expanded(
                   child: Column(
                     children: segs.map((s) {
-                      final pct = total > 0 ? (s.count / total * 100).toStringAsFixed(0) : '0';
+                      final pct = total > 0
+                          ? (s.count / total * 100).toStringAsFixed(0)
+                          : '0';
                       return Padding(
                         padding: const EdgeInsets.symmetric(vertical: 3),
                         child: Row(
@@ -1437,23 +1614,36 @@ class _DistributionCard extends StatelessWidget {
                             Container(
                               width: 12,
                               height: 12,
-                              decoration: BoxDecoration(color: s.color, shape: BoxShape.circle),
+                              decoration: BoxDecoration(
+                                color: s.color,
+                                shape: BoxShape.circle,
+                              ),
                             ),
                             const SizedBox(width: 8),
                             Text(
                               '${s.stars} star${s.stars > 1 ? 's' : ''}',
-                              style: GoogleFonts.inter(fontSize: 12, color: _C.muted),
+                              style: GoogleFonts.inter(
+                                fontSize: 12,
+                                color: _C.muted,
+                              ),
                             ),
                             const Spacer(),
                             Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 2,
+                              ),
                               decoration: BoxDecoration(
                                 color: s.color.withOpacity(0.1),
                                 borderRadius: BorderRadius.circular(4),
                               ),
                               child: Text(
                                 '$pct%',
-                                style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w600, color: s.color),
+                                style: GoogleFonts.inter(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: s.color,
+                                ),
                               ),
                             ),
                           ],
@@ -1480,7 +1670,11 @@ class _DonutPainter extends CustomPainter {
   final List<_Seg> segs;
   final int total;
   final String label;
-  const _DonutPainter({required this.segs, required this.total, required this.label});
+  const _DonutPainter({
+    required this.segs,
+    required this.total,
+    required this.label,
+  });
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -1503,25 +1697,44 @@ class _DonutPainter extends CustomPainter {
         final sweep = s.count / total * 2 * math.pi;
         final actual = nonZero > 1 ? math.max(0.0, sweep - gap) : sweep;
         paint.color = s.color;
-        canvas.drawArc(Rect.fromCircle(center: Offset(cx, cy), radius: r), start, actual, false, paint);
+        canvas.drawArc(
+          Rect.fromCircle(center: Offset(cx, cy), radius: r),
+          start,
+          actual,
+          false,
+          paint,
+        );
         start += sweep;
       }
     }
 
-    final bigStyle = GoogleFonts.inter(fontSize: 22, fontWeight: FontWeight.w700, color: _C.charcoal);
-    final smStyle = GoogleFonts.inter(fontSize: 11, color: _C.muted, fontWeight: FontWeight.w500);
+    final bigStyle = GoogleFonts.inter(
+      fontSize: 22,
+      fontWeight: FontWeight.w700,
+      color: _C.charcoal,
+    );
+    final smStyle = GoogleFonts.inter(
+      fontSize: 11,
+      color: _C.muted,
+      fontWeight: FontWeight.w500,
+    );
 
-    final tp1 = TextPainter(text: TextSpan(text: label, style: bigStyle), textDirection: ui.TextDirection.ltr)
-      ..layout();
-    final tp2 = TextPainter(text: TextSpan(text: 'average', style: smStyle), textDirection: ui.TextDirection.ltr)
-      ..layout();
+    final tp1 = TextPainter(
+      text: TextSpan(text: label, style: bigStyle),
+      textDirection: ui.TextDirection.ltr,
+    )..layout();
+    final tp2 = TextPainter(
+      text: TextSpan(text: 'average', style: smStyle),
+      textDirection: ui.TextDirection.ltr,
+    )..layout();
 
     tp1.paint(canvas, ui.Offset(cx - tp1.width / 2, cy - tp1.height / 2 - 7));
     tp2.paint(canvas, ui.Offset(cx - tp2.width / 2, cy + tp1.height / 2 - 3));
   }
 
   @override
-  bool shouldRepaint(_DonutPainter old) => old.total != total || old.label != label;
+  bool shouldRepaint(_DonutPainter old) =>
+      old.total != total || old.label != label;
 }
 
 /// Redesigned "Evaluation completion by event" widget.
@@ -1541,10 +1754,14 @@ class _CompletionCard extends StatelessWidget {
       final ra = countByEvent[a['id']] ?? 0;
       final rb = countByEvent[b['id']] ?? 0;
       if (ra != rb) return rb.compareTo(ra);
-      return (a['title'] as String).toLowerCase().compareTo((b['title'] as String).toLowerCase());
+      return (a['title'] as String).toLowerCase().compareTo(
+        (b['title'] as String).toLowerCase(),
+      );
     });
 
-    final withFeedback = rows.where((e) => (countByEvent[e['id']] ?? 0) > 0).length;
+    final withFeedback = rows
+        .where((e) => (countByEvent[e['id']] ?? 0) > 0)
+        .length;
 
     return Container(
       decoration: BoxDecoration(
@@ -1566,7 +1783,11 @@ class _CompletionCard extends StatelessWidget {
                     color: const Color(0xFFECFDF5),
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  child: const Icon(Icons.checklist_outlined, size: 16, color: _C.green),
+                  child: const Icon(
+                    Icons.checklist_outlined,
+                    size: 16,
+                    color: _C.green,
+                  ),
                 ),
                 const SizedBox(width: 10),
                 Expanded(
@@ -1575,13 +1796,20 @@ class _CompletionCard extends StatelessWidget {
                     children: [
                       Text(
                         'Evaluation completion by event',
-                        style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w600, color: _C.charcoal),
+                        style: GoogleFonts.inter(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: _C.charcoal,
+                        ),
                       ),
                       if (rows.isNotEmpty) ...[
                         const SizedBox(height: 2),
                         Text(
                           '$withFeedback of ${rows.length} events have received feedback',
-                          style: GoogleFonts.inter(fontSize: 11.5, color: _C.muted),
+                          style: GoogleFonts.inter(
+                            fontSize: 11.5,
+                            color: _C.muted,
+                          ),
                         ),
                       ],
                     ],
@@ -1602,7 +1830,8 @@ class _CompletionCard extends StatelessWidget {
               child: ListView.separated(
                 padding: EdgeInsets.zero,
                 itemCount: rows.length,
-                separatorBuilder: (_, __) => const Divider(height: 1, color: Color(0xFFF1F5F9)),
+                separatorBuilder: (_, __) =>
+                    const Divider(height: 1, color: Color(0xFFF1F5F9)),
                 itemBuilder: (context, i) {
                   final event = rows[i];
                   final title = event['title'] as String;
@@ -1610,14 +1839,19 @@ class _CompletionCard extends StatelessWidget {
                   final hasFeedback = received > 0;
 
                   return Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 12,
+                    ),
                     child: Row(
                       children: [
                         Container(
                           width: 7,
                           height: 7,
                           decoration: BoxDecoration(
-                            color: hasFeedback ? _C.green : const Color(0xFFCBD5E1),
+                            color: hasFeedback
+                                ? _C.green
+                                : const Color(0xFFCBD5E1),
                             shape: BoxShape.circle,
                           ),
                         ),
@@ -1636,17 +1870,26 @@ class _CompletionCard extends StatelessWidget {
                         ),
                         const SizedBox(width: 10),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 4,
+                          ),
                           decoration: BoxDecoration(
-                            color: hasFeedback ? const Color(0xFFECFDF5) : const Color(0xFFF1F5F9),
+                            color: hasFeedback
+                                ? const Color(0xFFECFDF5)
+                                : const Color(0xFFF1F5F9),
                             borderRadius: BorderRadius.circular(20),
                           ),
                           child: Text(
-                            hasFeedback ? '$received response${received == 1 ? '' : 's'}' : 'No responses yet',
+                            hasFeedback
+                                ? '$received response${received == 1 ? '' : 's'}'
+                                : 'No responses yet',
                             style: GoogleFonts.inter(
                               fontSize: 11.5,
                               fontWeight: FontWeight.w600,
-                              color: hasFeedback ? const Color(0xFF166534) : _C.muted,
+                              color: hasFeedback
+                                  ? const Color(0xFF166534)
+                                  : _C.muted,
                             ),
                           ),
                         ),
@@ -1692,12 +1935,18 @@ class _ActiveFilterChips extends StatelessWidget {
           'Showing $filteredCount of $totalCount',
           style: GoogleFonts.beVietnamPro(fontSize: 12, color: _C.muted),
         ),
-        if (searchQuery.isNotEmpty) _Chip(label: '"$searchQuery"', onRemove: onRemoveSearch),
-        if (selectedEvent != 'All Events') _Chip(label: selectedEvent, onRemove: onRemoveEvent),
-        if (selectedRating != null) _Chip(label: '$selectedRating★ only', onRemove: onRemoveRating),
+        if (searchQuery.isNotEmpty)
+          _Chip(label: '"$searchQuery"', onRemove: onRemoveSearch),
+        if (selectedEvent != 'All Events')
+          _Chip(label: selectedEvent, onRemove: onRemoveEvent),
+        if (selectedRating != null)
+          _Chip(label: '$selectedRating★ only', onRemove: onRemoveRating),
         TextButton(
           onPressed: onClearAll,
-          child: Text('Clear all', style: GoogleFonts.beVietnamPro(fontSize: 12, color: _C.red)),
+          child: Text(
+            'Clear all',
+            style: GoogleFonts.beVietnamPro(fontSize: 12, color: _C.red),
+          ),
         ),
       ],
     );
@@ -1711,54 +1960,75 @@ class _Chip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-        decoration: BoxDecoration(
-          color: UpriseColors.primaryDark.withOpacity(0.08),
-          borderRadius: BorderRadius.circular(99),
-          border: Border.all(color: UpriseColors.primaryDark.withOpacity(0.2)),
+    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+    decoration: BoxDecoration(
+      color: UpriseColors.primaryDark.withOpacity(0.08),
+      borderRadius: BorderRadius.circular(99),
+      border: Border.all(color: UpriseColors.primaryDark.withOpacity(0.2)),
+    ),
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          label,
+          style: GoogleFonts.beVietnamPro(
+            fontSize: 11,
+            color: UpriseColors.primaryDark,
+            fontWeight: FontWeight.w500,
+          ),
         ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              label,
-              style: GoogleFonts.beVietnamPro(fontSize: 11, color: UpriseColors.primaryDark, fontWeight: FontWeight.w500),
-            ),
-            const SizedBox(width: 4),
-            GestureDetector(
-              onTap: onRemove,
-              child: const Icon(Icons.close, size: 11, color: UpriseColors.primaryDark),
-            ),
-          ],
+        const SizedBox(width: 4),
+        GestureDetector(
+          onTap: onRemove,
+          child: const Icon(
+            Icons.close,
+            size: 11,
+            color: UpriseColors.primaryDark,
+          ),
         ),
-      );
+      ],
+    ),
+  );
 }
 
 class _FilterDropdown extends StatelessWidget {
   final String value;
   final List<String> items;
   final ValueChanged<String?> onChanged;
-  const _FilterDropdown({required this.value, required this.items, required this.onChanged});
+  const _FilterDropdown({
+    required this.value,
+    required this.items,
+    required this.onChanged,
+  });
 
   @override
   Widget build(BuildContext context) => Container(
-        height: 42,
-        padding: const EdgeInsets.symmetric(horizontal: 12),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: _C.border),
+    height: 42,
+    padding: const EdgeInsets.symmetric(horizontal: 12),
+    decoration: BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(10),
+      border: Border.all(color: _C.border),
+    ),
+    child: DropdownButtonHideUnderline(
+      child: DropdownButton<String>(
+        value: value,
+        icon: const Icon(
+          Icons.keyboard_arrow_down_rounded,
+          size: 17,
+          color: _C.muted,
         ),
-        child: DropdownButtonHideUnderline(
-          child: DropdownButton<String>(
-            value: value,
-            icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 17, color: _C.muted),
-            style: GoogleFonts.beVietnamPro(fontSize: 13, color: _C.charcoal),
-            items: items
-                .map((s) => DropdownMenuItem(value: s, child: Text(s, style: GoogleFonts.beVietnamPro(fontSize: 13))))
-                .toList(),
-            onChanged: onChanged,
-          ),
-        ),
-      );
+        style: GoogleFonts.beVietnamPro(fontSize: 13, color: _C.charcoal),
+        items: items
+            .map(
+              (s) => DropdownMenuItem(
+                value: s,
+                child: Text(s, style: GoogleFonts.beVietnamPro(fontSize: 13)),
+              ),
+            )
+            .toList(),
+        onChanged: onChanged,
+      ),
+    ),
+  );
 }

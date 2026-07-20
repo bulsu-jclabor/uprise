@@ -33,19 +33,19 @@ class _UiTokens {
   static const Color headingText = Color(0xFF1B1B1D);
 
   static List<BoxShadow> get subtleShadow => [
-        BoxShadow(
-          color: Colors.black.withOpacity(0.05),
-          blurRadius: 12,
-          offset: const Offset(0, 4),
-        ),
-      ];
+    BoxShadow(
+      color: Colors.black.withOpacity(0.05),
+      blurRadius: 12,
+      offset: const Offset(0, 4),
+    ),
+  ];
 
   static BoxDecoration card({double radiusOverride = radius}) => BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(radiusOverride),
-        border: Border.all(color: cardBorder, width: 1),
-        boxShadow: subtleShadow,
-      );
+    color: Colors.white,
+    borderRadius: BorderRadius.circular(radiusOverride),
+    border: Border.all(color: cardBorder, width: 1),
+    boxShadow: subtleShadow,
+  );
 }
 
 // Helper widget to display base64 images
@@ -75,7 +75,7 @@ class Base64Image extends StatelessWidget {
           base64Data = base64String.substring(commaIndex + 1);
         }
       }
-      
+
       final bytes = base64Decode(base64Data);
       return Image.memory(
         bytes,
@@ -116,11 +116,7 @@ class _SectionHeader extends StatelessWidget {
   final String? actionLabel;
   final VoidCallback? onAction;
 
-  const _SectionHeader({
-    required this.title,
-    this.actionLabel,
-    this.onAction,
-  });
+  const _SectionHeader({required this.title, this.actionLabel, this.onAction});
 
   @override
   Widget build(BuildContext context) {
@@ -170,7 +166,11 @@ class _SectionHeader extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 2),
-                const Icon(Icons.arrow_forward_ios, size: 11, color: AppColors.primaryDark),
+                const Icon(
+                  Icons.arrow_forward_ios,
+                  size: 11,
+                  color: AppColors.primaryDark,
+                ),
               ],
             ),
           ),
@@ -238,7 +238,9 @@ class BottomNavBar extends StatelessWidget {
                       children: [
                         Icon(
                           isSelected ? item.selectedIcon : item.icon,
-                          color: isSelected ? AppColors.primaryDark : _UiTokens.mutedText,
+                          color: isSelected
+                              ? AppColors.primaryDark
+                              : _UiTokens.mutedText,
                           size: 22,
                         ),
                         const SizedBox(height: 4),
@@ -246,8 +248,12 @@ class BottomNavBar extends StatelessWidget {
                           item.label,
                           style: TextStyle(
                             fontSize: 10,
-                            fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-                            color: isSelected ? AppColors.primaryDark : _UiTokens.mutedText,
+                            fontWeight: isSelected
+                                ? FontWeight.w700
+                                : FontWeight.w500,
+                            color: isSelected
+                                ? AppColors.primaryDark
+                                : _UiTokens.mutedText,
                           ),
                           textAlign: TextAlign.center,
                           overflow: TextOverflow.visible,
@@ -305,14 +311,17 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
           final firstName = (data['firstName'] ?? '').toString().trim();
           final middleName = (data['middleName'] ?? '').toString().trim();
 
-          final greetingName = [firstName, middleName]
-              .where((p) => p.isNotEmpty)
-              .join(' ');
+          final greetingName = [
+            firstName,
+            middleName,
+          ].where((p) => p.isNotEmpty).join(' ');
 
           setState(() {
             _userName = greetingName.isNotEmpty
                 ? greetingName
-                : (user.displayName ?? user.email?.split('@').first ?? 'Student');
+                : (user.displayName ??
+                      user.email?.split('@').first ??
+                      'Student');
           });
         }
       } catch (_) {
@@ -346,8 +355,16 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
         },
         items: const [
           BottomNavItem(Icons.home_outlined, Icons.home, 'Home'),
-          BottomNavItem(Icons.announcement_outlined, Icons.announcement, 'Announce'),
-          BottomNavItem(Icons.calendar_today_outlined, Icons.calendar_today, 'Events'),
+          BottomNavItem(
+            Icons.announcement_outlined,
+            Icons.announcement,
+            'Announce',
+          ),
+          BottomNavItem(
+            Icons.calendar_today_outlined,
+            Icons.calendar_today,
+            'Events',
+          ),
           BottomNavItem(Icons.groups_outlined, Icons.groups, 'Orgs'),
           BottomNavItem(Icons.person_outline, Icons.person, 'Profile'),
         ],
@@ -356,12 +373,12 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
   }
 
   List<Widget> get _screens => [
-        _HomeContent(key: _homeKey, userName: _userName),
-        const StudentAnnouncementsScreen(),
-        const StudentEventsScreen(),
-        const StudentOrganizationsScreen(),
-        const StudentProfileScreen(),
-      ];
+    _HomeContent(key: _homeKey, userName: _userName),
+    const StudentAnnouncementsScreen(),
+    const StudentEventsScreen(),
+    const StudentOrganizationsScreen(),
+    const StudentProfileScreen(),
+  ];
 }
 
 class _HomeContent extends StatefulWidget {
@@ -394,10 +411,10 @@ class _HomeContentState extends State<_HomeContent> {
         .limit(1)
         .snapshots(includeMetadataChanges: true)
         .listen((snap) {
-      if (mounted && snap.metadata.isFromCache != _isOffline) {
-        setState(() => _isOffline = snap.metadata.isFromCache);
-      }
-    });
+          if (mounted && snap.metadata.isFromCache != _isOffline) {
+            setState(() => _isOffline = snap.metadata.isFromCache);
+          }
+        });
   }
 
   @override
@@ -423,9 +440,7 @@ class _HomeContentState extends State<_HomeContent> {
           .where('userId', isEqualTo: user.uid)
           .get();
 
-      final ids = snap.docs
-          .map((doc) => doc['eventId'] as String)
-          .toSet();
+      final ids = snap.docs.map((doc) => doc['eventId'] as String).toSet();
 
       debugPrint('✅ Registered event IDs: $ids');
       debugPrint('✅ Number of registered events: ${ids.length}');
@@ -470,7 +485,9 @@ class _HomeContentState extends State<_HomeContent> {
         }
 
         final event = EventModel.fromFirestore(snap.docs.first);
-        debugPrint('✅ Earliest future event found: ${event.title} - ${event.date}');
+        debugPrint(
+          '✅ Earliest future event found: ${event.title} - ${event.date}',
+        );
         debugPrint('✅ Event ID: ${event.id}');
         return event;
       } catch (e) {
@@ -497,7 +514,9 @@ class _HomeContentState extends State<_HomeContent> {
 
           futureEvents.sort((a, b) => a.fullDateTime.compareTo(b.fullDateTime));
           final event = futureEvents.first;
-          debugPrint('✅ Earliest future event (fallback): ${event.title} - ${event.date}');
+          debugPrint(
+            '✅ Earliest future event (fallback): ${event.title} - ${event.date}',
+          );
           return event;
         } catch (e2) {
           debugPrint('❌ Error querying events (fallback): $e2');
@@ -581,7 +600,15 @@ class _HomeContentState extends State<_HomeContent> {
         return;
       }
 
-      final orgId = studentDoc.data()?['orgId'] as String?;
+      String? orgId = studentDoc.data()?['orgId'] as String?;
+      if (orgId == null || orgId.isEmpty) {
+        final userDoc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .get();
+        orgId = userDoc.data()?['orgId'] as String?;
+      }
+
       if (orgId == null || orgId.isEmpty) {
         setState(() => _orgLoading = false);
         return;
@@ -620,9 +647,8 @@ class _HomeContentState extends State<_HomeContent> {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => AnnouncementDetailScreen(
-          announcement: announcement,
-        ),
+        builder: (context) =>
+            AnnouncementDetailScreen(announcement: announcement),
       ),
     );
   }
@@ -702,7 +728,9 @@ class _HomeContentState extends State<_HomeContent> {
                     .where('isRead', isEqualTo: false)
                     .snapshots(),
                 builder: (context, snapshot) {
-                  final unreadCount = snapshot.hasData ? snapshot.data!.docs.length : 0;
+                  final unreadCount = snapshot.hasData
+                      ? snapshot.data!.docs.length
+                      : 0;
 
                   return Stack(
                     alignment: Alignment.center,
@@ -717,7 +745,8 @@ class _HomeContentState extends State<_HomeContent> {
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (context) => const StudentNotificationsScreen(),
+                              builder: (context) =>
+                                  const StudentNotificationsScreen(),
                             ),
                           );
                         },
@@ -731,7 +760,10 @@ class _HomeContentState extends State<_HomeContent> {
                             decoration: BoxDecoration(
                               color: const Color(0xFFC0392B),
                               shape: BoxShape.circle,
-                              border: Border.all(color: Colors.white, width: 1.5),
+                              border: Border.all(
+                                color: Colors.white,
+                                width: 1.5,
+                              ),
                             ),
                             constraints: const BoxConstraints(
                               minWidth: 16,
@@ -762,10 +794,17 @@ class _HomeContentState extends State<_HomeContent> {
             SliverToBoxAdapter(
               child: Container(
                 color: const Color(0xFFF6EEDD),
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 8,
+                ),
                 child: const Row(
                   children: [
-                    Icon(Icons.wifi_off_rounded, size: 14, color: Color(0xFF8A6D1F)),
+                    Icon(
+                      Icons.wifi_off_rounded,
+                      size: 14,
+                      color: Color(0xFF8A6D1F),
+                    ),
                     SizedBox(width: 8),
                     Text(
                       'Offline — showing cached data',
@@ -841,7 +880,8 @@ class _HomeContentState extends State<_HomeContent> {
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (context) => const StudentEventsScreen(initialTabIndex: 0),
+                          builder: (context) =>
+                              const StudentEventsScreen(initialTabIndex: 0),
                         ),
                       );
                     },
@@ -853,7 +893,8 @@ class _HomeContentState extends State<_HomeContent> {
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (context) => const StudentCertificatesScreen(),
+                          builder: (context) =>
+                              const StudentCertificatesScreen(),
                         ),
                       );
                     },
@@ -865,7 +906,8 @@ class _HomeContentState extends State<_HomeContent> {
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (context) => const StudentOrganizationsScreen(),
+                          builder: (context) =>
+                              const StudentOrganizationsScreen(),
                         ),
                       );
                     },
@@ -892,7 +934,10 @@ class _HomeContentState extends State<_HomeContent> {
             child: _loadingRegistered
                 ? Container(
                     height: 130,
-                    margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                    margin: const EdgeInsets.symmetric(
+                      horizontal: 20,
+                      vertical: 10,
+                    ),
                     decoration: _UiTokens.card(),
                     child: const Center(
                       child: SizedBox(
@@ -906,57 +951,70 @@ class _HomeContentState extends State<_HomeContent> {
                     ),
                   )
                 : _registeredEventIds.isEmpty
-                    ? const SizedBox.shrink()
-                    : Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                        child: FutureBuilder<EventModel?>(
-                          future: _getEarliestRegisteredEvent(),
-                          builder: (context, snapshot) {
-                            debugPrint('🔍 Countdown FutureBuilder: connectionState=${snapshot.connectionState}, hasData=${snapshot.hasData}, error=${snapshot.error}');
+                ? const SizedBox.shrink()
+                : Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 20,
+                      vertical: 10,
+                    ),
+                    child: FutureBuilder<EventModel?>(
+                      future: _getEarliestRegisteredEvent(),
+                      builder: (context, snapshot) {
+                        debugPrint(
+                          '🔍 Countdown FutureBuilder: connectionState=${snapshot.connectionState}, hasData=${snapshot.hasData}, error=${snapshot.error}',
+                        );
 
-                            if (snapshot.connectionState == ConnectionState.waiting) {
-                              return Container(
-                                height: 130,
-                                decoration: _UiTokens.card(),
-                                child: const Center(
-                                  child: SizedBox(
-                                    height: 24,
-                                    width: 24,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                      color: AppColors.primaryDark,
-                                    ),
-                                  ),
+                        if (snapshot.connectionState ==
+                            ConnectionState.waiting) {
+                          return Container(
+                            height: 130,
+                            decoration: _UiTokens.card(),
+                            child: const Center(
+                              child: SizedBox(
+                                height: 24,
+                                width: 24,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: AppColors.primaryDark,
                                 ),
-                              );
-                            }
+                              ),
+                            ),
+                          );
+                        }
 
-                            if (snapshot.hasError) {
-                              return Container(
-                                height: 130,
-                                decoration: _UiTokens.card(),
-                                child: Center(
-                                  child: Text(
-                                    'Error: ${snapshot.error}',
-                                    style: const TextStyle(color: Colors.red, fontSize: 12),
-                                    textAlign: TextAlign.center,
-                                  ),
+                        if (snapshot.hasError) {
+                          return Container(
+                            height: 130,
+                            decoration: _UiTokens.card(),
+                            child: Center(
+                              child: Text(
+                                'Error: ${snapshot.error}',
+                                style: const TextStyle(
+                                  color: Colors.red,
+                                  fontSize: 12,
                                 ),
-                              );
-                            }
+                                textAlign: TextAlign.center,
+                              ),
+                            ),
+                          );
+                        }
 
-                            if (snapshot.data == null) {
-                              debugPrint('📌 No future events found - hiding countdown');
-                              return const SizedBox.shrink();
-                            }
+                        if (snapshot.data == null) {
+                          debugPrint(
+                            '📌 No future events found - hiding countdown',
+                          );
+                          return const SizedBox.shrink();
+                        }
 
-                            final event = snapshot.data!;
-                            debugPrint('✅ Countdown event found: ${event.title} - ${event.date}');
-                            
-                            return CountdownWidget(event: event);
-                          },
-                        ),
-                      ),
+                        final event = snapshot.data!;
+                        debugPrint(
+                          '✅ Countdown event found: ${event.title} - ${event.date}',
+                        );
+
+                        return CountdownWidget(event: event);
+                      },
+                    ),
+                  ),
           ),
 
           // Upcoming Events Section Header
@@ -970,7 +1028,8 @@ class _HomeContentState extends State<_HomeContent> {
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (context) => const StudentEventsScreen(initialTabIndex: 1),
+                      builder: (context) =>
+                          const StudentEventsScreen(initialTabIndex: 1),
                     ),
                   );
                 },
@@ -1008,7 +1067,8 @@ class _HomeContentState extends State<_HomeContent> {
                     child: UpriseEmptyState(
                       icon: Icons.calendar_today_outlined,
                       title: 'No upcoming events',
-                      subtitle: 'Check back later for new events from your organizations.',
+                      subtitle:
+                          'Check back later for new events from your organizations.',
                     ),
                   );
                 }
@@ -1052,7 +1112,9 @@ class _HomeContentState extends State<_HomeContent> {
                                   : Container(
                                       height: 100,
                                       width: double.infinity,
-                                      color: AppColors.primaryDark.withOpacity(0.1),
+                                      color: AppColors.primaryDark.withOpacity(
+                                        0.1,
+                                      ),
                                       child: const Icon(
                                         Icons.image_not_supported,
                                         color: Colors.grey,
@@ -1186,9 +1248,7 @@ class _HomeContentState extends State<_HomeContent> {
             ),
           ),
 
-          const SliverToBoxAdapter(
-            child: SizedBox(height: 84),
-          ),
+          const SliverToBoxAdapter(child: SizedBox(height: 84)),
         ],
       ),
     );
@@ -1222,13 +1282,12 @@ class _QuickAccessItem extends StatelessWidget {
             decoration: BoxDecoration(
               color: AppColors.primaryDark.withOpacity(0.08),
               borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: AppColors.primaryDark.withOpacity(0.15), width: 1),
+              border: Border.all(
+                color: AppColors.primaryDark.withOpacity(0.15),
+                width: 1,
+              ),
             ),
-            child: Icon(
-              icon,
-              color: AppColors.primaryDark,
-              size: 24,
-            ),
+            child: Icon(icon, color: AppColors.primaryDark, size: 24),
           ),
           const SizedBox(height: 7),
           Text(
