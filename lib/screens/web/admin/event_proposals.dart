@@ -21,7 +21,10 @@ import 'package:intl/intl.dart';
 Future<String> _getUserName(String uid) async {
   if (uid.isEmpty) return '—';
   try {
-    final doc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
+    final doc = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(uid)
+        .get();
     if (doc.exists) {
       final data = doc.data();
       // Try various possible field names
@@ -41,7 +44,12 @@ bool _isImageAttachment(Map<String, dynamic> data) {
   return ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp'].contains(ext);
 }
 
-Widget _buildImageFromBase64(String base64, {double? width, double? height, BoxFit fit = BoxFit.cover}) {
+Widget _buildImageFromBase64(
+  String base64, {
+  double? width,
+  double? height,
+  BoxFit fit = BoxFit.cover,
+}) {
   try {
     final bytes = base64Decode(base64);
     return Image.memory(
@@ -70,7 +78,12 @@ ImageProvider _imageProviderFromUrl(String url) {
   return NetworkImage(url);
 }
 
-Widget _buildImageWidget(String url, {BoxFit fit = BoxFit.cover, double? width, double? height}) {
+Widget _buildImageWidget(
+  String url, {
+  BoxFit fit = BoxFit.cover,
+  double? width,
+  double? height,
+}) {
   return Image(
     image: _imageProviderFromUrl(url),
     fit: fit,
@@ -80,13 +93,23 @@ Widget _buildImageWidget(String url, {BoxFit fit = BoxFit.cover, double? width, 
   );
 }
 
+bool shouldShowCertificateSignatoryIndicator({
+  required String status,
+  required bool issuesCertificate,
+  required bool signatoriesAvailable,
+}) {
+  return status.toLowerCase() == 'approved' &&
+      issuesCertificate &&
+      signatoriesAvailable;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Design tokens
 // ─────────────────────────────────────────────────────────────────────────────
 class _DS {
-  static const double radiusSm   = 8;
-  static const double radiusMd   = 12;
-  static const double radiusLg   = 16;
+  static const double radiusSm = 8;
+  static const double radiusMd = 12;
+  static const double radiusLg = 16;
   static const double radiusPill = 100;
 
   static final cardShadow = [
@@ -104,38 +127,45 @@ class _DS {
 Widget _sectionLabel(String text, {IconData? icon}) {
   return Padding(
     padding: const EdgeInsets.only(bottom: 12),
-    child: Row(children: [
-      if (icon != null) ...[
-        Icon(icon, size: 16, color: UpriseColors.primaryDark),
-        const SizedBox(width: 8),
-      ],
-      Text(
-        text,
-        style: GoogleFonts.beVietnamPro(
-          fontSize: 13,
-          fontWeight: FontWeight.w700,
-          color: UpriseColors.primaryDark,
-          letterSpacing: 0.3,
+    child: Row(
+      children: [
+        if (icon != null) ...[
+          Icon(icon, size: 16, color: UpriseColors.primaryDark),
+          const SizedBox(width: 8),
+        ],
+        Text(
+          text,
+          style: GoogleFonts.beVietnamPro(
+            fontSize: 13,
+            fontWeight: FontWeight.w700,
+            color: UpriseColors.primaryDark,
+            letterSpacing: 0.3,
+          ),
         ),
-      ),
-      const SizedBox(width: 12),
-      Expanded(child: Divider(color: const Color(0xFFE2E6EA), thickness: 1)),
-    ]),
+        const SizedBox(width: 12),
+        Expanded(child: Divider(color: const Color(0xFFE2E6EA), thickness: 1)),
+      ],
+    ),
   );
 }
 
 Widget _statusBadge(String status) {
   const Map<String, _BadgeStyle> styles = {
     'approved': _BadgeStyle(Color(0xFFECFDF5), Color(0xFF059669), 'APPROVED'),
-    'pending':  _BadgeStyle(Color(0xFFFFFBEB), Color(0xFFFB923C), 'PENDING'),
+    'pending': _BadgeStyle(Color(0xFFFFFBEB), Color(0xFFFB923C), 'PENDING'),
     'rejected': _BadgeStyle(Color(0xFFFEF2F2), Color(0xFFDC2626), 'REJECTED'),
     'archived': _BadgeStyle(Color(0xFFF3F4F6), Color(0xFF6B7280), 'ARCHIVED'),
-    'for_review': _BadgeStyle(const Color(0xFFFFF7ED), const Color(0xFFBE4700), 'NEEDS REVISION'),
+    'for_review': _BadgeStyle(
+      const Color(0xFFFFF7ED),
+      const Color(0xFFBE4700),
+      'NEEDS REVISION',
+    ),
   };
-  final s = styles[status.toLowerCase()] ??
+  final s =
+      styles[status.toLowerCase()] ??
       const _BadgeStyle(Color(0xFFF3F4F6), Color(0xFF6B7280), '—');
   return Container(
-    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3), // reduced padding
+    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 3),
     decoration: BoxDecoration(
       color: s.bg,
       borderRadius: BorderRadius.circular(_DS.radiusPill),
@@ -143,7 +173,7 @@ Widget _statusBadge(String status) {
     child: Text(
       s.label,
       style: GoogleFonts.beVietnamPro(
-        fontSize: 9, // smaller font
+        fontSize: 9,
         fontWeight: FontWeight.w700,
         color: s.fg,
         letterSpacing: 0.6,
@@ -171,7 +201,12 @@ class _OrgAvatar extends StatelessWidget {
     if (logoUrl != null && logoUrl!.isNotEmpty) {
       return ClipRRect(
         borderRadius: BorderRadius.circular(_DS.radiusSm),
-        child: _buildImageWidget(logoUrl!, width: 34, height: 34, fit: BoxFit.cover),
+        child: _buildImageWidget(
+          logoUrl!,
+          width: 34,
+          height: 34,
+          fit: BoxFit.cover,
+        ),
       );
     }
     // Fallback to initials
@@ -220,8 +255,9 @@ class _EventProposalsState extends State<EventProposals> {
   // methods that use these are called on every rebuild (search, filter
   // changes, pagination), so building a fresh .snapshots() there each time
   // was re-subscribing to Firestore from scratch on every keystroke.
-  late final Stream<QuerySnapshot> _proposalsStream =
-      FirebaseFirestore.instance.collection('event_proposals').snapshots();
+  late final Stream<QuerySnapshot> _proposalsStream = FirebaseFirestore.instance
+      .collection('event_proposals')
+      .snapshots();
   late final Stream<QuerySnapshot> _proposalsOrderedStream = FirebaseFirestore
       .instance
       .collection('event_proposals')
@@ -245,13 +281,13 @@ class _EventProposalsState extends State<EventProposals> {
     if (_orgLogoCache.containsKey(orgId)) {
       return _orgLogoCache[orgId];
     }
-    
+
     try {
       final orgDoc = await FirebaseFirestore.instance
           .collection('organizations')
           .doc(orgId)
           .get();
-      
+
       if (orgDoc.exists) {
         final data = orgDoc.data() as Map<String, dynamic>;
         final logoUrl = data['logoUrl'] as String? ?? '';
@@ -262,6 +298,19 @@ class _EventProposalsState extends State<EventProposals> {
       debugPrint('Error fetching org logo for $orgId: $e');
     }
     return null;
+  }
+
+  Future<bool> _hasConfiguredSignatories() async {
+    try {
+      final snapshot = await FirebaseFirestore.instance
+          .collection('signatories')
+          .limit(1)
+          .get();
+      return snapshot.docs.isNotEmpty;
+    } catch (e) {
+      debugPrint('Error checking signatories availability: $e');
+      return false;
+    }
   }
 
   // ── Build ─────────────────────────────────────────────────────────
@@ -291,12 +340,17 @@ class _EventProposalsState extends State<EventProposals> {
     return StreamBuilder<QuerySnapshot>(
       stream: _proposalsStream,
       builder: (context, snapshot) {
-        int total = 0, pending = 0, approved = 0, rejected = 0, archived = 0, forReview = 0;
+        int total = 0,
+            pending = 0,
+            approved = 0,
+            rejected = 0,
+            archived = 0,
+            forReview = 0;
         if (snapshot.hasData) {
           total = snapshot.data!.docs.length;
           for (final doc in snapshot.data!.docs) {
             final status = (doc.data() as Map)['status'] ?? 'pending';
-            if (status == 'pending')  pending++;
+            if (status == 'pending') pending++;
             if (status == 'approved') approved++;
             if (status == 'rejected') rejected++;
             if (status == 'archived') archived++;
@@ -337,15 +391,20 @@ class _EventProposalsState extends State<EventProposals> {
             color: const Color(0xFF6B7280),
           ),
           _StatCard(
-  label: 'For Review',
-  value: '$forReview',
-  icon: Icons.rate_review_rounded,
-  color: const Color(0xFFBE4700),
-),
+            label: 'For Review',
+            value: '$forReview',
+            icon: Icons.rate_review_rounded,
+            color: const Color(0xFFBE4700),
+          ),
         ];
 
         return Padding(
-          padding: EdgeInsets.fromLTRB(horizontalPadding, 24, horizontalPadding, 0),
+          padding: EdgeInsets.fromLTRB(
+            horizontalPadding,
+            24,
+            horizontalPadding,
+            0,
+          ),
           child: isMobile
               ? SingleChildScrollView(
                   scrollDirection: Axis.horizontal,
@@ -353,7 +412,9 @@ class _EventProposalsState extends State<EventProposals> {
                     children: List.generate(
                       statCards.length,
                       (index) => Padding(
-                        padding: EdgeInsets.only(right: index < statCards.length - 1 ? cardGap : 0),
+                        padding: EdgeInsets.only(
+                          right: index < statCards.length - 1 ? cardGap : 0,
+                        ),
                         child: SizedBox(width: 220, child: statCards[index]),
                       ),
                     ),
@@ -365,7 +426,9 @@ class _EventProposalsState extends State<EventProposals> {
                     statCards.length,
                     (index) => Expanded(
                       child: Padding(
-                        padding: EdgeInsets.only(right: index < statCards.length - 1 ? cardGap : 0),
+                        padding: EdgeInsets.only(
+                          right: index < statCards.length - 1 ? cardGap : 0,
+                        ),
                         child: statCards[index],
                       ),
                     ),
@@ -388,21 +451,45 @@ class _EventProposalsState extends State<EventProposals> {
         style: GoogleFonts.beVietnamPro(fontSize: 13),
         decoration: InputDecoration(
           hintText: 'Search proposal…',
-          hintStyle: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF9AA5B4)),
-          prefixIcon: const Icon(Icons.search_rounded, size: 18, color: Color(0xFF9AA5B4)),
+          hintStyle: GoogleFonts.beVietnamPro(
+            fontSize: 13,
+            color: const Color(0xFF9AA5B4),
+          ),
+          prefixIcon: const Icon(
+            Icons.search_rounded,
+            size: 18,
+            color: Color(0xFF9AA5B4),
+          ),
           filled: true,
           fillColor: Colors.white,
-          contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE2E6EA))),
-          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE2E6EA))),
-          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: UpriseColors.primaryDark, width: 1.5)),
+          contentPadding: const EdgeInsets.symmetric(
+            vertical: 0,
+            horizontal: 16,
+          ),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: const BorderSide(color: Color(0xFFE2E6EA)),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: const BorderSide(color: Color(0xFFE2E6EA)),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: BorderSide(color: UpriseColors.primaryDark, width: 1.5),
+          ),
         ),
         onChanged: (_) => setState(() => _currentPage = 1),
       ),
     );
 
     return Padding(
-      padding: EdgeInsets.fromLTRB(horizontalPadding, isMobile ? 16 : 20, horizontalPadding, 0),
+      padding: EdgeInsets.fromLTRB(
+        horizontalPadding,
+        isMobile ? 16 : 20,
+        horizontalPadding,
+        0,
+      ),
       child: isMobile
           ? Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -411,7 +498,14 @@ class _EventProposalsState extends State<EventProposals> {
                 SizedBox(height: itemGap),
                 _FilterDropdown(
                   value: _statusFilter,
-                  items: const ['All', 'Pending', 'Approved', 'Rejected', 'For Review', 'Archived'],
+                  items: const [
+                    'All',
+                    'Pending',
+                    'Approved',
+                    'Rejected',
+                    'For Review',
+                    'Archived',
+                  ],
                   hint: 'Status',
                   icon: Icons.tune_rounded,
                   onChanged: (v) => setState(() {
@@ -426,25 +520,33 @@ class _EventProposalsState extends State<EventProposals> {
                 ),
               ],
             )
-          : Row(children: [
-              Expanded(child: searchField),
-              SizedBox(width: itemGap),
-              _FilterDropdown(
-                value: _statusFilter,
-                items: const ['All', 'Pending', 'Approved', 'Rejected', 'Archived'],
-                hint: 'Status',
-                icon: Icons.tune_rounded,
-                onChanged: (v) => setState(() {
-                  _statusFilter = v!;
-                  _currentPage = 1;
-                }),
-              ),
-              SizedBox(width: itemGap),
-              _ExportProposalsButton(
-                statusFilter: _statusFilter,
-                searchTerm: _searchController.text.trim(),
-              ),
-            ]),
+          : Row(
+              children: [
+                Expanded(child: searchField),
+                SizedBox(width: itemGap),
+                _FilterDropdown(
+                  value: _statusFilter,
+                  items: const [
+                    'All',
+                    'Pending',
+                    'Approved',
+                    'Rejected',
+                    'Archived',
+                  ],
+                  hint: 'Status',
+                  icon: Icons.tune_rounded,
+                  onChanged: (v) => setState(() {
+                    _statusFilter = v!;
+                    _currentPage = 1;
+                  }),
+                ),
+                SizedBox(width: itemGap),
+                _ExportProposalsButton(
+                  statusFilter: _statusFilter,
+                  searchTerm: _searchController.text.trim(),
+                ),
+              ],
+            ),
     );
   }
 
@@ -470,7 +572,10 @@ class _EventProposalsState extends State<EventProposals> {
               .toList();
         } else {
           docs = docs
-              .where((d) => (d.data() as Map)['status'] == _statusFilter.toLowerCase())
+              .where(
+                (d) =>
+                    (d.data() as Map)['status'] == _statusFilter.toLowerCase(),
+              )
               .toList();
         }
 
@@ -478,17 +583,23 @@ class _EventProposalsState extends State<EventProposals> {
         if (_searchTerm.isNotEmpty) {
           docs = docs.where((d) {
             final data = d.data() as Map;
-            return (data['title'] ?? '').toString().toLowerCase().contains(_searchTerm) ||
-                (data['orgName'] ?? '').toString().toLowerCase().contains(_searchTerm) ||
-                (data['submittedBy'] ?? '').toString().toLowerCase().contains(_searchTerm);
+            return (data['title'] ?? '').toString().toLowerCase().contains(
+                  _searchTerm,
+                ) ||
+                (data['orgName'] ?? '').toString().toLowerCase().contains(
+                  _searchTerm,
+                ) ||
+                (data['submittedBy'] ?? '').toString().toLowerCase().contains(
+                  _searchTerm,
+                );
           }).toList();
         }
 
         final totalPages = docs.isEmpty ? 1 : (docs.length / _pageSize).ceil();
-        final safePage   = _currentPage.clamp(1, totalPages);
-        final start      = (safePage - 1) * _pageSize;
-        final end        = (start + _pageSize).clamp(0, docs.length);
-        final pageDocs   = docs.isEmpty ? [] : docs.sublist(start, end);
+        final safePage = _currentPage.clamp(1, totalPages);
+        final start = (safePage - 1) * _pageSize;
+        final end = (start + _pageSize).clamp(0, docs.length);
+        final pageDocs = docs.isEmpty ? [] : docs.sublist(start, end);
 
         final tableContent = Container(
           margin: EdgeInsets.symmetric(horizontal: horizontalPadding),
@@ -498,25 +609,28 @@ class _EventProposalsState extends State<EventProposals> {
             border: Border.all(color: const Color(0xFFE8ECF0)),
             boxShadow: _DS.cardShadow,
           ),
-          child: Column(children: [
-            _buildTableHeader(),
-            Expanded(
-              child: docs.isEmpty
-                  ? _buildEmptyState()
-                  : ListView.builder(
-                      itemCount: pageDocs.length,
-                      itemBuilder: (_, i) {
-                        final data = pageDocs[i].data() as Map<String, dynamic>;
-                        return _buildProposalRow(
-                          docId: pageDocs[i].id,
-                          data: data,
-                          isLast: i == pageDocs.length - 1,
-                        );
-                      },
-                    ),
-            ),
-            _buildFooter(docs.length, totalPages, start, end),
-          ]),
+          child: Column(
+            children: [
+              _buildTableHeader(),
+              Expanded(
+                child: docs.isEmpty
+                    ? _buildEmptyState()
+                    : ListView.builder(
+                        itemCount: pageDocs.length,
+                        itemBuilder: (_, i) {
+                          final data =
+                              pageDocs[i].data() as Map<String, dynamic>;
+                          return _buildProposalRow(
+                            docId: pageDocs[i].id,
+                            data: data,
+                            isLast: i == pageDocs.length - 1,
+                          );
+                        },
+                      ),
+              ),
+              _buildFooter(docs.length, totalPages, start, end),
+            ],
+          ),
         );
 
         return isMobile
@@ -531,52 +645,54 @@ class _EventProposalsState extends State<EventProposals> {
 
   // NEW HEADER: Organization first, then Event Title
   Widget _buildTableHeader() {
-  return Container(
-    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 13),
-    decoration: const BoxDecoration(
-      color: Color(0xFFFFF7ED),
-      borderRadius: BorderRadius.vertical(top: Radius.circular(14)),
-      border: Border(bottom: BorderSide(color: Color(0xFFFB923C), width: 1)),
-    ),
-    child: Row(children: [
-      Expanded(flex: 2, child: _headerCell('ORGANIZATION')),
-      Expanded(flex: 3, child: _headerCell('EVENT TITLE')),
-      Expanded(flex: 2, child: _headerCell('CATEGORY')),          // back to 2
-      Expanded(flex: 2, child: _headerCell('DATE')),              // back to 2
-      Expanded(
-        flex: 1,                                                  // back to 1
-        child: Align(
-          alignment: Alignment.centerRight,                       // right‑align header
-          child: _headerCell('STATUS'),
-        ),
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 13),
+      decoration: const BoxDecoration(
+        color: Color(0xFFFFF7ED),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(14)),
+        border: Border(bottom: BorderSide(color: Color(0xFFFB923C), width: 1)),
       ),
-      Expanded(
-        flex: 2,                                                  // back to 2
-        child: Align(
-          alignment: Alignment.centerRight,
-          child: _headerCell('ACTIONS'),
-        ),
+      child: Row(
+        children: [
+          Expanded(flex: 2, child: _headerCell('ORGANIZATION')),
+          Expanded(flex: 3, child: _headerCell('EVENT TITLE')),
+          Expanded(flex: 2, child: _headerCell('CATEGORY')), // back to 2
+          Expanded(flex: 2, child: _headerCell('DATE')), // back to 2
+          Expanded(
+            flex: 1, // back to 1
+            child: Align(
+              alignment: Alignment.centerRight, // right‑align header
+              child: _headerCell('STATUS'),
+            ),
+          ),
+          Expanded(
+            flex: 2, // back to 2
+            child: Align(
+              alignment: Alignment.centerRight,
+              child: _headerCell('ACTIONS'),
+            ),
+          ),
+        ],
       ),
-    ]),
-  );
-}
+    );
+  }
 
   Widget _headerCell(String text) => Text(
-        text,
-        style: GoogleFonts.beVietnamPro(
-          fontSize: 11,
-          fontWeight: FontWeight.w700,
-          color: const Color(0xFF64748B),
-          letterSpacing: 0.7,
-        ),
-      );
+    text,
+    style: GoogleFonts.beVietnamPro(
+      fontSize: 11,
+      fontWeight: FontWeight.w700,
+      color: const Color(0xFF64748B),
+      letterSpacing: 0.7,
+    ),
+  );
 
   Widget _buildProposalRow({
     required String docId,
     required Map<String, dynamic> data,
     required bool isLast,
   }) {
-    final status  = (data['status'] ?? 'pending') as String;
+    final status = (data['status'] ?? 'pending') as String;
     final isPublished = (data['publishedEventId'] ?? '').toString().isNotEmpty;
     final dateStr = _formatDate(data['date']);
     final orgId = data['orgId'] ?? '';
@@ -584,11 +700,18 @@ class _EventProposalsState extends State<EventProposals> {
     final orgLogoUrl = data['orgLogoUrl'] as String?;
 
     // ── DEDICATED IMAGE thumbnail ──
-    final bool hasImage = data['imageBase64'] != null && data['imageBase64'].toString().isNotEmpty;
+    final bool hasImage =
+        data['imageBase64'] != null &&
+        data['imageBase64'].toString().isNotEmpty;
     final Widget? imageThumbnail = hasImage
         ? ClipRRect(
             borderRadius: BorderRadius.circular(6),
-            child: _buildImageFromBase64(data['imageBase64']!, width: 40, height: 40, fit: BoxFit.cover),
+            child: _buildImageFromBase64(
+              data['imageBase64']!,
+              width: 40,
+              height: 40,
+              fit: BoxFit.cover,
+            ),
           )
         : null;
 
@@ -596,155 +719,222 @@ class _EventProposalsState extends State<EventProposals> {
       future: _fetchOrgLogo(orgId),
       builder: (context, logoSnapshot) {
         final logoUrl = orgLogoUrl ?? (logoSnapshot.data ?? '');
-        
-        return InkWell(
-          hoverColor: const Color(0xFFF8F9FB),
-          onTap: () => _showProposalDetailDialog(docId, data),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-            decoration: BoxDecoration(
-              border: isLast
-                  ? null
-                  : const Border(bottom: BorderSide(color: Color(0xFFF1F5F9))),
-            ),
-            child: Row(children: [
-  // ORGANIZATION – unchanged
-  Expanded(
-    flex: 2,
-    child: Row(children: [
-      _OrgAvatar(name: orgName, logoUrl: logoUrl),
-      const SizedBox(width: 10),
-      Expanded(
-        child: Text(
-          orgName,
-          style: GoogleFonts.beVietnamPro(
-            fontSize: 13,
-            fontWeight: FontWeight.w600,
-            color: const Color(0xFF1A202C),
-          ),
-          overflow: TextOverflow.ellipsis,
-        ),
-      ),
-    ]),
-  ),
-  // EVENT TITLE – unchanged
-  Expanded(
-    flex: 3,
-    child: Row(
-      children: [
-        if (imageThumbnail != null) ...[
-          imageThumbnail,
-          const SizedBox(width: 10),
-        ],
-        Expanded(
-          child: Text(
-            data['title'] ?? '—',
-            style: GoogleFonts.beVietnamPro(
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-              color: const Color(0xFF1A202C),
-            ),
-            overflow: TextOverflow.ellipsis,
-          ),
-        ),
-      ],
-    ),
-  ),
-  // CATEGORY – flex back to 2
-  Expanded(
-    flex: 2,
-    child: Align(
-      alignment: Alignment.centerLeft,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-        decoration: BoxDecoration(
-          color: UpriseColors.primaryDark.withAlpha(18),
-          borderRadius: BorderRadius.circular(6),
-        ),
-        child: Text(
-          data['category'] == 'Other' && (data['otherCategory'] ?? '').toString().isNotEmpty
-              ? data['otherCategory']
-              : (data['category'] ?? '—'),
-          style: GoogleFonts.beVietnamPro(
-            fontSize: 12,
-            fontWeight: FontWeight.w600,
-            color: UpriseColors.primaryDark,
-          ),
-          overflow: TextOverflow.ellipsis,
-        ),
-      ),
-    ),
-  ),
-  // DATE – flex back to 2
-  Expanded(
-    flex: 2,
-    child: Text(
-      dateStr,
-      style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF64748B)),
-      overflow: TextOverflow.ellipsis,
-    ),
-  ),
-  // STATUS – flex back to 1, but right‑aligned
-  Expanded(
-    flex: 1,
-    child: Align(
-      alignment: Alignment.centerRight,
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          _statusBadge(status),
-          if (isPublished) ...[
-            const SizedBox(width: 4),
-            const Tooltip(
-              message: 'Published to students',
-              child: Icon(Icons.circle, size: 8, color: Color(0xFF2563EB)),
-            ),
-          ],
-        ],
-      ),
-    ),
-  ),
-  // ACTIONS – flex back to 2, right‑aligned (unchanged)
-  Expanded(
-    flex: 2,
-    child: Row(
-      mainAxisAlignment: MainAxisAlignment.end,
-      children: [
-        _ActionIconButton(
-          icon: Icons.visibility_outlined,
-          tooltip: 'View Details',
-          color: const Color(0xFF3B82F6),
-          onTap: () => _showProposalDetailDialog(docId, data),
-        ),
-        const SizedBox(width: 4),
-        if (status == 'pending') ...[
-          _ActionIconButton(
-            icon: Icons.check_circle_outline_rounded,
-            tooltip: 'Approve',
-            color: const Color(0xFF059669),
-            onTap: () => _confirmSetStatus(docId, data['title'] ?? 'this event', 'approved'),
-          ),
-          const SizedBox(width: 4),
-          _ActionIconButton(
-            icon: Icons.cancel_outlined,
-            tooltip: 'Reject',
-            color: const Color(0xFFDC2626),
-            onTap: () => _showRejectReasonDialog(docId, data['title'] ?? 'this event'),
-          ),
-          const SizedBox(width: 4),
-        ],
-        if (status != 'archived')
-          _ActionIconButton(
-            icon: Icons.archive_outlined,
-            tooltip: 'Archive',
-            color: const Color(0xFF6B7280),
-            onTap: () => _confirmSetStatus(docId, data['title'] ?? 'this event', 'archived'),
-          ),
-      ],
-    ),
-  ),
-]),
-          ),
+
+        return FutureBuilder<bool>(
+          future: _hasConfiguredSignatories(),
+          builder: (context, signatorySnapshot) {
+            final showSignatoryIndicator =
+                shouldShowCertificateSignatoryIndicator(
+                  status: status,
+                  issuesCertificate: data['issuesCertificate'] == true,
+                  signatoriesAvailable: signatorySnapshot.data ?? false,
+                );
+
+            return InkWell(
+              hoverColor: const Color(0xFFF8F9FB),
+              onTap: () => _showProposalDetailDialog(docId, data),
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 14,
+                ),
+                decoration: BoxDecoration(
+                  border: isLast
+                      ? null
+                      : const Border(
+                          bottom: BorderSide(color: Color(0xFFF1F5F9)),
+                        ),
+                ),
+                child: Row(
+                  children: [
+                    // ORGANIZATION – unchanged
+                    Expanded(
+                      flex: 2,
+                      child: Row(
+                        children: [
+                          _OrgAvatar(name: orgName, logoUrl: logoUrl),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              orgName,
+                              style: GoogleFonts.beVietnamPro(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                color: const Color(0xFF1A202C),
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    // EVENT TITLE – unchanged
+                    Expanded(
+                      flex: 3,
+                      child: Row(
+                        children: [
+                          if (imageThumbnail != null) ...[
+                            imageThumbnail,
+                            const SizedBox(width: 10),
+                          ],
+                          Expanded(
+                            child: Text(
+                              data['title'] ?? '—',
+                              style: GoogleFonts.beVietnamPro(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                color: const Color(0xFF1A202C),
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    // CATEGORY – flex back to 2
+                    Expanded(
+                      flex: 2,
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 3,
+                          ),
+                          decoration: BoxDecoration(
+                            color: UpriseColors.primaryDark.withAlpha(18),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            data['category'] == 'Other' &&
+                                    (data['otherCategory'] ?? '')
+                                        .toString()
+                                        .isNotEmpty
+                                ? data['otherCategory']
+                                : (data['category'] ?? '—'),
+                            style: GoogleFonts.beVietnamPro(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: UpriseColors.primaryDark,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ),
+                    ),
+                    // DATE – flex back to 2
+                    Expanded(
+                      flex: 2,
+                      child: Text(
+                        dateStr,
+                        style: GoogleFonts.beVietnamPro(
+                          fontSize: 12,
+                          color: const Color(0xFF64748B),
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    // STATUS – flex back to 2, but right‑aligned
+                    Expanded(
+                      flex: 2,
+                      child: Align(
+                        alignment: Alignment.centerRight,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Flexible(child: _statusBadge(status)),
+                            if (showSignatoryIndicator) ...[
+                              const SizedBox(width: 4),
+                              Tooltip(
+                                message:
+                                    'Signatories are available for certificate issuance',
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 6,
+                                    vertical: 3,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFECFDF5),
+                                    borderRadius: BorderRadius.circular(999),
+                                  ),
+                                  child: const Icon(
+                                    Icons.draw_outlined,
+                                    size: 12,
+                                    color: Color(0xFF059669),
+                                  ),
+                                ),
+                              ),
+                            ],
+                            if (isPublished) ...[
+                              const SizedBox(width: 1),
+                              const Tooltip(
+                                message: 'Published to students',
+                                child: Icon(
+                                  Icons.circle,
+                                  size: 8,
+                                  color: Color(0xFF2563EB),
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ),
+                    // ACTIONS – flex back to 2, right‑aligned (unchanged)
+                    Expanded(
+                      flex: 2,
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          _ActionIconButton(
+                            icon: Icons.visibility_outlined,
+                            tooltip: 'View Details',
+                            color: const Color(0xFF3B82F6),
+                            onTap: () => _showProposalDetailDialog(docId, data),
+                          ),
+                          const SizedBox(width: 4),
+                          if (status == 'pending') ...[
+                            _ActionIconButton(
+                              icon: Icons.check_circle_outline_rounded,
+                              tooltip: 'Approve',
+                              color: const Color(0xFF059669),
+                              onTap: () => _confirmSetStatus(
+                                docId,
+                                data['title'] ?? 'this event',
+                                'approved',
+                              ),
+                            ),
+                            const SizedBox(width: 4),
+                            _ActionIconButton(
+                              icon: Icons.cancel_outlined,
+                              tooltip: 'Reject',
+                              color: const Color(0xFFDC2626),
+                              onTap: () => _showRejectReasonDialog(
+                                docId,
+                                data['title'] ?? 'this event',
+                              ),
+                            ),
+                            const SizedBox(width: 4),
+                          ],
+                          if (status != 'archived')
+                            _ActionIconButton(
+                              icon: Icons.archive_outlined,
+                              tooltip: 'Archive',
+                              color: const Color(0xFF6B7280),
+                              onTap: () => _confirmSetStatus(
+                                docId,
+                                data['title'] ?? 'this event',
+                                'archived',
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
         );
       },
     );
@@ -752,38 +942,48 @@ class _EventProposalsState extends State<EventProposals> {
 
   Widget _buildEmptyState() {
     return Center(
-      child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-        Container(
-          width: 80,
-          height: 80,
-          decoration: BoxDecoration(
-            color: const Color(0xFFF1F5F9),
-            borderRadius: BorderRadius.circular(20),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            width: 80,
+            height: 80,
+            decoration: BoxDecoration(
+              color: const Color(0xFFF1F5F9),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: const Icon(
+              Icons.event_busy_rounded,
+              size: 40,
+              color: Color(0xFF9AA5B4),
+            ),
           ),
-          child: const Icon(Icons.event_busy_rounded, size: 40, color: Color(0xFF9AA5B4)),
-        ),
-        const SizedBox(height: 16),
-        Text(
-          'No proposals found',
-          style: GoogleFonts.beVietnamPro(
-            fontSize: 15,
-            fontWeight: FontWeight.w600,
-            color: const Color(0xFF374151),
+          const SizedBox(height: 16),
+          Text(
+            'No proposals found',
+            style: GoogleFonts.beVietnamPro(
+              fontSize: 15,
+              fontWeight: FontWeight.w600,
+              color: const Color(0xFF374151),
+            ),
           ),
-        ),
-        const SizedBox(height: 6),
-        Text(
-          'Try adjusting your filters or wait for new submissions.',
-          style: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF64748B)),
-        ),
-      ]),
+          const SizedBox(height: 6),
+          Text(
+            'Try adjusting your filters or wait for new submissions.',
+            style: GoogleFonts.beVietnamPro(
+              fontSize: 13,
+              color: const Color(0xFF64748B),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
   Widget _buildFooter(int total, int totalPages, int start, int end) {
     const int maxVisible = 5;
     int firstPage = (_currentPage - maxVisible ~/ 2).clamp(1, totalPages);
-    int lastPage  = (firstPage + maxVisible - 1).clamp(1, totalPages);
+    int lastPage = (firstPage + maxVisible - 1).clamp(1, totalPages);
     if (lastPage - firstPage + 1 < maxVisible && firstPage > 1) {
       firstPage = (lastPage - maxVisible + 1).clamp(1, totalPages);
     }
@@ -801,39 +1001,51 @@ class _EventProposalsState extends State<EventProposals> {
         children: [
           Text(
             'Showing ${total == 0 ? 0 : start + 1}–$end of $total proposals',
-            style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF64748B)),
-          ),
-          Row(children: [
-            _PageButton(
-              icon: Icons.chevron_left_rounded,
-              enabled: _currentPage > 1,
-              onTap: () => setState(() => _currentPage--),
+            style: GoogleFonts.beVietnamPro(
+              fontSize: 12,
+              color: const Color(0xFF64748B),
             ),
-            const SizedBox(width: 4),
-            ...pages.map((p) => _PageNumButton(
+          ),
+          Row(
+            children: [
+              _PageButton(
+                icon: Icons.chevron_left_rounded,
+                enabled: _currentPage > 1,
+                onTap: () => setState(() => _currentPage--),
+              ),
+              const SizedBox(width: 4),
+              ...pages.map(
+                (p) => _PageNumButton(
                   page: p,
                   isActive: p == _currentPage,
                   onTap: () => setState(() => _currentPage = p),
-                )),
-            if (lastPage < totalPages) ...[
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 4),
-                child: Text('…',
-                    style: GoogleFonts.beVietnamPro(color: const Color(0xFF64748B), fontSize: 12)),
+                ),
               ),
-              _PageNumButton(
-                page: totalPages,
-                isActive: _currentPage == totalPages,
-                onTap: () => setState(() => _currentPage = totalPages),
+              if (lastPage < totalPages) ...[
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  child: Text(
+                    '…',
+                    style: GoogleFonts.beVietnamPro(
+                      color: const Color(0xFF64748B),
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
+                _PageNumButton(
+                  page: totalPages,
+                  isActive: _currentPage == totalPages,
+                  onTap: () => setState(() => _currentPage = totalPages),
+                ),
+              ],
+              const SizedBox(width: 4),
+              _PageButton(
+                icon: Icons.chevron_right_rounded,
+                enabled: _currentPage < totalPages,
+                onTap: () => setState(() => _currentPage++),
               ),
             ],
-            const SizedBox(width: 4),
-            _PageButton(
-              icon: Icons.chevron_right_rounded,
-              enabled: _currentPage < totalPages,
-              onTap: () => setState(() => _currentPage++),
-            ),
-          ]),
+          ),
         ],
       ),
     );
@@ -849,7 +1061,8 @@ class _EventProposalsState extends State<EventProposals> {
         iconColor: const Color(0xFF059669),
         btnColor: const Color(0xFF059669),
         heading: 'Approve Proposal',
-        body: 'Are you sure you want to approve "$title"? This will automatically add it to the calendar.',
+        body:
+            'Are you sure you want to approve "$title"? This will automatically add it to the calendar.',
         btnLabel: 'Approve',
       ),
       // Removed 'rejected' from here – we handle rejection separately with reason
@@ -877,54 +1090,92 @@ class _EventProposalsState extends State<EventProposals> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(children: [
-                Container(
-                  width: 42,
-                  height: 42,
-                  decoration: BoxDecoration(color: s.iconBg, borderRadius: BorderRadius.circular(10)),
-                  child: Icon(s.icon, color: s.iconColor, size: 20),
-                ),
-                const SizedBox(width: 14),
-                Text(s.heading,
+              Row(
+                children: [
+                  Container(
+                    width: 42,
+                    height: 42,
+                    decoration: BoxDecoration(
+                      color: s.iconBg,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Icon(s.icon, color: s.iconColor, size: 20),
+                  ),
+                  const SizedBox(width: 14),
+                  Text(
+                    s.heading,
                     style: GoogleFonts.beVietnamPro(
-                        fontSize: 17, fontWeight: FontWeight.w700, color: const Color(0xFF1A202C))),
-              ]),
+                      fontSize: 17,
+                      fontWeight: FontWeight.w700,
+                      color: const Color(0xFF1A202C),
+                    ),
+                  ),
+                ],
+              ),
               const SizedBox(height: 16),
-              Text(s.body,
-                  style: GoogleFonts.beVietnamPro(
-                      fontSize: 14, color: const Color(0xFF64748B), height: 1.5)),
+              Text(
+                s.body,
+                style: GoogleFonts.beVietnamPro(
+                  fontSize: 14,
+                  color: const Color(0xFF64748B),
+                  height: 1.5,
+                ),
+              ),
               const SizedBox(height: 24),
-              Row(mainAxisAlignment: MainAxisAlignment.end, children: [
-                OutlinedButton(
-                  onPressed: () => Navigator.pop(ctx),
-                  style: OutlinedButton.styleFrom(
-                    side: const BorderSide(color: Color(0xFFE2E6EA)),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 11),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  OutlinedButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    style: OutlinedButton.styleFrom(
+                      side: const BorderSide(color: Color(0xFFE2E6EA)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 18,
+                        vertical: 11,
+                      ),
+                    ),
+                    child: Text(
+                      'Cancel',
+                      style: GoogleFonts.beVietnamPro(
+                        fontSize: 13,
+                        color: const Color(0xFF374151),
+                      ),
+                    ),
                   ),
-                  child: Text('Cancel',
-                      style: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF374151))),
-                ),
-                const SizedBox(width: 10),
-                ElevatedButton(
-                  onPressed: () async {
-                    Navigator.pop(ctx);
-                    await _setStatus(docId, title, newStatus);
-                    if (newStatus == 'approved') {
-                      _showWetSignSchedulingPopup(docId, title);
-                    }
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: s.btnColor,
-                    foregroundColor: Colors.white,
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 11),
+                  const SizedBox(width: 10),
+                  ElevatedButton(
+                    onPressed: () async {
+                      Navigator.pop(ctx);
+                      await _setStatus(docId, title, newStatus);
+                      if (newStatus == 'approved') {
+                        _showWetSignSchedulingPopup(docId, title);
+                      }
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: s.btnColor,
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 18,
+                        vertical: 11,
+                      ),
+                    ),
+                    child: Text(
+                      s.btnLabel,
+                      style: GoogleFonts.beVietnamPro(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                   ),
-                  child: Text(s.btnLabel,
-                      style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600)),
-                ),
-              ]),
+                ],
+              ),
             ],
           ),
         ),
@@ -948,27 +1199,40 @@ class _EventProposalsState extends State<EventProposals> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(children: [
-                Container(
-                  width: 42,
-                  height: 42,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFFEF2F2),
-                    borderRadius: BorderRadius.circular(10),
+              Row(
+                children: [
+                  Container(
+                    width: 42,
+                    height: 42,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFEF2F2),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(
+                      Icons.cancel_outlined,
+                      color: Color(0xFFDC2626),
+                      size: 20,
+                    ),
                   ),
-                  child: const Icon(Icons.cancel_outlined, color: Color(0xFFDC2626), size: 20),
-                ),
-                const SizedBox(width: 14),
-                Text(
-                  'Reject Proposal',
-                  style: GoogleFonts.beVietnamPro(
-                      fontSize: 17, fontWeight: FontWeight.w700, color: const Color(0xFF1A202C)),
-                ),
-              ]),
+                  const SizedBox(width: 14),
+                  Text(
+                    'Reject Proposal',
+                    style: GoogleFonts.beVietnamPro(
+                      fontSize: 17,
+                      fontWeight: FontWeight.w700,
+                      color: const Color(0xFF1A202C),
+                    ),
+                  ),
+                ],
+              ),
               const SizedBox(height: 8),
               Text(
                 'Provide a reason for rejecting "$title". This will be visible to the organization.',
-                style: GoogleFonts.beVietnamPro(fontSize: 14, color: const Color(0xFF64748B), height: 1.4),
+                style: GoogleFonts.beVietnamPro(
+                  fontSize: 14,
+                  color: const Color(0xFF64748B),
+                  height: 1.4,
+                ),
               ),
               const SizedBox(height: 16),
               TextField(
@@ -977,7 +1241,10 @@ class _EventProposalsState extends State<EventProposals> {
                 style: GoogleFonts.beVietnamPro(fontSize: 13),
                 decoration: InputDecoration(
                   hintText: 'Reason for rejection…',
-                  hintStyle: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF9AA5B4)),
+                  hintStyle: GoogleFonts.beVietnamPro(
+                    fontSize: 13,
+                    color: const Color(0xFF9AA5B4),
+                  ),
                   filled: true,
                   fillColor: const Color(0xFFF8F9FB),
                   border: OutlineInputBorder(
@@ -990,51 +1257,79 @@ class _EventProposalsState extends State<EventProposals> {
                   ),
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(8),
-                    borderSide: const BorderSide(color: Color(0xFFDC2626), width: 1.5),
+                    borderSide: const BorderSide(
+                      color: Color(0xFFDC2626),
+                      width: 1.5,
+                    ),
                   ),
                   contentPadding: const EdgeInsets.all(12),
                 ),
               ),
               const SizedBox(height: 24),
-              Row(mainAxisAlignment: MainAxisAlignment.end, children: [
-                OutlinedButton(
-                  onPressed: () => Navigator.pop(ctx),
-                  style: OutlinedButton.styleFrom(
-                    side: const BorderSide(color: Color(0xFFE2E6EA)),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 11),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  OutlinedButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    style: OutlinedButton.styleFrom(
+                      side: const BorderSide(color: Color(0xFFE2E6EA)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 18,
+                        vertical: 11,
+                      ),
+                    ),
+                    child: Text(
+                      'Cancel',
+                      style: GoogleFonts.beVietnamPro(
+                        fontSize: 13,
+                        color: const Color(0xFF374151),
+                      ),
+                    ),
                   ),
-                  child: Text('Cancel',
-                      style: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF374151))),
-                ),
-                const SizedBox(width: 10),
-                ElevatedButton(
-                  onPressed: () async {
-                    final reason = reasonController.text.trim();
-                    if (reason.isEmpty) {
-                      ScaffoldMessenger.of(ctx).showSnackBar(
-                        const SnackBar(
-                          content: Text('Please provide a reason for rejection.'),
-                          backgroundColor: Colors.orange,
-                          behavior: SnackBarBehavior.floating,
-                        ),
-                      );
-                      return;
-                    }
-                    Navigator.pop(ctx);
-                    await _rejectProposalWithReason(docId, title, reason);
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFDC2626),
-                    foregroundColor: Colors.white,
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 11),
+                  const SizedBox(width: 10),
+                  ElevatedButton(
+                    onPressed: () async {
+                      final reason = reasonController.text.trim();
+                      if (reason.isEmpty) {
+                        ScaffoldMessenger.of(ctx).showSnackBar(
+                          const SnackBar(
+                            content: Text(
+                              'Please provide a reason for rejection.',
+                            ),
+                            backgroundColor: Colors.orange,
+                            behavior: SnackBarBehavior.floating,
+                          ),
+                        );
+                        return;
+                      }
+                      Navigator.pop(ctx);
+                      await _rejectProposalWithReason(docId, title, reason);
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFFDC2626),
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 18,
+                        vertical: 11,
+                      ),
+                    ),
+                    child: Text(
+                      'Reject',
+                      style: GoogleFonts.beVietnamPro(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                   ),
-                  child: Text('Reject',
-                      style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600)),
-                ),
-              ]),
+                ],
+              ),
             ],
           ),
         ),
@@ -1043,9 +1338,15 @@ class _EventProposalsState extends State<EventProposals> {
   }
 
   // ── NEW: Reject with reason ──────────────────────────────────────
-  Future<void> _rejectProposalWithReason(String docId, String title, String reason) async {
+  Future<void> _rejectProposalWithReason(
+    String docId,
+    String title,
+    String reason,
+  ) async {
     try {
-      final docRef = FirebaseFirestore.instance.collection('event_proposals').doc(docId);
+      final docRef = FirebaseFirestore.instance
+          .collection('event_proposals')
+          .doc(docId);
       final orgId = (await docRef.get()).data()?['orgId']?.toString() ?? '';
       await docRef.update({
         'status': 'rejected',
@@ -1068,20 +1369,26 @@ class _EventProposalsState extends State<EventProposals> {
         );
       }
       if (_isMounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('Proposal rejected. Reason sent to organization.'),
-          backgroundColor: const Color(0xFFDC2626),
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-        ));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Proposal rejected. Reason sent to organization.'),
+            backgroundColor: const Color(0xFFDC2626),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
+          ),
+        );
       }
     } catch (e) {
       if (_isMounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('Error: $e'),
-          backgroundColor: UpriseColors.error,
-          behavior: SnackBarBehavior.floating,
-        ));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: $e'),
+            backgroundColor: UpriseColors.error,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
       }
     }
   }
@@ -1094,14 +1401,16 @@ class _EventProposalsState extends State<EventProposals> {
     DateTime? selectedDate;
     TimeOfDay? startTime;
     TimeOfDay? endTime;
-    
+
     showDialog(
       context: context,
       barrierDismissible: false,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDialogState) {
           return Dialog(
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(18),
+            ),
             child: Container(
               width: 500,
               padding: const EdgeInsets.all(24),
@@ -1109,38 +1418,72 @@ class _EventProposalsState extends State<EventProposals> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(children: [
-                    Container(
-                      width: 42, height: 42,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFECFDF5),
-                        borderRadius: BorderRadius.circular(10),
+                  Row(
+                    children: [
+                      Container(
+                        width: 42,
+                        height: 42,
+                        decoration: BoxDecoration(
+                          color: UpriseColors.primaryDark.withAlpha(18),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: const Icon(
+                          Icons.edit_calendar_rounded,
+                          color: UpriseColors.primaryDark,
+                          size: 20,
+                        ),
                       ),
-                      child: const Icon(Icons.edit_calendar_rounded, color: Color(0xFF059669), size: 20),
-                    ),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Text(
-                        'Schedule Wet Sign',
-                        style: GoogleFonts.beVietnamPro(fontSize: 17, fontWeight: FontWeight.w700, color: const Color(0xFF1A202C)),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Text(
+                          'Schedule Wet Sign',
+                          style: GoogleFonts.beVietnamPro(
+                            fontSize: 17,
+                            fontWeight: FontWeight.w700,
+                            color: UpriseColors.primaryDark,
+                          ),
+                        ),
                       ),
-                    ),
-                  ]),
+                    ],
+                  ),
                   const SizedBox(height: 20),
                   Text(
                     'Set your office availability for the organization to sign documents.',
-                    style: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF64748B)),
+                    style: GoogleFonts.beVietnamPro(
+                      fontSize: 13,
+                      color: UpriseColors.greyText,
+                    ),
                   ),
                   const SizedBox(height: 20),
-                  
+
                   TextFormField(
                     controller: _dateCtrl,
                     readOnly: true,
                     decoration: InputDecoration(
                       labelText: 'Select Date *',
                       hintText: 'MM/DD/YYYY',
-                      prefixIcon: const Icon(Icons.calendar_today_outlined, size: 18),
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                      prefixIcon: const Icon(
+                        Icons.calendar_today_outlined,
+                        size: 18,
+                        color: UpriseColors.primaryDark,
+                      ),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: BorderSide(
+                          color: UpriseColors.primaryDark.withAlpha(100),
+                          width: 1.2,
+                        ),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: const BorderSide(
+                          color: UpriseColors.primaryDark,
+                          width: 1.5,
+                        ),
+                      ),
                     ),
                     onTap: () async {
                       final picked = await showDatePicker(
@@ -1151,24 +1494,49 @@ class _EventProposalsState extends State<EventProposals> {
                       );
                       if (picked != null) {
                         selectedDate = picked;
-                        _dateCtrl.text = DateFormat('MM/dd/yyyy').format(picked);
+                        _dateCtrl.text = DateFormat(
+                          'MM/dd/yyyy',
+                        ).format(picked);
                         setDialogState(() {});
                       }
                     },
                   ),
                   const SizedBox(height: 14),
-                  
+
                   TextFormField(
                     controller: _startTimeCtrl,
                     readOnly: true,
                     decoration: InputDecoration(
                       labelText: 'Start Time *',
                       hintText: '-- : --',
-                      prefixIcon: const Icon(Icons.access_time_rounded, size: 18),
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                      prefixIcon: const Icon(
+                        Icons.access_time_rounded,
+                        size: 18,
+                        color: UpriseColors.primaryDark,
+                      ),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: BorderSide(
+                          color: UpriseColors.primaryDark.withAlpha(100),
+                          width: 1.2,
+                        ),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: const BorderSide(
+                          color: UpriseColors.primaryDark,
+                          width: 1.5,
+                        ),
+                      ),
                     ),
                     onTap: () async {
-                      final picked = await showTimePicker(context: ctx, initialTime: TimeOfDay.now());
+                      final picked = await showTimePicker(
+                        context: ctx,
+                        initialTime: TimeOfDay.now(),
+                      );
                       if (picked != null) {
                         startTime = picked;
                         _startTimeCtrl.text = picked.format(ctx);
@@ -1177,19 +1545,39 @@ class _EventProposalsState extends State<EventProposals> {
                     },
                   ),
                   const SizedBox(height: 14),
-                  
+
                   TextFormField(
                     controller: _endTimeCtrl,
                     readOnly: true,
                     decoration: InputDecoration(
                       labelText: 'End Time *',
                       hintText: '-- : --',
-                      prefixIcon: const Icon(Icons.access_time_rounded, size: 18),
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                      prefixIcon: const Icon(
+                        Icons.access_time_rounded,
+                        size: 18,
+                        color: UpriseColors.primaryDark,
+                      ),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: BorderSide(
+                          color: UpriseColors.primaryDark.withAlpha(100),
+                          width: 1.2,
+                        ),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: const BorderSide(
+                          color: UpriseColors.primaryDark,
+                          width: 1.5,
+                        ),
+                      ),
                     ),
                     onTap: () async {
                       final picked = await showTimePicker(
-                        context: ctx, 
+                        context: ctx,
                         initialTime: startTime ?? TimeOfDay.now(),
                       );
                       if (picked != null) {
@@ -1200,18 +1588,38 @@ class _EventProposalsState extends State<EventProposals> {
                     },
                   ),
                   const SizedBox(height: 14),
-                  
+
                   TextFormField(
                     controller: _locationCtrl,
                     decoration: InputDecoration(
                       labelText: 'Office Location *',
                       hintText: 'e.g., Dean\'s Office Room 101',
-                      prefixIcon: const Icon(Icons.location_on_outlined, size: 18),
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                      prefixIcon: const Icon(
+                        Icons.location_on_outlined,
+                        size: 18,
+                        color: UpriseColors.primaryDark,
+                      ),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: BorderSide(
+                          color: UpriseColors.primaryDark.withAlpha(100),
+                          width: 1.2,
+                        ),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: const BorderSide(
+                          color: UpriseColors.primaryDark,
+                          width: 1.5,
+                        ),
+                      ),
                     ),
                   ),
                   const SizedBox(height: 24),
-                  
+
                   Row(
                     mainAxisAlignment: MainAxisAlignment.end,
                     children: [
@@ -1220,22 +1628,39 @@ class _EventProposalsState extends State<EventProposals> {
                       // approved, it can't be bypassed.
                       ElevatedButton(
                         onPressed: () async {
-                          if (selectedDate == null || startTime == null || endTime == null) {
+                          if (selectedDate == null ||
+                              startTime == null ||
+                              endTime == null) {
                             ScaffoldMessenger.of(ctx).showSnackBar(
-                              const SnackBar(content: Text('Please fill all required fields'), backgroundColor: Colors.orange),
+                              SnackBar(
+                                content: const Text(
+                                  'Please fill all required fields',
+                                ),
+                                backgroundColor: UpriseColors.warning,
+                                behavior: SnackBarBehavior.floating,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                              ),
                             );
                             return;
                           }
-                          
+
                           final startDateTime = DateTime(
-                            selectedDate!.year, selectedDate!.month, selectedDate!.day,
-                            startTime!.hour, startTime!.minute,
+                            selectedDate!.year,
+                            selectedDate!.month,
+                            selectedDate!.day,
+                            startTime!.hour,
+                            startTime!.minute,
                           );
                           final endDateTime = DateTime(
-                            selectedDate!.year, selectedDate!.month, selectedDate!.day,
-                            endTime!.hour, endTime!.minute,
+                            selectedDate!.year,
+                            selectedDate!.month,
+                            selectedDate!.day,
+                            endTime!.hour,
+                            endTime!.minute,
                           );
-                          
+
                           await _saveWetSignSchedule(
                             proposalId: proposalId,
                             title: title,
@@ -1243,16 +1668,27 @@ class _EventProposalsState extends State<EventProposals> {
                             endDateTime: endDateTime,
                             location: _locationCtrl.text.trim(),
                           );
-                          
+
                           Navigator.pop(ctx);
                         },
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF059669),
+                          backgroundColor: UpriseColors.primaryDark,
                           foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 11),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 20,
+                            vertical: 11,
+                          ),
                         ),
-                        child: Text('Save Schedule', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600)),
+                        child: Text(
+                          'Save Schedule',
+                          style: GoogleFonts.beVietnamPro(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
                       ),
                     ],
                   ),
@@ -1281,17 +1717,17 @@ class _EventProposalsState extends State<EventProposals> {
         'scheduledBy': FirebaseAuth.instance.currentUser?.uid ?? '',
         'scheduledAt': FieldValue.serverTimestamp(),
       };
-      
+
       await FirebaseFirestore.instance
           .collection('event_proposals')
           .doc(proposalId)
           .update({
-        'status': 'approved',
-        'wetSignSchedule': wetSignData,
-        'reviewedAt': FieldValue.serverTimestamp(),
-        'reviewedBy': FirebaseAuth.instance.currentUser?.uid ?? '',
-      });
-      
+            'status': 'approved',
+            'wetSignSchedule': wetSignData,
+            'reviewedAt': FieldValue.serverTimestamp(),
+            'reviewedBy': FirebaseAuth.instance.currentUser?.uid ?? '',
+          });
+
       await activity_log.ActivityLogger.log(
         action: 'schedule_wet_sign',
         module: 'Event Management',
@@ -1302,7 +1738,7 @@ class _EventProposalsState extends State<EventProposals> {
           'location': location,
         },
       );
-      
+
       if (_isMounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -1317,7 +1753,9 @@ class _EventProposalsState extends State<EventProposals> {
       if (_isMounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('⚠️ Proposal approved but wet sign scheduling failed: $e'),
+            content: Text(
+              '⚠️ Proposal approved but wet sign scheduling failed: $e',
+            ),
             backgroundColor: Colors.orange,
             behavior: SnackBarBehavior.floating,
           ),
@@ -1328,23 +1766,30 @@ class _EventProposalsState extends State<EventProposals> {
 
   Future<void> _setStatus(String docId, String title, String newStatus) async {
     try {
-      final docRef = FirebaseFirestore.instance.collection('event_proposals').doc(docId);
+      final docRef = FirebaseFirestore.instance
+          .collection('event_proposals')
+          .doc(docId);
       final orgId = (await docRef.get()).data()?['orgId']?.toString() ?? '';
       await docRef.update({
-        'status':     newStatus,
+        'status': newStatus,
         'reviewedAt': FieldValue.serverTimestamp(),
         'reviewedBy': FirebaseAuth.instance.currentUser?.uid ?? '',
       });
       await activity_log.ActivityLogger.log(
         action: '${newStatus.toUpperCase()} proposal: $title',
         module: 'Event Management',
-        severity: (newStatus == 'rejected' || newStatus == 'archived') ? 'warning' : 'info',
+        severity: (newStatus == 'rejected' || newStatus == 'archived')
+            ? 'warning'
+            : 'info',
         details: {'proposalId': docId, 'title': title},
       );
-      if (orgId.isNotEmpty && (newStatus == 'approved' || newStatus == 'rejected')) {
+      if (orgId.isNotEmpty &&
+          (newStatus == 'approved' || newStatus == 'rejected')) {
         NotificationService.sendToOrgMembers(
           orgId: orgId,
-          title: newStatus == 'approved' ? 'Proposal approved' : 'Proposal rejected',
+          title: newStatus == 'approved'
+              ? 'Proposal approved'
+              : 'Proposal rejected',
           body: newStatus == 'approved'
               ? 'Your event proposal "$title" was approved. You can now publish it.'
               : 'Your event proposal "$title" was rejected.',
@@ -1352,31 +1797,45 @@ class _EventProposalsState extends State<EventProposals> {
         );
       }
       if (_isMounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('Proposal ${newStatus[0].toUpperCase()}${newStatus.substring(1)}'),
-          backgroundColor: newStatus == 'approved'
-              ? const Color(0xFF059669)
-              : newStatus == 'rejected'
-                  ? const Color(0xFFDC2626)
-                  : const Color(0xFF6B7280),
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-        ));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Proposal ${newStatus[0].toUpperCase()}${newStatus.substring(1)}',
+            ),
+            backgroundColor: newStatus == 'approved'
+                ? const Color(0xFF059669)
+                : newStatus == 'rejected'
+                ? const Color(0xFFDC2626)
+                : const Color(0xFF6B7280),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
+          ),
+        );
       }
     } catch (e) {
       if (_isMounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('Error: $e'),
-          backgroundColor: UpriseColors.error,
-          behavior: SnackBarBehavior.floating,
-        ));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: $e'),
+            backgroundColor: UpriseColors.error,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
       }
     }
   }
 
-  Future<void> _requestRevision(String docId, String title, String feedback) async {
+  Future<void> _requestRevision(
+    String docId,
+    String title,
+    String feedback,
+  ) async {
     try {
-      final docRef = FirebaseFirestore.instance.collection('event_proposals').doc(docId);
+      final docRef = FirebaseFirestore.instance
+          .collection('event_proposals')
+          .doc(docId);
       final orgId = (await docRef.get()).data()?['orgId']?.toString() ?? '';
       await docRef.update({
         'status': 'for_review',
@@ -1399,20 +1858,26 @@ class _EventProposalsState extends State<EventProposals> {
         );
       }
       if (_isMounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: const Text('Revision request sent to organization'),
-          backgroundColor: const Color(0xFF7C3AED),
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-        ));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Revision request sent to organization'),
+            backgroundColor: const Color(0xFF7C3AED),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
+          ),
+        );
       }
     } catch (e) {
       if (_isMounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('Error: $e'),
-          backgroundColor: UpriseColors.error,
-          behavior: SnackBarBehavior.floating,
-        ));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: $e'),
+            backgroundColor: UpriseColors.error,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
       }
     }
   }
@@ -1426,68 +1891,136 @@ class _EventProposalsState extends State<EventProposals> {
         child: Container(
           width: 420,
           padding: const EdgeInsets.all(24),
-          child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Row(children: [
-              Container(
-  width: 38, height: 38,
-  decoration: BoxDecoration(color: const Color(0xFFFFF7ED), borderRadius: BorderRadius.circular(10)),
-  child: Icon(Icons.rate_review_rounded, color: UpriseColors.primaryDark, size: 18),
-),
-              const SizedBox(width: 12),
-              Expanded(child: Text('Request Revision',
-                  style: GoogleFonts.beVietnamPro(fontSize: 16, fontWeight: FontWeight.w700, color: const Color(0xFF1A202C)))),
-            ]),
-            const SizedBox(height: 6),
-            Text('Your feedback will be visible to the organization.',
-                style: GoogleFonts.beVietnamPro(fontSize: 12, color: const Color(0xFF64748B))),
-            const SizedBox(height: 16),
-            TextField(
-              controller: ctrl,
-              maxLines: 4,
-              style: GoogleFonts.beVietnamPro(fontSize: 13),
-              decoration: InputDecoration(
-                hintText: 'e.g. Please update the venue details and resubmit...',
-                hintStyle: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF9AA5B4)),
-                filled: true,
-                fillColor: const Color(0xFFF8F9FB),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFFE2E6EA))),
-                enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFFE2E6EA))),
-                focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFF7C3AED), width: 1.5)),
-                contentPadding: const EdgeInsets.all(12),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 38,
+                    height: 38,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFFF7ED),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Icon(
+                      Icons.rate_review_rounded,
+                      color: UpriseColors.primaryDark,
+                      size: 18,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      'Request Revision',
+                      style: GoogleFonts.beVietnamPro(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                        color: const Color(0xFF1A202C),
+                      ),
+                    ),
+                  ),
+                ],
               ),
-            ),
-            const SizedBox(height: 20),
-            Row(mainAxisAlignment: MainAxisAlignment.end, children: [
-              OutlinedButton(
-                onPressed: () => Navigator.pop(ctx),
-                style: OutlinedButton.styleFrom(
-                  side: const BorderSide(color: Color(0xFFE2E6EA)),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                ),
-                child: Text('Cancel', style: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF374151))),
-              ),
-              const SizedBox(width: 10),
-              ElevatedButton.icon(
-                onPressed: () async {
-                  final feedback = ctrl.text.trim();
-                  if (feedback.isEmpty) return;
-                  Navigator.pop(ctx);
-                  Navigator.pop(parentCtx);
-                  await _requestRevision(docId, title, feedback);
-                },
-                icon: const Icon(Icons.send_rounded, size: 14),
-                label: Text('Send Feedback', style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600)),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: UpriseColors.primaryDark,
-                  foregroundColor: Colors.white,
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              const SizedBox(height: 6),
+              Text(
+                'Your feedback will be visible to the organization.',
+                style: GoogleFonts.beVietnamPro(
+                  fontSize: 12,
+                  color: const Color(0xFF64748B),
                 ),
               ),
-            ]),
-          ]),
+              const SizedBox(height: 16),
+              TextField(
+                controller: ctrl,
+                maxLines: 4,
+                style: GoogleFonts.beVietnamPro(fontSize: 13),
+                decoration: InputDecoration(
+                  hintText:
+                      'e.g. Please update the venue details and resubmit...',
+                  hintStyle: GoogleFonts.beVietnamPro(
+                    fontSize: 13,
+                    color: const Color(0xFF9AA5B4),
+                  ),
+                  filled: true,
+                  fillColor: const Color(0xFFF8F9FB),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: const BorderSide(color: Color(0xFFE2E6EA)),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: const BorderSide(color: Color(0xFFE2E6EA)),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: const BorderSide(
+                      color: Color(0xFF7C3AED),
+                      width: 1.5,
+                    ),
+                  ),
+                  contentPadding: const EdgeInsets.all(12),
+                ),
+              ),
+              const SizedBox(height: 20),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  OutlinedButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    style: OutlinedButton.styleFrom(
+                      side: const BorderSide(color: Color(0xFFE2E6EA)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 10,
+                      ),
+                    ),
+                    child: Text(
+                      'Cancel',
+                      style: GoogleFonts.beVietnamPro(
+                        fontSize: 13,
+                        color: const Color(0xFF374151),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  ElevatedButton.icon(
+                    onPressed: () async {
+                      final feedback = ctrl.text.trim();
+                      if (feedback.isEmpty) return;
+                      Navigator.pop(ctx);
+                      Navigator.pop(parentCtx);
+                      await _requestRevision(docId, title, feedback);
+                    },
+                    icon: const Icon(Icons.send_rounded, size: 14),
+                    label: Text(
+                      'Send Feedback',
+                      style: GoogleFonts.beVietnamPro(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: UpriseColors.primaryDark,
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 10,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -1495,467 +2028,791 @@ class _EventProposalsState extends State<EventProposals> {
 
   // ── View Detail Dialog – with dedicated image preview ──
   void _showProposalDetailDialog(String docId, Map<String, dynamic> data) {
-  final status = (data['status'] ?? 'pending') as String;
-  final isPublished = (data['publishedEventId'] ?? '').toString().isNotEmpty;
-  final hasImage = data['imageBase64'] != null && data['imageBase64'].toString().isNotEmpty;
-  final hasAttachment = data['attachmentBase64'] != null &&
-      data['attachmentBase64'].toString().isNotEmpty;
-  final issuesCertificate = data['issuesCertificate'] == true;
-  final startTime = (data['startTime'] ?? data['time'] ?? '').toString();
-  final endTime = (data['endTime'] ?? '').toString();
-  final timeStr = startTime.isEmpty
-      ? '—'
-      : (endTime.isEmpty ? startTime : '$startTime – $endTime');
+    final status = (data['status'] ?? 'pending') as String;
+    final isPublished = (data['publishedEventId'] ?? '').toString().isNotEmpty;
+    final hasImage =
+        data['imageBase64'] != null &&
+        data['imageBase64'].toString().isNotEmpty;
+    final hasAttachment =
+        data['attachmentBase64'] != null &&
+        data['attachmentBase64'].toString().isNotEmpty;
+    final issuesCertificate = data['issuesCertificate'] == true;
+    final startTime = (data['startTime'] ?? data['time'] ?? '').toString();
+    final endTime = (data['endTime'] ?? '').toString();
+    final timeStr = startTime.isEmpty
+        ? '—'
+        : (endTime.isEmpty ? startTime : '$startTime – $endTime');
 
-  showDialog(
-    context: context,
-    barrierColor: Colors.black54,
-    builder: (ctx) => Dialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-      child: Container(
-        width: 600,
-        constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.88),
-        // A soft warm cream instead of stark white — ties the body back to
-        // the amber header instead of jumping straight to a flat, generic
-        // white admin-form look.
-        decoration: const BoxDecoration(
-          color: Color(0xFFFFFAF5),
-          borderRadius: BorderRadius.all(Radius.circular(18)),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // ── HEADER ──────────────────────────────────────────────
-            Container(
-              padding: const EdgeInsets.fromLTRB(24, 22, 16, 20),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [UpriseColors.primaryDark, UpriseColors.primaryDark.withAlpha(225)],
+    showDialog(
+      context: context,
+      barrierColor: Colors.black54,
+      builder: (ctx) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        child: Container(
+          width: 600,
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(context).size.height * 0.88,
+          ),
+          // A soft warm cream instead of stark white — ties the body back to
+          // the amber header instead of jumping straight to a flat, generic
+          // white admin-form look.
+          decoration: const BoxDecoration(
+            color: Color(0xFFFFFAF5),
+            borderRadius: BorderRadius.all(Radius.circular(18)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // ── HEADER ──────────────────────────────────────────────
+              Container(
+                padding: const EdgeInsets.fromLTRB(24, 22, 16, 20),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      UpriseColors.primaryDark,
+                      UpriseColors.primaryDark.withAlpha(225),
+                    ],
+                  ),
+                  borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(18),
+                  ),
                 ),
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(18)),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              _statusBadge(status),
+                              if ((data['orgName'] ?? '')
+                                  .toString()
+                                  .isNotEmpty) ...[
+                                const SizedBox(width: 8),
+                                Flexible(
+                                  child: Text(
+                                    data['orgName'],
+                                    style: GoogleFonts.beVietnamPro(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.white.withAlpha(200),
+                                    ),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                          const SizedBox(height: 10),
+                          Text(
+                            data['title'] ?? 'Event Proposal',
+                            style: GoogleFonts.beVietnamPro(
+                              fontSize: 19,
+                              fontWeight: FontWeight.w700,
+                              color: Colors.white,
+                              height: 1.25,
+                            ),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(
+                        Icons.close_rounded,
+                        color: Colors.white,
+                        size: 20,
+                      ),
+                      onPressed: () => Navigator.pop(ctx),
+                    ),
+                  ],
+                ),
               ),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      Row(children: [
-                        _statusBadge(status),
-                        if ((data['orgName'] ?? '').toString().isNotEmpty) ...[
-                          const SizedBox(width: 8),
-                          Flexible(
-                            child: Text(
-                              data['orgName'],
-                              style: GoogleFonts.beVietnamPro(
-                                  fontSize: 12, fontWeight: FontWeight.w600, color: Colors.white.withAlpha(200)),
-                              overflow: TextOverflow.ellipsis,
+
+              // ── BODY ────────────────────────────────────────────────
+              // Flexible (not Expanded) so the dialog shrinks to fit short
+              // content instead of stretching to near-fullscreen height.
+              Flexible(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // ── Event Image (if present) ──
+                      if (hasImage) ...[
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(12),
+                          child: Container(
+                            width: double.infinity,
+                            height: 200,
+                            color: const Color(0xFFF8F9FB),
+                            child: _buildImageFromBase64(
+                              data['imageBase64']!,
+                              fit: BoxFit.contain,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 24),
+                      ],
+
+                      // ── Event Details Section ──
+                      // Plain inline grid, no boxed card — avoids the
+                      // dashboard-template look of a grey box around everything.
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: _detailItem(
+                              'Category',
+                              data['category'] == 'Other' &&
+                                      (data['otherCategory'] ?? '')
+                                          .toString()
+                                          .isNotEmpty
+                                  ? data['otherCategory']
+                                  : (data['category'] ?? '—'),
+                              Icons.category_outlined,
+                            ),
+                          ),
+                          Expanded(
+                            child: _detailItem(
+                              'Audience',
+                              data['audience'] ?? '—',
+                              Icons.people_outline_rounded,
                             ),
                           ),
                         ],
-                      ]),
-                      const SizedBox(height: 10),
-                      Text(
-                        data['title'] ?? 'Event Proposal',
-                        style: GoogleFonts.beVietnamPro(
-                            fontSize: 19, fontWeight: FontWeight.w700, color: Colors.white, height: 1.25),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
                       ),
-                    ]),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.close_rounded, color: Colors.white, size: 20),
-                    onPressed: () => Navigator.pop(ctx),
-                  ),
-                ],
-              ),
-            ),
+                      const SizedBox(height: 16),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: _detailItem(
+                              'Date',
+                              _formatDate(data['date']),
+                              Icons.calendar_today_outlined,
+                            ),
+                          ),
+                          Expanded(
+                            child: _detailItem(
+                              'Time',
+                              timeStr,
+                              Icons.access_time_rounded,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: _detailItem(
+                              'School Year',
+                              data['schoolYear'] ?? '—',
+                              Icons.school_outlined,
+                            ),
+                          ),
+                          Expanded(
+                            child: _detailItem(
+                              'Semester',
+                              data['semester'] ?? '—',
+                              Icons.date_range_outlined,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: _detailItem(
+                              'Location',
+                              data['location'] ?? '—',
+                              Icons.location_on_outlined,
+                            ),
+                          ),
+                          Expanded(
+                            child: FutureBuilder<bool>(
+                              future: _hasConfiguredSignatories(),
+                              builder: (context, signatorySnapshot) {
+                                final showSignatoryIndicator =
+                                    shouldShowCertificateSignatoryIndicator(
+                                      status: status,
+                                      issuesCertificate: issuesCertificate,
+                                      signatoriesAvailable:
+                                          signatorySnapshot.data ?? false,
+                                    );
 
-            // ── BODY ────────────────────────────────────────────────
-            // Flexible (not Expanded) so the dialog shrinks to fit short
-            // content instead of stretching to near-fullscreen height.
-            Flexible(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(24),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // ── Event Image (if present) ──
-                    if (hasImage) ...[
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(12),
-                        child: Container(
-                          width: double.infinity,
-                          height: 200,
-                          color: const Color(0xFFF8F9FB),
-                          child: _buildImageFromBase64(data['imageBase64']!, fit: BoxFit.contain),
+                                return Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    _detailItem(
+                                      'Issues Certificate',
+                                      issuesCertificate ? 'Yes' : 'No',
+                                      Icons.verified_outlined,
+                                      valueColor: issuesCertificate
+                                          ? const Color(0xFF059669)
+                                          : const Color(0xFF6B7280),
+                                    ),
+                                    if (showSignatoryIndicator) ...[
+                                      const SizedBox(height: 8),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 10,
+                                          vertical: 6,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: UpriseColors.primaryDark
+                                              .withAlpha(18),
+                                          borderRadius: BorderRadius.circular(
+                                            _DS.radiusPill,
+                                          ),
+                                        ),
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            const Icon(
+                                              Icons.draw_outlined,
+                                              size: 13,
+                                              color: UpriseColors.primaryDark,
+                                            ),
+                                            const SizedBox(width: 6),
+                                            Text(
+                                              'Signatories ready',
+                                              style: GoogleFonts.beVietnamPro(
+                                                fontSize: 11.5,
+                                                fontWeight: FontWeight.w600,
+                                                color: UpriseColors.primaryDark,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                  ],
+                                );
+                              },
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 24),
+
+                      // ── Description ──
+                      _sectionLabel(
+                        'Description',
+                        icon: Icons.description_outlined,
+                      ),
+                      Text(
+                        data['description'] ?? 'No description provided.',
+                        style: GoogleFonts.beVietnamPro(
+                          fontSize: 13.5,
+                          color: const Color(0xFF374151),
+                          height: 1.65,
                         ),
                       ),
                       const SizedBox(height: 24),
-                    ],
 
-                    // ── Event Details Section ──
-                    // Plain inline grid, no boxed card — avoids the
-                    // dashboard-template look of a grey box around everything.
-                    Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      Expanded(child: _detailItem(
-                        'Category',
-                        data['category'] == 'Other' && (data['otherCategory'] ?? '').toString().isNotEmpty
-                            ? data['otherCategory']
-                            : (data['category'] ?? '—'),
-                        Icons.category_outlined,
-                      )),
-                      Expanded(child: _detailItem('Audience', data['audience'] ?? '—', Icons.people_outline_rounded)),
-                    ]),
-                    const SizedBox(height: 16),
-                    Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      Expanded(child: _detailItem('Date', _formatDate(data['date']), Icons.calendar_today_outlined)),
-                      Expanded(child: _detailItem('Time', timeStr, Icons.access_time_rounded)),
-                    ]),
-                    const SizedBox(height: 16),
-                    Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      Expanded(child: _detailItem('School Year', data['schoolYear'] ?? '—', Icons.school_outlined)),
-                      Expanded(child: _detailItem('Semester', data['semester'] ?? '—', Icons.date_range_outlined)),
-                    ]),
-                    const SizedBox(height: 16),
-                    Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      Expanded(child: _detailItem('Location', data['location'] ?? '—', Icons.location_on_outlined)),
-                      Expanded(
-                        child: _detailItem(
-                          'Issues Certificate',
-                          issuesCertificate ? 'Yes' : 'No',
-                          Icons.verified_outlined,
-                          valueColor: issuesCertificate ? const Color(0xFF059669) : const Color(0xFF6B7280),
-                        ),
-                      ),
-                    ]),
-                    const SizedBox(height: 24),
-
-                    // ── Description ──
-                    _sectionLabel('Description', icon: Icons.description_outlined),
-                    Text(
-                      data['description'] ?? 'No description provided.',
-                      style: GoogleFonts.beVietnamPro(fontSize: 13.5, color: const Color(0xFF374151), height: 1.65),
-                    ),
-                    const SizedBox(height: 24),
-
-                    // ── Submission Info ──
-                    _sectionLabel('Submission Info', icon: Icons.person_outline_rounded),
-                    Column(children: [
-                        Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                          Expanded(child: _detailItem('Submitted By', data['submittedByEmail'] ?? '—', Icons.email_outlined)),
-                          Expanded(child: _detailItem('Submitted At', _formatTimestamp(data['createdAt']), Icons.access_time_rounded)),
-                        ]),
-                        if (data['reviewedAt'] != null) ...[
-                          const SizedBox(height: 12),
-                          Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                            Expanded(
-  child: FutureBuilder<String>(
-    future: _getUserName(data['reviewedBy'] ?? ''),
-    builder: (context, snapshot) {
-      final name = snapshot.hasData ? snapshot.data! : 'Loading...';
-      return _detailItem('Reviewed By', name, Icons.rate_review_outlined);
-    },
-  ),
-),
-                            Expanded(child: _detailItem('Reviewed At', _formatTimestamp(data['reviewedAt']), Icons.access_time_rounded)),
-                          ]),
-                        ],
-                        if (data['publishedAt'] != null) ...[
-                          const SizedBox(height: 12),
-                          Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                            Expanded(
-                              child: _detailItem(
-                                'Published to Students',
-                                _formatTimestamp(data['publishedAt']),
-                                Icons.publish_rounded,
-                                valueColor: const Color(0xFF2563EB),
-                              ),
-                            ),
-                            const Expanded(child: SizedBox()),
-                          ]),
-                        ],
-                      ]),
-                    const SizedBox(height: 24),
-
-                    // ── Admin Feedback (if present) ──
-                    if (data['adminFeedback'] != null && data['adminFeedback'].toString().isNotEmpty) ...[
+                      // ── Submission Info ──
                       _sectionLabel(
-                        status == 'rejected' ? 'Rejection Reason' : 'Feedback',
-                        icon: status == 'rejected' ? Icons.cancel_outlined : Icons.rate_review_rounded,
+                        'Submission Info',
+                        icon: Icons.person_outline_rounded,
                       ),
-                      Container(
-                        padding: const EdgeInsets.all(14),
-                        decoration: BoxDecoration(
-                          color: status == 'rejected'
-                              ? const Color(0xFFFEF2F2)
-                              : const Color(0xFFF3E8FF),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
+                      Column(
+                        children: [
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(
+                                child: _detailItem(
+                                  'Submitted By',
+                                  data['submittedByEmail'] ?? '—',
+                                  Icons.email_outlined,
+                                ),
+                              ),
+                              Expanded(
+                                child: _detailItem(
+                                  'Submitted At',
+                                  _formatTimestamp(data['createdAt']),
+                                  Icons.access_time_rounded,
+                                ),
+                              ),
+                            ],
+                          ),
+                          if (data['reviewedAt'] != null) ...[
+                            const SizedBox(height: 12),
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Expanded(
+                                  child: FutureBuilder<String>(
+                                    future: _getUserName(
+                                      data['reviewedBy'] ?? '',
+                                    ),
+                                    builder: (context, snapshot) {
+                                      final name = snapshot.hasData
+                                          ? snapshot.data!
+                                          : 'Loading...';
+                                      return _detailItem(
+                                        'Reviewed By',
+                                        name,
+                                        Icons.rate_review_outlined,
+                                      );
+                                    },
+                                  ),
+                                ),
+                                Expanded(
+                                  child: _detailItem(
+                                    'Reviewed At',
+                                    _formatTimestamp(data['reviewedAt']),
+                                    Icons.access_time_rounded,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                          if (data['publishedAt'] != null) ...[
+                            const SizedBox(height: 12),
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Expanded(
+                                  child: _detailItem(
+                                    'Published to Students',
+                                    _formatTimestamp(data['publishedAt']),
+                                    Icons.publish_rounded,
+                                    valueColor: const Color(0xFF2563EB),
+                                  ),
+                                ),
+                                const Expanded(child: SizedBox()),
+                              ],
+                            ),
+                          ],
+                        ],
+                      ),
+                      const SizedBox(height: 24),
+
+                      // ── Admin Feedback (if present) ──
+                      if (data['adminFeedback'] != null &&
+                          data['adminFeedback'].toString().isNotEmpty) ...[
+                        _sectionLabel(
+                          status == 'rejected'
+                              ? 'Rejection Reason'
+                              : 'Feedback',
+                          icon: status == 'rejected'
+                              ? Icons.cancel_outlined
+                              : Icons.rate_review_rounded,
+                        ),
+                        Container(
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
                             color: status == 'rejected'
-                                ? const Color(0xFFDC2626).withOpacity(0.3)
-                                : const Color(0xFF7C3AED).withOpacity(0.3),
+                                ? const Color(0xFFFEF2F2)
+                                : const Color(0xFFF3E8FF),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: status == 'rejected'
+                                  ? const Color(0xFFDC2626).withOpacity(0.3)
+                                  : const Color(0xFF7C3AED).withOpacity(0.3),
+                            ),
+                          ),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Icon(
+                                status == 'rejected'
+                                    ? Icons.cancel_outlined
+                                    : Icons.rate_review_rounded,
+                                size: 16,
+                                color: status == 'rejected'
+                                    ? const Color(0xFFDC2626)
+                                    : const Color(0xFF7C3AED),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Text(
+                                  data['adminFeedback'].toString(),
+                                  style: GoogleFonts.beVietnamPro(
+                                    fontSize: 13,
+                                    color: status == 'rejected'
+                                        ? const Color(0xFF991B1B)
+                                        : const Color(0xFF4C1D95),
+                                    height: 1.5,
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
-                        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                          Icon(
-                            status == 'rejected'
-                                ? Icons.cancel_outlined
-                                : Icons.rate_review_rounded,
-                            size: 16,
-                            color: status == 'rejected'
-                                ? const Color(0xFFDC2626)
-                                : const Color(0xFF7C3AED),
+                      ],
+
+                      // ── Attachment ──
+                      if (hasAttachment) ...[
+                        const SizedBox(height: 20),
+                        _sectionLabel(
+                          'Attachment',
+                          icon: Icons.attach_file_rounded,
+                        ),
+                        Container(
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: const Color(0xFFE2E6EA)),
+                          ),
+                          child: Row(
+                            children: [
+                              Container(
+                                width: 44,
+                                height: 44,
+                                decoration: BoxDecoration(
+                                  color: UpriseColors.primaryDark.withOpacity(
+                                    0.10,
+                                  ),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: Icon(
+                                  Icons.insert_drive_file_rounded,
+                                  size: 20,
+                                  color: UpriseColors.primaryDark,
+                                ),
+                              ),
+                              const SizedBox(width: 14),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      data['attachmentName'] ?? 'Attached File',
+                                      style: GoogleFonts.beVietnamPro(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                    if (data['attachmentSize'] != null)
+                                      Text(
+                                        data['attachmentSize'],
+                                        style: GoogleFonts.beVietnamPro(
+                                          fontSize: 11,
+                                          color: const Color(0xFF9AA5B4),
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              ),
+                              ElevatedButton.icon(
+                                onPressed: () => _saveAndOpenFile(data),
+                                icon: const Icon(
+                                  Icons.open_in_new_rounded,
+                                  size: 14,
+                                ),
+                                label: Text(
+                                  'Open',
+                                  style: GoogleFonts.beVietnamPro(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: UpriseColors.primaryDark,
+                                  foregroundColor: Colors.white,
+                                  elevation: 0,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 14,
+                                    vertical: 10,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+
+              // ── FOOTER ─────────────────────────────────────────────
+              Container(
+                padding: const EdgeInsets.fromLTRB(24, 16, 24, 18),
+                decoration: const BoxDecoration(
+                  border: Border(top: BorderSide(color: Color(0xFFEDF0F3))),
+                ),
+                child: Column(
+                  children: [
+                    if (status == 'pending') ...[
+                      Row(
+                        children: [
+                          Expanded(
+                            child: ElevatedButton.icon(
+                              onPressed: () {
+                                Navigator.pop(ctx);
+                                _confirmSetStatus(
+                                  docId,
+                                  data['title'] ?? 'this event',
+                                  'approved',
+                                );
+                              },
+                              icon: const Icon(
+                                Icons.check_circle_rounded,
+                                size: 15,
+                              ),
+                              label: Text(
+                                'Approve',
+                                style: GoogleFonts.beVietnamPro(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFF059669),
+                                foregroundColor: Colors.white,
+                                elevation: 0,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 11,
+                                ),
+                              ),
+                            ),
                           ),
                           const SizedBox(width: 10),
                           Expanded(
-                            child: Text(
-                              data['adminFeedback'].toString(),
-                              style: GoogleFonts.beVietnamPro(
-                                fontSize: 13,
-                                color: status == 'rejected'
-                                    ? const Color(0xFF991B1B)
-                                    : const Color(0xFF4C1D95),
-                                height: 1.5,
+                            child: OutlinedButton.icon(
+                              onPressed: () {
+                                Navigator.pop(ctx);
+                                _showRejectReasonDialog(
+                                  docId,
+                                  data['title'] ?? 'this event',
+                                );
+                              },
+                              icon: const Icon(Icons.cancel_outlined, size: 15),
+                              label: Text(
+                                'Reject',
+                                style: GoogleFonts.beVietnamPro(fontSize: 13),
+                              ),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: const Color(0xFFDC2626),
+                                side: const BorderSide(
+                                  color: Color(0xFFDC2626),
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 11,
+                                ),
                               ),
                             ),
                           ),
-                        ]),
-                      ),
-                    ],
-
-                    // ── Attachment ──
-                    if (hasAttachment) ...[
-                      const SizedBox(height: 20),
-                      _sectionLabel('Attachment', icon: Icons.attach_file_rounded),
-                      Container(
-                        padding: const EdgeInsets.all(14),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: const Color(0xFFE2E6EA)),
-                        ),
-                        child: Row(children: [
-                          Container(
-                            width: 44,
-                            height: 44,
-                            decoration: BoxDecoration(
-                              color: UpriseColors.primaryDark.withOpacity(0.10),
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                            child: Icon(Icons.insert_drive_file_rounded,
-                                size: 20, color: UpriseColors.primaryDark),
-                          ),
-                          const SizedBox(width: 14),
+                          const SizedBox(width: 10),
                           Expanded(
-                            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                              Text(
-                                data['attachmentName'] ?? 'Attached File',
-                                style: GoogleFonts.beVietnamPro(
-                                    fontSize: 13, fontWeight: FontWeight.w600),
+                            child: OutlinedButton.icon(
+                              onPressed: () => _showRevisionDialog(
+                                ctx,
+                                docId,
+                                data['title'] ?? 'this event',
                               ),
-                              if (data['attachmentSize'] != null)
-                                Text(data['attachmentSize'],
-                                    style: GoogleFonts.beVietnamPro(
-                                        fontSize: 11, color: const Color(0xFF9AA5B4))),
-                            ]),
-                          ),
-                          ElevatedButton.icon(
-                            onPressed: () => _saveAndOpenFile(data),
-                            icon: const Icon(Icons.open_in_new_rounded, size: 14),
-                            label: Text('Open',
-                                style: GoogleFonts.beVietnamPro(
-                                    fontSize: 13, fontWeight: FontWeight.w600)),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: UpriseColors.primaryDark,
-                              foregroundColor: Colors.white,
-                              elevation: 0,
-                              shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(8)),
-                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                              icon: const Icon(
+                                Icons.rate_review_rounded,
+                                size: 15,
+                              ),
+                              label: Text(
+                                'Revision',
+                                style: GoogleFonts.beVietnamPro(fontSize: 13),
+                              ),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: const Color(0xFF7C3AED),
+                                side: const BorderSide(
+                                  color: Color(0xFF7C3AED),
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 11,
+                                ),
+                              ),
                             ),
                           ),
-                        ]),
+                        ],
                       ),
+                      const SizedBox(height: 10),
                     ],
+                    Row(
+                      children: [
+                        if (status == 'approved') ...[
+                          Padding(
+                            padding: const EdgeInsets.only(right: 10),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  isPublished
+                                      ? Icons.check_circle_rounded
+                                      : Icons.hourglass_top_rounded,
+                                  size: 15,
+                                  color: isPublished
+                                      ? const Color(0xFF2563EB)
+                                      : const Color(0xFF9AA5B4),
+                                ),
+                                const SizedBox(width: 6),
+                                Flexible(
+                                  child: Text(
+                                    isPublished
+                                        ? 'Published'
+                                        : 'Awaiting publish',
+                                    style: GoogleFonts.beVietnamPro(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                      color: isPublished
+                                          ? const Color(0xFF2563EB)
+                                          : const Color(0xFF9AA5B4),
+                                    ),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                        if (status != 'archived')
+                          OutlinedButton.icon(
+                            onPressed: () {
+                              Navigator.pop(ctx);
+                              _confirmSetStatus(
+                                docId,
+                                data['title'] ?? 'this event',
+                                'archived',
+                              );
+                            },
+                            icon: const Icon(Icons.archive_outlined, size: 15),
+                            label: Text(
+                              'Archive',
+                              style: GoogleFonts.beVietnamPro(fontSize: 13),
+                            ),
+                            style: OutlinedButton.styleFrom(
+                              side: const BorderSide(color: Color(0xFFE2E6EA)),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 18,
+                                vertical: 11,
+                              ),
+                            ),
+                          ),
+                        const Spacer(),
+                        OutlinedButton(
+                          onPressed: () => Navigator.pop(ctx),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: const Color(0xFF374151),
+                            side: const BorderSide(color: Color(0xFFE2E6EA)),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 20,
+                              vertical: 11,
+                            ),
+                          ),
+                          child: Text(
+                            'Close',
+                            style: GoogleFonts.beVietnamPro(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ],
                 ),
               ),
-            ),
-
-            // ── FOOTER ─────────────────────────────────────────────
-            Container(
-              padding: const EdgeInsets.fromLTRB(24, 16, 24, 18),
-              decoration: const BoxDecoration(
-                border: Border(top: BorderSide(color: Color(0xFFEDF0F3))),
-              ),
-              child: Column(children: [
-                if (status == 'pending') ...[
-                  Row(children: [
-                    Expanded(
-                      child: ElevatedButton.icon(
-                        onPressed: () {
-                          Navigator.pop(ctx);
-                          _confirmSetStatus(docId, data['title'] ?? 'this event', 'approved');
-                        },
-                        icon: const Icon(Icons.check_circle_rounded, size: 15),
-                        label: Text('Approve',
-                            style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600)),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF059669),
-                          foregroundColor: Colors.white,
-                          elevation: 0,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                          padding: const EdgeInsets.symmetric(vertical: 11),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: () {
-                          Navigator.pop(ctx);
-                          _showRejectReasonDialog(docId, data['title'] ?? 'this event');
-                        },
-                        icon: const Icon(Icons.cancel_outlined, size: 15),
-                        label: Text('Reject',
-                            style: GoogleFonts.beVietnamPro(fontSize: 13)),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: const Color(0xFFDC2626),
-                          side: const BorderSide(color: Color(0xFFDC2626)),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                          padding: const EdgeInsets.symmetric(vertical: 11),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: () => _showRevisionDialog(ctx, docId, data['title'] ?? 'this event'),
-                        icon: const Icon(Icons.rate_review_rounded, size: 15),
-                        label: Text('Revision',
-                            style: GoogleFonts.beVietnamPro(fontSize: 13)),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: const Color(0xFF7C3AED),
-                          side: const BorderSide(color: Color(0xFF7C3AED)),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                          padding: const EdgeInsets.symmetric(vertical: 11),
-                        ),
-                      ),
-                    ),
-                  ]),
-                  const SizedBox(height: 10),
-                ],
-                Row(children: [
-                  if (status == 'approved') ...[
-                    Padding(
-                      padding: const EdgeInsets.only(right: 10),
-                      child: Row(mainAxisSize: MainAxisSize.min, children: [
-                        Icon(
-                          isPublished ? Icons.check_circle_rounded : Icons.hourglass_top_rounded,
-                          size: 15,
-                          color: isPublished ? const Color(0xFF2563EB) : const Color(0xFF9AA5B4),
-                        ),
-                        const SizedBox(width: 6),
-                        Flexible(
-                          child: Text(
-                            isPublished ? 'Published' : 'Awaiting publish',
-                            style: GoogleFonts.beVietnamPro(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                                color: isPublished ? const Color(0xFF2563EB) : const Color(0xFF9AA5B4)),
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      ]),
-                    ),
-                  ],
-                  if (status != 'archived')
-                    OutlinedButton.icon(
-                      onPressed: () {
-                        Navigator.pop(ctx);
-                        _confirmSetStatus(docId, data['title'] ?? 'this event', 'archived');
-                      },
-                      icon: const Icon(Icons.archive_outlined, size: 15),
-                      label: Text('Archive',
-                          style: GoogleFonts.beVietnamPro(fontSize: 13)),
-                      style: OutlinedButton.styleFrom(
-                        side: const BorderSide(color: Color(0xFFE2E6EA)),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 11),
-                      ),
-                    ),
-                  const Spacer(),
-                  OutlinedButton(
-                    onPressed: () => Navigator.pop(ctx),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: const Color(0xFF374151),
-                      side: const BorderSide(color: Color(0xFFE2E6EA)),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 11),
-                    ),
-                    child: Text('Close',
-                        style: GoogleFonts.beVietnamPro(fontSize: 13, fontWeight: FontWeight.w600)),
-                  ),
-                ]),
-              ]),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
-    ),
-  );
-}
+    );
+  }
 
-  Widget _detailItem(String label, String value, IconData icon, {Color? valueColor}) {
-  return Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      Row(children: [
-        Icon(icon, size: 12, color: UpriseColors.primaryDark.withAlpha(150)),
-        const SizedBox(width: 4),
-        Text(label,
-            style: GoogleFonts.beVietnamPro(
+  Widget _detailItem(
+    String label,
+    String value,
+    IconData icon, {
+    Color? valueColor,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(
+              icon,
+              size: 12,
+              color: UpriseColors.primaryDark.withAlpha(150),
+            ),
+            const SizedBox(width: 4),
+            Text(
+              label,
+              style: GoogleFonts.beVietnamPro(
                 fontSize: 10,
                 fontWeight: FontWeight.w600,
                 color: const Color(0xFF64748B),
-                letterSpacing: 0.3)),
-      ]),
-      const SizedBox(height: 2),
-      Text(
-        value,
-        style: GoogleFonts.beVietnamPro(
-          fontSize: 13,
-          fontWeight: FontWeight.w500,
-          color: valueColor ?? const Color(0xFF1A202C),
+                letterSpacing: 0.3,
+              ),
+            ),
+          ],
         ),
-      ),
-    ],
-  );
-}
+        const SizedBox(height: 2),
+        Text(
+          value,
+          style: GoogleFonts.beVietnamPro(
+            fontSize: 13,
+            fontWeight: FontWeight.w500,
+            color: valueColor ?? const Color(0xFF1A202C),
+          ),
+        ),
+      ],
+    );
+  }
 
   // ── Open attachment (unchanged) ──
   Future<void> _saveAndOpenFile(Map<String, dynamic> data) async {
     try {
       Uint8List bytes = Uint8List(0);
       final String fileName = data['attachmentName'] ?? 'document';
-      
-      final hasBase64 = data['attachmentBase64'] != null && 
-                        data['attachmentBase64'].toString().isNotEmpty;
-      final hasUrl = data['attachmentUrl'] != null && 
-                     data['attachmentUrl'].toString().isNotEmpty;
-      
+
+      final hasBase64 =
+          data['attachmentBase64'] != null &&
+          data['attachmentBase64'].toString().isNotEmpty;
+      final hasUrl =
+          data['attachmentUrl'] != null &&
+          data['attachmentUrl'].toString().isNotEmpty;
+
       if (!hasBase64 && !hasUrl) {
         if (_isMounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('No attachment found'), backgroundColor: UpriseColors.error),
+            const SnackBar(
+              content: Text('No attachment found'),
+              backgroundColor: UpriseColors.error,
+            ),
           );
         }
         return;
       }
-      
+
       if (hasBase64) {
         final String base64String = data['attachmentBase64'];
         bytes = base64Decode(base64String);
@@ -1978,9 +2835,14 @@ class _EventProposalsState extends State<EventProposals> {
                 context: context,
                 builder: (_) => AlertDialog(
                   title: const Text('Open Attachment'),
-                  content: Text('Cannot download attachment. Open in browser instead?'),
+                  content: Text(
+                    'Cannot download attachment. Open in browser instead?',
+                  ),
                   actions: [
-                    TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+                    TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text('Cancel'),
+                    ),
                     TextButton(
                       onPressed: () {
                         Navigator.pop(context);
@@ -1996,19 +2858,24 @@ class _EventProposalsState extends State<EventProposals> {
           }
         }
       }
-      
+
       if (bytes.isEmpty) {
         if (_isMounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Empty attachment'), backgroundColor: UpriseColors.error),
+            const SnackBar(
+              content: Text('Empty attachment'),
+              backgroundColor: UpriseColors.error,
+            ),
           );
         }
         return;
       }
-      
-      final ext = fileName.contains('.') ? fileName.split('.').last.toLowerCase() : '';
+
+      final ext = fileName.contains('.')
+          ? fileName.split('.').last.toLowerCase()
+          : '';
       final mime = _getMimeTypeFromExtension(ext);
-      
+
       if (mime.startsWith('text/')) {
         final content = utf8.decode(bytes);
         if (_isMounted) {
@@ -2030,7 +2897,11 @@ class _EventProposalsState extends State<EventProposals> {
                 TextButton(
                   onPressed: () {
                     Navigator.pop(ctx);
-                    platform_file_utils.saveBytesToTempAndOpen(bytes, fileName, mimeType: mime);
+                    platform_file_utils.saveBytesToTempAndOpen(
+                      bytes,
+                      fileName,
+                      mimeType: mime,
+                    );
                   },
                   child: const Text('Download'),
                 ),
@@ -2040,7 +2911,7 @@ class _EventProposalsState extends State<EventProposals> {
         }
         return;
       }
-      
+
       if (mime.startsWith('image/')) {
         if (_isMounted) {
           showDialog(
@@ -2053,7 +2924,10 @@ class _EventProposalsState extends State<EventProposals> {
                     padding: const EdgeInsets.all(12),
                     child: Text(
                       fileName,
-                      style: GoogleFonts.beVietnamPro(fontSize: 14, fontWeight: FontWeight.w600),
+                      style: GoogleFonts.beVietnamPro(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ),
                   Flexible(
@@ -2072,7 +2946,11 @@ class _EventProposalsState extends State<EventProposals> {
                       TextButton(
                         onPressed: () {
                           Navigator.pop(ctx);
-                          platform_file_utils.saveBytesToTempAndOpen(bytes, fileName, mimeType: mime);
+                          platform_file_utils.saveBytesToTempAndOpen(
+                            bytes,
+                            fileName,
+                            mimeType: mime,
+                          );
                         },
                         child: const Text('Download'),
                       ),
@@ -2085,37 +2963,58 @@ class _EventProposalsState extends State<EventProposals> {
         }
         return;
       }
-      
-      await platform_file_utils.saveBytesToTempAndOpen(bytes, fileName, mimeType: mime);
 
+      await platform_file_utils.saveBytesToTempAndOpen(
+        bytes,
+        fileName,
+        mimeType: mime,
+      );
     } catch (e) {
       print('❌ Error opening attachment: $e');
       if (_isMounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('Error opening file: $e'),
-          backgroundColor: UpriseColors.error,
-          behavior: SnackBarBehavior.floating,
-        ));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error opening file: $e'),
+            backgroundColor: UpriseColors.error,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
       }
     }
   }
 
   String _getMimeTypeFromExtension(String ext) {
     switch (ext.toLowerCase()) {
-      case 'txt': return 'text/plain';
-      case 'md': return 'text/markdown';
-      case 'html': case 'htm': return 'text/html';
-      case 'json': return 'application/json';
-      case 'png': return 'image/png';
-      case 'jpg': case 'jpeg': return 'image/jpeg';
-      case 'gif': return 'image/gif';
-      case 'pdf': return 'application/pdf';
-      case 'doc': return 'application/msword';
-      case 'docx': return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
-      case 'xls': return 'application/vnd.ms-excel';
-      case 'xlsx': return 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
-      case 'csv': return 'text/csv';
-      default: return 'application/octet-stream';
+      case 'txt':
+        return 'text/plain';
+      case 'md':
+        return 'text/markdown';
+      case 'html':
+      case 'htm':
+        return 'text/html';
+      case 'json':
+        return 'application/json';
+      case 'png':
+        return 'image/png';
+      case 'jpg':
+      case 'jpeg':
+        return 'image/jpeg';
+      case 'gif':
+        return 'image/gif';
+      case 'pdf':
+        return 'application/pdf';
+      case 'doc':
+        return 'application/msword';
+      case 'docx':
+        return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+      case 'xls':
+        return 'application/vnd.ms-excel';
+      case 'xlsx':
+        return 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+      case 'csv':
+        return 'text/csv';
+      default:
+        return 'application/octet-stream';
     }
   }
 
@@ -2174,33 +3073,44 @@ class _StatCard extends StatelessWidget {
         border: Border.all(color: const Color(0xFFE8ECF0)),
         boxShadow: _DS.cardShadow,
       ),
-      child: Row(children: [
-        Container(
-          width: 44,
-          height: 44,
-          decoration: BoxDecoration(
-            color: color.withOpacity(0.10),
-            borderRadius: BorderRadius.circular(12),
+      child: Row(
+        children: [
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.10),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(icon, color: color, size: 22),
           ),
-          child: Icon(icon, color: color, size: 22),
-        ),
-        const SizedBox(width: 14),
-        Expanded(
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(label,
-                style: GoogleFonts.beVietnamPro(
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: GoogleFonts.beVietnamPro(
                     fontSize: 11,
                     color: const Color(0xFF64748B),
-                    fontWeight: FontWeight.w500)),
-            const SizedBox(height: 2),
-            Text(value,
-                style: GoogleFonts.beVietnamPro(
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  value,
+                  style: GoogleFonts.beVietnamPro(
                     fontSize: 28,
                     fontWeight: FontWeight.w700,
-                    color: const Color(0xFF1A202C))),
-          ]),
-        ),
-      ]),
+                    color: const Color(0xFF1A202C),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -2233,14 +3143,22 @@ class _FilterDropdown extends StatelessWidget {
       child: DropdownButtonHideUnderline(
         child: DropdownButton<String>(
           value: value,
-          icon: const Icon(Icons.keyboard_arrow_down_rounded,
-              size: 18, color: Color(0xFF9AA5B4)),
-          style: GoogleFonts.beVietnamPro(fontSize: 13, color: const Color(0xFF374151)),
+          icon: const Icon(
+            Icons.keyboard_arrow_down_rounded,
+            size: 18,
+            color: Color(0xFF9AA5B4),
+          ),
+          style: GoogleFonts.beVietnamPro(
+            fontSize: 13,
+            color: const Color(0xFF374151),
+          ),
           items: items
-              .map((s) => DropdownMenuItem(
-                    value: s,
-                    child: Text(s, style: GoogleFonts.beVietnamPro(fontSize: 13)),
-                  ))
+              .map(
+                (s) => DropdownMenuItem(
+                  value: s,
+                  child: Text(s, style: GoogleFonts.beVietnamPro(fontSize: 13)),
+                ),
+              )
               .toList(),
           onChanged: onChanged,
         ),
@@ -2258,7 +3176,9 @@ class _ExportProposalsButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return AdminExportButton(onSelected: (choice) => _doExport(context, choice));
+    return AdminExportButton(
+      onSelected: (choice) => _doExport(context, choice),
+    );
   }
 
   Future<void> _doExport(BuildContext context, String format) async {
@@ -2277,16 +3197,22 @@ class _ExportProposalsButton extends StatelessWidget {
       if (searchTerm.isNotEmpty) {
         docs = docs.where((d) {
           final data = d.data();
-          return (data['title']   ?? '').toString().toLowerCase().contains(searchTerm) ||
-              (data['orgName'] ?? '').toString().toLowerCase().contains(searchTerm);
+          return (data['title'] ?? '').toString().toLowerCase().contains(
+                searchTerm,
+              ) ||
+              (data['orgName'] ?? '').toString().toLowerCase().contains(
+                searchTerm,
+              );
         }).toList();
       }
 
       if (docs.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('No data to export.'),
-          behavior: SnackBarBehavior.floating,
-        ));
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('No data to export.'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
         return;
       }
 
@@ -2295,42 +3221,49 @@ class _ExportProposalsButton extends StatelessWidget {
 
       if (format == 'csv') {
         final buf = StringBuffer();
-        buf.writeln('Organization,Event Title,Category,Date,Status,Description');
+        buf.writeln(
+          'Organization,Event Title,Category,Date,Status,Description',
+        );
         for (final doc in docs) {
           final d = doc.data();
           String esc(String s) => '"${s.replaceAll('"', '""')}"';
-          buf.writeln([
-            esc(d['orgName']     ?? ''),
-            esc(d['title']       ?? ''),
-            esc(d['category']    ?? ''),
-            esc(_fmtDate(d['date'])),
-            esc(d['status']      ?? ''),
-            esc(d['description'] ?? ''),
-          ].join(','));
+          buf.writeln(
+            [
+              esc(d['orgName'] ?? ''),
+              esc(d['title'] ?? ''),
+              esc(d['category'] ?? ''),
+              esc(_fmtDate(d['date'])),
+              esc(d['status'] ?? ''),
+              esc(d['description'] ?? ''),
+            ].join(','),
+          );
         }
-        content  = buf.toString();
+        content = buf.toString();
         fileName = 'event_proposals_$now.csv';
-        await AdminExportUtil.saveText(
-          content,
-          fileName,
-          mimeType: 'text/csv',
-        );
+        await AdminExportUtil.saveText(content, fileName, mimeType: 'text/csv');
       } else if (format == 'pdf') {
         final rows = docs.map((doc) {
           final d = doc.data();
           return [
-            d['orgName']     ?? '',
-            d['title']       ?? '',
-            d['category']    ?? '',
+            d['orgName'] ?? '',
+            d['title'] ?? '',
+            d['category'] ?? '',
             _fmtDate(d['date']),
-            d['status']      ?? '',
+            d['status'] ?? '',
             d['description'] ?? '',
           ].map((value) => value.toString()).toList();
         }).toList();
 
         final pdfBytes = await AdminExportPdf.generateTablePdf(
           title: 'Event Proposals Report',
-          headers: const ['Organization', 'Event Title', 'Category', 'Date', 'Status', 'Description'],
+          headers: const [
+            'Organization',
+            'Event Title',
+            'Category',
+            'Date',
+            'Status',
+            'Description',
+          ],
           rows: rows,
         );
         await AdminExportUtil.saveBytes(
@@ -2342,11 +3275,13 @@ class _ExportProposalsButton extends StatelessWidget {
         throw UnsupportedError('Unsupported export format: $format');
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('Export failed: $e'),
-        backgroundColor: UpriseColors.error,
-        behavior: SnackBarBehavior.floating,
-      ));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Export failed: $e'),
+          backgroundColor: UpriseColors.error,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
     }
   }
 
@@ -2400,7 +3335,11 @@ class _PageButton extends StatelessWidget {
   final IconData icon;
   final bool enabled;
   final VoidCallback onTap;
-  const _PageButton({required this.icon, required this.enabled, required this.onTap});
+  const _PageButton({
+    required this.icon,
+    required this.enabled,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -2409,9 +3348,11 @@ class _PageButton extends StatelessWidget {
       borderRadius: BorderRadius.circular(6),
       child: Padding(
         padding: const EdgeInsets.all(4),
-        child: Icon(icon,
-            size: 20,
-            color: enabled ? const Color(0xFF374151) : const Color(0xFFD1D5DB)),
+        child: Icon(
+          icon,
+          size: 20,
+          color: enabled ? const Color(0xFF374151) : const Color(0xFFD1D5DB),
+        ),
       ),
     );
   }
@@ -2421,7 +3362,11 @@ class _PageNumButton extends StatelessWidget {
   final int page;
   final bool isActive;
   final VoidCallback onTap;
-  const _PageNumButton({required this.page, required this.isActive, required this.onTap});
+  const _PageNumButton({
+    required this.page,
+    required this.isActive,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {

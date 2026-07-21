@@ -39,10 +39,7 @@ class StudentImportParser {
       'studentId': row.isNotEmpty ? row[0] : '',
       'fullName': row.length > 1 ? row[1] : '',
       'course': row.length > 2 ? row[2] : '',
-      'college': row.length > 6 ? row[6] : '',
-      'program': row.length > 7 ? row[7] : '',
       'schoolYear': row.length > 3 ? row[3] : '',
-      'semester': row.length > 8 ? row[8] : '',
       'section': row.length > 4 ? row[4] : '',
       'email': row.length > 5 ? row[5] : '',
       'yearLevel': row.length > 3 ? row[3] : '',
@@ -71,14 +68,13 @@ class StudentImportParser {
     final studentId = getValue('student id');
     final fullName = getValue('full name');
     final course = getValue('course');
-    final college = getValue('college');
-    final program = getValue('program');
+    // college/program/semester removed from import format
     final schoolYear = getValue('school year') != ''
         ? getValue('school year')
         : (getValue('year level') != ''
               ? getValue('year level')
               : getValue('year'));
-    final semester = getValue('semester');
+    final semester = '';
     final section = getValue('section');
     final email = getValue('email');
 
@@ -86,8 +82,6 @@ class StudentImportParser {
       'studentId': studentId,
       'fullName': fullName,
       'course': course,
-      'college': college,
-      'program': program,
       'schoolYear': schoolYear,
       'semester': semester,
       'section': section,
@@ -135,11 +129,8 @@ class StudentImportParser {
       'student id': 'Student ID',
       'full name': 'Full Name',
       'course': 'Course',
-      'college': 'College',
-      'program': 'Program',
       'school year': 'School Year',
       'year level': 'Year Level',
-      'semester': 'Semester',
       'section': 'Section',
       'email': 'Email',
     };

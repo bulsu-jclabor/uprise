@@ -445,19 +445,10 @@ class StudentAccountsState extends State<StudentAccounts> {
                 (data['email'] ?? '').toString().toLowerCase().contains(
                   searchTerm,
                 ) ||
-                (data['college'] ?? '').toString().toLowerCase().contains(
-                  searchTerm,
-                ) ||
-                (data['program'] ?? '').toString().toLowerCase().contains(
-                  searchTerm,
-                ) ||
                 (data['schoolYear'] ?? data['yearLevel'] ?? '')
                     .toString()
                     .toLowerCase()
                     .contains(searchTerm) ||
-                (data['semester'] ?? '').toString().toLowerCase().contains(
-                  searchTerm,
-                ) ||
                 (data['section'] ?? '').toString().toLowerCase().contains(
                   searchTerm,
                 );
@@ -527,10 +518,7 @@ class StudentAccountsState extends State<StudentAccounts> {
           Expanded(flex: 2, child: _headerCell('STUDENT ID')),
           Expanded(flex: 3, child: _headerCell('FULL NAME')),
           Expanded(flex: 2, child: _headerCell('COURSE')),
-          Expanded(flex: 2, child: _headerCell('COLLEGE')),
-          Expanded(flex: 2, child: _headerCell('PROGRAM')),
           Expanded(flex: 2, child: _headerCell('SCHOOL YEAR')),
-          Expanded(flex: 2, child: _headerCell('SEMESTER')),
           Expanded(flex: 1, child: _headerCell('SECTION')),
           Expanded(flex: 3, child: _headerCell('EMAIL')),
           Expanded(
@@ -562,9 +550,7 @@ class StudentAccountsState extends State<StudentAccounts> {
   }) {
     final isArchived = data['archived'] == true;
     final schoolYear = data['schoolYear'] ?? data['yearLevel'] ?? '';
-    final semester = data['semester'] ?? '';
-    final college = data['college'] ?? '';
-    final program = data['program'] ?? '';
+    // college/program/semester removed from UI
     final section = data['section'] ?? '';
 
     return InkWell(
@@ -651,32 +637,6 @@ class StudentAccountsState extends State<StudentAccounts> {
             Expanded(
               flex: 2,
               child: Text(
-                college.isEmpty ? '—' : college,
-                style: GoogleFonts.beVietnamPro(
-                  fontSize: 12,
-                  color: isArchived
-                      ? const Color(0xFF9AA5B4)
-                      : const Color(0xFF64748B),
-                ),
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-            Expanded(
-              flex: 2,
-              child: Text(
-                program.isEmpty ? '—' : program,
-                style: GoogleFonts.beVietnamPro(
-                  fontSize: 12,
-                  color: isArchived
-                      ? const Color(0xFF9AA5B4)
-                      : const Color(0xFF64748B),
-                ),
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-            Expanded(
-              flex: 2,
-              child: Text(
                 schoolYear.isEmpty ? '—' : schoolYear,
                 style: GoogleFonts.beVietnamPro(
                   fontSize: 12,
@@ -687,19 +647,7 @@ class StudentAccountsState extends State<StudentAccounts> {
                 overflow: TextOverflow.ellipsis,
               ),
             ),
-            Expanded(
-              flex: 2,
-              child: Text(
-                semester.isEmpty ? '—' : semester,
-                style: GoogleFonts.beVietnamPro(
-                  fontSize: 12,
-                  color: isArchived
-                      ? const Color(0xFF9AA5B4)
-                      : const Color(0xFF64748B),
-                ),
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
+            // College, Program, Semester columns removed per request.
             Expanded(
               flex: 1,
               child: Text(
@@ -1003,27 +951,11 @@ class StudentAccountsState extends State<StudentAccounts> {
                               Icons.school_outlined,
                             ),
                           ),
-                          const SizedBox(width: 16),
-                          Expanded(
-                            child: _detailItem(
-                              'College',
-                              data['college'] ?? '—',
-                              Icons.account_balance_outlined,
-                            ),
-                          ),
                         ],
                       ),
                       const SizedBox(height: 16),
                       Row(
                         children: [
-                          Expanded(
-                            child: _detailItem(
-                              'Program',
-                              data['program'] ?? '—',
-                              Icons.menu_book_outlined,
-                            ),
-                          ),
-                          const SizedBox(width: 16),
                           Expanded(
                             child: _detailItem(
                               'School Year',
@@ -1036,14 +968,6 @@ class StudentAccountsState extends State<StudentAccounts> {
                       const SizedBox(height: 16),
                       Row(
                         children: [
-                          Expanded(
-                            child: _detailItem(
-                              'Semester',
-                              data['semester'] ?? '—',
-                              Icons.schedule_outlined,
-                            ),
-                          ),
-                          const SizedBox(width: 16),
                           Expanded(
                             child: _detailItem(
                               'Section',
@@ -1777,7 +1701,7 @@ class StudentAccountsState extends State<StudentAccounts> {
                             const SizedBox(width: 10),
                             Expanded(
                               child: Text(
-                                'Expected headers or column order:\nStudent ID · Full Name · Course · College · Program · School Year · Semester · Section · Email',
+                                'Expected headers or column order:\nStudent ID · Full Name · Course · School Year · Section · Email',
                                 style: GoogleFonts.beVietnamPro(
                                   fontSize: 12,
                                   color: const Color(0xFF1D4ED8),
@@ -2149,12 +2073,10 @@ class StudentAccountsState extends State<StudentAccounts> {
     final idCtrl = TextEditingController();
     final nameCtrl = TextEditingController();
     final emailCtrl = TextEditingController();
-    final collegeCtrl = TextEditingController();
-    final programCtrl = TextEditingController();
+    // College and Program removed — no controllers needed.
     final schoolYearCtrl = TextEditingController();
     final sectionCtrl = TextEditingController();
     String course = 'BSIT';
-    String semester = '1st Semester';
     bool isCreating = false;
     String? errorMsg;
 
@@ -2317,68 +2239,6 @@ class StudentAccountsState extends State<StudentAccounts> {
                             children: [
                               Expanded(
                                 child: TextFormField(
-                                  controller: collegeCtrl,
-                                  decoration: _DS.inputDecoration(
-                                    'College',
-                                    hint: 'e.g., College of Computing',
-                                    icon: Icons.account_balance_outlined,
-                                  ),
-                                  style: GoogleFonts.beVietnamPro(fontSize: 13),
-                                  validator: (v) =>
-                                      v == null || v.trim().isEmpty
-                                      ? 'Required'
-                                      : null,
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: TextFormField(
-                                  controller: programCtrl,
-                                  decoration: _DS.inputDecoration(
-                                    'Program',
-                                    hint: 'e.g., Information Technology',
-                                    icon: Icons.menu_book_outlined,
-                                  ),
-                                  style: GoogleFonts.beVietnamPro(fontSize: 13),
-                                  validator: (v) =>
-                                      v == null || v.trim().isEmpty
-                                      ? 'Required'
-                                      : null,
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 12),
-                          Row(
-                            children: [
-                              Expanded(
-                                child: DropdownButtonFormField<String>(
-                                  value: semester,
-                                  decoration: _DS.inputDecoration('Semester'),
-                                  style: GoogleFonts.beVietnamPro(
-                                    fontSize: 13,
-                                    color: const Color(0xFF1A202C),
-                                  ),
-                                  items:
-                                      const [
-                                            '1st Semester',
-                                            '2nd Semester',
-                                            'Summer',
-                                          ]
-                                          .map(
-                                            (s) => DropdownMenuItem(
-                                              value: s,
-                                              child: Text(s),
-                                            ),
-                                          )
-                                          .toList(),
-                                  onChanged: (v) =>
-                                      setDialogState(() => semester = v!),
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: TextFormField(
                                   controller: sectionCtrl,
                                   decoration: _DS.inputDecoration(
                                     'Section',
@@ -2498,11 +2358,8 @@ class StudentAccountsState extends State<StudentAccounts> {
                                     'studentId': idCtrl.text.trim(),
                                     'fullName': nameCtrl.text.trim(),
                                     'course': course,
-                                    'college': collegeCtrl.text.trim(),
-                                    'program': programCtrl.text.trim(),
                                     'schoolYear': schoolYearCtrl.text.trim(),
                                     'yearLevel': schoolYearCtrl.text.trim(),
-                                    'semester': semester,
                                     'section': sectionCtrl.text.trim(),
                                     'email': emailCtrl.text
                                         .trim()
@@ -2668,7 +2525,7 @@ class StudentAccountsState extends State<StudentAccounts> {
     }
     if (missingRequired.isNotEmpty) {
       buffer.writeln(
-        '- Rows missing required fields (course/full name/semester): ${missingRequired.join(', ')}.',
+        '- Rows missing required fields (course/full name): ${missingRequired.join(', ')}.',
       );
     }
     if (missingStudentIds.isEmpty &&
@@ -2678,7 +2535,7 @@ class StudentAccountsState extends State<StudentAccounts> {
       buffer.writeln('- Sample data looks well-formed for import.');
     }
     buffer.writeln(
-      '- Expected fields matched: Student ID, Full Name, Course, College, Program, School Year, Semester, Section, Email.',
+      '- Expected fields matched: Student ID, Full Name, Course, School Year, Section, Email.',
     );
     buffer.writeln(
       'If any rows look wrong, please correct the spreadsheet before importing.',
@@ -3257,7 +3114,7 @@ class _ExportStudentsButton extends StatelessWidget {
       if (format == 'csv') {
         final buf = StringBuffer();
         buf.writeln(
-          'Student ID,Full Name,Course,College,Program,School Year,Semester,Section,Email,Archived',
+          'Student ID,Full Name,Course,School Year,Section,Email,Archived',
         );
         for (final doc in docs) {
           final d = doc.data();
@@ -3267,10 +3124,7 @@ class _ExportStudentsButton extends StatelessWidget {
               esc(d['studentId'] ?? ''),
               esc(d['fullName'] ?? ''),
               esc(d['course'] ?? ''),
-              esc(d['college'] ?? ''),
-              esc(d['program'] ?? ''),
               esc(d['schoolYear'] ?? d['yearLevel'] ?? ''),
-              esc(d['semester'] ?? ''),
               esc(d['section'] ?? ''),
               esc(d['email'] ?? ''),
               esc(d['archived'] == true ? 'Yes' : 'No'),
@@ -3289,10 +3143,7 @@ class _ExportStudentsButton extends StatelessWidget {
             d['studentId'] ?? '',
             d['fullName'] ?? '',
             d['course'] ?? '',
-            d['college'] ?? '',
-            d['program'] ?? '',
             d['schoolYear'] ?? d['yearLevel'] ?? '',
-            d['semester'] ?? '',
             d['section'] ?? '',
             d['email'] ?? '',
           ].map((value) => value.toString()).toList();
@@ -3304,10 +3155,7 @@ class _ExportStudentsButton extends StatelessWidget {
             'Student ID',
             'Full Name',
             'Course',
-            'College',
-            'Program',
             'School Year',
-            'Semester',
             'Section',
             'Email',
           ],

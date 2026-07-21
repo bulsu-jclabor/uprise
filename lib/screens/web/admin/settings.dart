@@ -403,6 +403,20 @@ class _AdminSettingsState extends State<AdminSettings>
     }
     setState(() => _isLoading = true);
     try {
+      // If email changed, attempt to update the auth user's email as well.
+      final newEmail = _emailController.text.trim();
+      if (newEmail.isNotEmpty && newEmail != (_currentUser?.email ?? '')) {
+        try {
+          await _currentUser!.updateEmail(newEmail);
+        } on FirebaseAuthException catch (e) {
+          if (e.code == 'requires-recent-login') {
+            _showSnack('Please re-login to change your email', success: false);
+            setState(() => _isLoading = false);
+            return;
+          }
+          rethrow;
+        }
+      }
       await _currentUser!.updateDisplayName(_fullNameController.text.trim());
       await FirebaseFirestore.instance
           .collection('users')
@@ -686,27 +700,12 @@ class _AdminSettingsState extends State<AdminSettings>
                     const SizedBox(height: 12),
                     TextFormField(
                       controller: _emailController,
-                      enabled: false,
-                      style: GoogleFonts.beVietnamPro(
-                        fontSize: 13,
-                        color: const Color(0xFF9AA5B4),
-                      ),
+                      style: GoogleFonts.beVietnamPro(fontSize: 13),
                       decoration: _DS.inputDecoration(
                         'Email Address',
                         icon: Icons.email_outlined,
-                        enabled: false,
                       ),
-                    ),
-                    const SizedBox(height: 8),
-                    Padding(
-                      padding: const EdgeInsets.only(left: 2),
-                      child: Text(
-                        'Email address cannot be changed here.',
-                        style: GoogleFonts.beVietnamPro(
-                          fontSize: 11,
-                          color: const Color(0xFF9AA5B4),
-                        ),
-                      ),
+                      onChanged: (_) {},
                     ),
                     const SizedBox(height: 20),
                     ElevatedButton.icon(
@@ -956,34 +955,7 @@ class _AdminSettingsState extends State<AdminSettings>
                   ],
                 ),
               ),
-              const SizedBox(height: 20),
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(24),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(_DS.radiusLg),
-                  border: Border.all(color: const Color(0xFFE8ECF0)),
-                  boxShadow: _DS.cardShadow,
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _sectionLabel(
-                      'Two-Factor Authentication',
-                      icon: Icons.shield_outlined,
-                    ),
-                    _notificationTile(
-                      title: 'Enable 2FA',
-                      subtitle:
-                          'Receive a verification code via email on each login',
-                      icon: Icons.verified_user_outlined,
-                      value: false,
-                      onChanged: (_) {},
-                    ),
-                  ],
-                ),
-              ),
+              // Two-Factor Authentication removed per user request.
               const SizedBox(height: 20),
               Container(
                 width: double.infinity,

@@ -2466,7 +2466,7 @@ Widget _readOnlyDetail(String label, String value) {
 }
 
 // ============ ADVISER FORM WIDGET ============
-class _AdviserForm extends StatelessWidget {
+class _AdviserForm extends StatefulWidget {
   final Adviser adviser;
   final int index;
   final bool canRemove;
@@ -2482,6 +2482,47 @@ class _AdviserForm extends StatelessWidget {
   });
 
   @override
+  State<_AdviserForm> createState() => _AdviserFormState();
+}
+
+class _AdviserFormState extends State<_AdviserForm> {
+  late final TextEditingController _nameCtrl;
+  late final TextEditingController _emailCtrl;
+  late final TextEditingController _phoneCtrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _nameCtrl = TextEditingController(text: widget.adviser.name);
+    _emailCtrl = TextEditingController(text: widget.adviser.email);
+    _phoneCtrl = TextEditingController(text: widget.adviser.phone);
+  }
+
+  @override
+  void didUpdateWidget(covariant _AdviserForm oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.adviser != widget.adviser) {
+      if (_nameCtrl.text != widget.adviser.name) {
+        _nameCtrl.text = widget.adviser.name;
+      }
+      if (_emailCtrl.text != widget.adviser.email) {
+        _emailCtrl.text = widget.adviser.email;
+      }
+      if (_phoneCtrl.text != widget.adviser.phone) {
+        _phoneCtrl.text = widget.adviser.phone;
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _nameCtrl.dispose();
+    _emailCtrl.dispose();
+    _phoneCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final validPositions = [
       'Dean',
@@ -2491,10 +2532,11 @@ class _AdviserForm extends StatelessWidget {
       'Faculty',
     ];
     final bool isValidTitle =
-        adviser.title.isNotEmpty && validPositions.contains(adviser.title);
-    final String? selectedValue = isValidTitle ? adviser.title : null;
-    final String adviserType = adviser.type.isNotEmpty
-        ? adviser.type
+        widget.adviser.title.isNotEmpty &&
+        validPositions.contains(widget.adviser.title);
+    final String? selectedValue = isValidTitle ? widget.adviser.title : null;
+    final String adviserType = widget.adviser.type.isNotEmpty
+        ? widget.adviser.type
         : 'faculty';
 
     return Container(
@@ -2512,16 +2554,16 @@ class _AdviserForm extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                'Adviser ${index + 1}',
+                'Adviser ${widget.index + 1}',
                 style: GoogleFonts.beVietnamPro(
                   fontSize: 12,
                   fontWeight: FontWeight.w700,
                   color: UpriseColors.primaryDark,
                 ),
               ),
-              if (canRemove)
+              if (widget.canRemove)
                 InkWell(
-                  onTap: onRemove,
+                  onTap: widget.onRemove,
                   borderRadius: BorderRadius.circular(6),
                   child: Padding(
                     padding: const EdgeInsets.all(4),
@@ -2539,16 +2581,17 @@ class _AdviserForm extends StatelessWidget {
             children: [
               Expanded(
                 child: TextFormField(
-                  initialValue: adviser.name,
+                  controller: _nameCtrl,
                   decoration: _DS.inputDecoration(
                     'Full Name',
                     hint: 'e.g., Dr. Juan dela Cruz',
                     icon: Icons.badge_outlined,
                   ),
                   style: GoogleFonts.beVietnamPro(fontSize: 13),
-                  onChanged: (v) => onChanged(adviser.copyWith(name: v)),
+                  onChanged: (v) =>
+                      widget.onChanged(widget.adviser.copyWith(name: v)),
                   validator: (v) =>
-                      index == 0 && (v == null || v.trim().isEmpty)
+                      widget.index == 0 && (v == null || v.trim().isEmpty)
                       ? 'Required'
                       : null,
                 ),
@@ -2572,8 +2615,9 @@ class _AdviserForm extends StatelessWidget {
                       child: Text('Student Adviser'),
                     ),
                   ],
-                  onChanged: (newValue) =>
-                      onChanged(adviser.copyWith(type: newValue ?? 'faculty')),
+                  onChanged: (newValue) => widget.onChanged(
+                    widget.adviser.copyWith(type: newValue ?? 'faculty'),
+                  ),
                 ),
               ),
             ],
@@ -2658,54 +2702,107 @@ class _AdviserForm extends StatelessWidget {
                     }),
                   ],
                   onChanged: (newValue) {
-                    onChanged(adviser.copyWith(title: newValue ?? ''));
+                    widget.onChanged(
+                      widget.adviser.copyWith(title: newValue ?? ''),
+                    );
                   },
                 ),
               ),
             ],
           ),
           const SizedBox(height: 10),
-          Row(
-            children: [
-              Expanded(
-                child: TextFormField(
-                  initialValue: adviser.email,
-                  decoration: _DS.inputDecoration(
-                    'Email',
-                    hint: 'e.g., jdelacruz@university.edu.ph',
-                    icon: Icons.email_outlined,
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final useTwoColumns = constraints.maxWidth >= 480;
+              if (useTwoColumns) {
+                return Row(
+                  children: [
+                    Expanded(
+                      child: TextFormField(
+                        controller: _emailCtrl,
+                        decoration: _DS.inputDecoration(
+                          'Email',
+                          hint: 'e.g., jdelacruz@university.edu.ph',
+                          icon: Icons.email_outlined,
+                        ),
+                        style: GoogleFonts.beVietnamPro(fontSize: 13),
+                        keyboardType: TextInputType.emailAddress,
+                        onChanged: (v) =>
+                            widget.onChanged(widget.adviser.copyWith(email: v)),
+                        validator: (v) {
+                          if (widget.index == 0) {
+                            if (v == null || v.trim().isEmpty)
+                              return 'Required';
+                            if (!v.contains('@') || !v.contains('.'))
+                              return 'Enter a valid email';
+                          } else if (v != null && v.trim().isNotEmpty) {
+                            if (!v.contains('@') || !v.contains('.'))
+                              return 'Enter a valid email';
+                          }
+                          return null;
+                        },
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: TextFormField(
+                        controller: _phoneCtrl,
+                        decoration: _DS.inputDecoration(
+                          'Phone Number',
+                          hint: 'e.g., +63 912 345 6789',
+                          icon: Icons.phone_outlined,
+                        ),
+                        style: GoogleFonts.beVietnamPro(fontSize: 13),
+                        keyboardType: TextInputType.phone,
+                        onChanged: (v) =>
+                            widget.onChanged(widget.adviser.copyWith(phone: v)),
+                      ),
+                    ),
+                  ],
+                );
+              }
+
+              return Column(
+                children: [
+                  TextFormField(
+                    controller: _emailCtrl,
+                    decoration: _DS.inputDecoration(
+                      'Email',
+                      hint: 'e.g., jdelacruz@university.edu.ph',
+                      icon: Icons.email_outlined,
+                    ),
+                    style: GoogleFonts.beVietnamPro(fontSize: 13),
+                    keyboardType: TextInputType.emailAddress,
+                    onChanged: (v) =>
+                        widget.onChanged(widget.adviser.copyWith(email: v)),
+                    validator: (v) {
+                      if (widget.index == 0) {
+                        if (v == null || v.trim().isEmpty) return 'Required';
+                        if (!v.contains('@') || !v.contains('.'))
+                          return 'Enter a valid email';
+                      } else if (v != null && v.trim().isNotEmpty) {
+                        if (!v.contains('@') || !v.contains('.'))
+                          return 'Enter a valid email';
+                      }
+                      return null;
+                    },
                   ),
-                  style: GoogleFonts.beVietnamPro(fontSize: 13),
-                  keyboardType: TextInputType.emailAddress,
-                  onChanged: (v) => onChanged(adviser.copyWith(email: v)),
-                  validator: (v) {
-                    if (index == 0) {
-                      if (v == null || v.trim().isEmpty) return 'Required';
-                      if (!v.contains('@') || !v.contains('.'))
-                        return 'Enter a valid email';
-                    } else if (v != null && v.trim().isNotEmpty) {
-                      if (!v.contains('@') || !v.contains('.'))
-                        return 'Enter a valid email';
-                    }
-                    return null;
-                  },
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: TextFormField(
-                  initialValue: adviser.phone,
-                  decoration: _DS.inputDecoration(
-                    'Phone Number',
-                    hint: 'e.g., +63 912 345 6789',
-                    icon: Icons.phone_outlined,
+                  const SizedBox(height: 10),
+                  TextFormField(
+                    controller: _phoneCtrl,
+                    decoration: _DS.inputDecoration(
+                      'Phone Number',
+                      hint: 'e.g., +63 912 345 6789',
+                      icon: Icons.phone_outlined,
+                    ),
+                    style: GoogleFonts.beVietnamPro(fontSize: 13),
+                    keyboardType: TextInputType.phone,
+                    onChanged: (v) =>
+                        widget.onChanged(widget.adviser.copyWith(phone: v)),
                   ),
-                  style: GoogleFonts.beVietnamPro(fontSize: 13),
-                  keyboardType: TextInputType.phone,
-                  onChanged: (v) => onChanged(adviser.copyWith(phone: v)),
-                ),
-              ),
-            ],
+                ],
+              );
+            },
           ),
         ],
       ),
@@ -3559,6 +3656,7 @@ class _EditOrganizationDialog extends StatefulWidget {
 }
 
 class _EditOrganizationDialogState extends State<_EditOrganizationDialog> {
+  final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
   late TextEditingController _nameCtrl, _shortCtrl, _orgEmailCtrl, _descCtrl;
   late String _type, _status;
   late List<Adviser> _advisers;
@@ -3667,7 +3765,7 @@ class _EditOrganizationDialogState extends State<_EditOrganizationDialog> {
               child: SingleChildScrollView(
                 padding: const EdgeInsets.all(28),
                 child: Form(
-                  key: GlobalKey<FormState>(),
+                  key: _formKey,
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [

@@ -2,13 +2,14 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
+import 'package:pdf/pdf.dart';
 import 'package:universal_html/html.dart' as html;
 import 'package:uprise/screens/web/admin/export_pdf.dart' show AdminExportPdf;
 import 'export_util.dart';
 import 'package:uprise/widgets/admin_export_button.dart';
 import '../../../widgets/student/event_image.dart';
+import 'package:pdf/widgets.dart' as pw;
 import '../../../services/activity_logger.dart' as activity_log;
-import '../../../services/ai_service.dart';
 import 'dart:convert'; // for base64Decode, utf8
 import '../../../utils/platform_file_utils.dart'
     as platform_file_utils; // adjust path if needed
@@ -415,9 +416,6 @@ class _ReportsManagementState extends State<ReportsManagement>
   List<Map<String, dynamic>> _organizations = [];
   bool _loadingEvents = true;
   bool _loadingEventCounts = false;
-  bool _loadingAiInsight = false;
-  String? _aiInsight;
-  String? _aiInsightError;
 
   // Admin reports for financial and accomplishment
   List<AdminReport> _financialReports = [];
@@ -594,7 +592,6 @@ class _ReportsManagementState extends State<ReportsManagement>
       ];
       if (!mounted) return;
       setState(() => _events = loaded);
-      _maybeRefreshAiInsight();
     } catch (e) {
       debugPrint('Error loading events: $e');
     } finally {
@@ -916,7 +913,6 @@ class _ReportsManagementState extends State<ReportsManagement>
         _financialReports = activeReports;
         _loadingFinancial = false;
       });
-      _maybeRefreshAiInsight();
     } catch (e) {
       debugPrint('Error loading financial reports: $e');
       if (mounted) {
@@ -963,7 +959,6 @@ class _ReportsManagementState extends State<ReportsManagement>
         _accomplishmentReports = activeReports;
         _loadingAccomplishment = false;
       });
-      _maybeRefreshAiInsight();
     } catch (e) {
       debugPrint('Error loading accomplishment reports: $e');
       if (mounted) {
@@ -1471,7 +1466,6 @@ class _ReportsManagementState extends State<ReportsManagement>
       final rows = await _loadSubmissionRows('financial');
       if (!mounted) return;
       setState(() => _financialSubs = rows);
-      _maybeRefreshAiInsight();
     } catch (e) {
       debugPrint('Error loading financial submissions: $e');
     } finally {
@@ -1486,7 +1480,6 @@ class _ReportsManagementState extends State<ReportsManagement>
       final rows = await _loadSubmissionRows('accomplishment');
       if (!mounted) return;
       setState(() => _accomplishmentSubs = rows);
-      _maybeRefreshAiInsight();
     } catch (e) {
       debugPrint('Error loading accomplishment submissions: $e');
     } finally {
@@ -1725,8 +1718,6 @@ class _ReportsManagementState extends State<ReportsManagement>
       children: [
         _buildPageStatsRow(),
         const SizedBox(height: 16),
-        _buildAiInsightCard(),
-        const SizedBox(height: 16),
         _buildTabBar(),
         const SizedBox(height: 16),
         Expanded(
@@ -1754,242 +1745,6 @@ class _ReportsManagementState extends State<ReportsManagement>
   }
 
   // ── Tab Bar ───────────────────────────────────────────────────────
-  Widget _buildAiInsightCard() {
-    final trackedFin = _financialSubs.where((s) => s.hasApprovedEvent).toList();
-    final trackedAcc = _accomplishmentSubs
-        .where((s) => s.hasApprovedEvent)
-        .toList();
-    final overdue =
-        trackedFin
-            .where(
-              (s) =>
-                  s.submittedAt == null &&
-                  s.eventDeadline != null &&
-                  DateTime.now().isAfter(s.eventDeadline!),
-            )
-            .length +
-        trackedAcc
-            .where(
-              (s) =>
-                  s.submittedAt == null &&
-                  s.eventDeadline != null &&
-                  DateTime.now().isAfter(s.eventDeadline!),
-            )
-            .length;
-    final late =
-        trackedFin.where((s) => s.isLate).length +
-        trackedAcc.where((s) => s.isLate).length;
-    final pending =
-        trackedFin.where((s) => s.submittedAt == null).length +
-        trackedAcc.where((s) => s.submittedAt == null).length;
-
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFE8ECF0)),
-        boxShadow: _DS.cardShadow,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'AI Report Summary',
-                style: GoogleFonts.beVietnamPro(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              if (_loadingAiInsight)
-                Row(
-                  children: [
-                    const SizedBox(width: 8),
-                    const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    ),
-                  ],
-                )
-              else
-                TextButton(
-                  onPressed: _loadAiInsight,
-                  style: TextButton.styleFrom(
-                    foregroundColor: UpriseColors.primaryDark,
-                    textStyle: GoogleFonts.beVietnamPro(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  child: const Text('Refresh'),
-                ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Text(
-            'This AI insight helps you spot report backlog, submission delays, and important follow-up actions for organizations.',
-            style: GoogleFonts.beVietnamPro(
-              fontSize: 12,
-              color: const Color(0xFF64748B),
-              height: 1.5,
-            ),
-          ),
-          const SizedBox(height: 14),
-          if (_aiInsightError != null) ...[
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: UpriseColors.errorBg,
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Text(
-                _aiInsightError!,
-                style: GoogleFonts.beVietnamPro(
-                  fontSize: 12,
-                  color: UpriseColors.error,
-                ),
-              ),
-            ),
-          ] else ...[
-            Text(
-              _aiInsight ??
-                  'AI is reviewing the report status and will show recommendations here.',
-              style: GoogleFonts.beVietnamPro(
-                fontSize: 13,
-                color: const Color(0xFF1F2937),
-                height: 1.6,
-              ),
-            ),
-          ],
-          const SizedBox(height: 14),
-          Wrap(
-            spacing: 12,
-            runSpacing: 8,
-            children: [
-              _StatCard(
-                label: 'Overdue Reports',
-                value: '$overdue',
-                icon: Icons.error_outline_rounded,
-                color: UpriseColors.error,
-              ),
-              _StatCard(
-                label: 'Late Submissions',
-                value: '$late',
-                icon: Icons.history_toggle_off_rounded,
-                color: UpriseColors.warning,
-              ),
-              _StatCard(
-                label: 'Pending Reports',
-                value: '$pending',
-                icon: Icons.pending_actions_rounded,
-                color: UpriseColors.info,
-              ),
-              _StatCard(
-                label: 'Tracked Events',
-                value: '${_events.length}',
-                icon: Icons.event_available_rounded,
-                color: UpriseColors.primary,
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _maybeRefreshAiInsight() async {
-    if (_loadingAiInsight ||
-        _loadingEvents ||
-        _loadingFinancial ||
-        _loadingAccomplishment ||
-        _loadingFinancialSubs ||
-        _loadingAccomplishmentSubs) {
-      return;
-    }
-    await _loadAiInsight();
-  }
-
-  Future<void> _loadAiInsight() async {
-    if (_loadingAiInsight) return;
-
-    final trackedFin = _financialSubs.where((s) => s.hasApprovedEvent).toList();
-    final trackedAcc = _accomplishmentSubs
-        .where((s) => s.hasApprovedEvent)
-        .toList();
-    final overdue =
-        trackedFin
-            .where(
-              (s) =>
-                  s.submittedAt == null &&
-                  s.eventDeadline != null &&
-                  DateTime.now().isAfter(s.eventDeadline!),
-            )
-            .length +
-        trackedAcc
-            .where(
-              (s) =>
-                  s.submittedAt == null &&
-                  s.eventDeadline != null &&
-                  DateTime.now().isAfter(s.eventDeadline!),
-            )
-            .length;
-    final late =
-        trackedFin.where((s) => s.isLate).length +
-        trackedAcc.where((s) => s.isLate).length;
-    final pending =
-        trackedFin.where((s) => s.submittedAt == null).length +
-        trackedAcc.where((s) => s.submittedAt == null).length;
-    final activeOrganizations = _organizations.length;
-    final activeEvents = _events.length;
-    final topOrgByOverdue = <String, int>{};
-    for (final sub in [...trackedFin, ...trackedAcc]) {
-      if (sub.submittedAt == null &&
-          sub.eventDeadline != null &&
-          DateTime.now().isAfter(sub.eventDeadline!)) {
-        topOrgByOverdue[sub.orgName] = (topOrgByOverdue[sub.orgName] ?? 0) + 1;
-      }
-    }
-    final topOrg = topOrgByOverdue.isEmpty
-        ? 'No organization is currently overdue'
-        : topOrgByOverdue.entries
-              .reduce((a, b) => a.value >= b.value ? a : b)
-              .key;
-
-    setState(() {
-      _loadingAiInsight = true;
-      _aiInsightError = null;
-    });
-
-    try {
-      final prompt = AiService.buildReportManagementInsightPrompt(
-        activeOrganizations: activeOrganizations,
-        activeEvents: activeEvents,
-        overdueReports: overdue,
-        lateSubmissions: late,
-        pendingReports: pending,
-        topOrganization: topOrg,
-      );
-      final insight = await AiService.ask(prompt);
-      if (!mounted) return;
-      setState(() {
-        _aiInsight = insight.trim();
-      });
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _aiInsightError = 'AI summary unavailable: ${e.toString()}';
-      });
-    } finally {
-      if (mounted) setState(() => _loadingAiInsight = false);
-    }
-  }
-
   Widget _buildTabBar() {
     return Padding(
       padding: const EdgeInsets.fromLTRB(28, 20, 28, 0),

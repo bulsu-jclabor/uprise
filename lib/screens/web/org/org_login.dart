@@ -7,7 +7,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../../auth_service.dart';
 import '../../auth/change_password_screen.dart';
 import 'org_dashboard.dart';
-import 'two_factor_verify_screen.dart';
 
 class OrganizationLogin extends StatefulWidget {
   const OrganizationLogin({super.key});
@@ -17,11 +16,11 @@ class OrganizationLogin extends StatefulWidget {
 
 class _OrganizationLoginState extends State<OrganizationLogin>
     with SingleTickerProviderStateMixin {
-  final TextEditingController _emailController    = TextEditingController();
+  final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
-  bool _isLoading       = false;
+  bool _isLoading = false;
   bool _obscurePassword = true;
-  bool _rememberMe      = false;
+  bool _rememberMe = false;
   late AnimationController _animController;
   late Animation<double> _fadeIn;
   late Animation<Offset> _slideUp;
@@ -29,27 +28,31 @@ class _OrganizationLoginState extends State<OrganizationLogin>
 
   // ── Palette — shared with the Admin portal, plus a green accent to keep
   //    the Org portal visually distinct at a glance. ─────────────────────────
-  static const Color _rust       = Color(0xFFB6430E);
-  static const Color _rustDeep   = Color(0xFF7A2B08);
-  static const Color _accent     = Color(0xFFF97316);
+  static const Color _rust = Color(0xFFB6430E);
+  static const Color _rustDeep = Color(0xFF7A2B08);
+  static const Color _accent = Color(0xFFF97316);
   static const Color _accentDeep = Color(0xFFEA580C);
-  static const Color _orgGreen   = Color(0xFF059669);
+  static const Color _orgGreen = Color(0xFF059669);
   static const Color _orgGreenLt = Color(0xFF34D399);
-  static const Color _navy       = Color(0xFF0F172A);
-  static const Color _slateDark  = Color(0xFF1E1B16);
-  static const Color _slateMid   = Color(0xFF6B7280);
-  static const Color _slateSoft  = Color(0xFFAEB4C4);
-  static const Color _fieldFill  = Color(0xFFFAF6F2);
-  static const Color _fieldBorder= Color(0xFFEDE4DC);
+  static const Color _navy = Color(0xFF0F172A);
+  static const Color _slateDark = Color(0xFF1E1B16);
+  static const Color _slateMid = Color(0xFF6B7280);
+  static const Color _slateSoft = Color(0xFFAEB4C4);
+  static const Color _fieldFill = Color(0xFFFAF6F2);
+  static const Color _fieldBorder = Color(0xFFEDE4DC);
 
   @override
   void initState() {
     super.initState();
     _animController = AnimationController(
-        vsync: this, duration: const Duration(milliseconds: 800));
-    _fadeIn  = CurvedAnimation(parent: _animController, curve: Curves.easeOut);
-    _slideUp = Tween<Offset>(begin: const Offset(0, 0.04), end: Offset.zero)
-        .animate(CurvedAnimation(parent: _animController, curve: Curves.easeOut));
+      vsync: this,
+      duration: const Duration(milliseconds: 800),
+    );
+    _fadeIn = CurvedAnimation(parent: _animController, curve: Curves.easeOut);
+    _slideUp = Tween<Offset>(
+      begin: const Offset(0, 0.04),
+      end: Offset.zero,
+    ).animate(CurvedAnimation(parent: _animController, curve: Curves.easeOut));
     _animController.forward();
     _loadSavedEmail();
   }
@@ -63,8 +66,11 @@ class _OrganizationLoginState extends State<OrganizationLogin>
   }
 
   Future<SharedPreferences?> _getPrefs() async {
-    try { return await SharedPreferences.getInstance(); }
-    catch (_) { return null; }
+    try {
+      return await SharedPreferences.getInstance();
+    } catch (_) {
+      return null;
+    }
   }
 
   Future<void> _loadSavedEmail() async {
@@ -72,7 +78,10 @@ class _OrganizationLoginState extends State<OrganizationLogin>
     if (prefs == null) return;
     final saved = prefs.getString('org_email');
     if (saved != null && saved.isNotEmpty) {
-      setState(() { _emailController.text = saved; _rememberMe = true; });
+      setState(() {
+        _emailController.text = saved;
+        _rememberMe = true;
+      });
     }
   }
 
@@ -87,13 +96,20 @@ class _OrganizationLoginState extends State<OrganizationLogin>
   }
 
   Future<void> _login() async {
-    final email    = _emailController.text.trim();
+    final email = _emailController.text.trim();
     final password = _passwordController.text.trim();
-    if (email.isEmpty) { _showError('Please enter your email address'); return; }
-    if (!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(email)) {
-      _showError('Please enter a valid email address'); return;
+    if (email.isEmpty) {
+      _showError('Please enter your email address');
+      return;
     }
-    if (password.isEmpty) { _showError('Please enter your password'); return; }
+    if (!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(email)) {
+      _showError('Please enter a valid email address');
+      return;
+    }
+    if (password.isEmpty) {
+      _showError('Please enter your password');
+      return;
+    }
 
     setState(() => _isLoading = true);
     try {
@@ -106,7 +122,9 @@ class _OrganizationLoginState extends State<OrganizationLogin>
       final role = await _auth.getUserRole(user.uid) ?? '';
       if (role != 'org') {
         await FirebaseAuth.instance.signOut();
-        _showError('This account is not authorized for the Organization Portal');
+        _showError(
+          'This account is not authorized for the Organization Portal',
+        );
         if (mounted) setState(() => _isLoading = false);
         return;
       }
@@ -118,49 +136,31 @@ class _OrganizationLoginState extends State<OrganizationLogin>
           ? ChangePasswordScreen(userId: user.uid, isFirstLogin: true)
           : OrgDashboard();
 
-      // Password auth succeeded — now check whether this account has TOTP
-      // 2FA enabled (set up under Settings > Security) and gate access
-      // behind a live code if so, before granting the dashboard/change-
-      // password destination.
-      String? twoFactorSecret;
-      try {
-        final securityDoc = await FirebaseFirestore.instance
-            .collection('users')
-            .doc(user.uid)
-            .collection('settings')
-            .doc('security')
-            .get();
-        if (securityDoc.data()?['twoFactorEnabled'] == true) {
-          twoFactorSecret = securityDoc.data()?['twoFactorSecret'] as String?;
-        }
-      } catch (_) {}
-
+      // Proceed directly to destination — 2FA enforcement removed.
       if (mounted) {
         setState(() => _isLoading = false);
-        if (twoFactorSecret != null && twoFactorSecret.isNotEmpty) {
-          Navigator.of(context).pushReplacement(MaterialPageRoute(
-            builder: (_) => TwoFactorVerifyScreen(
-              secret: twoFactorSecret!,
-              onVerified: () {
-                Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => destination()));
-              },
-              onCancel: () => Navigator.of(context).pushReplacement(
-                  MaterialPageRoute(builder: (_) => const OrganizationLogin())),
-            ),
-          ));
-        } else {
-          Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => destination()));
-        }
+        Navigator.of(
+          context,
+        ).pushReplacement(MaterialPageRoute(builder: (_) => destination()));
       }
     } on FirebaseAuthException catch (e) {
       String msg;
       switch (e.code) {
-        case 'user-not-found':     msg = 'No account found with this email';   break;
+        case 'user-not-found':
+          msg = 'No account found with this email';
+          break;
         case 'wrong-password':
-        case 'invalid-credential': msg = 'Incorrect email or password';        break;
-        case 'invalid-email':      msg = 'Please enter a valid email address'; break;
-        case 'too-many-requests':  msg = 'Too many attempts. Try again later'; break;
-        default:                   msg = e.message ?? 'Login failed';
+        case 'invalid-credential':
+          msg = 'Incorrect email or password';
+          break;
+        case 'invalid-email':
+          msg = 'Please enter a valid email address';
+          break;
+        case 'too-many-requests':
+          msg = 'Too many attempts. Try again later';
+          break;
+        default:
+          msg = e.message ?? 'Login failed';
       }
       _showError(msg);
       if (mounted) setState(() => _isLoading = false);
@@ -176,30 +176,50 @@ class _OrganizationLoginState extends State<OrganizationLogin>
 
   Future<void> _resetPassword() async {
     final email = _emailController.text.trim();
-    if (email.isEmpty) { _showError('Please enter your email address first'); return; }
+    if (email.isEmpty) {
+      _showError('Please enter your email address first');
+      return;
+    }
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
         backgroundColor: Colors.white,
-        title: Text('Reset Password',
-            style: GoogleFonts.beVietnamPro(
-                fontWeight: FontWeight.w700, color: _slateDark)),
-        content: Text('Send a password reset link to\n$email',
-            style: GoogleFonts.beVietnamPro(color: _slateMid)),
+        title: Text(
+          'Reset Password',
+          style: GoogleFonts.beVietnamPro(
+            fontWeight: FontWeight.w700,
+            color: _slateDark,
+          ),
+        ),
+        content: Text(
+          'Send a password reset link to\n$email',
+          style: GoogleFonts.beVietnamPro(color: _slateMid),
+        ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false),
-              child: Text('Cancel',
-                  style: GoogleFonts.beVietnamPro(color: _slateSoft))),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(
+              'Cancel',
+              style: GoogleFonts.beVietnamPro(color: _slateSoft),
+            ),
+          ),
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: ElevatedButton.styleFrom(
-                backgroundColor: _rust,
-                elevation: 0,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
-            child: Text('Send Link',
-                style: GoogleFonts.beVietnamPro(
-                    color: Colors.white, fontWeight: FontWeight.w700)),
+              backgroundColor: _rust,
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+            child: Text(
+              'Send Link',
+              style: GoogleFonts.beVietnamPro(
+                color: Colors.white,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
           ),
         ],
       ),
@@ -209,13 +229,19 @@ class _OrganizationLoginState extends State<OrganizationLogin>
     try {
       await FirebaseAuth.instance.sendPasswordResetEmail(email: email);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('Reset link sent! Check your inbox.',
-              style: GoogleFonts.beVietnamPro()),
-          backgroundColor: const Color(0xFF3FA672),
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        ));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Reset link sent! Check your inbox.',
+              style: GoogleFonts.beVietnamPro(),
+            ),
+            backgroundColor: const Color(0xFF3FA672),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+        );
       }
     } catch (e) {
       _showError('Failed to send reset email: ${e.toString()}');
@@ -226,12 +252,14 @@ class _OrganizationLoginState extends State<OrganizationLogin>
 
   void _showError(String message) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(message, style: GoogleFonts.beVietnamPro()),
-      backgroundColor: const Color(0xFFDC2626),
-      behavior: SnackBarBehavior.floating,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-    ));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message, style: GoogleFonts.beVietnamPro()),
+        backgroundColor: const Color(0xFFDC2626),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+    );
   }
 
   // ── Build ──────────────────────────────────────────────────────────────────
@@ -240,51 +268,64 @@ class _OrganizationLoginState extends State<OrganizationLogin>
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: _navy,
-      body: LayoutBuilder(builder: (_, c) {
-        return Stack(fit: StackFit.expand, children: [
-          Image.asset(
-            'assets/images/bg_pattern.png',
-            fit: BoxFit.cover,
-            errorBuilder: (_, __, ___) => Container(
-              decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                    begin: Alignment.topLeft, end: Alignment.bottomRight,
-                    colors: [_rustDeep, _navy]),
+      body: LayoutBuilder(
+        builder: (_, c) {
+          return Stack(
+            fit: StackFit.expand,
+            children: [
+              Image.asset(
+                'assets/images/bg_pattern.png',
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => Container(
+                  decoration: const BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [_rustDeep, _navy],
+                    ),
+                  ),
+                ),
               ),
-            ),
-          ),
-          // Vignette overlay — darker at the edges (for text/card contrast),
-          // lighter in the middle so the building photo stays visible.
-          Container(
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.centerLeft,
-                end: Alignment.centerRight,
-                colors: [
-                  Color(0xE07A2B08),
-                  Color(0x996B2A08),
-                  Color(0x99B6430E),
-                  Color(0xD2551F07),
-                ],
-                stops: [0.0, 0.38, 0.62, 1.0],
+              // Vignette overlay — darker at the edges (for text/card contrast),
+              // lighter in the middle so the building photo stays visible.
+              Container(
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.centerLeft,
+                    end: Alignment.centerRight,
+                    colors: [
+                      Color(0xE07A2B08),
+                      Color(0x996B2A08),
+                      Color(0x99B6430E),
+                      Color(0xD2551F07),
+                    ],
+                    stops: [0.0, 0.38, 0.62, 1.0],
+                  ),
+                ),
               ),
-            ),
-          ),
-          Container(
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [Color(0x4D0F172A), Colors.transparent, Color(0x660F172A)],
-                stops: [0.0, 0.4, 1.0],
+              Container(
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Color(0x4D0F172A),
+                      Colors.transparent,
+                      Color(0x660F172A),
+                    ],
+                    stops: [0.0, 0.4, 1.0],
+                  ),
+                ),
               ),
-            ),
-          ),
-          SafeArea(
-            child: c.maxWidth > 900 ? _buildWideHero() : _buildCompactHero(),
-          ),
-        ]);
-      }),
+              SafeArea(
+                child: c.maxWidth > 900
+                    ? _buildWideHero()
+                    : _buildCompactHero(),
+              ),
+            ],
+          );
+        },
+      ),
     );
   }
 
@@ -324,33 +365,53 @@ class _OrganizationLoginState extends State<OrganizationLogin>
       mainAxisSize: MainAxisSize.min,
       children: [
         Container(
-          width: 116, height: 116,
+          width: 116,
+          height: 116,
           decoration: BoxDecoration(
             color: Colors.white,
             shape: BoxShape.circle,
             boxShadow: [
               BoxShadow(
-                  color: Colors.black.withAlpha(70),
-                  blurRadius: 24, offset: const Offset(0, 10)),
+                color: Colors.black.withAlpha(70),
+                blurRadius: 24,
+                offset: const Offset(0, 10),
+              ),
             ],
           ),
           padding: const EdgeInsets.all(14),
-          child: Image.asset('assets/images/logo.png',
-              fit: BoxFit.contain,
-              errorBuilder: (_, __, ___) => const Icon(
-                  Icons.business_outlined, size: 48, color: _rust)),
+          child: Image.asset(
+            'assets/images/logo.png',
+            fit: BoxFit.contain,
+            errorBuilder: (_, __, ___) =>
+                const Icon(Icons.business_outlined, size: 48, color: _rust),
+          ),
         ),
         const SizedBox(height: 26),
-        Row(mainAxisSize: MainAxisSize.min, children: [
-          Text('UP',
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'UP',
               style: GoogleFonts.beVietnamPro(
-                fontSize: 56, fontWeight: FontWeight.w800,
-                color: Colors.white, letterSpacing: 1.5, height: 1)),
-          Text('RISE',
+                fontSize: 56,
+                fontWeight: FontWeight.w800,
+                color: Colors.white,
+                letterSpacing: 1.5,
+                height: 1,
+              ),
+            ),
+            Text(
+              'RISE',
               style: GoogleFonts.beVietnamPro(
-                fontSize: 56, fontWeight: FontWeight.w800,
-                color: const Color(0xFFFFC79A), letterSpacing: 1.5, height: 1)),
-        ]),
+                fontSize: 56,
+                fontWeight: FontWeight.w800,
+                color: const Color(0xFFFFC79A),
+                letterSpacing: 1.5,
+                height: 1,
+              ),
+            ),
+          ],
+        ),
         const SizedBox(height: 12),
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
@@ -358,16 +419,22 @@ class _OrganizationLoginState extends State<OrganizationLogin>
             color: Colors.white.withAlpha(40),
             borderRadius: BorderRadius.circular(100),
           ),
-          child: Text('ORGANIZATION PORTAL',
-              style: GoogleFonts.beVietnamPro(
-                fontSize: 10.5, fontWeight: FontWeight.w700,
-                color: Colors.white, letterSpacing: 2.6)),
+          child: Text(
+            'ORGANIZATION PORTAL',
+            style: GoogleFonts.beVietnamPro(
+              fontSize: 10.5,
+              fontWeight: FontWeight.w700,
+              color: Colors.white,
+              letterSpacing: 2.6,
+            ),
+          ),
         ),
         const SizedBox(height: 22),
 
         // Green accent bar — keeps the org portal visually distinct
         Container(
-          width: 40, height: 3,
+          width: 40,
+          height: 3,
           decoration: BoxDecoration(
             gradient: const LinearGradient(colors: [_orgGreen, _orgGreenLt]),
             borderRadius: BorderRadius.circular(2),
@@ -378,28 +445,41 @@ class _OrganizationLoginState extends State<OrganizationLogin>
         Text(
           'Manage your organization\'s\nevents, reports, and members\nfrom one unified dashboard.',
           style: GoogleFonts.beVietnamPro(
-            fontSize: 17, fontWeight: FontWeight.w400,
-            color: Colors.white.withAlpha(235), height: 1.7,
-            shadows: [Shadow(color: Colors.black.withAlpha(90), blurRadius: 12)],
+            fontSize: 17,
+            fontWeight: FontWeight.w400,
+            color: Colors.white.withAlpha(235),
+            height: 1.7,
+            shadows: [
+              Shadow(color: Colors.black.withAlpha(90), blurRadius: 12),
+            ],
           ),
         ),
         const SizedBox(height: 40),
-        Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Padding(
-            padding: const EdgeInsets.only(top: 6),
-            child: Container(
-              width: 6, height: 6,
-              decoration: const BoxDecoration(
-                  shape: BoxShape.circle, color: _orgGreenLt),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Container(
+                width: 6,
+                height: 6,
+                decoration: const BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: _orgGreenLt,
+                ),
+              ),
             ),
-          ),
-          const SizedBox(width: 10),
-          Text(
-            'College of Information and\nCommunications Technology',
-            style: GoogleFonts.beVietnamPro(
-              fontSize: 12, color: Colors.white.withAlpha(220), height: 1.6),
-          ),
-        ]),
+            const SizedBox(width: 10),
+            Text(
+              'College of Information and\nCommunications Technology',
+              style: GoogleFonts.beVietnamPro(
+                fontSize: 12,
+                color: Colors.white.withAlpha(220),
+                height: 1.6,
+              ),
+            ),
+          ],
+        ),
       ],
     );
   }
@@ -416,42 +496,74 @@ class _OrganizationLoginState extends State<OrganizationLogin>
             position: _slideUp,
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 420),
-              child: Column(mainAxisSize: MainAxisSize.min, children: [
-                Container(
-                  width: 92, height: 92,
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    shape: BoxShape.circle,
-                    boxShadow: [
-                      BoxShadow(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 92,
+                    height: 92,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
                           color: Colors.black.withAlpha(70),
-                          blurRadius: 20, offset: const Offset(0, 8)),
+                          blurRadius: 20,
+                          offset: const Offset(0, 8),
+                        ),
+                      ],
+                    ),
+                    padding: const EdgeInsets.all(12),
+                    child: Image.asset(
+                      'assets/images/logo.png',
+                      fit: BoxFit.contain,
+                      errorBuilder: (_, __, ___) => const Icon(
+                        Icons.business_outlined,
+                        size: 40,
+                        color: _rust,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        'UP',
+                        style: GoogleFonts.beVietnamPro(
+                          fontSize: 32,
+                          fontWeight: FontWeight.w800,
+                          color: Colors.white,
+                          letterSpacing: 1,
+                          height: 1,
+                        ),
+                      ),
+                      Text(
+                        'RISE',
+                        style: GoogleFonts.beVietnamPro(
+                          fontSize: 32,
+                          fontWeight: FontWeight.w800,
+                          color: const Color(0xFFFFC79A),
+                          letterSpacing: 1,
+                          height: 1,
+                        ),
+                      ),
                     ],
                   ),
-                  padding: const EdgeInsets.all(12),
-                  child: Image.asset('assets/images/logo.png', fit: BoxFit.contain,
-                      errorBuilder: (_, __, ___) => const Icon(
-                          Icons.business_outlined, size: 40, color: _rust)),
-                ),
-                const SizedBox(height: 16),
-                Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                  Text('UP',
-                      style: GoogleFonts.beVietnamPro(
-                        fontSize: 32, fontWeight: FontWeight.w800,
-                        color: Colors.white, letterSpacing: 1, height: 1)),
-                  Text('RISE',
-                      style: GoogleFonts.beVietnamPro(
-                        fontSize: 32, fontWeight: FontWeight.w800,
-                        color: const Color(0xFFFFC79A), letterSpacing: 1, height: 1)),
-                ]),
-                const SizedBox(height: 8),
-                Text('ORGANIZATION PORTAL',
+                  const SizedBox(height: 8),
+                  Text(
+                    'ORGANIZATION PORTAL',
                     style: GoogleFonts.beVietnamPro(
-                      fontSize: 11, fontWeight: FontWeight.w600,
-                      color: Colors.white.withAlpha(215), letterSpacing: 2.6)),
-                const SizedBox(height: 22),
-                _buildFormCard(),
-              ]),
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white.withAlpha(215),
+                      letterSpacing: 2.6,
+                    ),
+                  ),
+                  const SizedBox(height: 22),
+                  _buildFormCard(),
+                ],
+              ),
             ),
           ),
         ),
@@ -476,8 +588,10 @@ class _OrganizationLoginState extends State<OrganizationLogin>
             border: Border.all(color: Colors.white.withAlpha(90), width: 1),
             boxShadow: [
               BoxShadow(
-                  color: Colors.black.withAlpha(120),
-                  blurRadius: 50, offset: const Offset(0, 20)),
+                color: Colors.black.withAlpha(120),
+                blurRadius: 50,
+                offset: const Offset(0, 20),
+              ),
             ],
           ),
           padding: const EdgeInsets.fromLTRB(32, 34, 32, 30),
@@ -485,14 +599,24 @@ class _OrganizationLoginState extends State<OrganizationLogin>
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text('Sign in',
-                  style: GoogleFonts.beVietnamPro(
-                    fontSize: 22, fontWeight: FontWeight.w700,
-                    color: _slateDark, letterSpacing: -0.3)),
+              Text(
+                'Sign in',
+                style: GoogleFonts.beVietnamPro(
+                  fontSize: 22,
+                  fontWeight: FontWeight.w700,
+                  color: _slateDark,
+                  letterSpacing: -0.3,
+                ),
+              ),
               const SizedBox(height: 5),
-              Text('Enter your credentials to access the organization portal.',
-                  style: GoogleFonts.beVietnamPro(
-                    fontSize: 12.5, color: _slateMid, height: 1.5)),
+              Text(
+                'Enter your credentials to access the organization portal.',
+                style: GoogleFonts.beVietnamPro(
+                  fontSize: 12.5,
+                  color: _slateMid,
+                  height: 1.5,
+                ),
+              ),
               const SizedBox(height: 24),
 
               _buildField(
@@ -515,53 +639,77 @@ class _OrganizationLoginState extends State<OrganizationLogin>
                     _obscurePassword
                         ? Icons.visibility_off_outlined
                         : Icons.visibility_outlined,
-                    color: _slateSoft, size: 18),
-                  onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                    color: _slateSoft,
+                    size: 18,
+                  ),
+                  onPressed: () =>
+                      setState(() => _obscurePassword = !_obscurePassword),
                 ),
                 onSubmit: (_) => _login(),
               ),
               const SizedBox(height: 13),
 
-              Row(children: [
-                GestureDetector(
-                  onTap: () {
-                    setState(() => _rememberMe = !_rememberMe);
-                    if (!_rememberMe) _saveEmail('');
-                  },
-                  child: Row(children: [
-                    AnimatedContainer(
-                      duration: const Duration(milliseconds: 160),
-                      width: 17, height: 17,
-                      decoration: BoxDecoration(
-                        color: _rememberMe ? _rust : Colors.white,
-                        borderRadius: BorderRadius.circular(5),
-                        border: Border.all(
-                          color: _rememberMe ? _rust : const Color(0xFFC7CDD6),
-                          width: 1.5),
-                      ),
-                      child: _rememberMe
-                          ? const Icon(Icons.check, size: 11, color: Colors.white)
-                          : null,
+              Row(
+                children: [
+                  GestureDetector(
+                    onTap: () {
+                      setState(() => _rememberMe = !_rememberMe);
+                      if (!_rememberMe) _saveEmail('');
+                    },
+                    child: Row(
+                      children: [
+                        AnimatedContainer(
+                          duration: const Duration(milliseconds: 160),
+                          width: 17,
+                          height: 17,
+                          decoration: BoxDecoration(
+                            color: _rememberMe ? _rust : Colors.white,
+                            borderRadius: BorderRadius.circular(5),
+                            border: Border.all(
+                              color: _rememberMe
+                                  ? _rust
+                                  : const Color(0xFFC7CDD6),
+                              width: 1.5,
+                            ),
+                          ),
+                          child: _rememberMe
+                              ? const Icon(
+                                  Icons.check,
+                                  size: 11,
+                                  color: Colors.white,
+                                )
+                              : null,
+                        ),
+                        const SizedBox(width: 7),
+                        Text(
+                          'Remember me',
+                          style: GoogleFonts.beVietnamPro(
+                            fontSize: 12,
+                            color: _slateMid,
+                          ),
+                        ),
+                      ],
                     ),
-                    const SizedBox(width: 7),
-                    Text('Remember me',
-                        style: GoogleFonts.beVietnamPro(
-                          fontSize: 12, color: _slateMid)),
-                  ]),
-                ),
-                const Spacer(),
-                TextButton(
-                  onPressed: _isLoading ? null : _resetPassword,
-                  style: TextButton.styleFrom(
+                  ),
+                  const Spacer(),
+                  TextButton(
+                    onPressed: _isLoading ? null : _resetPassword,
+                    style: TextButton.styleFrom(
                       padding: EdgeInsets.zero,
                       minimumSize: Size.zero,
-                      tapTargetSize: MaterialTapTargetSize.shrinkWrap),
-                  child: Text('Forgot password?',
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                    child: Text(
+                      'Forgot password?',
                       style: GoogleFonts.beVietnamPro(
-                        fontSize: 12, color: _rust,
-                        fontWeight: FontWeight.w600)),
-                ),
-              ]),
+                        fontSize: 12,
+                        color: _rust,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
               const SizedBox(height: 20),
 
               // Login button
@@ -569,14 +717,19 @@ class _OrganizationLoginState extends State<OrganizationLogin>
                 opacity: _isLoading ? 0.7 : 1.0,
                 duration: const Duration(milliseconds: 200),
                 child: Container(
-                  width: double.infinity, height: 46,
+                  width: double.infinity,
+                  height: 46,
                   decoration: BoxDecoration(
-                    gradient: const LinearGradient(colors: [_accentDeep, _accent]),
+                    gradient: const LinearGradient(
+                      colors: [_accentDeep, _accent],
+                    ),
                     borderRadius: BorderRadius.circular(12),
                     boxShadow: [
                       BoxShadow(
-                          color: _accent.withAlpha(80),
-                          blurRadius: 16, offset: const Offset(0, 7)),
+                        color: _accent.withAlpha(80),
+                        blurRadius: 16,
+                        offset: const Offset(0, 7),
+                      ),
                     ],
                   ),
                   child: TextButton(
@@ -585,58 +738,104 @@ class _OrganizationLoginState extends State<OrganizationLogin>
                       foregroundColor: Colors.white,
                       disabledForegroundColor: Colors.white,
                       shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12)),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
                     ),
                     child: _isLoading
-                        ? const SizedBox(width: 20, height: 20,
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
                             child: CircularProgressIndicator(
-                                strokeWidth: 2.5, color: Colors.white))
-                        : Text('Sign In to Organization Portal',
+                              strokeWidth: 2.5,
+                              color: Colors.white,
+                            ),
+                          )
+                        : Text(
+                            'Sign In to Organization Portal',
                             style: GoogleFonts.beVietnamPro(
-                              fontSize: 13.5, fontWeight: FontWeight.w700,
-                              letterSpacing: 0.1)),
+                              fontSize: 13.5,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 0.1,
+                            ),
+                          ),
                   ),
                 ),
               ),
               const SizedBox(height: 18),
 
-              Row(children: [
-                Expanded(child: Divider(color: const Color(0xFFF1EAE3), thickness: 1)),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  child: Text('or',
+              Row(
+                children: [
+                  Expanded(
+                    child: Divider(
+                      color: const Color(0xFFF1EAE3),
+                      thickness: 1,
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    child: Text(
+                      'or',
                       style: GoogleFonts.beVietnamPro(
-                          fontSize: 11.5, color: _slateSoft))),
-                Expanded(child: Divider(color: const Color(0xFFF1EAE3), thickness: 1)),
-              ]),
+                        fontSize: 11.5,
+                        color: _slateSoft,
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    child: Divider(
+                      color: const Color(0xFFF1EAE3),
+                      thickness: 1,
+                    ),
+                  ),
+                ],
+              ),
               const SizedBox(height: 16),
 
               Center(
-                child: Column(mainAxisSize: MainAxisSize.min, children: [
-                  Text("Don't have an organization account?",
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      "Don't have an organization account?",
                       style: GoogleFonts.beVietnamPro(
-                          fontSize: 12, color: _slateSoft)),
-                  const SizedBox(height: 2),
-                  Text('Contact CICT Administrator',
+                        fontSize: 12,
+                        color: _slateSoft,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Contact CICT Administrator',
                       style: GoogleFonts.beVietnamPro(
-                        fontSize: 12, color: _slateDark,
-                        fontWeight: FontWeight.w600)),
-                  const SizedBox(height: 12),
-                  TextButton.icon(
-                    onPressed: () =>
-                        Navigator.of(context).popUntil((r) => r.isFirst),
-                    icon: const Icon(Icons.arrow_back_ios_new_rounded,
-                        size: 10.5, color: _rust),
-                    label: Text('Back to Portal Selection',
+                        fontSize: 12,
+                        color: _slateDark,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    TextButton.icon(
+                      onPressed: () =>
+                          Navigator.of(context).popUntil((r) => r.isFirst),
+                      icon: const Icon(
+                        Icons.arrow_back_ios_new_rounded,
+                        size: 10.5,
+                        color: _rust,
+                      ),
+                      label: Text(
+                        'Back to Portal Selection',
                         style: GoogleFonts.beVietnamPro(
                           color: _rust,
-                          fontWeight: FontWeight.w600, fontSize: 12)),
-                    style: TextButton.styleFrom(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 12,
+                        ),
+                      ),
+                      style: TextButton.styleFrom(
                         padding: EdgeInsets.zero,
                         minimumSize: Size.zero,
-                        tapTargetSize: MaterialTapTargetSize.shrinkWrap),
-                  ),
-                ]),
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ],
           ),
@@ -663,26 +862,32 @@ class _OrganizationLoginState extends State<OrganizationLogin>
       style: GoogleFonts.beVietnamPro(fontSize: 13.5, color: _slateDark),
       decoration: InputDecoration(
         labelText: label,
-        labelStyle: GoogleFonts.beVietnamPro(
-            color: _slateSoft, fontSize: 12.5),
+        labelStyle: GoogleFonts.beVietnamPro(color: _slateSoft, fontSize: 12.5),
         hintText: hint,
         hintStyle: GoogleFonts.beVietnamPro(
-            color: const Color(0xFFD8D2C8), fontSize: 12.5),
+          color: const Color(0xFFD8D2C8),
+          fontSize: 12.5,
+        ),
         prefixIcon: Icon(icon, color: _rust, size: 18),
         suffixIcon: suffix,
         filled: true,
         fillColor: _fieldFill,
         border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: const BorderSide(color: _fieldBorder)),
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: _fieldBorder),
+        ),
         enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: const BorderSide(color: _fieldBorder)),
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: _fieldBorder),
+        ),
         focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: const BorderSide(color: _rust, width: 1.6)),
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 15, vertical: 13),
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: _rust, width: 1.6),
+        ),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 15,
+          vertical: 13,
+        ),
       ),
     );
   }
