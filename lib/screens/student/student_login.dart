@@ -263,7 +263,7 @@ class _StudentLoginState extends State<StudentLogin> {
                                 color: Colors.black87,
                               ),
                               decoration: InputDecoration(
-                                hintText: 'student@email.com',
+                                hintText: 'student@outlook.com',
                                 hintStyle: GoogleFonts.beVietnamPro(
                                   fontSize: 14,
                                   color: Colors.grey.shade400,
