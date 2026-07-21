@@ -26,6 +26,50 @@ const kOrangeLight = Color(0xFFF5E3D9);
 const kBg = Color(0xFFF5F5F5);
 
 // ─────────────────────────────────────────────────────────────
+// Shared style helpers — keeps the Profile tab visually aligned
+// with the Settings screen (cards, shadows, section labels).
+// ─────────────────────────────────────────────────────────────
+BoxDecoration kCardDecoration({double radius = 16}) {
+  return BoxDecoration(
+    color: Colors.white,
+    borderRadius: BorderRadius.circular(radius),
+    boxShadow: [
+      BoxShadow(
+        color: Colors.grey.withOpacity(0.06),
+        blurRadius: 10,
+        offset: const Offset(0, 3),
+      ),
+    ],
+  );
+}
+
+Widget kSectionLabel(String title) {
+  return Padding(
+    padding: const EdgeInsets.fromLTRB(20, 22, 20, 10),
+    child: Text(
+      title.toUpperCase(),
+      style: TextStyle(
+        fontSize: 12,
+        fontWeight: FontWeight.w700,
+        letterSpacing: 1.2,
+        color: Colors.grey[500],
+      ),
+    ),
+  );
+}
+
+Widget kIconBadge(IconData icon, {Color color = kOrange, double size = 20}) {
+  return Container(
+    padding: const EdgeInsets.all(8),
+    decoration: BoxDecoration(
+      color: color.withOpacity(0.12),
+      borderRadius: BorderRadius.circular(8),
+    ),
+    child: Icon(icon, color: color, size: size),
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
 // ProfileModel — single source of truth
 // ─────────────────────────────────────────────────────────────
 class ProfileModel extends ChangeNotifier {
@@ -154,10 +198,10 @@ class ProfileModel extends ChangeNotifier {
         }, SetOptions(merge: true));
       }
     }
-    
+
     // 🔥 NEW: Update all registrations with the new name
     await updateAllRegistrationsWithName();
-    
+
     notifyListeners();
   }
 
@@ -222,22 +266,22 @@ class ProfileModel extends ChangeNotifier {
 
       int updatedCount = 0;
       final batch = FirebaseFirestore.instance.batch();
-      
+
       for (var doc in allRegistrations.docs) {
         final data = doc.data();
         final userId = data['userId'];
-        
+
         // Get the student's latest info
         if (userId != null && userId.isNotEmpty) {
           final studentDoc = await FirebaseFirestore.instance
               .collection('students')
               .doc(userId)
               .get();
-          
+
           if (studentDoc.exists) {
             final studentData = studentDoc.data()!;
             final fullName = '${studentData['firstName'] ?? ''} ${studentData['lastName'] ?? ''}'.trim();
-            
+
             if (fullName.isNotEmpty) {
               batch.update(doc.reference, {
                 'studentName': fullName,
@@ -251,7 +295,7 @@ class ProfileModel extends ChangeNotifier {
           }
         }
       }
-      
+
       if (updatedCount > 0) {
         await batch.commit();
         print('✅ Fixed $updatedCount registrations');
@@ -380,7 +424,109 @@ ImageProvider? _profileImageProvider(String photoUrl) {
 }
 
 // ─────────────────────────────────────────────────────────────
-// Student Profile Screen
+// Small reusable pieces for the redesigned Profile header
+// ─────────────────────────────────────────────────────────────
+class _HeaderChip extends StatelessWidget {
+  final IconData icon;
+  final String text;
+  const _HeaderChip({required this.icon, required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.18),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 13, color: Colors.white),
+          const SizedBox(width: 5),
+          Flexible(
+            child: Text(
+              text,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontSize: 12,
+                color: Colors.white,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _QuickActionCard extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final Color color;
+  final VoidCallback onTap;
+
+  const _QuickActionCard({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+    this.color = kOrange,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: Material(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: onTap,
+          child: Container(
+            decoration: kCardDecoration(),
+            padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: color.withOpacity(0.12),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Icon(icon, color: color, size: 22),
+                    ),
+                    Icon(Icons.arrow_forward_ios_rounded,
+                        size: 12, color: Colors.grey[300]),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                Text(title,
+                    style: const TextStyle(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 14,
+                        color: Colors.black87)),
+                const SizedBox(height: 2),
+                Text(subtitle,
+                    style: TextStyle(fontSize: 11.5, color: Colors.grey[500])),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+// Student Profile Screen — redesigned to match Settings' visual
+// language: gradient hero, shadowed cards, uppercase section labels.
 // ─────────────────────────────────────────────────────────────
 class StudentProfileScreen extends StatefulWidget {
   const StudentProfileScreen({super.key});
@@ -423,14 +569,23 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
             backgroundColor: Colors.white,
             elevation: 0,
             centerTitle: true,
+            // Invisible spacer the same width as the settings icon button
+            // on the right, so `centerTitle` truly centers "Profile"
+            // instead of drifting toward the side with no actions.
+            leadingWidth: 48,
+            leading: const SizedBox.shrink(),
             title: const Text('Profile',
                 style: TextStyle(
-                    color: Colors.black,
-                    fontWeight: FontWeight.w600,
+                    color: Colors.black87,
+                    fontWeight: FontWeight.w700,
                     fontSize: 18)),
+            bottom: PreferredSize(
+              preferredSize: const Size.fromHeight(1),
+              child: Container(height: 1, color: Colors.grey.shade100),
+            ),
             actions: [
               IconButton(
-                icon: const Icon(Icons.settings, color: kOrange),
+                icon: const Icon(Icons.settings_outlined, color: kOrange),
                 onPressed: () => Navigator.push(
                   context,
                   MaterialPageRoute(
@@ -440,35 +595,60 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
             ],
           ),
           body: SingleChildScrollView(
+            padding: const EdgeInsets.only(bottom: 28),
             child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // ── Header ──
+                // ── Gradient hero header ──
                 Container(
-                  color: Colors.white,
-                  padding: const EdgeInsets.symmetric(
-                      vertical: 24, horizontal: 16),
+                  width: double.infinity,
+                  margin: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                  padding: const EdgeInsets.fromLTRB(20, 28, 20, 26),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(22),
+                    gradient: const LinearGradient(
+                      colors: [kOrange, AppColors.primaryLight],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: kOrange.withOpacity(0.25),
+                        blurRadius: 16,
+                        offset: const Offset(0, 8),
+                      ),
+                    ],
+                  ),
                   child: Column(
                     children: [
                       Stack(
                         children: [
                           Container(
-                            width: 90,
-                            height: 90,
+                            width: 92,
+                            height: 92,
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
-                              color: const Color(0xFFF5C8A0),
+                              color: Colors.white,
                               border: Border.all(color: Colors.white, width: 3),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.15),
+                                  blurRadius: 12,
+                                  offset: const Offset(0, 4),
+                                ),
+                              ],
                             ),
                             child: ClipOval(
                               child: _profile.photoUrl.isNotEmpty
                                   ? _ProfileImage(
                                       photoUrl: _profile.photoUrl,
-                                      errorBuilder: (_, __, ___) =>
-                                          const Icon(Icons.person,
-                                              size: 50, color: Colors.white),
+                                      errorBuilder: (_, __, ___) => const Icon(
+                                          Icons.person,
+                                          size: 50,
+                                          color: kOrange),
                                     )
                                   : const Icon(Icons.person,
-                                      size: 50, color: Colors.white),
+                                      size: 50, color: kOrange),
                             ),
                           ),
                           Positioned(
@@ -478,156 +658,144 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
                               onTap: () =>
                                   _pickAndUploadPhoto(context, _profile),
                               child: Container(
-                                width: 26,
-                                height: 26,
-                                decoration: const BoxDecoration(
-                                    color: kOrange, shape: BoxShape.circle),
+                                width: 28,
+                                height: 28,
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  shape: BoxShape.circle,
+                                  border: Border.all(color: kOrange, width: 2),
+                                ),
                                 child: const Icon(Icons.edit,
-                                    color: Colors.white, size: 14),
+                                    color: kOrange, size: 14),
                               ),
                             ),
                           ),
                         ],
                       ),
-                      const SizedBox(height: 12),
-                      Text(_profile.fullName,
+                      const SizedBox(height: 14),
+                      Text(_profile.fullName.isNotEmpty
+                              ? _profile.fullName
+                              : 'Student Name',
+                          textAlign: TextAlign.center,
                           style: const TextStyle(
-                              fontSize: 20, fontWeight: FontWeight.bold)),
-                      const SizedBox(height: 4),
-                      Text(_profile.studentId,
-                          style: const TextStyle(
-                              fontSize: 13, color: Colors.grey)),
-                      const SizedBox(height: 2),
-                      Text(_profile.email,
-                          style: const TextStyle(
-                              fontSize: 13, color: kOrange)),
-                      const SizedBox(height: 16),
-                      Row(
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white)),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        alignment: WrapAlignment.center,
+                        spacing: 8,
+                        runSpacing: 6,
                         children: [
-                          Expanded(
-                            child: ElevatedButton(
-                              onPressed: () async {
-                                final result = await Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) =>
-                                        EditProfileScreen(profile: _profile),
-                                  ),
-                                );
-                                if (result != null && result is String) {
-                                  _profile._loadUserData();
-                                }
-                              },
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: kOrange,
-                                foregroundColor: Colors.white,
-                                shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(10)),
-                                padding:
-                                    const EdgeInsets.symmetric(vertical: 16),
-                              ),
-                              child: const Text('Edit Profile',
-                                  style: TextStyle(
-                                      fontWeight: FontWeight.w600,
-                                      fontSize: 15)),
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: ElevatedButton(
-                              onPressed: () => Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                    builder: (_) => PersonalIdentityScreen(
-                                        profile: _profile)),
-                              ),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: kOrange,
-                                foregroundColor: Colors.white,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
-                                padding: const EdgeInsets.symmetric(vertical: 16),
-                                elevation: 2,
-                              ),
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: const [
-                                  Icon(Icons.credit_card, size: 20),
-                                  SizedBox(width: 8),
-                                  Text('Digital Student ID',
-                                      style: TextStyle(
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 14)),
-                                ],
-                              ),
-                            ),
-                          ),
+                          _HeaderChip(
+                              icon: Icons.badge_outlined,
+                              text: _profile.studentId.isNotEmpty
+                                  ? _profile.studentId
+                                  : 'No student ID'),
+                          _HeaderChip(
+                              icon: Icons.mail_outline,
+                              text: _profile.email.isNotEmpty
+                                  ? _profile.email
+                                  : 'No email'),
                         ],
                       ),
                     ],
                   ),
                 ),
 
-                const SizedBox(height: 12),
+                // ── Quick actions: Edit Profile / Digital ID ──
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
+                  child: Row(
+                    children: [
+                      _QuickActionCard(
+                        icon: Icons.edit_outlined,
+                        title: 'Edit Profile',
+                        subtitle: 'Update your info',
+                        color: kOrange,
+                        onTap: () async {
+                          final result = await Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) =>
+                                  EditProfileScreen(profile: _profile),
+                            ),
+                          );
+                          if (result != null && result is String) {
+                            _profile._loadUserData();
+                          }
+                        },
+                      ),
+                      const SizedBox(width: 12),
+                      _QuickActionCard(
+                        icon: Icons.credit_card,
+                        title: 'Digital ID',
+                        subtitle: 'View & download',
+                        color: const Color(0xFF2196F3),
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                              builder: (_) =>
+                                  PersonalIdentityScreen(profile: _profile)),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
 
                 // ── Organization ──
-                if (_profile.orgName.isNotEmpty)
+                if (_profile.orgName.isNotEmpty) ...[
+                  kSectionLabel('Organization'),
                   Container(
-                    color: Colors.white,
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                    margin: const EdgeInsets.symmetric(horizontal: 16),
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [kOrange, AppColors.primaryLight],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: [
+                        BoxShadow(
+                          color: kOrange.withOpacity(0.18),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: Row(
                       children: [
-                        const Text('Organization',
-                            style: TextStyle(
-                                fontWeight: FontWeight.bold, fontSize: 15)),
-                        const SizedBox(height: 12),
                         Container(
-                          padding: const EdgeInsets.all(14),
+                          padding: const EdgeInsets.all(10),
                           decoration: BoxDecoration(
-                            gradient: const LinearGradient(
-                              colors: [kOrange, AppColors.primaryLight],
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                            ),
-                            borderRadius: BorderRadius.circular(14),
+                            color: Colors.white.withOpacity(0.25),
+                            shape: BoxShape.circle,
                           ),
-                          child: Row(
+                          child: const Icon(Icons.groups,
+                              color: Colors.white, size: 22),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Container(
-                                padding: const EdgeInsets.all(10),
-                                decoration: BoxDecoration(
-                                  color: Colors.white.withOpacity(0.25),
-                                  shape: BoxShape.circle,
+                              const Text(
+                                'ASSIGNED ORGANIZATION',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w700,
+                                  color: Colors.white70,
+                                  letterSpacing: 0.8,
                                 ),
-                                child: const Icon(Icons.groups,
-                                    color: Colors.white, size: 22),
                               ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    const Text(
-                                      'ASSIGNED ORGANIZATION',
-                                      style: TextStyle(
-                                        fontSize: 10,
-                                        fontWeight: FontWeight.w700,
-                                        color: Colors.white70,
-                                        letterSpacing: 0.8,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 2),
-                                    Text(
-                                      _profile.orgName,
-                                      style: const TextStyle(
-                                        fontSize: 15,
-                                        fontWeight: FontWeight.w800,
-                                        color: Colors.white,
-                                      ),
-                                    ),
-                                  ],
+                              const SizedBox(height: 2),
+                              Text(
+                                _profile.orgName,
+                                style: const TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w800,
+                                  color: Colors.white,
                                 ),
                               ),
                             ],
@@ -636,22 +804,25 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
                       ],
                     ),
                   ),
-
-                if (_profile.orgName.isNotEmpty) const SizedBox(height: 12),
+                ],
 
                 // ── Contact Information ──
+                kSectionLabel('Contact Information'),
                 Container(
-                  color: Colors.white,
+                  margin: const EdgeInsets.symmetric(horizontal: 16),
                   padding: const EdgeInsets.all(16),
+                  decoration: kCardDecoration(),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          const Text('Contact Information',
+                          const Text('Your details',
                               style: TextStyle(
-                                  fontWeight: FontWeight.bold, fontSize: 15)),
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 14,
+                                  color: Colors.black87)),
                           GestureDetector(
                             onTap: () => Navigator.push(
                               context,
@@ -660,9 +831,15 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
                                     EditProfileScreen(profile: _profile),
                               ),
                             ),
-                            child: const Text('Edit',
-                                style:
-                                    TextStyle(color: kOrange, fontSize: 14)),
+                            child: Container(
+                              padding: const EdgeInsets.all(6),
+                              decoration: BoxDecoration(
+                                color: kOrange.withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: const Icon(Icons.edit_outlined,
+                                  size: 16, color: kOrange),
+                            ),
                           ),
                         ],
                       ),
@@ -671,6 +848,8 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
                           icon: Icons.phone_android_outlined,
                           label: 'MOBILE',
                           value: _profile.mobile),
+                      const SizedBox(height: 8),
+                      Divider(height: 1, color: Colors.grey.shade100),
                       const SizedBox(height: 14),
                       _ContactRow(
                           icon: Icons.location_on_outlined,
@@ -680,21 +859,23 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
                   ),
                 ),
 
-                const SizedBox(height: 12),
-
                 // ── Events Registered ──
+                kSectionLabel('Events Registered'),
                 Container(
-                  color: Colors.white,
+                  margin: const EdgeInsets.symmetric(horizontal: 16),
                   padding: const EdgeInsets.all(16),
+                  decoration: kCardDecoration(),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          const Text('Events Registered',
+                          const Text('Recent registrations',
                               style: TextStyle(
-                                  fontWeight: FontWeight.bold, fontSize: 15)),
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 14,
+                                  color: Colors.black87)),
                           GestureDetector(
                             onTap: () {
                               Navigator.push(
@@ -706,12 +887,14 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
                               );
                             },
                             child: const Text('See All',
-                                style:
-                                    TextStyle(color: kOrange, fontSize: 14)),
+                                style: TextStyle(
+                                    color: kOrange,
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600)),
                           ),
                         ],
                       ),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 8),
                       StreamBuilder<QuerySnapshot>(
                         stream: FirebaseFirestore.instance
                             .collection('registrations')
@@ -725,23 +908,14 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
                             return const Center(
                               child: Padding(
                                 padding: EdgeInsets.all(16),
-                                child: CircularProgressIndicator(),
+                                child: CircularProgressIndicator(color: kOrange),
                               ),
                             );
                           }
 
                           if (!regSnapshot.hasData ||
                               regSnapshot.data!.docs.isEmpty) {
-                            return const Padding(
-                              padding: EdgeInsets.symmetric(vertical: 20),
-                              child: Center(
-                                child: Text(
-                                  'No registered events yet',
-                                  style: TextStyle(
-                                      color: Colors.grey, fontSize: 13),
-                                ),
-                              ),
-                            );
+                            return _EmptyEventsState();
                           }
 
                           final registrations = regSnapshot.data!.docs;
@@ -750,16 +924,7 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
                               .toList();
 
                           if (eventIds.isEmpty) {
-                            return const Padding(
-                              padding: EdgeInsets.symmetric(vertical: 20),
-                              child: Center(
-                                child: Text(
-                                  'No registered events yet',
-                                  style: TextStyle(
-                                      color: Colors.grey, fontSize: 13),
-                                ),
-                              ),
-                            );
+                            return _EmptyEventsState();
                           }
 
                           return FutureBuilder<List<QueryDocumentSnapshot>>(
@@ -770,7 +935,8 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
                                 return const Center(
                                   child: Padding(
                                     padding: EdgeInsets.all(16),
-                                    child: CircularProgressIndicator(),
+                                    child: CircularProgressIndicator(
+                                        color: kOrange),
                                   ),
                                 );
                               }
@@ -778,16 +944,7 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
                               final events = eventSnapshot.data ?? [];
 
                               if (events.isEmpty) {
-                                return const Padding(
-                                  padding: EdgeInsets.symmetric(vertical: 20),
-                                  child: Center(
-                                    child: Text(
-                                      'No registered events yet',
-                                      style: TextStyle(
-                                          color: Colors.grey, fontSize: 13),
-                                    ),
-                                  ),
-                                );
+                                return _EmptyEventsState();
                               }
 
                               final displayEvents = events.take(3).toList();
@@ -838,7 +995,9 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
                                             eventData['bannerUrl'] ?? '',
                                       ),
                                       if (index < displayEvents.length - 1)
-                                        const Divider(height: 1),
+                                        Divider(
+                                            height: 1,
+                                            color: Colors.grey.shade100),
                                     ],
                                   );
                                 }).toList(),
@@ -851,16 +1010,42 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
                   ),
                 ),
 
-                const SizedBox(height: 12),
-
                 // ── Log Out Button ──
                 Padding(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 16, vertical: 8),
+                  padding: const EdgeInsets.fromLTRB(16, 22, 16, 0),
                   child: SizedBox(
                     width: double.infinity,
-                    child: ElevatedButton(
+                    child: ElevatedButton.icon(
                       onPressed: () async {
+                        final confirm = await showDialog<bool>(
+                          context: context,
+                          builder: (context) => AlertDialog(
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            title: const Text('Log Out'),
+                            content: const Text(
+                              'Are you sure you want to log out?',
+                              style: TextStyle(fontSize: 14),
+                            ),
+                            actions: [
+                              TextButton(
+                                onPressed: () => Navigator.pop(context, false),
+                                child: Text('Cancel',
+                                    style: TextStyle(color: Colors.grey[600])),
+                              ),
+                              TextButton(
+                                onPressed: () => Navigator.pop(context, true),
+                                style: TextButton.styleFrom(
+                                    foregroundColor: Colors.red),
+                                child: const Text('Log Out'),
+                              ),
+                            ],
+                          ),
+                        );
+
+                        if (confirm != true) return;
+
                         await FirebaseAuth.instance.signOut();
                         if (context.mounted) {
                           Navigator.of(context).pushAndRemoveUntil(
@@ -871,38 +1056,53 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
                         }
                       },
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.red,
-                        foregroundColor: Colors.white,
+                        backgroundColor: Colors.white,
+                        foregroundColor: Colors.red,
+                        elevation: 0,
                         padding: const EdgeInsets.symmetric(vertical: 16),
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
+                          borderRadius: BorderRadius.circular(14),
+                          side: const BorderSide(color: Color(0xFFFFD3D3)),
                         ),
-                        elevation: 2,
                       ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: const [
-                          Icon(Icons.logout, color: Colors.white, size: 20),
-                          SizedBox(width: 10),
-                          Text(
-                            'Log Out',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                              color: Colors.white,
-                            ),
-                          ),
-                        ],
+                      icon: const Icon(Icons.logout, color: Colors.red, size: 20),
+                      label: const Text(
+                        'Log Out',
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.red,
+                        ),
                       ),
                     ),
                   ),
                 ),
-                const SizedBox(height: 16),
               ],
             ),
           ),
         );
       },
+    );
+  }
+}
+
+class _EmptyEventsState extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 24),
+      child: Center(
+        child: Column(
+          children: [
+            Icon(Icons.event_busy_outlined, size: 34, color: Colors.grey[300]),
+            const SizedBox(height: 8),
+            const Text(
+              'No registered events yet',
+              style: TextStyle(color: Colors.grey, fontSize: 13),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -1735,22 +1935,24 @@ class _ContactRow extends StatelessWidget {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Icon(icon, size: 20, color: Colors.grey),
+        kIconBadge(icon, size: 18),
         const SizedBox(width: 12),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(label,
-                  style: const TextStyle(
+                  style: TextStyle(
                       fontSize: 11,
-                      color: Colors.grey,
+                      color: Colors.grey[500],
                       letterSpacing: 0.5,
-                      fontWeight: FontWeight.w500)),
-              const SizedBox(height: 2),
-              Text(value,
+                      fontWeight: FontWeight.w600)),
+              const SizedBox(height: 3),
+              Text(value.isNotEmpty ? value : '—',
                   style: const TextStyle(
-                      fontSize: 14, color: Colors.black87)),
+                      fontSize: 14,
+                      color: Colors.black87,
+                      fontWeight: FontWeight.w500)),
             ],
           ),
         ),
@@ -1780,7 +1982,7 @@ class _EventCard extends StatelessWidget {
       contentPadding:
           const EdgeInsets.symmetric(vertical: 8, horizontal: 0),
       leading: ClipRRect(
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(10),
         child: Image.network(
           imageUrl,
           width: 56,
@@ -1789,14 +1991,17 @@ class _EventCard extends StatelessWidget {
           errorBuilder: (_, __, ___) => Container(
             width: 56,
             height: 56,
-            color: Colors.grey[300],
+            decoration: BoxDecoration(
+              color: Colors.grey[200],
+              borderRadius: BorderRadius.circular(10),
+            ),
             child: const Icon(Icons.event, color: Colors.grey),
           ),
         ),
       ),
       title: Text(title,
           style: const TextStyle(
-              fontWeight: FontWeight.w600, fontSize: 14)),
+              fontWeight: FontWeight.w700, fontSize: 14, color: Colors.black87)),
       subtitle: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1902,9 +2107,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         yearLevel: _yearLevelCtrl.text.trim(),
         department: _departmentCtrl.text.trim(),
       );
-      
+
       // The update() method now automatically updates all registrations
-      
+
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -2215,10 +2420,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
   // 🔥 NEW: Manual fix for all registrations
   Future<void> _fixAllRegistrations() async {
     setState(() => _isFixingRegistrations = true);
-    
+
     try {
       await widget.profile.fixAllRegistrationsManually();
-      
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(

@@ -1726,11 +1726,22 @@ class _CalendarGrid extends StatelessWidget {
               '${currentDate.year}-${currentDate.month.toString().padLeft(2, '0')}-${currentDate.day.toString().padLeft(2, '0')}';
           final hasEvent = eventDates.contains(dateKey);
 
+          // ── Dot indicator color logic ──
+          // Green  = event is happening today
+          // Red    = event date has already passed (finished)
+          // Yellow = event is upcoming (in the future)
           Color indicatorColor;
+          final todayMidnight = DateTime(
+            DateTime.now().year,
+            DateTime.now().month,
+            DateTime.now().day,
+          );
           if (hasEvent && isToday) {
             indicatorColor = Colors.green;
+          } else if (hasEvent && currentDate.isBefore(todayMidnight)) {
+            indicatorColor = Colors.red;
           } else if (hasEvent) {
-            indicatorColor = AppColors.primaryDark;
+            indicatorColor = Colors.amber;
           } else {
             indicatorColor = Colors.transparent;
           }
