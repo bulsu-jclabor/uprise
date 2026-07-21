@@ -9,7 +9,164 @@ import 'package:qr_flutter/qr_flutter.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/certificate_preview.dart';
 import '../../widgets/student/app_colors.dart';
+import 'dart:math' as math;  // ← For math.max
+import 'package:google_fonts/google_fonts.dart';  // ← For GoogleFonts
 
+// ─────────────────────────────────────────────────────────────────────────────
+// COPY THESE FROM OrgCertificatesScreen
+// ─────────────────────────────────────────────────────────────────────────────
+
+class SignatoryData {
+  final String id;
+  final String placeholderKey;
+  final String fullName;
+  final String title;
+  final String? signatureBase64;
+
+  const SignatoryData({
+    required this.id,
+    required this.placeholderKey,
+    required this.fullName,
+    required this.title,
+    this.signatureBase64,
+  });
+
+  factory SignatoryData.fromDoc(DocumentSnapshot doc) {
+    final d = (doc.data() as Map<String, dynamic>?) ?? {};
+    return SignatoryData(
+      id: doc.id,
+      placeholderKey: (d['placeholderKey'] ?? '').toString(),
+      fullName: (d['fullName'] ?? '').toString(),
+      title: (d['title'] ?? '').toString(),
+      signatureBase64: d['signatureBase64'] as String?,
+    );
+  }
+}
+
+class _CertificateComposite extends StatelessWidget {
+  final ImageProvider background;
+  final String recipientName;
+  final CertNamePlacement namePlacement;
+  final Map<String, CertNamePlacement> signatoryPlacements;
+  final Map<String, SignatoryData> signatories;
+
+  const _CertificateComposite({
+    required this.background,
+    required this.recipientName,
+    required this.namePlacement,
+    this.signatoryPlacements = const {},
+    this.signatories = const {},
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final boxSize = constraints.biggest;
+        final fittedFontSize = _autoFitFontSize(
+          text: recipientName,
+          baseFontSize: namePlacement.fontSize,
+          maxWidthPx: boxSize.width * 0.65,
+        );
+        final effectivePlacement = namePlacement.copyWith(
+          fontSize: fittedFontSize,
+        );
+
+        return Stack(
+          children: [
+            Positioned.fill(
+              child: CertificateImageWithName(
+                recipientName: recipientName,
+                placement: effectivePlacement,
+                background: Image(image: background, fit: BoxFit.cover),
+              ),
+            ),
+            for (final entry in signatoryPlacements.entries)
+              if (signatories.containsKey(entry.key))
+                _buildSignatoryOverlay(
+                  boxSize: boxSize,
+                  placement: entry.value,
+                  signatory: signatories[entry.key]!,
+                ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildSignatoryOverlay({
+    required Size boxSize,
+    required CertNamePlacement placement,
+    required SignatoryData signatory,
+  }) {
+    const overlayWidth = 130.0;
+    final left = (placement.xPct * boxSize.width - overlayWidth / 2)
+        .clamp(0.0, math.max(0.0, boxSize.width - overlayWidth))
+        .toDouble();
+    final top = (placement.yPct * boxSize.height - 30)
+        .clamp(0.0, math.max(0.0, boxSize.height - 60))
+        .toDouble();
+    final textColor = placement.light ? Colors.white : const Color(0xFF1A202C);
+
+    return Positioned(
+      left: left,
+      top: top,
+      width: overlayWidth,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (signatory.signatureBase64 != null && 
+              signatory.signatureBase64!.isNotEmpty)
+            SizedBox(
+              height: 40,
+              child: Image.memory(
+                base64Decode(signatory.signatureBase64!),
+                fit: BoxFit.contain,
+              ),
+            ),
+          Text(
+            signatory.fullName,
+            textAlign: TextAlign.center,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: GoogleFonts.beVietnamPro(
+              fontSize: (placement.fontSize * 0.7).clamp(9, 14),
+              fontWeight: FontWeight.w700,
+              color: textColor,
+            ),
+          ),
+          if (signatory.title.isNotEmpty)
+            Text(
+              signatory.title,
+              textAlign: TextAlign.center,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: GoogleFonts.beVietnamPro(
+                fontSize: (placement.fontSize * 0.55).clamp(8, 12),
+                color: textColor.withOpacity(0.85),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+double _autoFitFontSize({
+  required String text,
+  required double baseFontSize,
+  required double maxWidthPx,
+  double minFontSize = 11,
+  double avgCharWidthFactor = 0.56,
+}) {
+  if (text.isEmpty || maxWidthPx <= 0) return baseFontSize;
+  double fs = baseFontSize;
+  double estWidth() => text.length * fs * avgCharWidthFactor;
+  while (fs > minFontSize && estWidth() > maxWidthPx) {
+    fs -= 1;
+  }
+  return fs;
+}
 // ─────────────────────────────────────────────────────────────
 //  STANDALONE SCREEN
 // ─────────────────────────────────────────────────────────────
@@ -142,26 +299,27 @@ class _CertificatesContentState extends State<CertificatesContent> {
   }
 
   Map<String, dynamic> _docToMap(QueryDocumentSnapshot doc) {
-    final data = doc.data() as Map<String, dynamic>;
-    return {
-      'id'          : doc.id,
-      'title'       : data['eventName'] ?? 'Untitled Certificate',
-      'date'        : _formatDate(data['issuedAt']),
-      'category'    : data['type'] ?? data['templateType'] ?? 'General',
-      'organization': data['organization'] ?? '',
-      'recipientName': data['recipientName'] ?? '',
-      'signatories' : data['signatories'] is List ? data['signatories'] : const [],
-      'status'      : data['status'] ?? 'draft',
-      'recipients'  : data['recipients'] ?? 0,
-      'templateType': data['templateType'] ?? '',
-      'imageUrl'    : data['templateFileUrl'] ?? data['imageUrl'] ?? '',
-      'namePlacement': data['namePlacement'] is Map ? data['namePlacement'] : null,
-      'isUploaded'  : data['isUploaded'] ?? false,
-      'verificationCode' : data['verificationCode'] ?? '',
-      'autoGenerated'    : data['autoGenerated'] ?? false,
-      'eventId'     : data['eventId'] ?? '',
-    };
-  }
+  final data = doc.data() as Map<String, dynamic>;
+  return {
+    'id'          : doc.id,
+    'title'       : data['eventName'] ?? 'Untitled Certificate',
+    'date'        : _formatDate(data['issuedAt']),
+    'category'    : data['type'] ?? data['templateType'] ?? 'General',
+    'organization': data['organization'] ?? '',
+    'recipientName': data['recipientName'] ?? '',
+    'signatories' : data['signatories'] is List ? data['signatories'] : const [],
+    'status'      : data['status'] ?? 'draft',
+    'recipients'  : data['recipients'] ?? 0,
+    'templateType': data['templateType'] ?? '',
+    'imageUrl'    : data['templateFileUrl'] ?? data['imageUrl'] ?? '',
+    'namePlacement': data['namePlacement'] is Map ? data['namePlacement'] : null,
+    'signatoryPlacements': data['signatoryPlacements'] is Map ? data['signatoryPlacements'] : null, // ← ADD THIS
+    'isUploaded'  : data['isUploaded'] ?? false,
+    'verificationCode' : data['verificationCode'] ?? '',
+    'autoGenerated'    : data['autoGenerated'] ?? false,
+    'eventId'     : data['eventId'] ?? '',
+  };
+}
 
   String _formatDate(dynamic timestamp) {
     if (timestamp == null) return 'Just now';
@@ -579,115 +737,148 @@ class _CertificatesContentState extends State<CertificatesContent> {
     );
   }
 
-  // ── Certificate Card ──────────────────────────────────────────────
-  Widget _buildCertificateCard(Map<String, dynamic> cert) {
-    final isDraft    = cert['status'] == 'draft';
-    final isUploaded = cert['isUploaded'] == true;
-    final imageUrl   = cert['imageUrl'] as String;
-    final canRenderLive = !isUploaded && (cert['organization'] as String).isNotEmpty;
+ Widget _buildCertificateCard(Map<String, dynamic> cert) {
+  final isDraft    = cert['status'] == 'draft';
+  final isUploaded = cert['isUploaded'] == true;
+  final imageUrl   = cert['imageUrl'] as String;
+  final canRenderLive = !isUploaded && (cert['organization'] as String).isNotEmpty;
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-              color: Colors.black.withOpacity(0.07),
-              blurRadius: 12,
-              offset: const Offset(0, 4)),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          ClipRRect(
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-            child: imageUrl.isNotEmpty
-                ? (isUploaded
-                    ? _buildImage(imageUrl)
-                    : CertificateImageWithName(
-                        background: _buildImage(imageUrl),
-                        recipientName: cert['recipientName'] as String,
-                        placement: CertNamePlacement.fromMap(cert['namePlacement'] as Map<String, dynamic>?),
-                      ))
-                : canRenderLive
-                    ? _buildLivePreview(cert)
-                    : _placeholderBanner(isDraft, isUploaded, cert),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(14, 12, 12, 12),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(cert['title'],
-                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Colors.black87)),
-                      const SizedBox(height: 4),
-                      if (cert['organization'].toString().isNotEmpty)
-                        Text(
-                          cert['organization'],
+  return Container(
+    margin: const EdgeInsets.only(bottom: 20),
+    decoration: BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(16),
+      boxShadow: [
+        BoxShadow(
+          color: Colors.black.withOpacity(0.07),
+          blurRadius: 12,
+          offset: const Offset(0, 4),
+        ),
+      ],
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        ClipRRect(
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+          child: imageUrl.isNotEmpty
+              ? (isUploaded
+                  ? _buildImage(imageUrl)
+                  : FutureBuilder<QuerySnapshot>(
+                      future: FirebaseFirestore.instance.collection('signatories').get(),
+                      builder: (context, snap) {
+                        // Build signatories map
+                        final signatories = <String, SignatoryData>{};
+                        for (final doc in (snap.data?.docs ?? [])) {
+                          final data = doc.data() as Map<String, dynamic>? ?? {};
+                          final id = doc.id;
+                          signatories[id] = SignatoryData(
+                            id: id,
+                            placeholderKey: (data['placeholderKey'] ?? '').toString(),
+                            fullName: (data['fullName'] ?? '').toString(),
+                            title: (data['title'] ?? '').toString(),
+                            signatureBase64: data['signatureBase64'] as String?,
+                          );
+                        }
+                        
+                        // Get signatory placements from certificate
+                        final sigPlacements = cert['signatoryPlacements'] as Map<String, dynamic>? ?? {};
+                        final placements = <String, CertNamePlacement>{};
+                        for (final entry in sigPlacements.entries) {
+                          placements[entry.key] = CertNamePlacement.fromMap(
+                            Map<String, dynamic>.from(entry.value as Map),
+                          );
+                        }
+                        
+                        // Also need the namePlacement from cert
+                        final namePlacement = cert['namePlacement'] as Map<String, dynamic>?;
+                        
+                        return _CertificateComposite(
+                          recipientName: cert['recipientName'] as String? ?? 'Recipient',
+                          namePlacement: CertNamePlacement.fromMap(namePlacement),
+                          signatoryPlacements: placements,
+                          signatories: signatories,
+                          background: NetworkImage(imageUrl),
+                        );
+                      },
+                    ))
+              : canRenderLive
+                  ? _buildLivePreview(cert)
+                  : _placeholderBanner(isDraft, isUploaded, cert),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(14, 12, 12, 12),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(cert['title'],
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Colors.black87)),
+                    const SizedBox(height: 4),
+                    if (cert['organization'].toString().isNotEmpty)
+                      Text(
+                        cert['organization'],
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey.shade600,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    const SizedBox(height: 4),
+                    Text(
+                      cert['date'],
+                      style: TextStyle(
+                        color: Colors.grey.shade500,
+                        fontSize: 12,
+                      ),
+                    ),
+                    if (isUploaded) ...[
+                      const SizedBox(height: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: Colors.blue.shade50,
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Text(
+                          'Uploaded by you',
                           style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.grey.shade600,
+                            color: Colors.blue.shade600,
+                            fontSize: 11,
                             fontWeight: FontWeight.w500,
                           ),
                         ),
-                      const SizedBox(height: 4),
-                      Text(
-                        cert['date'],
-                        style: TextStyle(
-                          color: Colors.grey.shade500,
-                          fontSize: 12,
-                        ),
                       ),
-                      if (isUploaded) ...[
-                        const SizedBox(height: 6),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                          decoration: BoxDecoration(
-                            color: Colors.blue.shade50,
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: Text(
-                            'Uploaded by you',
-                            style: TextStyle(
-                              color: Colors.blue.shade600,
-                              fontSize: 11,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ),
-                      ],
                     ],
+                  ],
+                ),
+              ),
+              // Download button
+              GestureDetector(
+                onTap: () => _showMessage('✅ ${cert['title']} downloaded!'),
+                child: Container(
+                  width: 40, height: 40,
+                  decoration: BoxDecoration(
+                    color: AppColors.primaryDark,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(
+                    Icons.download_rounded,
+                    color: Colors.white,
+                    size: 22,
                   ),
                 ),
-                // Download button
-                GestureDetector(
-                  onTap: () => _showMessage('✅ ${cert['title']} downloaded!'),
-                  child: Container(
-                    width: 40, height: 40,
-                    decoration: BoxDecoration(
-                      color: AppColors.primaryDark,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: const Icon(
-                      Icons.download_rounded,
-                      color: Colors.white,
-                      size: 22,
-                    ),
-                  ),
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
-        ],
-      ),
-    );
-  }
+        ),
+      ],
+    ),
+  );
+}
 
   // ── Live preview for non‑uploaded certificates ──────────────────
   Widget _buildLivePreview(Map<String, dynamic> cert) {
