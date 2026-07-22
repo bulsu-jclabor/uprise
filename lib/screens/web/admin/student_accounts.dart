@@ -19,7 +19,6 @@ import 'export_pdf.dart';
 import 'student_accounts_import_parser.dart';
 import '../../../theme/app_theme.dart';
 import '../../../services/activity_logger.dart' as activity_log;
-import '../../../services/ai_service.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Design tokens (mirrors org_management.dart)
@@ -2461,27 +2460,7 @@ class StudentAccountsState extends State<StudentAccounts> {
       };
     }).toList();
 
-    final prompt = AiService.buildStudentImportValidationPrompt(
-      sampleRows: sample,
-      expectedFields: [
-        'Student ID',
-        'Full Name',
-        'Course',
-        'College',
-        'Program',
-        'School Year',
-        'Semester',
-        'Section',
-        'Email',
-      ],
-    );
-
-    try {
-      final aiResult = await AiService.ask(prompt);
-      return 'AI validation results:\n$aiResult';
-    } catch (_) {
-      return _localImportValidationSummary(students);
-    }
+    return _localImportValidationSummary(students);
   }
 
   String _localImportValidationSummary(List<Map<String, String>> students) {

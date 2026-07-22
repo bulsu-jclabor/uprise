@@ -18,7 +18,6 @@ import 'letter_request.dart';
 import 'external_account.dart';
 import '../../../services/activity_logger.dart' as activity_log;
 import '../../../services/notification_service.dart';
-import '../../../services/ai_service.dart';
 import 'reports_management.dart';
 import 'settings.dart';
 
@@ -1027,10 +1026,6 @@ class _DashboardHomeState extends State<DashboardHome> {
   String _selectedMonth = '';
   List<int> _chartData = List.filled(12, 0);
   bool _chartLoading = true;
-  bool _aiLoading = false;
-  String? _aiInsight;
-  String? _aiError;
-  bool _useFallbackInsight = false;
 
   late final Stream<QuerySnapshot> _organizationsStream;
   late final Stream<QuerySnapshot> _eventsStream;
@@ -1093,7 +1088,6 @@ class _DashboardHomeState extends State<DashboardHome> {
         .snapshots();
 
     _fetchChartData();
-    _analyzeDashboard();
   }
 
   void _fetchChartData() {
@@ -1126,82 +1120,6 @@ class _DashboardHomeState extends State<DashboardHome> {
         .catchError((_) {
           if (mounted) setState(() => _chartLoading = false);
         });
-  }
-
-  Future<void> _analyzeDashboard() async {
-    if (!mounted) return;
-    setState(() {
-      _aiLoading = true;
-      _aiError = null;
-    });
-
-    try {
-      final orgSnap = await FirebaseFirestore.instance
-          .collection('organizations')
-          .where('status', isEqualTo: 'active')
-          .get();
-      final activeEventsSnap = await FirebaseFirestore.instance
-          .collection('event_proposals')
-          .where('status', isEqualTo: 'approved')
-          .get();
-      final pendingProposalsSnap = await FirebaseFirestore.instance
-          .collection('event_proposals')
-          .where('status', isEqualTo: 'pending')
-          .get();
-      final overdueReportsSnap = await FirebaseFirestore.instance
-          .collection('reports')
-          .where('status', isEqualTo: 'overdue')
-          .get();
-
-      final orgDocs = orgSnap.docs;
-      final topOrganization = orgDocs.isNotEmpty
-          ? ((orgDocs.first.data())['name'] ?? 'No organization')
-          : 'No organization';
-
-      final prompt = AiService.buildAdminDashboardInsightPrompt(
-        activeOrganizations: orgSnap.docs.length,
-        activeEvents: activeEventsSnap.docs.length,
-        pendingProposals: pendingProposalsSnap.docs.length,
-        overdueReports: overdueReportsSnap.docs.length,
-        topOrganization: topOrganization.toString(),
-      );
-
-      String insight;
-      try {
-        insight = await AiService.ask(prompt);
-      } catch (_) {
-        insight = AiService.buildAdminDashboardSummary(
-          activeOrganizations: orgSnap.docs.length,
-          activeEvents: activeEventsSnap.docs.length,
-          pendingProposals: pendingProposalsSnap.docs.length,
-          overdueReports: overdueReportsSnap.docs.length,
-          topOrganization: topOrganization.toString(),
-        );
-        if (!mounted) return;
-        setState(() {
-          _useFallbackInsight = true;
-          _aiInsight = insight;
-          _aiLoading = false;
-        });
-        return;
-      }
-
-      if (!mounted) return;
-      setState(() {
-        _useFallbackInsight = false;
-        _aiInsight = insight.trim().isNotEmpty
-            ? insight
-            : 'No insight generated.';
-        _aiLoading = false;
-      });
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _aiInsight = null;
-        _aiError = e.toString();
-        _aiLoading = false;
-      });
-    }
   }
 
   // Helper to filter upcoming events (filter in memory)
@@ -1246,8 +1164,6 @@ class _DashboardHomeState extends State<DashboardHome> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _buildWelcomeHeader(isMobile),
-          const SizedBox(height: 20),
-          _buildAiInsightCard(),
           const SizedBox(height: 20),
           if (isMobile) ...[
             _buildStatCards(isMobile, isTablet),
@@ -1425,151 +1341,6 @@ class _DashboardHomeState extends State<DashboardHome> {
             ),
           ],
         ),
-      ),
-    );
-  }
-
-  Widget _buildAiInsightCard() {
-    final needsAttention =
-        (_aiError != null) ||
-        (_aiInsight != null &&
-            _aiInsight!.toLowerCase().contains('attention')) ||
-        (_aiInsight != null && _aiInsight!.toLowerCase().contains('urgent'));
-
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(_DS.radiusLg),
-        border: Border.all(color: const Color(0xFFE8ECF0)),
-        boxShadow: _DS.cardShadow,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: UpriseColors.primaryDark.withAlpha(22),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: const Icon(
-                  Icons.auto_awesome_rounded,
-                  color: UpriseColors.primaryDark,
-                  size: 18,
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Admin Health',
-                      style: GoogleFonts.beVietnamPro(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w700,
-                        color: UpriseColors.charcoal,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      'Current operational status and priority actions for the admin team.',
-                      style: GoogleFonts.beVietnamPro(
-                        fontSize: 12,
-                        color: const Color(0xFF64748B),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              if (needsAttention)
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 5,
-                  ),
-                  decoration: BoxDecoration(
-                    color: UpriseColors.warning.withAlpha(24),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Text(
-                    needsAttention ? 'Needs attention' : 'Looks steady',
-                    style: GoogleFonts.beVietnamPro(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                      color: UpriseColors.warning,
-                    ),
-                  ),
-                ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          if (_aiLoading)
-            Row(
-              children: [
-                SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: UpriseColors.primaryDark,
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Text(
-                  'Checking dashboard health…',
-                  style: GoogleFonts.beVietnamPro(
-                    fontSize: 12,
-                    color: const Color(0xFF64748B),
-                  ),
-                ),
-              ],
-            )
-          else if (_aiError != null)
-            Text(
-              'AI review is unavailable right now. Showing a local fallback summary instead.\n\n${_aiError!}',
-              style: GoogleFonts.beVietnamPro(
-                fontSize: 12.5,
-                color: UpriseColors.error,
-              ),
-            )
-          else if (_aiInsight != null)
-            Text(
-              _aiInsight!,
-              style: GoogleFonts.beVietnamPro(
-                fontSize: 13.5,
-                color: const Color(0xFF374151),
-                height: 1.55,
-              ),
-            )
-          else
-            Text(
-              'No health check available yet.',
-              style: GoogleFonts.beVietnamPro(
-                fontSize: 12.5,
-                color: const Color(0xFF64748B),
-              ),
-            ),
-          const SizedBox(height: 12),
-          Align(
-            alignment: Alignment.centerRight,
-            child: TextButton.icon(
-              onPressed: _aiLoading ? null : _analyzeDashboard,
-              icon: const Icon(Icons.refresh_rounded, size: 16),
-              label: Text(
-                'Refresh',
-                style: GoogleFonts.beVietnamPro(
-                  fontSize: 12.5,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-          ),
-        ],
       ),
     );
   }

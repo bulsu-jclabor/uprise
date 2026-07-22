@@ -2053,35 +2053,50 @@ class _AdviserRolesState extends State<AdviserRoles> {
                 );
               }
 
-              await _loadMeta();
+              // Show immediate feedback and close the dialog first so the
+              // user returns to the list quickly. Refresh meta data in the
+              // background without awaiting so the list updates when ready.
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      isEdit
+                          ? 'Adviser role updated.'
+                          : 'Adviser role assigned.',
+                    ),
+                    backgroundColor: const Color(0xFF059669),
+                    behavior: SnackBarBehavior.floating,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                );
+              }
 
-              if (!mounted) return;
+              // Close the dialog first so the user returns to the list.
+              Navigator.pop(ctx);
+
+              // Trigger a local UI refresh immediately and show feedback.
               if (mounted) {
                 setState(() {});
-              }
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(
-                    isEdit ? 'Adviser role updated.' : 'Adviser role assigned.',
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      isEdit
+                          ? 'Adviser role updated.'
+                          : 'Adviser role assigned.',
+                    ),
+                    backgroundColor: const Color(0xFF059669),
+                    behavior: SnackBarBehavior.floating,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
                   ),
-                  backgroundColor: const Color(0xFF059669),
-                  behavior: SnackBarBehavior.floating,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                ),
-              );
-              // Close only THIS dialog. The previous popUntil((route) =>
-              // route.isFirst) on the root navigator popped every route back
-              // to the very first one in the whole app's stack — if this
-              // screen isn't the first route (e.g. it's nested inside an
-              // admin shell/drawer), that either overshoots past the list
-              // entirely or, if it's already effectively "first", does
-              // nothing visible. A single .pop() reliably closes just this
-              // dialog and reveals the list underneath.
-              if (mounted) {
-                Navigator.of(context, rootNavigator: true).pop();
+                );
               }
+
+              // Refresh metadata in background (non-blocking)
+              _loadMeta();
             } catch (e) {
               setDlg(() {
                 isSaving = false;
